@@ -59,7 +59,7 @@ fi
 #Create a disk image
 QEMU_DISK_IMAGE="${TMP_DIR}/disk.raw"
 if [ ! -f $QEMU_DISK_IMAGE ]; then
-  mkfile -n 1g $QEMU_DISK_IMAGE
+  mkfile -n 3g $QEMU_DISK_IMAGE
 fi
 
 # Download ipxe image
@@ -92,7 +92,7 @@ args=(
   -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::2222-:22 -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
 
   # bootload IPXE with autoexec.ipxe script
-  -drive format=raw,file="${TMP_DIR}/boot.usb"
+  -usb -usbdevice disk:raw:"${TMP_DIR}/boot.usb"
   # attach a disk image to the guest
   -drive format=raw,file=$QEMU_DISK_IMAGE
   # ATTENTION `nographic` mode requires 'console=ttyS0,115200n8' in the kernel command line

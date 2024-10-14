@@ -39,11 +39,18 @@ d-i netcfg/hostname string sputnik
 # Mirror protocol:
 # If you select ftp, the mirror/country string does not need to be set.
 # Default value for the mirror protocol: http.
-d-i mirror/protocol string ftp
-d-i mirror/http/hostname string http.us.debian.org
-d-i mirror/http/directory string /debian
-
+d-i mirror/protocol string http
+d-i mirror/ftp/hostname string mirrors.ptisp.pt
+d-i mirror/ftp/directory string /debian
+#
+### Account setup
+# Skip creation of a root account (normal user account will be able to
+# use sudo).
+d-i passwd/root-login boolean false
+# Alternatively, to skip creation of a normal user account.
+#d-i passwd/make-user boolean false
 # To create a normal user account.
+d-i passwd/user-fullname string OP
 d-i passwd/username string mateomoon
 # Normal user's password, either in clear text
 d-i passwd/user-password password tmppwd
@@ -66,7 +73,7 @@ d-i clock-setup/ntp boolean true
 ## Partitioning example
 # If the system has free space you can choose to only partition that space.
 # This is only honoured if partman-auto/method (below) is not set.
-#d-i partman-auto/init_automatically_partition select biggest_free
+#d-i partman-auto/init_automatically_partition some_device_lvm
 
 # Alternatively, you may specify a disk to partition. If the system has only
 # one disk the installer will default to using that, but otherwise the device

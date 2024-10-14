@@ -1,6 +1,6 @@
 #!ipxe
 
 dhcp
-kernel http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/linux initrd=initrd.gz netcfg/dhcp_timeout=200 auto=true interactive=false console=ttyS0,115200n8 url=http://www.debian.org/releases/bullseye/example-preseed.txt
+kernel http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/linux auto=true priority=critical console=ttyS0,115200n8 url=https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/test.cng
 initrd http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/initrd.gz
 boot
