@@ -1,0 +1,2544 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>    Debian worldwide mirror sites </title>
+  <link rel="author" href="mailto:webmaster@debian.org">
+  <meta name="Generator" content="WML 2.32.0">
+  <meta name="Modified" content="2024-10-16 11:28:28">
+  <meta name="viewport" content="width=device-width">
+  <meta name="mobileoptimized" content="300">
+  <meta name="HandheldFriendly" content="true">
+<link href="../debian.css" rel="stylesheet" type="text/css">
+  <link href="../debian-en.css" rel="stylesheet" type="text/css" media="all">
+<link rel="search" type="application/opensearchdescription+xml" title="Debian website search" href="../search.en.xml">
+</head>
+<body>
+<div id="header">
+  <div id="upperheader">
+    <div id="logo">
+    <a href="../" title="Debian Home"><img src="../Pics/openlogo-50.png" alt="Debian" width="50" height="61"></a>
+    </div> <!-- end logo -->
+    <div id="searchbox">
+      <form name="p" method="get" action="https://search.debian.org/cgi-bin/omega">
+      <p>
+<input type="hidden" name="DB" value="en">
+        <input name="P" value="" size="14">
+        <input type="submit" value="Search">
+      </p>
+      </form>
+    </div>   <!-- end sitetools -->
+  </div> <!-- end upperheader -->
+  <!--UdmComment-->
+  <div id="navbar">
+    <p class="hidecss"><a href="#content">Skip Quicknav</a></p>
+    <ul>
+      <!-- Link to Debian's own Social Media resources -->
+      <li><a href="https://bits.debian.org/" title="Bits from Debian">Blog</a></li>
+      <li><a href="https://micronews.debian.org" title="Micronews from Debian">Micronews</a></li>
+      <li><a href="https://planet.debian.org/" title="The Planet of Debian">Planet</a></li>
+    </ul>
+  </div> <!-- end navbar -->
+<p id="breadcrumbs"><a href="./">Debian Mirrors</a>
+ &#x2F;
+Debian worldwide mirror sites</p>
+</div> <!-- end header -->
+<!--/UdmComment-->
+<div id="content">
+<h1>Debian worldwide mirror sites</h1>
+<p>This is a <strong>complete</strong> list of mirrors of Debian.
+For each site, the different types of material available are listed,
+along with the access method for each type.</p>
+<p>The following things are mirrored:</p>
+<dl>
+<dt><strong>Packages</strong></dt>
+	<dd>The Debian package pool.</dd>
+<dt><strong>CD Images</strong></dt>
+	<dd>Official Debian CD Images. See
+	<a href="https://www.debian.org/CD/">https://www.debian.org/CD/</a> for details.</dd>
+<dt><strong>Old releases</strong></dt>
+	<dd>The archive of old released versions of Debian.
+	<br>
+	Some of the old releases also included the so-called debian-non-US
+	archive, with sections for Debian packages that could not be
+	distributed in the US due to software patents or use of encryption.
+	The debian-non-US updates were discontinued with Debian 3.1.</dd>
+</dl>
+<p>The following access methods are possible:</p>
+<dl>
+<dt><strong>HTTP</strong></dt>
+	<dd>Standard web access, but it can be used for downloading files.</dd>
+<dt><strong>rsync</strong></dt>
+	<dd>An efficient means of mirroring.</dd>
+</dl>
+<p>The authoritative copy of the following list can always be found at:
+<a href="https://www.debian.org/mirror/list-full">https://www.debian.org/mirror/list-full</a>.
+<br>
+Everything else you want to know about Debian mirrors:
+<a href="https://www.debian.org/mirror/">https://www.debian.org/mirror/</a>.
+</p>
+<hr style="height:1">
+<p>Jump directly to a country on the list:
+<br>
+ [<a href="#AR">Argentina</a>] [<a href="#AM">Armenia</a>] [<a href="#AU">Australia</a>] [<a href="#AT">Austria</a>] [<a href="#BD">Bangladesh</a>] [<a href="#BY">Belarus</a>] [<a href="#BE">Belgium</a>]<br>
+ [<a href="#BR">Brazil</a>] [<a href="#BG">Bulgaria</a>] [<a href="#KH">Cambodia</a>] [<a href="#CA">Canada</a>] [<a href="#CL">Chile</a>] [<a href="#CN">China</a>] [<a href="#CR">Costa Rica</a>] [<a href="#HR">Croatia</a>]<br>
+ [<a href="#CZ">Czech Republic</a>] [<a href="#DK">Denmark</a>] [<a href="#EC">Ecuador</a>] [<a href="#EE">Estonia</a>] [<a href="#FI">Finland</a>] [<a href="#FR">France</a>] [<a href="#GE">Georgia</a>]<br>
+ [<a href="#DE">Germany</a>] [<a href="#GR">Greece</a>] [<a href="#HK">Hong Kong</a>] [<a href="#HU">Hungary</a>] [<a href="#IS">Iceland</a>] [<a href="#IN">India</a>] [<a href="#ID">Indonesia</a>] [<a href="#IR">Iran</a>]<br>
+ [<a href="#IL">Israel</a>] [<a href="#IT">Italy</a>] [<a href="#JP">Japan</a>] [<a href="#KZ">Kazakhstan</a>] [<a href="#KE">Kenya</a>] [<a href="#KR">Korea</a>] [<a href="#LV">Latvia</a>] [<a href="#LT">Lithuania</a>]<br>
+ [<a href="#LU">Luxembourg</a>] [<a href="#MK">Macedonia, Republic of</a>] [<a href="#MX">Mexico</a>] [<a href="#MD">Moldova</a>] [<a href="#MA">Morocco</a>] [<a href="#NL">Netherlands</a>]<br>
+ [<a href="#NC">New Caledonia</a>] [<a href="#NZ">New Zealand</a>] [<a href="#PL">Poland</a>] [<a href="#PT">Portugal</a>] [<a href="#PR">Puerto Rico</a>] [<a href="#RE">Réunion</a>]<br>
+ [<a href="#RO">Romania</a>] [<a href="#RU">Russia</a>] [<a href="#RS">Serbia</a>] [<a href="#SG">Singapore</a>] [<a href="#SK">Slovakia</a>] [<a href="#SI">Slovenia</a>] [<a href="#ZA">South Africa</a>]<br>
+ [<a href="#ES">Spain</a>] [<a href="#SE">Sweden</a>] [<a href="#CH">Switzerland</a>] [<a href="#TW">Taiwan</a>] [<a href="#TH">Thailand</a>] [<a href="#TR">Turkey</a>] [<a href="#UA">Ukraine</a>] [<a href="#GB">United Kingdom</a>]<br>
+ [<a href="#US">United States</a>] [<a href="#UY">Uruguay</a>] [<a href="#VN">Vietnam</a>]
+<hr style="height:1">
+<h3><a name="AM">Armenia</a></h3>
+Site: <tt>mirrors.asnet.am</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.asnet.am/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.asnet.am/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.am.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.am.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="AR">Argentina</a></h3>
+Site: <tt>mirror.sitsa.com.ar</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.sitsa.com.ar/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>debian.xfree.com.ar</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.xfree.com.ar/debian-cd/">/debian-cd/</a>
+</tt><br>
+<br><br>
+Site: <tt>debian.unnoba.edu.ar</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.unnoba.edu.ar/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel riscv64
+<br>
+<br><br>
+<h3><a name="AT">Austria</a></h3>
+Site: <tt>ftp.tu-graz.ac.at</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.tu-graz.ac.at/mirror/debian/">/mirror/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">maintainer address bounces</span>
+<br><br>
+Site: <tt>debian.anexia.at</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.anexia.at/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.anexia.at/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.lagis.at</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.lagis.at/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>debian.mur.at</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mur.at/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>debian.sil.at</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.sil.at/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+Site: <tt>mirror.alwyzon.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.alwyzon.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>ftp.at.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.at.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="AU">Australia</a></h3>
+Site: <tt>mirror.amaze.com.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.amaze.com.au/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>debian.mirror.digitalpacific.com.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.digitalpacific.com.au/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.digitalpacific.com.au/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.overthewire.com.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.overthewire.com.au/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.overthewire.com.au/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel i386
+<br>
+<br><br>
+Site: <tt>debian.mirror.serversaustralia.com.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.serversaustralia.com.au/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.aarnet.edu.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.aarnet.edu.au/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.linux.org.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.linux.org.au/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.xtom.au</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xtom.au/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.gsl.icu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.gsl.icu/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.realcompute.io</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.realcompute.io/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.au.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.au.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+<h3><a name="BD">Bangladesh</a></h3>
+Site: <tt>mirror.xeonbd.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.xeonbd.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.limda.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.limda.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="BE">Belgium</a></h3>
+Site: <tt>ftp.belnet.be</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.belnet.be/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 i386 mips64el ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>mirror.as35701.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.as35701.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.as35701.net/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian-mirror.behostings.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian-mirror.behostings.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.be.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.be.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="BG">Bulgaria</a></h3>
+Site: <tt>debian.a1.bg</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.a1.bg/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mnet.bg</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mnet.bg/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 i386 mips64el
+<br>
+<br><br>
+Site: <tt>debian.telecoms.bg</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.telecoms.bg/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>mirror.telepoint.bg</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.telepoint.bg/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.uni-sofia.bg</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-sofia.bg/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>/debian/
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.ipacct.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.ipacct.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.ludost.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.ludost.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>ftp.bg.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.bg.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="BR">Brazil</a></h3>
+Site: <tt>mirror.blue3.com.br</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.blue3.com.br/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.uepg.br</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.uepg.br/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.c3sl.ufpr.br</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.c3sl.ufpr.br/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.c3sl.ufpr.br/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x sparc
+<br>
+<br><br>
+Site: <tt>alcateia.ufscar.br</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://alcateia.ufscar.br/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>ftp.br.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.br.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x sparc
+<br>
+<br><br>
+<h3><a name="BY">Belarus</a></h3>
+Site: <tt>ftp.byfly.by</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.byfly.by/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.byfly.by/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.datacenter.by</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.datacenter.by/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.datacenter.by/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.by.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.by.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CA">Canada</a></h3>
+Site: <tt>mirror.dst.ca</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.dst.ca/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.estone.ca</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.estone.ca/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>debian.linux.n0c.ca</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.linux.n0c.ca/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.rafal.ca</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.rafal.ca/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.it.ubc.ca</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.it.ubc.ca/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.csclub.uwaterloo.ca</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.csclub.uwaterloo.ca/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.ca.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.ca.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CH">Switzerland</a></h3>
+Site: <tt>pkg.adfinis-on-exoscale.ch</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://pkg.adfinis-on-exoscale.ch/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>linuxsoft.cern.ch</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://linuxsoft.cern.ch/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.ethz.ch</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.ethz.ch/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.ethz.ch/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://debian.ethz.ch/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+Site: <tt>mirror.iway.ch</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.iway.ch/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.metanet.ch</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.metanet.ch/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 i386
+<br>
+<br><br>
+Site: <tt>mirror.sinavps.ch</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.sinavps.ch/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>mirror1.infomaniak.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror1.infomaniak.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror2.infomaniak.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror2.infomaniak.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.init7.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.init7.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.ch.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.ch.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CL">Chile</a></h3>
+Site: <tt>elmirror.cl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://elmirror.cl/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.hnd.cl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.hnd.cl/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.insacom.cl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.insacom.cl/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.redlibre.cl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.redlibre.cl/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mipsel s390x
+<br>
+<br><br>
+Site: <tt>ftp.cl.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.cl.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CN">China</a></h3>
+Site: <tt>mirrors.bfsu.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.bfsu.edu.cn/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.jlu.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.jlu.edu.cn/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.lzu.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.lzu.edu.cn/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.lzu.edu.cn/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.nju.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nju.edu.cn/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.nyist.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nyist.edu.cn/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>/debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.sjtu.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.sjtu.edu.cn/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.tuna.tsinghua.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.tuna.tsinghua.edu.cn/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>/debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.ustc.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.ustc.edu.cn/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.zju.edu.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.zju.edu.cn/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 riscv64
+<br>
+<br><br>
+Site: <tt>mirrors.qvq.net.cn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.qvq.net.cn/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.163.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.163.com/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.163.com/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 i386 mips64el ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>ftp.cn.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.cn.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CR">Costa Rica</a></h3>
+Site: <tt>mirrors.ucr.ac.cr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.ucr.ac.cr/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.ucr.ac.cr/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debianmirror.una.ac.cr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debianmirror.una.ac.cr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CZ">Czech Republic</a></h3>
+Site: <tt>ftp.debian.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.debian.cz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.dkm.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.dkm.cz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.dkm.cz/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.it4i.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.it4i.cz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.superhosting.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.superhosting.cz/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.superhosting.cz/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>merlin.fit.vutbr.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://merlin.fit.vutbr.cz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el riscv64
+<br>
+<br><br>
+Site: <tt>debian.mirror.web4u.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.web4u.cz/">/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>debian-cd.mirror.web4u.cz</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://debian-cd.mirror.web4u.cz/">/</a>
+</tt><br>
+<br><br>
+Site: <tt>ftp.zcu.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.zcu.cz/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386 mips64el riscv64
+<br>
+<br><br>
+Site: <tt>ftp.cz.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.cz.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="CZ">Czech Republic</a></h3>
+Site: <tt>ftp.cvut.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.cvut.cz/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386 mips64el ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>mirrors.nic.cz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.nic.cz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.nic.cz/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="DE">Germany</a></h3>
+Site: <tt>mirror.23m.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.23m.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.23m.com/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.charite.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.charite.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386 riscv64
+<br>
+<br><br>
+Site: <tt>mirror.checkdomain.de</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.checkdomain.de/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 i386 ppc64el
+<br>
+<br><br>
+Site: <tt>mirror.dogado.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.dogado.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 i386
+<br>
+<br><br>
+Site: <tt>ftp.fau.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.fau.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.fau.de/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.gwdg.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.gwdg.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>pub/linux/debian/debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.gwdg.de/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>pub/linux/debian/debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.hosteurope.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.hosteurope.de/mirror/ftp.debian.org/debian/">/mirror/ftp.debian.org/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.hosteurope.de/mirror/ftp.debian.org/debian-cd/">/mirror/ftp.debian.org/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://ftp.hosteurope.de/mirror/archive.debian.org/">/mirror/archive.debian.org/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp-stud.hs-esslingen.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp-stud.hs-esslingen.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp-stud.hs-esslingen.de/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>packages.hs-regensburg.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://packages.hs-regensburg.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>debian.intergenia.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.intergenia.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian-linux/debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.ipb.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.ipb.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>debian.mirror.lrz.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.lrz.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">[2015] 20 Gbps bandwidth.</span>
+<br><br>
+Site: <tt>debian.netcologne.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.netcologne.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.netcologne.de/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.netzwerge.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.netzwerge.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>pubmirror.plutex.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://pubmirror.plutex.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386
+<br>
+<br><br>
+Site: <tt>ftp.halifax.rwth-aachen.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.halifax.rwth-aachen.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>/debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.halifax.rwth-aachen.de/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.stw-bonn.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.stw-bonn.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+Site: <tt>debian.tu-bs.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.tu-bs.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.tu-chemnitz.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.tu-chemnitz.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.tu-clausthal.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.tu-clausthal.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390x
+<br>
+<br><br>
+Site: <tt>debian.inf.tu-dresden.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.inf.tu-dresden.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.inf.tu-dresden.de/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://debian.inf.tu-dresden.de/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+Site: <tt>mirror.informatik.tu-freiberg.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.informatik.tu-freiberg.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386 mips64el ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>ftp.uni-bayreuth.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-bayreuth.de/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-bayreuth.de/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">Rsync is on rsync.uni-bayreuth.de (aka btr0xq.rz.uni-bayreuth.de).</span>
+<br><br>
+Site: <tt>rsync.uni-bayreuth.de</tt><br>
+Packages over rsync: <tt>debian/
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br>Comment: <span style="white-space: pre;">See ftp.uni-bayreuth.de</span>
+<br><br>
+Site: <tt>ftp.uni-hannover.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-hannover.de/debian/debian/">/debian/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-hannover.de/debian/debian-cd/">/debian/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>drmirror.physi.uni-heidelberg.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://drmirror.physi.uni-heidelberg.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.uni-kl.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-kl.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>ftp.uni-mainz.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.uni-mainz.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.united-gameserver.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.united-gameserver.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.wrz.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.wrz.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armhf i386
+<br>
+<br><br>
+Site: <tt>mirror.wtnet.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.wtnet.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.xtom.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xtom.de/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian-cd.repulsive.eu</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://debian-cd.repulsive.eu/">/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>de.mirrors.clouvider.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://de.mirrors.clouvider.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.creoline.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.creoline.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.iphh.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.iphh.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.de.leaseweb.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.de.leaseweb.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.de.leaseweb.net/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel powerpc ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.eu.oneandone.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.eu.oneandone.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirror.eu.oneandone.net/linux/distributions/debian/debian-archive/">/linux/distributions/debian/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.plusline.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.plusline.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>artfiles.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://artfiles.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>ftp.de.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.de.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp2.de.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp2.de.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="DK">Denmark</a></h3>
+Site: <tt>mirror.one.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.one.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.one.com/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirror.one.com/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.rackhosting.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.rackhosting.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.rackhosting.com/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 armhf i386 ia64 kfreebsd-amd64 kfreebsd-i386 s390x
+<br>
+<br><br>
+Site: <tt>ftp.dk.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.dk.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.dotsrc.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.dotsrc.org/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.dotsrc.org/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="EC">Ecuador</a></h3>
+Site: <tt>mirror.cedia.org.ec</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.cedia.org.ec/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 armel armhf i386 mips mipsel s390x
+<br>
+<br><br>
+<h3><a name="EE">Estonia</a></h3>
+Site: <tt>mirrors.xtom.ee</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xtom.ee/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="ES">Spain</a></h3>
+Site: <tt>debian.grn.cat</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.grn.cat/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386 riscv64
+<br>
+<br><br>
+Site: <tt>ulises.hostalia.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ulises.hostalia.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mipsel riscv64
+<br>
+<br><br>
+Site: <tt>mirror.raiolanetworks.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.raiolanetworks.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>pub/debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.redparra.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.redparra.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br>Comment: <span style="white-space: pre;">Server status: http://status.redparra.com</span>
+<br><br>
+Site: <tt>ftp.cica.es</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.cica.es/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.cica.es/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>repo.ifca.es</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://repo.ifca.es/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mipsel riscv64
+<br>
+<br><br>
+Site: <tt>debian.redimadrid.es</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.redimadrid.es/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.udc.es</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.udc.es/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>softlibre.unizar.es</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://softlibre.unizar.es/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.uvigo.es</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.uvigo.es/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.uvigo.es/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.es.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.es.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mipsel riscv64
+<br>
+<br><br>
+<h3><a name="FI">Finland</a></h3>
+Site: <tt>www.nic.funet.fi</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://www.nic.funet.fi/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>ftp/pub/mirrors/ftp.debian.org/debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.web.trex.fi</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.web.trex.fi/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.fi.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.fi.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="FR">France</a></h3>
+Site: <tt>mirror.debian.ikoula.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.debian.ikoula.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 i386
+<br>
+<br><br>
+Site: <tt>mirror.plusserver.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.plusserver.com/debian/debian/">/debian/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf i386 mips mipsel s390x
+<br>
+<br><br>
+Site: <tt>debian.apt-mirror.de</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.apt-mirror.de/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armhf i386
+<br>
+<br><br>
+Site: <tt>ftp.ec-m.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.ec-m.fr/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.ircam.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.ircam.fr/pub/debian/">/pub/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.johnnybegood.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.johnnybegood.fr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.lip6.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.lip6.fr/pub/linux/distributions/debian/">/pub/linux/distributions/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf i386 s390x
+<br>
+<br><br>
+Site: <tt>debian.obspm.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.obspm.fr/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.obspm.fr/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.polytech-lille.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.polytech-lille.fr/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 i386 mips64el ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.u-picardie.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.u-picardie.fr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.u-strasbg.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.u-strasbg.fr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386 riscv64
+<br>
+<br>Comment: <span style="white-space: pre;">Guy Brand's address bounces</span>
+<br><br>
+Site: <tt>miroir.univ-lorraine.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://miroir.univ-lorraine.fr/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://miroir.univ-lorraine.fr/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.univ-pau.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.univ-pau.fr/linux/mirrors/debian/">/linux/mirrors/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386 mips64el ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>debian.univ-tlse2.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.univ-tlse2.fr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirror.gitoyen.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.gitoyen.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>deb-mir1.naitways.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://deb-mir1.naitways.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirrors.ovh.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirrors.ovh.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.proxad.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.proxad.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.rezopole.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.rezopole.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>apt.tetaneutral.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://apt.tetaneutral.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 riscv64
+<br>
+<br>Comment: <span style="white-space: pre;">TetaNeutral.net est un fournisseur d'accès à Internet associatif opérant actuellement un réseau radio sur Toulouse et ses environs et un hébergeur. L'association est membre de la Fédération des fournisseurs d’accès à Internet associatifs (FFDN) qui regroupe des projets similaires en France, en Belgique et en Suisse.</span>
+<br><br>
+Site: <tt>ftp.crifo.org</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.crifo.org/debian-cd/">/debian-cd/</a>
+</tt><br>
+<br><br>
+Site: <tt>ftp.fr.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.fr.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="GB">United Kingdom</a></h3>
+Site: <tt>free.hands.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://free.hands.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+Site: <tt>mirror.mythic-beasts.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.mythic-beasts.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.cov.ukservers.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.cov.ukservers.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian-iso.mirror.anlx.net</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://debian-iso.mirror.anlx.net/">/</a>
+</tt><br>
+<br><br>
+Site: <tt>uk.mirrors.clouvider.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://uk.mirrors.clouvider.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.coreix.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.coreix.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>mirrors/debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirror.lchost.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.lchost.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>debian.mirror.uk.sargasso.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.uk.sargasso.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirrors.uk2.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirrors.uk2.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armhf i386 ia64 mips64el ppc64el
+<br>
+<br><br>
+Site: <tt>mirror.vinehost.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.vinehost.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.vorboss.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.vorboss.net/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.vorboss.net/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.uk.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.uk.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrorservice.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrorservice.org/sites/ftp.debian.org/debian/">/sites/ftp.debian.org/debian/</a>
+</tt><br>Packages over rsync: <tt>ftp.debian.org/debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrorservice.org/sites/cdimage.debian.org/debian-cd/">/sites/cdimage.debian.org/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>cdimage.debian.org/debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.ticklers.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.ticklers.org/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.ticklers.org/debian-cd/">/debian-cd/</a>
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://ftp.ticklers.org/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>archive.debian.org/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.ox.ac.uk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.ox.ac.uk/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+<h3><a name="GE">Georgia</a></h3>
+Site: <tt>debian.grena.ge</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.grena.ge/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.grena.ge/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 riscv64
+<br>
+<br><br>
+<h3><a name="GR">Greece</a></h3>
+Site: <tt>debian.otenet.gr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.otenet.gr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="HK">Hong Kong</a></h3>
+Site: <tt>mirror.xtom.com.hk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.xtom.com.hk/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.xtom.com.hk/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.hk.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.hk.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="HR">Croatia</a></h3>
+Site: <tt>debian.carnet.hr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.carnet.hr/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.carnet.hr/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.iskon.hr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.iskon.hr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.hr.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.hr.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="HU">Hungary</a></h3>
+Site: <tt>ftp.bme.hu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.bme.hu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.bme.hu/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>repo.jztkft.hu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://repo.jztkft.hu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="ID">Indonesia</a></h3>
+Site: <tt>kebo.pens.ac.id</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://kebo.pens.ac.id/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 i386 riscv64
+<br>
+<br><br>
+Site: <tt>mirror.unair.ac.id</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.unair.ac.id/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mr.heru.id</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mr.heru.id/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>kartolo.sby.datautama.net.id</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://kartolo.sby.datautama.net.id/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://kartolo.sby.datautama.net.id/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+<h3><a name="IL">Israel</a></h3>
+Site: <tt>debian.interhost.co.il</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.interhost.co.il/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.interhost.co.il/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 i386 mips64el riscv64
+<br>
+<br><br>
+<h3><a name="IN">India</a></h3>
+Site: <tt>mirrors.iitd.ac.in</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.iitd.ac.in/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.cse.iitk.ac.in</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.cse.iitk.ac.in/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf i386 kfreebsd-amd64 kfreebsd-i386
+<br>
+<br><br>
+Site: <tt>mirror.nitc.ac.in</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nitc.ac.in/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386
+<br>
+<br><br>
+<h3><a name="IR">Iran</a></h3>
+Site: <tt>archive.debian.petiak.ir</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://archive.debian.petiak.ir/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="IS">Iceland</a></h3>
+Site: <tt>is.mirror.flokinet.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://is.mirror.flokinet.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>ftp.is.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.is.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="IT">Italy</a></h3>
+Site: <tt>debian.dynamica.it</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.dynamica.it/debian/">/debian/</a>
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://debian.dynamica.it/debian-archive/">/debian-archive/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.garr.it</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.garr.it/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.linux.it</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.linux.it/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">rsync access is available to other public mirrors</span>
+<br><br>
+Site: <tt>giano.com.dist.unige.it</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://giano.com.dist.unige.it/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://giano.com.dist.unige.it/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 armel armhf i386
+<br>
+<br><br>
+Site: <tt>mirror.units.it</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.units.it/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.it.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.it.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="JP">Japan</a></h3>
+Site: <tt>ftp.jaist.ac.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.jaist.ac.jp/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.jaist.ac.jp/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>ftp.yz.yamagata-u.ac.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.yz.yamagata-u.ac.jp/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.yz.yamagata-u.ac.jp/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">HTTPS Enabled</span>
+<br><br>
+Site: <tt>ftp.nara.wide.ad.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.nara.wide.ad.jp/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.nara.wide.ad.jp/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 armel i386 mips mipsel
+<br>
+<br><br>
+Site: <tt>ftp.kddilabs.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.kddilabs.jp/pub/debian/">/pub/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.kddilabs.jp/pub/debian-cd/">/pub/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips64el mipsel ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>debian-mirror.sakura.ne.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian-mirror.sakura.ne.jp/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.riken.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.riken.jp/Linux/debian/debian/">/Linux/debian/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.riken.jp/Linux/debian/debian-cd/">/Linux/debian/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.xtom.jp</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xtom.jp/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.jp.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.jp.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>dennou-k.gfd-dennou.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://dennou-k.gfd-dennou.org/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br>Comment: <span style="white-space: pre;">Recommended for SINET (Science Information Network: http://www.sinet.ad.jp/) users only!</span>
+<br><br>
+Site: <tt>dennou-q.gfd-dennou.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://dennou-q.gfd-dennou.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br>Comment: <span style="white-space: pre;">Recommended for SINET (Science Information Network: http://www.sinet.ad.jp/) users only!</span>
+<br><br>
+Site: <tt>repo.jing.rocks</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://repo.jing.rocks/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://repo.jing.rocks/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://repo.jing.rocks/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="KE">Kenya</a></h3>
+Site: <tt>debian.mirror.liquidtelecom.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.liquidtelecom.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.ac.ke</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.ac.ke/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+<h3><a name="KH">Cambodia</a></h3>
+Site: <tt>mirror.sabay.com.kh</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.sabay.com.kh/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="KR">Korea</a></h3>
+Site: <tt>ftp.lanet.kr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.lanet.kr/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.lanet.kr/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.siwoo.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.siwoo.org/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.siwoo.org/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.yuki.net.uk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.yuki.net.uk/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="KZ">Kazakhstan</a></h3>
+Site: <tt>mirror.hoster.kz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.hoster.kz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.ps.kz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.ps.kz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="LT">Lithuania</a></h3>
+Site: <tt>mirror.vpsnet.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.vpsnet.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.litnet.lt</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.litnet.lt/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.vu.lt</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.vu.lt/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.vu.lt/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.balt.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.balt.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>ftp.lt.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.lt.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="LU">Luxembourg</a></h3>
+Site: <tt>debian.mirror.root.lu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.root.lu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.root.lu/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="LV">Latvia</a></h3>
+Site: <tt>mirror.veesp.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.veesp.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.cloudhosting.lv</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.cloudhosting.lv/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>debian.koyanet.lv</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.koyanet.lv/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.koyanet.lv/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://debian.koyanet.lv/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="MA">Morocco</a></h3>
+Site: <tt>mirror.marwan.ma</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.marwan.ma/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="MD">Moldova</a></h3>
+Site: <tt>mirror.as43289.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.as43289.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+Site: <tt>ftp.md.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.md.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+<h3><a name="MK">Macedonia, Republic of</a></h3>
+Site: <tt>mirror.onevip.mk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.onevip.mk/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="MK">Macedonia, Republic of</a></h3>
+Site: <tt>mirror-mk.interspace.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror-mk.interspace.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+<h3><a name="MX">Mexico</a></h3>
+Site: <tt>lidsol.fi-b.unam.mx</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://lidsol.fi-b.unam.mx/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://lidsol.fi-b.unam.mx/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="NC">New Caledonia</a></h3>
+Site: <tt>debian.lagoon.nc</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.lagoon.nc/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 armel armhf i386 mips mipsel s390x
+<br>
+<br><br>
+Site: <tt>debian.nautile.nc</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.nautile.nc/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.nautile.nc/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.nc.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.nc.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="NL">Netherlands</a></h3>
+Site: <tt>mirror.nl.datapacket.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nl.datapacket.com/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.nl.datapacket.com/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.hostiserver.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.hostiserver.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.nforce.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nforce.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>mirror.tngnet.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.tngnet.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.vpgrp.io</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.vpgrp.io/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>nl.mirrors.clouvider.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://nl.mirrors.clouvider.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.duocast.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.duocast.net/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.duocast.net/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>nl.mirror.flokinet.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://nl.mirror.flokinet.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirror.i3d.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.i3d.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.nl.leaseweb.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nl.leaseweb.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.nl.leaseweb.net/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirror.nl.leaseweb.net/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel powerpc ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.nl.mirhosting.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.nl.mirhosting.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.snt.utwente.nl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.snt.utwente.nl/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.snt.utwente.nl/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://debian.snt.utwente.nl/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+Site: <tt>mirrors.xtom.nl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xtom.nl/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>archive.debian.org</tt><br>
+Old releases over HTTP: <tt><a rel="nofollow" href="http://archive.debian.org/debian-archive/">/debian-archive/</a>
+</tt><br>
+<br><br>
+Site: <tt>ftp.nl.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.nl.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.bgp.rodeo</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.bgp.rodeo/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64
+<br>
+<br><br>
+<h3><a name="NZ">New Zealand</a></h3>
+Site: <tt>linux.purple-cat.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://linux.purple-cat.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.fsmg.org.nz</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.fsmg.org.nz/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.nz.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.nz.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="PL">Poland</a></h3>
+Site: <tt>ftp.pl.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.pl.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.agh.edu.pl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.agh.edu.pl/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.icm.edu.pl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.icm.edu.pl/pub/Linux/debian/">/pub/Linux/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.icm.edu.pl/pub/Linux/debian-cd/">/pub/Linux/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>ftp/debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.task.gda.pl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.task.gda.pl/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>ftp/site/debian/
+</tt><br>CD Images over rsync: <tt>debian-iso/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.psnc.pl</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.psnc.pl/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="PR">Puerto Rico</a></h3>
+Site: <tt>mirrors.upr.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.upr.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64
+<br>
+<br><br>
+<h3><a name="PT">Portugal</a></h3>
+Site: <tt>mirror.leitecastro.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.leitecastro.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.pt.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.pt.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.ptisp.pt</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.ptisp.pt/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.eq.uc.pt</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.eq.uc.pt/software/Linux/debian/">/software/Linux/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.uevora.pt</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.uevora.pt/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.uevora.pt/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.rnl.tecnico.ulisboa.pt</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.rnl.tecnico.ulisboa.pt/pub/debian/">/pub/debian/</a>
+</tt><br>Packages over rsync: <tt>pub/debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.rnl.tecnico.ulisboa.pt/pub/debian-cd/">/pub/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>/pub/debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="RE">Réunion</a></h3>
+Site: <tt>depot-debian.univ-reunion.fr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://depot-debian.univ-reunion.fr/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mithril.re</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mithril.re/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+<h3><a name="RO">Romania</a></h3>
+Site: <tt>mirrors.nxthost.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.nxthost.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el s390x
+<br>
+<br><br>
+Site: <tt>ro.mirror.flokinet.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ro.mirror.flokinet.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirrors.hosterion.ro</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.hosterion.ro/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.hostico.ro</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.hostico.ro/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirror.linux.ro</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.linux.ro/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirrors.nav.ro</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.nav.ro/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.xservers.ro</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xservers.ro/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.xservers.ro/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armhf i386 mips64el ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="RS">Serbia</a></h3>
+Site: <tt>mirror.pmf.kg.ac.rs</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.pmf.kg.ac.rs/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armhf i386 kfreebsd-amd64
+<br>
+<br><br>
+<h3><a name="RU">Russia</a></h3>
+Site: <tt>mirror.corbina.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.corbina.net/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.corbina.net/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>ftp.ru.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.ru.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.powernet.com.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.powernet.com.ru/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>mirror.docker.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.docker.ru/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.hyperdedic.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.hyperdedic.ru/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.kpfu.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.kpfu.ru/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirror.mephi.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.mephi.ru/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.mephi.ru/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirror.mephi.ru/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.neftm.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.neftm.ru/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>ftp.psn.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.psn.ru/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.psn.ru/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>mirror.truenetwork.ru</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.truenetwork.ru/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.truenetwork.ru/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirror.truenetwork.ru/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>repository.su</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://repository.su/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="SE">Sweden</a></h3>
+Site: <tt>mirrors.glesys.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.glesys.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftpmirror1.infania.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftpmirror1.infania.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.zetup.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.zetup.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.braindrainlan.nu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.braindrainlan.nu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>cdimage.debian.org</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://cdimage.debian.org/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>
+<br><br>
+Site: <tt>ftp.se.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.se.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.lth.se</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.lth.se/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.su.se</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.su.se/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.acc.umu.se</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.acc.umu.se/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.acc.umu.se/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="SG">Singapore</a></h3>
+Site: <tt>mirror.coganng.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.coganng.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 riscv64
+<br>
+<br><br>
+Site: <tt>mirror.sg.gs</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.sg.gs/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.djvg.sg</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.djvg.sg/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="SI">Slovenia</a></h3>
+Site: <tt>ftp.si.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.si.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="SK">Slovakia</a></h3>
+Site: <tt>ftp.sk.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.sk.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+Site: <tt>ftp.antik.sk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.antik.sk/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>deb.bbxnet.sk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://deb.bbxnet.sk/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.debian.sk</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.debian.sk/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+<h3><a name="TH">Thailand</a></h3>
+Site: <tt>mirror.applebred.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.applebred.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armhf i386 riscv64
+<br>
+<br><br>
+Site: <tt>mirror.kku.ac.th</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.kku.ac.th/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="TR">Turkey</a></h3>
+Site: <tt>ftp.tr.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.tr.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.linux.org.tr</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.linux.org.tr/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.linux.org.tr/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="TW">Taiwan</a></h3>
+Site: <tt>tw1.mirror.blendbyte.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://tw1.mirror.blendbyte.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.tw.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.tw.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.twds.com.tw</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.twds.com.tw/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.twds.com.tw/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.csie.ncku.edu.tw</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.csie.ncku.edu.tw/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>ftp.ncnu.edu.tw</tt><br>
+CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.ncnu.edu.tw/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>debian.csie.ntu.edu.tw</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.csie.ntu.edu.tw/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.cs.nycu.edu.tw</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.cs.nycu.edu.tw/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.cs.nycu.edu.tw/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>opensource.nchc.org.tw</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://opensource.nchc.org.tw/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="UA">Ukraine</a></h3>
+Site: <tt>debian.netforce.hosting</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.netforce.hosting/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.netforce.hosting/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>mirror.mirohost.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.mirohost.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br><br>
+Site: <tt>debian.volia.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.volia.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.volia.net/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://debian.volia.net/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="US">United States</a></h3>
+Site: <tt>mirror.0x626b.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.0x626b.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 i386 riscv64
+<br>
+<br><br>
+Site: <tt>mirrors.advancedhosters.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.advancedhosters.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.advancedhosters.com/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirrors.advancedhosters.com/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390 s390x
+<br>
+<br><br>
+Site: <tt>mirror.cogentco.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.cogentco.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.cogentco.com/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.mirror.constant.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.mirror.constant.com/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.namecheap.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.namecheap.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.xtom.com</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.xtom.com/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.ocf.berkeley.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.ocf.berkeley.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.ocf.berkeley.edu/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.cs.binghamton.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.cs.binghamton.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.bloomu.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.bloomu.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.bloomu.edu/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.bmcc.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.bmcc.edu/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>mirror.clarkson.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.clarkson.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.cc.lehigh.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.cc.lehigh.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.csail.mit.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.csail.mit.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.lug.mtu.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.lug.mtu.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.lug.mtu.edu/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.cat.pdx.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.cat.pdx.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armhf i386 mips64el ppc64el riscv64
+<br>
+<br><br>
+Site: <tt>plug-mirror.rcac.purdue.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://plug-mirror.rcac.purdue.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.siena.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.siena.edu/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64
+<br>
+<br><br>
+Site: <tt>debian.uchicago.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.uchicago.edu/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.vcea.wsu.edu</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.vcea.wsu.edu/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 i386
+<br>
+<br><br>
+Site: <tt>mirrors.accretive-networks.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.accretive-networks.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Old releases over HTTP: <tt><a rel="nofollow" href="http://mirrors.accretive-networks.net/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>atl.mirrors.clouvider.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://atl.mirrors.clouvider.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>la.mirrors.clouvider.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://la.mirrors.clouvider.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>nyc.mirrors.clouvider.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://nyc.mirrors.clouvider.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirrors.iu13.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.iu13.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirrors.iu13.net/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armhf i386
+<br>
+<br><br>
+Site: <tt>mirror.us.leaseweb.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.us.leaseweb.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.us.leaseweb.net/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel powerpc ppc64el s390x
+<br>
+<br><br>
+Site: <tt>mirror.us.mirhosting.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.us.mirhosting.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.dal.nexril.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.dal.nexril.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.us.oneandone.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.us.oneandone.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.rustytel.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.rustytel.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.steadfast.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.steadfast.net/debian/">/debian/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.steadfast.net/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 armhf i386 s390x
+<br>
+<br><br>
+Site: <tt>debian-archive.trafficmanager.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian-archive.trafficmanager.net/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 i386
+<br>
+<br>Comment: <span style="white-space: pre;">Geolocated mirror for Debian images inside Microsoft Azure</span>
+<br><br>
+Site: <tt>ftp.us.debian.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.us.debian.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>archive.kernel.org</tt><br>
+Old releases over HTTP: <tt><a rel="nofollow" href="http://archive.kernel.org/debian-archive/">/debian-archive/</a>
+</tt><br>Old releases over rsync: <tt>debian-archive/
+</tt><br>
+<br><br>
+Site: <tt>mirror.keystealth.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.keystealth.org/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://mirror.keystealth.org/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>debian.osuosl.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.osuosl.org/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.osuosl.org/debian-cdimage/">/debian-cdimage/</a>
+</tt><br>CD Images over rsync: <tt>debian-cdimage/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+Site: <tt>mirrors.wikimedia.org</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirrors.wikimedia.org/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br>Comment: <span style="white-space: pre;">offers ssh triggers for downstream mirrors, contact maintainer for setup - see https://www.debian.org/mirror/push_mirroring</span>
+<br><br>
+<h3><a name="UY">Uruguay</a></h3>
+Site: <tt>debian.repo.cure.edu.uy</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.repo.cure.edu.uy/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel riscv64
+<br>
+<br><br>
+<h3><a name="VN">Vietnam</a></h3>
+Site: <tt>debian.xtdv.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.xtdv.net/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>debian/
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+Site: <tt>mirror.bizflycloud.vn</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://mirror.bizflycloud.vn/debian/">/debian/</a>
+</tt><br>Includes architectures: amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64el riscv64 s390x
+<br>
+<br><br>
+<h3><a name="ZA">South Africa</a></h3>
+Site: <tt>debian.saix.net</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://debian.saix.net/">/</a>
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://debian.saix.net/debian-cd/">/debian-cd/</a>
+</tt><br>Includes architectures: amd64 armel armhf i386 mips mipsel s390x
+<br>
+<br><br>
+Site: <tt>ftp.is.co.za</tt><br>
+Packages over HTTP: <tt><a rel="nofollow" href="http://ftp.is.co.za/debian/">/debian/</a>
+</tt><br>Packages over rsync: <tt>/debian/
+</tt><br>CD Images over HTTP: <tt><a rel="nofollow" href="http://ftp.is.co.za/debian-cd/">/debian-cd/</a>
+</tt><br>CD Images over rsync: <tt>/debian-cd/
+</tt><br>Includes architectures: amd64 arm64 armel armhf hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 mips mips64el mipsel powerpc ppc64el s390 s390x
+<br>
+<br><br>
+<hr>
+<table border="0" width="100%" summary=""><tr>
+  <td align="left"><small>Last modified: Wed Oct 16 11:08:51 2024</small></td>
+  <td align="right"><small>Number of sites listed: 380</small></td>
+</tr></table>
+<div class="clr"></div>
+</div> <!-- end content -->
+<div id="footer">
+<hr class="hidecss">
+<p>Back to the <a href="../">Debian Project homepage</a>.</p>
+<hr>
+<!--UdmComment-->
+<div id="pageLang">
+<div id="langSelector">
+This page is also available in the following languages:
+<div id="langContainer">
+ <a href="list-full.cs.html" title="Czech" hreflang="cs" lang="cs" rel="alternate">&#269;esky</a>
+ <a href="list-full.da.html" title="Danish" hreflang="da" lang="da" rel="alternate">dansk</a>
+ <a href="list-full.de.html" title="German" hreflang="de" lang="de" rel="alternate">Deutsch</a>
+ <a href="list-full.es.html" title="Spanish" hreflang="es" lang="es" rel="alternate">espa&ntilde;ol</a>
+ <a href="list-full.fr.html" title="French" hreflang="fr" lang="fr" rel="alternate">fran&ccedil;ais</a>
+ <a href="list-full.id.html" title="Indonesian" hreflang="id" lang="id" rel="alternate">Indonesia</a>
+ <a href="list-full.it.html" title="Italian" hreflang="it" lang="it" rel="alternate">Italiano</a>
+ <a href="list-full.nl.html" title="Dutch" hreflang="nl" lang="nl" rel="alternate">Nederlands</a>
+ <a href="list-full.ja.html" title="Japanese" hreflang="ja" lang="ja" rel="alternate">&#26085;&#26412;&#35486;&nbsp;(Nihongo)</a>
+ <a href="list-full.pt.html" title="Portuguese" hreflang="pt" lang="pt" rel="alternate">Portugu&ecirc;s</a>
+ <a href="list-full.ru.html" title="Russian" hreflang="ru" lang="ru" rel="alternate">&#1056;&#1091;&#1089;&#1089;&#1082;&#1080;&#1081;&nbsp;(Russkij)</a>
+ <a href="list-full.sk.html" title="Slovak" hreflang="sk" lang="sk" rel="alternate">slovenčina</a>
+ <a href="list-full.sv.html" title="Swedish" hreflang="sv" lang="sv" rel="alternate">svenska</a>
+</div>
+How to set <a href="../intro/cn">the default document language</a>
+</div></div><!--/UdmComment-->
+<hr>
+<div id="footermap">
+<!--UdmComment-->
+<p><strong><a href="/">Home</a></strong></p>
+    <ul id="footermap-cola">
+		<li><a href="../intro/about">About</a>
+		  <ul>
+		  <li><a href="../social_contract">Social Contract</a></li>
+		  <li><a href="../code_of_conduct">Code of Conduct</a></li>
+		  <li><a href="../intro/free">Free Software</a></li>
+          <li><a href="../legal">Legal Info</a></li>
+		  </ul>
+		</li>
+        <li><a href="../intro/help">Help Debian</a></li>
+    </ul>
+	<ul id="footermap-colb">
+			<li><a href="../distrib/">Getting Debian</a>
+			  <ul>
+			  <li><a href="../distrib/netinst">Network install</a></li>
+			  <li><a href="../CD/">CD/USB ISO images</a></li>
+            <li><a href="../blends/">Pure Blends</a></li>
+			<li><a href="../distrib/packages">Debian Packages</a></li>
+			<li><a href="../devel/">Developers' Corner</a></li>
+			  </ul>
+			</li>
+	</ul>
+	<ul id="footermap-colc">
+		<li><a href="../News/">News</a>
+		  <ul>
+		  <li><a href="../News/weekly/">Project News</a></li>
+		  <li><a href="../events/">Events</a></li>
+		  </ul>
+		</li>
+    <li><a href="../doc/">Documentation</a>
+      <ul>
+      <li><a href="../releases/">Release Info</a></li>
+      <li><a href="https://wiki.debian.org/">Debian Wiki</a></li>
+      </ul>
+    </li>
+   </ul>
+   <ul id="footermap-cold">
+    <li><a href="../support">Support</a>
+	  <ul>
+			  <li><a href="../international/">Debian International</a></li>
+			  <li><a href="../security/">Security Information</a></li>
+			  <li><a href="../Bugs/">Bug reports</a></li>
+			  <li><a href="../MailingLists/">Mailing Lists</a></li>
+      </ul>
+    </li>
+</ul>
+<ul id="footermap-cole">
+  <li><a href="../sitemap">Site map</a></li>
+  <li><a href="https://search.debian.org/">Search</a></li>
+  <li><a href="https://bits.debian.org">The Debian Blog</a></li>
+  <li><a href="https://micronews.debian.org">Debian Micronews</a></li>
+  <li><a href="https://planet.debian.org">Debian Planet</a></li>
+</ul>
+<!--/UdmComment-->
+</div> <!-- end footermap -->
+<div id="fineprint">
+<!--UdmComment-->
+  <p>See our <a href="../contact">contact page</a> to get in touch. Web site source code is <a href="https://salsa.debian.org/webmaster-team/webwml">available</a>.</p>
+<p>
+Last Modified: Sun, May 23 16:22:01 UTC 2021
+&emsp;
+Last Built: Wed, Oct 16 11:28:29 UTC 2024
+  <br>
+  Copyright &copy; 1997-2021 <a href="https://www.spi-inc.org/">SPI</a> and others; See <a href="../license" rel="copyright">license terms</a><br>
+  Debian is a registered <a href="../trademark">trademark</a> of Software in the Public Interest, Inc.
+</p>
+<!--/UdmComment-->
+</div>
+</div> <!-- end footer -->
+</body>
+</html>

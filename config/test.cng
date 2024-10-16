@@ -155,3 +155,22 @@ d-i finish-install/reboot_in_progress note
 #d-i debian-installer/exit/halt boolean true
 # This will power off the machine instead of just halting it.
 d-i debian-installer/exit/poweroff boolean true
+
+# This command is run immediately before the partitioner starts. It may be
+# useful to apply dynamic partitioner preseeding that depends on the state
+# of the disks (which may not be visible when preseed/early_command runs).
+d-i partman/early_command string \
+  DISKS="$(list-devices disk)"; \
+  BIGGEST_DISK=""; \
+  BIGGEST_SIZE=0; \
+  for disk in $DISKS; do \
+    DEV_NAME="$(basename $disk)"; \
+    SIZE="$(cat /sys/block/$DEV_NAME/size)"; \
+    SECTOR_SIZE="$(cat /sys/block/$DEV_NAME/queue/hw_sector_size)"; \
+    SIZE_BYTES=$((SIZE * SECTOR_SIZE)); \
+    if [ "$SIZE_BYTES" -gt "$BIGGEST_SIZE" ]; then \
+      BIGGEST_SIZE="$SIZE_BYTES"; \
+      BIGGEST_DISK="$disk"; \
+    fi; \
+  done; \
+  debconf-set partman-auto/disk "$BIGGEST_DISK"

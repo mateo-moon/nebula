@@ -16,7 +16,7 @@ error_handler() {
     echo -e "${red}Error in script at line $(caller)${reset}"
     echo -e "${red}The command '${last_command}' failed with exit code ${exit_code}.${reset}"
 
-    umount $MOUNT_DIR
+    hdiutil eject $DISK
     exit "${exit_code}"
   }
 
@@ -29,8 +29,23 @@ if [ -z $QEMU_BIN ]; then
   exit 1
 fi
 
+# qemu-system-x86_64 version
+QEMU_VERSION=$($QEMU_BIN --version | egrep -o '[0-9]+\.[0-9]+\.[0-9]+' | tr '\n' '\0')
+
 # get the path to the edk2 image for later use in UEFI boot
-QEMU_EDK2_CODE="/usr/share/qemu/OVMF.fd"
+OS=$(uname -s)
+case $OS in
+  Darwin)
+    QEMU_EDK2_CODE="/opt/homebrew/Cellar/qemu/${QEMU_VERSION}/share/qemu/edk2-x86_64-code.fd"
+    ;;
+  Linux)
+    QEMU_EDK2_CODE="/usr/share/qemu/edk2-x86_64-code.fd"
+    ;;
+  *)
+    echo "Unsupported OS: $OS"
+    exit 1
+    ;;
+esac
 
 TMP_DIR="$(pwd)/qemu"
 mkdir -p $TMP_DIR
@@ -44,24 +59,29 @@ fi
 #Create a disk image
 QEMU_DISK_IMAGE="${TMP_DIR}/disk.raw"
 if [ ! -f $QEMU_DISK_IMAGE ]; then
-  fallocate -l 3g $QEMU_DISK_IMAGE
+  mkfile -n 3g $QEMU_DISK_IMAGE
 fi
 
 # Download ipxe image
 wget -nc -P "${TMP_DIR}" http://boot.ipxe.org/ipxe.efi
 
-# cd /tmp && wget -O netselect-apt.deb http://snapshot.debian.org/archive/debian/20230226T084744Z/pool/main/n/netselect/netselect-apt_0.3.ds1-30.1_all.deb && ar x netselect-apt.deb && unxz data.tar.xz && tar -xvf data.tar && chmod +x usr/bin/netselect-apt && sed -i "s/MIRROR_PLACEHOLDER/$(usr/bin/netselect-apt | awk 'NR==2 {print; exit}' | awk -F[/:] '{print $4}')/g" /var/lib/cdebconf/questions.dat
-
 # Create a bootable USB drive
-fallocate -l 200M "${TMP_DIR}/boot.usb"
-mkfs.fat -F 32 "${TMP_DIR}/boot.usb"
+mkfile -n 200M "${TMP_DIR}/boot.usb"
+DISK="$(hdiutil attach -noverify -nomount -imagekey diskimage-class=CRawDiskImage ${TMP_DIR}/boot.usb | cut -f 1 -d ' ' | head -1)"
+if [ $? -ne 0 ]; then
+  echo "Failed to attach"
+  exit 1
+fi
+diskutil eraseDisk FAT32 IPXE_BOOT $DISK
+hdiutil eject $DISK
 MOUNT_DIR="${TMP_DIR}/efi"
-mount -m -o loop "${TMP_DIR}/boot.usb" $MOUNT_DIR
+mkdir -p $MOUNT_DIR
+hdiutil attach -noverify -mountpoint $MOUNT_DIR -imagekey diskimage-class=CRawDiskImage "${TMP_DIR}/boot.usb"
 mkdir -p "${MOUNT_DIR}/EFI/BOOT/"
 cp "${TMP_DIR}/ipxe.efi" "${MOUNT_DIR}/EFI/BOOT/bootx64.efi"
 # the name of the script SHOULD BE autoexec.ipxe
-cp "autoexec.ipxe" "${MOUNT_DIR}/EFI/BOOT/"
-umount $MOUNT_DIR
+cp "scripts/autoexec.ipxe" "${MOUNT_DIR}/EFI/BOOT/"
+hdiutil eject $DISK
 
 args=(
   # create flash hardware with UEFI image and flash with UEFI variables
@@ -69,7 +89,7 @@ args=(
 
   # create network device with user mode network stack and open port 2222 on host machine to point to ssh of a guest
   # create hardware random number generator and connect it to the guest(required for some OSes to boot)
-  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22 -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
+  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::2222-:22 -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
 
   # bootload IPXE with autoexec.ipxe script
   -drive if=none,id=usbstick,format=raw,file="${TMP_DIR}/boot.usb" \
