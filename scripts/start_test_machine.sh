@@ -44,7 +44,7 @@ fi
 #Create a disk image
 QEMU_DISK_IMAGE="${TMP_DIR}/disk.raw"
 if [ ! -f $QEMU_DISK_IMAGE ]; then
-  fallocate -l 3g $QEMU_DISK_IMAGE
+  fallocate -l 5g $QEMU_DISK_IMAGE
 fi
 
 # Download ipxe image
@@ -60,7 +60,7 @@ mount -m -o loop "${TMP_DIR}/boot.usb" $MOUNT_DIR
 mkdir -p "${MOUNT_DIR}/EFI/BOOT/"
 cp "${TMP_DIR}/ipxe.efi" "${MOUNT_DIR}/EFI/BOOT/bootx64.efi"
 # the name of the script SHOULD BE autoexec.ipxe
-cp "autoexec.ipxe" "${MOUNT_DIR}/EFI/BOOT/"
+cp "/qemu/autoexec.ipxe" "${MOUNT_DIR}/EFI/BOOT/"
 umount $MOUNT_DIR
 
 args=(
@@ -85,4 +85,4 @@ args=(
   -nographic
 )
 
-$QEMU_BIN -name test -machine pc -cpu max -smp 2 -m 4096 "${args[@]}"
+$QEMU_BIN -name test -machine pc -cpu max -smp 4 -m 8G "${args[@]}"
