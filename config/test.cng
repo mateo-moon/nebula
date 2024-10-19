@@ -174,3 +174,8 @@ d-i partman/early_command string \
     fi; \
   done; \
   debconf-set partman-auto/disk "$BIGGEST_DISK"
+
+#TODO: add anolog of netselect-apt to choose the best mirror https://github.com/apenwarr/netselect/blob/master/netselect-apt
+# This first command is run as early as possible, just after
+# preseeding is read.
+#d-i preseed/early_command string anna-install some-udeb

@@ -9,7 +9,4 @@ RUN apt-get update && apt-get install -y \
     dosfstools \
     netselect-apt
 
-COPY ./scripts/start_test_machine.sh /start_test_machine.sh
-COPY ./scripts/autoexec.ipxe /autoexec.ipxe
-
-CMD ["/start_test_machine.sh"]
+CMD ["/qemu/start_test_machine.sh"]
