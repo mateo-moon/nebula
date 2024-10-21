@@ -29,11 +29,15 @@ if [ -z $QEMU_BIN ]; then
   exit 1
 fi
 
-# get the path to the edk2 image for later use in UEFI boot
-QEMU_EDK2_CODE="/usr/share/qemu/OVMF.fd"
-
 TMP_DIR="$(pwd)/qemu"
 mkdir -p $TMP_DIR
+
+# get the path to the edk2 image for later use in UEFI boot
+QEMU_EDK2_PATH="/usr/share/qemu/OVMF.fd"
+QEMU_EDK2_CODE="${TMP_DIR}/OVMF_CODE.fd"
+if [ ! -f $QEMU_EDK2_CODE ]; then
+  cp $QEMU_EDK2_PATH $QEMU_EDK2_CODE
+fi
 
 # Create UEFI variables file
 QEMU_UEFI_VARS="${TMP_DIR}/x86_uefi_vars.raw"
@@ -65,18 +69,18 @@ umount $MOUNT_DIR
 
 args=(
   # create flash hardware with UEFI image and flash with UEFI variables
-  -drive if=pflash,format=raw,unit=0,readonly=on,file="$QEMU_EDK2_CODE" -drive if=pflash,format=raw,unit=1,file="$QEMU_UEFI_VARS"
+  -drive if=pflash,format=raw,unit=0,file="$QEMU_EDK2_CODE" -drive if=pflash,format=raw,unit=1,file="$QEMU_UEFI_VARS"
 
   # create network device with user mode network stack and open port 2222 on host machine to point to ssh of a guest
   # create hardware random number generator and connect it to the guest(required for some OSes to boot)
   -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22 -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
 
   # bootload IPXE with autoexec.ipxe script
-  -drive if=none,id=usbstick,format=raw,file="${TMP_DIR}/boot.usb" \
-  -usb                                                             \
-  -device usb-ehci,id=ehci                                         \
-  -device usb-tablet,bus=usb-bus.0                                 \
-  -device usb-storage,bus=ehci.0,drive=usbstick
+  # -drive if=none,id=usbstick,format=raw,file="${TMP_DIR}/boot.usb" \
+  # -usb                                                             \
+  # -device usb-ehci,id=ehci                                         \
+  # -device usb-tablet,bus=usb-bus.0                                 \
+  # -device usb-storage,bus=ehci.0,drive=usbstick
 
   # attach a disk image to the guest
   -drive format=raw,file=$QEMU_DISK_IMAGE
