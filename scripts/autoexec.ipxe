@@ -1,6 +1,0 @@
-#!ipxe
-
-dhcp
-kernel http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/linux auto=true priority=critical console=ttyS0,115200n8 
-initrd http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/initrd.gz
-boot

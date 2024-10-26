@@ -1,0 +1,13 @@
+#!ipxe
+
+# Wait for 5 seconds for a key press to interrupt the script
+prompt --timeout 5000 Press any key to interrupt autoexec.ipxe script and enter the iPXE command line && shell ||
+
+# Get IP from DHCP
+dhcp
+# If test env use MAC adress, else use IP
+iseq ${manufacturer} QEMU && set config ${hostname} || set config ${ip}
+
+kernel http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/linux auto=true priority=critical console=ttyS0,115200n8 url=https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/${config}
+initrd http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/debian-installer/amd64/initrd.gz
+boot

@@ -22,6 +22,23 @@ error_handler() {
 
 trap error_handler ERR
 
+# Directory to search in
+directory="/qemu"
+
+# Check if exactly one argument is passed
+if [ -z "$CONFIG" ]; then
+    echo "No CONFIG is set. Set it to corresponding config"
+    exit 1
+fi
+
+# Argument as the file name
+config="$CONFIG"
+
+# Check if the file exists in the directory
+if [ -n "$directory/$config" ] && [ -n "$directory/${config}.ipxe" ]; then
+    echo "Config for '$config' does not exist in the directory '$directory'."
+fi
+
 # check if qemu-system-x86_64 is installed
 QEMU_BIN=$(which qemu-system-x86_64)
 if [ -z $QEMU_BIN ]; then
@@ -72,15 +89,16 @@ args=(
   -drive if=pflash,format=raw,unit=0,file="$QEMU_EDK2_CODE" -drive if=pflash,format=raw,unit=1,file="$QEMU_UEFI_VARS"
 
   # create network device with user mode network stack and open port 2222 on host machine to point to ssh of a guest
+  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22,hostname=${config}
   # create hardware random number generator and connect it to the guest(required for some OSes to boot)
-  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22 -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
+  -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
 
   # bootload IPXE with autoexec.ipxe script
-  # -drive if=none,id=usbstick,format=raw,file="${TMP_DIR}/boot.usb" \
-  # -usb                                                             \
-  # -device usb-ehci,id=ehci                                         \
-  # -device usb-tablet,bus=usb-bus.0                                 \
-  # -device usb-storage,bus=ehci.0,drive=usbstick
+  -drive if=none,id=usbstick,format=raw,file="${TMP_DIR}/boot.usb" \
+  -usb                                                             \
+  -device usb-ehci,id=ehci                                         \
+  -device usb-tablet,bus=usb-bus.0                                 \
+  -device usb-storage,bus=ehci.0,drive=usbstick
 
   # attach a disk image to the guest
   -drive format=raw,file=$QEMU_DISK_IMAGE
@@ -89,4 +107,4 @@ args=(
   -nographic
 )
 
-$QEMU_BIN -name test -machine pc -cpu max -smp 4 -m 8G "${args[@]}"
+exec $QEMU_BIN -name test -machine pc -cpu max -smp 4 -m 8G "${args[@]}"
