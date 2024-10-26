@@ -1,0 +1,13 @@
+#!ipxe
+
+# Wait for 5 seconds for a key press to interrupt the script
+prompt --timeout 5000 Press any key to interrupt autoexec.ipxe script and enter the iPXE command line && shell ||
+
+# Get IP from DHCP
+dhcp
+# If test env use MAC adress, else use IP
+iseq ${manufacturer} QEMU && set config ${hostname} || set config ${ip}
+
+kernel http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/vmlinuz-lts ip=dhcp alpine_repo=http://dl-cdn.alpinelinux.org/alpine/latest-stable/main modloop=http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/modloop-lts console=ttyS0,115200n8 ssh_key=https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/ssh.pub
+initrd http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/initramfs-lts
+boot
