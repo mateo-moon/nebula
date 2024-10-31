@@ -68,17 +68,13 @@ if [ ! -f $QEMU_DISK_IMAGE ]; then
   fallocate -l 5g $QEMU_DISK_IMAGE
 fi
 
-# Download ipxe image
-wget -nc -P "${TMP_DIR}" http://boot.ipxe.org/ipxe.efi
-
-# cd /tmp && wget -O netselect-apt.deb http://snapshot.debian.org/archive/debian/20230226T084744Z/pool/main/n/netselect/netselect-apt_0.3.ds1-30.1_all.deb && ar x netselect-apt.deb && unxz data.tar.xz && tar -xvf data.tar && chmod +x usr/bin/netselect-apt && sed -i "s/MIRROR_PLACEHOLDER/$(usr/bin/netselect-apt | awk 'NR==2 {print; exit}' | awk -F[/:] '{print $4}')/g" /var/lib/cdebconf/questions.dat
-
 # Create a bootable USB drive
 fallocate -l 200M "${TMP_DIR}/boot.usb"
 mkfs.fat -F 32 "${TMP_DIR}/boot.usb"
 MOUNT_DIR="${TMP_DIR}/efi"
 mount -m -o loop "${TMP_DIR}/boot.usb" $MOUNT_DIR
 mkdir -p "${MOUNT_DIR}/EFI/BOOT/"
+cp /ipxe/ipxe.efi "${TMP_DIR}/ipxe.efi"
 cp "${TMP_DIR}/ipxe.efi" "${MOUNT_DIR}/EFI/BOOT/bootx64.efi"
 # the name of the script SHOULD BE autoexec.ipxe
 cp "/qemu/autoexec.ipxe" "${MOUNT_DIR}/EFI/BOOT/"
