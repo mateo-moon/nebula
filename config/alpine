@@ -1,6 +1,11 @@
 !#/bin/sh
 
-#rm /etc/local.d/bootstrap.start
+# show script's output
+exec > >(tee -a /dev/tty0) 2>&1
+
+# delete this hack
+# otherwise this script will run on the system we newly installed
+rm -f /etc/local.d/bootstrap.start
 
 cat <<EOF > alpine-answers
 # Example answer file for setup-alpine script
