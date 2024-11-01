@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # Modified version of alpine initramfs init script https://github.com/alpinelinux/mkinitfs/blob/master/initramfs-init.in
-# This version allows to copy into sysroot whatever you add to /add folder in the initramfs
-# also this version enables local service by default, which allows to run scripts in /etc/local.d on a boot
+# This version runs /bootstrap script in the end of execution
+# this way it's possible to manipulate initramfs and customize steps
 
 # this is the init script version
-VERSION=@VERSION@
+VERSION=custom
 SINGLEMODE=no
 sysroot="$ROOT"/sysroot
 splashfile=/.splash.ctrl
@@ -454,7 +454,8 @@ myopts="autodetect_serial chart cryptroot cryptdm cryptheader cryptoffset
 	cryptdiscards cryptkey debug_init ds init init_args keep_apk_new modules
 	pkgs quiet root_size root usbdelay ip alpine_repo apkovl splash
 	blacklist overlaytmpfs overlaytmpfsflags rootfstype rootflags nbd resume resume_offset
-	s390x_net dasd ssh_key BOOTIF zfcp uevent_buf_size aoe aoe_iflist aoe_mtu wireguard"
+	s390x_net dasd ssh_key BOOTIF zfcp uevent_buf_size aoe aoe_iflist aoe_mtu wireguard
+  source_script"
 
 for opt; do
 	case "$opt" in
@@ -814,10 +815,6 @@ if [ -f "$sysroot/etc/.default_boot_services" -o ! -f "$ovl" ]; then
 
 	rc_add firstboot default
 
-  # missing feature of default alpine init script
-  # enable local.d by default
-  rc_add local default
-
 	# add openssh
 	if [ -n "$KOPT_ssh_key" ]; then
 		pkgs="$pkgs openssh"
@@ -992,8 +989,12 @@ if [ ! -x "${sysroot}${KOPT_init}" ]; then
 	/bin/busybox sh
 fi
 
-# Copy additional stuff to new root
-cp -a /add/. $sysroot/
+# Source custom script. Allows to modify original script behavior
+if [ -n "$KOPT_source_script" ]; then
+  echo "Sourcing custom script: '$KOPT_source_script'"
+  chmod +x $KOPT_source_script
+  source $KOPT_source_script 
+fi
 
 # switch over to new root
 cat "$ROOT"/proc/mounts 2>/dev/null | while read DEV DIR TYPE OPTS ; do
