@@ -1,11 +1,21 @@
-!#/bin/sh
+#!/bin/sh
 
-# show script's output
-exec > >(tee -a /dev/tty0) 2>&1
+echo "Setting up alpine"
+# Turn on local service in busybox init
+ln -sf /etc/init.d/local $sysroot/etc/runlevels/default/
 
-# delete this hack
-# otherwise this script will run on the system we newly installed
-rm -f /etc/local.d/bootstrap.start
+cat <<EOF > bootstrap.start
+
+echo "BOOTSTRAP START"
+# exec > >(tee -a /dev/tty0) 2>&1
+# # delete this hack
+# # otherwise this script will run on the system we newly installed
+# rm -f /etc/local.d/bootstrap.start
+# setup-alpine -f /etc/alpine-answers
+EOF
+
+cp bootstrap.start $sysroot/etc/local.d/
+chmod +x $sysroot/etc/local.d/bootstrap.start
 
 cat <<EOF > alpine-answers
 # Example answer file for setup-alpine script
@@ -70,4 +80,4 @@ LBUOPTS=none
 APKCACHEOPTS=none
 EOF
 
-setup-alpine -f alpine-answers
+cp alpine-answers $sysroot/etc/
