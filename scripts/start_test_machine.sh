@@ -71,7 +71,7 @@ args=(
   -drive if=pflash,format=raw,unit=0,file="$QEMU_EDK2_CODE" -drive if=pflash,format=raw,unit=1,file="$QEMU_UEFI_VARS"
 
   # create network device with user mode network stack and open port 2222 on host machine to point to ssh of a guest
-  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22,hostname="${HOSTNAME:=default}"
+  -device rtl8139,netdev=mynet0 -netdev user,id=mynet0,hostfwd=tcp::22-:22,hostname="${HOSTNAME:=qemu}"
   # create hardware random number generator and connect it to the guest(required for some OSes to boot)
   -smbios type=0,uefi=on -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
 
