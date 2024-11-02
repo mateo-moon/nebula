@@ -1,0 +1,13 @@
+#!ipxe
+
+# Wait for 5 seconds for a key press to interrupt the script
+prompt --timeout 5000 Press any key to interrupt autoexec.ipxe script and enter the iPXE command line && shell ||
+
+# Get IP from DHCP
+dhcp
+
+# Use hostname for config name, else use IP
+isset ${hostname} && set config ${hostname} || set config ${ip}
+
+# Chainload ipxe script with corresponding name
+chain https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/${config}/${config}.ipxe
