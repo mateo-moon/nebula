@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=ipxe_builder /ipxe/src/bin-x86_64-efi/ipxe.efi /ipxe/ipxe.efi
 
-EXPOSE 22 8133 8132 9443 6443 
+# Open ports: SSH, K0S API, K8s API
+EXPOSE 22 9443 6443 
 
 CMD ["/qemu/start_test_machine.sh"]
