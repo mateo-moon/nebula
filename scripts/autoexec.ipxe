@@ -6,6 +6,9 @@ prompt --timeout 5000 Press any key to interrupt autoexec.ipxe script and enter 
 # Get IP from DHCP
 dhcp
 
+# Set right time
+ntp pool.ntp.org
+
 # Chainload ipxe script with corresponding name
 chain https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/${hostname}/${hostname}.ipxe ||
 chain https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/${ip}/${ip}.ipxe
