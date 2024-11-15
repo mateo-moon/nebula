@@ -10,8 +10,13 @@ RUN apt update && apt install -y \
 
 # Clone iPXE repository and build the EFI image with HTTPS support
 RUN git clone https://github.com/ipxe/ipxe.git /ipxe
+
+# Build the iPXE EFI image with HTTPS support and NTP_CMD enabled
+# https is neede for retrieving config from github and NTP is used
+# for setting the correct time, without that TLS may fail
 RUN cd /ipxe/src && \
       sed -i '/DOWNLOAD_PROTO_HTTPS/ s/undef/define/' config/general.h && \
+      sed -i '/NTP_CMD/ s/\/\///' config/general.h && \
       make bin-x86_64-efi/ipxe.efi
 
 FROM debian:stable-slim
