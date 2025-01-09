@@ -1,0 +1,5 @@
+clusterSecrets:
+  ghcr:
+    type: kubernetes.io/dockerconfigjson
+    data:
+      .dockerconfigjson: ref+sops://../../.secrets/secrets.yaml#github/ghcr

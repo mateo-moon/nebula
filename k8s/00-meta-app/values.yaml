@@ -1,0 +1,34 @@
+env: ""
+
+# Common applications for all the clusters
+commonApps:
+  #  example-app:
+  #    disabled: true|false                 # defaults to false
+  #    appProject: ""                       # defaults to "devops"
+  #    appPlugin: ""                        # defaults to "helm", possible values: helm, helm-secrets
+  #    repoUrl: ""                          # defaults to https://gitlab.parity-mgmt.parity.io/infrastructure/cloud-infra.git
+  #    helmReleaseName: ""                  # defaults to "appName"
+  #    helmReleaseNamespace: ""             # defaults to "appName"
+  #    helmChartPath: ""                    # chart's directory name, defaults to "appName"
+  #    helmCustomValues: ""                 # specify whether helm chart has custom values file, defaults to true
+  #    helmCustomValuesSuffix: ""           # customize values file suffix. Useful to install same chart multiple times with different parameters
+  #    helmSkipCrds: true|false             # defaults to false
+  #    autosync: true|false                 # defaults to true, set to false ti disable automated sync policy
+  #    helmSyncOptionsReplace: true|false   # defaults to false
+  #    appTargetRevision: ""                # defaults to "HEAD"
+  #    appIgnoreDifferences: []             # defaults to []. Force Argo CD to ignore differences for some externally managed fields (e.g., replicas)#
+  #    appServerSideApply: false            " defaults to false"
+  #    additionalValuesSourceRepo:          # Optional List of additional repository sources for values. Example. additionalValuesSourceRepos: - name: <uniqueName> repoUrl: <repoUrl>
+  #    targetClusterURL: ""                 # defaults to "https://kubernetes.default.svc". Specify a different cluster URL to deploy the application to. A cluster must be configured first
+  #    targetClusterName: ""                # Optional. Specify a different cluster name to deploy the application to. A cluster must be configured first
+  argo-cd:
+    enable: true
+  cluster-secret:
+    enable: true
+  00-meta-app:
+    enable: true
+
+
+
+# Project specific Application resources
+additionalApps: {}
