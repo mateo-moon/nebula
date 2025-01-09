@@ -1,0 +1,12 @@
+{{ if .Values.appProjects }}
+{{- range $key, $value := .Values.appProjects }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $key }}
+  namespace: argo-cd
+spec:
+{{- (tpl (toYaml $value) $key ) | nindent 2 }}
+{{- end }}
+{{- end }}
