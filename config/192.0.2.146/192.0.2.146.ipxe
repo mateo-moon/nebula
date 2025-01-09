@@ -3,7 +3,7 @@
 # Get IP from DHCP
 dhcp
 
-kernel http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/vmlinuz-lts ip=dhcp alpine_repo=http://dl-cdn.alpinelinux.org/alpine/latest-stable/main modloop=http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/modloop-lts ssh_key=https://github.com/mateo-moon.keys source_script=/bootstrap
+kernel http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/vmlinuz-lts ip=dhcp alpine_repo=http://dl-cdn.alpinelinux.org/alpine/latest-stable/main modloop=http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/modloop-lts console=tty1,115200n8 ssh_key=https://github.com/mateo-moon.keys source_script=/bootstrap
 initrd http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/initramfs-lts
 initrd https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/alpine/initramfs_init.sh /init mode=755
 initrd https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/alpine/alpine /bootstrap mode=755

@@ -1,1 +1,4 @@
-- name: geerlingguy.docker
+collections:
+  - name: https://github.com/paritytech/ansible-polkadot.git
+    type: git
+    version: main
