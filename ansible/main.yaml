@@ -2,7 +2,17 @@
 - hosts: all
   become: yes
   gather_facts: true
-  tasks:
-    - name: Print all available facts
-      ansible.builtin.debug:
-        var: ansible_facts
+  pre_tasks:
+    - name: dependencies
+      ansible.builtin.apt:
+        pkg:
+          - gpg
+        state: present
+  roles:
+    - paritytech.chain.node
+  vars:
+    node_paritydb_enable: true
+    node_custom_options:
+      - "--telemetry-url 'wss://telemetry.polkadot.io/submit/ 0'"
+      - "--sync warp"
+    node_telemetry_url: wss://telemetry-backend.w3f.community/submit/ 1

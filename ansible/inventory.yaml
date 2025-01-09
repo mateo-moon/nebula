@@ -1,1 +1,29 @@
-2a01:04f8:0151:8402:0000:0000:0000:0000
+all:
+  vars:
+    node_app_name: Jupiter
+    node_binary: https://github.com/paritytech/polkadot-sdk/releases/download/polkadot-stable2409-2/polkadot
+    node_prepare_worker_binary: https://github.com/paritytech/polkadot-sdk/releases/download/polkadot-stable2409-2/polkadot-prepare-worker
+    node_execute_worker_binary: https://github.com/paritytech/polkadot-sdk/releases/download/polkadot-stable2409-2/polkadot-execute-worker
+    node_binary_signature: https://github.com/paritytech/polkadot-sdk/releases/download/polkadot-stable2409-2/polkadot.asc
+    node_prepare_worker_binary_signature: https://github.com/paritytech/polkadot-sdk/releases/download/polkadot-stable2409-2/polkadot-prepare-worker.asc
+    node_execute_worker_binary_signature: https://github.com/paritytech/polkadot-sdk/releases/download/polkadot-stable2409-2/polkadot-execute-worker.asc
+  children:
+    validators:
+      vars:
+      hosts:
+        io.jupiter.nebula:
+          ansible_host: 173.214.163.130
+          ansible_user: root
+          node_public_name: bright-side-3
+          node_role: validator
+          node_chain: polkadot
+          node_user: polkadot
+    collators:
+      vars:
+        node_binary: https://github.com/paritytech/cumulus/releases/download/{{ node_binary_version }}0/polkadot-parachain
+        node_binary_signature: https://github.com/paritytech/cumulus/releases/download/{{ node_binary_version }}0/polkadot-parachain.asc
+        node_parachain_chain: shell
+      # hosts:
+      #   collator1:
+      #     ansible_host: io.jupiter.nebula
+      #     node_parachain_role: collator
