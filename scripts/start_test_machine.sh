@@ -16,7 +16,9 @@ error_handler() {
     echo -e "${red}Error in script at line $(caller)${reset}"
     echo -e "${red}The command '${last_command}' failed with exit code ${exit_code}.${reset}"
 
-    umount $MOUNT_DIR
+    if [ -n "${MOUNT_DIR:-}" ]; then
+      umount "$MOUNT_DIR" || true
+    fi
     exit "${exit_code}"
   }
 
@@ -54,17 +56,16 @@ if [ ! -f $QEMU_DISK_IMAGE ]; then
   fallocate -l 5g $QEMU_DISK_IMAGE
 fi
 
-# Create a bootable USB drive
-fallocate -l 200M "${TMP_DIR}/boot.usb"
-mkfs.fat -F 32 "${TMP_DIR}/boot.usb"
-MOUNT_DIR="${TMP_DIR}/efi"
-mount -m -o loop "${TMP_DIR}/boot.usb" $MOUNT_DIR
-mkdir -p "${MOUNT_DIR}/EFI/BOOT/"
-cp /ipxe/ipxe.efi "${TMP_DIR}/ipxe.efi"
-cp "${TMP_DIR}/ipxe.efi" "${MOUNT_DIR}/EFI/BOOT/bootx64.efi"
-# the name of the script SHOULD BE autoexec.ipxe
-cp "/qemu/autoexec.ipxe" "${MOUNT_DIR}/EFI/BOOT/"
-umount $MOUNT_DIR
+# Create bootable USB via helper script
+BOOT_USB_IMAGE="${TMP_DIR}/boot.usb"
+IPXE_EFI_SOURCE="/ipxe/ipxe.efi"
+AUTOEXEC_SOURCE="/qemu/autoexec.ipxe"
+
+"$(dirname "$0")/build_boot_usb.sh" \
+  --output "${BOOT_USB_IMAGE}" \
+  --ipxe-efi "${IPXE_EFI_SOURCE}" \
+  --autoexec "${AUTOEXEC_SOURCE}" \
+  --force
 
 args=(
   # create flash hardware with UEFI image and flash with UEFI variables
