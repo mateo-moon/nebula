@@ -28,9 +28,22 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     dosfstools \
-    netselect-apt
+    netselect-apt \
+    parted \
+    gdisk \
+    kpartx \
+    mtools \
+    python3
 
 COPY --from=ipxe_builder /ipxe/src/bin-x86_64-efi/ipxe.efi /ipxe/ipxe.efi
+
+# Provide USB builder tool inside the image for convenience
+COPY scripts/build_boot_usb.sh /usr/local/bin/build_boot_usb.sh
+RUN chmod +x /usr/local/bin/build_boot_usb.sh
+
+# Provide GPT disk builder script inside the image
+COPY scripts/container_build_gpt_disk.sh /usr/local/bin/container_build_gpt_disk.sh
+RUN chmod +x /usr/local/bin/container_build_gpt_disk.sh
 
 # Open ports: SSH, K0S API, K8s API
 EXPOSE 22 9443 6443 
