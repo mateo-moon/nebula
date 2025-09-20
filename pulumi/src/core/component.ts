@@ -1,0 +1,30 @@
+import type { PulumiFn } from '@pulumi/pulumi/automation';
+import { Environment } from './environment';
+
+export abstract class Component {
+  constructor(
+    public readonly env: Environment,
+    public readonly name: string,
+  ) {}
+
+  /**
+   * Program that defines this component's resources.
+   * Returned function is executed by Pulumi Automation API.
+   */
+  public abstract createProgram(): PulumiFn;
+
+  /** Name of the Pulumi stack for this component in the environment */
+  public get stackName(): string {
+    return `${this.env.id}-${this.name}`;
+  }
+
+  /** Pulumi project name */
+  public get projectName(): string {
+    return this.env.projectId;
+  }
+
+  /** Optional stack config key-value pairs */
+  public get stackConfig(): Record<string, string> {
+    return {};
+  }
+}
