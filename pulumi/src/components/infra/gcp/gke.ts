@@ -49,6 +49,27 @@ export class Gke {
       },
     });
 
+    // Create a dedicated service account for GKE nodes and grant the default node role
+    const nodeServiceAccount = new gcp.serviceaccount.Account(`${clusterName}-nodes`, {
+      accountId: `${clusterName}-nodes`,
+      displayName: `${clusterName} GKE nodes`,
+    });
+
+    new gcp.projects.IAMMember(`${clusterName}-nodes-container-default`, {
+      project: gcp.config.project!,
+      role: 'roles/container.defaultNodeServiceAccount',
+      member: pulumi.interpolate`serviceAccount:${nodeServiceAccount.email}`,
+    });
+
+    // Also grant the role to the Compute Engine default service account to satisfy diagnostics
+    const projectInfo = gcp.organizations.getProjectOutput({ projectId: gcp.config.project });
+    const computeDefaultSa = projectInfo.number.apply(n => `${n}-compute@developer.gserviceaccount.com`);
+    new gcp.projects.IAMMember(`${clusterName}-compute-default-container-default`, {
+      project: gcp.config.project!,
+      role: 'roles/container.defaultNodeServiceAccount',
+      member: pulumi.interpolate`serviceAccount:${computeDefaultSa}`,
+    });
+
     this.nodePool = new gcp.container.NodePool(`${clusterName}-np`, {
       name: `${clusterName}-np`,
       cluster: this.cluster.name,
@@ -63,6 +84,7 @@ export class Gke {
         diskSizeGb: cfg?.volumeSizeGb ?? 10,
         labels: { 'node-role.kubernetes.io': 'system', ...(undefined as any) },
         taints: undefined as any,
+        serviceAccount: nodeServiceAccount.email,
         oauthScopes: [
           'https://www.googleapis.com/auth/cloud-platform',
         ],

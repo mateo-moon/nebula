@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
 import { Environment, EnvironmentConfig } from "./environment";
 import { Utils } from "../utils";
-import { destroyComponent, upComponent } from './automation';
+import { destroyComponent, previewComponent, upComponent } from './automation';
 
 export interface ProjectConfig {
   id: string;
@@ -32,7 +32,7 @@ export class Project {
   }
 
   private bootstrap() {
-    Utils.createProjectConfigPath({} as any);
+    Utils.createProjectConfigPath();
     // Only perform AWS-related bootstrapping when AWS config is present
     if (this.config.aws) {
       Utils.generateAwsConfigFile(this.config);
@@ -67,6 +67,14 @@ export class Project {
     for (const env of Object.values(this.environments)) {
       for (const component of env.components) {
         await destroyComponent(component);
+      }
+    }
+  }
+  
+  public async previewAll() {
+    for (const env of Object.values(this.environments)) {
+      for (const component of env.components) {
+        await previewComponent(component);
       }
     }
   }

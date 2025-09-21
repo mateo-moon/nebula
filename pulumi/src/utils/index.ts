@@ -2,7 +2,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { Construct } from 'constructs';
 import { ProjectConfig } from '../core/project';
 import { S3Client, HeadBucketCommand, CreateBucketCommand, PutBucketVersioningCommand, BucketLocationConstraint } from '@aws-sdk/client-s3';
 import { STS } from '@aws-sdk/client-sts'
@@ -124,6 +123,20 @@ sso_registration_scopes = sso:account:access\
       // gcloud not available; skip
       return;
     }
+    const isContainer = (() => { try { return execSync('id -u').toString().trim() === '999'; } catch { return false; } })();
+    const allowInteractive = process.stdout.isTTY && !isContainer && process.env.GCP_INTERACTIVE_LOGIN !== 'false';
+    const maybeReauth = (err: any) => {
+      if (!allowInteractive) return false;
+      const msg = [err?.stderr?.toString?.(), err?.stdout?.toString?.(), err?.message]
+        .filter(Boolean)
+        .join('\n');
+      if (!msg) return false;
+      const needs = /Reauthentication required|login required|invalid_grant|permission denied|unauthorized/i.test(msg);
+      if (needs) {
+        try { execSync('gcloud auth login --update-adc', { stdio: 'inherit' }); return true; } catch { return false; }
+      }
+      return false;
+    };
     const normalizeLocation = (loc?: string) => {
       if (!loc) return 'US';
       // Allow AWS-style shortcodes like eu-west3 -> europe-west3
@@ -136,11 +149,30 @@ sso_registration_scopes = sso:account:access\
       // Describe bucket; if it fails, create it
       execSync(`gcloud storage buckets describe gs://${config.bucket}`, { stdio: 'ignore' });
       return;
-    } catch {}
+    } catch (err: any) {
+      // Try to re-auth and re-check once if needed
+      if (maybeReauth(err)) {
+        try {
+          execSync(`gcloud storage buckets describe gs://${config.bucket}`, { stdio: 'ignore' });
+          return;
+        } catch {}
+      }
+    }
     try {
       const location = normalizeLocation(config.location);
       execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location}`, { stdio: 'inherit' });
     } catch (e) {
+      // Retry once after interactive auth if needed
+      if (maybeReauth(e)) {
+        try {
+          const location = normalizeLocation(config.location);
+          execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location}`, { stdio: 'inherit' });
+          return;
+        } catch (e2) {
+          console.error(`Failed to create GCS bucket ${config.bucket}:`, (e2 as any)?.message || e2);
+          return;
+        }
+      }
       console.error(`Failed to create GCS bucket ${config.bucket}:`, (e as any)?.message || e);
     }
   }
@@ -150,7 +182,7 @@ sso_registration_scopes = sso:account:access\
    * @param scope - CDK construct scope for error annotations
    * @param path - Optional custom path for config directory
    */
-  public static createProjectConfigPath(_scope?: Construct, p?: string) {
+  public static createProjectConfigPath(p?: string) {
     const dir = p || projectConfigPath;
     try {
       if (!fs.existsSync(dir)) {
@@ -219,6 +251,25 @@ sso_registration_scopes = sso:account:access\
         }
       } catch {
         // gcloud not installed; skip silently
+      }
+
+      // If no ADC yet, open browser for interactive login (ADC), unless disabled
+      const adcPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      const hasAdc = adcPath && fs.existsSync(adcPath);
+      let gcloudAvailable = false;
+      try { execSync('gcloud --version', { stdio: 'ignore' }); gcloudAvailable = true; } catch {}
+      const isContainer = (() => { try { return execSync('id -u').toString().trim() === '999'; } catch { return false; } })();
+      if (!hasAdc && gcloudAvailable && process.stdout.isTTY && !isContainer && process.env.GCP_INTERACTIVE_LOGIN !== 'false') {
+        try {
+          execSync('gcloud auth application-default login --update-adc', { stdio: 'inherit' });
+          if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(defaultAdcPath)) {
+            process.env.GOOGLE_APPLICATION_CREDENTIALS = defaultAdcPath;
+          }
+          if (projectId) {
+            try { execSync(`gcloud config set project ${projectId}`, { stdio: 'ignore' }); } catch {}
+            try { execSync(`gcloud auth application-default set-quota-project ${projectId}`, { stdio: 'ignore' }); } catch {}
+          }
+        } catch {}
       }
 
       // If we still don't have ADC, emit a helpful hint

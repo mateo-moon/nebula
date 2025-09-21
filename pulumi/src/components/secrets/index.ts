@@ -1,393 +1,203 @@
-import * as YAML from "yaml";
-import * as fs from "fs";
-import { File } from "../../../.gen/providers/local/file";
-import { Kms } from '../../../.gen/modules/terraform-aws-modules/aws/kms';
-import { TerraformOutput, Annotations } from "cdktf";
-import { DataAwsIamRoles } from "../../../.gen/providers/aws/data-aws-iam-roles"
-import { IamAssumableRole } from "../../../.gen/modules/terraform-aws-modules/aws/iam/modules/iam-assumable-role";
-import { IamPolicy as AwsIamPolicy } from "../../../.gen/modules/terraform-aws-modules/aws/iam/modules/iam-policy";
-import { Environment } from "../../core/environment";
-import { Component } from "../../core/component";
-import { RenameDependencies, WithAwsProvider } from "../../utils/decorators";
-
-
-type outputs = {
-}
-interface Outputs {
-  outputs?: outputs;
-}
-
-/**
- * Supported encryption methods for SOPS
- * TODO(OP): Add pgp method encryption
- */
-export type EncryptionMethod = 'kms' | 'pgp'
+import * as fs from 'fs';
+import * as YAML from 'yaml';
+import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+import * as gcp from '@pulumi/gcp';
+import type { PulumiFn } from '@pulumi/pulumi/automation';
+import { Component } from '../../core/component';
+import { Environment } from '../../core/environment';
 
 export interface SecretsConfig {
-  readonly methods: EncryptionMethod[];
-  readonly arns?: string[];
+  deploy?: boolean;
+  paths?: string[];
+  aws?: {
+    enabled?: boolean;
+    alias?: string;            // e.g. alias/sops-<env>
+    createRole?: boolean;
+    roleName?: string;
+    allowAssumeRoleArns?: string[];
+  };
+  gcp?: {
+    enabled?: boolean;
+    location?: string;         // e.g. global
+    keyRing?: string;          // e.g. sops-<env>
+    keyName?: string;          // e.g. sops-<env>
+    members?: string[];        // e.g. serviceAccount:foo@project.iam.gserviceaccount.com
+  };
 }
 
-/**
- * Root SOPS configuration
- * https://github.com/getsops/sops
- */
-/**
- * SOPS creation rule for encrypting secrets
- * @interface CreationRule
- */
-interface CreationRule {
-  /** Regular expression pattern for matching secret files */
+type SopsCreationRule = {
   path_regex: string;
-  /** Groups of encryption keys to use */
-  key_groups: {
-    /** KMS key configuration */
-    kms?: {
-      /** ARN of the KMS key */
-      arn: string;
-      /** ARN of the IAM role with KMS access */
-      role: string;
-    }[]
-  }[]
-}
+  key_groups: Array<{
+    kms?: Array<{ arn: string; role?: string }>;
+    gcp_kms?: Array<{ resource_id: string }>;
+  }>;
+};
 
-/**
- * SOPS configuration file structure
- * @interface SopsConfig
- */
-interface SopsConfig {
-  /** List of rules for encrypting different files */
-  creation_rules: CreationRule[];
-  /** Configuration for different file formats */
-  stores: {
-    /** YAML-specific configuration */
-    yaml: {
-      /** Number of spaces for YAML indentation */
-      indent: number;
-    }
-  }
-}
+type SopsConfig = {
+  creation_rules: SopsCreationRule[];
+  stores: { yaml: { indent: number } };
+};
 
-interface KmsResources {
-  key: Kms;
-  role: IamAssumableRole;
-}
-
-/**
- * Secrets stack that manages SOPS configuration and KMS encryption resources
- * 
- * This stack is responsible for:
- * - Creating and managing KMS keys for encryption
- * - Setting up IAM roles and policies for KMS access
- * - Generating SOPS configuration file (.sops.yaml)
- * - Managing access control for secrets encryption/decryption
- */
-@RenameDependencies()
-@WithAwsProvider()
-export class Secrets
-  extends Component
-  implements SecretsConfig, Outputs
-{
-  public outputs?: outputs;
-  public readonly methods: EncryptionMethod[];
-  public readonly arns?: string[];
-  private kmsResources?: KmsResources;
+export class Secrets extends Component implements SecretsConfig {
+  public readonly deploy?: boolean;
+  public readonly paths?: string[];
+  public readonly aws?: SecretsConfig['aws'];
+  public readonly gcp?: SecretsConfig['gcp'];
 
   constructor(
     public readonly env: Environment,
-    public readonly id: string, 
+    public readonly name: string,
     public readonly config: SecretsConfig
   ) {
-    super(env, id);
-    this.methods = config.methods;
+    super(env, name);
+    this.deploy = config.deploy;
+    this.paths = config.paths;
+    this.aws = config.aws;
+    this.gcp = config.gcp;
   }
 
-  public init(): Secrets {
-    // Create secrets file
-    this.createSecretsFile();
-    this.giveAccess(this.arns);
-    return this;
-  }
+  public createProgram(): PulumiFn {
+    return async () => {
+      if (this.deploy === false) return;
 
-  /**
-   * Creates or updates the .sops.yaml configuration file
-   * 
-   * This method:
-   * - Reads existing SOPS configuration if present
-   * - Creates KMS resources if KMS encryption is enabled
-   * - Updates configuration with new encryption rules
-   * - Writes the updated configuration to .sops.yaml
-   */
-  private createSecretsFile(): void {
-    const sopsFilePath = `${projectRoot}/.sops.yaml`;
-    let existingConfig: SopsConfig = { creation_rules: [], stores: { yaml: { indent: 2 } } };
+      const sopsPath = `${projectRoot}/.sops.yaml`;
+      const existing: SopsConfig = this.readSopsConfig(sopsPath);
 
-    // Try to read existing config
-    try {
-      if (fs.existsSync(sopsFilePath)) {
-        const content = fs.readFileSync(sopsFilePath, 'utf8');
-        existingConfig = YAML.parse(content);
-      }
-    } catch (error) {
-      Annotations.of(this).addError(`Failed to read existing .sops.yaml: ${error}`);
-    }
-
-    // Create KMS resources if method is enabled
-    if (this.config?.methods.includes('kms') && this.env?.config?.awsConfig) {
-      this.outputs = {}
-      this.kmsResources = this.createKmsResources();
-    }
-
-    // Update or add rules for current environment
-    const updatedConfig = this.updateSopsConfig(existingConfig);
-
-    new File(this, "local_file", {
-      filename: sopsFilePath,
-      content: '#Generated with CDKTF\n' + YAML.stringify(updatedConfig, { indent: 2 }),
-    });
-  }
-
-  /**
-   * Creates and attaches IAM trust policy to the SOPS role
-   * @param principalArns - List of IAM principal ARNs that can assume the role. Supports wildcards (*)
-   * @throws Error if KMS resources are not initialized
-   */
-  public giveAccess(principalArns: string[] | undefined): void {
-    if (!principalArns) {
-      return;
-    }
-    if (!this.kmsResources?.role) {
-      throw new Error('KMS resources must be initialized before attaching trust policy');
-    }
-
-    // Split ARNs into exact matches and wildcard patterns
-    const exactArns: string[] = [];
-    const wildcardPatterns: string[] = [];
-
-    principalArns.forEach(arn => {
-      if (arn.includes('*')) {
-        wildcardPatterns.push(arn);
-      } else {
-        exactArns.push(arn);
-      }
-    });
-
-    // Get existing trust policy or create a new one
-    let existingPolicy: any = {
-      Version: "2012-10-17",
-      Statement: []
-    };
-
-    const existingPolicyStr = this.kmsResources.role.customRoleTrustPolicy
-    if (existingPolicyStr) {
-      try {
-        existingPolicy = JSON.parse(existingPolicyStr);
-      } catch (e) {
-        Annotations.of(this).addWarning(`Failed to parse existing trust policy: ${e}`);
-      }
-    }
-
-    // Add new statements for exact ARNs if any exist
-    if (exactArns.length > 0) {
-      // Find existing statement for exact ARNs
-      const existingExactStatement = existingPolicy.Statement.find((s: any) => 
-        s.Effect === "Allow" && 
-        s.Action === "sts:AssumeRole" && 
-        s.Principal?.AWS && 
-        !s.Condition
-      );
-
-      if (existingExactStatement) {
-        // Convert existing Principal.AWS to array if it's a string
-        if (typeof existingExactStatement.Principal.AWS === 'string') {
-          existingExactStatement.Principal.AWS = [existingExactStatement.Principal.AWS];
-        }
-        // Add new ARNs that don't already exist
-        exactArns.forEach(arn => {
-          if (!existingExactStatement.Principal.AWS.includes(arn)) {
-            existingExactStatement.Principal.AWS.push(arn);
-          }
+      const useAws = (this.aws?.enabled !== false) && !!this.env.config.awsConfig;
+      let awsKeyArn: pulumi.Output<string> | undefined;
+      let awsRoleArn: pulumi.Output<string> | undefined;
+      if (useAws) {
+        const aliasName = this.aws?.alias || `alias/sops-${this.env.id}`;
+        const key = new aws.kms.Key(`${this.name}-key`, {
+          description: `SOPS key for env ${this.env.id}`,
+          deletionWindowInDays: 7,
+          enableKeyRotation: true,
         });
-      } else {
-        existingPolicy.Statement.push({
-          Effect: "Allow",
-          Principal: {
-            AWS: exactArns
-          },
-          Action: "sts:AssumeRole"
+        new aws.kms.Alias(`${this.name}-alias`, {
+          name: aliasName.startsWith('alias/') ? aliasName : `alias/${aliasName}`,
+          targetKeyId: key.keyId,
         });
-      }
-    }
+        awsKeyArn = key.arn;
 
-    // Add new statements for wildcard patterns if any exist
-    if (wildcardPatterns.length > 0) {
-      // Find existing statement for wildcard patterns
-      const existingWildcardStatement = existingPolicy.Statement.find((s: any) => 
-        s.Effect === "Allow" && 
-        s.Action === "sts:AssumeRole" && 
-        s.Principal?.AWS === "*" &&
-        s.Condition?.StringLike?.["aws:PrincipalARN"]
-      );
-
-      if (existingWildcardStatement) {
-        // Convert existing patterns to array if it's a string
-        if (typeof existingWildcardStatement.Condition.StringLike["aws:PrincipalARN"] === 'string') {
-          existingWildcardStatement.Condition.StringLike["aws:PrincipalARN"] = 
-            [existingWildcardStatement.Condition.StringLike["aws:PrincipalARN"]];
-        }
-        // Add new patterns that don't already exist
-        wildcardPatterns.forEach(pattern => {
-          if (!existingWildcardStatement.Condition.StringLike["aws:PrincipalARN"].includes(pattern)) {
-            existingWildcardStatement.Condition.StringLike["aws:PrincipalARN"].push(pattern);
-          }
-        });
-      } else {
-        existingPolicy.Statement.push({
-          Effect: "Allow",
-          Principal: {
-            AWS: "*"
-          },
-          Action: "sts:AssumeRole",
-          Condition: {
-            StringLike: {
-              "aws:PrincipalARN": wildcardPatterns
-            }
-          }
-        });
-      }
-    }
-
-    // Apply the updated trust policy
-    this.kmsResources.role.addOverride('custom_role_trust_policy', JSON.stringify(existingPolicy));
-    this.kmsResources.role.addOverride('create_custom_role_trust_policy', true);
-  }
-
-  /**
-   * Creates KMS key and IAM role resources for SOPS encryption
-   * 
-   * @returns Object containing the created KMS key and IAM role
-   * @throws Error if AWS configuration is missing
-   */
-  private createKmsResources(): KmsResources {
-    const keyName = `sops-key-${this.id}`;
-    const roleName = `sops-role-${this.id}`;
-
-    // Create KMS key
-    var key = new Kms(this, 'kms', {
-      description: `SOPS encryption key for ${this.id} environment`,
-      deletionWindowInDays: 7,
-      enableKeyRotation: true,
-      aliases: [`alias/${keyName}`],
-    });
-
-    const sopsPolicy = new AwsIamPolicy(this, 'aws_iam_policy', {
-      name: `sops-policy-${this.id}`,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Effect: "Allow",
-          Action: [
-            "kms:Decrypt",
-            "kms:Encrypt",
-            "kms:ReEncrypt*",
-            "kms:GenerateDataKey*",
-            "kms:DescribeKey",
-          ],
-          Resource: key.keyArnOutput,
-        }]
-      })
-    })
-
-
-    let adminRole: DataAwsIamRoles | undefined;
-    if (!this.env.project.config.aws?.sso_config?.sso_role_name) {
-      adminRole = new DataAwsIamRoles(
-        this,
-        "data_aws_iam_roles",
-        {nameRegex: `.*${this.env.project.config.aws?.sso_config?.sso_role_name}.*`}
-      );
-    }
-    const role = new IamAssumableRole(this, 'iam_assumable_role', {
-      createRole: true,
-      roleName: roleName,
-      roleRequiresMfa: false,
-      customRolePolicyArns: [sopsPolicy.arnOutput],
-      createCustomRoleTrustPolicy: true,
-      customRoleTrustPolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Effect: "Allow",
-          Principal: {
-            AWS: adminRole?.arns[0] || ""
-          },
-          Action: "sts:AssumeRole"
-        }]
-      })
-    });
-
-    // Create outputs
-    new TerraformOutput(this, 'kms_key_arn', {
-      value: key.keyArnOutput,
-    });
-    new TerraformOutput(this, 'iam_assumable_role_arn', {
-      value: role.iamRoleArnOutput,
-    });
-    return { key, role };
-  }
-
-  /**
-   * Updates SOPS configuration with new encryption rules
-   * 
-   * @param existingConfig - Current SOPS configuration
-   * @returns Updated SOPS configuration with new rules
-   */
-  private updateSopsConfig(existingConfig: SopsConfig): SopsConfig {
-    const pathPatterns = [
-      `.*/secrets\\.yaml`,
-      `.*/secrets-${this.env.id}\\.yaml`,
-    ];
-
-    // For each path pattern
-    pathPatterns.forEach(pattern => {
-      // Find existing rule for this pattern
-      const existingRuleIndex = existingConfig.creation_rules.findIndex(
-        rule => rule.path_regex === pattern
-      );
-
-      if (this.kmsResources) {
-        const kmsConfig = {
-          arn: this.kmsResources.key.keyArnOutput,
-          role: this.kmsResources.role.iamRoleArnOutput
-        };
-
-        if (existingRuleIndex === -1) {
-          // Create new rule if doesn't exist
-          existingConfig.creation_rules.push({
-            path_regex: pattern,
-            key_groups: [{
-              kms: [kmsConfig]
-            }]
+        if (this.aws?.createRole) {
+          const role = new aws.iam.Role(`${this.name}-sops-role`, {
+            name: this.aws.roleName || `sops-role-${this.env.id}`,
+            assumeRolePolicy: this.buildAwsAssumeRolePolicy(this.aws.allowAssumeRoleArns || []),
           });
-        } else {
-          // Update existing rule
-          const rule = existingConfig.creation_rules[existingRuleIndex];
-          if (!rule.key_groups[0]) {
-            rule.key_groups[0] = { kms: [] };
-          }
-          if (!rule.key_groups[0].kms) {
-            rule.key_groups[0].kms = [];
-          }
-
-          // Add KMS config if not already present
-          const existingKmsConfig = rule.key_groups[0].kms.find(
-            k => k.arn === kmsConfig.arn && k.role === kmsConfig.role
-          );
-          if (!existingKmsConfig) {
-            rule.key_groups[0].kms.push(kmsConfig);
-          }
+          new aws.iam.RolePolicy(`${this.name}-sops-policy`, {
+            role: role.name,
+            policy: key.arn.apply(arn => JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [{
+                Effect: 'Allow',
+                Action: [
+                  'kms:Decrypt','kms:Encrypt','kms:ReEncrypt*','kms:GenerateDataKey*','kms:DescribeKey'
+                ],
+                Resource: arn,
+              }],
+            })),
+          });
+          awsRoleArn = role.arn;
         }
       }
-    });
-    return existingConfig;
+
+      // Optionally provision GCP KMS
+      const useGcp = (this.gcp?.enabled === true) || (!useAws && !!this.env.config.gcpConfig);
+      let gcpKeyResourceId: pulumi.Output<string> | undefined;
+      if (useGcp) {
+        const location = this.gcp?.location || 'global';
+        const ringName = this.gcp?.keyRing || `sops-${this.env.id}`;
+        const keyName = this.gcp?.keyName || `sops-${this.env.id}`;
+        const ring = new gcp.kms.KeyRing(`${this.name}-ring`, {
+          name: ringName,
+          location,
+        });
+        const ckey = new gcp.kms.CryptoKey(`${this.name}-key`, {
+          name: keyName,
+          keyRing: ring.id,
+          rotationPeriod: '7776000s', // 90 days
+        });
+        gcpKeyResourceId = ckey.id; // projects/.../locations/.../keyRings/.../cryptoKeys/...
+        (this.gcp?.members || []).forEach((member, idx) => {
+          new gcp.kms.CryptoKeyIAMMember(`${this.name}-member-${idx}`, {
+            cryptoKeyId: ckey.id,
+            role: 'roles/cloudkms.cryptoKeyEncrypterDecrypter',
+            member,
+          });
+        });
+      }
+
+      // Resolve dynamic IDs and then merge/update SOPS rules, writing file once
+      const awsArnIn: pulumi.Input<string> = (awsKeyArn as any) || '';
+      const awsRoleIn: pulumi.Input<string> = (awsRoleArn as any) || '';
+      const gcpResIn: pulumi.Input<string> = (gcpKeyResourceId as any) || '';
+      pulumi.all([awsArnIn, awsRoleIn, gcpResIn]).apply(([awsArn, awsRole, gcpRes]) => {
+        const rules = this.paths || [
+          `.*/secrets\\.yaml`,
+          `.*/secrets-${this.env.id}\\.yaml`,
+        ];
+        rules.forEach(pattern => {
+          const idx = existing.creation_rules.findIndex(r => r.path_regex === pattern);
+          const group: SopsCreationRule['key_groups'][number] = {};
+          if (awsArn) group.kms = [{ arn: awsArn, role: awsRole || undefined }];
+          if (gcpRes) group.gcp_kms = [{ resource_id: gcpRes }];
+          if (!group.kms && !group.gcp_kms) return;
+          if (idx === -1) {
+            existing.creation_rules.push({ path_regex: pattern, key_groups: [group] });
+          } else {
+            const kg = existing.creation_rules[idx].key_groups[0] || {} as any;
+            if (group.kms) {
+              kg.kms = kg.kms || [];
+              const exists = kg.kms.find((k: any) => k.arn === group.kms![0].arn && k.role === group.kms![0].role);
+              if (!exists) kg.kms.push(group.kms[0]);
+            }
+            if (group.gcp_kms) {
+              kg.gcp_kms = kg.gcp_kms || [];
+              const exists = kg.gcp_kms.find((g: any) => g.resource_id === group.gcp_kms![0].resource_id);
+              if (!exists) kg.gcp_kms.push(group.gcp_kms[0]);
+            }
+            existing.creation_rules[idx].key_groups[0] = kg;
+          }
+        });
+        this.writeSopsConfig(sopsPath, existing);
+      });
+    };
+  }
+
+  private readSopsConfig(pathname: string): SopsConfig {
+    try {
+      if (fs.existsSync(pathname)) {
+        const content = fs.readFileSync(pathname, 'utf8');
+        const parsed = YAML.parse(content);
+        if (parsed?.creation_rules && parsed?.stores?.yaml) return parsed as SopsConfig;
+      }
+    } catch {}
+    return { creation_rules: [], stores: { yaml: { indent: 2 } } };
+  }
+
+  private writeSopsConfig(pathname: string, cfg: SopsConfig) {
+    try {
+      fs.writeFileSync(pathname, '# Generated by Pulumi\n' + YAML.stringify(cfg, { indent: 2 }));
+    } catch {}
+  }
+
+  private buildAwsAssumeRolePolicy(arns: string[]): string {
+    if (!arns || arns.length === 0) {
+      return JSON.stringify({ Version: '2012-10-17', Statement: [] });
+    }
+    const exact = arns.filter(a => !a.includes('*'));
+    const wildcard = arns.filter(a => a.includes('*'));
+    const statements: any[] = [];
+    if (exact.length > 0) {
+      statements.push({ Effect: 'Allow', Action: 'sts:AssumeRole', Principal: { AWS: exact } });
+    }
+    if (wildcard.length > 0) {
+      statements.push({
+        Effect: 'Allow', Action: 'sts:AssumeRole', Principal: { AWS: '*' },
+        Condition: { StringLike: { 'aws:PrincipalARN': wildcard } },
+      });
+    }
+    return JSON.stringify({ Version: '2012-10-17', Statement: statements });
   }
 }
