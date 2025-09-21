@@ -1,42 +1,16 @@
 {
   "compilerOptions": {
-    "alwaysStrict": true,
-    "declaration": true,
-    "experimentalDecorators": true,
-    "esModuleInterop": true,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "lib": [
-      "es2019",
-      "dom"
-    ],
-    "module": "CommonJS",
+    "types": ["node"],
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "outDir": "dist",
     "noEmitOnError": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitAny": true,
-    "noImplicitReturns": true,
-    "noImplicitThis": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": true,
-    "resolveJsonModule": true,
-    "strict": true,
-    "strictNullChecks": true,
-    "strictPropertyInitialization": true,
-    "stripInternal": true,
-    "target": "ES2019",
-    "incremental": true,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
-    "moduleResolution": "node",
-    "types": ["node"]
+    "target": "es2022",
+    "baseUrl": ".",
   },
-  "include": [
-    "**/*.ts"
-  ],
+  "include": ["src/**/*"],
   "exclude": [
     "node_modules",
-    "src/components/secrets",
-    "src/components/k8s",
-    "src/k8s",
+    "dist",
   ]
 }

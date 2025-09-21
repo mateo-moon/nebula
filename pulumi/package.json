@@ -2,26 +2,18 @@
   "name": "nebula",
   "version": "1.0.0",
   "license": "MPL-2.0",
+  "type": "module",
   "exports": {
-    "./src/*": "./dist/src/*.js",
-    "./src/core/*": "./dist/src/core/*.js",
-    "./src/components": "./dist/src/components/index.js",
-    "./src/utils/*": "./dist/src/utils/*.js",
-    "./src/components/k8s": "./dist/src/components/k8s/index.js"
+    ".": "./src/index.ts",
+    "./core/*": "./src/core/*.ts",
+    "./components/*": "./src/components/*.ts"
   },
-  "main": "dist/src/index.js",
-  "module": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
-  "files": [
-    "dist/**"
-  ],
   "engines": {
-    "node": ">=18.0"
+    "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "clean": "rimraf dist",
-    "prepare": "pnpm run build"
+    "build": "tsc",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.717.0",
@@ -44,7 +36,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.9",
-    "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
   }

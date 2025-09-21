@@ -78,4 +78,11 @@ export async function destroyComponent(component: Component) {
   });
 }
 
-
+export async function previewComponent(component: Component) {
+  const stack = await createOrSelectComponentStack(component);
+  return await stack.preview({
+    diff: true,
+    onOutput: (out) => process.stdout.write(out),
+    onError: (err) => process.stderr.write(err),
+  });
+}
