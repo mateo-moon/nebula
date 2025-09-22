@@ -147,26 +147,26 @@ sso_registration_scopes = sso:account:access\
     };
     try {
       // Describe bucket; if it fails, create it
-      execSync(`gcloud storage buckets describe gs://${config.bucket}`, { stdio: 'ignore' });
+      execSync(`gcloud storage buckets describe gs://${config.bucket} --quiet`, { stdio: 'ignore' });
       return;
     } catch (err: any) {
       // Try to re-auth and re-check once if needed
       if (maybeReauth(err)) {
         try {
-          execSync(`gcloud storage buckets describe gs://${config.bucket}`, { stdio: 'ignore' });
+          execSync(`gcloud storage buckets describe gs://${config.bucket} --quiet`, { stdio: 'ignore' });
           return;
         } catch {}
       }
     }
     try {
       const location = normalizeLocation(config.location);
-      execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location}`, { stdio: 'inherit' });
+      execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location} --quiet`, { stdio: 'inherit' });
     } catch (e) {
       // Retry once after interactive auth if needed
       if (maybeReauth(e)) {
         try {
           const location = normalizeLocation(config.location);
-          execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location}`, { stdio: 'inherit' });
+          execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location} --quiet`, { stdio: 'inherit' });
           return;
         } catch (e2) {
           console.error(`Failed to create GCS bucket ${config.bucket}:`, (e2 as any)?.message || e2);

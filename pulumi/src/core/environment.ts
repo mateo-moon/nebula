@@ -1,4 +1,5 @@
-import { Components, ComponentTypes, ComponentVariants, Secrets, Infra, K8s } from "../components";
+import { Components, ComponentTypes } from "../components";
+import type { Secrets, Infra, K8s, ComponentVariants } from "../components";
 import type { BackendConfig } from '../utils';
 import { Component } from "./component";
 import { Project } from "./project";
@@ -59,12 +60,40 @@ export class Environment implements ComponentVariants {
         }
       }
       const component = new ComponentClass(this, componentName, resolvedConfig as any);
+      // Minimal dependency hints
+      if (key === 'K8s') component.dependsOn = ['infra'];
       this._components[key.toLowerCase()] = component;
     });
   }
 
   /** Return all initialized components in this environment */
   public get components(): Component[] {
-    return Object.values(this._components);
+    // Topological order with cycle detection
+    const result: Component[] = [];
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const names = Object.keys(this._components);
+
+    const dfs = (name: string) => {
+      if (visited.has(name)) return;
+      if (visiting.has(name)) {
+        const cycle = Array.from(visiting).concat(name).join(' -> ');
+        throw new Error(`Component dependency cycle detected: ${cycle}`);
+      }
+      const comp = this._components[name];
+      if (!comp) return;
+      visiting.add(name);
+      for (const dep of comp.dependsOn || []) {
+        if (this._components[dep]) dfs(dep);
+      }
+      visiting.delete(name);
+      visited.add(name);
+      result.push(comp);
+    };
+
+    // Prefer starting with infra if present
+    if (this._components['infra']) dfs('infra');
+    for (const n of names) dfs(n);
+    return result;
   }
 }
