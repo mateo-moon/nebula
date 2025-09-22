@@ -95,12 +95,15 @@ export class Gke {
       management: { autoRepair: true, autoUpgrade: true },
     });
 
+    // Generate a kubeconfig that authenticates via gcloud access token, avoiding
+    // the need to install the GKE-specific auth plugin.
     this.kubeconfig = pulumi.all([
       this.cluster.name,
       this.cluster.endpoint,
       this.cluster.masterAuth,
     ]).apply(([clusterName, endpoint, auth]) => {
       const context = `${gcp.config.project}_${location}_${clusterName}`;
+      const nodeExec = "const cp=require('node:child_process'); const t=cp.execSync('gcloud auth print-access-token --quiet',{stdio:['ignore','pipe','inherit']}).toString().trim(); console.log(JSON.stringify({apiVersion:'client.authentication.k8s.io/v1',kind:'ExecCredential',status:{token:t}}));";
       return `apiVersion: v1
 clusters:
 - cluster:
@@ -118,8 +121,15 @@ preferences: {}
 users:
 - name: ${context}
   user:
-    auth-provider:
-      name: gcp
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      command: node
+      args:
+      - -e
+      - ${JSON.stringify(nodeExec)}
+      interactiveMode: IfAvailable
+      installHint: Authenticate with gcloud; this helper shells to 'gcloud auth print-access-token'.
+      provideClusterInfo: true
 `;
     });
 

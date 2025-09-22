@@ -1,11 +1,9 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as k8s from '@pulumi/kubernetes';
-import * as gcp from '@pulumi/gcp';
 import type { PulumiFn } from '@pulumi/pulumi/automation';
 import { Component } from '../../core/component';
 import { Environment } from '../../core/environment';
 import { K8sAddon } from './addon';
-export { K8sAddon, HelmChartAddon, HelmAddonSpec, WorkloadIdentitySpec } from './addon';
 
 export function createK8sProvider(args: { kubeconfig: pulumi.Input<string>; name?: string }) {
   return new k8s.Provider(args.name || 'k8s', { kubeconfig: args.kubeconfig });
@@ -39,7 +37,7 @@ export class K8s extends Component implements K8sConfig {
     return async () => {
       if (this.deploy === false) return;
       this.provider = createK8sProvider({ kubeconfig: this.kubeconfig, name: `${this.name}-provider` });
-      (this.charts || [])
+      (this.charts || []).map(a => a.bind(this))
         .filter(addon => addon.shouldDeploy())
         .forEach(addon => addon.apply());
     };

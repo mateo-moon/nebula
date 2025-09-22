@@ -7,6 +7,9 @@ export abstract class Component {
     public readonly name: string,
   ) {}
 
+  /** Optional logical dependencies on other components by name (e.g. 'infra', 'secrets'). */
+  public dependsOn: string[] = [];
+
   /**
    * Program that defines this component's resources.
    * Returned function is executed by Pulumi Automation API.
