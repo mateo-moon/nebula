@@ -14,11 +14,12 @@ export interface EksConfig {
   version?: string;
 }
 
-export class Eks {
+export class Eks extends pulumi.ComponentResource {
   public cluster: eks.Cluster;
   public kubeconfig: pulumi.Output<any>;
 
-  constructor(name: string, vpc: Vpc) {
+  constructor(name: string, vpc: Vpc, opts?: pulumi.ComponentResourceOptions) {
+    super('nebula:infra:aws:Eks', name, {}, opts);
     this.cluster = new eks.Cluster(name, {
       name,
       version: '1.32',
@@ -32,7 +33,7 @@ export class Eks {
         instanceType: 't3a.medium',
       },
       createOidcProvider: true,
-    });
+    }, { parent: this });
 
     // Managed Node Groups equivalent
     // Public NG IAM role with additional SSM policy
@@ -41,11 +42,11 @@ export class Eks {
         Version: '2012-10-17',
         Statement: [{ Effect: 'Allow', Principal: { Service: 'ec2.amazonaws.com' }, Action: 'sts:AssumeRole' }],
       }),
-    });
-    new aws.iam.RolePolicyAttachment('public-ng-worker', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy' });
-    new aws.iam.RolePolicyAttachment('public-ng-cni', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy' });
-    new aws.iam.RolePolicyAttachment('public-ng-ecr', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly' });
-    new aws.iam.RolePolicyAttachment('public-ng-ssm', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' });
+    }, { parent: this });
+    new aws.iam.RolePolicyAttachment('public-ng-worker', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy' }, { parent: this });
+    new aws.iam.RolePolicyAttachment('public-ng-cni', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy' }, { parent: this });
+    new aws.iam.RolePolicyAttachment('public-ng-ecr', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly' }, { parent: this });
+    new aws.iam.RolePolicyAttachment('public-ng-ssm', { role: publicNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' }, { parent: this });
 
     // Public NG Launch Template with Bottlerocket data volume and TOML userData
     const publicUserData = Buffer.from(TOML.stringify({
@@ -57,7 +58,7 @@ export class Eks {
         ebs: { volumeSize: 20, volumeType: 'gp3', deleteOnTermination: "true" },
       }],
       userData: publicUserData,
-    });
+    }, { parent: this });
 
     const _publicGroup = new eks.ManagedNodeGroup('eks_managed_node_group_public', {
       cluster: this.cluster,
@@ -75,7 +76,7 @@ export class Eks {
       },
       taints: [{ key: 'node-role.kubernetes.io/infra', value: 'true', effect: 'NoSchedule' }],
       
-    });
+    }, { parent: this });
 
     // Private NG IAM role with additional SSM policy
     const privateNgRole = new aws.iam.Role('private-ng-role', {
@@ -83,11 +84,11 @@ export class Eks {
         Version: '2012-10-17',
         Statement: [{ Effect: 'Allow', Principal: { Service: 'ec2.amazonaws.com' }, Action: 'sts:AssumeRole' }],
       }),
-    });
-    new aws.iam.RolePolicyAttachment('private-ng-worker', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy' });
-    new aws.iam.RolePolicyAttachment('private-ng-cni', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy' });
-    new aws.iam.RolePolicyAttachment('private-ng-ecr', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly' });
-    new aws.iam.RolePolicyAttachment('private-ng-ssm', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' });
+    }, { parent: this });
+    new aws.iam.RolePolicyAttachment('private-ng-worker', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy' }, { parent: this });
+    new aws.iam.RolePolicyAttachment('private-ng-cni', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy' }, { parent: this });
+    new aws.iam.RolePolicyAttachment('private-ng-ecr', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly' }, { parent: this });
+    new aws.iam.RolePolicyAttachment('private-ng-ssm', { role: privateNgRole.name, policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' }, { parent: this });
 
     const privateUserData = Buffer.from(TOML.stringify({
       settings: { kubernetes: { 'max-pods': 24 } }
@@ -98,7 +99,7 @@ export class Eks {
         ebs: { volumeSize: 20, volumeType: 'gp3', deleteOnTermination: "true" },
       }],
       userData: privateUserData,
-    });
+    }, { parent: this });
 
     const _privateGroup = new eks.ManagedNodeGroup('eks_managed_node_group_private', {
       cluster: this.cluster,
@@ -116,7 +117,7 @@ export class Eks {
       },
       taints: [{ key: 'node-role.kubernetes.io/infra', value: 'true', effect: 'NoSchedule' }],
       
-    });
+    }, { parent: this });
 
     // Addons via aws.eks.Addon
     const addonVersion = {
@@ -192,6 +193,11 @@ export class Eks {
         if (existing !== finalContent) fs.writeFileSync(kubeConfigPath, finalContent);
       } catch { /* ignore */ }
       return cfg;
+    });
+
+    this.registerOutputs({
+      clusterName: this.cluster.core.cluster.name,
+      kubeconfig: this.kubeconfig,
     });
   }
 }

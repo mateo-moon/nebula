@@ -30,4 +30,8 @@ export abstract class Component {
   public get stackConfig(): Record<string, string> {
     return {};
   }
+
+  /** Optionally expand this component into child components (each becomes its own stack). */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  public expandToChildren(): Component[] { return []; }
 }

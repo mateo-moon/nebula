@@ -16,12 +16,13 @@ export interface GkeConfig {
   deletionProtection?: boolean;
 }
 
-export class Gke {
+export class Gke extends pulumi.ComponentResource {
   public readonly cluster: gcp.container.Cluster;
   public readonly nodePool: gcp.container.NodePool;
   public readonly kubeconfig: pulumi.Output<string>;
 
-  constructor(name: string, net: Network, cfg?: GkeConfig) {
+  constructor(name: string, net: Network, cfg?: GkeConfig, opts?: pulumi.ComponentResourceOptions) {
+    super('nebula:infra:gcp:Gke', name, {}, opts);
     const location = cfg?.location ?? cfg?.region ?? 'us-central1';
     const network = net.network.selfLink;
     const subnetwork = net.subnetwork.selfLink;
@@ -47,19 +48,19 @@ export class Gke {
         httpLoadBalancing: { disabled: false },
         horizontalPodAutoscaling: { disabled: false },
       },
-    });
+    }, { parent: this });
 
     // Create a dedicated service account for GKE nodes and grant the default node role
     const nodeServiceAccount = new gcp.serviceaccount.Account(`${clusterName}-nodes`, {
       accountId: `${clusterName}-nodes`,
       displayName: `${clusterName} GKE nodes`,
-    });
+    }, { parent: this });
 
     new gcp.projects.IAMMember(`${clusterName}-nodes-container-default`, {
       project: gcp.config.project!,
       role: 'roles/container.defaultNodeServiceAccount',
       member: pulumi.interpolate`serviceAccount:${nodeServiceAccount.email}`,
-    });
+    }, { parent: this });
 
     // Also grant the role to the Compute Engine default service account to satisfy diagnostics
     const projectInfo = gcp.organizations.getProjectOutput({ projectId: gcp.config.project });
@@ -68,7 +69,7 @@ export class Gke {
       project: gcp.config.project!,
       role: 'roles/container.defaultNodeServiceAccount',
       member: pulumi.interpolate`serviceAccount:${computeDefaultSa}`,
-    });
+    }, { parent: this });
 
     this.nodePool = new gcp.container.NodePool(`${clusterName}-np`, {
       name: `${clusterName}-np`,
@@ -93,7 +94,7 @@ export class Gke {
         tags: [ `${clusterName}-system` ],
       },
       management: { autoRepair: true, autoUpgrade: true },
-    });
+    }, { parent: this });
 
     // Generate a kubeconfig that authenticates via gcloud access token, avoiding
     // the need to install the GKE-specific auth plugin.
@@ -140,6 +141,11 @@ users:
         fs.writeFileSync(path.resolve(dir, 'kube_config'), cfgStr);
       } catch { /* ignore */ }
       return cfgStr;
+    });
+
+    this.registerOutputs({
+      clusterName: this.cluster.name,
+      kubeconfig: this.kubeconfig,
     });
   }
 }

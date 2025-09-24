@@ -42,4 +42,24 @@ export class K8s extends Component implements K8sConfig {
         .forEach(addon => addon.apply());
     };
   }
+
+  public override expandToChildren(): Component[] {
+    const charts = this.charts || [];
+    return charts.filter(a => a.shouldDeploy()).map(addon => {
+      const display = addon.displayName?.() || 'chart';
+      const safe = display.replace(/[^A-Za-z0-9_.-]/g, '-');
+      const parent = this;
+      return new (class extends Component {
+        constructor() { super(parent.env, `k8s-${safe}`); }
+        public get projectName() { return `${parent.projectName}-k8s`; }
+        public createProgram() {
+          return async () => {
+            parent.provider = parent.provider || createK8sProvider({ kubeconfig: parent.kubeconfig, name: `${this.name}-provider` });
+            (addon as any).bind?.(parent);
+            (addon as any).apply();
+          };
+        }
+      })();
+    });
+  }
 }
