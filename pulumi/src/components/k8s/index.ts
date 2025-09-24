@@ -2,8 +2,9 @@ import * as pulumi from '@pulumi/pulumi';
 import * as k8s from '@pulumi/kubernetes';
 import type { PulumiFn } from '@pulumi/pulumi/automation';
 import { Component } from '../../core/component';
+import type { StackUnit } from '../../core/stack';
 import { Environment } from '../../core/environment';
-import { K8sAddon } from './addon';
+import { K8sAddon, K8sChartResource, K8sContext } from './addon';
 
 export function createK8sProvider(args: { kubeconfig: pulumi.Input<string>; name?: string }) {
   return new k8s.Provider(args.name || 'k8s', { kubeconfig: args.kubeconfig });
@@ -13,6 +14,11 @@ export function createK8sProvider(args: { kubeconfig: pulumi.Input<string>; name
 export interface K8sConfig  {
   deploy?: boolean;
   kubeconfig: pulumi.Input<string>;
+  charts?: Array<K8sAddon>;
+}
+
+export interface K8sResources {
+  provider?: k8s.Provider;
   charts?: Array<K8sAddon>;
 }
 
@@ -36,30 +42,36 @@ export class K8s extends Component implements K8sConfig {
   public createProgram(): PulumiFn {
     return async () => {
       if (this.deploy === false) return;
-      this.provider = createK8sProvider({ kubeconfig: this.kubeconfig, name: `${this.name}-provider` });
-      (this.charts || []).map(a => a.bind(this))
+      this.provider = createK8sProvider({ kubeconfig: this.kubeconfig, name: `${this.env.id}-${this.name}-provider` });
+      const ctx: K8sContext = { env: this.env, provider: this.provider!, kubeconfig: this.kubeconfig };
+      (this.charts || []).map(a => a.bind(ctx))
         .filter(addon => addon.shouldDeploy())
         .forEach(addon => addon.apply());
     };
   }
 
-  public override expandToChildren(): Component[] {
+  public override expandToStacks(): StackUnit[] {
     const charts = this.charts || [];
     return charts.filter(a => a.shouldDeploy()).map(addon => {
       const display = addon.displayName?.() || 'chart';
       const safe = display.replace(/[^A-Za-z0-9_.-]/g, '-');
-      const parent = this;
-      return new (class extends Component {
-        constructor() { super(parent.env, `k8s-${safe}`); }
-        public get projectName() { return `${parent.projectName}-k8s`; }
-        public createProgram() {
-          return async () => {
-            parent.provider = parent.provider || createK8sProvider({ kubeconfig: parent.kubeconfig, name: `${this.name}-provider` });
-            (addon as any).bind?.(parent);
-            (addon as any).apply();
-          };
+      return {
+        name: `k8s-${safe}`,
+        projectName: `${this.env.projectId}-k8s`,
+        program: async () => {
+          this.provider = this.provider || createK8sProvider({ kubeconfig: this.kubeconfig, name: `${this.env.id}-${safe}-provider` });
+          const ctx: K8sContext = { env: this.env, provider: this.provider!, kubeconfig: this.kubeconfig };
+          new K8sChartResource(safe, { addon: addon.bind(ctx), provider: this.provider!, env: this.env }, { provider: this.provider });
         }
-      })();
+      };
     });
+  }
+
+  /** Strongly-typed view for IDE hints */
+  public get k8sResources(): K8sResources {
+    return {
+      provider: this.provider,
+      charts: this.charts,
+    };
   }
 }

@@ -38,16 +38,22 @@ export interface HelmAddonSpec {
  * Each addon will be executed in its own stack (via automation) when provided
  * via the K8s component charts array.
  */
+export interface K8sContext {
+  env: Environment;
+  provider: k8s.Provider;
+  kubeconfig?: pulumi.Input<string>;
+}
+
 export abstract class K8sAddon {
   private _deploy?: boolean;
-  private _k8s?: K8s;
+  private _k8s?: K8sContext; // minimal runtime context
   private _provider?: k8s.Provider;
   constructor(deploy?: boolean) { this._deploy = deploy; }
-  public bind(k8s: K8s): this { this._k8s = k8s; return this; }
+  public bind(k8s: K8sContext): this { this._k8s = k8s; return this; }
   public shouldDeploy(): boolean { return this._deploy !== false; }
   public setDeploy(value: boolean): this { this._deploy = value; return this; }
   public get env(): Environment { return this._k8s!.env; }
-  public get infra(): Infra | undefined { return this._k8s?.env.infra; }
+  public get infra(): Infra | undefined { return this._k8s?.env?.infra; }
   public get provider(): k8s.Provider {
     if (this._k8s?.provider) return this._k8s.provider;
     if (this._provider) return this._provider;
@@ -65,6 +71,19 @@ export abstract class K8sAddon {
   public abstract apply(): void;
   /** Human-friendly name for selection in CLI. */
   public abstract displayName(): string;
+}
+
+/**
+ * ComponentResource wrapper for any K8sAddon descriptor. Ensures all addon resources
+ * are parented and use the provided provider.
+ */
+export class K8sChartResource extends pulumi.ComponentResource {
+  constructor(name: string, args: { addon: K8sAddon; provider: k8s.Provider; env: Environment }, opts?: pulumi.ComponentResourceOptions) {
+    super('nebula:k8s:Chart', name, {}, { ...opts, provider: args.provider });
+    args.addon.bind({ env: args.env, provider: args.provider });
+    args.addon.apply();
+    this.registerOutputs({});
+  }
 }
 
 export function deployHelmAddon(args: {

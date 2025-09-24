@@ -26,6 +26,10 @@ export interface SecretsConfig {
   };
 }
 
+export interface SecretsResources {
+  // High-level outputs for IDE assist (extend as needed)
+}
+
 type SopsCreationRule = {
   path_regex: string;
   key_groups: Array<{
@@ -199,5 +203,9 @@ export class Secrets extends Component implements SecretsConfig {
       });
     }
     return JSON.stringify({ Version: '2012-10-17', Statement: statements });
+  }
+
+  public get secretsResources(): SecretsResources {
+    return {};
   }
 }
