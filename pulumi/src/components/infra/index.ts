@@ -2,10 +2,11 @@ import type { PulumiFn } from '@pulumi/pulumi/automation';
 import { Vpc } from './aws/vpc';
 import { Eks } from './aws/eks';
 import { Iam } from './aws/iam';
-import { Route53 } from './aws/route53';
 import { Network as GcpNetwork } from './gcp/network';
 import { Gke } from './gcp/gke';
-import { DnsZone as GcpDnsZone } from './gcp/dns';
+import { Dns } from './dns';
+import type { DnsDelegationConfig } from './dns';
+import { Constellation } from './constellation';
 import { Component } from '../../core/component';
 import { Environment } from '../../core/environment';
 
@@ -14,10 +15,12 @@ export type AwsInfraConfig = {
   domainName?: string;
 }
 
+export type GcpInfraDnsConfig = never;
+
 export type GcpInfraConfig = {
   enabled: boolean;
-  domainName?: string;
   region?: string;
+  dns?: GcpInfraDnsConfig;
   network?: {
     cidrBlocks?: string[]; // deprecated
     cidr?: string;
@@ -47,6 +50,18 @@ export type GcpInfraConfig = {
 export interface InfraConfig {
   aws?: AwsInfraConfig;
   gcp?: GcpInfraConfig;
+  constellation?: {
+    enabled?: boolean;
+    source: string;
+    version?: string;
+    variables?: Record<string, any>;
+  };
+  dns?: {
+    enabled?: boolean;
+    provider: 'gcp' | 'aws';
+    domain?: string;
+    delegations?: DnsDelegationConfig[];
+  };
 }
 
 export class Infra extends Component implements InfraConfig {
@@ -54,12 +69,13 @@ export class Infra extends Component implements InfraConfig {
   public vpc?: Vpc;
   public eks?: Eks;
   public iam?: Iam;
-  public route53?: Route53;
+  // public route53?: Route53;
   public gcpResources?: {
     network?: GcpNetwork;
     gke?: Gke;
-    dns?: GcpDnsZone;
   }
+  public dnsModule?: Dns;
+  public constellationModule?: Constellation;
   constructor(
     public readonly env: Environment,
     public readonly name: string,
@@ -73,14 +89,12 @@ export class Infra extends Component implements InfraConfig {
     const config = this.config;
     return async () => {
       if (config.aws?.enabled) {
-        this.route53 = new Route53('route53', { domain: config.aws.domainName });
         this.vpc = new Vpc('vpc', { name: 'eks' });
         this.eks = new Eks('eks', this.vpc);
         this.iam = new Iam('iam');
       }
       if (config.gcp?.enabled) {
         this.gcpResources = {};
-        this.gcpResources.dns = new GcpDnsZone('gcp', { domain: config.gcp.domainName });
         const envRegion = this.env.config.gcpConfig?.region;
         this.gcpResources.network = new GcpNetwork('gcp', {
           region: envRegion,
@@ -103,6 +117,81 @@ export class Infra extends Component implements InfraConfig {
           deletionProtection: config.gcp.gke?.deletionProtection,
         });
       }
+      if (config.dns?.enabled && config.dns.domain) {
+        this.dnsModule = new Dns('dns', {
+          enabled: true,
+          provider: config.dns.provider,
+          domain: config.dns.domain,
+          delegations: config.dns.delegations,
+        });
+      }
+      if (config.constellation?.enabled) {
+        this.constellationModule = new Constellation('constellation', {
+          enabled: true,
+          source: config.constellation.source,
+          version: config.constellation.version,
+          variables: config.constellation.variables,
+        });
+      }
     };
+  }
+
+  public override expandToChildren(): Component[] {
+    const children: Component[] = [];
+    const cfg = this.config;
+    // AWS
+    if (cfg.aws?.enabled) {
+      const that = this;
+      children.push(new (class extends Component {
+        constructor() { super(that.env, 'infra-aws-vpc'); }
+        public get projectName() { return `${that.projectName}-infra`; }
+        public createProgram() { return async () => { that.vpc = new Vpc('vpc'); }; }
+      })());
+      children.push(new (class extends Component {
+        constructor() { super(that.env, 'infra-aws-eks'); }
+        public get projectName() { return `${that.projectName}-infra`; }
+        public createProgram() { return async () => { const vpc = that.vpc || new Vpc('vpc'); that.eks = new Eks('eks', vpc); }; }
+      })());
+      children.push(new (class extends Component {
+        constructor() { super(that.env, 'infra-aws-iam'); }
+        public get projectName() { return `${that.projectName}-infra`; }
+        public createProgram() { return async () => { that.iam = new Iam('iam'); }; }
+      })());
+    }
+    // GCP
+    if (cfg.gcp?.enabled) {
+      const that = this;
+      children.push(new (class extends Component {
+        constructor() { super(that.env, 'infra-gcp-network'); }
+        public get projectName() { return `${that.projectName}-infra`; }
+        public createProgram() { return async () => { that.gcpResources = that.gcpResources || {}; that.gcpResources.network = new GcpNetwork('gcp', { region: that.env.config.gcpConfig?.region, cidr: cfg.gcp.network?.cidr, cidrBlocks: cfg.gcp.network?.cidrBlocks, networkName: cfg.gcp.network?.networkName, subnetName: cfg.gcp.network?.subnetName, podsSecondaryCidr: cfg.gcp.network?.podsSecondaryCidr, podsRangeName: cfg.gcp.network?.podsRangeName, servicesSecondaryCidr: cfg.gcp.network?.servicesSecondaryCidr, servicesRangeName: cfg.gcp.network?.servicesRangeName }); }; }
+      })());
+      if (cfg.gcp.gke) {
+        children.push(new (class extends Component {
+          constructor() { super(that.env, 'infra-gcp-gke'); }
+          public get projectName() { return `${that.projectName}-infra`; }
+          public createProgram() { return async () => { const net = that.gcpResources?.network || new GcpNetwork('gcp', { region: that.env.config.gcpConfig?.region }); that.gcpResources = that.gcpResources || {}; that.gcpResources.gke = new Gke(cfg.gcp.gke?.name ?? 'gke', net, { location: that.env.config.gcpConfig?.region, minNodes: cfg.gcp.gke?.systemNodepool?.min, maxNodes: cfg.gcp.gke?.systemNodepool?.max, machineType: cfg.gcp.gke?.systemNodepool?.machineType, volumeSizeGb: cfg.gcp.gke?.systemNodepool?.diskGb, releaseChannel: cfg.gcp.gke?.releaseChannel, deletionProtection: cfg.gcp.gke?.deletionProtection }); }; }
+        })());
+      }
+    }
+    // DNS
+    if (cfg.dns?.enabled && cfg.dns.domain) {
+      const that = this;
+      children.push(new (class extends Component {
+        constructor() { super(that.env, 'infra-dns'); }
+        public get projectName() { return `${that.projectName}-infra`; }
+        public createProgram() { return async () => { that.dnsModule = new Dns('dns', { enabled: true, provider: cfg.dns!.provider, domain: cfg.dns!.domain, delegations: cfg.dns!.delegations }); }; }
+      })());
+    }
+    // Constellation
+    if (cfg.constellation?.enabled) {
+      const that = this;
+      children.push(new (class extends Component {
+        constructor() { super(that.env, 'infra-constellation'); }
+        public get projectName() { return `${that.projectName}-infra`; }
+        public createProgram() { return async () => { that.constellationModule = new Constellation('constellation', { enabled: true, source: cfg.constellation!.source, version: cfg.constellation!.version, variables: cfg.constellation!.variables }); }; }
+      })());
+    }
+    return children;
   }
 }

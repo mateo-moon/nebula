@@ -9,6 +9,7 @@ import { execSync } from 'child_process';
 import type { Environment } from '../../core/environment';
 import type { Infra } from '../infra';
 import type { K8s } from './index';
+import { createK8sProvider } from './index';
 
 export interface WorkloadIdentitySpec {
   ksaName: string;
@@ -40,13 +41,25 @@ export interface HelmAddonSpec {
 export abstract class K8sAddon {
   private _deploy?: boolean;
   private _k8s?: K8s;
+  private _provider?: k8s.Provider;
   constructor(deploy?: boolean) { this._deploy = deploy; }
   public bind(k8s: K8s): this { this._k8s = k8s; return this; }
   public shouldDeploy(): boolean { return this._deploy !== false; }
   public setDeploy(value: boolean): this { this._deploy = value; return this; }
   public get env(): Environment { return this._k8s!.env; }
   public get infra(): Infra | undefined { return this._k8s?.env.infra; }
-  public get provider(): k8s.Provider { return this._k8s!.provider!; }
+  public get provider(): k8s.Provider {
+    if (this._k8s?.provider) return this._k8s.provider;
+    if (this._provider) return this._provider;
+    const kc: any = (this._k8s as any)?.kubeconfig;
+    if (kc) {
+      // Lazily create a provider using the K8s component's kubeconfig if not already available
+      const name = (typeof (this as any).displayName === 'function' && (this as any).displayName()) || 'chart';
+      this._provider = createK8sProvider({ kubeconfig: kc, name: `${String(name).replace(/[^A-Za-z0-9_.-]/g, '-')}-provider` });
+      return this._provider;
+    }
+    throw new Error('Kubernetes provider is not available. Ensure addon is bound to a K8s component or provide kubeconfig.');
+  }
   public get projectId(): pulumi.Input<string> | undefined { return gcp.config.project || (this.env as any)?.config?.gcpConfig?.projectId; }
   /** Implement this to create any needed cloud resources and Kubernetes objects. */
   public abstract apply(): void;

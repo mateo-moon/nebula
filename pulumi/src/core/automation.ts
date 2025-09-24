@@ -1,14 +1,15 @@
 /**
  * Automation utilities
  *
- * This module wires Pulumi Automation API for component stacks and
- * transparently expands the K8s component into per-chart stacks at runtime.
- * Each chart is applied independently to improve isolation and reduce blast radius.
+ * This module wires Pulumi Automation API for component stacks.
+ * Components can optionally expand into children (via expandToChildren),
+ * each executed as its own stack for isolation and reduced blast radius.
  */
 import { LocalWorkspace, InlineProgramArgs, Stack, ConfigValue } from '@pulumi/pulumi/automation';
 import { Component } from './component';
 import { createK8sProvider } from '../components/k8s';
 import { Utils } from '../utils';
+import { Infra } from '../components/infra';
 
 /**
  * Create or select a Pulumi stack for the given component and set common config.
@@ -75,98 +76,75 @@ export async function createOrSelectComponentStack(component: Component): Promis
 
 /** Apply changes for a component (or per-chart when K8s-like). */
 export async function upComponent(component: Component) {
-  const maybeCharts: any[] | undefined = (component as any)?.charts;
-  if (Array.isArray(maybeCharts) && maybeCharts.length > 0) {
-    await runK8sCharts(component, 'up');
-    return;
-  }
-  const stack = await createOrSelectComponentStack(component);
-  return await stack.up({
-    onOutput: (out) => process.stdout.write(out),
-    onError: (err) => process.stderr.write(err),
-  });
+  return run(component, 'up');
 }
 
 /** Destroy resources for a component (or per-chart when K8s-like). */
 export async function destroyComponent(component: Component) {
-  const maybeCharts: any[] | undefined = (component as any)?.charts;
-  if (Array.isArray(maybeCharts) && maybeCharts.length > 0) {
-    await runK8sCharts(component, 'destroy');
-    return;
-  }
-  const stack = await createOrSelectComponentStack(component);
-  return await stack.destroy({
-    onOutput: (out) => process.stdout.write(out),
-    onError: (err) => process.stderr.write(err),
-  });
+  return run(component, 'destroy');
 }
 
 /** Preview a component, printing detailed diffs. Splits K8s components per chart. */
 export async function previewComponent(component: Component) {
-  const maybeCharts: any[] | undefined = (component as any)?.charts;
-  if (Array.isArray(maybeCharts) && maybeCharts.length > 0) {
-    await runK8sCharts(component, 'preview');
-    return;
-  }
-  const stack = await createOrSelectComponentStack(component);
-  return await stack.preview({
-    diff: true,
-    onOutput: (out) => process.stdout.write(out),
-    onError: (err) => process.stderr.write(err),
-    onEvent: (e: any) => {
-      const md = e?.resourcePreEvent?.metadata;
-      if (md?.detailedDiff) {
-        const urn = md.urn || md.resourceUrn || 'unknown-urn';
-        process.stdout.write(`\n[diff] ${urn}\n`);
-        try {
-          process.stdout.write(`${JSON.stringify(md.detailedDiff, null, 2)}\n`);
-        } catch {
-          process.stdout.write(`${String(md.detailedDiff)}\n`);
-        }
-      }
-    }
-  });
+  return run(component, 'preview');
 }
 
 /** Refresh resource state for a component (or per-chart when K8s-like). */
 export async function refreshComponent(component: Component) {
-  const maybeCharts: any[] | undefined = (component as any)?.charts;
-  if (Array.isArray(maybeCharts) && maybeCharts.length > 0) {
-    await runK8sCharts(component, 'refresh');
-    return;
-  }
-  const stack = await createOrSelectComponentStack(component);
-  return await stack.refresh({
-    onOutput: (out) => process.stdout.write(out),
-    onError: (err) => process.stderr.write(err),
-  });
+  return run(component, 'refresh');
 }
 
 /**
  * Internal: split a K8s-like component (charts array and kubeconfig) into per-chart
  * ephemeral components (stacks) and execute the requested operation.
  */
-async function runK8sCharts(k8sComp: Component, op: 'preview' | 'up' | 'destroy' | 'refresh') {
-  const charts: any[] = (k8sComp as any).charts || [];
-  const kubeconfig: any = (k8sComp as any).kubeconfig;
-  for (const addon of charts) {
-    if (addon.shouldDeploy && addon.shouldDeploy() === false) continue;
-    class ChartComponent extends Component {
-      constructor() { super(k8sComp.env, `k8s-${(addon.displayName?.() || 'chart').replace(/[^A-Za-z0-9_.-]/g, '-')}`); }
-      public get projectName() { return `${k8sComp.projectName}-k8s`; }
-      public createProgram() {
-        return async () => {
-          const provider = createK8sProvider({ kubeconfig, name: `${this.name}-provider` });
-          const kctx: any = { env: k8sComp.env, provider };
-          (addon as any).bind?.(kctx);
-          (addon as any).apply();
-        };
-      }
+async function run(component: Component, op: 'preview' | 'up' | 'destroy' | 'refresh') {
+  const children = component.expandToChildren();
+  if (Array.isArray(children) && children.length > 0) {
+    for (const child of children) {
+      await run(child, op);
     }
-    const chartComp = new ChartComponent();
-    if (op === 'preview') await previewComponent(chartComp);
-    else if (op === 'up') await upComponent(chartComp);
-    else if (op === 'destroy') await destroyComponent(chartComp);
-    else if (op === 'refresh') await refreshComponent(chartComp);
+    return;
+  }
+
+  const stack = await createOrSelectComponentStack(component);
+  const io = {
+    onOutput: (out: string) => process.stdout.write(out),
+    onError: (err: string) => process.stderr.write(err),
+  } as const;
+
+  if (op === 'preview') {
+    return await stack.preview({
+      diff: true,
+      ...io,
+      onEvent: (e: any) => {
+        const md = e?.resourcePreEvent?.metadata;
+        if (md?.detailedDiff) {
+          const urn = md.urn || md.resourceUrn || 'unknown-urn';
+          process.stdout.write(`\n[diff] ${urn}\n`);
+          try {
+            process.stdout.write(`${JSON.stringify(md.detailedDiff, null, 2)}\n`);
+          } catch {
+            process.stdout.write(`${String(md.detailedDiff)}\n`);
+          }
+        }
+      }
+    });
+  }
+  if (op === 'up') return await stack.up(io as any);
+  if (op === 'destroy') return await stack.destroy(io as any);
+  if (op === 'refresh') return await stack.refresh(io as any);
+}
+
+/**
+ * Split Infra component into per-module ephemeral components and operate on them independently.
+ */
+async function runExpanded(comp: Component, op: 'preview' | 'up' | 'destroy' | 'refresh') {
+  const children = comp.expandToChildren();
+  for (const child of children) {
+    if (op === 'preview') await previewComponent(child);
+    else if (op === 'up') await upComponent(child);
+    else if (op === 'destroy') await destroyComponent(child);
+    else if (op === 'refresh') await refreshComponent(child);
   }
 }
