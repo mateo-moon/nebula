@@ -8,6 +8,7 @@ import { Dns } from './dns';
 import type { DnsDelegationConfig } from './dns';
 import { Constellation } from './constellation';
 import { Component } from '../../core/component';
+import type { StackUnit } from '../../core/stack';
 import { Environment } from '../../core/environment';
 
 export type AwsInfraConfig = {
@@ -62,6 +63,18 @@ export interface InfraConfig {
     domain?: string;
     delegations?: DnsDelegationConfig[];
   };
+}
+
+export interface InfraResources {
+  vpc?: Vpc;
+  eks?: Eks;
+  iam?: Iam;
+  gcp?: {
+    network?: GcpNetwork;
+    gke?: Gke;
+  };
+  dns?: Dns;
+  constellation?: Constellation;
 }
 
 export class Infra extends Component implements InfraConfig {
@@ -136,62 +149,77 @@ export class Infra extends Component implements InfraConfig {
     };
   }
 
-  public override expandToChildren(): Component[] {
-    const children: Component[] = [];
+  public override expandToStacks(): StackUnit[] {
+    const stacks: StackUnit[] = [];
     const cfg = this.config;
     // AWS
     if (cfg.aws?.enabled) {
-      const that = this;
-      children.push(new (class extends Component {
-        constructor() { super(that.env, 'infra-aws-vpc'); }
-        public get projectName() { return `${that.projectName}-infra`; }
-        public createProgram() { return async () => { that.vpc = new Vpc('vpc'); }; }
-      })());
-      children.push(new (class extends Component {
-        constructor() { super(that.env, 'infra-aws-eks'); }
-        public get projectName() { return `${that.projectName}-infra`; }
-        public createProgram() { return async () => { const vpc = that.vpc || new Vpc('vpc'); that.eks = new Eks('eks', vpc); }; }
-      })());
-      children.push(new (class extends Component {
-        constructor() { super(that.env, 'infra-aws-iam'); }
-        public get projectName() { return `${that.projectName}-infra`; }
-        public createProgram() { return async () => { that.iam = new Iam('iam'); }; }
-      })());
+      stacks.push({
+        name: 'infra-aws-vpc',
+        projectName: `${this.env.projectId}-infra`,
+        provides: ['aws:network'],
+        program: async () => { this.vpc = new Vpc('vpc'); }
+      });
+      stacks.push({
+        name: 'infra-aws-eks',
+        projectName: `${this.env.projectId}-infra`,
+        consumes: ['aws:network'],
+        program: async () => { const vpc = this.vpc || new Vpc('vpc'); this.eks = new Eks('eks', vpc); }
+      });
+      stacks.push({
+        name: 'infra-aws-iam',
+        projectName: `${this.env.projectId}-infra`,
+        program: async () => { this.iam = new Iam('iam'); }
+      });
     }
     // GCP
     if (cfg.gcp?.enabled) {
-      const that = this;
-      children.push(new (class extends Component {
-        constructor() { super(that.env, 'infra-gcp-network'); }
-        public get projectName() { return `${that.projectName}-infra`; }
-        public createProgram() { return async () => { that.gcpResources = that.gcpResources || {}; that.gcpResources.network = new GcpNetwork('gcp', { region: that.env.config.gcpConfig?.region, cidr: cfg.gcp.network?.cidr, cidrBlocks: cfg.gcp.network?.cidrBlocks, networkName: cfg.gcp.network?.networkName, subnetName: cfg.gcp.network?.subnetName, podsSecondaryCidr: cfg.gcp.network?.podsSecondaryCidr, podsRangeName: cfg.gcp.network?.podsRangeName, servicesSecondaryCidr: cfg.gcp.network?.servicesSecondaryCidr, servicesRangeName: cfg.gcp.network?.servicesRangeName }); }; }
-      })());
+      stacks.push({
+        name: 'infra-gcp-network',
+        projectName: `${this.env.projectId}-infra`,
+        provides: ['gcp:network'],
+        program: async () => { this.gcpResources = this.gcpResources || {}; this.gcpResources.network = new GcpNetwork('gcp', { region: this.env.config.gcpConfig?.region, cidr: cfg.gcp.network?.cidr, cidrBlocks: cfg.gcp.network?.cidrBlocks, networkName: cfg.gcp.network?.networkName, subnetName: cfg.gcp.network?.subnetName, podsSecondaryCidr: cfg.gcp.network?.podsSecondaryCidr, podsRangeName: cfg.gcp.network?.podsRangeName, servicesSecondaryCidr: cfg.gcp.network?.servicesSecondaryCidr, servicesRangeName: cfg.gcp.network?.servicesRangeName }); }
+      });
       if (cfg.gcp.gke) {
-        children.push(new (class extends Component {
-          constructor() { super(that.env, 'infra-gcp-gke'); }
-          public get projectName() { return `${that.projectName}-infra`; }
-          public createProgram() { return async () => { const net = that.gcpResources?.network || new GcpNetwork('gcp', { region: that.env.config.gcpConfig?.region }); that.gcpResources = that.gcpResources || {}; that.gcpResources.gke = new Gke(cfg.gcp.gke?.name ?? 'gke', net, { location: that.env.config.gcpConfig?.region, minNodes: cfg.gcp.gke?.systemNodepool?.min, maxNodes: cfg.gcp.gke?.systemNodepool?.max, machineType: cfg.gcp.gke?.systemNodepool?.machineType, volumeSizeGb: cfg.gcp.gke?.systemNodepool?.diskGb, releaseChannel: cfg.gcp.gke?.releaseChannel, deletionProtection: cfg.gcp.gke?.deletionProtection }); }; }
-        })());
+        stacks.push({
+          name: 'infra-gcp-gke',
+          projectName: `${this.env.projectId}-infra`,
+          consumes: ['gcp:network'],
+          program: async () => { const net = this.gcpResources?.network || new GcpNetwork('gcp', { region: this.env.config.gcpConfig?.region }); this.gcpResources = this.gcpResources || {}; this.gcpResources.gke = new Gke(cfg.gcp.gke?.name ?? 'gke', net, { location: this.env.config.gcpConfig?.region, minNodes: cfg.gcp.gke?.systemNodepool?.min, maxNodes: cfg.gcp.gke?.systemNodepool?.max, machineType: cfg.gcp.gke?.systemNodepool?.machineType, volumeSizeGb: cfg.gcp.gke?.systemNodepool?.diskGb, releaseChannel: cfg.gcp.gke?.releaseChannel, deletionProtection: cfg.gcp.gke?.deletionProtection }); }
+        });
       }
     }
     // DNS
     if (cfg.dns?.enabled && cfg.dns.domain) {
-      const that = this;
-      children.push(new (class extends Component {
-        constructor() { super(that.env, 'infra-dns'); }
-        public get projectName() { return `${that.projectName}-infra`; }
-        public createProgram() { return async () => { that.dnsModule = new Dns('dns', { enabled: true, provider: cfg.dns!.provider, domain: cfg.dns!.domain, delegations: cfg.dns!.delegations }); }; }
-      })());
+      stacks.push({
+        name: 'infra-dns',
+        projectName: `${this.env.projectId}-infra`,
+        program: async () => { this.dnsModule = new Dns('dns', { enabled: true, provider: cfg.dns!.provider, domain: cfg.dns!.domain, delegations: cfg.dns!.delegations }); }
+      });
     }
     // Constellation
     if (cfg.constellation?.enabled) {
-      const that = this;
-      children.push(new (class extends Component {
-        constructor() { super(that.env, 'infra-constellation'); }
-        public get projectName() { return `${that.projectName}-infra`; }
-        public createProgram() { return async () => { that.constellationModule = new Constellation('constellation', { enabled: true, source: cfg.constellation!.source, version: cfg.constellation!.version, variables: cfg.constellation!.variables }); }; }
-      })());
+      stacks.push({
+        name: 'infra-constellation',
+        projectName: `${this.env.projectId}-infra`,
+        program: async () => { this.constellationModule = new Constellation('constellation', { enabled: true, source: cfg.constellation!.source, version: cfg.constellation!.version, variables: cfg.constellation!.variables }); }
+      });
     }
-    return children;
+    return stacks;
+  }
+
+  /** Strongly-typed view of created resources for IDE hints */
+  public get infraResources(): InfraResources {
+    return {
+      vpc: this.vpc,
+      eks: this.eks,
+      iam: this.iam,
+      gcp: {
+        network: this.gcpResources?.network,
+        gke: this.gcpResources?.gke,
+      },
+      dns: this.dnsModule,
+      constellation: this.constellationModule,
+    };
   }
 }

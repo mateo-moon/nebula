@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import { Environment, EnvironmentConfig } from "./environment";
 import { Utils } from "../utils";
 import { destroyComponent, previewComponent, upComponent } from './automation';
+import { runProjectCli } from '../cli';
 
 export interface ProjectConfig {
   id: string;
@@ -81,5 +82,10 @@ export class Project {
 
   public get(id: string): Environment | undefined {
     return this.environments[id];
+  }
+
+  /** Convenience wrapper to run the interactive CLI for this project. */
+  public async run(argv?: string[]) {
+    await runProjectCli(this, argv);
   }
 }

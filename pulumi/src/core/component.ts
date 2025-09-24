@@ -1,7 +1,11 @@
-import type { PulumiFn } from '@pulumi/pulumi/automation';
 import { Environment } from './environment';
+import * as pulumi from '@pulumi/pulumi';
+import type { StackUnit } from './stack';
 
-export abstract class Component {
+export class Component {
+  private _resources: pulumi.ComponentResource[] = [];
+  private _labels: Record<string, string> = {};
+
   constructor(
     public readonly env: Environment,
     public readonly name: string,
@@ -10,28 +14,14 @@ export abstract class Component {
   /** Optional logical dependencies on other components by name (e.g. 'infra', 'secrets'). */
   public dependsOn: string[] = [];
 
-  /**
-   * Program that defines this component's resources.
-   * Returned function is executed by Pulumi Automation API.
-   */
-  public abstract createProgram(): PulumiFn;
+  /** Register a created ComponentResource to this component's registry. */
+  public register<T extends pulumi.ComponentResource>(resource: T): T { this._resources.push(resource); return resource; }
+  /** Get all registered resources. */
+  public get resources(): pulumi.ComponentResource[] { return this._resources.slice(); }
+  /** Attach arbitrary labels/metadata to this component. */
+  public setLabel(key: string, value: string): this { this._labels[key] = value; return this; }
+  public get labels(): Record<string, string> { return { ...this._labels }; }
 
-  /** Name of the Pulumi stack for this component in the environment */
-  public get stackName(): string {
-    return `${this.env.id}-${this.name}`;
-  }
-
-  /** Pulumi project name */
-  public get projectName(): string {
-    return this.env.projectId;
-  }
-
-  /** Optional stack config key-value pairs */
-  public get stackConfig(): Record<string, string> {
-    return {};
-  }
-
-  /** Optionally expand this component into child components (each becomes its own stack). */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public expandToChildren(): Component[] { return []; }
+  /** Optionally expand this component into explicit stack units (preferred). */
+  public expandToStacks(): StackUnit[] { return []; }
 }
