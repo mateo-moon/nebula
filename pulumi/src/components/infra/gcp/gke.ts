@@ -21,25 +21,27 @@ export class Gke extends pulumi.ComponentResource {
   public readonly nodePool: gcp.container.NodePool;
   public readonly kubeconfig: pulumi.Output<string>;
 
-  constructor(name: string, net: Network, cfg?: GkeConfig, opts?: pulumi.ComponentResourceOptions) {
+  constructor(
+    name: string,
+    network: Network,
+    cfg?: GkeConfig,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
     super('nebula:infra:gcp:Gke', name, {}, opts);
-    const location = cfg?.location ?? cfg?.region ?? 'us-central1';
-    const network = net.network.selfLink;
-    const subnetwork = net.subnetwork.selfLink;
 
     const clusterName = cfg?.name ?? name;
+    const location = cfg?.location ?? cfg?.region ?? gcp.config.region;
     this.cluster = new gcp.container.Cluster(clusterName, {
       name: clusterName,
-      location,
+      location: location,
       networkingMode: 'VPC_NATIVE',
       removeDefaultNodePool: true,
       initialNodeCount: 1,
-      network,
-      subnetwork,
+      network: network.network.selfLink,
+      subnetwork: network.subnetwork.selfLink,
       releaseChannel: cfg?.releaseChannel ? { channel: cfg.releaseChannel } : undefined,
       loggingService: 'logging.googleapis.com/kubernetes',
       monitoringService: 'monitoring.googleapis.com/kubernetes',
-      ipAllocationPolicy: {},
       deletionProtection: cfg?.deletionProtection,
       workloadIdentityConfig: gcp.config.project ? { workloadPool: `${gcp.config.project}.svc.id.goog` } : undefined,
       enableShieldedNodes: true,
@@ -74,7 +76,7 @@ export class Gke extends pulumi.ComponentResource {
     this.nodePool = new gcp.container.NodePool(`${clusterName}-np`, {
       name: `${clusterName}-np`,
       cluster: this.cluster.name,
-      location,
+      location: location,
       nodeCount: cfg?.minNodes ?? 2,
       autoscaling: {
         minNodeCount: cfg?.minNodes ?? 2,
@@ -83,8 +85,8 @@ export class Gke extends pulumi.ComponentResource {
       nodeConfig: {
         machineType: cfg?.machineType ?? 'e2-standard-4',
         diskSizeGb: cfg?.volumeSizeGb ?? 10,
-        labels: { 'node-role.kubernetes.io': 'system', ...(undefined as any) },
-        taints: undefined as any,
+        labels: { 'node-role.kubernetes.io': 'system' },
+        taints: undefined,
         serviceAccount: nodeServiceAccount.email,
         oauthScopes: [
           'https://www.googleapis.com/auth/cloud-platform',
@@ -149,5 +151,3 @@ users:
     });
   }
 }
-
-
