@@ -1,12 +1,20 @@
 {
   "name": "nebula",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "license": "MPL-2.0",
   "type": "module",
+  "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./core/*": "./src/core/*.ts",
-    "./components/*": "./src/components/*.ts"
+    "./cli": "./src/cli.ts",
+    "./components": "./src/components/index.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "src/*"
+      ]
+    }
   },
   "engines": {
     "node": ">=20"

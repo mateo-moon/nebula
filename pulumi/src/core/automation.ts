@@ -7,7 +7,6 @@
 import { LocalWorkspace, ConfigValue } from '@pulumi/pulumi/automation';
 import type { PulumiFn } from '@pulumi/pulumi/automation';
 import { Component } from './component';
-import { Utils } from '../utils';
 
 /** Apply changes for a component by expanding and running its StackUnits. */
 export async function upComponent(component: Component) {
@@ -45,10 +44,24 @@ async function run(component: Component, op: 'preview' | 'up' | 'destroy' | 'ref
     if (candidate && typeof candidate.preview === 'function') stack = candidate;
   } catch {}
   if (!stack) {
-    stack = await LocalWorkspace.createOrSelectStack({ stackName, projectName, program });
+    try {
+      stack = await LocalWorkspace.createOrSelectStack({ stackName, projectName, program });
+    } catch (e: any) {
+      const msg = [e?.message, e?.stderr, e?.stdout].filter(Boolean).join('\n');
+      const isLock = /stack is currently locked|currently locked by/i.test(msg);
+      if (!isLock) throw e;
+      try {
+        // Best-effort cancel existing/locked update and retry
+        const sel = await LocalWorkspace.selectStack({ stackName, projectName, program });
+        await sel.cancel();
+        await new Promise(r => setTimeout(r, 1500));
+      } catch {}
+      // Retry once after cancel
+      stack = await LocalWorkspace.createOrSelectStack({ stackName, projectName, program });
+    }
   }
 
-  const cfg: Record<string, ConfigValue> = providerConfigFromEnv(component.env);
+  const cfg: Record<string, ConfigValue> = providerConfigFrom(component);
   if (Object.keys(cfg).length) await stack.setAllConfig(cfg);
 
   const io = {
@@ -78,21 +91,34 @@ export async function runSelectedUnits(parent: Component, op: 'preview' | 'up' |
   await run(parent, op);
 }
 
-/**
- * Resolve backend URL, ensure remote storage if applicable, and prepare env vars
- * so Automation API uses the correct backend and cloud providers non-interactively.
- */
-// Note: env vars and backend are prepared once during Environment initialization
 
 /** Provider configuration (gcp/aws) derived from Environment config. */
-function providerConfigFromEnv(env: any): Record<string, ConfigValue> {
-  const cfg: Record<string, ConfigValue> = {};
-  const gcpCfg: any = env?.config?.gcpConfig;
-  const awsCfg: any = env?.config?.awsConfig;
-  const envProject = process.env.GOOGLE_PROJECT || process.env.GCLOUD_PROJECT;
-  if (gcpCfg?.projectId) cfg['gcp:project'] = { value: gcpCfg.projectId };
-  else if (envProject) cfg['gcp:project'] = { value: envProject };
-  if (gcpCfg?.region) cfg['gcp:region'] = { value: gcpCfg.region };
-  if (awsCfg?.region) cfg['aws:region'] = { value: awsCfg.region };
-  return cfg;
+function providerConfigFrom(component: Component): Record<string, ConfigValue> {
+  const out: Record<string, ConfigValue> = {};
+  const env: any = (component as any).env;
+  const compCfg: any = (component as any).config || {};
+  const projCfg: any = env?.project?.config || {};
+
+  const gcpCfg: any = compCfg?.gcpConfig || env?.config?.gcpConfig || projCfg?.gcpConfig || {};
+  const awsCfg: any = compCfg?.awsConfig || env?.config?.awsConfig || projCfg?.awsConfig || {};
+
+  const gcpProjectFromEnv = process.env.GOOGLE_PROJECT || process.env.GCLOUD_PROJECT;
+  const awsRegionFromEnv = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+
+  // Resolve GCP projectId with fallbacks
+  const gcpProject = gcpCfg.projectId || gcpProjectFromEnv;
+  if (gcpProject) out['gcp:project'] = { value: gcpProject };
+
+  // Resolve GCP region from multiple possible locations
+  const gcpRegion = gcpCfg.region
+    || gcpCfg.gke?.location
+    || gcpCfg.network?.region
+    || projCfg?.gcpConfig?.region
+    || undefined;
+  if (gcpRegion) out['gcp:region'] = { value: gcpRegion };
+
+  // Resolve AWS region
+  const awsRegion = awsCfg.region || awsRegionFromEnv;
+  if (awsRegion) out['aws:region'] = { value: awsRegion };
+  return out;
 }

@@ -1,7 +1,7 @@
 import { Environment } from '../core/environment';
-import { Infra, InfraConfig } from './infra';
-import { K8s, K8sConfig } from './k8s';
-import { Secrets, SecretsConfig } from './secrets';
+import { Infra, type InfraConfig } from './infra/index';
+import { K8s, type K8sConfig } from './k8s/index';
+import { Secrets, type SecretsConfig } from './secrets/index';
 
 export type ComponentTypes = {
   Secrets: SecretsConfig;
@@ -36,4 +36,5 @@ export interface ComponentVariants {
   infra?: Infra;
 }
 
-export { Secrets, Infra, K8s };
+export { Secrets, Infra, K8s, SecretsConfig, InfraConfig, K8sConfig };
+export { HelmFolderAddon, HelmChartAddon, type K8sContext } from './k8s/addon';

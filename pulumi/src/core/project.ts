@@ -5,12 +5,16 @@ import { Utils } from "../utils";
 export interface ProjectConfig {
   id: string;
   environments?: { [key: string]: EnvironmentConfig };
-  aws?: {
+  awsConfig?: {
     sso_config?: {
       sso_url: string;
       sso_region: string;
       sso_role_name: string;
     };
+  };
+  gcpConfig?: {
+    projectId: string;
+    region: string;
   };
 }
 
