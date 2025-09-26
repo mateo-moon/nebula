@@ -7,13 +7,14 @@ export interface VpcConfig {
   numberOfAvailabilityZones?: number;
 }
 
-export class Vpc {
+export class Vpc extends pulumi.ComponentResource {
   public readonly vpc: awsx.ec2.Vpc;
   public readonly vpcId: pulumi.Output<string>;
   public readonly privateSubnetIds: pulumi.Output<string[]>;
   public readonly publicSubnetIds: pulumi.Output<string[]>;
 
-  constructor(name: string, config?: VpcConfig) {
+  constructor(name: string, config?: VpcConfig, opts?: pulumi.ComponentResourceOptions) {
+    super('nebula:infra:aws:Vpc', name, {}, opts);
     const clusterName = 'eks';
     const clusterTagKey = `kubernetes.io/cluster/${clusterName}`;
 
@@ -44,11 +45,16 @@ export class Vpc {
       tags: {
         Name: config?.name ?? name,
       },
-    });
+    }, { parent: this });
 
     this.vpcId = this.vpc.vpcId;
     this.privateSubnetIds = pulumi.output(this.vpc.privateSubnetIds);
     this.publicSubnetIds = pulumi.output(this.vpc.publicSubnetIds);
+    this.registerOutputs({
+      vpcId: this.vpcId,
+      privateSubnetIds: this.privateSubnetIds,
+      publicSubnetIds: this.publicSubnetIds,
+    });
   }
 }
 

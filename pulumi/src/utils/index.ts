@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { ProjectConfig } from '../core/project';
+import type { Environment } from '../core/environment';
 import { S3Client, HeadBucketCommand, CreateBucketCommand, PutBucketVersioningCommand, BucketLocationConstraint } from '@aws-sdk/client-s3';
 import { STS } from '@aws-sdk/client-sts'
 
@@ -31,12 +32,12 @@ export class Utils {
   public static generateAwsConfigFile(projectConfig: ProjectConfig | undefined) {
     //TODO(OP): Add other authentication method
     if (!projectConfig) return;
-    if (!projectConfig.aws?.sso_config) return;
+    if (!projectConfig.awsConfig?.sso_config) return;
     
     const projectId = projectConfig.id;
-    const ssoUrl = projectConfig.aws.sso_config.sso_url;
-    const ssoRegion = projectConfig.aws.sso_config.sso_region;
-    const ssoRoleName = projectConfig.aws.sso_config.sso_role_name;
+    const ssoUrl = projectConfig.awsConfig.sso_config.sso_url;
+    const ssoRegion = projectConfig.awsConfig.sso_config.sso_region;
+    const ssoRoleName = projectConfig.awsConfig.sso_config.sso_role_name;
     const environments = projectConfig.environments || {};
 
     let configContent = `\
@@ -45,13 +46,13 @@ sso_session = ${projectId}
 region = ${ssoRegion}
 `
     Object.entries(environments).forEach(([envId, config]) => {
-      if (!config.awsConfig) return;
+      if (!(config as any).awsConfig) return;
       configContent += `
 [profile ${projectId}-${envId}]
 sso_session = ${projectId}
-sso_account_id = ${config.awsConfig.accountId}
+sso_account_id = ${(config as any).awsConfig.accountId}
 sso_role_name = ${ssoRoleName}
-region = ${config.awsConfig.region}
+region = ${(config as any).awsConfig.region}
 `
     })
     configContent += `
@@ -168,12 +169,14 @@ sso_registration_scopes = sso:account:access\
           const location = normalizeLocation(config.location);
           execSync(`gcloud storage buckets create gs://${config.bucket} --location=${location} --quiet`, { stdio: 'inherit' });
           return;
-        } catch (e2) {
-          console.error(`Failed to create GCS bucket ${config.bucket}:`, (e2 as any)?.message || e2);
+        } catch (e2: any) {
+          console.error(`Failed to create GCS bucket ${config.bucket}:`, e2?.message || e2);
           return;
         }
       }
-      console.error(`Failed to create GCS bucket ${config.bucket}:`, (e as any)?.message || e);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const err: any = e;
+      console.error(`Failed to create GCS bucket ${config.bucket}:`, err?.message || e);
     }
   }
 
@@ -204,13 +207,13 @@ sso_registration_scopes = sso:account:access\
   }
 
   public static async refreshSsoSession(config: ProjectConfig) {
-    if (!config.aws?.sso_config) return;
+    if (!config.awsConfig?.sso_config) return;
     const configFile = fs.existsSync(`${projectConfigPath}/aws_config`) ? `${projectConfigPath}/aws_config` : '~/.aws/config';
 
     process.env.AWS_CONFIG_FILE = configFile;
     try {
       await new STS({
-        region: config.aws.sso_config.sso_region,
+        region: config.awsConfig.sso_config.sso_region,
         profile: 'nebra-dev'
       }).getCallerIdentity({});
     } catch (error: any) {
@@ -285,8 +288,21 @@ sso_registration_scopes = sso:account:access\
   /**
    * Resolve Pulumi backend URL for a given environment.
    */
-  public static resolveBackendUrl(params: { projectId: string; envId: string; backend?: string | BackendConfig; aws?: { region?: string; profile?: string; sharedConfigFiles?: string[] }; gcp?: { projectId?: string; region?: string } }): string {
-    const { projectId, envId, backend, aws, gcp } = params;
+  public static resolveBackend(env: Environment): string {
+    const projectId = env.project.id;
+    const envId = env.id;
+    const cfg: any = (env as any).config || {};
+    const backend: string | BackendConfig | undefined = cfg.backend;
+    const aws = cfg.awsConfig ? {
+      region: cfg.awsConfig.region as (string | undefined),
+      profile: cfg.awsConfig.profile as (string | undefined),
+      sharedConfigFiles: [`${projectConfigPath}/aws_config`],
+    } : undefined;
+    const gcp = cfg.gcpConfig ? {
+      projectId: cfg.gcpConfig.projectId as (string | undefined),
+      region: cfg.gcpConfig.region as (string | undefined),
+    } : undefined;
+
     // Explicit backend selection (string URL or local path)
     if (typeof backend === 'string' && backend.trim().length > 0) {
       const b = backend.trim();
@@ -298,7 +314,7 @@ sso_registration_scopes = sso:account:access\
       try { if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true }); } catch {}
       return `file://${target}`;
     }
-    // Backward-compatible explicit object variant
+    // Explicit object variant
     if ((backend as BackendConfig)?.type === 's3') {
       const s3 = backend as BackendS3;
       const bucket = s3.bucket || `${projectId}-${envId}-tfstate`;
@@ -309,7 +325,7 @@ sso_registration_scopes = sso:account:access\
       return `gs://${gcs.bucket}`;
     }
     if ((backend as BackendConfig)?.type === 'file') {
-      const f = backend as BackendFile;
+      const f = backend as BackendLocal;
       const target = f.path || path.resolve(projectRoot, '.pulumi-state');
       try { if (!fs.existsSync(target)) fs.mkdirSync(target, { recursive: true }); } catch {}
       return `file://${target}`;
@@ -374,7 +390,7 @@ sso_registration_scopes = sso:account:access\
 
 export type BackendS3 = { type: 's3'; bucket?: string; region?: string; profile?: string; sharedConfigFiles?: string[] };
 export type BackendGcs = { type: 'gcs'; bucket: string; location?: string };
-export type BackendFile = { type: 'file'; path?: string };
-export type BackendConfig = BackendS3 | BackendGcs | BackendFile;
+export type BackendLocal = { type: 'file'; path?: string };
+export type BackendConfig = BackendS3 | BackendGcs | BackendLocal;
 
 

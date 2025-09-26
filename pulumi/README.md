@@ -6,8 +6,8 @@ Nebula gives you:
 - Componentized stacks per environment: `Infra`, `K8s`, `Secrets`
 - Automatic backend selection and bootstrap (S3/GCS/local)
 - GCP GKE and AWS EKS reference infra
-- Kubernetes addons as classes, deployed per-chart in isolated Pulumi stacks
-- Non-interactive-friendly CLI with optional interactive selection
+- Kubernetes addons as classes, deployed per-chart as isolated Pulumi stacks
+- Non-interactive-friendly CLI with optional interactive selection; selecting "all" skips per-stack prompts
 
 ---
 
@@ -164,17 +164,17 @@ Run it:
 # Preview every component (Infra, K8s, and each K8s chart) in the project
 pnpm -C pulumi run cli -- --config nebula.config.ts --op preview --all
 
-# Apply only dev:k8s (will interactively let you pick charts)
+# Apply only dev:k8s (interactively pick charts if multiple)
 pnpm -C pulumi run cli -- --config nebula.config.ts --op up --select dev:k8s
 
 # Destroy a specific component
 pnpm -C pulumi run cli -- --config nebula.config.ts --op destroy --select dev:infra
 ```
 
-During `up`/`preview`, when a `K8s` component contains charts, the CLI shows a list and lets you choose:
-- `all` to deploy all charts
-- `none` to skip all
-- Comma-separated indices to deploy a subset
+Selection behavior:
+- If you select `--all` (or choose "all" interactively), sub-stack prompts are skipped and all stacks run for each component.
+- If a component has a single stack, the sub-stack prompt is skipped.
+- For components with multiple stacks when partially selected, you'll be prompted to pick specific stacks (empty/Enter means all).
 
 Kubeconfig gets written to `.config/kube_config`.
 
@@ -223,7 +223,7 @@ Flags:
 - `--config <path>`: defaults to `nebula.config.js` in CWD
 - `--op <preview|up|destroy|refresh>`: operation to execute (defaults to `preview` if omitted)
 - `--select env:component[,env:component...]`: select specific targets (e.g. `dev:k8s,dev:infra`)
-- `--all`: select all stacks
+- `--all`: select all components; runs all stacks for each component without further prompts
 
 Examples:
 ```bash
