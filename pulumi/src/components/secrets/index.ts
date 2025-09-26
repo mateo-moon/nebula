@@ -6,9 +6,11 @@ import * as gcp from '@pulumi/gcp';
 import type { PulumiFn } from '@pulumi/pulumi/automation';
 import { Component } from '../../core/component';
 import { Environment } from '../../core/environment';
+import { KeyManagementServiceClient } from '@google-cloud/kms';
 
 export interface SecretsConfig {
   deploy?: boolean;
+  dependsOn?: string[];
   paths?: string[];
   aws?: {
     enabled?: boolean;
@@ -26,6 +28,10 @@ export interface SecretsConfig {
   };
 }
 
+export interface SecretsResources {
+  // High-level outputs for IDE assist (extend as needed)
+}
+
 type SopsCreationRule = {
   path_regex: string;
   key_groups: Array<{
@@ -41,9 +47,11 @@ type SopsConfig = {
 
 export class Secrets extends Component implements SecretsConfig {
   public readonly deploy?: boolean;
+  public readonly dependsOn?: string[];
   public readonly paths?: string[];
   public readonly aws?: SecretsConfig['aws'];
   public readonly gcp?: SecretsConfig['gcp'];
+  public pulumiFn: PulumiFn = this.createProgram();
 
   constructor(
     public readonly env: Environment,
@@ -52,6 +60,7 @@ export class Secrets extends Component implements SecretsConfig {
   ) {
     super(env, name);
     this.deploy = config.deploy;
+    this.dependsOn = config.dependsOn;
     this.paths = config.paths;
     this.aws = config.aws;
     this.gcp = config.gcp;
@@ -64,7 +73,7 @@ export class Secrets extends Component implements SecretsConfig {
       const sopsPath = `${projectRoot}/.sops.yaml`;
       const existing: SopsConfig = this.readSopsConfig(sopsPath);
 
-      const useAws = (this.aws?.enabled !== false) && !!this.env.config.awsConfig;
+      const useAws = (this.aws?.enabled !== false) && !!(this.env.config as any).awsConfig;
       let awsKeyArn: pulumi.Output<string> | undefined;
       let awsRoleArn: pulumi.Output<string> | undefined;
       if (useAws) {
@@ -102,22 +111,39 @@ export class Secrets extends Component implements SecretsConfig {
         }
       }
 
-      // Optionally provision GCP KMS
-      const useGcp = (this.gcp?.enabled === true) || (!useAws && !!this.env.config.gcpConfig);
+      // Optionally provision GCP KMS using Google SDK for existence check
+      const useGcp = (this.gcp?.enabled === true) || (!useAws && !!(this.env.config as any).gcpConfig);
       let gcpKeyResourceId: pulumi.Output<string> | undefined;
       if (useGcp) {
         const location = this.gcp?.location || 'global';
         const ringName = this.gcp?.keyRing || `sops-${this.env.id}`;
         const keyName = this.gcp?.keyName || `sops-${this.env.id}`;
+        const projectId = (this.env.config as any).gcpConfig?.projectId || gcp.config.project;
+
+        const kms = new KeyManagementServiceClient();
+        const ringFullName = projectId ? kms.keyRingPath(projectId, location, ringName) : undefined;
+        const keyFullName = projectId ? kms.cryptoKeyPath(projectId, location, ringName, keyName) : undefined;
+
+        const ringExists = async (): Promise<boolean> => {
+          if (!ringFullName) return false;
+          try { await kms.getKeyRing({ name: ringFullName }); return true; } catch { return false; }
+        };
+        const keyExists = async (): Promise<boolean> => {
+          if (!keyFullName) return false;
+          try { await kms.getCryptoKey({ name: keyFullName }); return true; } catch { return false; }
+        };
+
+        const [hasRing, hasKey] = await Promise.all([ringExists(), keyExists()]);
+
         const ring = new gcp.kms.KeyRing(`${this.name}-ring`, {
           name: ringName,
           location,
-        });
+        }, hasRing && ringFullName ? { import: ringFullName } : undefined);
         const ckey = new gcp.kms.CryptoKey(`${this.name}-key`, {
           name: keyName,
           keyRing: ring.id,
           rotationPeriod: '7776000s', // 90 days
-        });
+        }, hasKey && keyFullName ? { import: keyFullName } : undefined);
         gcpKeyResourceId = ckey.id; // projects/.../locations/.../keyRings/.../cryptoKeys/...
         (this.gcp?.members || []).forEach((member, idx) => {
           new gcp.kms.CryptoKeyIAMMember(`${this.name}-member-${idx}`, {
@@ -129,13 +155,13 @@ export class Secrets extends Component implements SecretsConfig {
       }
 
       // Resolve dynamic IDs and then merge/update SOPS rules, writing file once
-      const awsArnIn: pulumi.Input<string> = (awsKeyArn as any) || '';
-      const awsRoleIn: pulumi.Input<string> = (awsRoleArn as any) || '';
-      const gcpResIn: pulumi.Input<string> = (gcpKeyResourceId as any) || '';
+      const awsArnIn: pulumi.Input<string> = awsKeyArn ?? '';
+      const awsRoleIn: pulumi.Input<string> = awsRoleArn ?? '';
+      const gcpResIn: pulumi.Input<string> = gcpKeyResourceId ?? '';
       pulumi.all([awsArnIn, awsRoleIn, gcpResIn]).apply(([awsArn, awsRole, gcpRes]) => {
         const rules = this.paths || [
-          `.*/secrets\\.yaml`,
-          `.*/secrets-${this.env.id}\\.yaml`,
+          `.*/secrets\.yaml`,
+          `.*/secrets-${this.env.id}\.yaml`,
         ];
         rules.forEach(pattern => {
           const idx = existing.creation_rules.findIndex(r => r.path_regex === pattern);
@@ -146,15 +172,15 @@ export class Secrets extends Component implements SecretsConfig {
           if (idx === -1) {
             existing.creation_rules.push({ path_regex: pattern, key_groups: [group] });
           } else {
-            const kg = existing.creation_rules[idx].key_groups[0] || {} as any;
+            const kg = (existing.creation_rules[idx].key_groups[0] || {}) as SopsCreationRule['key_groups'][number];
             if (group.kms) {
               kg.kms = kg.kms || [];
-              const exists = kg.kms.find((k: any) => k.arn === group.kms![0].arn && k.role === group.kms![0].role);
+              const exists = kg.kms.find(k => k.arn === group.kms![0].arn && k.role === group.kms![0].role);
               if (!exists) kg.kms.push(group.kms[0]);
             }
             if (group.gcp_kms) {
               kg.gcp_kms = kg.gcp_kms || [];
-              const exists = kg.gcp_kms.find((g: any) => g.resource_id === group.gcp_kms![0].resource_id);
+              const exists = kg.gcp_kms.find(g => g.resource_id === group.gcp_kms![0].resource_id);
               if (!exists) kg.gcp_kms.push(group.gcp_kms[0]);
             }
             existing.creation_rules[idx].key_groups[0] = kg;
@@ -163,6 +189,14 @@ export class Secrets extends Component implements SecretsConfig {
         this.writeSopsConfig(sopsPath, existing);
       });
     };
+  }
+
+  public expandToStacks(): Array<{ name: string; projectName?: string; stackConfig?: Record<string,string>; program: PulumiFn }> {
+    return [{
+      name: `secrets`,
+      projectName: `${this.env.project.id}-infra`,
+      program: this.createProgram(),
+    }];
   }
 
   private readSopsConfig(pathname: string): SopsConfig {
@@ -199,5 +233,9 @@ export class Secrets extends Component implements SecretsConfig {
       });
     }
     return JSON.stringify({ Version: '2012-10-17', Statement: statements });
+  }
+
+  public get secretsResources(): SecretsResources {
+    return {};
   }
 }

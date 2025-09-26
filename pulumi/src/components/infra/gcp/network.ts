@@ -1,4 +1,5 @@
 import * as gcp from '@pulumi/gcp';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface NetworkConfig {
   name?: string;
@@ -13,25 +14,26 @@ export interface NetworkConfig {
   subnetName?: string;  // override GCP subnet name
 }
 
-export class Network {
+export class Network extends pulumi.ComponentResource {
   public readonly network: gcp.compute.Network;
   public readonly subnetwork: gcp.compute.Subnetwork;
-  public readonly podsRangeName?: string;
-  public readonly servicesRangeName?: string;
+  public readonly podsRangeName: string;
+  public readonly servicesRangeName: string;
 
-  constructor(name: string, config?: NetworkConfig) {
+  constructor(name: string, config?: NetworkConfig, opts?: pulumi.ComponentResourceOptions) {
+    super('nebula:infra:gcp:Network', name, {}, opts);
     const netName = config?.networkName ?? name;
     this.network = new gcp.compute.Network(netName, {
       name: netName,
       autoCreateSubnetworks: false,
-    });
+    }, { parent: this });
 
     const subnetName = config?.subnetName ?? `${name}-subnet`;
     const ipCidr = config?.cidr ?? config?.cidrBlocks?.[0] ?? '10.10.0.0/16';
     const podsRangeName = config?.podsRangeName ?? `${subnetName}-pods`;
     const servicesRangeName = config?.servicesRangeName ?? `${subnetName}-services`;
-    this.podsRangeName = config?.podsSecondaryCidr ? podsRangeName : undefined;
-    this.servicesRangeName = config?.servicesSecondaryCidr ? servicesRangeName : undefined;
+    this.podsRangeName = podsRangeName;
+    this.servicesRangeName = servicesRangeName;
 
     this.subnetwork = new gcp.compute.Subnetwork(subnetName, {
       name: subnetName,
@@ -49,6 +51,14 @@ export class Network {
           rangeName: servicesRangeName,
         }] : []),
       ],
+    }, { parent: this });
+    this.registerOutputs({
+      networkId: this.network.id,
+      subnetworkId: this.subnetwork.id,
+      networkSelfLink: this.network.selfLink,
+      subnetworkSelfLink: this.subnetwork.selfLink,
+      podsRangeName: podsRangeName,
+      servicesRangeName: servicesRangeName,
     });
   }
 }
