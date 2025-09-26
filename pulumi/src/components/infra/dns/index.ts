@@ -1,6 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
 import * as aws from '@pulumi/aws';
+import * as cloudflare from '@pulumi/cloudflare';
 
 export type DnsDelegationProvider = 'cloudflare' | 'hetzner';
 
@@ -12,9 +13,10 @@ export interface DnsDelegationConfig {
 
 export type DnsProvider = 'gcp' | 'aws';
 
-export interface DnsModuleConfig {
-  enabled?: boolean;
+export interface DnsConfig {
   provider: DnsProvider;
+  dnsDelegations?: DnsDelegationConfig[];
+  enabled?: boolean;
   domain?: string; // e.g. example.com or sub.example.com
   delegations?: DnsDelegationConfig[]; // optional upstream DNS delegations
 }
@@ -23,7 +25,7 @@ export class Dns extends pulumi.ComponentResource {
   public readonly zoneId?: pulumi.Output<string>;
   public readonly nameServers?: pulumi.Output<string[]>;
 
-  constructor(name: string, cfg: DnsModuleConfig, opts?: pulumi.ComponentResourceOptions) {
+  constructor(name: string, cfg: DnsConfig, opts?: pulumi.ComponentResourceOptions) {
     super('nebula:infra:dns:Module', name, {}, opts);
 
     if (cfg.enabled === false || !cfg.domain) {
@@ -49,10 +51,8 @@ export class Dns extends pulumi.ComponentResource {
         forceDestroy: true,
       }, { parent: this });
       // nameServers are available after creation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.zoneId = zone.id as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.nameServers = (zone as any).nameServers as pulumi.Output<string[]>;
+      this.zoneId = zone.id;
+      this.nameServers = zone.nameServers as pulumi.Output<string[]>;
       this.applyDelegations(name, domain, this.nameServers, cfg.delegations);
     } else {
       throw new Error(`Unsupported DNS provider: ${cfg.provider}`);
@@ -66,15 +66,14 @@ export class Dns extends pulumi.ComponentResource {
     nsList.apply(async (servers) => {
       for (const d of delegations) {
         if (d.provider === 'cloudflare') {
-          const cf: any = await (new Function('m', 'return import(m)'))('@pulumi/cloudflare');
-          const recCtor = (cf as any).DnsRecord || (cf as any).Record;
-          const propsCommon = (ns: string) => ({ zoneId: d.zoneId, name: fqdn, type: 'NS', ttl: 3600 });
           servers.forEach((ns, idx) => {
-            if ((cf as any).DnsRecord) {
-              new recCtor(`${name}-ns-${idx}`, { ...propsCommon(ns), content: ns }, { parent: this });
-            } else {
-              new recCtor(`${name}-ns-${idx}`, { ...propsCommon(ns), value: ns }, { parent: this });
-            }
+            new cloudflare.Record(`${name}-ns-${idx}`, {
+              zoneId: d.zoneId,
+              name: fqdn,
+              type: 'NS',
+              ttl: 3600,
+              content: ns,
+            }, { parent: this });
           });
         } else if (d.provider === 'hetzner') {
           // Placeholder: implement Hetzner DNS in future

@@ -7,9 +7,6 @@ import * as YAML from 'yaml';
 import { deepmerge } from 'deepmerge-ts';
 import { execSync } from 'child_process';
 import type { Environment } from '../../core/environment';
-import type { Infra } from '../infra';
-import type { K8s } from './index';
-import { createK8sProvider } from './index';
 
 export interface WorkloadIdentitySpec {
   ksaName: string;
@@ -30,67 +27,26 @@ export interface HelmAddonSpec {
   deploy?: boolean;
 }
 
-/**
- * Base class for K8s addons.
- *
- * Addons are pure deployment units that can be bound to a runtime K8s context
- * (provider + env). They expose shouldDeploy() and apply() to drive execution.
- * Each addon will be executed in its own stack (via automation) when provided
- * via the K8s component charts array.
- */
-export interface K8sContext {
-  env: Environment;
-  provider: k8s.Provider;
-  kubeconfig?: pulumi.Input<string>;
-}
+export interface K8sContext { env: Environment; provider: k8s.Provider }
 
 export abstract class K8sAddon {
-  private _deploy?: boolean;
-  private _k8s?: K8sContext; // minimal runtime context
-  private _provider?: k8s.Provider;
+  protected _deploy?: boolean;
+  protected provider?: k8s.Provider;
+  protected env?: Environment;
+
   constructor(deploy?: boolean) { this._deploy = deploy; }
-  public bind(k8s: K8sContext): this { this._k8s = k8s; return this; }
-  public shouldDeploy(): boolean { return this._deploy !== false; }
-  public setDeploy(value: boolean): this { this._deploy = value; return this; }
-  public get env(): Environment { return this._k8s!.env; }
-  public get infra(): Infra | undefined { return this._k8s?.env?.infra; }
-  public get provider(): k8s.Provider {
-    if (this._k8s?.provider) return this._k8s.provider;
-    if (this._provider) return this._provider;
-    const kc: any = (this._k8s as any)?.kubeconfig;
-    if (kc) {
-      // Lazily create a provider using the K8s component's kubeconfig if not already available
-      const name = (typeof (this as any).displayName === 'function' && (this as any).displayName()) || 'chart';
-      this._provider = createK8sProvider({ kubeconfig: kc, name: `${String(name).replace(/[^A-Za-z0-9_.-]/g, '-')}-provider` });
-      return this._provider;
-    }
-    throw new Error('Kubernetes provider is not available. Ensure addon is bound to a K8s component or provide kubeconfig.');
+
+  public bind(ctx: K8sContext): this {
+    this.env = ctx.env;
+    this.provider = ctx.provider;
+    return this;
   }
-  public get projectId(): pulumi.Input<string> | undefined { return gcp.config.project || (this.env as any)?.config?.gcpConfig?.projectId; }
-  /** Implement this to create any needed cloud resources and Kubernetes objects. */
+  public shouldDeploy(): boolean { return this._deploy !== false; }
   public abstract apply(): void;
-  /** Human-friendly name for selection in CLI. */
   public abstract displayName(): string;
 }
 
-/**
- * ComponentResource wrapper for any K8sAddon descriptor. Ensures all addon resources
- * are parented and use the provided provider.
- */
-export class K8sChartResource extends pulumi.ComponentResource {
-  constructor(name: string, args: { addon: K8sAddon; provider: k8s.Provider; env: Environment }, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:k8s:Chart', name, {}, { ...opts, provider: args.provider });
-    args.addon.bind({ env: args.env, provider: args.provider });
-    args.addon.apply();
-    this.registerOutputs({});
-  }
-}
-
-export function deployHelmAddon(args: {
-  provider: k8s.Provider;
-  spec: HelmAddonSpec;
-  projectId?: pulumi.Input<string>;
-}) {
+export function deployHelmAddon(args: { provider: k8s.Provider; spec: HelmAddonSpec; projectId?: pulumi.Input<string> }) {
   const { provider, spec, projectId } = args;
   const ns = spec.namespace || 'default';
 
@@ -142,7 +98,8 @@ export class HelmChartAddon extends K8sAddon {
     this.spec = spec;
   }
   public apply(): void {
-    deployHelmAddon({ provider: this.provider, spec: this.spec, projectId: this.projectId });
+    if (!this.provider) throw new Error('K8s provider not bound');
+    deployHelmAddon({ provider: this.provider, spec: this.spec });
   }
   public displayName(): string { return this.spec.name; }
 }
@@ -199,9 +156,7 @@ export class HelmFolderAddon extends K8sAddon {
     const baseName = (this.name && this.name.trim().length > 0) ? this.name.trim() : path.basename(dir);
     const safeName = baseName.replace(/[^A-Za-z0-9_.-]/g, '-');
     const nsName = this.options?.namespace;
-    const nsRes = nsName
-      ? new k8s.core.v1.Namespace(`${safeName}-ns`, { metadata: { name: nsName } }, { provider: this.provider })
-      : undefined;
+    const nsRes = nsName ? new k8s.core.v1.Namespace(`${safeName}-ns`, { metadata: { name: nsName } }, { provider: this.provider }) : undefined;
     if (fs.existsSync(chartYaml)) {
       // Helm mode: merge values from files (values.yaml, values-*.yaml, etc.) and inline overrides
       let mergedValues: any = {};
@@ -213,7 +168,7 @@ export class HelmFolderAddon extends K8sAddon {
         }
       }
       if (this.options?.values && typeof this.options.values === 'object') {
-        mergedValues = deepmerge(mergedValues, this.options.values as any);
+        mergedValues = deepmerge(mergedValues, this.options.values as Record<string, unknown>);
       }
       mergedValues = resolveValsRefs(mergedValues);
       new k8s.helm.v3.Chart(safeName, {

@@ -17,8 +17,6 @@ export interface NetworkConfig {
 export class Network extends pulumi.ComponentResource {
   public readonly network: gcp.compute.Network;
   public readonly subnetwork: gcp.compute.Subnetwork;
-  public readonly podsRangeName?: string;
-  public readonly servicesRangeName?: string;
 
   constructor(name: string, config?: NetworkConfig, opts?: pulumi.ComponentResourceOptions) {
     super('nebula:infra:gcp:Network', name, {}, opts);
@@ -32,8 +30,6 @@ export class Network extends pulumi.ComponentResource {
     const ipCidr = config?.cidr ?? config?.cidrBlocks?.[0] ?? '10.10.0.0/16';
     const podsRangeName = config?.podsRangeName ?? `${subnetName}-pods`;
     const servicesRangeName = config?.servicesRangeName ?? `${subnetName}-services`;
-    this.podsRangeName = config?.podsSecondaryCidr ? podsRangeName : undefined;
-    this.servicesRangeName = config?.servicesSecondaryCidr ? servicesRangeName : undefined;
 
     this.subnetwork = new gcp.compute.Subnetwork(subnetName, {
       name: subnetName,
@@ -55,8 +51,10 @@ export class Network extends pulumi.ComponentResource {
     this.registerOutputs({
       networkId: this.network.id,
       subnetworkId: this.subnetwork.id,
-      podsRangeName: this.podsRangeName,
-      servicesRangeName: this.servicesRangeName,
+      networkSelfLink: this.network.selfLink,
+      subnetworkSelfLink: this.subnetwork.selfLink,
+      podsRangeName: podsRangeName,
+      servicesRangeName: servicesRangeName,
     });
   }
 }

@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
-export interface ConstellationModuleConfig {
+export interface ConstellationConfig {
   enabled?: boolean;
   /** Module source (git registry or local path). Provide a provider-specific example. */
   source: string;
@@ -22,7 +22,7 @@ export interface ConstellationModuleConfig {
 export class Constellation extends pulumi.ComponentResource {
   public readonly outputs: pulumi.Output<any>;
 
-  constructor(name: string, cfg: ConstellationModuleConfig, opts?: pulumi.ComponentResourceOptions) {
+  constructor(name: string, cfg: ConstellationConfig, opts?: pulumi.ComponentResourceOptions) {
     super('nebula:infra:constellation:Module', name, {}, opts);
 
     if (!cfg?.source || cfg.source.trim().length === 0) {
@@ -35,13 +35,13 @@ export class Constellation extends pulumi.ComponentResource {
     // Initialize a minimal JS package to host the generated SDK
     const pkgJsonPath = path.join(workDir, 'package.json');
     if (!fs.existsSync(pkgJsonPath)) {
-      const pkg = {
+      const pkg: Record<string, unknown> = {
         name: `tfmod-${name}`,
         private: true,
         type: 'module',
         version: '0.0.0',
         dependencies: { '@pulumi/pulumi': '^3.0.0' }
-      } as any;
+      };
       try { fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2)); } catch {}
     }
 
@@ -56,18 +56,20 @@ export class Constellation extends pulumi.ComponentResource {
     try { execSync(addArgs.join(' '), { cwd: workDir, stdio: 'inherit' }); } catch (e: any) {
       throw new Error(`pulumi package add failed: ${e?.message || e}`);
     }
-    try { execSync('pnpm i --silent', { cwd: workDir, stdio: 'inherit' as any, shell: true as any }); } catch { try { execSync('npm i --silent', { cwd: workDir, stdio: 'inherit' as any, shell: true as any }); } catch {} }
+    try { execSync('pnpm i --silent', { cwd: workDir, stdio: 'inherit' }); } catch { try { execSync('npm i --silent', { cwd: workDir, stdio: 'inherit' }); } catch {} }
 
     // Import the generated SDK and create the module resource
     const req = createRequire(path.join(workDir, 'index.js'));
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const tfmod: any = req(alias);
-    const ModuleCtor = tfmod.Module || tfmod.default || tfmod;
+    const tfmod: unknown = req(alias);
+    const ModuleCtor = (tfmod as { Module?: unknown; default?: unknown }).Module || (tfmod as { default?: unknown }).default || (tfmod as unknown);
     if (typeof ModuleCtor !== 'function') throw new Error('Generated Terraform module SDK did not expose a constructable Module');
 
-    const mod = new ModuleCtor(name, { ...(cfg.variables || {}) }, { parent: this });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod = new (ModuleCtor as any)(name, { ...(cfg.variables || {}) }, { parent: this });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const outAny = (mod && (mod.outputs ?? (mod.output && mod.output()) ?? mod)) as any;
-    this.outputs = pulumi.output(outAny);
+    this.outputs = pulumi.output(outAny as pulumi.Input<any>);
 
     this.registerOutputs({ outputs: this.outputs });
   }
