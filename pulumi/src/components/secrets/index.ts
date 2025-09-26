@@ -10,6 +10,7 @@ import { KeyManagementServiceClient } from '@google-cloud/kms';
 
 export interface SecretsConfig {
   deploy?: boolean;
+  dependsOn?: string[];
   paths?: string[];
   aws?: {
     enabled?: boolean;
@@ -46,9 +47,11 @@ type SopsConfig = {
 
 export class Secrets extends Component implements SecretsConfig {
   public readonly deploy?: boolean;
+  public readonly dependsOn?: string[];
   public readonly paths?: string[];
   public readonly aws?: SecretsConfig['aws'];
   public readonly gcp?: SecretsConfig['gcp'];
+  public pulumiFn: PulumiFn = this.createProgram();
 
   constructor(
     public readonly env: Environment,
@@ -57,6 +60,7 @@ export class Secrets extends Component implements SecretsConfig {
   ) {
     super(env, name);
     this.deploy = config.deploy;
+    this.dependsOn = config.dependsOn;
     this.paths = config.paths;
     this.aws = config.aws;
     this.gcp = config.gcp;
@@ -69,7 +73,7 @@ export class Secrets extends Component implements SecretsConfig {
       const sopsPath = `${projectRoot}/.sops.yaml`;
       const existing: SopsConfig = this.readSopsConfig(sopsPath);
 
-      const useAws = (this.aws?.enabled !== false) && !!this.env.config.awsConfig;
+      const useAws = (this.aws?.enabled !== false) && !!(this.env.config as any).awsConfig;
       let awsKeyArn: pulumi.Output<string> | undefined;
       let awsRoleArn: pulumi.Output<string> | undefined;
       if (useAws) {
@@ -108,13 +112,13 @@ export class Secrets extends Component implements SecretsConfig {
       }
 
       // Optionally provision GCP KMS using Google SDK for existence check
-      const useGcp = (this.gcp?.enabled === true) || (!useAws && !!this.env.config.gcpConfig);
+      const useGcp = (this.gcp?.enabled === true) || (!useAws && !!(this.env.config as any).gcpConfig);
       let gcpKeyResourceId: pulumi.Output<string> | undefined;
       if (useGcp) {
         const location = this.gcp?.location || 'global';
         const ringName = this.gcp?.keyRing || `sops-${this.env.id}`;
         const keyName = this.gcp?.keyName || `sops-${this.env.id}`;
-        const projectId = this.env.config.gcpConfig?.projectId || gcp.config.project;
+        const projectId = (this.env.config as any).gcpConfig?.projectId || gcp.config.project;
 
         const kms = new KeyManagementServiceClient();
         const ringFullName = projectId ? kms.keyRingPath(projectId, location, ringName) : undefined;
@@ -187,10 +191,10 @@ export class Secrets extends Component implements SecretsConfig {
     };
   }
 
-  public override expandToStacks(): Array<{ name: string; projectName?: string; stackConfig?: Record<string,string>; program: PulumiFn }> {
+  public expandToStacks(): Array<{ name: string; projectName?: string; stackConfig?: Record<string,string>; program: PulumiFn }> {
     return [{
       name: `secrets`,
-      projectName: `${this.env.projectId}-infra`,
+      projectName: `${this.env.project.id}-infra`,
       program: this.createProgram(),
     }];
   }

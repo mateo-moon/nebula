@@ -32,12 +32,12 @@ export class Utils {
   public static generateAwsConfigFile(projectConfig: ProjectConfig | undefined) {
     //TODO(OP): Add other authentication method
     if (!projectConfig) return;
-    if (!projectConfig.aws?.sso_config) return;
+    if (!projectConfig.awsConfig?.sso_config) return;
     
     const projectId = projectConfig.id;
-    const ssoUrl = projectConfig.aws.sso_config.sso_url;
-    const ssoRegion = projectConfig.aws.sso_config.sso_region;
-    const ssoRoleName = projectConfig.aws.sso_config.sso_role_name;
+    const ssoUrl = projectConfig.awsConfig.sso_config.sso_url;
+    const ssoRegion = projectConfig.awsConfig.sso_config.sso_region;
+    const ssoRoleName = projectConfig.awsConfig.sso_config.sso_role_name;
     const environments = projectConfig.environments || {};
 
     let configContent = `\
@@ -207,13 +207,13 @@ sso_registration_scopes = sso:account:access\
   }
 
   public static async refreshSsoSession(config: ProjectConfig) {
-    if (!config.aws?.sso_config) return;
+    if (!config.awsConfig?.sso_config) return;
     const configFile = fs.existsSync(`${projectConfigPath}/aws_config`) ? `${projectConfigPath}/aws_config` : '~/.aws/config';
 
     process.env.AWS_CONFIG_FILE = configFile;
     try {
       await new STS({
-        region: config.aws.sso_config.sso_region,
+        region: config.awsConfig.sso_config.sso_region,
         profile: 'nebra-dev'
       }).getCallerIdentity({});
     } catch (error: any) {

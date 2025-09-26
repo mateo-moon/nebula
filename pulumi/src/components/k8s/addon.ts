@@ -160,7 +160,24 @@ export class HelmFolderAddon extends K8sAddon {
     if (fs.existsSync(chartYaml)) {
       // Helm mode: merge values from files (values.yaml, values-*.yaml, etc.) and inline overrides
       let mergedValues: any = {};
-      const valueFiles = this.options?.valuesFiles || [];
+      // Default values files: values.yaml, values-<project>-<env>.yaml, values-<env>.yaml (and .yml variants), if present
+      const defaults: string[] = [];
+      const envId = this.env?.id;
+      const projectId = this.env?.project?.id;
+      const candidates = [
+        'values.yaml',
+        'values.yml',
+        ...(projectId && envId ? [ `values-${projectId}-${envId}.yaml`, `values-${projectId}-${envId}.yml` ] : []),
+        ...(envId ? [ `values-${envId}.yaml`, `values-${envId}.yml` ] : []),
+      ];
+      for (const f of candidates) {
+        const p = path.join(dir, f);
+        if (fs.existsSync(p)) defaults.push(f);
+      }
+      const valueFiles = [
+        ...defaults,
+        ...((this.options?.valuesFiles || []).filter(Boolean)),
+      ];
       for (const f of valueFiles) {
         const p = path.isAbsolute(f) ? f : path.join(dir, f);
         if (fs.existsSync(p)) {

@@ -20,8 +20,19 @@ export async function runProjectCli(project: Project, args?: string[]) {
   const op = (get('--op') as Op) || undefined;
   const select = get('--select');
 
+  const getComponents = (env: any): Component[] => {
+    const comps = (env as any).components;
+    if (comps && typeof comps === 'object' && !Array.isArray(comps)) {
+      return Object.values(comps).filter(Boolean) as Component[];
+    }
+    const guess = [env.secrets, env.infra, env.k8s].filter(Boolean);
+    return guess as Component[];
+  };
   const items: Array<{ env: Environment; component: Component }> = [];
-  for (const env of Object.values(project.environments)) for (const c of env.components) items.push({ env, component: c });
+  for (const env of Object.values(project.environments || {})) {
+    const list = getComponents(env);
+    for (const c of list) items.push({ env: env as Environment, component: c });
+  }
   if (items.length === 0) { console.log('No components found.'); return; }
 
   let chosenOp: Op = op || (await (async () => { const ans = await ask('Operation [preview|up|destroy|refresh] (default preview): '); return (['preview','up','destroy','refresh'].includes(ans) ? ans as Op : 'preview'); })());
@@ -46,10 +57,10 @@ export async function runProjectCli(project: Project, args?: string[]) {
   // Expand selection to include dependencies (e.g., K8s dependsOn Infra)
   const expanded: Array<{ env: Environment; component: Component; autoIncluded: boolean }> = [];
   const byEnv = new Map<Environment, { list: Component[]; index: Map<string, Component> }>();
-  for (const env of Object.values(project.environments)) {
-    const list = env.components;
+  for (const env of Object.values(project.environments || {})) {
+    const list = getComponents(env);
     const index = new Map(list.map(c => [c.name, c] as const));
-    byEnv.set(env, { list, index });
+    byEnv.set(env as Environment, { list, index });
   }
   const includeSet = new Set<string>();
   const keyOf = (e: Environment, c: Component) => `${e.id}:${c.name}`;
@@ -58,7 +69,8 @@ export async function runProjectCli(project: Project, args?: string[]) {
     if (includeSet.has(key)) return;
     includeSet.add(key);
     // Add dependencies first
-    for (const dep of (c.dependsOn || [])) {
+    const deps: string[] = (c as any).dependsOn || [];
+    for (const dep of deps) {
       const envEntry = byEnv.get(e);
       const depComp = envEntry?.index.get(dep);
       if (depComp) addWithDeps(e, depComp, true);
@@ -77,7 +89,7 @@ export async function runProjectCli(project: Project, args?: string[]) {
   console.log(`Executing '${chosenOp}' for ${ordered.length} component(s)...`);
   const componentOrder = chosenOp === 'destroy' ? [...ordered].reverse() : ordered;
   for (const it of componentOrder) {
-    const stacks = it.component.expandToStacks?.();
+    const stacks = (it.component as any).expandToStacks?.();
     if (stacks && stacks.length > 0) {
       const autoIncluded = it.autoIncluded || false;
       if (allComponents || stacks.length === 1 || autoIncluded) {

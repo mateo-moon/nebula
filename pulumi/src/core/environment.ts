@@ -25,11 +25,14 @@ export abstract class Environment {
     this.config = config;
     const backendUrl = Utils.resolveBackend(this);
     const cfgAny: any = this.config as any;
+    const projCfgAny: any = (this.project as any).config || {};
     process.env.PULUMI_CONFIG_PASSPHRASE = Utils.ensurePulumiPassphrase();
     if (cfgAny?.awsConfig?.profile) process.env.AWS_PROFILE = cfgAny.awsConfig.profile;
     if (cfgAny?.awsConfig?.region) process.env.AWS_REGION = cfgAny.awsConfig.region;
     if (typeof projectConfigPath !== 'undefined') process.env.AWS_CONFIG_FILE = `${projectConfigPath}/aws_config`;
     if (cfgAny?.gcpConfig?.projectId) process.env.GOOGLE_PROJECT = cfgAny.gcpConfig.projectId;
+    else if (projCfgAny?.gcpConfig?.projectId) process.env.GOOGLE_PROJECT = projCfgAny.gcpConfig.projectId;
+    if (!process.env.GOOGLE_PROJECT && (process.env.GCLOUD_PROJECT)) process.env.GOOGLE_PROJECT = process.env.GCLOUD_PROJECT;
 
     // Ensure backend storage exists (best-effort, non-blocking)
     Utils.ensureBackendForUrl({
