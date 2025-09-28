@@ -6,8 +6,8 @@ import { Network } from './network';
 
 export interface GkeConfig {
   name?: string;
-  region?: string;
   location?: string; // region or zone
+  network?: Network;
   minNodes?: number;
   maxNodes?: number;
   machineType?: string;
@@ -23,30 +23,31 @@ export class Gke extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    network: Network,
-    cfg?: GkeConfig,
+    args?: GkeConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:infra:gcp:Gke', name, {}, opts);
+    super('nebula:infra:gcp:Gke', name, args, opts);
 
-    const clusterName = cfg?.name ?? name;
-    const location = cfg?.location ?? cfg?.region ?? gcp.config.region;
-    const project = gcp.config.project || process.env.GOOGLE_PROJECT || process.env.GCLOUD_PROJECT;
-    if (!project) {
-      throw new Error("GCP project is not set. Configure 'gcp:project' in stack config or set GOOGLE_PROJECT.");
-    }
+    const cfg = new pulumi.Config()
+    const clusterName = args?.name ?? name;
+    const location = args?.location ?? cfg.require('gcp:region');
+    const project = pulumi.getProject();
     this.cluster = new gcp.container.Cluster(clusterName, {
       name: clusterName,
       location: location,
       networkingMode: 'VPC_NATIVE',
       removeDefaultNodePool: true,
       initialNodeCount: 1,
-      network: network.network.selfLink,
-      subnetwork: network.subnetwork.selfLink,
-      releaseChannel: cfg?.releaseChannel ? { channel: cfg.releaseChannel } : undefined,
+      network: args?.network?.network.selfLink,
+      subnetwork: args?.network?.subnetwork.selfLink,
+      ipAllocationPolicy: {
+        clusterSecondaryRangeName: args?.network?.podsRangeName,
+        servicesSecondaryRangeName: args?.network?.servicesRangeName,
+      },
+      releaseChannel: args?.releaseChannel ? { channel: args?.releaseChannel } : undefined,
       loggingService: 'logging.googleapis.com/kubernetes',
       monitoringService: 'monitoring.googleapis.com/kubernetes',
-      deletionProtection: cfg?.deletionProtection,
+      deletionProtection: args?.deletionProtection,
       workloadIdentityConfig: project ? { workloadPool: `${project}.svc.id.goog` } : undefined,
       enableShieldedNodes: true,
       verticalPodAutoscaling: { enabled: true },
@@ -77,19 +78,19 @@ export class Gke extends pulumi.ComponentResource {
       member: pulumi.interpolate`serviceAccount:${computeDefaultSa}`,
     }, { parent: this });
 
-    const autoscaleEnabled = (cfg?.maxNodes ?? 0) > (cfg?.minNodes ?? 1);
+    const autoscaleEnabled = (args?.maxNodes ?? 0) > (args?.minNodes ?? 1);
     const nodePoolName = 'system';
     this.nodePool = new gcp.container.NodePool(nodePoolName, {
       name: nodePoolName,
       cluster: this.cluster.name,
       location: location,
       ...(autoscaleEnabled
-        ? { autoscaling: { minNodeCount: cfg?.minNodes ?? 1, maxNodeCount: cfg?.maxNodes ?? (cfg?.minNodes ?? 1) } }
-        : { nodeCount: cfg?.minNodes ?? 1 }
+        ? { autoscaling: { minNodeCount: args?.minNodes ?? 1, maxNodeCount: args?.maxNodes ?? (args?.minNodes ?? 1) } }
+        : { nodeCount: args?.minNodes ?? 1 }
       ),
       nodeConfig: {
-        machineType: cfg?.machineType ?? 'e2-standard-4',
-        diskSizeGb: cfg?.volumeSizeGb ?? 10,
+        machineType: args?.machineType ?? 'e2-standard-4',
+        diskSizeGb: args?.volumeSizeGb ?? 10,
         labels: { 'node-role.kubernetes.io': 'system' },
         taints: undefined,
         serviceAccount: nodeServiceAccount.email,

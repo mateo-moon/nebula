@@ -32,6 +32,12 @@ export interface SecretsResources {
   // High-level outputs for IDE assist (extend as needed)
 }
 
+export interface SecretsOutput {
+  awsKmsKeyArn?: pulumi.Output<string>;
+  awsRoleArn?: pulumi.Output<string>;
+  gcpKeyResourceId?: pulumi.Output<string>;
+}
+
 type SopsCreationRule = {
   path_regex: string;
   key_groups: Array<{
@@ -71,6 +77,7 @@ export class Secrets extends Component implements SecretsConfig {
       if (this.deploy === false) return;
 
       const sopsPath = `${projectRoot}/.sops.yaml`;
+      const fileExisted = (() => { try { return fs.existsSync(sopsPath); } catch { return false; } })();
       const existing: SopsConfig = this.readSopsConfig(sopsPath);
 
       const useAws = (this.aws?.enabled !== false) && !!(this.env.config as any).awsConfig;
@@ -139,11 +146,73 @@ export class Secrets extends Component implements SecretsConfig {
           name: ringName,
           location,
         }, hasRing && ringFullName ? { import: ringFullName } : undefined);
+        // Choose which key to use: prefer existing base key if its primary version is ENABLED; otherwise create or reuse an alternate key with a random suffix
+        let finalKeyName = keyName;
+        let importExisting = false;
+        let importName: string | undefined;
+        try {
+          if (hasKey && keyFullName) {
+            const [ck] = await kms.getCryptoKey({ name: keyFullName });
+            const primaryName = ck?.primary?.name;
+            if (primaryName) {
+              const [ver] = await kms.getCryptoKeyVersion({ name: primaryName });
+              importExisting = (ver.state === 'ENABLED');
+            }
+            if (!importExisting) {
+              // Prefer reusing an existing random-suffixed key with ENABLED primary; otherwise mint a new random-suffixed key
+              const [all] = await kms.listCryptoKeys({ parent: ringFullName! });
+              const existingNames = new Set<string>((all || []).map(k => (k.name || '').split('/').pop() || ''));
+              let reuse: string | undefined;
+              for (const n of Array.from(existingNames)) {
+                if (!n.startsWith(`${keyName}-`)) continue;
+                try {
+                  const full = `${ringFullName}/cryptoKeys/${n}`;
+                  const [ck2] = await kms.getCryptoKey({ name: full });
+                  const p = ck2?.primary?.name;
+                  if (p) {
+                    const [ver2] = await kms.getCryptoKeyVersion({ name: p });
+                    if (ver2.state === 'ENABLED') { reuse = n; break; }
+                  }
+                } catch {}
+              }
+              if (reuse) {
+                finalKeyName = reuse;
+                importName = `${ringFullName}/cryptoKeys/${finalKeyName}`;
+              } else {
+                const rand = () => Math.random().toString(36).replace(/[^a-z0-9]/g, '').slice(0, 8) || ('r' + Date.now().toString(36).slice(-8));
+                let candidate = `${keyName}-${rand()}`;
+                while (existingNames.has(candidate)) candidate = `${keyName}-${rand()}`;
+                finalKeyName = candidate;
+                importName = undefined;
+              }
+            }
+          }
+        } catch {}
+
+        // If .sops.yaml is missing, pre-write it with the provisional GCP key reference so sops works on first run
+        try {
+          const provisionalGcpId = (projectId && finalKeyName)
+            ? `projects/${projectId}/locations/${location}/keyRings/${ringName}/cryptoKeys/${finalKeyName}`
+            : undefined;
+          if (!fileExisted && provisionalGcpId) {
+            const base: SopsConfig = existing || { creation_rules: [], stores: { yaml: { indent: 2 } } };
+            const rules = this.paths || [
+              `.*/secrets\\.yaml`,
+              `.*/secrets-${this.env.id}\\.yaml`,
+            ];
+            rules.forEach(pattern => {
+              const newRule = { path_regex: pattern, key_groups: [{ gcp_kms: [{ resource_id: provisionalGcpId }] }] } as any;
+              base.creation_rules.push(newRule);
+            });
+            this.writeSopsConfig(sopsPath, base);
+          }
+        } catch {}
+
         const ckey = new gcp.kms.CryptoKey(`${this.name}-key`, {
-          name: keyName,
+          name: finalKeyName,
           keyRing: ring.id,
           rotationPeriod: '7776000s', // 90 days
-        }, hasKey && keyFullName ? { import: keyFullName } : undefined);
+        }, (importExisting && hasKey && keyFullName) ? { import: keyFullName } : (importName ? { import: importName } : undefined));
         gcpKeyResourceId = ckey.id; // projects/.../locations/.../keyRings/.../cryptoKeys/...
         (this.gcp?.members || []).forEach((member, idx) => {
           new gcp.kms.CryptoKeyIAMMember(`${this.name}-member-${idx}`, {
@@ -152,42 +221,39 @@ export class Secrets extends Component implements SecretsConfig {
             member,
           });
         });
+
+        // Do not modify existing keys or primary versions
       }
 
       // Resolve dynamic IDs and then merge/update SOPS rules, writing file once
       const awsArnIn: pulumi.Input<string> = awsKeyArn ?? '';
       const awsRoleIn: pulumi.Input<string> = awsRoleArn ?? '';
       const gcpResIn: pulumi.Input<string> = gcpKeyResourceId ?? '';
+      const outputs: SecretsOutput = {};
       pulumi.all([awsArnIn, awsRoleIn, gcpResIn]).apply(([awsArn, awsRole, gcpRes]) => {
-        const rules = this.paths || [
-          `.*/secrets\.yaml`,
-          `.*/secrets-${this.env.id}\.yaml`,
+        const defaultPatterns = [
+          `.*/secrets\\.yaml`,
+          `.*/secrets-${this.env.id}\\.yaml`,
         ];
-        rules.forEach(pattern => {
-          const idx = existing.creation_rules.findIndex(r => r.path_regex === pattern);
-          const group: SopsCreationRule['key_groups'][number] = {};
-          if (awsArn) group.kms = [{ arn: awsArn, role: awsRole || undefined }];
-          if (gcpRes) group.gcp_kms = [{ resource_id: gcpRes }];
-          if (!group.kms && !group.gcp_kms) return;
-          if (idx === -1) {
-            existing.creation_rules.push({ path_regex: pattern, key_groups: [group] });
-          } else {
-            const kg = (existing.creation_rules[idx].key_groups[0] || {}) as SopsCreationRule['key_groups'][number];
-            if (group.kms) {
-              kg.kms = kg.kms || [];
-              const exists = kg.kms.find(k => k.arn === group.kms![0].arn && k.role === group.kms![0].role);
-              if (!exists) kg.kms.push(group.kms[0]);
-            }
-            if (group.gcp_kms) {
-              kg.gcp_kms = kg.gcp_kms || [];
-              const exists = kg.gcp_kms.find(g => g.resource_id === group.gcp_kms![0].resource_id);
-              if (!exists) kg.gcp_kms.push(group.gcp_kms[0]);
-            }
-            existing.creation_rules[idx].key_groups[0] = kg;
-          }
-        });
+        const patterns = Array.from(new Set((this.paths && this.paths.length > 0) ? this.paths : defaultPatterns));
+        // Build a fresh single key_group to avoid stale keys. Keep AWS if configured; replace GCP list with only the current active key.
+        const newGroup: SopsCreationRule['key_groups'][number] = {};
+        if (awsArn) newGroup.kms = [{ arn: awsArn, role: awsRole || undefined }];
+        if (gcpRes) newGroup.gcp_kms = [{ resource_id: gcpRes }];
+        if (!newGroup.kms && !newGroup.gcp_kms) return;
+        existing.creation_rules = patterns.map(pattern => ({ path_regex: pattern, key_groups: [newGroup] } as any));
+        existing.stores = existing.stores || { yaml: { indent: 2 } } as any;
+        if (!existing.stores.yaml || typeof (existing.stores as any).yaml.indent !== 'number') {
+          (existing.stores as any).yaml = { indent: 2 };
+        }
         this.writeSopsConfig(sopsPath, existing);
+        try {
+          if (awsArn) outputs.awsKmsKeyArn = pulumi.output(awsArn);
+          if (awsRole) outputs.awsRoleArn = pulumi.output(awsRole);
+          if (gcpRes) outputs.gcpKeyResourceId = pulumi.output(gcpRes);
+        } catch {}
       });
+      return outputs;
     };
   }
 

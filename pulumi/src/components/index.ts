@@ -37,4 +37,3 @@ export interface ComponentVariants {
 }
 
 export { Secrets, Infra, K8s, SecretsConfig, InfraConfig, K8sConfig };
-export { HelmFolderAddon, HelmChartAddon, type K8sContext } from './k8s/addon';
