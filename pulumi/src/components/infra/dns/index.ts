@@ -21,6 +21,11 @@ export interface DnsConfig {
   delegations?: DnsDelegationConfig[]; // optional upstream DNS delegations
 }
 
+export interface DnsOutput {
+  zoneId?: pulumi.Output<string>;
+  nameServers?: pulumi.Output<string[]>;
+}
+
 export class Dns extends pulumi.ComponentResource {
   public readonly zoneId?: pulumi.Output<string>;
   public readonly nameServers?: pulumi.Output<string[]>;
@@ -59,6 +64,10 @@ export class Dns extends pulumi.ComponentResource {
     }
 
     this.registerOutputs({ zoneId: this.zoneId, nameServers: this.nameServers });
+  }
+
+  public get outputs(): DnsOutput {
+    return { zoneId: this.zoneId, nameServers: this.nameServers };
   }
 
   private applyDelegations(name: string, fqdn: string, nsList?: pulumi.Output<string[]>, delegations?: DnsDelegationConfig[]) {

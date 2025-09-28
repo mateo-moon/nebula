@@ -20,34 +20,36 @@ export class Network extends pulumi.ComponentResource {
   public readonly podsRangeName: string;
   public readonly servicesRangeName: string;
 
-  constructor(name: string, config?: NetworkConfig, opts?: pulumi.ComponentResourceOptions) {
+  constructor(name: string, args?: NetworkConfig, opts?: pulumi.ComponentResourceOptions) {
     super('nebula:infra:gcp:Network', name, {}, opts);
-    const netName = config?.networkName ?? name;
+    
+    const cfg = new pulumi.Config()
+    const netName = args?.networkName ?? name;
     this.network = new gcp.compute.Network(netName, {
       name: netName,
       autoCreateSubnetworks: false,
     }, { parent: this });
 
-    const subnetName = config?.subnetName ?? `${name}-subnet`;
-    const ipCidr = config?.cidr ?? config?.cidrBlocks?.[0] ?? '10.10.0.0/16';
-    const podsRangeName = config?.podsRangeName ?? `${subnetName}-pods`;
-    const servicesRangeName = config?.servicesRangeName ?? `${subnetName}-services`;
+    const subnetName = args?.subnetName ?? `${name}-subnet`;
+    const ipCidr = args?.cidr ?? args?.cidrBlocks?.[0] ?? '10.10.0.0/16';
+    const podsRangeName = args?.podsRangeName ?? `${subnetName}-pods`;
+    const servicesRangeName = args?.servicesRangeName ?? `${subnetName}-services`;
     this.podsRangeName = podsRangeName;
     this.servicesRangeName = servicesRangeName;
 
     this.subnetwork = new gcp.compute.Subnetwork(subnetName, {
       name: subnetName,
       ipCidrRange: ipCidr,
-      region: config?.region,
+      region: args.region ?? cfg.require('gcp:region'),
       network: this.network.id,
       privateIpGoogleAccess: true,
       secondaryIpRanges: [
-        ...(config?.podsSecondaryCidr ? [{
-          ipCidrRange: config.podsSecondaryCidr,
+        ...(args?.podsSecondaryCidr ? [{
+          ipCidrRange: args.podsSecondaryCidr,
           rangeName: podsRangeName,
         }] : []),
-        ...(config?.servicesSecondaryCidr ? [{
-          ipCidrRange: config.servicesSecondaryCidr,
+        ...(args?.servicesSecondaryCidr ? [{
+          ipCidrRange: args.servicesSecondaryCidr,
           rangeName: servicesRangeName,
         }] : []),
       ],

@@ -47,48 +47,76 @@ async function run(component: Component, op: 'preview' | 'up' | 'destroy' | 'ref
     try {
       stack = await LocalWorkspace.createOrSelectStack({ stackName, projectName, program });
     } catch (e: any) {
-      const msg = [e?.message, e?.stderr, e?.stdout].filter(Boolean).join('\n');
-      const isLock = /stack is currently locked|currently locked by/i.test(msg);
-      if (!isLock) throw e;
-      try {
-        // Best-effort cancel existing/locked update and retry
-        const sel = await LocalWorkspace.selectStack({ stackName, projectName, program });
-        await sel.cancel();
-        await new Promise(r => setTimeout(r, 1500));
-      } catch {}
-      // Retry once after cancel
-      stack = await LocalWorkspace.createOrSelectStack({ stackName, projectName, program });
+      throw e;
     }
   }
 
   const cfg: Record<string, ConfigValue> = providerConfigFrom(component);
   if (Object.keys(cfg).length) await stack.setAllConfig(cfg);
 
+  const selectedTargets: string[] | undefined = (() => {
+    try {
+      const t = (component as any).__selectedUrns as string[] | undefined;
+      return (t && t.length > 0) ? t : undefined;
+    } catch { return undefined; }
+  })();
+
+  // Stream output to stdout only (avoid stderr to reduce duplicate lines)
   const io = {
     onOutput: (out: string) => process.stdout.write(out),
-    onError: (err: string) => process.stderr.write(err),
   } as const;
-  if (op === 'preview') return await stack.preview({ diff: true, color: 'always', ...io });
-  if (op === 'up') return await stack.up({ color: 'always', ...io });
-  if (op === 'destroy') {
-    const res = await stack.destroy({ color: 'always', ...io });
-    try {
-      const workspace = (stack as { workspace?: { removeStack: (n: string) => Promise<void> } }).workspace;
-      if (workspace && typeof workspace.removeStack === 'function') {
-        await workspace.removeStack(stackName);
-      }
-    } catch (e: unknown) {
-      const msg = (e as { message?: string })?.message ?? String(e);
-      process.stdout.write(`Warning: failed to remove stack ${stackName}: ${msg}\n`);
-    }
-    return res;
+
+  // Shared options and graceful-cancel wrapper
+  const baseOpts = { color: 'always', target: selectedTargets, ...io } as const;
+
+  const runWithSignals = async <T>(fn: () => Promise<T>): Promise<T> => {
+    let cancelled = false;
+    const cancelFn = async () => {
+      if (cancelled) return;
+      cancelled = true;
+      try { process.stderr.write('\nSignal received. Cancelling current Pulumi operation...\n'); } catch {}
+      try { await stack.cancel(); } catch {}
+    };
+    const add = () => { process.once('SIGINT', cancelFn); process.once('SIGTERM', cancelFn); };
+    const remove = () => { process.removeListener('SIGINT', cancelFn); process.removeListener('SIGTERM', cancelFn); };
+    add();
+    try { return await fn(); }
+    finally { remove(); }
+  };
+
+  if (op === 'preview') {
+    return await runWithSignals(() => stack.preview({ diff: true, ...baseOpts }));
   }
-  if (op === 'refresh') return await stack.refresh({ color: 'always', ...io });
+  if (op === 'up') {
+    return await runWithSignals(() => stack.up({ ...baseOpts }));
+  }
+  if (op === 'destroy') {
+    return await runWithSignals(() => stack.destroy({ ...baseOpts }));
+  }
+  if (op === 'refresh') {
+    return await runWithSignals(() => stack.refresh({ ...baseOpts }));
+  }
 }
 
 export async function runSelectedUnits(parent: Component, op: 'preview' | 'up' | 'destroy' | 'refresh', _selectedNames: string[]) {
-  // Single-stack per component; selection is ignored
-  await run(parent, op);
+  // If component supports selection, inject into instance, then run
+  try { (parent as any).__selectedUnits = _selectedNames || []; } catch {}
+  // When partially selecting units, avoid unintended deletions by disabling deletes for this run
+  const allStacks: Array<{ name: string }> = (typeof (parent as any).expandToStacks === 'function')
+    ? ((parent as any).expandToStacks() || [])
+    : [];
+  const isPartial = (_selectedNames && allStacks && allStacks.length > 0) ? _selectedNames.length < allStacks.length : false;
+  const shouldDisableDeletes = isPartial && (op === 'up' || op === 'preview');
+  const prevDisableDeletes = process.env.PULUMI_DISABLE_RESOURCE_DELETIONS;
+  if (shouldDisableDeletes) process.env.PULUMI_DISABLE_RESOURCE_DELETIONS = 'true';
+  try {
+    await run(parent, op);
+  } finally {
+    if (shouldDisableDeletes) {
+      if (prevDisableDeletes === undefined) delete process.env.PULUMI_DISABLE_RESOURCE_DELETIONS; else process.env.PULUMI_DISABLE_RESOURCE_DELETIONS = prevDisableDeletes;
+    }
+    try { delete (parent as any).__selectedUnits; } catch {}
+  }
 }
 
 
