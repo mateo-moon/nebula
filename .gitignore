@@ -15,3 +15,4 @@ charts
 .config
 .DS_Store
 dist
+pulumi/src/test

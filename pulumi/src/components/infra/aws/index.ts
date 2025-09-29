@@ -1,6 +1,9 @@
-import { Iam, IamConfig } from './iam';
-import { Eks, EksConfig } from './eks';
-import { Vpc, VpcConfig } from './vpc';
+import { Iam } from './iam';
+import type { IamConfig } from './iam';
+import { Eks } from './eks';
+import type { EksConfig } from './eks';
+import { Vpc } from './vpc';
+import type { VpcConfig } from './vpc';
 
 export type AwsConfig = {
   iam: IamConfig;

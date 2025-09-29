@@ -1,60 +1,95 @@
-import { LocalWorkspace, LocalWorkspaceOptions } from '@pulumi/pulumi/automation';
 import { Project } from "./project";
-import { Utils } from '../utils';
+import { LocalWorkspace, type PulumiFn, type Stack } from "@pulumi/pulumi/automation";
+import { Utils } from "../utils";
+import { Components, type ComponentTypes } from "../components";
 
-export interface EnvironmentConfig<ComponentTypesMap = Record<string, unknown>> {
-  id: string;
-  project: Project;
-  components?: { [K in keyof ComponentTypesMap]?: (env: Environment) => ComponentTypesMap[K] };
-  localWorkspaceOptions?: LocalWorkspaceOptions;
+export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
+
+export interface EnvironmentConfig {
+  components?: ComponentFactoryMap;
+  settings?: {
+    backendUrl?: string;
+    secretsProvider?: string;
+    config?: Record<string, unknown> | string;
+  };
 }
 
-export abstract class Environment {
-  public readonly id: string;
-  public readonly project: Project;
-  public readonly config: EnvironmentConfig;
-  public workspace?: LocalWorkspace;
+export class Environment {
+  public stacks: { [key: string]: Promise<Stack> } = {};
+  public readonly ready: Promise<void>;
 
   constructor(
-    id: string,
-    project: Project,
-    config: EnvironmentConfig
+    public readonly id: string,
+    public readonly project: Project,
+    public readonly config: EnvironmentConfig,
   ) {
-    this.id = id;
-    this.project = project;
-    this.config = config;
-    const backendUrl = Utils.resolveBackend(this);
-    const cfgAny: any = this.config as any;
-    const projCfgAny: any = (this.project as any).config || {};
-    process.env.PULUMI_CONFIG_PASSPHRASE = Utils.ensurePulumiPassphrase();
-    if (cfgAny?.awsConfig?.profile) process.env.AWS_PROFILE = cfgAny.awsConfig.profile;
-    if (cfgAny?.awsConfig?.region) process.env.AWS_REGION = cfgAny.awsConfig.region;
-    if (typeof projectConfigPath !== 'undefined') process.env.AWS_CONFIG_FILE = `${projectConfigPath}/aws_config`;
-    if (cfgAny?.gcpConfig?.projectId) process.env.GOOGLE_PROJECT = cfgAny.gcpConfig.projectId;
-    else if (projCfgAny?.gcpConfig?.projectId) process.env.GOOGLE_PROJECT = projCfgAny.gcpConfig.projectId;
-    if (!process.env.GOOGLE_PROJECT && (process.env.GCLOUD_PROJECT)) process.env.GOOGLE_PROJECT = process.env.GCLOUD_PROJECT;
+    this.stacks = {};
+    this.ready = (async () => {
+      // Environment-level config to apply to all stacks
+      const normalizeConfig = (obj: any): Record<string, { value: string; secret?: boolean }> => {
+        const out: Record<string, { value: string; secret?: boolean }> = {};
+        if (!obj || typeof obj !== 'object') return out;
+        Object.entries(obj).forEach(([k, v]) => {
+          if (typeof v === 'string') {
+            if (/^ref\+/.test(v)) {
+              try { out[k] = { value: Utils.resolveVALS(v), secret: true }; return; } catch {}
+            }
+            out[k] = { value: v };
+            return;
+          }
+          if (v != null && typeof v === 'object') {
+            try { out[k] = { value: JSON.stringify(v) }; return; } catch { out[k] = { value: String(v) }; return; }
+          }
+          out[k] = { value: String(v) };
+        });
+        return out;
+      };
 
-    // Ensure backend storage exists (best-effort, non-blocking)
-    Utils.ensureBackendForUrl({
-      backendUrl,
-      aws: cfgAny?.awsConfig ? {
-        region: cfgAny.awsConfig.region,
-        profile: cfgAny.awsConfig.profile,
-        sharedConfigFiles: [`${projectConfigPath}/aws_config`]
-      } : undefined,
-      gcp: cfgAny?.gcpConfig ? { region: cfgAny.gcpConfig.region } : undefined,
-    }).catch(() => {});
+      let wsCfg: Record<string, { value: string; secret?: boolean }> = {};
+      const rawCfg: any = this.config.settings?.config as any;
+      if (typeof rawCfg === 'string') {
+        let parsed: any = undefined;
+        try { parsed = JSON.parse(Utils.resolveVALS(rawCfg)); }
+        catch { try { parsed = JSON.parse(rawCfg); } catch { parsed = undefined; } }
+        if (parsed && typeof parsed === 'object') wsCfg = normalizeConfig(parsed);
+      } else if (rawCfg && typeof rawCfg === 'object') {
+        wsCfg = normalizeConfig(rawCfg);
+      }
 
-    // Initialize Automation API workspace for this environment
-    const wsOpts: LocalWorkspaceOptions = {
-      ...(this.config.localWorkspaceOptions || {}),
-      projectSettings: {
-        ...(this.config.localWorkspaceOptions?.projectSettings || {}),
-        name: this.project.id,
-        runtime: 'nodejs',
-        backend: { url: backendUrl },
-      },
-    } as LocalWorkspaceOptions;
-    LocalWorkspace.create(wsOpts).then(ws => { this.workspace = ws; }).catch(() => {});
+      // Bootstrap is done at project level; nothing here
+
+      // Create/select stacks per component with per-stack secretsProvider
+      const entries = Object.entries(config.components || {}) as [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][];
+      for (const [name, factory] of entries) {
+        const produced = factory(this);
+        const program: PulumiFn = (typeof produced === 'function')
+          ? (produced as PulumiFn)
+          : (async () => { const Ctor = (Components as any)[name]; new Ctor(String(name).toLowerCase(), produced as any); });
+
+        // Provide secretsProvider at workspace level so init uses it; per-stack config via stackSettings
+        const stackName = `${this.id}-${String(name).toLowerCase()}`;
+        const wsWithStack: any = {
+          projectSettings: {
+            name: this.project.id,
+            runtime: 'nodejs',
+            ...(this.config.settings?.backendUrl ? { backend: { url: this.config.settings.backendUrl } } : {}),
+          },
+        };
+        if (this.config.settings?.secretsProvider) wsWithStack.secretsProvider = this.config.settings.secretsProvider;
+        wsWithStack.stackSettings = { [stackName]: {
+          ...(this.config.settings?.secretsProvider ? { secretsProvider: this.config.settings.secretsProvider } : {}),
+          config: wsCfg,
+        } };
+
+        this.stacks[name] = LocalWorkspace.createOrSelectStack({
+          stackName: `${this.id}-${String(name).toLowerCase()}`,
+          projectName: this.project.id,
+          program,
+        }, wsWithStack).then(async (stack) => {
+          if (wsCfg && Object.keys(wsCfg).length > 0) await stack.setAllConfig(wsCfg);
+          return stack;
+        });
+      }
+    })();
   }
 }
