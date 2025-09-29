@@ -1,13 +1,13 @@
 # Nebula Pulumi
 
-TypeScript-first infrastructure and addons orchestrator built on the Pulumi Automation API.
+TypeScript-first infrastructure and platform orchestration built on Pulumi Automation API.
 
-Nebula gives you:
-- Componentized stacks per environment: `Infra`, `K8s`, `Secrets`
-- Automatic backend selection and bootstrap (S3/GCS/local)
-- GCP GKE and AWS EKS reference infra
-- Kubernetes addons as classes, deployed per-chart as isolated Pulumi stacks
-- Non-interactive-friendly CLI with optional interactive selection; selecting "all" skips per-stack prompts
+What you get:
+- Strictly-typed component model: `Infra`, `K8s`, and generic `Application`
+- K8s addons as first-class components: `cert-manager`, `external-dns`, `ingress-nginx`, `argoCd`, `pulumiOperator`
+- ExternalDNS (GCP) auto-provisions a GSA, WI binding, and `roles/dns.admin` (configurable)
+- Strong TS typing for environment configs and component factories (excess keys fail at compile time)
+- Improved CLI with resource targeting, dependent inclusion, and debug logging
 
 ---
 
@@ -45,136 +45,86 @@ node ./bin/nebula.js --help
 ---
 
 ## How it works (high level)
-- You author a small config module (TS or JS) that exports a `createProject()` function returning a `Project`.
-- A `Project` contains named `environments`.
-- Each `Environment` can enable components:
-  - `Infra` (AWS: VPC/EKS, Route53, IAM; GCP: VPC/GKE, Cloud DNS)
-  - `K8s` (connects via kubeconfig, deploys addons)
-  - `Secrets` (provisions SOPS keys and manages `.sops.yaml`)
-- The CLI expands `K8s` into per-chart ephemeral component stacks at runtime, so each chart previews/applies in isolation.
-- Backends are resolved automatically (S3 for AWS, GCS for GCP, local otherwise) and created on first run if needed.
+- Author a small TS module that instantiates a `Project(id, { environments })`.
+- Each `Environment` enables components:
+  - `Infra`: reference infra (GCP VPC/GKE, DNS; AWS VPC/EKS, Route53, IAM)
+  - `K8s`: kubeconfig + addons (`certManager`, `externalDns`, `ingressNginx`, `argoCd`, `pulumiOperator`)
+  - `Application`: generic app template combining K8s (ArgoCD Application + Pulumi Operator Stack) and arbitrary cloud resources
+- Backends are resolved/bootstrapped automatically (S3/GCS/local) using environment settings.
 
 ---
 
-## Full example: GKE + addons
-Create `nebula.config.ts` at the repo root (or another path and pass via `--config`).
+## Example: GKE + K8s addons + Application
+Create `nebula.config.ts` at the repo root (or pass a path via `--config`).
 
 ```ts
-// nebula.config.ts
 import { Project } from './pulumi/src';
 import type { EnvironmentConfig } from './pulumi/src/core/environment';
-import { Infra } from './pulumi/src/components/infra';
-import { K8s } from './pulumi/src/components/k8s';
-import { HelmChartAddon, HelmFolderAddon } from './pulumi/src/components/k8s/addon';
 
-export async function createProject() {
-  // Project-wide config
-  const project = new Project('acme', {
-    id: 'acme',
-    gcp: {
-      projectId: 'my-gcp-project-id',
-      region: 'us-central1',
-    },
-    environments: {
-      dev: devEnv(),
-    },
-  });
-  return project;
-}
-
-function devEnv(): EnvironmentConfig {
-  return {
-    // Optional explicit backend (otherwise auto-resolves to gs://pulumi-acme-dev-state)
-    // backend: 'gs://pulumi-acme-dev-state',
-    gcpConfig: {
-      projectId: 'my-gcp-project-id',
-      region: 'us-central1',
+export const project = new Project('acme', {
+  dev: {
+    settings: {
+      backendUrl: 'gs://acme-pulumi-state',
+      secretsProvider: 'gcpkms://projects/<id>/locations/global/keyRings/<ring>/cryptoKeys/<key>',
+      config: { 'gcp:project': '<project-id>', 'gcp:region': 'europe-west3' },
     },
     components: {
-      Infra: (env) => new Infra(env, 'infra', {
-        gcp: {
-          enabled: true,
-          domainName: 'dev.acme.example', // optional Cloud DNS zone
-          network: {
-            cidr: '10.10.0.0/16',
-            podsSecondaryCidr: '10.20.0.0/16',
-            servicesSecondaryCidr: '10.30.0.0/16',
+      Infra: () => ({
+        gcpConfig: {
+          network: { cidr: '10.10.0.0/16', podsSecondaryCidr: '10.20.0.0/16', servicesSecondaryCidr: '10.30.0.0/16' },
+          gke: { name: 'acme-gke', releaseChannel: 'REGULAR', deletionProtection: false, minNodes: 1, maxNodes: 3 },
+        },
+      }),
+      K8s: () => ({
+        kubeconfig: './.config/kube_config',
+        certManager: { namespace: 'cert-manager' },
+        externalDns: { provider: 'google', googleProject: '<project-id>', domainFilters: ['dev.example.com'] },
+        ingressNginx: { controller: { service: { type: 'LoadBalancer' } } },
+        argoCd: { values: { server: { extraArgs: ['--insecure'] } } },
+        pulumiOperator: {},
+      }),
+      Application: () => ({
+        k8s: {
+          argoApp: {
+            name: 'platform-apps',
+            source: { repoURL: 'https://github.com/org/platform.git', path: 'apps', targetRevision: 'main' },
+            destination: { namespace: 'platform' },
           },
-          gke: {
-            name: 'acme-gke',
-            releaseChannel: 'REGULAR',
-            deletionProtection: false,
-            systemNodepool: {
-              name: 'system',
-              machineType: 'e2-standard-4',
-              min: 2,
-              max: 5,
-              diskGb: 50,
+          operatorStack: {
+            spec: {
+              name: 'dev/platform',
+              projectRepo: 'https://github.com/org/pulumi-infra.git',
+              projectPath: 'stacks/platform',
             },
           },
         },
+        provision: (scope) => {
+          // Create extra cloud resources for this application here
+        },
       }),
-
-      K8s: (env) => new K8s(env, 'k8s', {
-        // Use the kubeconfig emitted by Infra → GKE
-        kubeconfig: env.infra!.gcpResources!.gke!.kubeconfig,
-        charts: [
-          new HelmChartAddon({
-            name: 'ingress-nginx',
-            namespace: 'ingress-nginx',
-            repo: { name: 'ingress-nginx', url: 'https://kubernetes.github.io/ingress-nginx' },
-            chart: 'ingress-nginx',
-            version: '4.11.3',
-            values: {
-              controller: {
-                service: { annotations: { 'cloud.google.com/load-balancer-type': 'External' } },
-              },
-            },
-            deploy: true,
-          }),
-          // Deploy a folder of manifests or a Helm chart with values files
-          new HelmFolderAddon(
-            'platform',
-            'k8s/platform',
-            {
-              namespace: 'platform',
-              valuesFiles: ['values.yaml', 'values-dev.yaml'], // merged if present in the folder
-              values: {
-                // Example: resolve a vals ref if you use sops + vals
-                // mySecret: 'ref+sops://secrets/dev.yaml#mySecret'
-              },
-              deploy: true,
-            }
-          ),
-        ],
-      }),
-
-      // Optional: provision SOPS KMS keys and write .sops.yaml rules
-      // Secrets: (env) => new Secrets(env, 'secrets', {
-      //   gcp: { enabled: true, location: 'global' },
-      // }),
-    },
-  };
-}
+    }
+  } satisfies EnvironmentConfig,
+});
 ```
 
 Run it:
 
 ```bash
-# Preview every component (Infra, K8s, and each K8s chart) in the project
+# Preview all components
 pnpm -C pulumi run cli -- --config nebula.config.ts --op preview --all
 
-# Apply only dev:k8s (interactively pick charts if multiple)
-pnpm -C pulumi run cli -- --config nebula.config.ts --op up --select dev:k8s
+# Apply only dev:K8s, pick target resources (ComponentResource expands to children)
+pnpm -C pulumi run cli -- --config nebula.config.ts --op up --select dev:K8s --target-dependents --debug trace
 
 # Destroy a specific component
-pnpm -C pulumi run cli -- --config nebula.config.ts --op destroy --select dev:infra
+pnpm -C pulumi run cli -- --config nebula.config.ts --op destroy --select dev:Infra
 ```
 
-Selection behavior:
-- If you select `--all` (or choose "all" interactively), sub-stack prompts are skipped and all stacks run for each component.
-- If a component has a single stack, the sub-stack prompt is skipped.
-- For components with multiple stacks when partially selected, you'll be prompted to pick specific stacks (empty/Enter means all).
+Selection & targeting:
+- After choosing stacks, the CLI lists resources; pick indices to target.
+- Selecting a ComponentResource automatically includes all its descendants.
+- `--target-dependents` includes dependents of selected targets (enabled by default when targeting).
+- `--debug debug|trace` enables verbose provider logs.
 
 Kubeconfig gets written to `.config/kube_config`.
 
@@ -220,10 +170,14 @@ Notes:
 
 ## CLI reference
 Flags:
-- `--config <path>`: defaults to `nebula.config.js` in CWD
-- `--op <preview|up|destroy|refresh>`: operation to execute (defaults to `preview` if omitted)
-- `--select env:component[,env:component...]`: select specific targets (e.g. `dev:k8s,dev:infra`)
-- `--all`: select all components; runs all stacks for each component without further prompts
+- `--config <path>`
+- `--op <preview|up|destroy|refresh>`
+- `--env <envId>`
+- `--select env:Component[,env:Component...]`
+- `--all`
+- `--target <URN[,URN...]>`
+- `--target-dependents`
+- `--debug <debug|trace>`
 
 Examples:
 ```bash
