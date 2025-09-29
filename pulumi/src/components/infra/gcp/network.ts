@@ -23,7 +23,6 @@ export class Network extends pulumi.ComponentResource {
   constructor(name: string, args?: NetworkConfig, opts?: pulumi.ComponentResourceOptions) {
     super('nebula:infra:gcp:Network', name, {}, opts);
     
-    const cfg = new pulumi.Config()
     const netName = args?.networkName ?? name;
     this.network = new gcp.compute.Network(netName, {
       name: netName,
@@ -40,7 +39,7 @@ export class Network extends pulumi.ComponentResource {
     this.subnetwork = new gcp.compute.Subnetwork(subnetName, {
       name: subnetName,
       ipCidrRange: ipCidr,
-      region: args.region ?? cfg.require('gcp:region'),
+      ...(args?.region ? { region: args.region } : {}),
       network: this.network.id,
       privateIpGoogleAccess: true,
       secondaryIpRanges: [

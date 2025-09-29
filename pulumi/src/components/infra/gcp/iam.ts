@@ -29,7 +29,7 @@ export class Iam extends pulumi.ComponentResource {
   constructor(name: string, args?: IamConfig, opts?: pulumi.ComponentResourceOptions) {
     super('nebula:infra:gcp:Iam', name, args, opts);
 
-    const cfg = new pulumi.Config()
+    const cfg = new pulumi.Config('gcp')
     const wantExternalDns = !!args?.externalDns && args.externalDns.enabled !== false;
     const wantCertManager = !!args?.certManager && args.certManager.enabled !== false;
     if (!wantExternalDns && !wantCertManager) {
@@ -37,7 +37,7 @@ export class Iam extends pulumi.ComponentResource {
       return;
     }
 
-    const clusterProject = cfg.require('gcp:project');
+    const clusterProject = cfg.require('project');
 
     const normalizeAccountId = (raw: string): string => {
       let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -88,13 +88,15 @@ export class Iam extends pulumi.ComponentResource {
     const edRolesProject = args?.externalDns?.projectId || clusterProject;
     const cmRolesProject = args?.certManager?.projectId || clusterProject;
 
-    this.externalDnsGsaEmail = makeSaWithBindings('external-dns', args?.externalDns, edRolesProject, clusterProject);
-    this.certManagerGsaEmail = makeSaWithBindings('cert-manager', args?.certManager, cmRolesProject, clusterProject);
+    const external = makeSaWithBindings('external-dns', args?.externalDns, edRolesProject, clusterProject);
+    const cert = makeSaWithBindings('cert-manager', args?.certManager, cmRolesProject, clusterProject);
+    if (external) this.externalDnsGsaEmail = external;
+    if (cert) this.certManagerGsaEmail = cert;
 
-    this.registerOutputs({
-      externalDnsGsaEmail: this.externalDnsGsaEmail,
-      certManagerGsaEmail: this.certManagerGsaEmail,
-    });
+    const outs: any = {};
+    if (this.externalDnsGsaEmail) outs.externalDnsGsaEmail = this.externalDnsGsaEmail;
+    if (this.certManagerGsaEmail) outs.certManagerGsaEmail = this.certManagerGsaEmail;
+    this.registerOutputs(outs);
   }
 }
 

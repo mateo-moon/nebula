@@ -1,7 +1,10 @@
 import * as pulumi from '@pulumi/pulumi';
-import { Gke, GkeConfig } from './gke';
-import { Network, NetworkConfig } from './network';
-import { Iam, IamConfig } from './iam';
+import { Gke } from './gke';
+import type { GkeConfig } from './gke';
+import { Network } from './network';
+import type { NetworkConfig } from './network';
+import { Iam } from './iam';
+import type { IamConfig } from './iam';
 
 function stableShortHash(input: string): string {
   // Simple deterministic 32-bit FNV-1a
