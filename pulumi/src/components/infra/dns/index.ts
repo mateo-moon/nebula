@@ -21,6 +21,11 @@ export interface DnsConfig {
   delegations?: DnsDelegationConfig[]; // optional upstream DNS delegations
 }
 
+export interface DnsOutput {
+  zoneId?: pulumi.Output<string>;
+  nameServers?: pulumi.Output<string[]>;
+}
+
 export class Dns extends pulumi.ComponentResource {
   public readonly zoneId?: pulumi.Output<string>;
   public readonly nameServers?: pulumi.Output<string[]>;
@@ -58,7 +63,17 @@ export class Dns extends pulumi.ComponentResource {
       throw new Error(`Unsupported DNS provider: ${cfg.provider}`);
     }
 
-    this.registerOutputs({ zoneId: this.zoneId, nameServers: this.nameServers });
+    const outputs: any = {};
+    if (this.zoneId) outputs.zoneId = this.zoneId;
+    if (this.nameServers) outputs.nameServers = this.nameServers;
+    this.registerOutputs(outputs);
+  }
+
+  public get outputs(): DnsOutput {
+    const o: any = {};
+    if (this.zoneId) o.zoneId = this.zoneId;
+    if (this.nameServers) o.nameServers = this.nameServers;
+    return o as DnsOutput;
   }
 
   private applyDelegations(name: string, fqdn: string, nsList?: pulumi.Output<string[]>, delegations?: DnsDelegationConfig[]) {

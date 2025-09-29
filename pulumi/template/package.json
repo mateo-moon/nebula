@@ -1,0 +1,14 @@
+{
+  "name": "nebula-template",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "nebula": "github:mateomoon/nebula/pulumi#main"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.13.9"
+  }
+}
+
