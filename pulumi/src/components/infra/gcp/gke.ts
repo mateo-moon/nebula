@@ -4,10 +4,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Network } from './network';
 
+function stableShortHash(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return ('0000000' + hash.toString(16)).slice(-8);
+}
+
 export interface GkeConfig {
   name?: string;
-  region?: string;
   location?: string; // region or zone
+  network?: Network;
   minNodes?: number;
   maxNodes?: number;
   machineType?: string;
@@ -23,38 +32,48 @@ export class Gke extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    network: Network,
-    cfg?: GkeConfig,
+    args?: GkeConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:infra:gcp:Gke', name, {}, opts);
+    super('nebula:infra:gcp:Gke', name, args, opts);
 
-    const clusterName = cfg?.name ?? name;
-    const location = cfg?.location ?? cfg?.region ?? gcp.config.region;
-    const project = gcp.config.project || process.env.GOOGLE_PROJECT || process.env.GCLOUD_PROJECT;
-    if (!project) {
-      throw new Error("GCP project is not set. Configure 'gcp:project' in stack config or set GOOGLE_PROJECT.");
-    }
-    this.cluster = new gcp.container.Cluster(clusterName, {
-      name: clusterName,
-      location: location,
-      networkingMode: 'VPC_NATIVE',
-      removeDefaultNodePool: true,
-      initialNodeCount: 1,
-      network: network.network.selfLink,
-      subnetwork: network.subnetwork.selfLink,
-      releaseChannel: cfg?.releaseChannel ? { channel: cfg.releaseChannel } : undefined,
-      loggingService: 'logging.googleapis.com/kubernetes',
-      monitoringService: 'monitoring.googleapis.com/kubernetes',
-      deletionProtection: cfg?.deletionProtection,
-      workloadIdentityConfig: project ? { workloadPool: `${project}.svc.id.goog` } : undefined,
-      enableShieldedNodes: true,
-      verticalPodAutoscaling: { enabled: true },
-      addonsConfig: {
-        httpLoadBalancing: { disabled: false },
-        horizontalPodAutoscaling: { disabled: false },
+    const cfg = new pulumi.Config('gcp');
+    const gcpProject = cfg.require('project');
+    const clusterName = args?.name ?? name;
+    const location = args?.location; // rely on provider default if not provided
+    const pulumiProject = pulumi.getProject();
+    this.cluster = new gcp.container.Cluster(
+      clusterName,
+      {
+        name: clusterName,
+        ...(location ? { location } : {}),
+        networkingMode: 'VPC_NATIVE',
+        removeDefaultNodePool: true,
+        initialNodeCount: 1,
+        ...(args?.network?.network?.selfLink ? { network: args.network.network.selfLink } : {}),
+        ...(args?.network?.subnetwork?.selfLink ? { subnetwork: args.network.subnetwork.selfLink } : {}),
+        ...(args?.network && (args.network.podsRangeName || args.network.servicesRangeName)
+          ? {
+              ipAllocationPolicy: {
+                clusterSecondaryRangeName: args.network.podsRangeName,
+                servicesSecondaryRangeName: args.network.servicesRangeName,
+              },
+            }
+          : {}),
+        ...(args?.releaseChannel ? { releaseChannel: { channel: args.releaseChannel } } : {}),
+        loggingService: 'logging.googleapis.com/kubernetes',
+        monitoringService: 'monitoring.googleapis.com/kubernetes',
+        ...(args?.deletionProtection !== undefined ? { deletionProtection: args.deletionProtection } : {}),
+        ...(gcpProject ? { workloadIdentityConfig: { workloadPool: `${gcpProject}.svc.id.goog` } } : {}),
+        enableShieldedNodes: true,
+        verticalPodAutoscaling: { enabled: true },
+        addonsConfig: {
+          httpLoadBalancing: { disabled: false },
+          horizontalPodAutoscaling: { disabled: false },
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // Create a dedicated service account for GKE nodes and grant the default node role
     const nodeServiceAccount = new gcp.serviceaccount.Account(`${clusterName}-nodes`, {
@@ -62,52 +81,65 @@ export class Gke extends pulumi.ComponentResource {
       displayName: `${clusterName} GKE nodes`,
     }, { parent: this });
 
-    new gcp.projects.IAMMember(`${clusterName}-nodes-container-default`, {
-      project: project,
+    const nodeSaDefaultRole = new gcp.projects.IAMMember(`${clusterName}-nodes-container-default`, {
+      project: gcpProject,
       role: 'roles/container.defaultNodeServiceAccount',
       member: pulumi.interpolate`serviceAccount:${nodeServiceAccount.email}`,
     }, { parent: this });
 
     // Also grant the role to the Compute Engine default service account to satisfy diagnostics
-    const projectInfo = gcp.organizations.getProjectOutput({ projectId: project });
+    const projectInfo = gcp.organizations.getProjectOutput({ projectId: gcpProject });
     const computeDefaultSa = projectInfo.number.apply(n => `${n}-compute@developer.gserviceaccount.com`);
     new gcp.projects.IAMMember(`${clusterName}-compute-default-container-default`, {
-      project: project,
+      project: gcpProject,
       role: 'roles/container.defaultNodeServiceAccount',
       member: pulumi.interpolate`serviceAccount:${computeDefaultSa}`,
     }, { parent: this });
 
-    const autoscaleEnabled = (cfg?.maxNodes ?? 0) > (cfg?.minNodes ?? 1);
-    const nodePoolName = 'system';
-    this.nodePool = new gcp.container.NodePool(nodePoolName, {
+    // Allow the GKE service agent to act as the custom node service account
+    const gkeRobotMember = projectInfo.number.apply(n => `serviceAccount:service-${n}@container-engine-robot.iam.gserviceaccount.com`);
+    const nodeSaRobotActAs = new gcp.serviceaccount.IAMMember(`${clusterName}-nodes-robot-actas`, {
+      serviceAccountId: nodeServiceAccount.name,
+      role: 'roles/iam.serviceAccountUser',
+      member: gkeRobotMember,
+    }, { parent: this });
+
+    const autoscaleEnabled = (args?.maxNodes ?? 0) > (args?.minNodes ?? 1);
+    const immutablesKey = JSON.stringify({
+      machineType: args?.machineType ?? 'e2-standard-4',
+      diskSizeGb: args?.volumeSizeGb ?? 10,
+      location: location || '',
+    });
+    const suffix = stableShortHash(immutablesKey);
+    const nodePoolName = `system-${suffix}`;
+    this.nodePool = new gcp.container.NodePool('system', {
       name: nodePoolName,
       cluster: this.cluster.name,
-      location: location,
+      ...(location ? { location } : {}),
       ...(autoscaleEnabled
-        ? { autoscaling: { minNodeCount: cfg?.minNodes ?? 1, maxNodeCount: cfg?.maxNodes ?? (cfg?.minNodes ?? 1) } }
-        : { nodeCount: cfg?.minNodes ?? 1 }
+        ? { autoscaling: { minNodeCount: args?.minNodes ?? 1, maxNodeCount: args?.maxNodes ?? (args?.minNodes ?? 1) } }
+        : { nodeCount: args?.minNodes ?? 1 }
       ),
       nodeConfig: {
-        machineType: cfg?.machineType ?? 'e2-standard-4',
-        diskSizeGb: cfg?.volumeSizeGb ?? 10,
+        machineType: args?.machineType ?? 'e2-standard-4',
+        diskSizeGb: args?.volumeSizeGb ?? 10,
+        diskType: 'pd-standard',
         labels: { 'node-role.kubernetes.io': 'system' },
-        taints: undefined,
         serviceAccount: nodeServiceAccount.email,
         workloadMetadataConfig: { mode: 'GKE_METADATA' },
         metadata: { 'disable-legacy-endpoints': 'true' },
         tags: [ 'system' ],
       },
       management: { autoRepair: true, autoUpgrade: true },
-    }, { parent: this, dependsOn: [this.cluster] });
+    }, { parent: this, dependsOn: [this.cluster, nodeServiceAccount, nodeSaDefaultRole, nodeSaRobotActAs], deleteBeforeReplace: true });
 
-    // Generate a kubeconfig that authenticates via gcloud access token, avoiding
-    // the need to install the GKE-specific auth plugin.
+    // Generate kubeconfig...
     this.kubeconfig = pulumi.all([
       this.cluster.name,
       this.cluster.endpoint,
       this.cluster.masterAuth,
     ]).apply(([clusterName, endpoint, auth]) => {
-      const context = `${project}_${location}_${clusterName}`;
+      const context = `${pulumiProject}_${location || 'region'}_${clusterName}`;
       const nodeExec = "const cp=require('node:child_process'); const t=cp.execSync('gcloud auth print-access-token --quiet',{stdio:['ignore','pipe','inherit']}).toString().trim(); console.log(JSON.stringify({apiVersion:'client.authentication.k8s.io/v1',kind:'ExecCredential',status:{token:t}}));";
       return `apiVersion: v1
 clusters:

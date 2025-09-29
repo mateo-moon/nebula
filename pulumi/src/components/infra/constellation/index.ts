@@ -15,6 +15,10 @@ export interface ConstellationConfig {
   variables?: Record<string, pulumi.Input<any>>;
 }
 
+export interface ConstellationOutput {
+  outputs?: pulumi.Output<any>;
+}
+
 /**
  * Cloud-agnostic wrapper for the Constellation Terraform module using @pulumi/terraform Module.
  * You must provide a suitable `source` for your target provider (e.g., the GCP example or an AWS module).
@@ -72,6 +76,10 @@ export class Constellation extends pulumi.ComponentResource {
     this.outputs = pulumi.output(outAny as pulumi.Input<any>);
 
     this.registerOutputs({ outputs: this.outputs });
+  }
+
+  public get result(): ConstellationOutput {
+    return { outputs: this.outputs };
   }
 }
 

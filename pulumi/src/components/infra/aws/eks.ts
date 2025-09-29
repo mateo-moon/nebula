@@ -60,7 +60,7 @@ export class Eks extends pulumi.ComponentResource {
       userData: publicUserData,
     }, { parent: this });
 
-    const _publicGroup = new eks.ManagedNodeGroup('eks_managed_node_group_public', {
+    new eks.ManagedNodeGroup('eks_managed_node_group_public', {
       cluster: this.cluster,
       nodeGroupName: 'eks-public-infra',
       subnetIds: vpc.publicSubnetIds,
@@ -101,7 +101,7 @@ export class Eks extends pulumi.ComponentResource {
       userData: privateUserData,
     }, { parent: this });
 
-    const _privateGroup = new eks.ManagedNodeGroup('eks_managed_node_group_private', {
+    new eks.ManagedNodeGroup('eks_managed_node_group_private', {
       cluster: this.cluster,
       nodeGroupName: 'eks-private-infra',
       subnetIds: vpc.privateSubnetIds,
@@ -162,9 +162,9 @@ export class Eks extends pulumi.ComponentResource {
         if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
         const kubeConfigPath = path.resolve(configDir, 'kube_config');
 
-        const awsConfigFile = fs.existsSync(`${projectConfigPath}/aws_config`) ? `${projectConfigPath}/aws_config` : process.env.AWS_CONFIG_FILE;
-        const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
-        const profile = process.env.AWS_PROFILE;
+        const awsConfigFile = fs.existsSync(`${projectConfigPath}/aws_config`) ? `${projectConfigPath}/aws_config` : process.env['AWS_CONFIG_FILE'];
+        const region = process.env['AWS_REGION'] || process.env['AWS_DEFAULT_REGION'];
+        const profile = process.env['AWS_PROFILE'];
 
         const prefix = awsConfigFile ? `AWS_CONFIG_FILE=${awsConfigFile} ` : '';
         try {
