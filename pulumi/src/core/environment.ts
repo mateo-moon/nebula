@@ -85,10 +85,7 @@ export class Environment {
           stackName: `${this.id}-${String(name).toLowerCase()}`,
           projectName: this.project.id,
           program,
-        }, wsWithStack).then(async (stack) => {
-          if (wsCfg && Object.keys(wsCfg).length > 0) await stack.setAllConfig(wsCfg);
-          return stack;
-        });
+        }, wsWithStack);
       }
     })();
   }
