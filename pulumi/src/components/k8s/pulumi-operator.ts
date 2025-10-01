@@ -1,5 +1,8 @@
 import * as k8s from "@pulumi/kubernetes";
+import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
+
+type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
 export interface PulumiOperatorStackConfigEntry { value: string; secret?: boolean }
 export interface PulumiOperatorStackSpec {
@@ -19,6 +22,7 @@ export interface PulumiOperatorConfig {
   repository?: string;                // helm repo, default: https://pulumi.github.io/helm-charts
   values?: Record<string, unknown>;   // raw chart overrides
   stack?: PulumiOperatorStackSpec;    // optional Pulumi Stack CR to create
+  args?: OptionalChartArgs;           // optional raw Helm args (values ignored)
 }
 
 export class PulumiOperator extends pulumi.ComponentResource {
@@ -34,13 +38,31 @@ export class PulumiOperator extends pulumi.ComponentResource {
       metadata: { name: namespaceName },
     }, { parent: this });
 
-    const chart = new k8s.helm.v4.Chart('pulumi-kubernetes-operator', {
-      chart: 'pulumi-kubernetes-operator',
-      repositoryOpts: { repo: args.repository || 'https://pulumi.github.io/helm-charts' },
-      ...(args.version ? { version: args.version } : {}),
+    const useOci = !args.repository || args.repository.startsWith('oci://');
+    const defaultValues = args.values || {};
+    const defaultChartArgsBase: OptionalChartArgs = useOci
+      ? {
+          chart: `${(args.repository || 'oci://ghcr.io/pulumi/helm-charts').replace(/\/$/, '')}/pulumi-kubernetes-operator`,
+          ...(args.version ? { version: args.version } : {}),
+          namespace: namespaceName,
+        }
+      : {
+          chart: 'pulumi-kubernetes-operator',
+          repositoryOpts: { repo: args.repository || 'https://pulumi.github.io/helm-charts' },
+          ...(args.version ? { version: args.version } : {}),
+          namespace: namespaceName,
+        };
+
+    const providedArgs: OptionalChartArgs | undefined = args.args;
+    const finalChartArgs: ChartArgs = {
+      chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
+      ...defaultChartArgsBase,
+      ...(providedArgs || {}),
       namespace: namespaceName,
-      values: args.values || {},
-    }, { parent: this, dependsOn: [namespace] });
+      values: defaultValues,
+    };
+
+    const chart = new k8s.helm.v4.Chart('pulumi-kubernetes-operator', finalChartArgs, { parent: this, dependsOn: [namespace] });
 
     if (args.stack) {
       const cfgEntries: any = {};

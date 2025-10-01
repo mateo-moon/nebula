@@ -26,6 +26,8 @@ export interface ArgoApplicationSpecConfig {
 }
 
 export interface ApplicationK8sConfig {
+  /** Optional explicit Kubernetes provider to use for all CRs created by this component */
+  provider?: k8s.Provider;
   argoApp?: ArgoApplicationSpecConfig;
   operatorStack?: {
     namespace?: string;            // pulumi-operator namespace (default: pulumi-operator)
@@ -34,6 +36,8 @@ export interface ApplicationK8sConfig {
 }
 
 export interface ApplicationConfig {
+  /** Optional instance/stack name override (defaults to 'application') */
+  name?: string;
   k8s?: ApplicationK8sConfig;
   provision?: (scope: pulumi.ComponentResource) => void | Promise<void>;
 }
@@ -65,7 +69,7 @@ export class Application extends pulumi.ComponentResource {
           ...(k.operatorStack.spec.stackConfig ? { stackConfig: Object.fromEntries(Object.entries(k.operatorStack.spec.stackConfig).map(([kk, vv]) => (typeof vv === 'string' ? [kk, { value: vv }] : [kk, vv]))) } : {}),
           ...(k.operatorStack.spec.env ? { env: k.operatorStack.spec.env } : {}),
         },
-      }, { parent: this });
+      }, { parent: this, ...(k.provider ? { provider: k.provider } : {}) });
     }
 
     // Create Argo CD Application CR if requested
@@ -93,7 +97,7 @@ export class Application extends pulumi.ComponentResource {
         kind: 'Application',
         metadata: { name: k.argoApp.name, namespace: ns },
         spec,
-      }, { parent: this });
+      }, { parent: this, ...(k.provider ? { provider: k.provider } : {}) });
     }
 
     // Additional resources for the application

@@ -26,26 +26,40 @@ export class Environment {
     this.stacks = {};
     this.ready = (async () => {
       // Environment-level config to apply to all stacks
-      const normalizeConfig = (obj: any): Record<string, { value: string; secret?: boolean }> => {
-        const out: Record<string, { value: string; secret?: boolean }> = {};
+      const normalizeConfig = (obj: any): Record<string, any> => {
+        const out: Record<string, any> = {};
         if (!obj || typeof obj !== 'object') return out;
         Object.entries(obj).forEach(([k, v]) => {
+          // Plain string → value
           if (typeof v === 'string') {
             if (/^ref\+/.test(v)) {
               try { out[k] = { value: Utils.resolveVALS(v), secret: true }; return; } catch {}
             }
-            out[k] = { value: v };
+            out[k] = v;
             return;
           }
-          if (v != null && typeof v === 'object') {
-            try { out[k] = { value: JSON.stringify(v) }; return; } catch { out[k] = { value: String(v) }; return; }
+          // If already in Pulumi ConfigValue shape, unwrap; coerce value to string when needed
+          if (v && typeof v === 'object' && ('value' in (v as any))) {
+            const val = (v as any).value;
+            const secret = Boolean((v as any).secret);
+            if (secret) {
+              if (typeof val === 'string') { out[k] = { value: val, secret: true }; return; }
+              try { out[k] = { value: JSON.stringify(val), secret: true }; return; } catch { out[k] = { value: String(val), secret: true }; return; }
+            } else {
+              if (typeof val === 'string') { out[k] = val; return; }
+              try { out[k] = JSON.stringify(val); return; } catch { out[k] = String(val); return; }
+            }
           }
-          out[k] = { value: String(v) };
+          // Any other object/primitive → JSON/string
+          if (v != null && typeof v === 'object') {
+            try { out[k] = JSON.stringify(v); return; } catch { out[k] = String(v); return; }
+          }
+          out[k] = String(v);
         });
         return out;
       };
 
-      let wsCfg: Record<string, { value: string; secret?: boolean }> = {};
+      let wsCfg: Record<string, any> = {};
       const rawCfg: any = this.config.settings?.config as any;
       if (typeof rawCfg === 'string') {
         let parsed: any = undefined;
@@ -62,12 +76,17 @@ export class Environment {
       const entries = Object.entries(config.components || {}) as [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][];
       for (const [name, factory] of entries) {
         const produced = factory(this);
+        let instanceName = String(name).toLowerCase();
+        if (typeof produced !== 'function') {
+          const override = (produced as any)?.name;
+          if (override && typeof override === 'string') instanceName = override;
+        }
         const program: PulumiFn = (typeof produced === 'function')
           ? (produced as PulumiFn)
-          : (async () => { const Ctor = (Components as any)[name]; new Ctor(String(name).toLowerCase(), produced as any); });
+          : (async () => { const Ctor = (Components as any)[name]; new Ctor(instanceName, produced as any); });
 
         // Provide secretsProvider at workspace level so init uses it; per-stack config via stackSettings
-        const stackName = `${this.id}-${String(name).toLowerCase()}`;
+        const stackName = `${this.id}-${instanceName}`;
         const wsWithStack: any = {
           projectSettings: {
             name: this.project.id,
@@ -82,7 +101,7 @@ export class Environment {
         } };
 
         this.stacks[name] = LocalWorkspace.createOrSelectStack({
-          stackName: `${this.id}-${String(name).toLowerCase()}`,
+          stackName: `${this.id}-${instanceName}`,
           projectName: this.project.id,
           program,
         }, wsWithStack);

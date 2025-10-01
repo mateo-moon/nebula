@@ -1,5 +1,11 @@
 import * as k8s from "@pulumi/kubernetes";
+import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
+import * as crypto from "crypto";
+import * as path from "path";
+//
+
+type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
 export interface ArgoCdProjectConfig {
   name: string;
@@ -16,6 +22,7 @@ export interface ArgoCdConfig {
   repository?: string;
   values?: Record<string, unknown>;
   project?: ArgoCdProjectConfig;
+  args?: OptionalChartArgs;
 }
 
 export class ArgoCd extends pulumi.ComponentResource {
@@ -32,18 +39,60 @@ export class ArgoCd extends pulumi.ComponentResource {
       metadata: { name: namespaceName },
     }, { parent: this });
 
+    // Precreate Redis password secret; ignore future content changes so it remains stable
+    const generatedRedisPassword = pulumi.secret(crypto.randomBytes(24).toString('base64'));
+    const redisSecret = new k8s.core.v1.Secret('argocd-redis-secret', {
+      metadata: { name: 'argocd-redis', namespace: namespaceName },
+      stringData: {
+        'auth': generatedRedisPassword,
+        'redis-password': generatedRedisPassword,
+      },
+    }, { parent: this, dependsOn: [namespace], ignoreChanges: ["data", "stringData"] });
+
     const chartValues: Record<string, unknown> = {
       crds: { install: true },
+      configs: {
+        cm: {
+          // Register a simple Argo CD CMP plugin that can run a repo-local generator
+          configManagementPlugins: `- name: pulumi-generate\n  generate:\n    command: ["/bin/sh", "-lc"]\n    args: ["node pulumi/src/tools/argocd-generate.js"]\n  discover:\n    fileName: pulumi/src/tools/argocd-generate.js\n`,
+        },
+      },
+      // The Argo CD chart's internal Redis uses secret 'argocd-redis' with key 'auth'.
+      // If the chart switches to a subchart requiring custom secret wiring, these values may apply.
+      // redis: { auth: { existingSecret: 'argocd-redis', existingSecretPasswordKey: 'redis-password' } },
       ...(args.values || {}),
     };
 
-    const chart = new k8s.helm.v4.Chart('argo-cd', {
+    const safeChartValues = chartValues;
+
+    const defaultChartArgsBase: OptionalChartArgs = {
       chart: 'argo-cd',
       repositoryOpts: { repo: args.repository || 'https://argoproj.github.io/argo-helm' },
       ...(args.version ? { version: args.version } : {}),
       namespace: namespaceName,
-      values: chartValues,
-    }, { parent: this, dependsOn: [namespace] });
+    };
+    const providedArgs: OptionalChartArgs | undefined = args.args;
+
+    const projectRoot = (global as any).projectRoot || process.cwd();
+
+    const finalChartArgs: ChartArgs = {
+      chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
+      ...defaultChartArgsBase,
+      ...(providedArgs || {}),
+      namespace: namespaceName,
+      values: safeChartValues,
+      postRenderer: {
+        command: "/bin/sh",
+        args: ["-lc", `cd ${projectRoot} && vals eval -f -`],
+      },
+    };
+
+
+    const chart = new k8s.helm.v4.Chart('argo-cd', finalChartArgs, {
+      parent: this,
+      dependsOn: [namespace, redisSecret],
+      transformations: []
+    });
 
     // Optional: Create an AppProject
     if (args.project?.name) {

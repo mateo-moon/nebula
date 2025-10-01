@@ -1,5 +1,8 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as k8s from '@pulumi/kubernetes';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { CertManager } from './cert-manager';
 import type { CertManagerConfig } from './cert-manager';
 import { ExternalDns } from './external-dns';
@@ -12,7 +15,23 @@ import { PulumiOperator } from './pulumi-operator';
 import type { PulumiOperatorConfig } from './pulumi-operator';
 
 export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
-  return new k8s.Provider(args.name || 'k8s', { kubeconfig: args.kubeconfig });
+  const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
+  const candidates = Array.from(new Set([
+    args.kubeconfig,
+    path.resolve(process.cwd(), args.kubeconfig || ''),
+    (global as any).projectRoot ? path.resolve((global as any).projectRoot, args.kubeconfig || '') : undefined,
+  ].filter(Boolean) as string[])).map(expandHome);
+
+  let kubeconfigContent = args.kubeconfig || '';
+  for (const pth of candidates) {
+    try {
+      if (pth && fs.existsSync(pth) && fs.statSync(pth).isFile()) {
+        kubeconfigContent = fs.readFileSync(pth, 'utf8');
+        break;
+      }
+    } catch {}
+  }
+  return new k8s.Provider(args.name || 'k8s', { kubeconfig: kubeconfigContent });
 }
 
 export interface K8sConfig  {
@@ -42,10 +61,11 @@ export class K8s extends pulumi.ComponentResource {
     super('nebula:k8s', name, args, opts);
 
     this.provider = createK8sProvider({ kubeconfig: args.kubeconfig || '', name: name });
-    if (args.certManager) new CertManager(name, args.certManager, { parent: this });
-    if (args.externalDns) new ExternalDns(name, args.externalDns, { parent: this });
-    if (args.ingressNginx) new IngressNginx(name, args.ingressNginx, { parent: this });
-    if (args.argoCd) new ArgoCd(name, args.argoCd, { parent: this });
-    if (args.pulumiOperator) new PulumiOperator(name, args.pulumiOperator, { parent: this });
+    const childOpts = { parent: this, providers: this.provider ? [this.provider] : undefined } as pulumi.ComponentResourceOptions;
+    if (args.certManager) new CertManager(name, args.certManager, childOpts);
+    if (args.externalDns) new ExternalDns(name, args.externalDns, childOpts);
+    if (args.ingressNginx) new IngressNginx(name, args.ingressNginx, childOpts);
+    if (args.argoCd) new ArgoCd(name, args.argoCd, childOpts);
+    if (args.pulumiOperator) new PulumiOperator(name, args.pulumiOperator, childOpts);
   }
 }
