@@ -1,5 +1,9 @@
 import * as k8s from "@pulumi/kubernetes";
+import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
+//
+
+type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
 export type ServiceType = 'LoadBalancer' | 'NodePort' | 'ClusterIP';
 export type ExternalTrafficPolicy = 'Local' | 'Cluster';
@@ -24,6 +28,7 @@ export interface IngressNginxConfig {
   values?: Record<string, unknown>;
   version?: string;
   repository?: string;
+  args?: OptionalChartArgs;
 }
 
 export class IngressNginx extends pulumi.ComponentResource {
@@ -39,6 +44,14 @@ export class IngressNginx extends pulumi.ComponentResource {
       metadata: { name: namespaceName },
     }, { parent: this });
 
+    // Self-signed Issuer used by cert-manager for the admission webhook certificate
+    const admissionIssuer = new k8s.apiextensions.CustomResource('ingress-nginx-selfsigned-issuer', {
+      apiVersion: 'cert-manager.io/v1',
+      kind: 'Issuer',
+      metadata: { name: 'ingress-nginx-selfsigned', namespace: namespaceName },
+      spec: { selfSigned: {} },
+    }, { parent: this });
+
     const values: Record<string, unknown> = {
       controller: {
         ...(args.controller?.replicaCount != null ? { replicaCount: args.controller.replicaCount } : {}),
@@ -51,17 +64,39 @@ export class IngressNginx extends pulumi.ComponentResource {
             ...(args.controller.service.externalTrafficPolicy ? { externalTrafficPolicy: args.controller.service.externalTrafficPolicy } : {}),
           }
         } : {}),
+        // Ensure admission webhooks certificate management via cert-manager (no Helm hooks required)
+        admissionWebhooks: {
+          certManager: {
+            enabled: true,
+            issuerRef: {
+              name: 'ingress-nginx-selfsigned',
+              kind: 'Issuer',
+              group: 'cert-manager.io',
+            },
+          },
+          // Disable patch job that normally runs via Helm hooks
+          patch: { enabled: false },
+        },
       },
       ...(args.values || {}),
     };
 
-    new k8s.helm.v4.Chart('ingress-nginx', {
+    const defaultChartArgsBase: OptionalChartArgs = {
       chart: 'ingress-nginx',
       repositoryOpts: { repo: args.repository || 'https://kubernetes.github.io/ingress-nginx' },
       ...(args.version ? { version: args.version } : {}),
       namespace: namespaceName,
+    };
+    const providedArgs: OptionalChartArgs | undefined = args.args;
+    const finalChartArgs: ChartArgs = {
+      chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
+      ...defaultChartArgsBase,
+      ...(providedArgs || {}),
+      namespace: namespaceName,
       values,
-    }, { parent: this, dependsOn: [namespace] });
+    };
+
+    new k8s.helm.v4.Chart('ingress-nginx', finalChartArgs, { parent: this, dependsOn: [namespace, admissionIssuer] });
 
     this.registerOutputs({});
   }

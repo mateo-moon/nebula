@@ -23,6 +23,7 @@ declare global {
  */
 export class Utils {
 
+
   /**
    * Generates AWS config file based on project configuration
    * Creates SSO profiles for each environment and default SSO session

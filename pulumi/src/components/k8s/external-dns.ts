@@ -1,6 +1,10 @@
 import * as k8s from "@pulumi/kubernetes";
+import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
+//
+
+type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
 export type ExternalDnsProvider = 'google' | 'aws' | 'azure' | 'cloudflare';
 
@@ -31,6 +35,7 @@ export interface ExternalDnsConfig {
   gsaRolesProjectId?: string;
   // Whether to grant the default DNS admin role to the GSA (defaults to true)
   createDefaultDnsAdminRole?: boolean;
+  args?: OptionalChartArgs;
 }
 
 export class ExternalDns extends pulumi.ComponentResource {
@@ -83,10 +88,10 @@ export class ExternalDns extends pulumi.ComponentResource {
         gsaResourceIdOut = gsa.name;
       }
 
-      // Bind WI
+      // Bind WI: allow KSA to impersonate GSA
       new gcp.serviceaccount.IAMMember(`${name}-external-dns-wi`, {
         serviceAccountId: gsaResourceIdOut!,
-        role: 'roles/iam.serviceAccountUser',
+        role: 'roles/iam.workloadIdentityUser',
         member: pulumi.interpolate`serviceAccount:${clusterProject}.svc.id.goog[${namespaceName}/external-dns]`,
       }, { parent: this });
 
@@ -131,17 +136,21 @@ export class ExternalDns extends pulumi.ComponentResource {
       ...(args.values || {}),
     };
 
-    new k8s.helm.v4.Chart(
-      'external-dns',
-      {
-        chart: 'external-dns',
-        repositoryOpts: { repo: args.repository || 'https://kubernetes-sigs.github.io/external-dns/' },
-        ...(args.version ? { version: args.version } : {}),
-        namespace: namespaceName,
-        values,
-      },
-      { parent: this, dependsOn: [namespace] }
-    );
+    const defaultChartArgsBase: OptionalChartArgs = {
+      chart: 'external-dns',
+      repositoryOpts: { repo: args.repository || 'https://kubernetes-sigs.github.io/external-dns/' },
+      ...(args.version ? { version: args.version } : {}),
+      namespace: namespaceName,
+    };
+    const providedArgs: OptionalChartArgs | undefined = args.args;
+    const finalChartArgs: ChartArgs = {
+      chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
+      ...defaultChartArgsBase,
+      ...(providedArgs || {}),
+      namespace: namespaceName,
+      values,
+    };
+    new k8s.helm.v4.Chart('external-dns', finalChartArgs, { parent: this, dependsOn: [namespace] });
 
     // If a GSA email is provided, bind KSA to GSA via Workload Identity and optionally grant roles to the GSA
     if (args.gsaEmail) {
@@ -152,7 +161,7 @@ export class ExternalDns extends pulumi.ComponentResource {
       // Workload Identity user binding (let the KSA impersonate the GSA)
       new gcp.serviceaccount.IAMMember(`${name}-external-dns-wi`, {
         serviceAccountId: gsaResourceName,
-        role: 'roles/iam.serviceAccountUser',
+        role: 'roles/iam.workloadIdentityUser',
         member: pulumi.interpolate`serviceAccount:${clusterProject}.svc.id.goog[${namespaceName}/external-dns]`,
       }, { parent: this });
 
