@@ -2,7 +2,6 @@ import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import * as crypto from "crypto";
-import * as path from "path";
 //
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };

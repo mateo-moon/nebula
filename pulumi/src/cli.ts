@@ -2,6 +2,7 @@ import * as readline from 'readline';
 import { previewStack, upStack, destroyStack, refreshStack } from './core/automation';
 import type { Project } from './core/project';
 import type { Stack } from '@pulumi/pulumi/automation';
+// no Utils needed for workDir-based operation
 
 type Op = 'preview' | 'up' | 'destroy' | 'refresh';
 
@@ -23,6 +24,7 @@ export async function runProjectCli(project: Project, args?: string[]) {
   const onlyEnv = get('--env');
   const debugLevel = get('--debug'); // 'debug' | 'trace'
   const includeDependentsFlag = has('--target-dependents');
+  const workDirFlag = get('--work-dir');
 
   // Enable provider/engine debug if requested
   if (debugLevel) {
@@ -32,6 +34,15 @@ export async function runProjectCli(project: Project, args?: string[]) {
     // Helpful extras
     process.env['PULUMI_KEEP_TEMP_DIRS'] = '1';
     process.env['TF_LOG_PROVIDER'] = level;
+  }
+
+  if (workDirFlag) {
+    for (const [, env] of Object.entries((project as any).envs || {})) {
+      const cfg = (env as any).config || {};
+      cfg.settings = cfg.settings || {};
+      cfg.settings.workDir = workDirFlag;
+      (env as any).config = cfg;
+    }
   }
 
   type Item = { envId: string; name: string; stack: Promise<Stack> };

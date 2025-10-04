@@ -21,7 +21,6 @@ export interface InfraOutput {
 }
 
 export class Infra extends pulumi.ComponentResource {
-  public constellation?: Constellation;
   constructor(
     name: string,
     args?: InfraConfig,
