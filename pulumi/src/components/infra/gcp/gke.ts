@@ -174,7 +174,10 @@ users:
       try {
         const dir = path.resolve(projectRoot, '.config');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.resolve(dir, 'kube_config'), cfgStr);
+        const stackName = pulumi.getStack();
+        const envPrefix = String(stackName).split('-')[0];
+        const fileName = `kube_config_${envPrefix}`;
+        fs.writeFileSync(path.resolve(dir, fileName), cfgStr);
       } catch { /* ignore */ }
       return cfgStr;
     });

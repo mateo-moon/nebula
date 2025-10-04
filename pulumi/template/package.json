@@ -2,13 +2,26 @@
   "name": "nebula-template",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "cli": "tsx src/index.ts",
+    "preview": "pnpm run cli -- --op preview --all",
+    "up": "pnpm run cli -- --op up --all",
+    "destroy": "pnpm run cli -- --op destroy --all",
+    "refresh": "pnpm run cli -- --op refresh --all",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
   "dependencies": {
-    "nebula": "github:mateomoon/nebula/pulumi#main"
+    "nebula": "github:mateo-moon/nebula#main&path:/pulumi"
   },
   "devDependencies": {
+    "@types/node": "^22.13.9",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2",
-    "@types/node": "^22.13.9"
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
   }
 }
 

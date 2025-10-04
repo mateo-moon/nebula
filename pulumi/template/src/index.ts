@@ -38,13 +38,11 @@ export const project = new Project('nebula-template', {
             name: 'nebula-template-gke',
             releaseChannel: 'REGULAR',
             deletionProtection: false,
-            systemNodepool: {
-              name: 'system',
-              machineType: 'e2-standard-4',
-              min: 1,
-              max: 1,
-              diskGb: 20,
-            },
+            // System node pool settings (align with current API)
+            minNodes: 1,
+            maxNodes: 1,
+            machineType: 'e2-standard-4',
+            volumeSizeGb: 20,
           },
         },
         dnsConfig: {
@@ -57,7 +55,7 @@ export const project = new Project('nebula-template', {
         },
       }),
       K8s: (): K8sConfig => ({
-        kubeconfig: './config/kube_config',
+        kubeconfig: './.config/kube_config',
         certManager: {
           namespace: 'cert-manager',
         },

@@ -1,6 +1,5 @@
 qemu
 *.d.ts
-*.js
 node_modules
 cdktf.out
 cdktf.log
@@ -15,4 +14,3 @@ charts
 .config
 .DS_Store
 dist
-pulumi/src/test

@@ -1,86 +1,167 @@
 import * as pulumi from '@pulumi/pulumi';
-import { PulumiCommand } from '@pulumi/pulumi/automation';
-import * as fs from 'fs';
-import * as path from 'path';
-import { execSync } from 'node:child_process';
-import { createRequire } from 'node:module';
+import type { ConstellationGcpNetworkConfig } from './gcp';
+import { GcpConstellationInfra, type GcpConstellationInfraConfig } from './gcp';
+import { ConstellationGcpIam, type ConstellationGcpIamConfig } from './gcp';
+import * as constellation from '@pulumi/constellation';
+import * as random from '@pulumi/random';
+
+export type AttestationVariant = 'gcp-sev-snp' | 'gcp-sev-es';
 
 export interface ConstellationConfig {
-  enabled?: boolean;
-  /** Module source (git registry or local path). Provide a provider-specific example. */
-  source: string;
-  /** Optional module version/ref when using registry/git */
-  version?: string;
-  /** Arbitrary variables passed to the Terraform module */
-  variables?: Record<string, pulumi.Input<any>>;
+  gcp?: {
+    region?: string; // default europe-west3
+    zone?: string;   // default europe-west3-a
+    internalLoadBalancer?: boolean;
+    network?: Omit<ConstellationGcpNetworkConfig, 'region' | 'internalLoadBalancer'>;
+    infra?: Omit<GcpConstellationInfraConfig, 'region' | 'internalLoadBalancer' | 'name'>;
+    iam?: ConstellationGcpIamConfig;
+    debug?: boolean;
+    projectId?: string; // will be sourced from infra output if not provided
+    serviceAccountKeyB64?: string; // will be sourced from IAM output if not provided
+    // Cluster settings
+    kubernetesVersion?: string; // default v1.31.12
+    constellationMicroserviceVersion?: string; // default image.version
+    licenseId?: string;
+    attestationVariant?: AttestationVariant; // default 'gcp-sev-snp'
+    image?: {
+      reference: string;
+      shortPath: string;
+      version: string;
+      marketplaceImage?: boolean;
+    };
+    // or resolve image by version/region
+    imageVersion?: string;
+    serviceCidr?: string; // default 10.96.0.0/12
+    enableCsiDriver?: boolean;
+    createTimeout?: string; // e.g., '60m' for cluster creation
+  };
 }
 
 export interface ConstellationOutput {
-  outputs?: pulumi.Output<any>;
+  gcp?: {
+    networkId?: pulumi.Output<string>;
+    nodesSubnetworkId?: pulumi.Output<string>;
+    inClusterEndpoint?: pulumi.Output<string>;
+    outOfClusterEndpoint?: pulumi.Output<string>;
+    kubeconfig?: pulumi.Output<string>;
+  };
 }
 
-/**
- * Cloud-agnostic wrapper for the Constellation Terraform module using @pulumi/terraform Module.
- * You must provide a suitable `source` for your target provider (e.g., the GCP example or an AWS module).
- */
 export class Constellation extends pulumi.ComponentResource {
-  public readonly outputs: pulumi.Output<any>;
+  constructor(name: string, args: ConstellationConfig = {}, opts?: pulumi.ComponentResourceOptions) {
+    super('nebula:infra:constellation:Module', name, args, opts);
 
-  constructor(name: string, cfg: ConstellationConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:constellation:Module', name, {}, opts);
+    if (args.gcp) {
+      // Secrets and identifiers
+      const uid = new random.RandomId(`${name}-uid`, { byteLength: 4 }, { parent: this });
+      const initSecret = new random.RandomPassword(`${name}-init-secret`, { length: 32, special: true, overrideSpecial: "_%@" }, { parent: this });
+      const masterSecret = new random.RandomId(`${name}-master-secret`, { byteLength: 32 }, { parent: this });
+      const masterSecretSalt = new random.RandomId(`${name}-master-secret-salt`, { byteLength: 32 }, { parent: this });
+      const measurementSalt = new random.RandomId(`${name}-measurement-salt`, { byteLength: 32 }, { parent: this });
 
-    if (!cfg?.source || cfg.source.trim().length === 0) {
-      throw new Error('Constellation module requires a non-empty `source`.');
-    }
+      // Image and attestation
+      const variant: AttestationVariant = args.gcp.attestationVariant || 'gcp-sev-snp';
+      const resolvedRegion = args.gcp.region || 'europe-west3';
+      const resolvedZone = args.gcp.zone || 'europe-west3-a';
+      const imageResult = args.gcp.image
+        ? pulumi.output({ image: args.gcp.image })
+        : (() => {
+            const imgArgs: any = { csp: 'gcp', attestationVariant: variant };
+            if (args.gcp.imageVersion) imgArgs.version = args.gcp.imageVersion;
+            return constellation.getImageOutput(imgArgs);
+          })();
+      const attestationResult = constellation.getAttestationOutput({
+        csp: 'gcp',
+        attestationVariant: variant,
+        image: imageResult.image,
+      });
 
-    const workDir = path.resolve(projectConfigPath, `tfmod-${name}`);
-    try { if (!fs.existsSync(workDir)) fs.mkdirSync(workDir, { recursive: true }); } catch {}
+      const serviceCidr = args.gcp.serviceCidr || '10.96.0.0/12';
 
-    // Initialize a minimal JS package to host the generated SDK
-    const pkgJsonPath = path.join(workDir, 'package.json');
-    if (!fs.existsSync(pkgJsonPath)) {
-      const pkg: Record<string, unknown> = {
-        name: `tfmod-${name}`,
-        private: true,
-        type: 'module',
-        version: '0.0.0',
-        dependencies: { '@pulumi/pulumi': '^3.0.0' }
+      // Prefer projectId from config 'gcpc:projectid', then explicit, then infra
+      const gcpcCfg = new pulumi.Config('gcpc');
+      const gcpcProjectId = gcpcCfg.get('projectid');
+      const provisionalProjectId = (args.gcp.projectId || gcpcProjectId);
+
+      // Always create IAM to ensure we have a service account key
+      const iamConfig: ConstellationGcpIamConfig = {
+        ...(args.gcp.iam || {} as any),
+        vmServiceAccount: {
+          projectId: provisionalProjectId as any,
+          ...((args.gcp.iam as any)?.vmServiceAccount || {}),
+        },
+        clusterServiceAccount: {
+          projectId: provisionalProjectId as any,
+          ...((args.gcp.iam as any)?.clusterServiceAccount || {}),
+        },
+      } as any;
+      const iam = new ConstellationGcpIam(name, iamConfig, { parent: this });
+
+      // Infra needs image.reference for node images by default
+      const infra = new GcpConstellationInfra(name, {
+        name,
+        region: resolvedRegion,
+        zone: resolvedZone,
+        internalLoadBalancer: args.gcp.internalLoadBalancer,
+        ...(args.gcp.infra || {} as any),
+        network: args.gcp.network,
+        initSecret: initSecret.result,
+        iamServiceAccountVm: iam.vmServiceAccountEmail,
+        debug: args.gcp.debug,
+        imageId: imageResult.image.reference as any,
+      } as any, { parent: this });
+
+      const resolvedProjectId = (provisionalProjectId || (infra.network.network.project as any));
+
+      const apiServerSans = pulumi.all([infra.inClusterEndpoint, infra.outOfClusterEndpoint] as [pulumi.Input<string>, pulumi.Input<string>]).apply(([inEp, outEp]) => {
+        const list: string[] = [];
+        if (outEp) list.push(outEp);
+        if (inEp && inEp !== outEp) list.push(inEp);
+        return list;
+      });
+
+      const k8sVersion: pulumi.Input<string> = args.gcp.kubernetesVersion || 'v1.31.12';
+      const microVersion: pulumi.Input<string> = (args.gcp.constellationMicroserviceVersion || (imageResult.image.version as any));
+
+      const clusterArgs: any = {
+        apiServerCertSans: apiServerSans,
+        attestation: attestationResult.attestation as any,
+        constellationMicroserviceVersion: microVersion,
+        csp: 'gcp',
+        extraMicroservices: { csiDriver: !!args.gcp.enableCsiDriver },
+        gcp: { projectId: resolvedProjectId, serviceAccountKey: (args.gcp.serviceAccountKeyB64 || (iam.serviceAccountKey as any)) },
+        image: imageResult.image as any,
+        kubernetesVersion: k8sVersion,
+        masterSecret: masterSecret.hex,
+        masterSecretSalt: masterSecretSalt.hex,
+        measurementSalt: measurementSalt.hex,
+        name,
+        networkConfig: {
+          ipCidrNode: (infra.network.nodesSubnetwork.ipCidrRange as pulumi.Output<string>),
+          ipCidrPod: (infra.network.nodesSubnetwork.secondaryIpRanges.apply(r => r?.[0]?.ipCidrRange || '') as pulumi.Output<string>),
+          ipCidrService: serviceCidr,
+        },
+        outOfClusterEndpoint: infra.outOfClusterEndpoint as any,
+        initSecret: initSecret.result,
+        uid: uid.hex,
       };
-      try { fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2)); } catch {}
+      if (args.gcp.licenseId) clusterArgs.licenseId = args.gcp.licenseId;
+
+      const clusterCreateTimeout = args.gcp.createTimeout || '60m';
+      const cluster = new constellation.Cluster(name, clusterArgs, {
+        parent: this,
+        customTimeouts: { create: clusterCreateTimeout },
+      });
+
+      this.registerOutputs({
+        gcp: {
+          networkId: infra.network.network.id,
+          nodesSubnetworkId: infra.network.nodesSubnetwork.id,
+          inClusterEndpoint: infra.inClusterEndpoint as any,
+          outOfClusterEndpoint: infra.outOfClusterEndpoint as any,
+          kubeconfig: cluster.kubeconfig,
+        },
+      } satisfies ConstellationOutput);
     }
-
-    // Ensure Pulumi CLI available (will install if missing)
-    PulumiCommand.get({ skipVersionCheck: true }).catch(() => PulumiCommand.install({}));
-
-    // Add terraform module SDK (codegen) into this workDir
-    const alias = 'constellation';
-    const addArgs = ['pulumi', 'package', 'add', 'terraform-module', cfg.source];
-    if (cfg.version) addArgs.push(cfg.version);
-    addArgs.push(alias);
-    try { execSync(addArgs.join(' '), { cwd: workDir, stdio: 'inherit' }); } catch (e: any) {
-      throw new Error(`pulumi package add failed: ${e?.message || e}`);
-    }
-    try { execSync('pnpm i --silent', { cwd: workDir, stdio: 'inherit' }); } catch { try { execSync('npm i --silent', { cwd: workDir, stdio: 'inherit' }); } catch {} }
-
-    // Import the generated SDK and create the module resource
-    const req = createRequire(path.join(workDir, 'index.js'));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const tfmod: unknown = req(alias);
-    const ModuleCtor = (tfmod as { Module?: unknown; default?: unknown }).Module || (tfmod as { default?: unknown }).default || (tfmod as unknown);
-    if (typeof ModuleCtor !== 'function') throw new Error('Generated Terraform module SDK did not expose a constructable Module');
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = new (ModuleCtor as any)(name, { ...(cfg.variables || {}) }, { parent: this });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outAny = (mod && (mod.outputs ?? (mod.output && mod.output()) ?? mod)) as any;
-    this.outputs = pulumi.output(outAny as pulumi.Input<any>);
-
-    this.registerOutputs({ outputs: this.outputs });
-  }
-
-  public get result(): ConstellationOutput {
-    return { outputs: this.outputs };
   }
 }
-
-
