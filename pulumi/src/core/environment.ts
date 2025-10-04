@@ -2,6 +2,7 @@ import { Project } from "./project";
 import { LocalWorkspace, type PulumiFn, type Stack } from "@pulumi/pulumi/automation";
 import { Utils } from "../utils";
 import { Components, type ComponentTypes } from "../components";
+import * as path from 'path';
 
 export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
 
@@ -11,6 +12,7 @@ export interface EnvironmentConfig {
     backendUrl?: string;
     secretsProvider?: string;
     config?: Record<string, unknown> | string;
+    workDir?: string;
   };
 }
 
@@ -88,11 +90,20 @@ export class Environment {
         // Provide secretsProvider at workspace level so init uses it; per-stack config via stackSettings
         const stackName = `${this.id}-${instanceName}`;
         const wsWithStack: any = {
+          envVars: {
+            TF_LOG: 'TRACE',
+            TF_LOG_PROVIDER: 'TRACE',
+            TF_LOG_PATH: '/tmp/terraform.log',
+            TF_APPEND_LOGS: '1',
+            PULUMI_LOG_LEVEL: 'debug',
+            PULUMI_LOG_FLOW: 'true',
+          },
           projectSettings: {
             name: this.project.id,
-            runtime: 'nodejs',
+            runtime: { name: 'nodejs', options: { typescript: false, nodeargs: '--import=tsx/esm' } },
             ...(this.config.settings?.backendUrl ? { backend: { url: this.config.settings.backendUrl } } : {}),
           },
+          ...(this.config.settings?.workDir ? { workDir: path.resolve(projectRoot, this.config.settings.workDir) } : {}),
         };
         if (this.config.settings?.secretsProvider) wsWithStack.secretsProvider = this.config.settings.secretsProvider;
         wsWithStack.stackSettings = { [stackName]: {
