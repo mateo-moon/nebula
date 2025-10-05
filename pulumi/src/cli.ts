@@ -1,93 +1,277 @@
 import * as readline from 'readline';
+import * as fs from 'fs';
+import * as path from 'path';
+import { Command } from 'commander';
+import { pathToFileURL } from 'node:url';
 import { previewStack, upStack, destroyStack, refreshStack } from './core/automation';
 import type { Project } from './core/project';
 import type { Stack } from '@pulumi/pulumi/automation';
+import * as YAML from 'yaml';
+import { Utils } from './utils';
 // no Utils needed for workDir-based operation
 
-type Op = 'preview' | 'up' | 'destroy' | 'refresh';
+type Operation = 'preview' | 'up' | 'destroy' | 'refresh' | 'generate';
 
-/**
- * Interactive CLI runner bound to a concrete Project instance.
- * - If all components are selected, sub-stack prompts are skipped and all units run.
- * - If a component has a single stack, the prompt is skipped.
- */
-export async function runProjectCli(project: Project, args?: string[]) {
-  const a = args ?? process.argv.slice(2);
-  const get = (flag: string) => { const i = a.indexOf(flag); return i >= 0 ? a[i + 1] : undefined };
-  const has = (flag: string) => a.includes(flag);
-  const ask = async (q: string) => new Promise<string>(resolve => { const rl = readline.createInterface({ input: process.stdin, output: process.stdout }); rl.question(q, ans => { rl.close(); resolve(ans); }); });
+type RunnerOptions = {
+  op?: Operation;
+  targets?: string[];
+  select?: string;
+  env?: string;
+  workDir?: string;
+  includeDependents?: boolean;
+  debugLevel?: 'debug' | 'trace';
+  all?: boolean;
+};
 
-  const op = (get('--op') as Op) || undefined;
-  const targetUrnsCsv = get('--target');
-  const targetUrns = targetUrnsCsv ? targetUrnsCsv.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const select = get('--select');
-  const onlyEnv = get('--env');
-  const debugLevel = get('--debug'); // 'debug' | 'trace'
-  const includeDependentsFlag = has('--target-dependents');
-  const workDirFlag = get('--work-dir');
-
-  // Enable provider/engine debug if requested
-  if (debugLevel) {
-    const level = ['trace', 'debug'].includes(debugLevel.toLowerCase()) ? debugLevel.toUpperCase() : 'DEBUG';
-    process.env['PULUMI_LOG_LEVEL'] = level.toLowerCase();
-    process.env['TF_LOG'] = level; // Terraform bridge providers respect TF_LOG
-    // Helpful extras
-    process.env['PULUMI_KEEP_TEMP_DIRS'] = '1';
-    process.env['TF_LOG_PROVIDER'] = level;
+/** Unified runner — executes the requested operation using structured options. */
+export async function runProject(project: Project, opts: RunnerOptions): Promise<void> {
+  // For generate, do not wait for full project init; we only need raw configs
+  if (opts.op !== 'generate') {
+    await project.ready;
   }
 
-  if (workDirFlag) {
-    for (const [, env] of Object.entries((project as any).envs || {})) {
-      const cfg = (env as any).config || {};
-      cfg.settings = cfg.settings || {};
-      cfg.settings.workDir = workDirFlag;
-      (env as any).config = cfg;
-    }
-  }
+  // Setup debug flags
+  setupDebugFlags(opts.debugLevel);
 
-  type Item = { envId: string; name: string; stack: Promise<Stack> };
-  const items: Item[] = [];
-  for (const [envId, env] of Object.entries((project as any).envs || {})) {
-    if (onlyEnv && envId !== onlyEnv) continue;
-    const stacks = (env as any).stacks || {};
-    for (const name of Object.keys(stacks)) items.push({ envId, name, stack: stacks[name] });
-  }
+  // Handle workDir override
+  if (opts.workDir) applyWorkDirOverride(project, opts.workDir);
+
+  // Handle generate operation
+  if (opts.op === 'generate') { handleGenerateOperation(project, opts.workDir); return; }
+
+  // Collect all stacks from all environments
+  const items = collectStacks(project, opts.env);
   if (items.length === 0) { console.log('No stacks found.'); return; }
 
-  let chosenOp: Op = op || (await (async () => { const ans = await ask('Operation [preview|up|destroy|refresh] (default preview): '); return (['preview','up','destroy','refresh'].includes(ans) ? ans as Op : 'preview'); })());
+  // Determine operation to execute
+  const chosenOp = await determineOperation(opts.op);
 
-  let selected: Item[] = [];
-  if (select && select !== 'all') {
-    const wanted = new Set(select.split(',').map(s => s.trim()));
-    selected = items.filter(i => wanted.has(`${i.envId}:${i.name}`) || wanted.has(i.name));
-  } else if (select === 'all' || has('--all')) {
-    selected = items;
-  } else {
-    console.log('Stacks:');
-    items.forEach((i, idx) => console.log(`${idx + 1}) ${i.envId}:${i.name}`));
-    const ans = await ask('Choose indices (comma) or type all: ');
-    if (ans.trim().toLowerCase() === 'all') selected = items; else {
-      const idxs = ans.split(',').map(s => parseInt(s.trim(), 10) - 1).filter(n => !isNaN(n));
-      selected = idxs
-        .map(i => items[i])
-        .filter((i): i is Item => Boolean(i));
-    }
-  }
+  // Select which stacks to operate on
+  const selected = await selectStacks(items, opts);
   if (selected.length === 0) { console.log('Nothing selected.'); return; }
 
-  console.log(`Executing '${chosenOp}' for ${selected.length} stack(s)...`);
-  const ordered = chosenOp === 'destroy' ? [...selected].reverse() : selected;
-  for (const it of ordered) {
-    const stack = await it.stack;
-    const baseTargets = targetUrns.length ? targetUrns : await promptTargetsForStack(stack, ask);
-    const expandedTargets = await expandComponentTargets(stack, baseTargets);
-    const shouldIncludeDependents = expandedTargets.length > 0 ? true : includeDependentsFlag;
-    const opts = expandedTargets.length ? { target: expandedTargets, targetDependents: shouldIncludeDependents } as any : undefined;
-    if (chosenOp === 'preview') await previewStack(stack, opts);
-    else if (chosenOp === 'up') await upStack(stack, opts);
-    else if (chosenOp === 'destroy') await destroyStack(stack, opts);
-    else if (chosenOp === 'refresh') await refreshStack(stack, opts);
+  // Execute operation on selected stacks
+  await executeOperation(chosenOp, selected, opts);
+}
+
+/** Setup debug environment variables */
+function setupDebugFlags(debugLevel?: 'debug' | 'trace'): void {
+  if (!debugLevel) return;
+
+  const level = ['trace', 'debug'].includes(debugLevel.toLowerCase()) ? debugLevel.toLowerCase() : 'debug';
+  process.env['PULUMI_LOG_LEVEL'] = level;
+  process.env['TF_LOG'] = level.toUpperCase();
+  process.env['PULUMI_KEEP_TEMP_DIRS'] = '1';
+  process.env['TF_LOG_PROVIDER'] = level.toUpperCase();
+}
+
+/** Apply workDir override to all environments */
+function applyWorkDirOverride(project: Project, workDir: string): void {
+  for (const env of Object.values(project.envs)) {
+    const cfg = env.config;
+    cfg.settings = cfg.settings || {};
+    cfg.settings.workDir = workDir;
   }
+}
+
+/** Find nearest package.json directory */
+function findNearestPackageDir(start: string): string {
+  let dir = start;
+  const root = path.parse(dir).root;
+  
+  while (true) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir || dir === root) break;
+    dir = parent;
+  }
+  
+  return start;
+}
+
+/** Handle generate operation: write Pulumi.yaml and Pulumi.<stack>.yaml files */
+function handleGenerateOperation(project: Project, workDir?: string): void {
+  const targetDir = workDir || findNearestPackageDir(process.cwd());
+
+  // Ensure dir exists
+  try { if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true }); } catch {}
+
+  // Determine backend from first environment settings
+  const envInputs = Object.entries((project as any).environments || {}) as [string, any][];
+  const firstSettings = (() => {
+    for (const [, cfg] of envInputs) {
+      if (cfg?.settings) return cfg.settings as any;
+    }
+    return undefined;
+  })();
+  const backendUrl = firstSettings?.backendUrl;
+
+  // Write Pulumi.yaml
+  const projectYaml: any = {
+    name: (project as any).id,
+    runtime: {
+      name: 'nodejs',
+      options: { typescript: false, nodeargs: '--import=tsx/esm' },
+    },
+    ...(backendUrl ? { backend: { url: backendUrl } } : {}),
+  };
+  try { fs.writeFileSync(path.join(targetDir, 'Pulumi.yaml'), '# Generated by Nebula\n' + YAML.stringify(projectYaml, { indent: 2 })); } catch {}
+
+  // For each environment and component, derive expected stack names and write Pulumi.<stack>.yaml with config
+  for (const [envId, envCfg] of envInputs) {
+    const eSettings = (envCfg?.settings || {}) as any;
+    const wsCfg = Utils.toWorkspaceConfig(eSettings?.config);
+    const components = Object.entries(envCfg?.components || {}) as [string, (env: any) => any][];
+
+    // Minimal mock env to allow factories that inspect env.id/project.id/settings
+    const mockEnv: any = { id: envId, project: { id: (project as any).id }, config: envCfg };
+
+    for (const [compName, factory] of components) {
+      let instanceName = String(compName).toLowerCase();
+      try {
+        const produced = typeof factory === 'function' ? factory(mockEnv) : undefined;
+        if (produced && typeof produced !== 'function') {
+          const override = produced?.name;
+          if (override && typeof override === 'string') instanceName = override;
+        }
+      } catch {
+        // If factory execution fails in generation mode, fall back to default instance name
+      }
+      const stackName = `${envId}-${instanceName}`;
+      const stackYaml = { config: wsCfg } as any;
+      const filePath = path.join(targetDir, `Pulumi.${stackName}.yaml`);
+      try { fs.writeFileSync(filePath, '# Generated by Nebula\n' + YAML.stringify(stackYaml, { indent: 2 })); } catch {}
+    }
+  }
+
+  console.log(`Generated Pulumi project and stack YAML in: ${targetDir}`);
+}
+
+type StackItem = { envId: string; name: string; stack: Promise<Stack> };
+
+/** Collect all stacks from project environments */
+function collectStacks(project: Project, envFilter?: string): StackItem[] {
+  const items: StackItem[] = [];
+  
+  for (const [envId, env] of Object.entries(project.envs)) {
+    if (envFilter && envId !== envFilter) continue;
+    
+    for (const [name, stack] of Object.entries(env.stacks)) {
+      items.push({ envId, name, stack });
+    }
+  }
+  
+  return items;
+}
+
+/** Prompt for operation if not specified */
+async function determineOperation(op?: Operation): Promise<Operation> {
+  if (op) return op;
+  const ans = await askOnce('Operation [preview|up|destroy|refresh] (default preview): ');
+  const validOps = ['preview', 'up', 'destroy', 'refresh'];
+  return validOps.includes(ans) ? ans as Operation : 'preview';
+}
+
+/** Select which stacks to operate on */
+async function selectStacks(items: StackItem[], opts: RunnerOptions): Promise<StackItem[]> {
+  // Selection via --select flag
+  if (opts.select && opts.select !== 'all') {
+    const wanted = new Set(opts.select.split(',').map(s => s.trim()));
+    return items.filter(i => wanted.has(`${i.envId}:${i.name}`) || wanted.has(i.name));
+  }
+  
+  // Select all
+  if (opts.select === 'all' || opts.all) {
+    return items;
+  }
+
+  // Interactive selection
+  console.log('Stacks:');
+  items.forEach((i, idx) => console.log(`${idx + 1}) ${i.envId}:${i.name}`));
+  
+  const ans = await askOnce('Choose indices (comma) or type all: ');
+  
+  if (ans.trim().toLowerCase() === 'all') {
+    return items;
+  }
+  
+  const idxs = ans.split(',')
+    .map(s => parseInt(s.trim(), 10) - 1)
+    .filter(n => !isNaN(n) && n >= 0 && n < items.length);
+  
+  return idxs.map(i => items[i]).filter((item): item is StackItem => Boolean(item));
+}
+
+/** Execute operation on selected stacks */
+async function executeOperation(
+  op: Operation,
+  selected: StackItem[],
+  opts: RunnerOptions
+): Promise<void> {
+  console.log(`Executing '${op}' for ${selected.length} stack(s)...`);
+  
+  // Reverse order for destroy operations
+  const ordered = op === 'destroy' ? [...selected].reverse() : selected;
+
+  for (const item of ordered) {
+    const stack = await item.stack;
+    const baseTargets = (opts.targets && opts.targets.length) 
+      ? opts.targets 
+      : await promptTargetsForStack(stack, askOnce);
+    
+    const expandedTargets = await expandComponentTargets(stack, baseTargets);
+    const shouldIncludeDependents = expandedTargets.length > 0 ? true : Boolean(opts.includeDependents);
+    const stackOpts = expandedTargets.length 
+      ? { target: expandedTargets, targetDependents: shouldIncludeDependents } 
+      : undefined;
+
+    if (op === 'preview') await previewStack(stack, stackOpts);
+    else if (op === 'up') await upStack(stack, stackOpts);
+    else if (op === 'destroy') await destroyStack(stack, stackOpts);
+    else if (op === 'refresh') await refreshStack(stack, stackOpts);
+  }
+}
+
+/** Back-compat wrapper: accepts legacy argv or structured options. */
+export async function runProjectCli(project: Project, argsOrOpts?: string[] | Partial<RunnerOptions>) {
+  if (Array.isArray(argsOrOpts)) {
+    const toOpts = (a: string[]): RunnerOptions => {
+      const get = (flag: string) => { const i = a.indexOf(flag); return i >= 0 ? a[i + 1] : undefined };
+      const has = (flag: string) => a.includes(flag);
+      const op = (get('--op') as Operation) || undefined;
+      const workDir = get('--work-dir') || get('--workdir');
+      const env = get('--env');
+      const select = get('--select');
+      const targetCsv = get('--target');
+      const targets = targetCsv ? targetCsv.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+      const includeDependents = has('--target-dependents');
+      const debugRaw = get('--debug');
+      const debugLevel = debugRaw ? ((['trace','debug'].includes(debugRaw.toLowerCase()) ? debugRaw.toLowerCase() : 'debug') as 'debug'|'trace') : undefined;
+      const all = has('--all');
+      const out: any = {};
+      if (op) out.op = op;
+      if (workDir) out.workDir = workDir;
+      if (env) out.env = env;
+      if (select) out.select = select;
+      if (targets && targets.length) out.targets = targets;
+      if (includeDependents) out.includeDependents = true;
+      if (debugLevel) out.debugLevel = debugLevel;
+      if (all) out.all = true;
+      return out as RunnerOptions;
+    };
+    return runProject(project, toOpts(argsOrOpts));
+  }
+  const opts = (argsOrOpts || {}) as Partial<RunnerOptions>;
+  const normalized: any = {};
+  if (opts.op) normalized.op = opts.op;
+  if (opts.workDir) normalized.workDir = opts.workDir;
+  if (opts.env) normalized.env = opts.env;
+  if (opts.select) normalized.select = opts.select;
+  if (opts.targets && opts.targets.length) normalized.targets = opts.targets;
+  if (typeof opts.includeDependents === 'boolean') normalized.includeDependents = opts.includeDependents;
+  if (opts.debugLevel) normalized.debugLevel = opts.debugLevel;
+  if (typeof opts.all === 'boolean') normalized.all = opts.all;
+  return runProject(project, normalized as RunnerOptions);
 }
 
 async function promptTargetsForStack(stack: Stack, ask: (q: string) => Promise<string>): Promise<string[]> {
@@ -158,4 +342,193 @@ async function expandComponentTargets(stack: Stack, targets: string[]): Promise<
   } catch {
     return unique;
   }
+}
+
+// Shared single-question prompt helper to avoid duplicate readline wiring
+function askOnce(q: string): Promise<string> {
+  return new Promise<string>(resolve => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(q, ans => { rl.close(); resolve(ans); });
+  });
+}
+
+// ---------------------------
+// CLI entrypoint when executed directly
+// ---------------------------
+
+type CommonOpts = {
+  config?: string;
+  workdir?: string;
+  env?: string;
+  select?: string;
+  target?: string[];
+  targetDependents?: boolean;
+  debug?: string | boolean;
+  all?: boolean;
+};
+
+async function loadProjectFromConfig(configPath?: string, waitReady: boolean = true): Promise<Project> {
+  const candidate = configPath || 'nebula.config.ts';
+  const abs = path.resolve(process.cwd(), candidate);
+  
+  // Import config module
+  let mod: any;
+  try {
+    mod = await import(pathToFileURL(abs).href);
+  } catch (e: any) {
+    throw new Error(`Failed to import config at ${candidate}: ${e?.message || e}`);
+  }
+
+  // Try to get project from exports
+  let projFactory = mod.project ?? mod.default ?? mod.createProject ?? mod.getProject;
+  
+  if (!projFactory) {
+    // Fallback: check if config created project globally
+    const globalProject = (globalThis as any).__nebulaProject;
+    if (globalProject) {
+      await globalProject.ready; // Wait for it to be ready
+      return globalProject as Project;
+    }
+    throw new Error(
+      `Config must export 'project' (value or Promise) or a factory like 'createProject()'. File: ${candidate}`
+    );
+  }
+
+  // Resolve project from factory or direct value
+  let project: any = projFactory;
+  try {
+    // Call factory if it's a function
+    if (typeof projFactory === 'function') {
+      project = await projFactory();
+    }
+    
+    // Await if it's a promise
+    if (project && typeof project.then === 'function') {
+      project = await project;
+    }
+  } catch (e: any) {
+    throw new Error(`Config factory threw: ${e?.message || e}`);
+  }
+
+  // Validate we got a project
+  if (!project || typeof project !== 'object') {
+    throw new Error(`Loaded config did not yield a Project instance from ${candidate}`);
+  }
+
+  // Wait for project to be fully initialized (unless explicitly skipped)
+  if (waitReady && project.ready && typeof project.ready.then === 'function') {
+    await project.ready;
+  }
+
+  return project as Project;
+}
+
+// no legacy arg adaptation needed in Commander path; using runProject directly
+
+async function cliMain(argv: string[]) {
+  const program = new Command();
+  program
+    .name('nebula-cli')
+    .description('Nebula Pulumi CLI')
+    .option('-c, --config <file>', 'path to config file exporting { project }')
+    .option('-w, --workdir <dir>', 'working directory for Pulumi settings generation and CLI operations')
+    .option('-e, --env <id>', 'environment id to run')
+    .option('-s, --select <names>', 'comma-separated component names (or env:name) to run')
+    .option('--target <urn...>', 'resource URN(s) to target (space separated)')
+    .option('--target-dependents', 'include dependents of targeted resources')
+    .option('-d, --debug [level]', 'enable debug/trace logging', false)
+    .option('--all', 'run all stacks', false);
+
+  const addOp = (name: 'generate' | 'preview' | 'up' | 'destroy' | 'refresh', desc: string) => {
+    program
+      .command(name)
+      .description(desc)
+      .action(async () => {
+        const o = program.opts<CommonOpts>();
+        const project = await loadProjectFromConfig(o.config, name !== 'generate');
+        const opts: any = { op: name };
+        if (o.workdir) opts.workDir = o.workdir;
+        if (o.env) opts.env = o.env;
+        if (o.select) opts.select = o.select;
+        if (o.target && o.target.length) opts.targets = o.target;
+        if (o.targetDependents) opts.includeDependents = true;
+        if (o.debug) opts.debugLevel = (typeof o.debug === 'string' && ['trace','debug'].includes(o.debug.toLowerCase())) ? o.debug.toLowerCase() : 'debug';
+        if (o.all) opts.all = true;
+        await runProject(project, opts);
+      });
+  };
+  addOp('generate', 'Generate Pulumi.yaml and Pulumi.<stack>.yaml files without running stacks');
+  addOp('preview', 'Preview changes for selected stacks');
+  addOp('up', 'Apply changes for selected stacks');
+  addOp('destroy', 'Destroy resources for selected stacks');
+  addOp('refresh', 'Refresh resource state for selected stacks');
+
+  // If no subcommand provided (only options), drop into interactive legacy flow
+  const tokens = argv.slice(2);
+  const knownSubcommands = new Set(['generate','preview','up','destroy','refresh']);
+  const hasSubcommand = tokens.some(t => knownSubcommands.has(t));
+  if (!hasSubcommand) {
+    if (tokens.includes('-h') || tokens.includes('--help')) return program.outputHelp();
+    const getVal = (...names: string[]): string | undefined => {
+      for (const n of names) {
+        const i = tokens.indexOf(n);
+        if (i >= 0) {
+          const v = tokens[i + 1];
+          if (v && !v.startsWith('-')) return v;
+          return undefined;
+        }
+      }
+      return undefined;
+    };
+    const has = (name: string) => tokens.includes(name);
+    const cfg = getVal('--config', '-c');
+    const workdir = getVal('--workdir', '-w', '--work-dir');
+    const env = getVal('--env', '-e');
+    const select = getVal('--select', '-s');
+    const debugIdx = (() => { const i = tokens.indexOf('--debug'); return i >= 0 ? i : tokens.indexOf('-d'); })();
+    const debugLevel = debugIdx >= 0 ? (() => { const v = tokens[debugIdx + 1]; return v && !v.startsWith('-') ? (v as 'debug' | 'trace') : 'debug'; })() : undefined;
+    try {
+      const project = await loadProjectFromConfig(cfg);
+      await runProject(project, {
+        workDir: workdir,
+        env,
+        select,
+        debugLevel,
+        all: has('--all'),
+        includeDependents: has('--target-dependents'),
+      } as any);
+      return;
+    } catch (e) {
+      return program.outputHelp();
+    }
+  }
+  await program.parseAsync(argv);
+}
+
+const isMain = (() => {
+  // CommonJS path
+  try {
+    // @ts-ignore - require/module may not exist in ESM
+    if (typeof require !== 'undefined' && typeof module !== 'undefined') {
+      // @ts-ignore
+      return require.main === module;
+    }
+  } catch {}
+  // ESM path
+  try {
+    const entry = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
+    // @ts-ignore - import.meta is available in ESM
+    return import.meta && import.meta.url === entry;
+  } catch {}
+  return false;
+})();
+
+if (isMain) {
+  // Fire and forget; let unhandled promise rejection surface for visibility
+  cliMain(process.argv).catch(err => { console.error(err?.message || err); process.exit(1); });
+}
+
+// Exported helper to invoke CLI programmatically (e.g., from index.ts when used as entrypoint)
+export async function runCli(argv?: string[]) {
+  return cliMain(argv ?? process.argv);
 }

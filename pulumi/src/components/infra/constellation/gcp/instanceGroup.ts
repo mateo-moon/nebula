@@ -126,9 +126,9 @@ export class InstanceGroup extends pulumi.ComponentResource {
       waitForInstances: false,
       ...(args.namedPorts && args.namedPorts.length > 0 ? { namedPorts: args.namedPorts.map(np => ({ name: np.name, port: np.port } as any)) } : {}),
       updatePolicy: {
-        minimalAction: 'NONE',
+        minimalAction: 'RESTART',
         type: 'OPPORTUNISTIC',
-        replacementMethod: 'NONE',
+        replacementMethod: 'RECREATE',
         maxSurgePercent: 0,
         maxUnavailablePercent: 100,
       },
