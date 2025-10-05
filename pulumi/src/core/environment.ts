@@ -3,7 +3,7 @@ import { LocalWorkspace, type PulumiFn, type Stack } from "@pulumi/pulumi/automa
 import { Utils } from "../utils";
 import { Components, type ComponentTypes } from "../components";
 import * as path from 'path';
-import { getStack } from '@pulumi/pulumi';
+import * as pulumi from '@pulumi/pulumi';
 
 export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
 
@@ -42,10 +42,10 @@ export class Environment {
     const wsCfg = this.prepareWorkspaceConfig();
 
     // Step 2: Get component entries
-    const entries = Object.entries(this.config.components || {}) as [
+    const entries = Object.entries(this.config.components || {}) as Array<[
       keyof ComponentTypes,
       (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn
-    ][];
+    ]>;
 
     // Step 3: Handle Pulumi CLI mode (direct stack execution)
     if (await this.handlePulumiCliMode(entries)) {
@@ -82,7 +82,7 @@ export class Environment {
 
     let currentStackName: string | undefined;
     try {
-      currentStackName = getStack();
+      currentStackName = pulumi.getStack();
     } catch {
       return false;
     }
@@ -126,10 +126,65 @@ export class Environment {
    */
   private createProgram(name: keyof ComponentTypes, produced: any, instanceName: string): PulumiFn {
     if (typeof produced === 'function') return produced as PulumiFn;
-    return () => {
+    return async () => {
       const Ctor = (Components as any)[name];
-      new Ctor(instanceName, produced);
-      return Promise.resolve<void>(undefined);
+      // Build resource graph via stack-level transformation
+      const projectName = pulumi.getProject();
+      const stackName = pulumi.getStack();
+      const graphEntries: pulumi.Output<any>[] = [];
+      try {
+        (pulumi as any).runtime.registerStackTransformation((args: any) => {
+          try {
+            const parentUrnOut = (args?.opts?.parent as any)?.urn as pulumi.Output<string> | undefined;
+            const urnOut = pulumi.output(parentUrnOut).apply((p) => (pulumi as any).createUrn(args.name, args.type, p, projectName, stackName));
+            const entry = pulumi.all([urnOut, parentUrnOut ?? pulumi.output<string | undefined>(undefined)]).apply(([urn, parentUrn]) => ({
+              urn,
+              type: args.type as string,
+              name: args.name as string,
+              parentUrn,
+            }));
+            graphEntries.push(entry);
+          } catch {}
+          return undefined;
+        });
+      } catch {}
+      // Capture outputs via registerOutputs interception (preferred Pulumi pattern)
+      const proto: any = (pulumi as any).ComponentResource?.prototype;
+      const originalRegister = proto && proto.registerOutputs ? proto.registerOutputs : undefined;
+      let capturedOutputs: any = {};
+      try {
+        if (proto && originalRegister) {
+          proto.registerOutputs = function(outputs: any) {
+            try { capturedOutputs = outputs || {}; } catch {}
+            return originalRegister.apply(this, arguments as any);
+          };
+        }
+      } catch {}
+      try {
+        // Instantiate component; its constructor should call registerOutputs
+        // Instantiate; side-effect calls registerOutputs
+        new Ctor(instanceName, produced);
+      } finally {
+        try { if (proto && originalRegister) proto.registerOutputs = originalRegister; } catch {}
+      }
+      try { (pulumi as any).export(instanceName, capturedOutputs); } catch {}
+      // Finalize resource graph to a global for Automation consumer
+      try {
+        const filteredGraph = pulumi.all(graphEntries).apply((nodes: any[]) => {
+          const uniq = new Map<string, any>();
+          for (const n of (nodes || [])) {
+            if (!n || !n.urn || !n.type) continue;
+            if (n.type === 'pulumi:pulumi:Stack') continue;
+            if (String(n.type).startsWith('pulumi:providers:')) continue;
+            if (!uniq.has(n.urn)) uniq.set(n.urn, n);
+          }
+          return Array.from(uniq.values());
+        });
+        filteredGraph.apply((items: any[]) => {
+          try { (globalThis as any).__nebulaGraph = Array.isArray(items) ? items : []; } catch {}
+          return items;
+        });
+      } catch {}
     };
   }
 

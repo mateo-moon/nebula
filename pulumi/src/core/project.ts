@@ -15,6 +15,8 @@ export class Project {
   ) {
     // Initialize project in proper sequence
     this.ready = this.initialize();
+    // Make the project discoverable immediately for configs that don't export it
+    try { (globalThis as any).__nebulaProject = this; } catch {}
   }
 
   /**
@@ -93,6 +95,4 @@ export class Project {
       Utils.ensureSopsConfig({ gcpKmsResourceId: resource, patterns });
     }
   }
-
-  // No further helpers here; moved to Utils for reuse
 }
