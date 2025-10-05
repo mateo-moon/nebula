@@ -3,6 +3,7 @@ import { LocalWorkspace, type PulumiFn, type Stack } from "@pulumi/pulumi/automa
 import { Utils } from "../utils";
 import { Components, type ComponentTypes } from "../components";
 import * as path from 'path';
+import { getStack } from '@pulumi/pulumi';
 
 export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
 
@@ -25,98 +26,191 @@ export class Environment {
     public readonly project: Project,
     public readonly config: EnvironmentConfig,
   ) {
-    this.stacks = {};
-    this.ready = (async () => {
-      // Environment-level config to apply to all stacks
-      const normalizeConfig = (obj: any): Record<string, any> => {
-        const out: Record<string, any> = {};
-        if (!obj || typeof obj !== 'object') return out;
-        Object.entries(obj).forEach(([k, v]) => {
-          // Plain string → value
-          if (typeof v === 'string') {
-            if (/^ref\+/.test(v)) {
-              try { out[k] = { value: Utils.resolveVALS(v), secret: true }; return; } catch {}
-            }
-            out[k] = v;
-            return;
-          }
-          // If already in Pulumi ConfigValue shape, unwrap; coerce value to string when needed
-          if (v && typeof v === 'object' && ('value' in (v as any))) {
-            const val = (v as any).value;
-            const secret = Boolean((v as any).secret);
-            if (secret) {
-              if (typeof val === 'string') { out[k] = { value: val, secret: true }; return; }
-              try { out[k] = { value: JSON.stringify(val), secret: true }; return; } catch { out[k] = { value: String(val), secret: true }; return; }
-            } else {
-              if (typeof val === 'string') { out[k] = val; return; }
-              try { out[k] = JSON.stringify(val); return; } catch { out[k] = String(val); return; }
-            }
-          }
-          // Any other object/primitive → JSON/string
-          if (v != null && typeof v === 'object') {
-            try { out[k] = JSON.stringify(v); return; } catch { out[k] = String(v); return; }
-          }
-          out[k] = String(v);
-        });
-        return out;
+    // Initialize environment and create stacks
+    this.ready = this.initialize();
+  }
+
+  /**
+   * Initialize environment:
+   * 1. Parse and prepare workspace config
+   * 2. Check if running under Pulumi CLI (early exit if so)
+   * 3. Create/select stacks for all components
+   * 4. Wait for all stacks to be ready
+   */
+  private async initialize(): Promise<void> {
+    // Step 1: Prepare workspace config
+    const wsCfg = this.prepareWorkspaceConfig();
+
+    // Step 2: Get component entries
+    const entries = Object.entries(this.config.components || {}) as [
+      keyof ComponentTypes,
+      (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn
+    ][];
+
+    // Step 3: Handle Pulumi CLI mode (direct stack execution)
+    if (await this.handlePulumiCliMode(entries)) {
+      return; // Early exit for CLI mode
+    }
+
+    // Step 4: Build base workspace options
+    const baseWorkspaceOpts = this.buildBaseWorkspaceOptions();
+
+    // Step 5: Create stacks for all components
+    this.createStacks(entries, baseWorkspaceOpts, wsCfg);
+
+    // Step 6: Wait for all stacks to be created/selected
+    await Promise.all(Object.values(this.stacks));
+  }
+
+  /**
+   * Parse and normalize workspace configuration
+   */
+  private prepareWorkspaceConfig(): Record<string, any> {
+    const rawCfg = this.config.settings?.config;
+    return Utils.toWorkspaceConfig(rawCfg);
+  }
+
+  /**
+   * Handle execution under Pulumi CLI
+   * Returns true if we're in CLI mode and should exit early
+   */
+  private async handlePulumiCliMode(
+    entries: [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][]
+  ): Promise<boolean> {
+    const nebulaCli = process.env['NEBULA_CLI'] === '1';
+    if (nebulaCli) return false;
+
+    let currentStackName: string | undefined;
+    try {
+      currentStackName = getStack();
+    } catch {
+      return false;
+    }
+
+    if (!currentStackName) return false;
+
+    // Find matching component for current stack
+    for (const [name, factory] of entries) {
+      const produced = factory(this);
+      const instanceName = this.getInstanceName(name, produced);
+      const expectedStackName = `${this.id}-${instanceName}`;
+
+      if (currentStackName === expectedStackName) {
+        const program = this.createProgram(name, produced, instanceName);
+        await program();
+        return true; // Exit early
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get instance name from component name and produced value
+   */
+  private getInstanceName(name: keyof ComponentTypes, produced: any): string {
+    let instanceName = String(name).toLowerCase();
+    
+    if (typeof produced !== 'function') {
+      const override = produced?.name;
+      if (override && typeof override === 'string') {
+        instanceName = override;
+      }
+    }
+    
+    return instanceName;
+  }
+
+  /**
+   * Create program function from component factory output
+   */
+  private createProgram(name: keyof ComponentTypes, produced: any, instanceName: string): PulumiFn {
+    if (typeof produced === 'function') return produced as PulumiFn;
+    return () => {
+      const Ctor = (Components as any)[name];
+      new Ctor(instanceName, produced);
+      return Promise.resolve<void>(undefined);
+    };
+  }
+
+  /**
+   * Build base workspace options shared by all stacks
+   */
+  private buildBaseWorkspaceOptions(): any {
+    const isDebug = Boolean(process.env['PULUMI_LOG_LEVEL'] || process.env['TF_LOG']);
+    
+    const baseOpts: any = {
+      projectSettings: {
+        name: this.project.id,
+        runtime: { 
+          name: 'nodejs', 
+          options: { typescript: false, nodeargs: '--import=tsx/esm' } 
+        },
+        ...(this.config.settings?.backendUrl ? { 
+          backend: { url: this.config.settings.backendUrl } 
+        } : {}),
+      },
+    };
+
+    // Add debug environment variables if needed
+    if (isDebug) {
+      baseOpts.envVars = {
+        ...(process.env['TF_LOG'] ? { TF_LOG: process.env['TF_LOG'] } : {}),
+        ...(process.env['TF_LOG_PROVIDER'] ? { TF_LOG_PROVIDER: process.env['TF_LOG_PROVIDER'] } : {}),
+        TF_LOG_PATH: '/tmp/terraform.log',
+        TF_APPEND_LOGS: '1',
+        ...(process.env['PULUMI_LOG_LEVEL'] ? { PULUMI_LOG_LEVEL: process.env['PULUMI_LOG_LEVEL'] } : {}),
+        PULUMI_LOG_FLOW: 'true',
+      };
+    }
+
+    // Add work directory if specified
+    if (this.config.settings?.workDir) {
+      baseOpts.workDir = path.resolve(projectRoot, this.config.settings.workDir);
+    }
+
+    // Add secrets provider if specified
+    if (this.config.settings?.secretsProvider) {
+      baseOpts.secretsProvider = this.config.settings.secretsProvider;
+    }
+
+    return baseOpts;
+  }
+
+  /**
+   * Create stack promises for all components
+   */
+  private createStacks(
+    entries: [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][],
+    baseWorkspaceOpts: any,
+    wsCfg: Record<string, any>
+  ): void {
+    for (const [name, factory] of entries) {
+      const produced = factory(this);
+      const instanceName = this.getInstanceName(name, produced);
+      const program = this.createProgram(name, produced, instanceName);
+      const stackName = `${this.id}-${instanceName}`;
+
+      const wsWithStack = {
+        ...baseWorkspaceOpts,
+        stackSettings: {
+          [stackName]: {
+            ...(this.config.settings?.secretsProvider ? { 
+              secretsProvider: this.config.settings.secretsProvider 
+            } : {}),
+            config: wsCfg,
+          },
+        },
       };
 
-      let wsCfg: Record<string, any> = {};
-      const rawCfg: any = this.config.settings?.config as any;
-      if (typeof rawCfg === 'string') {
-        let parsed: any = undefined;
-        try { parsed = JSON.parse(Utils.resolveVALS(rawCfg)); }
-        catch { try { parsed = JSON.parse(rawCfg); } catch { parsed = undefined; } }
-        if (parsed && typeof parsed === 'object') wsCfg = normalizeConfig(parsed);
-      } else if (rawCfg && typeof rawCfg === 'object') {
-        wsCfg = normalizeConfig(rawCfg);
-      }
-
-      // Bootstrap is done at project level; nothing here
-
-      // Create/select stacks per component with per-stack secretsProvider
-      const entries = Object.entries(config.components || {}) as [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][];
-      for (const [name, factory] of entries) {
-        const produced = factory(this);
-        let instanceName = String(name).toLowerCase();
-        if (typeof produced !== 'function') {
-          const override = (produced as any)?.name;
-          if (override && typeof override === 'string') instanceName = override;
-        }
-        const program: PulumiFn = (typeof produced === 'function')
-          ? (produced as PulumiFn)
-          : (async () => { const Ctor = (Components as any)[name]; new Ctor(instanceName, produced as any); });
-
-        // Provide secretsProvider at workspace level so init uses it; per-stack config via stackSettings
-        const stackName = `${this.id}-${instanceName}`;
-        const wsWithStack: any = {
-          envVars: {
-            TF_LOG: 'TRACE',
-            TF_LOG_PROVIDER: 'TRACE',
-            TF_LOG_PATH: '/tmp/terraform.log',
-            TF_APPEND_LOGS: '1',
-            PULUMI_LOG_LEVEL: 'debug',
-            PULUMI_LOG_FLOW: 'true',
-          },
-          projectSettings: {
-            name: this.project.id,
-            runtime: { name: 'nodejs', options: { typescript: false, nodeargs: '--import=tsx/esm' } },
-            ...(this.config.settings?.backendUrl ? { backend: { url: this.config.settings.backendUrl } } : {}),
-          },
-          ...(this.config.settings?.workDir ? { workDir: path.resolve(projectRoot, this.config.settings.workDir) } : {}),
-        };
-        if (this.config.settings?.secretsProvider) wsWithStack.secretsProvider = this.config.settings.secretsProvider;
-        wsWithStack.stackSettings = { [stackName]: {
-          ...(this.config.settings?.secretsProvider ? { secretsProvider: this.config.settings.secretsProvider } : {}),
-          config: wsCfg,
-        } };
-
-        this.stacks[name] = LocalWorkspace.createOrSelectStack({
-          stackName: `${this.id}-${instanceName}`,
+      this.stacks[name] = LocalWorkspace.createOrSelectStack(
+        {
+          stackName,
           projectName: this.project.id,
           program,
-        }, wsWithStack);
-      }
-    })();
+        },
+        wsWithStack
+      );
+    }
   }
 }
