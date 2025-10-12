@@ -40,8 +40,9 @@ export class Gcp  extends pulumi.ComponentResource{
   public readonly network: Network;
   public readonly gke: Gke;
   public readonly iam?: Iam;
+  public readonly outputs: GcpOutput;
   constructor(name: string, args: GcpConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:gcp', name, args, opts);
+    super('gcp', name, args, opts);
 
     const pods = args.network?.podsSecondaryCidr || '';
     const svcs = args.network?.servicesSecondaryCidr || '';
@@ -52,7 +53,18 @@ export class Gcp  extends pulumi.ComponentResource{
     this.gke = new Gke(baseName, { ...args.gke, network: this.network }, { parent: this });
     // Use non-suffixed name for IAM to keep GSA accountIds human-readable
     if (args.iam) this.iam = new Iam(name, args.iam);
-    
+    this.outputs = {
+      networkId: this.network?.network?.id,
+      subnetworkId: this.network?.subnetwork?.id,
+      networkSelfLink: this.network?.network?.selfLink,
+      subnetworkSelfLink: this.network?.subnetwork?.selfLink,
+      podsRangeName: this.network?.podsRangeName,
+      servicesRangeName: this.network?.servicesRangeName,
+      gkeClusterName: this.gke?.cluster?.name,
+      kubeconfig: this.gke?.kubeconfig,
+      externalDnsGsaEmail: this.iam?.externalDnsGsaEmail,
+      certManagerGsaEmail: this.iam?.certManagerGsaEmail,
+    };
     this.registerOutputs({
       networkId: this.network?.network?.id,
       subnetworkId: this.network?.subnetwork?.id,

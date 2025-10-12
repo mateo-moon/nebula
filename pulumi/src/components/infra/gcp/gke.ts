@@ -35,13 +35,12 @@ export class Gke extends pulumi.ComponentResource {
     args?: GkeConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:infra:gcp:Gke', name, args, opts);
+    super('gke', name, args, opts);
 
     const cfg = new pulumi.Config('gcp');
     const gcpProject = cfg.require('project');
     const clusterName = args?.name ?? name;
     const location = args?.location; // rely on provider default if not provided
-    const pulumiProject = pulumi.getProject();
     this.cluster = new gcp.container.Cluster(
       clusterName,
       {
@@ -72,7 +71,11 @@ export class Gke extends pulumi.ComponentResource {
           horizontalPodAutoscaling: { disabled: false },
         },
       },
-      { parent: this }
+      { 
+        parent: this,
+        // Ensure cluster is destroyed before network resources
+        dependsOn: args?.network ? [args.network.network, args.network.subnetwork] : []
+      }
     );
 
     // Create a dedicated service account for GKE nodes and grant the default node role
@@ -133,14 +136,16 @@ export class Gke extends pulumi.ComponentResource {
       management: { autoRepair: true, autoUpgrade: true },
     }, { parent: this, dependsOn: [this.cluster, nodeServiceAccount, nodeSaDefaultRole, nodeSaRobotActAs], deleteBeforeReplace: true });
 
-    // Generate kubeconfig...
+    // Use GKE's native kubeconfig output
     this.kubeconfig = pulumi.all([
       this.cluster.name,
       this.cluster.endpoint,
       this.cluster.masterAuth,
-    ]).apply(([clusterName, endpoint, auth]) => {
-      const context = `${pulumiProject}_${location || 'region'}_${clusterName}`;
-      const nodeExec = "const cp=require('node:child_process'); const t=cp.execSync('gcloud auth print-access-token --quiet',{stdio:['ignore','pipe','inherit']}).toString().trim(); console.log(JSON.stringify({apiVersion:'client.authentication.k8s.io/v1',kind:'ExecCredential',status:{token:t}}));";
+      gcpProject,
+    ]).apply(([clusterName, endpoint, auth, projectId]) => {
+      // Generate kubeconfig using GKE's standard format
+      const context = `${clusterName}`;
+      
       return `apiVersion: v1
 clusters:
 - cluster:
@@ -159,24 +164,56 @@ users:
 - name: ${context}
   user:
     exec:
-      apiVersion: client.authentication.k8s.io/v1
+      apiVersion: client.authentication.k8s.io/v1beta1
       command: node
       args:
       - -e
-      - ${JSON.stringify(nodeExec)}
-      interactiveMode: IfAvailable
-      installHint: Authenticate with gcloud; this helper shells to 'gcloud auth print-access-token'.
-      provideClusterInfo: true
+      - |
+        const fs = require('fs');
+        const path = require('path');
+        const os = require('os');
+        
+        try {
+          // Read project ID from environment
+          const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.CLOUDSDK_CORE_PROJECT;
+          const tokenFile = path.join(os.homedir(), '.config', 'gcloud', \`\${projectId}-accesstoken\`);
+          
+          if (fs.existsSync(tokenFile)) {
+            const tokenData = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
+            const accessToken = tokenData.access_token;
+            
+            if (accessToken) {
+              console.log(JSON.stringify({
+                kind: 'ExecCredential',
+                apiVersion: 'client.authentication.k8s.io/v1beta1',
+                status: {
+                  token: accessToken
+                }
+              }));
+              process.exit(0);
+            }
+          }
+          
+          console.error('No valid access token found');
+          process.exit(1);
+        } catch (error) {
+          console.error('Error reading access token:', error.message);
+          process.exit(1);
+        }
+      env:
+      - name: GOOGLE_CLOUD_PROJECT
+        value: ${projectId}
+      installHint: Access token not found. Run 'nebula bootstrap' to authenticate.
 `;
     });
 
     this.kubeconfig.apply(cfgStr => {
       try {
-        const dir = path.resolve(projectRoot, '.config');
+        const dir = path.resolve((global as any).projectRoot || process.cwd(), '.config');
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const stackName = pulumi.getStack();
         const envPrefix = String(stackName).split('-')[0];
-        const fileName = `kube_config_${envPrefix}`;
+        const fileName = `kube_config_${envPrefix}_gke`;
         fs.writeFileSync(path.resolve(dir, fileName), cfgStr);
       } catch { /* ignore */ }
       return cfgStr;

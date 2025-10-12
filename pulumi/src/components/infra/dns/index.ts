@@ -31,7 +31,7 @@ export class Dns extends pulumi.ComponentResource {
   public readonly nameServers?: pulumi.Output<string[]>;
 
   constructor(name: string, cfg: DnsConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:dns:Module', name, {}, opts);
+    super('dns', name, {}, opts);
 
     if (cfg.enabled === false || !cfg.domain) {
       this.registerOutputs({});

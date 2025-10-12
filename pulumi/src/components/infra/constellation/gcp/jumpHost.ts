@@ -14,7 +14,7 @@ export class JumpHost extends pulumi.ComponentResource {
   public readonly instance: gcp.compute.Instance;
 
   constructor(name: string, args: JumpHostConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:constellation:gcp:JumpHost', name, args, opts);
+    super('jumpHost', name, args, opts);
 
     const instanceArgs: any = {
       name: `${args.baseName}-jump`,

@@ -30,7 +30,7 @@ export class ArgoCd extends pulumi.ComponentResource {
     args: ArgoCdConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:k8s:argocd', name, args, opts);
+    super('argocd', name, args, opts);
 
     const namespaceName = args.namespace || 'argocd';
 

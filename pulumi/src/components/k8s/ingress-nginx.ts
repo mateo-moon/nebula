@@ -37,7 +37,7 @@ export class IngressNginx extends pulumi.ComponentResource {
     args: IngressNginxConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:k8s:ingress-nginx', name, args, opts);
+    super('ingress-nginx', name, args, opts);
 
     const namespaceName = args.namespace || 'ingress-nginx';
     const namespace = new k8s.core.v1.Namespace('ingress-nginx-namespace', {

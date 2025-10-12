@@ -21,9 +21,9 @@ export class InternalLoadBalancer extends pulumi.ComponentResource {
   public readonly forwardingRule: gcp.compute.ForwardingRule;
 
   constructor(name: string, args: InternalLbConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:constellation:gcp:InternalLoadBalancer', name, args, opts);
+    super('internalLb', name, args, opts);
 
-    const hcName = `${args.name}-${args.backendPortName}-hc-int`;
+    const hcName = `${args.name}-${args.backendPortName}-hc`;
     if (args.healthCheck === 'TCP') {
       this.hcTcp = new gcp.compute.HealthCheck(hcName, {
         name: hcName,
@@ -49,13 +49,23 @@ export class InternalLoadBalancer extends pulumi.ComponentResource {
       region: args.region,
       protocol: 'TCP',
       loadBalancingScheme: 'INTERNAL',
-      backends: [{ group: args.backendInstanceGroup }],
+      portName: args.backendPortName,
+      backends: [{ 
+        group: args.backendInstanceGroup,
+        balancingMode: 'UTILIZATION',
+        maxUtilization: 0.8,
+        capacityScaler: 1,
+      }],
       healthChecks: (this.hcTcp?.selfLink ?? this.hcHttps!.selfLink),
       timeoutSec: 30,
       network: args.networkId,
       subnetwork: args.backendSubnetId,
     };
-    this.backend = new gcp.compute.RegionBackendService(`${args.name}-${args.backendPortName}-int`, backendArgs, { parent: this, dependsOn: [this.hcTcp ?? this.hcHttps!] });
+    this.backend = new gcp.compute.RegionBackendService(`${args.name}-${args.backendPortName}-int`, backendArgs, { 
+      parent: this, 
+      dependsOn: [this.hcTcp ?? this.hcHttps!],
+      deleteBeforeReplace: true
+    });
 
     const frArgs: any = {
       name: `${args.name}-${args.backendPortName}-int`,
@@ -67,11 +77,16 @@ export class InternalLoadBalancer extends pulumi.ComponentResource {
       ports: [String(args.port)],
       backendService: this.backend.selfLink,
     };
-    if (args.labels) frArgs.labels = args.labels as any;
-    this.forwardingRule = new gcp.compute.ForwardingRule(`${args.name}-${args.backendPortName}-int`, frArgs, { parent: this, dependsOn: [this.backend] });
+    if (args.labels) frArgs.labels = args.labels;
+    this.forwardingRule = new gcp.compute.ForwardingRule(`${args.name}-${args.backendPortName}-int`, frArgs, { 
+      parent: this, 
+      dependsOn: [this.backend] 
+    });
 
-    this.registerOutputs({});
+    this.registerOutputs({
+      backendServiceId: this.backend.id,
+      forwardingRuleId: this.forwardingRule.id,
+    });
   }
 }
-
 

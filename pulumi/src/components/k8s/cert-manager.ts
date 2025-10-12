@@ -16,7 +16,7 @@ export class CertManager extends pulumi.ComponentResource {
     args: CertManagerConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:k8s:cert-manager', name, args, opts);
+    super('cert-manager', name, args, opts);
 
     const namespaceName = args.namespace || "cert-manager";
 

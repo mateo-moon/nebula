@@ -1,8 +1,7 @@
 import { Project } from "./project";
-import { LocalWorkspace, type PulumiFn, type Stack } from "@pulumi/pulumi/automation";
-import { Utils } from "../utils";
-import { Components, type ComponentTypes } from "../components";
-import * as path from 'path';
+import type { PulumiFn } from "@pulumi/pulumi/automation";
+import type { ComponentTypes } from "../components";
+import { Components } from "../components";
 import * as pulumi from '@pulumi/pulumi';
 
 export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
@@ -18,254 +17,108 @@ export interface EnvironmentConfig {
 }
 
 export class Environment {
-  public stacks: { [key: string]: Promise<Stack> } = {};
-  public readonly ready: Promise<void>;
-
   constructor(
     public readonly id: string,
     public readonly project: Project,
     public readonly config: EnvironmentConfig,
   ) {
-    // Initialize environment and create stacks
-    this.ready = this.initialize();
-  }
-
-  /**
-   * Initialize environment:
-   * 1. Parse and prepare workspace config
-   * 2. Check if running under Pulumi CLI (early exit if so)
-   * 3. Create/select stacks for all components
-   * 4. Wait for all stacks to be ready
-   */
-  private async initialize(): Promise<void> {
-    // Step 1: Prepare workspace config
-    const wsCfg = this.prepareWorkspaceConfig();
-
-    // Step 2: Get component entries
-    const entries = Object.entries(this.config.components || {}) as Array<[
-      keyof ComponentTypes,
-      (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn
-    ]>;
-
-    // Step 3: Handle Pulumi CLI mode (direct stack execution)
-    if (await this.handlePulumiCliMode(entries)) {
-      return; // Early exit for CLI mode
-    }
-
-    // Step 4: Build base workspace options
-    const baseWorkspaceOpts = this.buildBaseWorkspaceOptions();
-
-    // Step 5: Create stacks for all components
-    this.createStacks(entries, baseWorkspaceOpts, wsCfg);
-
-    // Step 6: Wait for all stacks to be created/selected
-    await Promise.all(Object.values(this.stacks));
-  }
-
-  /**
-   * Parse and normalize workspace configuration
-   */
-  private prepareWorkspaceConfig(): Record<string, any> {
-    const rawCfg = this.config.settings?.config;
-    return Utils.toWorkspaceConfig(rawCfg);
-  }
-
-  /**
-   * Handle execution under Pulumi CLI
-   * Returns true if we're in CLI mode and should exit early
-   */
-  private async handlePulumiCliMode(
-    entries: [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][]
-  ): Promise<boolean> {
-    const nebulaCli = process.env['NEBULA_CLI'] === '1';
-    if (nebulaCli) return false;
-
-    let currentStackName: string | undefined;
+    // Try to create resources if we're in Pulumi context
     try {
-      currentStackName = pulumi.getStack();
-    } catch {
-      return false;
-    }
-
-    if (!currentStackName) return false;
-
-    // Find matching component for current stack
-    for (const [name, factory] of entries) {
-      const produced = factory(this);
-      const instanceName = this.getInstanceName(name, produced);
-      const expectedStackName = `${this.id}-${instanceName}`;
-
-      if (currentStackName === expectedStackName) {
-        const program = this.createProgram(name, produced, instanceName);
-        await program();
-        return true; // Exit early
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Get instance name from component name and produced value
-   */
-  private getInstanceName(name: keyof ComponentTypes, produced: any): string {
-    let instanceName = String(name).toLowerCase();
-    
-    if (typeof produced !== 'function') {
-      const override = produced?.name;
-      if (override && typeof override === 'string') {
-        instanceName = override;
-      }
-    }
-    
-    return instanceName;
-  }
-
-  /**
-   * Create program function from component factory output
-   */
-  private createProgram(name: keyof ComponentTypes, produced: any, instanceName: string): PulumiFn {
-    if (typeof produced === 'function') return produced as PulumiFn;
-    return async () => {
-      const Ctor = (Components as any)[name];
-      // Build resource graph via stack-level transformation
-      const projectName = pulumi.getProject();
+      // Check if we're running in Pulumi and if this environment matches the current stack
       const stackName = pulumi.getStack();
-      const graphEntries: pulumi.Output<any>[] = [];
-      try {
-        (pulumi as any).runtime.registerStackTransformation((args: any) => {
-          try {
-            const parentUrnOut = (args?.opts?.parent as any)?.urn as pulumi.Output<string> | undefined;
-            const urnOut = pulumi.output(parentUrnOut).apply((p) => (pulumi as any).createUrn(args.name, args.type, p, projectName, stackName));
-            const entry = pulumi.all([urnOut, parentUrnOut ?? pulumi.output<string | undefined>(undefined)]).apply(([urn, parentUrn]) => ({
-              urn,
-              type: args.type as string,
-              name: args.name as string,
-              parentUrn,
-            }));
-            graphEntries.push(entry);
-          } catch {}
-          return undefined;
-        });
-      } catch {}
-      // Capture outputs via registerOutputs interception (preferred Pulumi pattern)
-      const proto: any = (pulumi as any).ComponentResource?.prototype;
-      const originalRegister = proto && proto.registerOutputs ? proto.registerOutputs : undefined;
-      let capturedOutputs: any = {};
-      try {
-        if (proto && originalRegister) {
-          proto.registerOutputs = function(outputs: any) {
-            try { capturedOutputs = outputs || {}; } catch {}
-            return originalRegister.apply(this, arguments as any);
-          };
-        }
-      } catch {}
-      try {
-        // Instantiate component; its constructor should call registerOutputs
-        // Instantiate; side-effect calls registerOutputs
-        new Ctor(instanceName, produced);
-      } finally {
-        try { if (proto && originalRegister) proto.registerOutputs = originalRegister; } catch {}
+      console.log(`[Environment] Stack: ${stackName}, Environment ID: ${this.id}`);
+      if (stackName && stackName.startsWith(`${this.id}-`)) {
+        console.log(`[Environment] Stack matches environment, creating resources...`);
+        // Create resources for this stack
+        this.getResourcesForStack();
       }
-      try { (pulumi as any).export(instanceName, capturedOutputs); } catch {}
-      // Finalize resource graph to a global for Automation consumer
-      try {
-        const filteredGraph = pulumi.all(graphEntries).apply((nodes: any[]) => {
-          const uniq = new Map<string, any>();
-          for (const n of (nodes || [])) {
-            if (!n || !n.urn || !n.type) continue;
-            if (n.type === 'pulumi:pulumi:Stack') continue;
-            if (String(n.type).startsWith('pulumi:providers:')) continue;
-            if (!uniq.has(n.urn)) uniq.set(n.urn, n);
-          }
-          return Array.from(uniq.values());
-        });
-        filteredGraph.apply((items: any[]) => {
-          try { (globalThis as any).__nebulaGraph = Array.isArray(items) ? items : []; } catch {}
-          return items;
-        });
-      } catch {}
-    };
+    } catch (e) {
+      // Not in Pulumi context, skip resource creation
+      console.log(`[Environment] Not in Pulumi context: ${e}`);
+    }
   }
 
   /**
-   * Build base workspace options shared by all stacks
+   * Get resources for the current stack based on pulumi.getStack()
    */
-  private buildBaseWorkspaceOptions(): any {
-    const isDebug = Boolean(process.env['PULUMI_LOG_LEVEL'] || process.env['TF_LOG']);
+  private getResourcesForStack(): void {
+    // Get current stack name from Pulumi context
+    const stackName = pulumi.getStack();
+    console.log(`[getResourcesForStack] Stack name: ${stackName}`);
     
-    const baseOpts: any = {
-      projectSettings: {
-        name: this.project.id,
-        runtime: { 
-          name: 'nodejs', 
-          options: { typescript: false, nodeargs: '--import=tsx/esm' } 
-        },
-        ...(this.config.settings?.backendUrl ? { 
-          backend: { url: this.config.settings.backendUrl } 
-        } : {}),
-      },
-    };
-
-    // Add debug environment variables if needed
-    if (isDebug) {
-      baseOpts.envVars = {
-        ...(process.env['TF_LOG'] ? { TF_LOG: process.env['TF_LOG'] } : {}),
-        ...(process.env['TF_LOG_PROVIDER'] ? { TF_LOG_PROVIDER: process.env['TF_LOG_PROVIDER'] } : {}),
-        TF_LOG_PATH: '/tmp/terraform.log',
-        TF_APPEND_LOGS: '1',
-        ...(process.env['PULUMI_LOG_LEVEL'] ? { PULUMI_LOG_LEVEL: process.env['PULUMI_LOG_LEVEL'] } : {}),
-        PULUMI_LOG_FLOW: 'true',
-      };
-    }
-
-    // Add work directory if specified
-    if (this.config.settings?.workDir) {
-      baseOpts.workDir = path.resolve(projectRoot, this.config.settings.workDir);
-    }
-
-    // Add secrets provider if specified
-    if (this.config.settings?.secretsProvider) {
-      baseOpts.secretsProvider = this.config.settings.secretsProvider;
-    }
-
-    return baseOpts;
+    // Parse component name from stack name
+    const componentName = this.parseComponentName(stackName);
+    console.log(`[getResourcesForStack] Component name: ${componentName}`);
+    
+    // Create the component resource
+    this.createComponentResource(componentName);
   }
 
   /**
-   * Create stack promises for all components
+   * Parse component name from stack name
+   * Stack name format: "{envId}-{componentName}"
+   * We only need the component name part
    */
-  private createStacks(
-    entries: [keyof ComponentTypes, (env: Environment) => ComponentTypes[keyof ComponentTypes] | PulumiFn][],
-    baseWorkspaceOpts: any,
-    wsCfg: Record<string, any>
-  ): void {
-    for (const [name, factory] of entries) {
-      const produced = factory(this);
-      const instanceName = this.getInstanceName(name, produced);
-      const program = this.createProgram(name, produced, instanceName);
-      const stackName = `${this.id}-${instanceName}`;
+  private parseComponentName(stackName: string): string {
+    // Remove environment prefix to get component name
+    const envPrefix = `${this.id}-`;
+    if (stackName.startsWith(envPrefix)) {
+      return stackName.substring(envPrefix.length);
+    }
+    return stackName;
+  }
 
-      const wsWithStack = {
-        ...baseWorkspaceOpts,
-        stackSettings: {
-          [stackName]: {
-            ...(this.config.settings?.secretsProvider ? { 
-              secretsProvider: this.config.settings.secretsProvider 
-            } : {}),
-            config: wsCfg,
-          },
-        },
-      };
+  /**
+   * Create component resource based on component name
+   */
+  private createComponentResource(componentName: string): void {
+    const components = this.config.components || {};
+    
+    // Find component factory with case-insensitive matching
+    const componentKey = Object.keys(components).find(key => 
+      key.toLowerCase() === componentName.toLowerCase()
+    ) as keyof ComponentTypes;
+    
+    if (!componentKey) {
+      throw new Error(`Component '${componentName}' not found in environment '${this.id}'`);
+    }
+    
+    const componentFactory = components[componentKey];
+    
+    if (!componentFactory) {
+      throw new Error(`Component factory for '${componentKey}' not found in environment '${this.id}'`);
+    }
+    
+    // Get config from factory
+    const config = componentFactory(this);
+    
+    // Skip if factory returned a PulumiFn (for programmatic stacks)
+    if (typeof config === 'function') {
+      return;
+    }
+    
+    // Get the component constructor from the registry using the correct key
+    const ComponentClass = Components[componentKey];
+    if (!ComponentClass) {
+      throw new Error(`Component class '${componentKey}' not found in Components registry`);
+    }
+    
+    // Create the component instance with the config
+    const componentInstance = new ComponentClass(`${this.id}-${componentName}`, config);
+    
+    // Register stack outputs on the Project instance (ESM-friendly), and also
+    // merge them into the *root* module's exports for CommonJS environments.
+    try {
+      const outs: any = (componentInstance as any).outputs;
+      if (!outs || typeof outs !== 'object') return;
 
-      this.stacks[name] = LocalWorkspace.createOrSelectStack(
-        {
-          stackName,
-          projectName: this.project.id,
-          program,
-        },
-        wsWithStack
-      );
+      // Make outputs available on the Project instance for ESM explicit export
+      // e.g., in nebula.config.ts: `export const outputs = project.outputs;`
+      this.project.outputs = outs;
+
+      console.log(`[Environment] Registered outputs for component '${componentName}'`);
+    } catch (error) {
+      console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
     }
   }
 }

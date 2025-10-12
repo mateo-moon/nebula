@@ -1,15 +1,14 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
+import { defaultValues } from '../index';
 
 export interface ConstellationGcpNetworkConfig {
   name?: string;
   region: string;
   ipCidrNodes?: string; // default 192.168.178.0/24
   ipCidrPods?: string;  // default 10.10.0.0/16
-  ipCidrProxy?: string; // default 192.168.179.0/24
-  ipCidrIlb?: string;   // default 192.168.180.0/24
-  internalLoadBalancer?: boolean; // default false
   mtu?: number; // default 8896
+  uid?: pulumi.Input<string>;
 }
 
 function stableShortHash(input: string): string {
@@ -24,25 +23,20 @@ function stableShortHash(input: string): string {
 export class ConstellationGcpNetwork extends pulumi.ComponentResource {
   public readonly network: gcp.compute.Network;
   public readonly nodesSubnetwork: gcp.compute.Subnetwork;
-  public readonly proxySubnetwork?: gcp.compute.Subnetwork;
-  public readonly ilbSubnetwork?: gcp.compute.Subnetwork;
   public readonly podsRangeName: pulumi.Output<string> | string;
 
   constructor(name: string, args: ConstellationGcpNetworkConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:constellation:gcp:Network', name, args, opts);
+    super('gcpNetwork', name, args, opts);
 
     const region = args.region;
-    const ipCidrNodes = args.ipCidrNodes || '192.168.178.0/24';
-    const ipCidrPods = args.ipCidrPods || '10.10.0.0/16';
-    const ipCidrProxy = args.ipCidrProxy || '192.168.179.0/24';
-    const ipCidrIlb = args.ipCidrIlb || '192.168.180.0/24';
-    const internalLb = args.internalLoadBalancer === true;
-    const mtu = args.mtu ?? 8896;
+    const ipCidrNodes = args.ipCidrNodes || defaultValues.gcp?.network?.ipCidrNodes!;
+    const ipCidrPods = args.ipCidrPods || defaultValues.gcp?.network?.ipCidrPods!;
+    const mtu = args.mtu ?? defaultValues.gcp?.network?.mtu!;
 
-    const suffix = stableShortHash([region, ipCidrNodes, ipCidrPods, ipCidrProxy, ipCidrIlb].join('|'));
-    const baseName = `${args.name || name}-${suffix}`;
+    const suffix = stableShortHash([region, ipCidrNodes, ipCidrPods].join('|'));
+    const baseName = args.uid ? pulumi.interpolate`${args.name || name}-${args.uid}` : `${args.name || name}-${suffix}`;
 
-    this.network = new gcp.compute.Network(baseName, {
+    this.network = new gcp.compute.Network(`${name}-network`, {
       name: baseName,
       description: 'Constellation VPC network',
       autoCreateSubnetworks: false,
@@ -52,7 +46,7 @@ export class ConstellationGcpNetwork extends pulumi.ComponentResource {
     const podsRangeName = baseName; // mirror TF: secondary range name == local.name
     this.podsRangeName = podsRangeName;
 
-    this.nodesSubnetwork = new gcp.compute.Subnetwork(baseName, {
+    this.nodesSubnetwork = new gcp.compute.Subnetwork(`${name}-subnet`, {
       name: baseName,
       description: 'Constellation VPC subnetwork',
       region,
@@ -62,27 +56,10 @@ export class ConstellationGcpNetwork extends pulumi.ComponentResource {
         rangeName: podsRangeName,
         ipCidrRange: ipCidrPods,
       }],
-    }, { parent: this });
-
-    if (internalLb) {
-      const proxyName = `${baseName}-proxy`;
-      this.proxySubnetwork = new gcp.compute.Subnetwork(proxyName, {
-        name: proxyName,
-        region,
-        ipCidrRange: ipCidrProxy,
-        purpose: 'REGIONAL_MANAGED_PROXY',
-        role: 'ACTIVE',
-        network: this.network.id,
-      }, { parent: this });
-
-      const ilbName = `${baseName}-ilb`;
-      this.ilbSubnetwork = new gcp.compute.Subnetwork(ilbName, {
-        name: ilbName,
-        region,
-        ipCidrRange: ipCidrIlb,
-        network: this.network.id,
-      }, { parent: this, dependsOn: [this.proxySubnetwork] });
-    }
+    }, { 
+      parent: this,
+      deleteBeforeReplace: true, // Delete subnetwork before replacement to avoid "resource in use" errors
+    });
 
     this.registerOutputs({
       networkId: this.network.id,
@@ -90,8 +67,6 @@ export class ConstellationGcpNetwork extends pulumi.ComponentResource {
       nodesSubnetworkId: this.nodesSubnetwork.id,
       nodesSubnetworkSelfLink: this.nodesSubnetwork.selfLink,
       podsRangeName,
-      proxySubnetworkId: this.proxySubnetwork?.id,
-      ilbSubnetworkId: this.ilbSubnetwork?.id,
     });
   }
 }

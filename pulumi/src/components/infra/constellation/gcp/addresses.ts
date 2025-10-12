@@ -4,38 +4,36 @@ import * as gcp from '@pulumi/gcp';
 export interface AddressesConfig {
   name: string; // baseName with suffix
   region: string;
-  internalLoadBalancer?: boolean;
-  ilbSubnetworkId?: pulumi.Input<string>;
+  uid?: pulumi.Input<string>; // Constellation cluster UID
+  labels?: Record<string, string>;
 }
 
 export class Addresses extends pulumi.ComponentResource {
-  public readonly internalAddress?: gcp.compute.Address;
-  public readonly globalAddress?: gcp.compute.Address;
+  public readonly globalAddress: gcp.compute.GlobalAddress;
 
   constructor(name: string, args: AddressesConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:constellation:gcp:Addresses', name, args, opts);
+    super('addresses', name, args, opts);
 
-    if (args.internalLoadBalancer) {
-      const addrArgs: any = {
-        name: args.name,
-        region: args.region,
-        purpose: 'SHARED_LOADBALANCER_VIP',
-        addressType: 'INTERNAL',
+    // Use a global external address for Global TCP Proxy LB
+    const addressName = args.uid ? pulumi.interpolate`${args.name}-${args.uid}` : args.name;
+    const addressArgs: any = {
+      name: addressName,
+    };
+    
+    // Add Constellation UID label if provided
+    if (args.uid) {
+      addressArgs.labels = {
+        'constellation-uid': args.uid,
+        ...(args.labels || {}),
       };
-      if (args.ilbSubnetworkId) addrArgs.subnetwork = args.ilbSubnetworkId;
-      this.internalAddress = new gcp.compute.Address(args.name, addrArgs, { parent: this });
-    } else {
-      // Use a regional external address for external Network TCP/UDP LB
-      this.globalAddress = new gcp.compute.Address(args.name, {
-        name: args.name,
-        region: args.region,
-        addressType: 'EXTERNAL',
-      }, { parent: this });
+    } else if (args.labels) {
+      addressArgs.labels = args.labels;
     }
+    
+    this.globalAddress = new gcp.compute.GlobalAddress(args.name, addressArgs, { parent: this });
 
     this.registerOutputs({
-      internalAddress: this.internalAddress?.address,
-      globalAddress: this.globalAddress?.address,
+      globalAddress: this.globalAddress.address,
     });
   }
 }

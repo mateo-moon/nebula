@@ -31,7 +31,7 @@ export class PulumiOperator extends pulumi.ComponentResource {
     args: PulumiOperatorConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:k8s:pulumi-operator', name, args, opts);
+    super('pulumi-operator', name, args, opts);
 
     const namespaceName = args.namespace || 'pulumi-operator';
     const namespace = new k8s.core.v1.Namespace('pulumi-operator-namespace', {

@@ -14,7 +14,7 @@ export class Vpc extends pulumi.ComponentResource {
   public readonly publicSubnetIds: pulumi.Output<string[]>;
 
   constructor(name: string, config?: VpcConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:aws:Vpc', name, {}, opts);
+    super('awsVpc', name, {}, opts);
     const clusterName = 'eks';
     const clusterTagKey = `kubernetes.io/cluster/${clusterName}`;
 
