@@ -19,7 +19,7 @@ export class Eks extends pulumi.ComponentResource {
   public kubeconfig: pulumi.Output<any>;
 
   constructor(name: string, vpc: Vpc, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:aws:Eks', name, {}, opts);
+    super('awsEks', name, {}, opts);
     this.cluster = new eks.Cluster(name, {
       name,
       version: '1.32',
@@ -33,7 +33,11 @@ export class Eks extends pulumi.ComponentResource {
         instanceType: 't3a.medium',
       },
       createOidcProvider: true,
-    }, { parent: this });
+    }, { 
+      parent: this,
+      // Ensure cluster is destroyed before VPC resources
+      dependsOn: [vpc.vpc]
+    });
 
     // Managed Node Groups equivalent
     // Public NG IAM role with additional SSM policy
@@ -158,10 +162,14 @@ export class Eks extends pulumi.ComponentResource {
     this.kubeconfig = this.cluster.kubeconfig;
     this.kubeconfig.apply(cfg => {
       try {
-        const configDir = path.resolve(projectRoot, '.config');
+        const configDir = path.resolve((global as any).projectRoot || process.cwd(), '.config');
         if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
-        const kubeConfigPath = path.resolve(configDir, 'kube_config');
+        const stackName = pulumi.getStack();
+        const envPrefix = String(stackName).split('-')[0];
+        const fileName = `kube_config_${envPrefix}_eks`;
+        const kubeConfigPath = path.resolve(configDir, fileName);
 
+        const projectConfigPath = (global as any).projectConfigPath || path.resolve((global as any).projectRoot || process.cwd(), '.config');
         const awsConfigFile = fs.existsSync(`${projectConfigPath}/aws_config`) ? `${projectConfigPath}/aws_config` : process.env['AWS_CONFIG_FILE'];
         const region = process.env['AWS_REGION'] || process.env['AWS_DEFAULT_REGION'];
         const profile = process.env['AWS_PROFILE'];

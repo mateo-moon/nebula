@@ -21,7 +21,7 @@ export class Network extends pulumi.ComponentResource {
   public readonly servicesRangeName: string;
 
   constructor(name: string, args?: NetworkConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:gcp:Network', name, {}, opts);
+    super('gcpNetwork', name, {}, opts);
     
     const netName = args?.networkName ?? name;
     this.network = new gcp.compute.Network(netName, {

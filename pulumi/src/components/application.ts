@@ -42,13 +42,19 @@ export interface ApplicationConfig {
   provision?: (scope: pulumi.ComponentResource) => void | Promise<void>;
 }
 
+export interface ApplicationOutput {
+  // Add any outputs you want to expose
+}
+
 export class Application extends pulumi.ComponentResource {
+  public readonly outputs: ApplicationOutput;
+
   constructor(
     name: string,
     args: ApplicationConfig,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super('nebula:app', name, args, opts);
+    super('application', name, args, opts);
 
     const k = args.k8s || {};
 
@@ -106,7 +112,8 @@ export class Application extends pulumi.ComponentResource {
       void args.provision(this);
     }
 
-    this.registerOutputs({});
+    this.outputs = {};
+    this.registerOutputs(this.outputs);
   }
 }
 

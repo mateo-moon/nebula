@@ -1,0 +1,50 @@
+FROM node:20-slim
+
+# Install Pulumi CLI
+RUN curl -fsSL https://get.pulumi.com | sh
+ENV PATH="/root/.pulumi/bin:${PATH}"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    make \
+    build-essential \
+    python3 \
+    python3-pip \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js package managers
+RUN npm install -g pnpm tsx
+
+# Install Google Cloud SDK
+RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+RUN apt-get update && apt-get install -y google-cloud-cli && rm -rf /var/lib/apt/lists/*
+
+# Install AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN unzip awscliv2.zip && ./aws/install && rm -rf aws awscliv2.zip
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+RUN chmod +x kubectl && mv kubectl /usr/local/bin/
+
+# Install Helm
+RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Install vals (for secret management)
+RUN curl -L -o /usr/local/bin/vals https://github.com/helmfile/vals/releases/download/v0.42.4/vals_0.42.4_linux_amd64
+RUN chmod +x /usr/local/bin/vals
+
+# Create overlay filesystem setup script
+RUN cat > /usr/local/bin/setupOverlayFilesystem << 'EOF'
+#!/bin/bash
+set -e
+# Set working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["bash"]

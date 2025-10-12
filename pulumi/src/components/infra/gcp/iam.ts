@@ -27,7 +27,7 @@ export class Iam extends pulumi.ComponentResource {
   public readonly certManagerGsaEmail?: pulumi.Output<string>;
 
   constructor(name: string, args?: IamConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:gcp:Iam', name, args, opts);
+    super('iam', name, args, opts);
 
     const cfg = new pulumi.Config('gcp')
     const wantExternalDns = !!args?.externalDns && args.externalDns.enabled !== false;

@@ -11,7 +11,7 @@ export class Iam extends pulumi.ComponentResource {
   public readonly sopsPolicy?: aws.iam.Policy;
 
   constructor(name: string, config?: IamConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:infra:aws:Iam', name, {}, opts);
+    super('awsIam', name, {}, opts);
     this.sopsKey = new aws.kms.Key(`${name}-sops-key`, {
       description: 'KMS key for SOPS secrets',
       deletionWindowInDays: 7,

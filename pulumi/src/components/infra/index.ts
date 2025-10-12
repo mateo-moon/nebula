@@ -14,23 +14,38 @@ export interface InfraConfig {
 }
 
 export interface InfraOutput {
-  aws?: AwsOutput;
-  gcp?: GcpOutput;
-  dns?: DnsOutput;
-  constellation?: ConstellationOutput;
+  aws?: AwsOutput | undefined;
+  gcp?: GcpOutput | undefined;
+  dns?: DnsOutput | undefined;
+  constellation?: ConstellationOutput | undefined;
 }
 
 export class Infra extends pulumi.ComponentResource {
+  public readonly aws?: Aws;
+  public readonly gcp?: Gcp;
+  public readonly dns?: Dns;
+  public readonly constellation?: Constellation;
+  public readonly outputs: InfraOutput;
+
   constructor(
     name: string,
     args?: InfraConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:infra', name, args, opts);
+    super('infra', name, args, opts);
 
-    if (args && args.awsConfig) new Aws(name, args.awsConfig);
-    if (args && args.gcpConfig) new Gcp(name, args.gcpConfig);
-    if (args && args.dnsConfig) new Dns(name, args.dnsConfig);
-    if (args && args.constellationConfig) new Constellation(name, args.constellationConfig);
+    if (args && args.awsConfig) this.aws = new Aws(name, args.awsConfig);
+    if (args && args.gcpConfig) this.gcp = new Gcp(name, args.gcpConfig);
+    if (args && args.dnsConfig) this.dns = new Dns(name, args.dnsConfig);
+    if (args && args.constellationConfig) this.constellation = new Constellation(name, args.constellationConfig);
+
+    this.outputs = {
+      aws: this.aws?.outputs,
+      gcp: this.gcp?.outputs,
+      dns: this.dns?.outputs,
+      constellation: this.constellation?.outputs,
+    };
+
+    this.registerOutputs(this.outputs);
   }
 }

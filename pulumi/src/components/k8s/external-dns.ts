@@ -44,7 +44,7 @@ export class ExternalDns extends pulumi.ComponentResource {
     args: ExternalDnsConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:k8s:external-dns', name, args, opts);
+    super('external-dns', name, args, opts);
 
     const namespaceName = args.namespace || 'external-dns';
     const provider: ExternalDnsProvider = args.provider ?? 'google';

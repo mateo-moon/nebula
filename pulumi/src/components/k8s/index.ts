@@ -13,6 +13,8 @@ import { ArgoCd } from './argocd';
 import type { ArgoCdConfig } from './argocd';
 import { PulumiOperator } from './pulumi-operator';
 import type { PulumiOperatorConfig } from './pulumi-operator';
+import { ConfidentialContainers } from './confidential-containers';
+import type { ConfidentialContainersConfig } from './confidential-containers';
 
 export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
@@ -41,6 +43,7 @@ export interface K8sConfig  {
   ingressNginx?: IngressNginxConfig;
   argoCd?: ArgoCdConfig;
   pulumiOperator?: PulumiOperatorConfig;
+  confidentialContainers?: ConfidentialContainersConfig;
 }
 
 export interface K8sResources { provider?: k8s.Provider }
@@ -52,20 +55,47 @@ export interface K8sOutput {
 export class K8s extends pulumi.ComponentResource {
   public readonly kubeconfig?: string;
   public provider?: k8s.Provider;
+  public readonly outputs: K8sOutput;
 
   constructor(
     name: string,
     args: K8sConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:k8s', name, args, opts);
+    super('k8s', name, args, opts);
 
     this.provider = createK8sProvider({ kubeconfig: args.kubeconfig || '', name: name });
     const childOpts = { parent: this, providers: this.provider ? [this.provider] : undefined } as pulumi.ComponentResourceOptions;
-    if (args.certManager) new CertManager(name, args.certManager, childOpts);
-    if (args.externalDns) new ExternalDns(name, args.externalDns, childOpts);
-    if (args.ingressNginx) new IngressNginx(name, args.ingressNginx, childOpts);
-    if (args.argoCd) new ArgoCd(name, args.argoCd, childOpts);
+    
+    // Deploy components with proper dependencies
+    const certManager = args.certManager ? new CertManager(name, args.certManager, childOpts) : undefined;
+    
+    if (args.externalDns) {
+      const externalDnsOpts = { ...childOpts };
+      if (certManager) externalDnsOpts.dependsOn = [certManager];
+      new ExternalDns(name, args.externalDns, externalDnsOpts);
+    }
+    
+    if (args.ingressNginx) {
+      const ingressNginxOpts = { ...childOpts };
+      if (certManager) ingressNginxOpts.dependsOn = [certManager];
+      new IngressNginx(name, args.ingressNginx, ingressNginxOpts);
+    }
+    
+    if (args.argoCd) {
+      const argoCdOpts = { ...childOpts };
+      const deps = [];
+      if (certManager) deps.push(certManager);
+      if (deps.length > 0) argoCdOpts.dependsOn = deps;
+      new ArgoCd(name, args.argoCd, argoCdOpts);
+    }
     if (args.pulumiOperator) new PulumiOperator(name, args.pulumiOperator, childOpts);
+    if (args.confidentialContainers) new ConfidentialContainers(name, args.confidentialContainers, childOpts);
+
+    this.outputs = {
+      providerName: "test",
+    };
+
+    this.registerOutputs(this.outputs);
   }
 }
