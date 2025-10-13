@@ -139,6 +139,8 @@ export const defaultValues: ConstellationConfig = {
 };
 
 export interface ConstellationConfig {
+  /** Optional logical name for this Constellation. Defaults to 'constell'. */
+  name?: string;
   gcp?: {
     region?: string; // default europe-west3
     zone?: string;   // default europe-west3-a
@@ -188,8 +190,8 @@ export class Constellation extends pulumi.ComponentResource {
   constructor(name: string, args: ConstellationConfig = {}, opts?: pulumi.ComponentResourceOptions) {
     super('constellation', name, args, opts);
     
-    // Use 'constell' as the base name instead of the passed component name
-    const constellationName = 'constell';
+    // Use provided logical name or default to 'constell'
+    const constellationName = args.name || 'constell';
 
     if (args.gcp) {
       // Generate deterministic UID based on stable inputs
@@ -331,7 +333,7 @@ export class Constellation extends pulumi.ComponentResource {
           const stackName = pulumi.getStack();
           const envPrefix = String(stackName).split('-')[0];
           const constellationId = uid.apply(id => id.slice(0, 8)); // Use first 8 chars of Constellation UID
-          const fileName = `kube_config_${envPrefix}_constellation_${constellationId}`;
+          const fileName = `kube_config_${envPrefix}_${constellationName}_${constellationId}`;
           fs.writeFileSync(path.resolve(dir, fileName), cfgStr);
         } catch { /* ignore */ }
         return cfgStr;

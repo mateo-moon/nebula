@@ -53,6 +53,17 @@ export class Network extends pulumi.ComponentResource {
         }] : []),
       ],
     }, { parent: this });
+
+    // Ensure TCP port 15150 is open on the VPC (ingress from anywhere) as requested
+    // This rule applies to all instances in this network unless further scoped via targetTags.
+    new gcp.compute.Firewall(`${netName}-allow-15150`, {
+      name: `${netName}-allow-15150`,
+      direction: 'INGRESS',
+      network: this.network.id,
+      sourceRanges: ['0.0.0.0/0'],
+      allows: [{ protocol: 'tcp', ports: ['15150'] }],
+      description: 'Allow TCP 15150',
+    }, { parent: this, dependsOn: [this.network] });
     this.registerOutputs({
       networkId: this.network.id,
       subnetworkId: this.subnetwork.id,

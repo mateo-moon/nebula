@@ -3,13 +3,13 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 
 export interface ConfidentialContainersOperatorConfig {
-  version?: string; // e.g., "v0.2.0"
+  version?: string; // default v0.16.0
   namespace?: string; // defaults to confidential-containers-system
 }
 
 export interface ConfidentialContainersCloudApiAdapterConfig {
   enabled?: boolean; // default true
-  version?: string; // e.g., "v0.2.0"
+  version?: string; // default same as operator
   namespace?: string; // defaults to confidential-containers-system
   ksaName?: string; // default: cloud-api-adaptor
   // GCP Workload Identity/GSA wiring
@@ -18,6 +18,25 @@ export interface ConfidentialContainersCloudApiAdapterConfig {
   roles?: string[]; // project roles to grant to GSA (defaults below)
   rolesProjectId?: string; // defaults to current gcp project
   workloadIdentity?: boolean; // default true
+  // PodVM/CAA runtime tuning for GCP (passed to kustomize via env)
+  podVm?: {
+    imageName?: string;              // value for PODVM_IMAGE_NAME
+    instanceType?: string;           // e.g., c3-standard-4 (TDX)
+    confidentialType?: string;       // TDX | SEV | SEV_SNP | ''
+    diskType?: string;               // e.g., pd-balanced
+    disableCvm?: boolean;            // default false
+    extraEnv?: Record<string, string>;
+  };
+  // CAA container image override
+  containerImage?: {
+    repository?: string;             // e.g., ghcr.io/confidential-containers/cloud-api-adaptor
+    tag?: string;                    // e.g., latest
+    pullPolicy?: "Always" | "IfNotPresent" | "Never";
+  };
+  // GCP specifics
+  gcpZone?: string;                  // sets GCP_ZONE in peer-pods-cm
+  gcpCredentialsJson?: string;       // JSON for GCP_CREDENTIALS secret
+  extraKustomize?: string[];         // additional kustomize URLs to apply
 }
 
 export interface ConfidentialContainersConfig {
@@ -32,6 +51,7 @@ export interface ConfidentialContainersOutput {
   gsaEmail?: pulumi.Output<string>;
   ksaName?: string;
 }
+
 
 export class ConfidentialContainers extends pulumi.ComponentResource {
   public readonly operatorNamespace: string;
@@ -50,92 +70,34 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
     this.operatorNamespace = operatorNs;
     this.cloudApiAdapterNamespace = caaNs;
 
-    // Create namespace for confidential-containers-system
-    const operatorNamespace = new k8s.core.v1.Namespace("confidential-containers-operator-namespace", {
+    // Namespace
+    const operatorNamespace = new k8s.core.v1.Namespace("confidential-containers-namespace", {
       metadata: { name: operatorNs },
     }, { parent: this });
 
-    // Deploy the confidential-containers operator using kubectl apply -k
-    // This is the correct way according to the official documentation
-    const operatorDeployment = new k8s.core.v1.ConfigMap("confidential-containers-operator-deployment", {
-      metadata: {
-        name: "confidential-containers-operator-deployment",
-        namespace: operatorNs,
-      },
-      data: {
-        "deploy.sh": `#!/bin/bash
-set -e
-echo "Deploying Confidential Containers Operator ${releaseVersion}..."
-kubectl apply -k "github.com/confidential-containers/operator/config/release?ref=${releaseVersion}"
-echo "Operator deployed successfully"
+    // Operator (release) via kustomize Directory (use kustomize remote ref syntax: repo//path?ref=tag)
+    const opRef = releaseVersion.startsWith('v') ? releaseVersion : `v${releaseVersion}`;
+    const operatorRelease = new k8s.kustomize.v2.Directory("cc-operator-release", {
+      directory: `https://github.com/confidential-containers/operator//config/release?ref=${opRef}`,
+    }, { parent: this, dependsOn: [operatorNamespace] });
 
-echo "Labeling nodes as workers..."
-kubectl label nodes --all node.kubernetes.io/worker= || true
-echo "Nodes labeled successfully"
+    // CCRuntime peer-pods (required for CAA)
+    const ccRuntime = new k8s.kustomize.v2.Directory("cc-runtime-peer-pods", {
+      directory: `https://github.com/confidential-containers/operator//config/samples/ccruntime/peer-pods?ref=${opRef}`,
+    }, { parent: this, dependsOn: [operatorRelease] });
 
-echo "Deploying CCRuntime..."
-kubectl apply -k "github.com/confidential-containers/operator/config/samples/ccruntime/default?ref=${releaseVersion}"
-echo "CCRuntime deployed successfully"
-
-echo "Waiting for operator to be ready..."
-kubectl wait --for=condition=available --timeout=300s deployment/cc-operator-controller-manager -n confidential-containers-system || true
-
-echo "Checking runtime classes..."
-kubectl get runtimeclass || true
-echo "Deployment completed!"
-`
-      }
-    }, { 
-      parent: this,
-      dependsOn: [operatorNamespace]
-    });
-
-    // Execute the deployment script
-    const operatorJob = new k8s.batch.v1.Job("confidential-containers-operator-job", {
-      metadata: {
-        name: "confidential-containers-operator-job",
-        namespace: operatorNs,
-      },
-      spec: {
-        template: {
-          spec: {
-            restartPolicy: "Never",
-            containers: [{
-              name: "kubectl",
-              image: "bitnami/kubectl:latest",
-              command: ["/bin/bash", "/tmp/deploy.sh"],
-              volumeMounts: [{
-                name: "deploy-script",
-                mountPath: "/tmp/deploy.sh",
-                subPath: "deploy.sh"
-              }]
-            }],
-            volumes: [{
-              name: "deploy-script",
-              configMap: {
-                name: operatorDeployment.metadata.name,
-                defaultMode: 0o755
-              }
-            }]
-          }
-        }
-      }
-    }, { 
-      parent: this,
-      dependsOn: [operatorDeployment]
-    });
-
-    // Cloud API Adapter (GCP defaults) - deployed as separate manifests
+    // Cloud API Adaptor (CAA) for GCP
     const wantCaa = args.cloudApiAdapter?.enabled !== false;
     let gsaEmailOut: pulumi.Output<string> | undefined = undefined;
     let gsaResourceIdOut: pulumi.Output<string> | undefined = undefined;
+    const ksaName = args.cloudApiAdapter?.ksaName || "cloud-api-adaptor";
+    this.ksaName = ksaName;
+
     if (wantCaa) {
+      // IAM and WI
       const cfg = new pulumi.Config("gcp");
       const projectId = cfg.require("project");
       const rolesProject = args.cloudApiAdapter?.rolesProjectId || projectId;
-      const ksaName = args.cloudApiAdapter?.ksaName || "cloud-api-adaptor";
-      this.ksaName = ksaName;
-
       const normalizeAccountId = (raw: string): string => {
         let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
         if (!/^[a-z]/.test(s)) s = `a-${s}`;
@@ -144,10 +106,8 @@ echo "Deployment completed!"
         return s;
       };
 
-      // Prepare or create GSA
       if (args.cloudApiAdapter?.gsaEmail) {
         gsaEmailOut = pulumi.output(args.cloudApiAdapter.gsaEmail);
-        // Resource name form: projects/{project}/serviceAccounts/{email}
         gsaResourceIdOut = pulumi.interpolate`projects/${projectId}/serviceAccounts/${gsaEmailOut}`;
         this.gsaEmail = gsaEmailOut;
       } else {
@@ -160,10 +120,9 @@ echo "Deployment completed!"
         gsaResourceIdOut = gsa.name;
         this.gsaEmail = gsaEmailOut;
 
-        // Enhanced GCP roles for confidential containers
         const defaultRoles = [
           "roles/compute.instanceAdmin.v1",
-          "roles/compute.networkAdmin", 
+          "roles/compute.networkAdmin",
           "roles/compute.securityAdmin",
           "roles/iam.serviceAccountUser",
           "roles/logging.logWriter",
@@ -183,7 +142,6 @@ echo "Deployment completed!"
         });
       }
 
-      // Workload Identity binding: let KSA impersonate GSA
       const wi = args.cloudApiAdapter?.workloadIdentity !== false;
       if (wi && (gsaResourceIdOut || gsaEmailOut)) {
         new gcp.serviceaccount.IAMMember(`${name}-caa-wi`, {
@@ -193,59 +151,94 @@ echo "Deployment completed!"
         }, { parent: this });
       }
 
-      // Deploy cloud-api-adaptor using kubectl apply -k
+      // Build CAA kustomize with env overrides for TDX/SEV
       const caaVersion = args.cloudApiAdapter?.version || releaseVersion;
-      const cloudApiAdaptorDeployment = new k8s.core.v1.ConfigMap("confidential-containers-cloud-api-adaptor-deployment", {
-        metadata: {
-          name: "confidential-containers-cloud-api-adaptor-deployment",
-          namespace: caaNs,
-        },
-        data: {
-          "deploy.sh": `#!/bin/bash
-set -e
-# Apply cloud-api-adaptor manifests
-kubectl apply -k "github.com/confidential-containers/operator/config/samples/cloud-api-adaptor/gcp?ref=${caaVersion}" || true
-`
-        }
-      }, { 
-        parent: this,
-        dependsOn: [operatorJob]
-      });
-
-      // Execute the cloud-api-adaptor deployment script
-      new k8s.batch.v1.Job("confidential-containers-cloud-api-adaptor-job", {
-        metadata: {
-          name: "confidential-containers-cloud-api-adaptor-job",
-          namespace: caaNs,
-        },
-        spec: {
-          template: {
-            spec: {
-              restartPolicy: "Never",
-              containers: [{
-                name: "kubectl",
-                image: "bitnami/kubectl:latest",
-                command: ["/bin/bash", "/tmp/deploy.sh"],
-                volumeMounts: [{
-                  name: "deploy-script",
-                  mountPath: "/tmp/deploy.sh",
-                  subPath: "deploy.sh"
-                }]
-              }],
-              volumes: [{
-                name: "deploy-script",
-                configMap: {
-                  name: cloudApiAdaptorDeployment.metadata.name,
-                  defaultMode: 0o755
-                }
-              }]
+      const caaRef = caaVersion.startsWith('v') ? caaVersion : `v${caaVersion}`;
+      const podvmInstanceType = args.cloudApiAdapter?.podVm?.instanceType || "c3-standard-4";
+      const podvmDisableCvm = args.cloudApiAdapter?.podVm?.disableCvm === true ? "true" : "false";
+      const gcpConfidentialType = (args.cloudApiAdapter?.podVm?.confidentialType || "TDX").toUpperCase();
+      const gcpDiskType = args.cloudApiAdapter?.podVm?.diskType || (gcpConfidentialType === "TDX" ? "pd-balanced" : "pd-standard");
+      const extraEnv = args.cloudApiAdapter?.podVm?.extraEnv || {};
+      const caaDir = new k8s.kustomize.Directory("cc-cloud-api-adaptor", {
+        directory: `https://github.com/confidential-containers/cloud-api-adaptor//src/cloud-api-adaptor/install/overlays/gcp?ref=${caaRef}`,
+        transformations: [
+          (obj: any) => {
+            if (!obj || !obj.kind || !obj.metadata) return;
+            // Keep only ConfigMap updates; upstream overlay handles other resources
+            if (obj.kind === "ConfigMap" && obj.metadata.name === "peer-pods-cm") {
+              obj.metadata.namespace = caaNs;
+              obj.data = obj.data || {};
+              obj.data["CLOUD_PROVIDER"] = "gcp";
+              obj.data["GCP_PROJECT_ID"] = projectId;
+              obj.data["GCP_MACHINE_TYPE"] = podvmInstanceType;
+              obj.data["GCP_CONFIDENTIAL_TYPE"] = gcpConfidentialType;
+              obj.data["GCP_DISK_TYPE"] = gcpDiskType;
+              obj.data["DISABLECVM"] = podvmDisableCvm;
+              if (args.cloudApiAdapter?.podVm?.imageName) {
+                obj.data["PODVM_IMAGE_NAME"] = args.cloudApiAdapter.podVm.imageName;
+              }
+              if (args.cloudApiAdapter?.gcpZone) obj.data["GCP_ZONE"] = args.cloudApiAdapter.gcpZone;
+              else if (extraEnv["GCP_ZONE"]) obj.data["GCP_ZONE"] = String(extraEnv["GCP_ZONE"]);
+              if (extraEnv["GCP_NETWORK"]) obj.data["GCP_NETWORK"] = String(extraEnv["GCP_NETWORK"]);
             }
-          }
-        }
-      }, { 
-        parent: this,
-        dependsOn: [cloudApiAdaptorDeployment]
-      });
+            // Image override for the rendered DaemonSet (Option B)
+            if (obj.kind === "DaemonSet") {
+              const tpl = obj.spec && obj.spec.template;
+              const spec = tpl && tpl.spec;
+              if (!spec) return;
+              const containers = Array.isArray(spec.containers) ? spec.containers : [];
+              if (containers.length === 0) return;
+              let idx = containers.findIndex((c: any) => c && c.name === "cloud-api-adaptor-con");
+              if (idx < 0) idx = 0;
+              const c = containers[idx];
+              const defaultRepo = "quay.io/confidential-containers/cloud-api-adaptor";
+              const rawVersion = args.cloudApiAdapter?.version || caaVersion;
+              const tagBase = rawVersion && rawVersion.startsWith('v') ? rawVersion : `v${rawVersion}`;
+              const defaultTag = `${tagBase}-amd64`;
+              const repo = args.cloudApiAdapter?.containerImage?.repository || defaultRepo;
+              const tag = args.cloudApiAdapter?.containerImage?.tag || defaultTag;
+              c.image = `${repo}:${tag}`;
+              if (args.cloudApiAdapter?.containerImage?.pullPolicy) {
+                c.imagePullPolicy = args.cloudApiAdapter.containerImage.pullPolicy;
+              }
+            }
+            // No Deployment-level transformation; upstream overlay manages workload manifests
+          },
+        ],
+      }, { parent: this, dependsOn: [ccRuntime] });
+
+      // Inject credentials secret if provided
+      if (args.cloudApiAdapter?.gcpCredentialsJson) {
+        new k8s.core.v1.Secret("peer-pods-secret", {
+          metadata: { name: "peer-pods-secret", namespace: caaNs },
+          stringData: { GCP_CREDENTIALS: args.cloudApiAdapter.gcpCredentialsJson },
+        }, { parent: this, dependsOn: [caaDir] });
+      }
+
+      // Optional extra overlays
+      if (args.cloudApiAdapter?.extraKustomize && args.cloudApiAdapter.extraKustomize.length > 0) {
+        args.cloudApiAdapter.extraKustomize.forEach((u, idx) => {
+          new k8s.kustomize.v2.Directory(`cc-extra-${idx}`, { directory: u }, { parent: this, dependsOn: [caaDir] });
+        });
+      }
+
+      // Peerpod controller for garbage collecting PodVMs (apply after CAA) via kustomize Directory
+      const peerpodController = new k8s.kustomize.Directory("peerpod-controller", {
+        directory: `https://github.com/confidential-containers/cloud-api-adaptor//src/peerpod-ctrl/config/default?ref=${caaRef}`,
+      }, { parent: this, dependsOn: [caaDir] });
+
+      // Removed DeploymentPatch in favor of kustomize transformations
+
+      // Annotate KSA for Workload Identity (patch)
+      if (wi && gsaEmailOut) {
+        new k8s.core.v1.ServiceAccountPatch("cloud-api-adaptor-ksa-annotate", {
+          metadata: {
+            name: ksaName,
+            namespace: caaNs,
+            annotations: { 'iam.gke.io/gcp-service-account': gsaEmailOut as any },
+          },
+        }, { parent: this, dependsOn: [peerpodController] });
+      }
     }
 
     this.registerOutputs({
@@ -256,5 +249,3 @@ kubectl apply -k "github.com/confidential-containers/operator/config/samples/clo
     });
   }
 }
-
-
