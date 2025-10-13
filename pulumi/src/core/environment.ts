@@ -26,9 +26,7 @@ export class Environment {
     try {
       // Check if we're running in Pulumi and if this environment matches the current stack
       const stackName = pulumi.getStack();
-      console.log(`[Environment] Stack: ${stackName}, Environment ID: ${this.id}`);
       if (stackName && stackName.startsWith(`${this.id}-`)) {
-        console.log(`[Environment] Stack matches environment, creating resources...`);
         // Create resources for this stack
         this.getResourcesForStack();
       }
@@ -44,11 +42,9 @@ export class Environment {
   private getResourcesForStack(): void {
     // Get current stack name from Pulumi context
     const stackName = pulumi.getStack();
-    console.log(`[getResourcesForStack] Stack name: ${stackName}`);
     
     // Parse component name from stack name
     const componentName = this.parseComponentName(stackName);
-    console.log(`[getResourcesForStack] Component name: ${componentName}`);
     
     // Create the component resource
     this.createComponentResource(componentName);
@@ -116,7 +112,6 @@ export class Environment {
       // e.g., in nebula.config.ts: `export const outputs = project.outputs;`
       this.project.outputs = outs;
 
-      console.log(`[Environment] Registered outputs for component '${componentName}'`);
     } catch (error) {
       console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
     }
