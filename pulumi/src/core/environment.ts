@@ -26,7 +26,7 @@ export class Environment {
     try {
       // Check if we're running in Pulumi and if this environment matches the current stack
       const stackName = pulumi.getStack();
-      if (stackName && stackName.startsWith(`${this.id}-`)) {
+      if (stackName && stackName.toLowerCase().startsWith(`${this.id.toLowerCase()}-`)) {
         // Create resources for this stack
         this.getResourcesForStack();
       }
@@ -57,8 +57,8 @@ export class Environment {
    */
   private parseComponentName(stackName: string): string {
     // Remove environment prefix to get component name
-    const envPrefix = `${this.id}-`;
-    if (stackName.startsWith(envPrefix)) {
+    const envPrefix = `${this.id.toLowerCase()}-`;
+    if (stackName.toLowerCase().startsWith(envPrefix)) {
       return stackName.substring(envPrefix.length);
     }
     return stackName;

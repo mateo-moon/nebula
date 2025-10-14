@@ -218,7 +218,33 @@ export class Constellation extends pulumi.ComponentResource {
       
       // Secrets and identifiers
       const uid = deterministicUid;
-      const initSecret = new random.RandomPassword(`${constellationName}-init-secret`, { length: 32, special: true, overrideSpecial: "_%@" }, { parent: this });
+      // Make initSecret deterministic based on stable inputs
+      const initSecretInputs = [
+        constellationName,
+        args.gcp.region || defaultValues.gcp?.region!,
+        args.gcp.zone || defaultValues.gcp?.zone!,
+        pulumi.getStack(),
+        pulumi.getProject(),
+        'init-secret', // salt for this specific secret
+      ].join('|');
+      
+      const initSecret = pulumi.output(initSecretInputs).apply(inputs => {
+        let hash = 0x811c9dc5; // FNV-1a offset basis
+        for (let i = 0; i < inputs.length; i++) {
+          hash ^= inputs.charCodeAt(i);
+          hash = (hash * 0x01000193) >>> 0; // FNV-1a prime
+        }
+        // Convert to base64-like string with special characters
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_%@';
+        let result = '';
+        let tempHash = hash;
+        for (let i = 0; i < 32; i++) {
+          result += chars[tempHash % chars.length];
+          tempHash = Math.floor(tempHash / chars.length);
+          if (tempHash === 0) tempHash = hash + i; // Ensure we keep generating
+        }
+        return result;
+      });
       const masterSecret = new random.RandomId(`${constellationName}-master-secret`, { byteLength: 32 }, { parent: this });
       const masterSecretSalt = new random.RandomId(`${constellationName}-master-secret-salt`, { byteLength: 32 }, { parent: this });
       const measurementSalt = new random.RandomId(`${constellationName}-measurement-salt`, { byteLength: 32 }, { parent: this });
@@ -267,7 +293,7 @@ export class Constellation extends pulumi.ComponentResource {
         zone: resolvedZone,
         ...(args.gcp.infra || {} as any),
         network: args.gcp.network,
-        initSecret: initSecret.result,
+        initSecret: initSecret,
         iamServiceAccountVm: iam.vmServiceAccountEmail,
         debug: args.gcp.debug,
         imageId: imageResult.image.reference as any,
@@ -306,7 +332,7 @@ export class Constellation extends pulumi.ComponentResource {
         },
         inClusterEndpoint: infra.inClusterEndpoint as any,
         outOfClusterEndpoint: infra.outOfClusterEndpoint as any,
-        initSecret: initSecret.result,
+        initSecret: initSecret,
         uid: uid,
       };
       if (args.gcp.licenseId) clusterArgs.licenseId = args.gcp.licenseId;
@@ -319,20 +345,20 @@ export class Constellation extends pulumi.ComponentResource {
       const cluster = new constellation.Cluster(constellationName, clusterArgs, {
         parent: this,
         customTimeouts: { create: clusterCreateTimeout },
-        dependsOn: [initSecret, infra, ...allInstanceGroups],
+        dependsOn: [infra, ...allInstanceGroups],
       });
 
       // Use Constellation's native kubeconfig directly - write as-is
       const finalKubeconfig = cluster.kubeconfig;
 
       // Write kubeconfig to .config directory
-      finalKubeconfig.apply(cfgStr => {
+      pulumi.all([finalKubeconfig, uid]).apply(([cfgStr, uidValue]) => {
         try {
-          const dir = path.resolve(projectRoot, '.config');
+          const dir = path.resolve((global as any).projectRoot || process.cwd(), '.config');
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
           const stackName = pulumi.getStack();
           const envPrefix = String(stackName).split('-')[0];
-          const constellationId = uid.apply(id => id.slice(0, 8)); // Use first 8 chars of Constellation UID
+          const constellationId = uidValue.slice(0, 8); // Use first 8 chars of Constellation UID
           const fileName = `kube_config_${envPrefix}_${constellationName}_${constellationId}`;
           fs.writeFileSync(path.resolve(dir, fileName), cfgStr);
         } catch { /* ignore */ }

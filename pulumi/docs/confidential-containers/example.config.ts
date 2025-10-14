@@ -73,6 +73,39 @@ export const project = new Project('confidential-containers-example', {
             },
           },
         },
+        prometheusOperator: {
+          namespace: 'monitoring',
+          args: {
+            values: {
+              prometheus: {
+                prometheusSpec: {
+                  retention: '15d', // Override default retention
+                  storageSpec: {
+                    volumeClaimTemplate: {
+                      spec: {
+                        storageClassName: 'fast-ssd',
+                        accessModes: ['ReadWriteOnce'],
+                        resources: {
+                          requests: {
+                            storage: '100Gi'
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              grafana: {
+                adminPassword: 'secure-password',
+                persistence: {
+                  enabled: true,
+                  storageClassName: 'fast-ssd',
+                  size: '20Gi'
+                }
+              }
+            }
+          }
+        },
       }),
     },
     settings: {

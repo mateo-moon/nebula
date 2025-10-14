@@ -72,14 +72,16 @@ export async function refreshStack(stack: Stack, opts?: BaseOpts): Promise<void>
  * Stack Manager - handles stack creation/management separate from resource definition
  */
 export class StackManager {
+  private projectSettingsSaved = false;
+  
   constructor(private project: Project) {}
 
   /**
    * Create or select a stack for a specific environment and component
    * Stack name format: "{envId}-{componentName}"
    */
-  async createOrSelectStack(envId: string, componentName: string, persistSettings = false): Promise<Stack> {
-    const stackName = `${envId}-${componentName}`;
+  async createOrSelectStack(envId: string, componentName: string, persistSettings = false, workDir?: string): Promise<Stack> {
+    const stackName = `${envId.toLowerCase()}-${componentName.toLowerCase()}`;
     
     // Get environment
     const env = this.project.envs[envId];
@@ -90,6 +92,11 @@ export class StackManager {
     // Prepare workspace configuration
     const wsCfg = this.prepareWorkspaceConfig(env);
     const baseWorkspaceOpts = this.buildBaseWorkspaceOptions(env);
+
+    // Add work directory if provided
+    if (workDir) {
+      baseWorkspaceOpts.workDir = path.resolve(workDir);
+    }
 
     // Create stack-specific configuration
     const wsWithStack = {
@@ -109,10 +116,17 @@ export class StackManager {
       {
         stackName,
         projectName: this.project.id,
-        program: () => {
+        program: async () => {
+          // Import and execute the nebula.config.ts program
           // This will trigger Environment.getResourcesForStack()
           // which uses pulumi.getStack() to determine what to create
-          return Promise.resolve();
+          try {
+            const configPath = workDir ? path.resolve(workDir, 'nebula.config.ts') : path.resolve(process.cwd(), 'nebula.config.ts');
+            await import(configPath);
+          } catch (error) {
+            console.warn(`Failed to load nebula.config.ts: ${error}`);
+            // Continue without throwing - stack creation should still succeed
+          }
         },
       },
       wsWithStack
@@ -122,8 +136,15 @@ export class StackManager {
     if (persistSettings) {
       const workspace = stack.workspace;
       
-      // Save project settings
-      await workspace.saveProjectSettings(baseWorkspaceOpts.projectSettings);
+      // Save project settings only once
+      if (!this.projectSettingsSaved) {
+        await workspace.saveProjectSettings(baseWorkspaceOpts.projectSettings);
+        this.projectSettingsSaved = true;
+        
+        // Log the generated project file
+        const projectFilePath = path.join(workspace.workDir || process.cwd(), 'Pulumi.yaml');
+        console.log(`Generated: ${projectFilePath}`);
+      }
       
       // Save stack settings
       await workspace.saveStackSettings(stackName, {
@@ -132,6 +153,10 @@ export class StackManager {
         } : {}),
         config: wsCfg,
       });
+      
+      // Log the generated stack file
+      const stackFilePath = path.join(workspace.workDir || process.cwd(), `Pulumi.${stackName}.yaml`);
+      console.log(`Generated: ${stackFilePath}`);
     }
 
     return stack;
@@ -147,7 +172,7 @@ export class StackManager {
     }
 
     const components = env.config.components || {};
-    return Object.keys(components).map(componentName => `${envId}-${componentName}`);
+    return Object.keys(components).map(componentName => `${envId.toLowerCase()}-${componentName.toLowerCase()}`);
   }
 
   /**
