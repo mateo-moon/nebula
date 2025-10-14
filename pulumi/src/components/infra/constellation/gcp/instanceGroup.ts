@@ -80,16 +80,35 @@ export class InstanceGroup extends pulumi.ComponentResource {
       hash = (hash * 0x01000193) >>> 0;
     }
     
-    // Generate a random suffix to prevent naming conflicts
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    
     // Build tags; prefer explicitly provided tags from infra (e.g., Firewall outputs)
     const baseTags = args.role === 'control-plane' ? [ 'control-plane' ] : [ 'worker' ];
     const dynamicTags = pulumi.output(args.uid).apply(u => baseTags.concat([`constellation-${u}`]));
     const computedTags: pulumi.Input<pulumi.Input<string>[]> = args.tags || (dynamicTags as any);
 
+    // Generate deterministic suffix based on immutable properties to avoid naming conflicts
+    const deterministicSuffix = pulumi.output(args.uid).apply(uid => {
+      const suffixInputs = [
+        args.baseName,
+        args.nodeGroupName,
+        uid,
+        args.instanceType,
+        args.imageId,
+        args.diskType ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskType!,
+        String(args.diskSize ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskSize!),
+        args.ccTechnology || '',
+      ].join('|');
+      
+      let hash = 0x811c9dc5; // FNV-1a offset basis
+      for (let i = 0; i < suffixInputs.length; i++) {
+        hash ^= suffixInputs.charCodeAt(i);
+        hash = (hash * 0x01000193) >>> 0; // FNV-1a prime
+      }
+      // Convert to base36 and take first 6 characters
+      return Math.abs(hash).toString(36).substring(0, 6);
+    });
+
     this.template = new gcp.compute.InstanceTemplate(`${args.baseName}-${args.nodeGroupName}-template`, {
-      name: pulumi.interpolate`${args.baseName}-${args.nodeGroupName}-${args.uid}-${randomSuffix}`,
+      name: pulumi.interpolate`${args.baseName}-${args.nodeGroupName}-${args.uid}-${deterministicSuffix}`,
       machineType: args.instanceType,
       tags: computedTags as any,
       labels: mergedLabels,
@@ -161,6 +180,7 @@ export class InstanceGroup extends pulumi.ComponentResource {
       },
     }, {
       parent: this,
+      dependsOn: [this.template], // Ensure manager depends on template for proper ordering
       deleteBeforeReplace: true, // Delete manager before template replacement
       protect: false,
     });

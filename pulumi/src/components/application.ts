@@ -39,7 +39,7 @@ export interface ApplicationConfig {
   /** Optional instance/stack name override (defaults to 'application') */
   name?: string;
   k8s?: ApplicationK8sConfig;
-  provision?: (scope: pulumi.ComponentResource) => void | Promise<void>;
+  provision?: (scope: Application) => pulumi.ComponentResource | Promise<pulumi.ComponentResource>;
 }
 
 export interface ApplicationOutput {
@@ -47,14 +47,14 @@ export interface ApplicationOutput {
 }
 
 export class Application extends pulumi.ComponentResource {
-  public readonly outputs: ApplicationOutput;
+  public readonly outputs: ApplicationOutput = {};
 
   constructor(
     name: string,
     args: ApplicationConfig,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super('application', name, args, opts);
+    super('app', args.name || name, args, opts);
 
     const k = args.k8s || {};
 
@@ -109,12 +109,10 @@ export class Application extends pulumi.ComponentResource {
     // Additional resources for the application
     if (typeof args.provision === 'function') {
       // Allow user code to create cloud/provider resources within this component scope
-      void args.provision(this);
+      const resource = args.provision(this);
+      this.outputs = (resource as any)?.outputs;
     }
 
-    this.outputs = {};
     this.registerOutputs(this.outputs);
   }
 }
-
-

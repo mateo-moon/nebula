@@ -15,6 +15,8 @@ import { PulumiOperator } from './pulumi-operator';
 import type { PulumiOperatorConfig } from './pulumi-operator';
 import { ConfidentialContainers } from './confidential-containers';
 import type { ConfidentialContainersConfig } from './confidential-containers';
+import { PrometheusOperator } from './prometheus-operator';
+import type { PrometheusOperatorConfig } from './prometheus-operator';
 
 export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
@@ -44,6 +46,7 @@ export interface K8sConfig  {
   argoCd?: ArgoCdConfig;
   pulumiOperator?: PulumiOperatorConfig;
   confidentialContainers?: ConfidentialContainersConfig;
+  prometheusOperator?: PrometheusOperatorConfig;
 }
 
 export interface K8sResources { provider?: k8s.Provider }
@@ -91,6 +94,7 @@ export class K8s extends pulumi.ComponentResource {
     }
     if (args.pulumiOperator) new PulumiOperator(name, args.pulumiOperator, childOpts);
     if (args.confidentialContainers) new ConfidentialContainers(name, args.confidentialContainers, childOpts);
+    if (args.prometheusOperator) new PrometheusOperator(name, args.prometheusOperator, childOpts);
 
     this.outputs = {
       providerName: "test",

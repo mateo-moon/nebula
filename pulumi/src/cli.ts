@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { Command } from 'commander';
 import { pathToFileURL } from 'node:url';
-import { LocalWorkspace } from '@pulumi/pulumi/automation';
 import { StackManager } from './core/automation';
 import { Project } from './core/project';
 import { Utils } from './utils';
@@ -154,11 +153,15 @@ async function handleShellOperation(project: Project, opts: RunnerOptions): Prom
   }
   
   const componentName = componentKeys[0]; // Use first component
+  if (!componentName) {
+    console.log('No component available');
+    return;
+  }
 
   // Open Pulumi shell (stack will be selected by Pulumi CLI based on YAML files)
   await openPulumiShell({
     workDir,
-    stackName: `${envId}-${componentName}`,
+    stackName: `${envId.toLowerCase()}-${componentName.toLowerCase()}`,
     targets: [],
     includeDependents: false,
   });
@@ -168,65 +171,33 @@ async function handleShellOperation(project: Project, opts: RunnerOptions): Prom
 
 
 
-/** Handle generate operation - create Pulumi YAML files using Automation API */
+/** Handle generate operation - create Pulumi YAML files and stacks using Automation API */
 async function handleGenerateOperation(project: Project, opts: RunnerOptions): Promise<void> {
   const workDir = opts.workDir || process.cwd();
   const stackManager = new StackManager(project);
   
-  console.log(`Generating Pulumi YAML files in: ${workDir}`);
+  console.log(`Generating Pulumi YAML files and creating stacks in: ${workDir}`);
   
-  // Get the first environment to extract project-level settings
-  const envKeys = Object.keys(project.envs);
-  const firstEnv = envKeys.length > 0 ? project.envs[envKeys[0]!] : null;
-  const backendUrl = firstEnv?.config.settings?.backendUrl;
-  
-  // Create a LocalWorkspace instance for saving settings
-  const workspace = await LocalWorkspace.create({ 
-    workDir,
-    projectSettings: {
-      name: project.id,
-      main: 'nebula.config.ts',
-      runtime: { 
-        name: 'nodejs', 
-        options: { typescript: false, nodeargs: '--import=tsx/esm' } 
-      },
-      ...(backendUrl ? { backend: { url: backendUrl } } : {}),
-    }
-  });
-  
-  // Save project settings using the Automation API
-  await workspace.saveProjectSettings({
-    name: project.id,
-    main: 'nebula.config.ts',
-    runtime: { 
-      name: 'nodejs', 
-      options: { typescript: false, nodeargs: '--import=tsx/esm' } 
-    },
-    ...(backendUrl ? { backend: { url: backendUrl } } : {}),
-  });
-  console.log(`Generated: ${path.join(workDir, 'Pulumi.yaml')}`);
-  
-  // Generate stack settings for each environment and component
+  // Create stacks for each environment and component
   for (const [envId, env] of Object.entries(project.envs)) {
-    const availableStacks = stackManager.getAvailableStacks(envId);
+    const components = env.config.components || {};
     
-    for (const stackName of availableStacks) {
-      // Prepare stack configuration
-      const stackConfig = Utils.convertPulumiConfigToWorkspace(env.config.settings?.config);
-      
-      // Save stack settings using the Automation API
-      await workspace.saveStackSettings(stackName, {
-        config: stackConfig,
-        ...(env.config.settings?.secretsProvider ? { 
-          secretsProvider: env.config.settings.secretsProvider 
-        } : {}),
-      });
-      
-      console.log(`Generated: ${path.join(workDir, `Pulumi.${stackName}.yaml`)}`);
+    for (const componentName of Object.keys(components)) {
+      try {
+        console.log(`Creating stack: ${envId.toLowerCase()}-${componentName.toLowerCase()}`);
+        
+        // Create or select the stack using StackManager
+        await stackManager.createOrSelectStack(envId, componentName, true, workDir);
+        
+        console.log(`Created/selected stack: ${envId.toLowerCase()}-${componentName.toLowerCase()}`);
+      } catch (error) {
+        console.error(`Failed to create stack ${envId.toLowerCase()}-${componentName.toLowerCase()}:`, error);
+        // Continue with other stacks even if one fails
+      }
     }
   }
   
-  console.log('Generation completed successfully');
+  console.log('Generation and stack creation completed successfully');
 }
 
 /** Handle clear-auth operation - clear expired Google Cloud credentials */
