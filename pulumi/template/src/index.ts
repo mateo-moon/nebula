@@ -38,11 +38,30 @@ export const project = new Project('nebula-template', {
             name: 'nebula-template-gke',
             releaseChannel: 'REGULAR',
             deletionProtection: false,
-            // System node pool settings (align with current API)
-            minNodes: 1,
-            maxNodes: 1,
-            machineType: 'e2-standard-4',
-            volumeSizeGb: 20,
+            // Dynamic node group configurations
+            nodeGroups: {
+              system: {
+                minNodes: 1,
+                maxNodes: 1,
+                machineType: 'e2-standard-4',
+                volumeSizeGb: 20,
+                labels: {
+                  'nebula.io/node-role': 'system'
+                },
+                tags: ['system']
+              },
+              worker: {
+                minNodes: 0,
+                maxNodes: 3,
+                machineType: 'e2-standard-4',
+                volumeSizeGb: 20,
+                imageType: 'UBUNTU_CONTAINERD',
+                labels: {
+                  'nebula.io/node-role': 'worker'
+                },
+                tags: ['worker']
+              }
+            }
           },
         },
         dnsConfig: {

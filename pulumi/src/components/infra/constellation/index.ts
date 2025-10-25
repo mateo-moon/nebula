@@ -346,6 +346,8 @@ export class Constellation extends pulumi.ComponentResource {
         parent: this,
         customTimeouts: { create: clusterCreateTimeout },
         dependsOn: [infra, ...allInstanceGroups],
+        replaceOnChanges: ['*'],
+        deleteBeforeReplace: true
       });
 
       // Use Constellation's native kubeconfig directly - write as-is

@@ -23,6 +23,10 @@ export interface InstanceGroupConfig {
   debug?: boolean;
   namedPorts?: NamedPortSpec[];
   labels?: Record<string, string>;
+  /** Kubernetes node labels to set on the kubelet at registration time */
+  nodeLabels?: Record<string, string>;
+  /** Kubernetes node taints to set at registration time */
+  nodeTaints?: { key: string; value?: string; effect: 'NoSchedule' | 'PreferNoSchedule' | 'NoExecute' }[];
   initSecret?: pulumi.Input<string>;
   customEndpoint?: string;
   ccTechnology?: string;
@@ -39,6 +43,15 @@ export class InstanceGroup extends pulumi.ComponentResource {
   constructor(name: string, args: InstanceGroupConfig, opts?: pulumi.ComponentResourceOptions) {
     super('instanceGroup', name, args, opts);
 
+    function stableShortHash(input: string): string {
+      let hash = 0x811c9dc5;
+      for (let i = 0; i < input.length; i++) {
+        hash ^= input.charCodeAt(i);
+        hash = (hash * 0x01000193) >>> 0;
+      }
+      return ('0000000' + hash.toString(16)).slice(-8);
+    }
+
     const baseLabels = args.labels || {};
     const mergedLabels: Record<string, pulumi.Input<string>> = {
       ...baseLabels,
@@ -47,16 +60,44 @@ export class InstanceGroup extends pulumi.ComponentResource {
       'constellation-node-group': args.nodeGroupName,
     };
 
-    const autoscalerEnv = 'AUTOSCALER_ENV_VARS: kube_reserved=cpu=1060m,memory=1019Mi,ephemeral-storage=41Gi;node_labels=;os=linux;os_distribution=cos;evictionHard=';
-    const kubeEnvCombined = args.kubeEnv ? `${args.kubeEnv}\n${autoscalerEnv}` : autoscalerEnv;
+    // Build kubelet node labels/taints to ensure scheduling constraints for system/worker separation
+    // Preserve computed labels/taints for future use, but don't inject via kube-env
+    // Reserved for future: merge user labels for node scheduling; currently not injected via metadata
+    // const defaultNodeLabels: Record<string, string> = (args.role === 'worker') ? { 'node.kubernetes.io/worker': 'true' } : {};
+    // const effectiveNodeLabels = { ...defaultNodeLabels, ...(args.nodeLabels || {}) };
+
     const metadata: Record<string, pulumi.Input<string>> = {
-      'kube-env': kubeEnvCombined,
       'serial-port-enable': 'TRUE',
     };
     if (args.initSecret != null) {
       metadata['constellation-init-secret-hash'] = pulumi.output(args.initSecret).apply(async (secret) => {
         const bcrypt = await import('bcryptjs');
-        return bcrypt.default.hashSync(String(secret), 10);
+        // Generate deterministic salt based on stable inputs
+        const saltInputs = [
+          args.baseName,
+          args.nodeGroupName,
+          args.uid,
+          'constellation-init-secret-salt'
+        ].join('|');
+        
+        // Create deterministic salt using same hash algorithm as init secret
+        let hash = 0x811c9dc5; // FNV-1a offset basis
+        for (let i = 0; i < saltInputs.length; i++) {
+          hash ^= saltInputs.charCodeAt(i);
+          hash = (hash * 0x01000193) >>> 0; // FNV-1a prime
+        }
+        
+        // Convert to base64-like string for salt
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./';
+        let salt = '$2a$10$'; // bcrypt format
+        let tempHash = Math.abs(hash);
+        for (let i = 0; i < 22; i++) { // 22 chars for bcrypt salt
+          salt += chars[tempHash % chars.length];
+          tempHash = Math.floor(tempHash / chars.length);
+          if (tempHash === 0) tempHash = Math.abs(hash) + i;
+        }
+        
+        return bcrypt.default.hashSync(String(secret), salt);
       });
     }
     if (args.customEndpoint) metadata['custom-endpoint'] = args.customEndpoint;
@@ -67,45 +108,29 @@ export class InstanceGroup extends pulumi.ComponentResource {
       ? { automaticRestart: false, onHostMaintenance: 'TERMINATE' }
       : { automaticRestart: true, onHostMaintenance: 'MIGRATE' };
 
-    const immutablesKey = JSON.stringify({
-      machineType: args.instanceType,
-      bootDiskType: args.diskType ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskType!,
-      bootDiskSize: args.diskSize ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskSize!,
-      imageId: args.imageId,
-      cc: args.ccTechnology || '',
-    });
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < immutablesKey.length; i++) {
-      hash ^= immutablesKey.charCodeAt(i);
-      hash = (hash * 0x01000193) >>> 0;
-    }
-    
     // Build tags; prefer explicitly provided tags from infra (e.g., Firewall outputs)
     const baseTags = args.role === 'control-plane' ? [ 'control-plane' ] : [ 'worker' ];
     const dynamicTags = pulumi.output(args.uid).apply(u => baseTags.concat([`constellation-${u}`]));
     const computedTags: pulumi.Input<pulumi.Input<string>[]> = args.tags || (dynamicTags as any);
 
-    // Generate deterministic suffix based on immutable properties to avoid naming conflicts
-    const deterministicSuffix = pulumi.output(args.uid).apply(uid => {
-      const suffixInputs = [
-        args.baseName,
-        args.nodeGroupName,
-        uid,
-        args.instanceType,
-        args.imageId,
-        args.diskType ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskType!,
-        String(args.diskSize ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskSize!),
-        args.ccTechnology || '',
-      ].join('|');
-      
-      let hash = 0x811c9dc5; // FNV-1a offset basis
-      for (let i = 0; i < suffixInputs.length; i++) {
-        hash ^= suffixInputs.charCodeAt(i);
-        hash = (hash * 0x01000193) >>> 0; // FNV-1a prime
-      }
-      // Convert to base36 and take first 6 characters
-      return Math.abs(hash).toString(36).substring(0, 6);
-    });
+    // Derive a deterministic suffix from immutable template inputs so the
+    // template name only changes when its effective configuration changes.
+    const deterministicSuffix = pulumi.all([
+      args.instanceType,
+      computedTags as any,
+      mergedLabels as any,
+      args.imageId,
+      (args.diskType ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskType!),
+      (args.diskSize ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskSize!),
+      args.network,
+      args.subnetwork,
+      args.aliasIpRangeName,
+      args.aliasIpRangeMask,
+      metadata as any,
+      (args.iamServiceAccountVm || ''),
+      JSON.stringify(scheduling),
+      (args.ccTechnology || ''),
+    ]).apply(values => stableShortHash(JSON.stringify(values)));
 
     this.template = new gcp.compute.InstanceTemplate(`${args.baseName}-${args.nodeGroupName}-template`, {
       name: pulumi.interpolate`${args.baseName}-${args.nodeGroupName}-${args.uid}-${deterministicSuffix}`,
@@ -125,7 +150,7 @@ export class InstanceGroup extends pulumi.ComponentResource {
         diskType: defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskType!,
       }, {
         // Constellation expects a state disk named 'state-disk'
-        autoDelete: true,
+        autoDelete: false,
         boot: false,
         deviceName: 'state-disk',
         diskType: args.diskType ?? defaultValues.gcp?.infra?.nodeGroups?.[0]?.diskType!,
@@ -167,7 +192,7 @@ export class InstanceGroup extends pulumi.ComponentResource {
       zone: args.zone,
       versions: [{ instanceTemplate: this.template.selfLink }],
       targetSize: args.initialCount,
-      // statefulDisks: [ { deviceName: 'state-disk', deleteRule: 'NEVER' } as any ],
+      statefulDisks: [ { deviceName: 'state-disk', deleteRule: 'ON_PERMANENT_INSTANCE_DELETION' } as any ],
       autoHealingPolicies: undefined as any,
       waitForInstances: true,
       ...(args.namedPorts && args.namedPorts.length > 0 ? { namedPorts: args.namedPorts.map(np => ({ name: np.name, port: np.port } as any)) } : {}),
@@ -175,13 +200,15 @@ export class InstanceGroup extends pulumi.ComponentResource {
         minimalAction: 'REPLACE',
         type: 'PROACTIVE',
         replacementMethod: 'RECREATE',
-        maxSurgeFixed: 0,
-        maxUnavailableFixed: 1,
+        maxSurgeFixed: 0, // Must be 0 when replacementMethod is RECREATE
+        maxUnavailableFixed: 1, // Only 1 instance unavailable at a time
+        minReadySec: 300, // Wait 5 minutes for new instances to be ready
       },
     }, {
       parent: this,
       dependsOn: [this.template], // Ensure manager depends on template for proper ordering
-      deleteBeforeReplace: true, // Delete manager before template replacement
+      deleteBeforeReplace: false, // Update MIG in-place to preserve stateful disk mapping
+      customTimeouts: { create: '120m', update: '120m', delete: '60m' },
       protect: false,
     });
 

@@ -117,6 +117,9 @@ export class ExternalDns extends pulumi.ComponentResource {
       registry,
       interval,
       logLevel,
+      tolerations: [
+        { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+      ],
       ...(args.domainFilters && args.domainFilters.length > 0 ? { domainFilters: args.domainFilters } : {}),
       ...(args.txtOwnerId ? { txtOwnerId: args.txtOwnerId } : {}),
       ...(args.txtPrefix ? { txtPrefix: args.txtPrefix } : {}),

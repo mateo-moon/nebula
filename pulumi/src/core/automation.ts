@@ -90,15 +90,22 @@ export class StackManager {
     }
 
     // Prepare workspace configuration
-    const wsCfg = this.prepareWorkspaceConfig(env);
+    const wsCfg = await this.prepareWorkspaceConfig(env);
     const baseWorkspaceOpts = this.buildBaseWorkspaceOptions(env);
+
+    // Filter out SOPS entries from workspace config (they'll be set as encrypted secrets via stack.setConfig())
+    const wsCfgFiltered = Object.fromEntries(
+      Object.entries(wsCfg).filter(([_, v]) => 
+        !(typeof v === 'string' && v.startsWith('ref+sops://'))
+      )
+    );
 
     // Add work directory if provided
     if (workDir) {
       baseWorkspaceOpts.workDir = path.resolve(workDir);
     }
 
-    // Create stack-specific configuration
+    // Create stack-specific configuration (without SOPS secrets for now)
     const wsWithStack = {
       ...baseWorkspaceOpts,
       stackSettings: {
@@ -106,7 +113,7 @@ export class StackManager {
           ...(env.config.settings?.secretsProvider ? { 
             secretsProvider: env.config.settings.secretsProvider 
           } : {}),
-          config: wsCfg,
+          config: wsCfgFiltered,
         },
       },
     };
@@ -132,6 +139,12 @@ export class StackManager {
       wsWithStack
     );
 
+    // Now resolve and set secrets after the stack is created
+    const resolvedSecrets = await Utils.resolveSecrets(wsCfg);
+    for (const [key, value] of Object.entries(resolvedSecrets)) {
+      await stack.setConfig(key, { value, secret: true });
+    }
+
     // Optionally persist settings using the Automation API
     if (persistSettings) {
       const workspace = stack.workspace;
@@ -146,15 +159,8 @@ export class StackManager {
         console.log(`Generated: ${projectFilePath}`);
       }
       
-      // Save stack settings
-      await workspace.saveStackSettings(stackName, {
-        ...(env.config.settings?.secretsProvider ? { 
-          secretsProvider: env.config.settings.secretsProvider 
-        } : {}),
-        config: wsCfg,
-      });
-      
-      // Log the generated stack file
+      // Stack settings are already processed by createOrSelectStack
+      // Just log the generated stack file
       const stackFilePath = path.join(workspace.workDir || process.cwd(), `Pulumi.${stackName}.yaml`);
       console.log(`Generated: ${stackFilePath}`);
     }
@@ -178,9 +184,9 @@ export class StackManager {
   /**
    * Prepare workspace configuration
    */
-  private prepareWorkspaceConfig(env: any): Record<string, any> {
+  private async prepareWorkspaceConfig(env: any): Promise<Record<string, any>> {
     const rawCfg = env.config.settings?.config;
-    return Utils.convertPulumiConfigToWorkspace(rawCfg);
+    return await Utils.convertPulumiConfigToWorkspace(rawCfg);
   }
 
   /**

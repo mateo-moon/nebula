@@ -56,6 +56,10 @@ export class ArgoCd extends pulumi.ComponentResource {
           configManagementPlugins: `- name: pulumi-generate\n  generate:\n    command: ["/bin/sh", "-lc"]\n    args: ["node pulumi/src/tools/argocd-generate.js"]\n  discover:\n    fileName: pulumi/src/tools/argocd-generate.js\n`,
         },
       },
+      controller: { tolerations: [{ key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }] },
+      repoServer: { tolerations: [{ key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }] },
+      server: { tolerations: [{ key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }] },
+      applicationSet: { tolerations: [{ key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }] },
       // The Argo CD chart's internal Redis uses secret 'argocd-redis' with key 'auth'.
       // If the chart switches to a subchart requiring custom secret wiring, these values may apply.
       // redis: { auth: { existingSecret: 'argocd-redis', existingSecretPasswordKey: 'redis-password' } },

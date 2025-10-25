@@ -1,4 +1,3 @@
-import { Project } from "./project";
 import type { PulumiFn } from "@pulumi/pulumi/automation";
 import type { ComponentTypes } from "../components";
 import { Components } from "../components";
@@ -17,9 +16,9 @@ export interface EnvironmentConfig {
 }
 
 export class Environment {
+  public outputs?: Record<string, any>;
   constructor(
     public readonly id: string,
-    public readonly project: Project,
     public readonly config: EnvironmentConfig,
   ) {
     // Try to create resources if we're in Pulumi context
@@ -105,13 +104,7 @@ export class Environment {
     // Register stack outputs on the Project instance (ESM-friendly), and also
     // merge them into the *root* module's exports for CommonJS environments.
     try {
-      const outs: any = (componentInstance as any).outputs;
-      if (!outs || typeof outs !== 'object') return;
-
-      // Make outputs available on the Project instance for ESM explicit export
-      // e.g., in nebula.config.ts: `export const outputs = project.outputs;`
-      this.project.outputs = outs;
-
+      this.outputs = (componentInstance as any).outputs;
     } catch (error) {
       console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
     }

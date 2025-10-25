@@ -25,6 +25,10 @@ export interface GcpConstellationInfraConfig {
     initialCount: number;
     diskSize?: number;
     diskType?: string;
+    /** Kubernetes node labels to set on the kubelet at registration time */
+    nodeLabels?: Record<string, string>;
+    /** Kubernetes node taints to set at registration time */
+    nodeTaints?: { key: string; value?: string; effect: 'NoSchedule' | 'PreferNoSchedule' | 'NoExecute' }[];
   }>;
 
   imageId?: string;
@@ -117,6 +121,8 @@ export class GcpConstellationInfra extends pulumi.ComponentResource {
           { name: 'join', port: 30090 },
         ] : [],
         labels: args.labels,
+        ...(ng.nodeLabels ? { nodeLabels: ng.nodeLabels } : {}),
+        ...(ng.nodeTaints ? { nodeTaints: ng.nodeTaints } : {}),
         initSecret: args.initSecret,
         customEndpoint: args.customEndpoint,
         ccTechnology: args.ccTechnology ?? defaultValues.gcp?.ccTechnology!,
