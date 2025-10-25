@@ -57,6 +57,9 @@ export class IngressNginx extends pulumi.ComponentResource {
         ...(args.controller?.replicaCount != null ? { replicaCount: args.controller.replicaCount } : {}),
         ...(args.controller?.extraArgs ? { extraArgs: args.controller.extraArgs } : {}),
         ...(args.controller?.resources ? { resources: args.controller.resources } : {}),
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ],
         ...(args.controller?.service ? {
           service: {
             ...(args.controller.service.type ? { type: args.controller.service.type } : {}),

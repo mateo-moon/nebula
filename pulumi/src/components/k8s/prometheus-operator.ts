@@ -7,6 +7,8 @@ type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"]
 export interface PrometheusOperatorConfig {
   namespace?: string;
   args?: OptionalChartArgs;
+  /** Storage class name for persistent volumes (default: "standard") */
+  storageClassName?: string;
 }
 
 export class PrometheusOperator extends pulumi.ComponentResource {
@@ -23,14 +25,19 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       metadata: { name: namespaceName },
     }, { parent: this });
 
+    const storageClassName = args.storageClassName || "standard";
+    
     const defaultValues = {
       prometheus: {
         prometheusSpec: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ],
           retention: "30d",
           storageSpec: {
             volumeClaimTemplate: {
               spec: {
-                storageClassName: "standard",
+                storageClassName: storageClassName,
                 accessModes: ["ReadWriteOnce"],
                 resources: {
                   requests: {
@@ -48,9 +55,27 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         }
       },
       prometheusOperator: {
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Equal', value: 'true', effect: 'NoSchedule' }
+        ],
         manageCrds: true, // Installs Prometheus Operator CRDs
         prometheusOperatorSpec: {
           manageCrds: true // Ensures CRDs are managed by the operator
+        },
+        admissionWebhooks: {
+          enabled: true,
+          createAdmissionWebhooks: true,
+          patch: {
+            enabled: false // Disable self-signed cert generation
+          },
+          certManager: {
+            enabled: true, // Use cert-manager for TLS certificates
+            issuerRef: {
+              name: "letsencrypt-staging",
+              kind: "ClusterIssuer",
+              group: "cert-manager.io"
+            }
+          }
         }
       },
       grafana: {
@@ -58,7 +83,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         adminPassword: "admin",
         persistence: {
           enabled: true,
-          storageClassName: "standard",
+          storageClassName: storageClassName,
           size: "10Gi"
         },
         service: {
@@ -71,7 +96,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           storage: {
             volumeClaimTemplate: {
               spec: {
-                storageClassName: "standard",
+                storageClassName: storageClassName,
                 accessModes: ["ReadWriteOnce"],
                 resources: {
                   requests: {

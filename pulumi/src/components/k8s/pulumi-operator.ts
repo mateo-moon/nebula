@@ -39,7 +39,15 @@ export class PulumiOperator extends pulumi.ComponentResource {
     }, { parent: this });
 
     const useOci = !args.repository || args.repository.startsWith('oci://');
-    const defaultValues = args.values || {};
+    const defaultValues = {
+      ...(args.values || {}),
+      // Add tolerations for system nodes
+      global: {
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+        ],
+      },
+    };
     const defaultChartArgsBase: OptionalChartArgs = useOci
       ? {
           chart: `${(args.repository || 'oci://ghcr.io/pulumi/helm-charts').replace(/\/$/, '')}/pulumi-kubernetes-operator`,

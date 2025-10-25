@@ -139,11 +139,15 @@ export class Auth {
         console.log('Token refresh successful');
         
         // Update the credential file with new tokens
+        const nowMs = Date.now();
+        const expiresInSec = Number(newTokens.expires_in || 3600);
         const updatedCredentials = {
           ...credentials,
           access_token: newTokens.access_token,
           expires_in: newTokens.expires_in,
-          token_type: newTokens.token_type || 'Bearer'
+          token_type: newTokens.token_type || 'Bearer',
+          fetched_at: nowMs,
+          expires_at: nowMs + (expiresInSec * 1000),
         };
         
         fs.writeFileSync(accessTokenFilePath, JSON.stringify(updatedCredentials, null, 2));
@@ -184,30 +188,42 @@ export class Auth {
         const credentialContent = fs.readFileSync(accessTokenFilePath, 'utf8');
         const credentials = JSON.parse(credentialContent);
         
-        // Check if it has the required structure
-        if (!credentials.access_token || credentials.type !== 'authorized_user') {
-          return false;
-        }
-        
-        // Check if token has refresh token for automatic renewal
-        if (credentials.refresh_token) {
-          // Try to refresh the token first
-          const refreshedTokens = await this.refreshAccessToken(projectId);
-          if (refreshedTokens) {
-            console.log('Token refreshed successfully');
-            return true;
-          } else {
-            console.log('Token refresh failed - will need to re-authenticate');
-            // Clear expired credentials to ensure fresh authentication
-            this.clearExpiredCredentials(projectId);
-            return false;
-          }
-        } else {
+        // Basic structure check
+        if (credentials.type !== 'authorized_user') return false;
+        if (!credentials.refresh_token) {
           console.log('No refresh token found - will need to re-authenticate');
-          // Clear expired credentials to ensure fresh authentication
           this.clearExpiredCredentials(projectId);
           return false;
         }
+        
+        // Determine if the token is still valid
+        const nowMs = Date.now();
+        const skewMs = 120 * 1000; // refresh 2 minutes before expiry
+        let expiresAtMs: number | undefined = undefined;
+        
+        if (typeof credentials.expires_at === 'number') {
+          expiresAtMs = credentials.expires_at;
+        } else if (typeof credentials.expires_at === 'string') {
+          const parsed = Date.parse(credentials.expires_at);
+          if (!Number.isNaN(parsed)) expiresAtMs = parsed;
+        } else if (typeof credentials.expires_in === 'number' && typeof credentials.fetched_at === 'number') {
+          expiresAtMs = credentials.fetched_at + (credentials.expires_in * 1000);
+        }
+        
+        if (expiresAtMs && nowMs + skewMs < expiresAtMs && credentials.access_token) {
+          // Current token is still valid
+          return true;
+        }
+        
+        // Expired or unknown expiry: try to refresh
+        const refreshedTokens = await this.refreshAccessToken(projectId);
+        if (refreshedTokens) {
+          console.log('Token refreshed successfully');
+          return true;
+        }
+        console.log('Token refresh failed - will need to re-authenticate');
+        this.clearExpiredCredentials(projectId);
+        return false;
       } catch (error) {
         // If command fails, token is expired or invalid
         console.log('Token validation failed:', error);
@@ -416,7 +432,7 @@ export class Auth {
             // Close server after handling request
             setTimeout(() => {
               server.close();
-            }, 1000);
+            }, 100);
           }
         });
         
@@ -455,10 +471,18 @@ export class Auth {
         });
         
         // Timeout after 5 minutes
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           server.close();
           resolve(null);
         }, 300000);
+        
+        // Ensure cleanup on resolution
+        const originalResolve = resolve;
+        resolve = (value: string | null) => {
+          clearTimeout(timeoutId);
+          server.close();
+          originalResolve(value);
+        };
       });
     },
 
@@ -597,6 +621,8 @@ export class Auth {
       }
       
       // Create proper credential JSON structure
+      const nowMs = Date.now();
+      const expiresInSec = Number(tokenResponse.expires_in || 3600);
       const credentialData = {
         type: "authorized_user",
         access_token: tokenResponse.access_token,
@@ -608,7 +634,9 @@ export class Auth {
         universe_domain: "googleapis.com",
         // Add token metadata
         expires_in: tokenResponse.expires_in,
-        token_type: tokenResponse.token_type || "Bearer"
+        token_type: tokenResponse.token_type || "Bearer",
+        fetched_at: nowMs,
+        expires_at: nowMs + (expiresInSec * 1000),
       };
       
       // Write credential JSON to file

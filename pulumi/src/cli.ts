@@ -68,6 +68,7 @@ function setupDebugFlags(debugLevel?: 'debug' | 'trace'): void {
   if (!debugLevel) return;
   process.env['PULUMI_LOG_LEVEL'] = debugLevel;
   process.env['PULUMI_LOG_FLOW'] = 'true';
+  process.env['TF_LOG'] = debugLevel; // Enable Terraform logging
 }
 
 /** Unified runner — executes the requested operation using structured options. */
@@ -93,7 +94,7 @@ export async function runProject(project: Project, opts: RunnerOptions): Promise
 
   // Handle bootstrap operation (already done above, but allow explicit bootstrap)
   if (opts.op === 'bootstrap') {
-    console.log('Bootstrap completed');
+    // Bootstrap was already completed above, no need to print again
     return;
   }
 

@@ -20,12 +20,17 @@ export class Project {
     for (const [name, cfg] of Object.entries(this.environments)) {
       if (!cfg) continue;
       const envId = (cfg as any)?.id || name;
-      this.envs[envId] = new Environment(envId, this, cfg);
+      const env = new Environment(envId, cfg);
+      this.envs[envId] = env;
+      // Merge environment outputs into project outputs when available
+      if (env.outputs && typeof env.outputs === 'object') {
+        this.outputs = { ...(this.outputs || {}), ...env.outputs };
+      }
     }
 
-    // Make the project discoverable globally
-    try { 
-      (globalThis as any).__nebulaProject = this; 
+    // Make the project discoverable globally (optional for external consumers)
+    try {
+      (globalThis as any).__nebulaProject = this;
     } catch {}
   }
 }

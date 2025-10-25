@@ -22,6 +22,7 @@ export interface FirewallConfig {
 
 export class Firewall extends pulumi.ComponentResource {
   public readonly external: gcp.compute.Firewall;
+  public readonly externalWorkers?: gcp.compute.Firewall;
   public readonly internalNodes: gcp.compute.Firewall;
   public readonly internalPods: gcp.compute.Firewall;
   public readonly internalProxy?: gcp.compute.Firewall;
@@ -42,11 +43,11 @@ export class Firewall extends pulumi.ComponentResource {
           { name: 'join', port: 30090, healthCheck: 'TCP' as const },
         ];
 
-    const externalPorts: Array<number | string> = [
+    // Control-plane external ports (API and bootstrap/control ports only)
+    const externalCpPorts: Array<number | string> = [
       ...cpPorts.map(p => p.port),
       ...(args.debug ? [4000] : []),
       ...(args.emergencySsh ? [22] : []),
-      ...(args.includeNodePortRange === false ? [] : ['30000-32767']),
     ];
 
     const ruleBase: pulumi.Input<string> = args.ruleNameBase ?? (args.uid ? pulumi.interpolate`${args.name}-${args.uid}` : args.name);
@@ -56,9 +57,29 @@ export class Firewall extends pulumi.ComponentResource {
       network: args.networkId,
       sourceRanges: ['0.0.0.0/0'],
       direction: 'INGRESS',
-      allows: [{ protocol: 'tcp', ports: externalPorts.map(p => String(p)) }],
+      allows: [{ protocol: 'tcp', ports: externalCpPorts.map(p => String(p)) }],
       ...(args.targetTags?.controlPlane ? { targetTags: args.targetTags.controlPlane as any } : {}),
     }, { parent: this });
+
+    // Worker nodes external ports (ingress traffic and NodePort range)
+    const externalWorkerPorts: Array<number | string> = [
+      80,
+      443,
+      ...(args.includeNodePortRange === false ? [] : ['30000-32767']),
+      ...(args.debug ? [4000] : []),
+      ...(args.emergencySsh ? [22] : []),
+    ];
+    if (args.targetTags?.worker) {
+      this.externalWorkers = new gcp.compute.Firewall(`${args.name}-workers`, {
+        name: pulumi.interpolate`${ruleBase}-external-workers`,
+        description: 'Constellation VPC firewall (workers)',
+        network: args.networkId,
+        sourceRanges: ['0.0.0.0/0'],
+        direction: 'INGRESS',
+        allows: [{ protocol: 'tcp', ports: externalWorkerPorts.map(p => String(p)) }],
+        targetTags: args.targetTags.worker as any,
+      }, { parent: this });
+    }
 
     const internalTargetTags = args.targetTags
       ? pulumi.all([args.targetTags.controlPlane, args.targetTags.worker]).apply(([a, b]) => ([] as string[]).concat(a || [], b || []))
@@ -106,6 +127,7 @@ export class Firewall extends pulumi.ComponentResource {
       controlPlaneTags: this.controlPlaneTags,
       workerTags: this.workerTags,
       externalRuleName: this.external.name,
+      externalWorkersRuleName: this.externalWorkers?.name,
       internalNodesRuleName: this.internalNodes.name,
       internalPodsRuleName: this.internalPods.name,
     });
