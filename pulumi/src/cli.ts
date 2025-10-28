@@ -76,7 +76,7 @@ export async function runProject(project: Project, opts: RunnerOptions): Promise
   // Always bootstrap first - this handles authentication, backend setup, secrets providers
   try {
     console.log('Bootstrapping project...');
-    await Utils.bootstrap(project.id, project.environments);
+    await Utils.bootstrap(project.id, project.environments, project.config);
     console.log('Bootstrap completed successfully');
   } catch (error) {
     console.error('Bootstrap failed:', error);
@@ -148,14 +148,17 @@ async function handleShellOperation(project: Project, opts: RunnerOptions): Prom
   }
 
   const componentKeys = Object.keys(env.config.components || {});
-  if (componentKeys.length === 0) {
-    console.log('No components found');
+  const addonKeys = Object.keys(env.config.addons || {});
+  const allKeys = [...componentKeys, ...addonKeys];
+  
+  if (allKeys.length === 0) {
+    console.log('No components or addons found');
     return;
   }
   
-  const componentName = componentKeys[0]; // Use first component
+  const componentName = allKeys[0]; // Use first component or addon
   if (!componentName) {
-    console.log('No component available');
+    console.log('No component or addon available');
     return;
   }
 
@@ -179,10 +182,12 @@ async function handleGenerateOperation(project: Project, opts: RunnerOptions): P
   
   console.log(`Generating Pulumi YAML files and creating stacks in: ${workDir}`);
   
-  // Create stacks for each environment and component
+  // Create stacks for each environment, component, and addon
   for (const [envId, env] of Object.entries(project.envs)) {
     const components = env.config.components || {};
+    const addons = env.config.addons || {};
     
+    // Create stacks for components
     for (const componentName of Object.keys(components)) {
       try {
         console.log(`Creating stack: ${envId.toLowerCase()}-${componentName.toLowerCase()}`);
@@ -193,6 +198,21 @@ async function handleGenerateOperation(project: Project, opts: RunnerOptions): P
         console.log(`Created/selected stack: ${envId.toLowerCase()}-${componentName.toLowerCase()}`);
       } catch (error) {
         console.error(`Failed to create stack ${envId.toLowerCase()}-${componentName.toLowerCase()}:`, error);
+        // Continue with other stacks even if one fails
+      }
+    }
+    
+    // Create stacks for addons
+    for (const addonName of Object.keys(addons)) {
+      try {
+        console.log(`Creating stack: ${envId.toLowerCase()}-${addonName.toLowerCase()}`);
+        
+        // Create or select the stack using StackManager
+        await stackManager.createOrSelectStack(envId, addonName, true, workDir);
+        
+        console.log(`Created/selected stack: ${envId.toLowerCase()}-${addonName.toLowerCase()}`);
+      } catch (error) {
+        console.error(`Failed to create stack ${envId.toLowerCase()}-${addonName.toLowerCase()}:`, error);
         // Continue with other stacks even if one fails
       }
     }

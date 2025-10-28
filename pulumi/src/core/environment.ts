@@ -1,12 +1,14 @@
 import type { PulumiFn } from "@pulumi/pulumi/automation";
-import type { ComponentTypes } from "../components";
-import { Components } from "../components";
+import type { ComponentTypes, AddonTypes } from "../components";
+import { Components, Addon } from "../components";
 import * as pulumi from '@pulumi/pulumi';
 
 export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
+export type AddonFactoryMap = { [key: string]: (env: Environment) => AddonTypes[string] | PulumiFn };
 
 export interface EnvironmentConfig {
   components?: ComponentFactoryMap;
+  addons?: AddonFactoryMap;
   settings?: {
     backendUrl?: string;
     secretsProvider?: string;
@@ -17,6 +19,7 @@ export interface EnvironmentConfig {
 
 export class Environment {
   public outputs?: Record<string, any>;
+  
   constructor(
     public readonly id: string,
     public readonly config: EnvironmentConfig,
@@ -68,45 +71,80 @@ export class Environment {
    */
   private createComponentResource(componentName: string): void {
     const components = this.config.components || {};
+    const addons = this.config.addons || {};
     
-    // Find component factory with case-insensitive matching
+    // Try to find as a component first
     const componentKey = Object.keys(components).find(key => 
       key.toLowerCase() === componentName.toLowerCase()
     ) as keyof ComponentTypes;
     
-    if (!componentKey) {
-      throw new Error(`Component '${componentName}' not found in environment '${this.id}'`);
-    }
-    
-    const componentFactory = components[componentKey];
-    
-    if (!componentFactory) {
-      throw new Error(`Component factory for '${componentKey}' not found in environment '${this.id}'`);
-    }
-    
-    // Get config from factory
-    const config = componentFactory(this);
-    
-    // Skip if factory returned a PulumiFn (for programmatic stacks)
-    if (typeof config === 'function') {
+    if (componentKey) {
+      const componentFactory = components[componentKey];
+      
+      if (!componentFactory) {
+        throw new Error(`Component factory for '${componentKey}' not found in environment '${this.id}'`);
+      }
+      
+      // Get config from factory
+      const config = componentFactory(this);
+      
+      // Skip if factory returned a PulumiFn (for programmatic stacks)
+      if (typeof config === 'function') {
+        return;
+      }
+      
+      // Get the component constructor from the registry using the correct key
+      const ComponentClass = Components[componentKey];
+      if (!ComponentClass) {
+        throw new Error(`Component class '${componentKey}' not found in Components registry`);
+      }
+      
+      // Create the component instance with the config
+      const componentInstance = new ComponentClass(`${this.id}-${componentName}`, config);
+      
+      // Register stack outputs on the Project instance (ESM-friendly), and also
+      // merge them into the *root* module's exports for CommonJS environments.
+      try {
+        this.outputs = (componentInstance as any).outputs;
+      } catch (error) {
+        console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
+      }
       return;
     }
     
-    // Get the component constructor from the registry using the correct key
-    const ComponentClass = Components[componentKey];
-    if (!ComponentClass) {
-      throw new Error(`Component class '${componentKey}' not found in Components registry`);
+    // Try to find as an addon
+    const addonKey = Object.keys(addons).find(key => 
+      key.toLowerCase() === componentName.toLowerCase()
+    );
+    
+    if (addonKey) {
+      const addonFactory = addons[addonKey];
+      
+      if (!addonFactory) {
+        throw new Error(`Addon factory for '${addonKey}' not found in environment '${this.id}'`);
+      }
+      
+      // Get config from factory
+      const config = addonFactory(this);
+      
+      // Skip if factory returned a PulumiFn (for programmatic stacks)
+      if (typeof config === 'function') {
+        return;
+      }
+      
+      // Create the addon instance with the config
+      const addonInstance = new Addon(`${this.id}-${componentName}`, config);
+      
+      // Register stack outputs
+      try {
+        this.outputs = (addonInstance as any).outputs;
+      } catch (error) {
+        console.warn(`[Environment] Failed to register outputs for addon '${componentName}':`, error);
+      }
+      return;
     }
     
-    // Create the component instance with the config
-    const componentInstance = new ComponentClass(`${this.id}-${componentName}`, config);
-    
-    // Register stack outputs on the Project instance (ESM-friendly), and also
-    // merge them into the *root* module's exports for CommonJS environments.
-    try {
-      this.outputs = (componentInstance as any).outputs;
-    } catch (error) {
-      console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
-    }
+    // If neither component nor addon found, throw error
+    throw new Error(`Component or addon '${componentName}' not found in environment '${this.id}'`);
   }
 }

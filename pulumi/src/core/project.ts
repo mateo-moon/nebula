@@ -1,18 +1,25 @@
 import { type EnvironmentConfig, Environment } from "./environment";
 import { Utils } from "../utils";
 
-export interface ProjectConfig {}
+export interface ProjectConfig {
+  backendUrl?: string;
+}
 
 type EnvironmentsInput = Record<string, EnvironmentConfig | undefined>;
 
 export class Project {
   public readonly envs: Record<string, Environment> = {};
   public outputs?: Record<string, any>;
+  public readonly config?: ProjectConfig;
 
   constructor(
     public readonly id: string,
+    config: ProjectConfig | undefined,
     public readonly environments: EnvironmentsInput
   ) {
+    if (config) {
+      this.config = config;
+    }
     // Set global variables
     Utils.setGlobalVariables();
 

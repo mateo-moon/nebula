@@ -178,7 +178,12 @@ export class StackManager {
     }
 
     const components = env.config.components || {};
-    return Object.keys(components).map(componentName => `${envId.toLowerCase()}-${componentName.toLowerCase()}`);
+    const addons = env.config.addons || {};
+    const allStacks = [
+      ...Object.keys(components),
+      ...Object.keys(addons)
+    ];
+    return allStacks.map(componentName => `${envId.toLowerCase()}-${componentName.toLowerCase()}`);
   }
 
   /**
@@ -195,6 +200,9 @@ export class StackManager {
   private buildBaseWorkspaceOptions(env: any): any {
     const isDebug = Boolean(process.env['PULUMI_LOG_LEVEL'] || process.env['TF_LOG']);
     
+    // Get backend URL from project-level config only
+    const backendUrl = this.project.config?.backendUrl;
+    
     const baseOpts: any = {
       projectSettings: {
         name: this.project.id,
@@ -203,8 +211,8 @@ export class StackManager {
           name: 'nodejs', 
           options: { typescript: false, nodeargs: '--import=tsx/esm' } 
         },
-        ...(env.config.settings?.backendUrl ? { 
-          backend: { url: env.config.settings.backendUrl } 
+        ...(backendUrl ? { 
+          backend: { url: backendUrl } 
         } : {}),
       },
     };

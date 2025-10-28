@@ -366,6 +366,7 @@ users:
 
     this.registerOutputs({
       clusterName: this.cluster.name,
+      clusterEndpoint: this.cluster.endpoint,
       kubeconfig: this.kubeconfig,
       nodePools: this.nodePools,
     });

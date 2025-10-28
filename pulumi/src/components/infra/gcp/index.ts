@@ -31,6 +31,7 @@ export interface GcpOutput {
   podsRangeName?: string;
   servicesRangeName?: string;
   gkeClusterName?: any;
+  gkeClusterEndpoint?: any;
   kubeconfig?: any;
   externalDnsGsaEmail?: any;
   certManagerGsaEmail?: any;
@@ -61,6 +62,7 @@ export class Gcp  extends pulumi.ComponentResource{
       podsRangeName: this.network?.podsRangeName,
       servicesRangeName: this.network?.servicesRangeName,
       gkeClusterName: this.gke?.cluster?.name,
+      gkeClusterEndpoint: this.gke?.cluster?.endpoint,
       kubeconfig: this.gke?.kubeconfig,
       externalDnsGsaEmail: this.iam?.externalDnsGsaEmail,
       certManagerGsaEmail: this.iam?.certManagerGsaEmail,
@@ -73,6 +75,7 @@ export class Gcp  extends pulumi.ComponentResource{
       podsRangeName: this.network?.podsRangeName,
       servicesRangeName: this.network?.servicesRangeName,
       gkeClusterName: this.gke?.cluster?.name,
+      gkeClusterEndpoint: this.gke?.cluster?.endpoint,
       kubeconfig: this.gke?.kubeconfig,
       externalDnsGsaEmail: this.iam?.externalDnsGsaEmail,
       certManagerGsaEmail: this.iam?.certManagerGsaEmail,
