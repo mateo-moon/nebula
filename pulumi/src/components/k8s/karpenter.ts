@@ -95,8 +95,17 @@ export interface KarpenterNodePoolDefinition {
   weight?: number;
   /** How long to keep an empty node before termination */
   ttlSecondsAfterEmpty?: number;
-  /** Disruption configuration (passed through) */
-  disruption?: Record<string, unknown>;
+  /** Disruption configuration - controls how Karpenter handles node disruption (drift, empty nodes, etc.) */
+  disruption?: {
+    /** Enable automatic disruption for drifted nodes (default: true) */
+    consolidateAfter?: string;
+    /** Consolidation policy: 'WhenEmpty', 'WhenUnderutilized', or 'Never' */
+    consolidateWhen?: 'Never' | 'WhenEmpty' | 'WhenUnderutilized';
+    /** Allow drift disruption */
+    drift?: boolean;
+    /** Expire nodes after specified duration if empty */
+    expireAfter?: string;
+  };
 }
 
 export class Karpenter extends pulumi.ComponentResource {
@@ -347,6 +356,9 @@ export class Karpenter extends pulumi.ComponentResource {
           { key: 'karpenter.sh/capacity-type', operator: 'In', values: ['on-demand'] },
           { key: 'node.kubernetes.io/instance-type', operator: 'In', values: ['e2-standard-2'] },
         ],
+        disruption: {
+          consolidateWhen: 'Never', // Don't consolidate system nodes
+        },
       };
     }
     
@@ -367,7 +379,7 @@ export class Karpenter extends pulumi.ComponentResource {
         const nodeClassSpec: Record<string, unknown> = Helpers.resolveStackRefsDeep({
           ...baseSpec,
           imageSelectorTerms: baseSpec['imageSelectorTerms'] || [{ alias: "Ubuntu@latest" }],
-          disks: baseSpec['disks'] || [{ boot: true, category: "pd-standard", sizeGiB: 100 }],
+          disks: baseSpec['disks'] || [{ boot: true, category: "pd-balanced", sizeGiB: 60 }],
         });
 
         // Note: Pulumi may attempt to create this CustomResource before the Helm chart's CRD is fully established.
