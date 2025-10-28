@@ -100,13 +100,28 @@ export class Helpers {
     }
     
     try {
+      // Read credentials file to extract projectId if not provided
+      let projectId = config.projectId;
+      if (!projectId) {
+        try {
+          const credentialsContent = fs.readFileSync(credentialsFile, 'utf8');
+          const credentials = JSON.parse(credentialsContent);
+          projectId = credentials.quota_project_id || credentials.project_id;
+          if (projectId) {
+            console.log(`Using project ID from credentials: ${projectId}`);
+          }
+        } catch (error) {
+          console.log('Could not read project ID from credentials file');
+        }
+      }
+      
       // Initialize Storage client with credentials
       const storageOptions: any = {
         keyFilename: credentialsFile
       };
       
-      if (config.projectId) {
-        storageOptions.projectId = config.projectId;
+      if (projectId) {
+        storageOptions.projectId = projectId;
       }
       
       const storage = new Storage(storageOptions);
@@ -127,8 +142,8 @@ export class Helpers {
         bucketOptions.location = config.location;
       }
       
-      if (config.projectId) {
-        bucketOptions.projectId = config.projectId;
+      if (projectId) {
+        bucketOptions.projectId = projectId;
       }
       
       await storage.createBucket(config.bucket, bucketOptions);
@@ -143,6 +158,16 @@ export class Helpers {
         console.error('Please run: npx nebula clear-auth (if available) or manually delete expired credential files.');
         console.error('Then run: npx nebula bootstrap to re-authenticate.');
       }
+      
+      // Check for project ID errors
+      if (err?.message?.includes('Unable to detect a Project Id') || err?.message?.includes('Project ID')) {
+        console.error('\nProject ID not found. Please ensure:');
+        console.error('1. Your credentials file contains quota_project_id or project_id field');
+        console.error('2. Pass projectId explicitly in the config');
+        console.error('3. Or set CLOUDSDK_CORE_PROJECT environment variable');
+      }
+      
+      throw err;
     }
   }
 
@@ -180,25 +205,41 @@ export class Helpers {
         // Import Auth utilities
         const { Auth } = await import('./auth');
         
-        if (config.projectId) {
+        // Try to get projectId from config, or try to extract from credentials
+        let projectId = config.projectId;
+        
+        if (!projectId) {
+          // Try to get projectId from environment variable or credentials file
+          const credsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
+          if (credsFile && fs.existsSync(credsFile)) {
+            try {
+              const creds = JSON.parse(fs.readFileSync(credsFile, 'utf8'));
+              projectId = creds.project_id || creds.quota_project_id;
+            } catch (e) {
+              // Ignore errors reading credentials
+            }
+          }
+        }
+        
+        if (projectId) {
           try {
             // Clear expired credentials
-            Auth.GCP.clearExpiredCredentials(config.projectId);
+            Auth.GCP.clearExpiredCredentials(projectId);
             
             // Re-authenticate
-            await Auth.GCP.authenticate(config.projectId, config.location);
+            await Auth.GCP.authenticate(projectId, config.location);
             
             console.log('Credentials refreshed, retrying GCS bucket operation...');
             
-            // Retry the operation
-            await Helpers.checkCreateGcsBucket(config);
+            // Retry the operation with projectId now set
+            await Helpers.checkCreateGcsBucket({ ...config, projectId });
             
           } catch (authError: any) {
             console.error('Failed to refresh credentials:', authError?.message || authError);
             throw new Error(`Authentication failed: ${authError?.message || authError}`);
           }
         } else {
-          throw new Error('Project ID required for credential refresh');
+          throw new Error('Project ID required for credential refresh. Please set gcp:project in your config or provide it in the credentials file.');
         }
       } else {
         // Re-throw non-auth errors
@@ -222,17 +263,17 @@ export class Helpers {
    * Bootstrap backend storage and secrets providers for all environments.
    * This is a utility function that should be called from the CLI layer.
    */
-  public static async bootstrap(projectId: string, environments: Record<string, any>): Promise<void> {
+  public static async bootstrap(projectId: string, environments: Record<string, any>, projectConfig?: any): Promise<void> {
     // Extract settings from environment configs
     const envConfigs = Object.values(environments).filter(Boolean) as any[];
     const envSettings = envConfigs.map(cfg => cfg.settings || {});
 
-    // Backend URL taken from the first environment with one set
-    const backendUrl = envSettings.find(s => Boolean(s.backendUrl))?.backendUrl;
+    // Backend URL taken from project config
+    const backendUrl = projectConfig?.backendUrl;
 
     // Parse first available config (string or object) and extract cloud details
     const firstRawConfig = envSettings.find(s => s.config != null)?.config;
-    const parsedCfg = Helpers.parsePulumiConfigRaw(firstRawConfig as any);
+    const parsedCfg = await Helpers.parsePulumiConfigRaw(firstRawConfig as any);
     const awsConfig = Helpers.extractAwsFromPulumiConfig(parsedCfg);
     const gcpConfig = Helpers.extractGcpFromPulumiConfig(parsedCfg);
 
@@ -260,15 +301,26 @@ export class Helpers {
       });
     }
 
-    // Setup SOPS config for GCP KMS
-    const gcpkms = secretsProviders.find(p => p.startsWith('gcpkms://'));
-    if (gcpkms) {
-      const patterns = [
-        `.*/secrets\\.yaml`,
-        `.*/secrets-${projectId}-.*\\.yaml`,
-      ];
-      const resource = gcpkms.replace(/^gcpkms:\/\//, '');
-      Helpers.ensureSopsConfig({ gcpKmsResourceId: resource, patterns });
+    // Setup SOPS config for GCP KMS - handle multiple providers
+    // Create separate rules for each environment
+    // Each environment gets access to shared secrets.yaml AND its own env-specific secrets
+    const envNames = Object.keys(environments);
+    for (const envName of envNames) {
+      // Use the KMS key for this environment (get from env settings)
+      const envConfig = environments[envName];
+      const envKmsProvider = envConfig?.settings?.secretsProvider;
+      
+      if (envKmsProvider && envKmsProvider.startsWith('gcpkms://')) {
+        const resource = envKmsProvider.replace(/^gcpkms:\/\//, '');
+        // Each env rule includes both shared secrets.yaml and env-specific secrets
+        Helpers.ensureSopsConfig({ 
+          gcpKmsResourceId: resource, 
+          patterns: [
+            `secrets\\.yaml`,
+            `secrets-${projectId}-${envName}\\.yaml`
+          ] 
+        });
+      }
     }
   }
 
@@ -447,22 +499,53 @@ export class Helpers {
   /** Ensure .sops.yaml exists and references the provided GCP KMS key for given patterns. */
   public static ensureSopsConfig(opts: { gcpKmsResourceId: string; patterns: string[] }) {
     const sopsPath = path.resolve(process.cwd(), '.sops.yaml');
+    
+    // Read existing config if it exists
+    const existingConfig = Helpers.readSopsConfig(sopsPath);
+    
+    // Create new rule
+    const newRule = {
+      gcp_kms: opts.gcpKmsResourceId,
+      path_regex: opts.patterns.join('|'),
+    };
+    
+    // Merge with existing rules (avoid duplicates)
+    const existingRules = existingConfig?.creation_rules || [];
+    const ruleExists = existingRules.some((rule: any) => 
+      rule.gcp_kms === newRule.gcp_kms && rule.path_regex === newRule.path_regex
+    );
+    
+    if (!ruleExists) {
+      existingRules.push(newRule);
+    }
+    
     const cfg = {
-      creation_rules: [
-        {
-          gcp_kms: opts.gcpKmsResourceId,
-          path_regex: opts.patterns.join('|'),
-        },
-      ],
-      stores: { yaml: { indent: 2 } },
-    } as const;
+      creation_rules: existingRules,
+      stores: existingConfig?.stores || { yaml: { indent: 2 } },
+    };
+    
     Helpers.writeSopsConfig(sopsPath, cfg as any);
+  }
+
+  /** Read existing SOPS config if it exists */
+  private static readSopsConfig(pathname: string): { creation_rules?: any[]; stores?: any } | null {
+    try {
+      if (fs.existsSync(pathname)) {
+        const content = fs.readFileSync(pathname, 'utf8');
+        return YAML.parse(content);
+      }
+    } catch (error) {
+      console.log(`Failed to read existing SOPS config: ${error}`);
+    }
+    return null;
   }
 
   private static writeSopsConfig(pathname: string, cfg: { creation_rules: any[]; stores: { yaml: { indent: number } } }) {
     try {
       fs.writeFileSync(pathname, '# Generated by Pulumi\n' + YAML.stringify(cfg, { indent: 2 }));
-    } catch {}
+    } catch (error) {
+      console.log(`Failed to write SOPS config: ${error}`);
+    }
   }
 
 

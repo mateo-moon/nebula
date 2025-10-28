@@ -6,7 +6,7 @@ import { InfraConfig, K8sConfig } from 'nebula/components';
 // for all stacks in the environment. Bootstrap ensures the backend bucket and KMS key exist.
 
 // Define a simple environment with a single Infra component scaffold
-export const project = new Project('nebula-template', {
+export const project = new Project('nebula-template', undefined, {
   dev: {
     settings: {
       // Pulumi backend URL (gs:// | s3:// | file://). Will be created/validated during bootstrap.

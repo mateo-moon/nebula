@@ -155,6 +155,24 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
         serviceAccountId: gsaResourceIdOut || pulumi.interpolate`projects/${projectId}/serviceAccounts/${gsaEmailOut!}`,
       }, { parent: this });
 
+      // Create the Secret BEFORE kustomize - this way kustomize's secretsGenerator won't create it
+      // Use deleteBeforeReplace to handle conflicts with any existing Secret
+      // The key must be GCP_CREDENTIALS (not creds.json) because envFrom creates env vars named after the key
+      const gcpCredentialsSecret = new k8s.core.v1.Secret(`${name}-caa-gcp-creds`, {
+        metadata: {
+          name: "peer-pods-secret",
+          namespace: namespace,
+        },
+        type: "Opaque",
+        data: {
+          "GCP_CREDENTIALS": gsaKey.privateKey.apply(key => key),
+        },
+      }, { 
+        parent: this,
+        deleteBeforeReplace: true,
+        retainOnDelete: false,
+      });
+
       const wi = args.cloudApiAdapter?.workloadIdentity !== false;
       if (wi && (gsaResourceIdOut || gsaEmailOut)) {
         new gcp.serviceaccount.IAMMember(`${name}-caa-wi`, {
@@ -166,45 +184,100 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
 
       // Build CAA kustomize with env overrides for TDX/SEV
       const caaVersion = args.cloudApiAdapter?.version || releaseVersion;
-      const caaRef = caaVersion.startsWith('v') ? caaVersion : `v${caaVersion}`;
+      // Handle branch names (like 'main') vs version tags (like 'v0.16.0')
+      const caaRef = caaVersion.startsWith('v') || caaVersion === 'main' || caaVersion.includes('/') 
+        ? caaVersion 
+        : `v${caaVersion}`;
       const podvmInstanceType = args.cloudApiAdapter?.podVm?.instanceType || "c3-standard-4";
       const podvmDisableCvm = args.cloudApiAdapter?.podVm?.disableCvm === true ? "true" : "false";
       const gcpConfidentialType = (args.cloudApiAdapter?.podVm?.confidentialType || "TDX").toUpperCase();
       const gcpDiskType = args.cloudApiAdapter?.podVm?.diskType || (gcpConfidentialType === "TDX" ? "pd-balanced" : "pd-standard");
-      const podvmImageName = args.cloudApiAdapter?.podVm?.imageName || "/projects/it-cloud-gcp-prod-osc-devel/global/images/fedora-mkosi-tee-amd-1-11-0";
+      // Note: Cloud API Adaptor v0.16.0 has a bug where it strips project ID from image paths
+      // and always uses GCP_PROJECT_ID. Workaround: Copy image to your project or use relative path
+      const podvmImageName = args.cloudApiAdapter?.podVm?.imageName || "fedora-mkosi-tee-amd-1-11-0";
       const gcpZone = args.cloudApiAdapter?.gcpZone || zoneFromConfig;
       const gcpNetwork = args.cloudApiAdapter?.gcpNetwork || "default";
+      
+      // Build container image override
+      const containerImage = args.cloudApiAdapter?.containerImage;
+      const imageOverride = containerImage?.repository && containerImage?.tag
+        ? `${containerImage.repository}:${containerImage.tag}`
+        : undefined;
+      
       const caaDir = new k8s.kustomize.v2.Directory("cc-cloud-api-adaptor", {
         directory: `https://github.com/confidential-containers/cloud-api-adaptor//src/cloud-api-adaptor/install/overlays/gcp?ref=${caaRef}`,
       }, {
         parent: this,
-        dependsOn: [ccRuntime],
+        dependsOn: [ccRuntime, gcpCredentialsSecret],
         transforms: [
           (obj: any) => {
-            if (!obj || !obj.kind || !obj.metadata) return;
-            // Keep only ConfigMap updates; upstream overlay handles other resources
-            if (obj.kind === "ConfigMap" && obj.metadata.name === "peer-pods-cm") {
-              obj.data = obj.data || {};
-              obj.data["CLOUD_PROVIDER"] = "gcp";
-              obj.data["GCP_PROJECT_ID"] = projectId || "";
-              obj.data["GCP_MACHINE_TYPE"] = podvmInstanceType || "";
-              obj.data["GCP_CONFIDENTIAL_TYPE"] = gcpConfidentialType || "";
-              obj.data["GCP_DISK_TYPE"] = gcpDiskType || "";
-              obj.data["DISABLECVM"] = podvmDisableCvm || "false";
-              obj.data["PODVM_IMAGE_NAME"] = podvmImageName || "";
-              obj.data["GCP_ZONE"] = gcpZone || "";
-              obj.data["GCP_NETWORK"] = gcpNetwork || "";
+            // Return early if null
+            if (!obj) return obj;
+            
+            // Handle both direct objects and objects wrapped in metadata
+            let resource = obj;
+            if (obj.metadata && obj.metadata.name) {
+              resource = obj;
+            } else if (obj.props) {
+              resource = obj.props;
             }
-            // Add tolerations for system nodes
+            
+            // Filter out Secret - we'll create it ourselves
+            if (resource?.kind === "Secret" && resource?.metadata?.name === "peer-pods-secret") {
+              // Return undefined to skip this resource
+              return undefined;
+            }
+            
+            // Access the actual Kubernetes resource from props
+            const k8sObj = obj?.props || obj;
+            if (!k8sObj || !k8sObj.kind || !k8sObj.metadata) return obj;
+            
+            // Keep only ConfigMap updates; upstream overlay handles other resources
+            if (k8sObj.kind === "ConfigMap" && k8sObj.metadata.name === "peer-pods-cm") {
+              k8sObj.data = k8sObj.data || {};
+              k8sObj.data["CLOUD_PROVIDER"] = "gcp";
+              k8sObj.data["GCP_PROJECT_ID"] = projectId || "";
+              k8sObj.data["GCP_MACHINE_TYPE"] = podvmInstanceType || "";
+              k8sObj.data["GCP_CONFIDENTIAL_TYPE"] = gcpConfidentialType || "";
+              k8sObj.data["GCP_DISK_TYPE"] = gcpDiskType || "";
+              k8sObj.data["DISABLECVM"] = podvmDisableCvm || "false";
+              k8sObj.data["PODVM_IMAGE_NAME"] = podvmImageName || "";
+              k8sObj.data["GCP_ZONE"] = gcpZone || "";
+              k8sObj.data["GCP_NETWORK"] = gcpNetwork || "";
+            }
+            // Add tolerations for system nodes and override container image
             const podLike = (o: any) => o && o.spec && (o.kind === 'Deployment' || o.kind === 'DaemonSet' || o.kind === 'StatefulSet');
-            if (podLike(obj)) {
-              const tpl = obj.spec.template || (obj.spec.template = {});
+            if (podLike(k8sObj)) {
+              const tpl = k8sObj.spec.template || (k8sObj.spec.template = {});
               const spec = tpl.spec || (tpl.spec = {});
+              
               // Add tolerations for system nodes
               if (spec.tolerations === undefined) {
                 spec.tolerations = [
                   { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
                 ];
+              }
+              
+              // Override container image if specified
+              if (spec.containers) {
+                for (const container of spec.containers) {
+                  // Match cloud-api-adaptor by name or by old registry in image
+                  const isCaaContainer = container.name?.includes("cloud-api-adaptor") || 
+                                         container.image?.includes("192.168.122.1:5000") ||
+                                         container.image === "cloud-api-adaptor";
+                  
+                  if (isCaaContainer) {
+                    if (imageOverride) {
+                      container.image = imageOverride;
+                      if (containerImage?.pullPolicy) {
+                        container.imagePullPolicy = containerImage.pullPolicy;
+                      }
+                    }
+                    // Note: SecretRef to peer-pods-secret is kept as-is
+                    // We create this secret above with the proper structure
+                    // The key is GCP_CREDENTIALS because envFrom creates env vars named after the key
+                  }
+                }
               }
             }
             return obj;
@@ -219,23 +292,12 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
         });
       }
 
-      // Create or update secret with GCP credentials
-      const peerPodsSecret = new k8s.core.v1.Secret("peer-pods-secret", {
-        metadata: {
-          name: "peer-pods-secret",
-          namespace: namespace,
-        },
-        data: {
-          GCP_CREDENTIALS: gsaKey.privateKey,
-        },
-      }, { parent: this, dependsOn: [caaDir], deleteBeforeReplace: true });
-
       // Peerpod controller for garbage collecting PodVMs (apply after CAA) via kustomize Directory
       const peerpodController = new k8s.kustomize.v2.Directory("peerpod-controller", {
         directory: `https://github.com/confidential-containers/cloud-api-adaptor//src/peerpod-ctrl/config/default?ref=${caaRef}`,
       }, {
         parent: this,
-        dependsOn: [caaDir, peerPodsSecret],
+        dependsOn: [caaDir, gcpCredentialsSecret],
       });
 
       // Annotate KSA for Workload Identity (patch)

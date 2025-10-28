@@ -13,11 +13,11 @@ export interface KarpenterConfig {
   /** Namespace where Karpenter will be installed (default: "karpenter") */
   namespace?: string;
   /** Name of the cluster as seen by Karpenter's controller (required) */
-  clusterName: string;
+  clusterName: pulumi.Input<string>;
   /** Optional cluster API server endpoint, recommended on some providers */
-  clusterEndpoint?: string;
+  clusterEndpoint?: pulumi.Input<string>;
   /** GCP region for the provider (required if installProvider=true) */
-  region?: string;
+  region?: pulumi.Input<string>;
   /** Optional extra Helm values to merge */
   values?: Record<string, unknown>;
   /** Helm chart version and repo overrides */
@@ -51,6 +51,8 @@ export interface KarpenterConfig {
   bootstrapHardening?: boolean;
   /** Override PDB minAvailable (default: 1). Note: PDB is managed by Helm chart, this is not currently used */
   pdbMinAvailable?: number;
+  /** Number of Karpenter controller replicas (default: 1) */
+  replicaCount?: number;
   /** Declarative nodePools: key is the NodePool name, value defines pool + NodeClass */
   nodePools?: Record<string, KarpenterNodePoolDefinition>;
 }
@@ -197,6 +199,8 @@ export class Karpenter extends pulumi.ComponentResource {
         clusterName: args.clusterName,
         ...(args.clusterEndpoint ? { clusterEndpoint: args.clusterEndpoint } : {}),
       },
+      // replicaCount is at the top level for Karpenter charts
+      ...(args.replicaCount !== undefined ? { replicaCount: args.replicaCount } : {}),
       controller: {
         clusterName: args.clusterName,
         ...(args.clusterEndpoint ? { clusterEndpoint: args.clusterEndpoint } : {}),
@@ -290,6 +294,7 @@ export class Karpenter extends pulumi.ComponentResource {
           },
         },
         controller: {
+          replicaCount: args.replicaCount !== undefined ? args.replicaCount : 1,
           settings: {
             projectID: clusterProject,
             location: args.region, // Use 'location' instead of 'region' for GCP provider chart
@@ -380,7 +385,9 @@ export class Karpenter extends pulumi.ComponentResource {
           parent: this, 
           dependsOn: crDeps,
           // Extended timeout to allow CRD establishment on first deployment
-          customTimeouts: { create: "5m" }
+          customTimeouts: { create: "5m" },
+          // Ignore metadata label changes to avoid resource recreation
+          ignoreChanges: ["metadata.labels"]
         });
 
         const templateSpec: Record<string, unknown> = {};

@@ -63,6 +63,22 @@ export class CertManager extends pulumi.ComponentResource {
       );
 
 
+    // Create self-signed ClusterIssuer for internal certificates
+    new k8s.apiextensions.CustomResource(
+      "selfsigned-clusterissuer",
+      {
+        apiVersion: "cert-manager.io/v1",
+        kind: "ClusterIssuer",
+        metadata: {
+          name: "selfsigned",
+        },
+        spec: {
+          selfSigned: {},
+        },
+      },
+      { dependsOn: [chart], parent: this }
+    );
+
     new k8s.apiextensions.CustomResource(
       "letsencrypt-stage-clusterissuer",
       {

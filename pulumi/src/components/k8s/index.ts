@@ -173,7 +173,10 @@ export class K8s extends pulumi.ComponentResource {
     }
     if (args.prometheusOperator) {
       const promOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-      if (clusterAutoscaler) promOpts.dependsOn = [clusterAutoscaler];
+      const deps = [] as any[];
+      if (clusterAutoscaler) deps.push(clusterAutoscaler);
+      if (certManager) deps.push(certManager);
+      if (deps.length > 0) promOpts.dependsOn = deps;
       new PrometheusOperator(name, args.prometheusOperator, promOpts);
     }
     if (args.metricsServer) {

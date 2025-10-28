@@ -4,6 +4,29 @@ import * as pulumi from "@pulumi/pulumi";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
+// Deep merge helper function
+function deepMerge(target: any, source: any): any {
+  const output = { ...target };
+  if (isObject(target) && isObject(source)) {
+    Object.keys(source).forEach(key => {
+      if (isObject(source[key])) {
+        if (!(key in target)) {
+          Object.assign(output, { [key]: source[key] });
+        } else {
+          output[key] = deepMerge(target[key], source[key]);
+        }
+      } else {
+        Object.assign(output, { [key]: source[key] });
+      }
+    });
+  }
+  return output;
+}
+
+function isObject(item: any): boolean {
+  return item && typeof item === 'object' && !Array.isArray(item);
+}
+
 export interface PrometheusOperatorConfig {
   namespace?: string;
   args?: OptionalChartArgs;
@@ -26,6 +49,11 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     }, { parent: this });
 
     const storageClassName = args.storageClassName || "standard";
+    
+    // Read Google OAuth config - use 'google' namespace like hetzner uses 'hetzner' namespace
+    const googleConfig = new pulumi.Config('google');
+    const googleClientId = googleConfig.get('oidc_client_id');
+    const googleClientSecret = googleConfig.getSecret('oidc_client_secret');
     
     const defaultValues = {
       prometheus: {
@@ -66,12 +94,12 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           enabled: true,
           createAdmissionWebhooks: true,
           patch: {
-            enabled: false // Disable self-signed cert generation
+            enabled: false // Disable self-signed cert generation (use cert-manager instead)
           },
           certManager: {
             enabled: true, // Use cert-manager for TLS certificates
             issuerRef: {
-              name: "letsencrypt-staging",
+              name: "selfsigned",
               kind: "ClusterIssuer",
               group: "cert-manager.io"
             }
@@ -88,7 +116,11 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         },
         service: {
           type: "ClusterIP"
-        }
+        },
+        env: googleClientId && googleClientSecret ? pulumi.all([googleClientId, googleClientSecret]).apply(([clientId, clientSecret]) => ({
+          GF_AUTH_GOOGLE_CLIENT_ID: clientId,
+          GF_AUTH_GOOGLE_CLIENT_SECRET: clientSecret,
+        })) : {},
       },
       alertmanager: {
         enabled: true,
@@ -145,12 +177,20 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     };
 
     const providedArgs: OptionalChartArgs | undefined = args.args;
+    
+    // Merge provided values with default values
+    const mergedValues = providedArgs?.values 
+      ? pulumi.all([defaultValues, providedArgs.values]).apply(([defaults, provided]) => {
+          return deepMerge(defaults, provided);
+        })
+      : defaultValues;
+    
     const finalChartArgs: ChartArgs = {
       chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
       ...defaultChartArgsBase,
       ...(providedArgs || {}),
       namespace: namespaceName,
-      values: defaultValues,
+      values: mergedValues,
     };
 
     const chart = new k8s.helm.v4.Chart(
