@@ -97,15 +97,18 @@ export interface KarpenterNodePoolDefinition {
   ttlSecondsAfterEmpty?: number;
   /** Disruption configuration - controls how Karpenter handles node disruption (drift, empty nodes, etc.) */
   disruption?: {
-    /** Enable automatic disruption for drifted nodes (default: true) */
+    /** Consolidate after duration (e.g., '30s', '1m') */
     consolidateAfter?: string;
-    /** Consolidation policy: 'WhenEmpty', 'WhenUnderutilized', or 'Never' */
-    consolidateWhen?: 'Never' | 'WhenEmpty' | 'WhenUnderutilized';
-    /** Allow drift disruption */
-    drift?: boolean;
+    /** Consolidation policy: 'Never', 'WhenEmpty', 'WhenUnderutilized' */
+    consolidationPolicy?: 'Never' | 'WhenEmpty' | 'WhenUnderutilized';
     /** Expire nodes after specified duration if empty */
     expireAfter?: string;
-  };
+    /** Budgets for limiting disruption - array of budget objects */
+    budgets?: Array<{
+      nodes?: string;
+      max?: number;
+    }>;
+  } | Record<string, unknown>; // Allow passing through custom disruption config
 }
 
 export class Karpenter extends pulumi.ComponentResource {
@@ -356,9 +359,7 @@ export class Karpenter extends pulumi.ComponentResource {
           { key: 'karpenter.sh/capacity-type', operator: 'In', values: ['on-demand'] },
           { key: 'node.kubernetes.io/instance-type', operator: 'In', values: ['e2-standard-2'] },
         ],
-        disruption: {
-          consolidateWhen: 'Never', // Don't consolidate system nodes
-        },
+        // Note: disruption config handled via pass-through below
       };
     }
     
@@ -369,13 +370,20 @@ export class Karpenter extends pulumi.ComponentResource {
       // NodePools use GCP provider CRDs, so they should only depend on the provider chart, not the core chart
       const crDeps = [providerChart!] as pulumi.Resource[];
       for (const [poolName, def] of Object.entries(effectiveNodePools)) {
-        const nodeClassName = def.nodeClassName || `${poolName}-class`;
+        const nodeClassName = def.nodeClassName || `${poolName.toLowerCase()}-class`;
         const nodeClassApi = def.nodeClass?.apiVersion || "karpenter.k8s.gcp/v1alpha1";
         const nodeClassKind = def.nodeClass?.kind || "GCENodeClass";
         // Note: projectID is configured at the controller level in the Helm chart settings, not in the NodeClass spec
         // imageSelectorTerms is required - default to Ubuntu if not specified (Ubuntu works better for confidential containers)
         // disks is required - default to a standard boot disk if not specified
         const baseSpec = def.nodeClass?.spec || {};
+        // For GCP, node naming is controlled by metadata labels in GCENodeClass
+        // Add project/prefix labels to help identify nodes
+        const nodeClassLabels = {
+          ...(def.nodeClass?.metadata?.labels || {}),
+          'karpenter.sh/project': clusterProject,
+          'karpenter.sh/pool': poolName.toLowerCase(),
+        };
         const nodeClassSpec: Record<string, unknown> = Helpers.resolveStackRefsDeep({
           ...baseSpec,
           imageSelectorTerms: baseSpec['imageSelectorTerms'] || [{ alias: "Ubuntu@latest" }],
@@ -390,7 +398,7 @@ export class Karpenter extends pulumi.ComponentResource {
           metadata: {
             name: nodeClassName,
             annotations: def.nodeClass?.metadata?.annotations || {},
-            labels: def.nodeClass?.metadata?.labels || {},
+            labels: nodeClassLabels,
           },
           spec: nodeClassSpec,
         }, { 
@@ -437,7 +445,7 @@ export class Karpenter extends pulumi.ComponentResource {
           apiVersion: "karpenter.sh/v1",
           kind: "NodePool",
           metadata: {
-            name: poolName,
+            name: poolName.toLowerCase(),
           },
           spec: nodePoolSpec,
         }, { parent: this, dependsOn: [nodeClass, ...crDeps] });

@@ -34,8 +34,9 @@ export interface ConfidentialContainersCloudApiAdapterConfig {
     pullPolicy?: "Always" | "IfNotPresent" | "Never";
   };
   // GCP specifics
-  gcpZone?: string;                  // sets GCP_ZONE in peer-pods-cm
-  gcpNetwork?: string;                // sets GCP_NETWORK in peer-pods-cm
+  gcpZone?: string | pulumi.Output<string>;                  // sets GCP_ZONE in peer-pods-cm
+  gcpNetwork?: string | pulumi.Output<string>;                // sets GCP_NETWORK in peer-pods-cm
+  gcpSubnetwork?: string | pulumi.Output<string>;            // sets GCP_SUBNETWORK in peer-pods-cm (for custom subnet mode)
   extraKustomize?: string[];         // additional kustomize URLs to apply
 }
 
@@ -192,13 +193,12 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
       const podvmDisableCvm = args.cloudApiAdapter?.podVm?.disableCvm === true ? "true" : "false";
       const gcpConfidentialType = (args.cloudApiAdapter?.podVm?.confidentialType || "TDX").toUpperCase();
       const gcpDiskType = args.cloudApiAdapter?.podVm?.diskType || (gcpConfidentialType === "TDX" ? "pd-balanced" : "pd-standard");
-      // Note: Cloud API Adaptor v0.16.0 has a bug where it strips project ID from image paths
-      // and always uses GCP_PROJECT_ID. Workaround: Copy image to your project or use relative path
+      // Default image name (can be overridden with full path for cross-project support)
+      // Cross-project images work with cloud-api-adaptor main branch (fix merged in PR #2654)
       const podvmImageName = args.cloudApiAdapter?.podVm?.imageName || "fedora-mkosi-tee-amd-1-11-0";
-      const gcpZone = args.cloudApiAdapter?.gcpZone || zoneFromConfig;
-      const gcpNetwork = args.cloudApiAdapter?.gcpNetwork || "default";
-      
-      // Build container image override
+      const gcpZoneRaw = args.cloudApiAdapter?.gcpZone || zoneFromConfig;
+      const gcpNetworkRaw = args.cloudApiAdapter?.gcpNetwork;
+      const gcpSubnetworkRaw = args.cloudApiAdapter?.gcpSubnetwork;
       const containerImage = args.cloudApiAdapter?.containerImage;
       const imageOverride = containerImage?.repository && containerImage?.tag
         ? `${containerImage.repository}:${containerImage.tag}`
@@ -222,9 +222,8 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
               resource = obj.props;
             }
             
-            // Filter out Secret - we'll create it ourselves
+            // Filter out Secret - we create it ourselves  
             if (resource?.kind === "Secret" && resource?.metadata?.name === "peer-pods-secret") {
-              // Return undefined to skip this resource
               return undefined;
             }
             
@@ -232,7 +231,7 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
             const k8sObj = obj?.props || obj;
             if (!k8sObj || !k8sObj.kind || !k8sObj.metadata) return obj;
             
-            // Keep only ConfigMap updates; upstream overlay handles other resources
+            // Update ConfigMap with our values
             if (k8sObj.kind === "ConfigMap" && k8sObj.metadata.name === "peer-pods-cm") {
               k8sObj.data = k8sObj.data || {};
               k8sObj.data["CLOUD_PROVIDER"] = "gcp";
@@ -242,8 +241,23 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
               k8sObj.data["GCP_DISK_TYPE"] = gcpDiskType || "";
               k8sObj.data["DISABLECVM"] = podvmDisableCvm || "false";
               k8sObj.data["PODVM_IMAGE_NAME"] = podvmImageName || "";
-              k8sObj.data["GCP_ZONE"] = gcpZone || "";
-              k8sObj.data["GCP_NETWORK"] = gcpNetwork || "";
+              k8sObj.data["GCP_ZONE"] = typeof gcpZoneRaw === 'string' ? gcpZoneRaw : "";
+              
+              // Handle GCP_NETWORK: convert relative paths to full URLs
+              const currentNetwork = k8sObj.data["GCP_NETWORK"] || "global/networks/default";
+              if (typeof gcpNetworkRaw === 'string') {
+                // Use the provided string value
+                k8sObj.data["GCP_NETWORK"] = gcpNetworkRaw;
+              } else if (currentNetwork.startsWith("global/networks/") || currentNetwork.startsWith("networks/")) {
+                // Convert kustomize default to full URL
+                const networkName = currentNetwork.split("/").pop() || "default";
+                k8sObj.data["GCP_NETWORK"] = `https://www.googleapis.com/compute/v1/projects/${projectId}/global/networks/${networkName}`;
+              }
+              
+              // Set GCP_SUBNETWORK if it's a string (not an Output)
+              if (typeof gcpSubnetworkRaw === 'string') {
+                k8sObj.data["GCP_SUBNETWORK"] = gcpSubnetworkRaw;
+              }
             }
             // Add tolerations for system nodes and override container image
             const podLike = (o: any) => o && o.spec && (o.kind === 'Deployment' || o.kind === 'DaemonSet' || o.kind === 'StatefulSet');
@@ -269,9 +283,10 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
                   if (isCaaContainer) {
                     if (imageOverride) {
                       container.image = imageOverride;
-                      if (containerImage?.pullPolicy) {
-                        container.imagePullPolicy = containerImage.pullPolicy;
-                      }
+                    }
+                    // Always set pullPolicy if provided
+                    if (containerImage?.pullPolicy) {
+                      container.imagePullPolicy = containerImage.pullPolicy;
                     }
                     // Note: SecretRef to peer-pods-secret is kept as-is
                     // We create this secret above with the proper structure
@@ -284,11 +299,13 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
           }
         ]
       });
+      
+      const caaDirResult = caaDir;
 
       // Optional extra overlays
       if (args.cloudApiAdapter?.extraKustomize && args.cloudApiAdapter.extraKustomize.length > 0) {
         args.cloudApiAdapter.extraKustomize.forEach((u, idx) => {
-          new k8s.kustomize.v2.Directory(`cc-extra-${idx}`, { directory: u }, { parent: this, dependsOn: [caaDir] });
+          new k8s.kustomize.v2.Directory(`cc-extra-${idx}`, { directory: u }, { parent: this, dependsOn: [caaDirResult] });
         });
       }
 
@@ -297,7 +314,7 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
         directory: `https://github.com/confidential-containers/cloud-api-adaptor//src/peerpod-ctrl/config/default?ref=${caaRef}`,
       }, {
         parent: this,
-        dependsOn: [caaDir, gcpCredentialsSecret],
+        dependsOn: [caaDirResult, gcpCredentialsSecret],
       });
 
       // Annotate KSA for Workload Identity (patch)

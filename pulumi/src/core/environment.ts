@@ -2,6 +2,7 @@ import type { PulumiFn } from "@pulumi/pulumi/automation";
 import type { ComponentTypes, AddonTypes } from "../components";
 import { Components, Addon } from "../components";
 import * as pulumi from '@pulumi/pulumi';
+import { Helpers } from '../utils/helpers';
 
 export type ComponentFactoryMap = { [K in keyof ComponentTypes]?: (env: Environment) => ComponentTypes[K] | PulumiFn };
 export type AddonFactoryMap = { [key: string]: (env: Environment) => AddonTypes[string] | PulumiFn };
@@ -93,14 +94,17 @@ export class Environment {
         return;
       }
       
+      // Resolve ref+ secrets in config before passing to component
+      const resolvedConfig = Helpers.resolveRefsInConfig(config);
+      
       // Get the component constructor from the registry using the correct key
       const ComponentClass = Components[componentKey];
       if (!ComponentClass) {
         throw new Error(`Component class '${componentKey}' not found in Components registry`);
       }
       
-      // Create the component instance with the config
-      const componentInstance = new ComponentClass(`${this.id}-${componentName}`, config);
+      // Create the component instance with the resolved config
+      const componentInstance = new ComponentClass(`${this.id}-${componentName}`, resolvedConfig);
       
       // Register stack outputs on the Project instance (ESM-friendly), and also
       // merge them into the *root* module's exports for CommonJS environments.
@@ -132,8 +136,11 @@ export class Environment {
         return;
       }
       
-      // Create the addon instance with the config
-      const addonInstance = new Addon(`${this.id}-${componentName}`, config);
+      // Resolve ref+ secrets in config before passing to addon
+      const resolvedConfig = Helpers.resolveRefsInConfig(config);
+      
+      // Create the addon instance with the resolved config
+      const addonInstance = new Addon(`${this.id}-${componentName}`, resolvedConfig);
       
       // Register stack outputs
       try {

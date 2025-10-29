@@ -196,7 +196,9 @@ export class Gke extends pulumi.ComponentResource {
       gcpProject,
     ]).apply(([clusterName, endpoint, auth, projectId]) => {
       // Generate kubeconfig using GKE's standard format
-      const context = `${clusterName}`;
+      const projectName = pulumi.getProject();
+      const clusterNameWithProject = `${projectName}-${clusterName}`;
+      const context = clusterNameWithProject;
       
       return `apiVersion: v1
 clusters:

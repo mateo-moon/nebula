@@ -18,6 +18,7 @@ export interface AddonOutput {
 
 export class Addon extends pulumi.ComponentResource {
   public readonly outputs: AddonOutput = {};
+  public readonly config: Record<string, any> = {};
 
   constructor(
     name: string,
@@ -25,6 +26,10 @@ export class Addon extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions,
   ) {
     super('nebula:addon', args.name || name, args, opts);
+
+    // Store config for access from provision function (excluding the provision function itself)
+    const { provision, ...config } = args;
+    this.config = config as Record<string, any>;
 
     // Allow user code to create resources within this component scope
     if (typeof args.provision === 'function') {
