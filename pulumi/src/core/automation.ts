@@ -93,19 +93,13 @@ export class StackManager {
     const wsCfg = await this.prepareWorkspaceConfig(env);
     const baseWorkspaceOpts = this.buildBaseWorkspaceOptions(env);
 
-    // Filter out SOPS entries from workspace config (they'll be set as encrypted secrets via stack.setConfig())
-    const wsCfgFiltered = Object.fromEntries(
-      Object.entries(wsCfg).filter(([_, v]) => 
-        !(typeof v === 'string' && v.startsWith('ref+sops://'))
-      )
-    );
-
     // Add work directory if provided
     if (workDir) {
       baseWorkspaceOpts.workDir = path.resolve(workDir);
     }
 
-    // Create stack-specific configuration (without SOPS secrets for now)
+    // Create stack-specific configuration
+    // Note: ref+ secrets in config are now resolved automatically by components at runtime
     const wsWithStack = {
       ...baseWorkspaceOpts,
       stackSettings: {
@@ -113,7 +107,7 @@ export class StackManager {
           ...(env.config.settings?.secretsProvider ? { 
             secretsProvider: env.config.settings.secretsProvider 
           } : {}),
-          config: wsCfgFiltered,
+          config: wsCfg,
         },
       },
     };
@@ -139,11 +133,11 @@ export class StackManager {
       wsWithStack
     );
 
-    // Now resolve and set secrets after the stack is created
-    const resolvedSecrets = await Utils.resolveSecrets(wsCfg);
-    for (const [key, value] of Object.entries(resolvedSecrets)) {
-      await stack.setConfig(key, { value, secret: true });
-    }
+    // Note: ref+ secrets are now resolved automatically by components using resolveStackRefsDeep
+    // No need to pre-resolve them here anymore. This means:
+    // 1. No need to run 'nebula generate' every time secrets change
+    // 2. Secrets are resolved at runtime by each component
+    // 3. Secrets are automatically hidden via pulumi.secret()
 
     // Optionally persist settings using the Automation API
     if (persistSettings) {

@@ -20,8 +20,10 @@ export class Eks extends pulumi.ComponentResource {
 
   constructor(name: string, vpc: Vpc, opts?: pulumi.ComponentResourceOptions) {
     super('awsEks', name, {}, opts);
+    const projectName = pulumi.getProject();
+    const clusterName = `${projectName}-${name}`;
     this.cluster = new eks.Cluster(name, {
-      name,
+      name: clusterName,
       version: '1.32',
       vpcId: vpc.vpcId,
       privateSubnetIds: vpc.privateSubnetIds,
@@ -176,12 +178,12 @@ export class Eks extends pulumi.ComponentResource {
 
         const prefix = awsConfigFile ? `AWS_CONFIG_FILE=${awsConfigFile} ` : '';
         try {
-          execSync(`${prefix}aws eks describe-cluster --name ${name} ${region ? `--region ${region}` : ''} ${profile ? `--profile ${profile}` : ''}`, { stdio: 'pipe' });
+          execSync(`${prefix}aws eks describe-cluster --name ${clusterName} ${region ? `--region ${region}` : ''} ${profile ? `--profile ${profile}` : ''}`, { stdio: 'pipe' });
         } catch {
           return cfg;
         }
 
-        const newKubeconfigContent = execSync(`${prefix}aws eks update-kubeconfig --name ${name} ${region ? `--region ${region}` : ''} ${profile ? `--profile ${profile}` : ''} --kubeconfig ${kubeConfigPath} --dry-run`, { stdio: 'pipe' }).toString();
+        const newKubeconfigContent = execSync(`${prefix}aws eks update-kubeconfig --name ${clusterName} ${region ? `--region ${region}` : ''} ${profile ? `--profile ${profile}` : ''} --kubeconfig ${kubeConfigPath} --dry-run`, { stdio: 'pipe' }).toString();
         const parsed = YAML.parse(newKubeconfigContent);
 
         if (parsed?.users) {

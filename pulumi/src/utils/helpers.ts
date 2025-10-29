@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as YAML from 'yaml';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import * as pulumi from '@pulumi/pulumi';
 import { S3Client, HeadBucketCommand, CreateBucketCommand, PutBucketVersioningCommand, BucketLocationConstraint } from '@aws-sdk/client-s3';
 import { Storage } from '@google-cloud/storage';
@@ -615,10 +615,17 @@ export class Helpers {
   public static getConfigValue(v: any): string {
     if (typeof v === 'string') return v;
     if (v && typeof v === 'object') {
+      // Check if this is a Pulumi Output - can't serialize Outputs
+      if (pulumi.Output.isInstance(v)) {
+        return '[Unresolved Output]'; // Return placeholder for Output values
+      }
       if ('value' in v) return String(v.value);
       if ('secret' in v) return String(v.secret);
     }
-    try { return JSON.stringify(v); } catch { return String(v); }
+    try { return JSON.stringify(v); } catch (e) { 
+      // If stringify fails (e.g., Output values), return string representation
+      return '[Object]';
+    }
   }
 
   /** Extract minimal AWS details from Pulumi config map if present. */
@@ -732,6 +739,17 @@ export class Helpers {
         const ref = Helpers.getStackRef(parsed.envId, parsed.component);
         return ref.getOutput(parsed.output);
       }
+      // Check if this is a ref+ secret
+      if (value.startsWith('ref+')) {
+        try {
+          const resolved = Helpers.resolveValsSync(value);
+          // Wrap in pulumi.secret() to hide from plain text output
+          return pulumi.secret(resolved);
+        } catch (error) {
+          console.warn(`Failed to resolve secret ${value}: ${error}`);
+          return value; // Return original value on error
+        }
+      }
       return value;
     }
     if (Array.isArray(value)) {
@@ -745,5 +763,136 @@ export class Helpers {
       return out;
     }
     return value;
+  }
+
+  // Cache for resolved secrets to avoid multiple vals calls (only for transform approach)
+  private static secretsCache = new Map<string, string>();
+
+  /** Synchronous version of resolveVals for use in transforms */
+  private static resolveValsSync(ref: string): string {
+    try {
+      const stdout = execFileSync('vals', ['get', ref, '-o', 'yaml'], { encoding: 'utf8' });
+      return stdout.trim();
+    } catch (e: any) {
+      const msg = e.stderr || e.message || 'vals evaluation failed';
+      throw new Error(`Helpers.resolveValsSync failed: ${msg}`);
+    }
+  }
+
+  /**
+   * Resolve ref+ secrets in config object during component initialization
+   * This function recursively walks through the config and resolves any ref+ strings
+   * Returns config with secrets wrapped in pulumi.secret()
+   */
+  public static resolveRefsInConfig<T = any>(config: T): any {
+    if (config == null) return config;
+    
+    if (typeof config === 'string') {
+      // Check if this is a ref+ secret
+      if (config.startsWith('ref+')) {
+        try {
+          const resolved = Helpers.resolveValsSync(config);
+          // Wrap in pulumi.secret() to hide from plain text output
+          return pulumi.secret(resolved);
+        } catch (error) {
+          console.warn(`Failed to resolve secret ${config}: ${error}`);
+          return config; // Return original value on error
+        }
+      }
+      return config;
+    }
+    
+    if (Array.isArray(config)) {
+      return config.map(v => Helpers.resolveRefsInConfig(v));
+    }
+    
+    if (typeof config === 'object') {
+      // Check if this is a Pulumi Output before trying to serialize it
+      if (pulumi.Output.isInstance(config)) {
+        return config; // Return Output unchanged - don't try to serialize it
+      }
+      
+      // Check if this is a Pulumi Asset or Archive (has __pulumiAsset property)
+      // These objects should not be recursively processed as they have internal state
+      if ('__pulumiAsset' in config || '__pulumiArchive' in config) {
+        return config;
+      }
+      
+      // Check if this object has properties that suggest it's a Pulumi Output wrapper
+      // (Output objects have special properties that shouldn't be enumerated)
+      if (config && typeof config === 'object' && !Array.isArray(config)) {
+        const hasOutputProperties = '__pulumiType' in config || '__pulumiIsSecret' in config;
+        if (hasOutputProperties) {
+          return config; // Likely an Output wrapper, don't enumerate it
+        }
+      }
+      
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(config as any)) {
+        out[k] = Helpers.resolveRefsInConfig(v as any);
+      }
+      return out;
+    }
+    
+    return config;
+  }
+
+  /**
+   * Create a transform function that resolves ref+ secrets in resource properties
+   * This can be added to transformations array in ComponentResourceOptions
+   * Note: For most use cases, using resolveStackRefsDeep in component constructors is simpler
+   */
+  public static createSecretResolutionTransform(): (args: any) => any {
+    return (args: any) => {
+      if (!args || !args.props) return args;
+      
+      // Recursively resolve ref+ secrets in props
+      const resolvedProps = Helpers.resolveRefsDeepInProps(args.props);
+      
+      return {
+        ...args,
+        props: resolvedProps,
+      };
+    };
+  }
+
+  /**
+   * Recursively resolve ref+ secrets in resource properties
+   * This is used by the transform approach
+   */
+  private static resolveRefsDeepInProps(props: any): any {
+    if (props == null) return props;
+    
+    if (typeof props === 'string') {
+      if (props.startsWith('ref+')) {
+        // Check cache first
+        let cached = Helpers.secretsCache.get(props);
+        if (!cached) {
+          try {
+            cached = Helpers.resolveValsSync(props);
+            Helpers.secretsCache.set(props, cached);
+          } catch (error) {
+            console.warn(`Failed to resolve secret ${props}: ${error}`);
+            return props;
+          }
+        }
+        return pulumi.secret(cached);
+      }
+      return props;
+    }
+    
+    if (Array.isArray(props)) {
+      return props.map(v => Helpers.resolveRefsDeepInProps(v));
+    }
+    
+    if (typeof props === 'object') {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(props)) {
+        out[k] = Helpers.resolveRefsDeepInProps(v);
+      }
+      return out;
+    }
+    
+    return props;
   }
 }
