@@ -71,15 +71,70 @@ function setupDebugFlags(debugLevel?: 'debug' | 'trace'): void {
   process.env['TF_LOG'] = debugLevel; // Enable Terraform logging
 }
 
+/** Output environment variables in a format that can be sourced into parent shell */
+function outputEnvVarsForShell(envVars: Record<string, string>, project: Project): void {
+  // Check for kubeconfig files in .config directory
+  const configDir = path.resolve((global as any).projectRoot || process.cwd(), '.config');
+  if (fs.existsSync(configDir)) {
+    const files = fs.readdirSync(configDir);
+    const kubeconfigFiles = files.filter(f => f.startsWith('kube-config-') || f.startsWith('kube_config'));
+    if (kubeconfigFiles.length > 0) {
+      // Use the first kubeconfig found, or try to match environment
+      const envKeys = Object.keys(project.envs);
+      const preferredEnv = envKeys[0]; // Use first environment
+      const preferredKubeconfig = preferredEnv 
+        ? kubeconfigFiles.find(f => f.includes(preferredEnv)) || kubeconfigFiles[0]
+        : kubeconfigFiles[0];
+      if (preferredKubeconfig) {
+        const kubeconfigPath = path.resolve(configDir, preferredKubeconfig);
+        envVars['KUBECONFIG'] = kubeconfigPath;
+      }
+    }
+  }
+
+  // Output instructions to stderr (so they don't interfere with eval)
+  if (Object.keys(envVars).length > 0) {
+    console.error('\n# Export these environment variables to your shell:');
+    console.error('# eval $(nebula bootstrap)');
+    console.error('');
+    
+    // Only output export statements to stdout (for eval)
+    // Get the original stdout.write function (stored in __original property of override)
+    const stdoutWriteFn = (process.stdout.write as any).__original;
+    
+    // Build all export statements first
+    const exportLines: string[] = [];
+    for (const [key, value] of Object.entries(envVars)) {
+      // Escape special characters in value for shell
+      const escapedValue = value.replace(/'/g, "'\\''");
+      exportLines.push(`export ${key}='${escapedValue}'`);
+    }
+    
+    // Write all export statements at once using the original stdout.write function
+    const output = exportLines.join('\n') + '\n';
+    
+    // Use the original function to bypass the override, or fall back to regular write
+    const writeFn = stdoutWriteFn || process.stdout.write.bind(process.stdout);
+    try {
+      writeFn(output, 'utf8');
+    } catch (error) {
+      console.error('[Error writing exports]:', error);
+      exportLines.forEach(line => console.error('  ', line));
+    }
+  }
+}
+
 /** Unified runner — executes the requested operation using structured options. */
 export async function runProject(project: Project, opts: RunnerOptions): Promise<void> {
   // Always bootstrap first - this handles authentication, backend setup, secrets providers
+  // Note: console.log redirection is handled in cliMain for bootstrap operations
+  let bootstrapResult: { envVars: Record<string, string> } | undefined;
   try {
-    console.log('Bootstrapping project...');
-    await Utils.bootstrap(project.id, project.environments, project.config);
-    console.log('Bootstrap completed successfully');
+    console.log('\n🚀 Bootstrapping project...\n');
+    bootstrapResult = await Utils.bootstrap(project.id, project.environments, project.config);
+    console.log('\n✅ Bootstrap completed successfully\n');
   } catch (error) {
-    console.error('Bootstrap failed:', error);
+    console.error('\n❌ Bootstrap failed:', error);
     throw error;
   }
 
@@ -94,7 +149,28 @@ export async function runProject(project: Project, opts: RunnerOptions): Promise
 
   // Handle bootstrap operation (already done above, but allow explicit bootstrap)
   if (opts.op === 'bootstrap') {
-    // Bootstrap was already completed above, no need to print again
+    // Generate Pulumi files as part of bootstrap to ensure they're up to date
+    try {
+      console.log('📝 Generating Pulumi files...');
+      await handleGenerateOperation(project, opts);
+    } catch (error) {
+      console.error('⚠️  Failed to generate Pulumi files:', error);
+      // Continue even if generation fails - bootstrap may still be useful
+    }
+    
+    // Bootstrap was already completed above, output environment variables for parent shell
+    // Note: outputEnvVarsForShell writes directly to process.stdout.write, so it's safe
+    if (bootstrapResult && Object.keys(bootstrapResult.envVars).length > 0) {
+      outputEnvVarsForShell(bootstrapResult.envVars, project);
+      // Force flush stdout to ensure export statements are written before process exits
+      if (process.stdout.writable) {
+        process.stdout.emit('drain');
+      }
+      // Exit immediately after writing exports to prevent any subsequent stdout writes
+      // This ensures eval only sees the export statements
+      process.exit(0);
+    }
+    // Don't restore console.log here - let cliMain handle it after the action completes
     return;
   }
 
@@ -429,11 +505,9 @@ async function loadProjectFromConfig(configPath?: string, waitReady: boolean = t
   const candidate = configPath || 'nebula.config.ts';
   const abs = path.resolve(process.cwd(), candidate);
   
-  console.log('CLI: Loading config from:', abs);
   // Simply import the config file - it should instantiate Project at top level
   try {
     await import(pathToFileURL(abs).href);
-    console.log('CLI: Config loaded successfully');
   } catch (e: any) {
     throw new Error(`Failed to import config at ${candidate}: ${e?.message || e}`);
   }
@@ -453,7 +527,43 @@ async function loadProjectFromConfig(configPath?: string, waitReady: boolean = t
 }
 
 async function cliMain(argv: string[]) {
-  console.log('CLI: cliMain called with argv:', argv);
+  // Check if bootstrap operation early to redirect console.log for all operations
+  const isBootstrapOp = argv.includes('bootstrap');
+  const originalLog = console.log;
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  
+  // Redirect console.log to stderr during bootstrap to avoid zsh globbing issues
+  if (isBootstrapOp) {
+    console.log = (...args: any[]) => {
+      console.error(...args);
+    };
+    
+    // Intercept stdout.write to block everything except our export statements
+    const stdoutWriteOverride = function(chunk: any, _encoding?: any, cb?: any): boolean {
+      // Always block writes - we'll use the original function directly for exports
+      // This ensures nothing can accidentally write to stdout
+      const str = typeof chunk === 'string' ? chunk : chunk.toString();
+      // Check each line in the chunk (could be multiline)
+      const lines = str.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('export ')) {
+          // Redirect non-export lines to stderr for debugging
+          // Include first few chars to help identify the source
+          const preview = trimmed.length > 50 ? trimmed.substring(0, 50) + '...' : trimmed;
+          console.error('[stdout blocked]:', preview);
+        }
+      }
+      // Call callback if provided (to avoid hanging)
+      if (typeof cb === 'function') {
+        cb();
+      }
+      return true; // Pretend write succeeded
+    };
+    stdoutWriteOverride.__original = originalStdoutWrite;
+    process.stdout.write = stdoutWriteOverride;
+  }
+  
   const program = new Command();
   program
     .name('nebula-cli')
@@ -469,17 +579,17 @@ async function cliMain(argv: string[]) {
       .command(name)
       .description(desc)
       .action(async () => {
-        console.log(`CLI: Commander handler for ${name} called`);
-        const o = program.opts<CommonOpts>();
-        
-        
-        const project = await loadProjectFromConfig(o.config, name !== 'bootstrap');
-        const opts: any = { op: name };
-        if (o.workdir) opts.workDir = o.workdir;
-        if (o.env) opts.env = o.env;
-        if (o.debug) opts.debugLevel = normalizeDebugLevel(o.debug) || undefined;
-        console.log(`CLI: About to call runProject for ${name}`);
-        await runProject(project, opts);
+        try {
+          const o = program.opts<CommonOpts>();
+          const project = await loadProjectFromConfig(o.config, name !== 'bootstrap');
+          const opts: any = { op: name };
+          if (o.workdir) opts.workDir = o.workdir;
+          if (o.env) opts.env = o.env;
+          if (o.debug) opts.debugLevel = normalizeDebugLevel(o.debug) || undefined;
+          await runProject(project, opts);
+        } catch (error) {
+          throw error;
+        }
       });
   };
 
@@ -492,8 +602,6 @@ async function cliMain(argv: string[]) {
   const tokens = argv.slice(2);
   const knownSubcommands = new Set(['shell', 'bootstrap', 'generate', 'clear-auth']);
   const hasSubcommand = tokens.some(t => knownSubcommands.has(t));
-  console.log('CLI: Tokens:', tokens);
-  console.log('CLI: Has subcommand:', hasSubcommand);
   if (!hasSubcommand) {
     if (tokens.includes('-h') || tokens.includes('--help')) return program.outputHelp();
     const getVal = (...names: string[]): string | undefined => {
@@ -525,7 +633,27 @@ async function cliMain(argv: string[]) {
       return program.outputHelp();
     }
   }
-  await program.parseAsync(argv);
+  
+  try {
+    await program.parseAsync(argv);
+  } catch (error) {
+    // Error handling - output to stderr
+    console.error('Error:', error);
+    throw error;
+  } finally {
+    // For bootstrap operations, keep stdout.write intercepted to prevent any output after env vars
+    // Only restore if NOT bootstrap operation
+    if (!isBootstrapOp && originalStdoutWrite) {
+      process.stdout.write = originalStdoutWrite;
+    }
+    // Only restore console.log if NOT bootstrap operation
+    // For bootstrap, keep it redirected to ensure nothing goes to stdout after env vars
+    if (!isBootstrapOp) {
+      console.log = originalLog;
+    }
+    // For bootstrap, both console.log and stdout.write stay redirected/intercepted
+    // This ensures eval only sees the export statements on stdout
+  }
 }
 
 interface CommonOpts {
@@ -555,11 +683,14 @@ const isMain = (() => {
 
 if (isMain) {
   // Fire and forget; let unhandled promise rejection surface for visibility
-  cliMain(process.argv).catch(err => { console.error(err?.message || err); process.exit(1); });
+  cliMain(process.argv).catch(err => { 
+    // Always use console.error for errors to avoid polluting stdout
+    console.error(err?.message || err); 
+    process.exit(1); 
+  });
 }
 
 // Exported helper to invoke CLI programmatically (e.g., from index.ts when used as entrypoint)
 export async function runCli(argv?: string[]) {
-  console.log('CLI: runCli called with argv:', argv ?? process.argv);
   return cliMain(argv ?? process.argv);
 }

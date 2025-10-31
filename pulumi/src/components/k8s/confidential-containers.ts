@@ -9,7 +9,6 @@ export interface ConfidentialContainersOperatorConfig {
 
 export interface ConfidentialContainersCloudApiAdapterConfig {
   enabled?: boolean; // default true
-  version?: string; // default same as operator
   namespace?: string; // defaults to confidential-containers-system
   ksaName?: string; // default: cloud-api-adaptor
   // GCP Workload Identity/GSA wiring
@@ -28,16 +27,24 @@ export interface ConfidentialContainersCloudApiAdapterConfig {
     extraEnv?: Record<string, string>;
   };
   // CAA container image override
+  // If tag is specified and looks like a version (e.g., "0.16.0", "v0.16.0", "main"), it will be used for kustomize refs
+  // Otherwise, operator version will be used for kustomize refs
   containerImage?: {
     repository?: string;             // e.g., ghcr.io/confidential-containers/cloud-api-adaptor
-    tag?: string;                    // e.g., latest
+    tag?: string;                    // e.g., "0.16.0", "v0.16.0", "latest", "main" (defaults to operator version if not specified)
     pullPolicy?: "Always" | "IfNotPresent" | "Never";
   };
   // GCP specifics
-  gcpZone?: string | pulumi.Output<string>;                  // sets GCP_ZONE in peer-pods-cm
+  gcpZone?: string | pulumi.Output<string>;                  // sets GCP_ZONE in peer-pods-cm (can be zone like "us-central1-a" or region like "us-central1")
+  gcpRegion?: string | pulumi.Output<string>;                // sets GCP_ZONE as "${region}-a" in peer-pods-cm (overrides gcpZone if specified)
   gcpNetwork?: string | pulumi.Output<string>;                // sets GCP_NETWORK in peer-pods-cm
   gcpSubnetwork?: string | pulumi.Output<string>;            // sets GCP_SUBNETWORK in peer-pods-cm (for custom subnet mode)
   extraKustomize?: string[];         // additional kustomize URLs to apply
+  // Firewall rules configuration
+  firewallRules?: {
+    enabled?: boolean;                 // default true - create firewall rules for required ports
+    sourceRanges?: string[];          // default ['0.0.0.0/0'] - CIDR ranges allowed (should be VPC CIDR ideally)
+  };
 }
 
 export interface ConfidentialContainersConfig {
@@ -184,11 +191,35 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
       }
 
       // Build CAA kustomize with env overrides for TDX/SEV
-      const caaVersion = args.cloudApiAdapter?.version || releaseVersion;
+      const containerImage = args.cloudApiAdapter?.containerImage;
+      // Derive kustomize version from containerImage.tag, falling back to operator version
+      // If containerImage.tag is a version-like string (e.g., "0.16.0", "v0.16.0", "main"), use it for kustomize ref
+      // Otherwise (e.g., "latest", SHA), default to operator version
+      const containerImageTag = containerImage?.tag;
+      const deriveKustomizeVersion = (tag: string | undefined): string => {
+        if (!tag) return releaseVersion;
+        // If it's already a valid git ref format (starts with 'v', is 'main', or contains '/'), use it
+        if (tag.startsWith('v') || tag === 'main' || tag.includes('/')) {
+          return tag;
+        }
+        // If it looks like a version number (e.g., "0.16.0"), prepend 'v'
+        if (/^\d+\.\d+\.\d+/.test(tag)) {
+          return `v${tag}`;
+        }
+        // Otherwise (e.g., "latest", SHA), fall back to operator version
+        return releaseVersion;
+      };
+      const caaVersion = deriveKustomizeVersion(containerImageTag);
       // Handle branch names (like 'main') vs version tags (like 'v0.16.0')
       const caaRef = caaVersion.startsWith('v') || caaVersion === 'main' || caaVersion.includes('/') 
         ? caaVersion 
         : `v${caaVersion}`;
+      // Use containerImageTag if specified, otherwise use version-derived tag (without 'v' prefix)
+      const finalImageTag = containerImageTag || caaVersion.replace(/^v/, '');
+      const imageOverride = containerImage?.repository && finalImageTag
+        ? `${containerImage.repository}:${finalImageTag}`
+        : undefined;
+      
       const podvmInstanceType = args.cloudApiAdapter?.podVm?.instanceType || "c3-standard-4";
       const podvmDisableCvm = args.cloudApiAdapter?.podVm?.disableCvm === true ? "true" : "false";
       const gcpConfidentialType = (args.cloudApiAdapter?.podVm?.confidentialType || "TDX").toUpperCase();
@@ -196,13 +227,70 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
       // Default image name (can be overridden with full path for cross-project support)
       // Cross-project images work with cloud-api-adaptor main branch (fix merged in PR #2654)
       const podvmImageName = args.cloudApiAdapter?.podVm?.imageName || "fedora-mkosi-tee-amd-1-11-0";
+      const gcpRegionRaw = args.cloudApiAdapter?.gcpRegion;
       const gcpZoneRaw = args.cloudApiAdapter?.gcpZone || zoneFromConfig;
       const gcpNetworkRaw = args.cloudApiAdapter?.gcpNetwork;
       const gcpSubnetworkRaw = args.cloudApiAdapter?.gcpSubnetwork;
-      const containerImage = args.cloudApiAdapter?.containerImage;
-      const imageOverride = containerImage?.repository && containerImage?.tag
-        ? `${containerImage.repository}:${containerImage.tag}`
-        : undefined;
+      
+      // Determine GCP_ZONE: if region is specified, use "${region}-a" format (matching kustomize config),
+      // otherwise use zone directly (or from config)
+      // Note: Only string values can be used in transforms (Outputs are not accessible synchronously)
+      const finalGcpZone = (typeof gcpRegionRaw === 'string' && gcpRegionRaw)
+        ? `${gcpRegionRaw}-a`
+        : (typeof gcpZoneRaw === 'string' ? gcpZoneRaw : "");
+      
+      // Create firewall rules for Confidential Containers if enabled (default: true)
+      // Required ports per https://confidentialcontainers.org/docs/examples/gcp-simple/#configure-vpc-network
+      // - Port 15150 (TCP): agent-protocol-forwarder within pod VM
+      // - Port 9000 (TCP/UDP): VXLAN for network overlay
+      const firewallEnabled = args.cloudApiAdapter?.firewallRules?.enabled !== false;
+      if (firewallEnabled && gcpNetworkRaw) {
+        // Extract network name from network string (could be full URL or just name)
+        const networkName = pulumi.output(gcpNetworkRaw).apply(net => {
+          if (!net) return "";
+          // Handle full URL: https://www.googleapis.com/compute/v1/projects/PROJECT/global/networks/NAME
+          if (net.includes('/networks/')) {
+            return net.split('/networks/').pop()?.split('/')[0] || "";
+          }
+          // Handle relative path: projects/PROJECT/global/networks/NAME
+          if (net.includes('global/networks/')) {
+            return net.split('global/networks/').pop()?.split('/')[0] || "";
+          }
+          // Handle networks/NAME format
+          if (net.startsWith('networks/')) {
+            return net.replace('networks/', '');
+          }
+          // Already just the name
+          return net;
+        });
+
+        const sourceRanges = args.cloudApiAdapter?.firewallRules?.sourceRanges || ['0.0.0.0/0'];
+        
+        // Firewall rule for port 15150 (TCP) - agent-protocol-forwarder
+        new gcp.compute.Firewall(`${name}-caa-fw-15150`, {
+          name: pulumi.interpolate`${name}-caa-allow-tcp-15150`,
+          description: 'Allow TCP 15150 for Confidential Containers agent-protocol-forwarder',
+          network: networkName,
+          direction: 'INGRESS',
+          sourceRanges: sourceRanges,
+          allows: [{ protocol: 'tcp', ports: ['15150'] }],
+          priority: 1000,
+        }, { parent: this });
+
+        // Firewall rule for port 9000 (TCP and UDP) - VXLAN network overlay
+        new gcp.compute.Firewall(`${name}-caa-fw-9000`, {
+          name: pulumi.interpolate`${name}-caa-allow-tcp-udp-9000`,
+          description: 'Allow TCP/UDP 9000 for Confidential Containers VXLAN network overlay',
+          network: networkName,
+          direction: 'INGRESS',
+          sourceRanges: sourceRanges,
+          allows: [
+            { protocol: 'tcp', ports: ['9000'] },
+            { protocol: 'udp', ports: ['9000'] },
+          ],
+          priority: 1000,
+        }, { parent: this });
+      }
       
       const caaDir = new k8s.kustomize.v2.Directory("cc-cloud-api-adaptor", {
         directory: `https://github.com/confidential-containers/cloud-api-adaptor//src/cloud-api-adaptor/install/overlays/gcp?ref=${caaRef}`,
@@ -241,7 +329,7 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
               k8sObj.data["GCP_DISK_TYPE"] = gcpDiskType || "";
               k8sObj.data["DISABLECVM"] = podvmDisableCvm || "false";
               k8sObj.data["PODVM_IMAGE_NAME"] = podvmImageName || "";
-              k8sObj.data["GCP_ZONE"] = typeof gcpZoneRaw === 'string' ? gcpZoneRaw : "";
+              k8sObj.data["GCP_ZONE"] = finalGcpZone || "";
               
               // Handle GCP_NETWORK: convert relative paths to full URLs
               const currentNetwork = k8sObj.data["GCP_NETWORK"] || "global/networks/default";

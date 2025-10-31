@@ -6,7 +6,6 @@
     "outDir": "dist",
     "noEmitOnError": true,
     "target": "es2022",
-    "baseUrl": ".",
     "alwaysStrict": true,
     "declaration": true,
     "noImplicitAny": true,

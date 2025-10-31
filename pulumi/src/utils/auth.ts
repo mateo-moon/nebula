@@ -27,18 +27,18 @@ export class Auth {
      * @param region - The GCP region (optional)
      */
     async authenticate(projectId: string, region?: string): Promise<void> {
-      console.log(`Starting authentication for project: ${projectId}`);
+      console.log(`🔐 Starting authentication for project: ${projectId}`);
       
       // Check if authentication is already in progress
       if (Auth.ongoingAuth) {
-        console.log('Authentication already in progress, waiting...');
+        console.log('  ⏳ Authentication already in progress, waiting...');
         await Auth.ongoingAuth;
         return;
       }
       
       // Step 1: Check if existing token is valid
       if (await this.isTokenValid(projectId)) {
-        console.log(`Valid token found for project: ${projectId}`);
+        console.log(`  ✅ Valid token found for project: ${projectId}`);
         this.setAccessTokenEnvVar(projectId, region);
         return;
       }
@@ -68,9 +68,9 @@ export class Auth {
         // Step 4: Set environment variable
         this.setAccessTokenEnvVar(projectId, region);
         
-        console.log(`Authentication successful for project: ${projectId}`);
+        console.log(`  ✅ Authentication successful for project: ${projectId}`);
       } else {
-        console.log(`Authentication failed for project: ${projectId}`);
+        console.log(`  ❌ Authentication failed for project: ${projectId}`);
       }
     },
 
@@ -136,7 +136,7 @@ export class Auth {
         }
         
         const newTokens = await response.json();
-        console.log('Token refresh successful');
+        console.log('  ✅ Token refresh successful');
         
         // Update the credential file with new tokens
         const nowMs = Date.now();
@@ -318,8 +318,8 @@ export class Auth {
         console.log('Generated OAuth URL parameters');
       }
       
-      console.log('Starting OAuth flow...');
-      console.log('Auth URL:', authUrl.toString());
+        console.log('  🔗 Starting OAuth flow...');
+        console.log('  🌐 Auth URL:', authUrl.toString());
       
       try {
         // Start local server to handle callback
@@ -338,7 +338,7 @@ export class Auth {
           return null;
         }
         
-        console.log('OAuth flow completed successfully');
+        console.log('  ✅ OAuth flow completed successfully');
         return {
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
@@ -347,7 +347,7 @@ export class Auth {
         };
         
       } catch (error) {
-        console.log(`OAuth flow failed: ${error}`);
+        console.log(`  ❌ OAuth flow failed: ${error}`);
         return null;
       }
     },
