@@ -1,6 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as YAML from 'yaml';
+import * as https from 'https';
 import { execSync, execFileSync } from 'child_process';
 import * as pulumi from '@pulumi/pulumi';
 import { S3Client, HeadBucketCommand, CreateBucketCommand, PutBucketVersioningCommand, BucketLocationConstraint } from '@aws-sdk/client-s3';
@@ -49,11 +51,11 @@ export class Helpers {
       // Check if bucket exists
       try {
         await client.send(new HeadBucketCommand({ Bucket: config.bucket }));
-        console.log(`S3 bucket ${config.bucket} already exists`);
+        console.log(`  ✅ S3 bucket ${config.bucket} already exists`);
       } catch (error: any) {
         if (error.name === 'NotFound') {
           // Bucket doesn't exist, create it
-          console.log(`Creating S3 bucket: ${config.bucket}`);
+          console.log(`  📦 Creating S3 bucket: ${config.bucket}`);
           const createParams: any = {
             Bucket: config.bucket,
           };
@@ -73,7 +75,7 @@ export class Helpers {
             VersioningConfiguration: { Status: 'Enabled' },
           }));
           
-          console.log(`S3 bucket ${config.bucket} created successfully`);
+          console.log(`  ✅ S3 bucket ${config.bucket} created successfully`);
         } else {
           throw error;
         }
@@ -130,12 +132,12 @@ export class Helpers {
       const [exists] = await storage.bucket(config.bucket).exists();
       
       if (exists) {
-        console.log(`GCS bucket ${config.bucket} already exists`);
+        console.log(`  ✅ GCS bucket ${config.bucket} already exists`);
         return;
       }
       
       // Create bucket
-      console.log(`Creating GCS bucket: ${config.bucket}`);
+      console.log(`  📦 Creating GCS bucket: ${config.bucket}`);
       const bucketOptions: any = {};
       
       if (config.location) {
@@ -147,7 +149,7 @@ export class Helpers {
       }
       
       await storage.createBucket(config.bucket, bucketOptions);
-      console.log(`GCS bucket ${config.bucket} created successfully`);
+      console.log(`  ✅ GCS bucket ${config.bucket} created successfully`);
       
     } catch (err: any) {
       console.error(`Failed to create GCS bucket ${config.bucket}:`, err?.message || err);
@@ -260,10 +262,190 @@ export class Helpers {
 
 
   /**
+   * Get access token from credentials file, refreshing if expired
+   * @param projectId - The GCP project ID
+   * @returns Access token or null if not available
+   */
+  private static async getAccessToken(projectId: string): Promise<string | null> {
+    try {
+      const homeDir = os.homedir();
+      const accessTokenFilePath = path.join(homeDir, '.config', 'gcloud', `${projectId}-accesstoken`);
+      
+      if (!fs.existsSync(accessTokenFilePath)) {
+        return null;
+      }
+
+      const tokenData = JSON.parse(fs.readFileSync(accessTokenFilePath, 'utf8'));
+      const now = Date.now();
+      const expiresAt = tokenData.expires_at || 0;
+
+      // If token is expired and we have a refresh token, try to refresh it
+      if (now >= expiresAt && tokenData.refresh_token) {
+        try {
+          const { Auth } = await import('./auth');
+          const refreshed = await Auth.GCP.refreshAccessToken(projectId);
+          if (refreshed?.access_token) {
+            return refreshed.access_token;
+          }
+        } catch (error) {
+          console.warn(`Failed to refresh token: ${error}`);
+          // Fall through to return existing token (might still work)
+        }
+      }
+
+      return tokenData.access_token || null;
+    } catch (error) {
+      console.warn(`Failed to read access token: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Enable a GCP API using the Service Usage REST API
+   * @param projectId - The GCP project ID
+   * @param apiName - The API name (e.g., 'compute.googleapis.com')
+   * @param accessToken - The OAuth access token
+   * @returns Promise that resolves to true if enabled, false otherwise
+   */
+  private static async enableGcpApi(projectId: string, apiName: string, accessToken: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const serviceName = `projects/${projectId}/services/${apiName}`;
+      const postData = JSON.stringify({});
+
+      const options = {
+        hostname: 'serviceusage.googleapis.com',
+        path: `/v1/${serviceName}:enable`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk.toString();
+        });
+
+        res.on('end', () => {
+          if (res.statusCode === 200 || res.statusCode === 204) {
+            resolve(true);
+          } else if (res.statusCode === 400 || res.statusCode === 409) {
+            // API might already be enabled or invalid request
+            // 400: Bad Request (often means already enabled)
+            // 409: Conflict (resource already exists)
+            try {
+              const error = JSON.parse(data);
+              const errorMessage = error.error?.message || '';
+              if (errorMessage.includes('already enabled') || 
+                  errorMessage.includes('already exists') ||
+                  errorMessage.includes('already been enabled') ||
+                  res.statusCode === 409) {
+                resolve(true); // Consider already enabled as success
+              } else {
+                console.warn(`Failed to enable ${apiName}: ${errorMessage || res.statusCode}`);
+                resolve(false);
+              }
+            } catch {
+              // If we can't parse the error, check status code
+              if (res.statusCode === 409) {
+                resolve(true); // 409 usually means already enabled
+              } else {
+                resolve(false);
+              }
+            }
+          } else {
+            // Log error for debugging
+            try {
+              const error = JSON.parse(data);
+              console.warn(`Failed to enable ${apiName}: ${error.error?.message || res.statusCode}`);
+            } catch {
+              console.warn(`Failed to enable ${apiName}: HTTP ${res.statusCode}`);
+            }
+            resolve(false);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.warn(`Failed to enable ${apiName}: ${error.message}`);
+        resolve(false);
+      });
+
+      req.setTimeout(30000, () => {
+        req.destroy();
+        resolve(false);
+      });
+
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * Enable required GCP APIs for the project
+   * @param projectId - The GCP project ID
+   */
+  public static async enableGcpApis(projectId: string): Promise<void> {
+    if (execSync('id -u').toString().trim() === '999') {
+      return;
+    }
+
+    // Get access token from credentials (will refresh if expired)
+    const accessToken = await Helpers.getAccessToken(projectId);
+    if (!accessToken) {
+      console.warn('⚠ No valid access token found. Skipping GCP API enablement. Please ensure you are authenticated.');
+      return;
+    }
+
+    // List of required GCP APIs based on codebase usage
+    const requiredApis = [
+      'compute.googleapis.com',           // Compute Engine (VMs, networks, firewalls, load balancers)
+      'container.googleapis.com',          // Kubernetes Engine (GKE)
+      'iam.googleapis.com',                // Identity and Access Management
+      'storage.googleapis.com',            // Cloud Storage (backend storage)
+      'cloudkms.googleapis.com',           // Cloud KMS (secrets management)
+      'secretmanager.googleapis.com',      // Secret Manager (confidential containers)
+      'dns.googleapis.com',                // Cloud DNS (DNS management)
+      'logging.googleapis.com',            // Cloud Logging (GKE logging)
+      'monitoring.googleapis.com',         // Cloud Monitoring (GKE monitoring)
+      'serviceusage.googleapis.com',       // Service Usage (used by Karpenter)
+    ];
+
+    console.log(`🔧 Enabling required GCP APIs for project: ${projectId}`);
+
+    const enabledApis: string[] = [];
+    const failedApis: string[] = [];
+
+    // Enable APIs in parallel for better performance
+    const enablePromises = requiredApis.map(async (api) => {
+      const success = await Helpers.enableGcpApi(projectId, api, accessToken);
+      if (success) {
+        enabledApis.push(api);
+      } else {
+        failedApis.push(api);
+      }
+    });
+
+    await Promise.all(enablePromises);
+
+    if (enabledApis.length > 0) {
+      console.log(`  ✅ Enabled ${enabledApis.length} GCP API(s)`);
+    }
+    if (failedApis.length > 0) {
+      console.warn(`  ⚠️  Failed to enable ${failedApis.length} GCP API(s). Some operations may fail if APIs are not enabled.`);
+    }
+    console.log('GCP API enablement completed');
+  }
+
+  /**
    * Bootstrap backend storage and secrets providers for all environments.
    * This is a utility function that should be called from the CLI layer.
    */
-  public static async bootstrap(projectId: string, environments: Record<string, any>, projectConfig?: any): Promise<void> {
+  public static async bootstrap(projectId: string, environments: Record<string, any>, projectConfig?: any): Promise<{ envVars: Record<string, string> }> {
     // Extract settings from environment configs
     const envConfigs = Object.values(environments).filter(Boolean) as any[];
     const envSettings = envConfigs.map(cfg => cfg.settings || {});
@@ -277,10 +459,27 @@ export class Helpers {
     const awsConfig = Helpers.extractAwsFromPulumiConfig(parsedCfg);
     const gcpConfig = Helpers.extractGcpFromPulumiConfig(parsedCfg);
 
+    const envVars: Record<string, string> = {};
+
     // Authenticate with GCP if GCP config is present
     if (gcpConfig?.projectId) {
       const { Auth } = await import('./auth');
       await Auth.GCP.authenticate(gcpConfig.projectId, gcpConfig.region);
+      
+      // Capture environment variables set by authentication
+      const credsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
+      if (credsFile) {
+        envVars['GOOGLE_APPLICATION_CREDENTIALS'] = credsFile;
+      }
+      if (process.env['CLOUDSDK_CORE_PROJECT']) {
+        envVars['CLOUDSDK_CORE_PROJECT'] = process.env['CLOUDSDK_CORE_PROJECT'];
+      }
+      if (process.env['CLOUDSDK_COMPUTE_ZONE']) {
+        envVars['CLOUDSDK_COMPUTE_ZONE'] = process.env['CLOUDSDK_COMPUTE_ZONE'];
+      }
+      
+      // Enable required GCP APIs after authentication
+      await Helpers.enableGcpApis(gcpConfig.projectId);
     }
 
     // Ensure backend storage exists prior to workspace init
@@ -322,6 +521,8 @@ export class Helpers {
         });
       }
     }
+
+    return { envVars };
   }
 
   /** Ensure remote backend storage exists for the given backend URL. Supports s3:// and gs:// when corresponding cloud config is provided. */
@@ -377,15 +578,15 @@ export class Helpers {
       // Check if key ring exists
       try {
         await kmsClient.getKeyRing({ name: keyRingPath });
-        console.log(`Key ring ${keyRingPath} already exists`);
+        console.log(`  ✅ Key ring ${keyRingPath} already exists`);
       } catch (error: any) {
         if (error.code === 5) { // NOT_FOUND
-          console.log(`Creating key ring: ${keyRingPath}`);
+          console.log(`  🔐 Creating key ring: ${keyRingPath}`);
           await kmsClient.createKeyRing({
             parent: kmsClient.locationPath(projectId, location),
             keyRingId: keyRingId
           });
-          console.log(`Key ring ${keyRingPath} created successfully`);
+          console.log(`  ✅ Key ring ${keyRingPath} created successfully`);
         } else {
           throw error;
         }
@@ -394,10 +595,10 @@ export class Helpers {
       // Check if crypto key exists
       try {
         await kmsClient.getCryptoKey({ name: cryptoKeyPath });
-        console.log(`Crypto key ${cryptoKeyPath} already exists`);
+        console.log(`  ✅ Crypto key ${cryptoKeyPath} already exists`);
       } catch (error: any) {
         if (error.code === 5) { // NOT_FOUND
-          console.log(`Creating crypto key: ${cryptoKeyPath}`);
+          console.log(`  🔐 Creating crypto key: ${cryptoKeyPath}`);
           await kmsClient.createCryptoKey({
             parent: keyRingPath,
             cryptoKeyId: cryptoKeyId,
@@ -405,7 +606,7 @@ export class Helpers {
               purpose: 'ENCRYPT_DECRYPT'
             }
           });
-          console.log(`Crypto key ${cryptoKeyPath} created successfully`);
+          console.log(`  ✅ Crypto key ${cryptoKeyPath} created successfully`);
         } else {
           throw error;
         }
@@ -596,14 +797,6 @@ export class Helpers {
         console.log(`Successfully resolved ${key}`);
       } catch (error) {
         console.warn(`Failed to resolve secret for ${key}: ${error}`);
-        // Fall back to plain value (not recommended but better than failing)
-        try {
-          const resolvedValue = await Helpers.resolveVals(secretRef);
-          resolvedSecrets[key] = resolvedValue;
-          console.log(`Fallback: stored ${key} as plain value`);
-        } catch (fallbackError) {
-          console.error(`Failed to process ${key}: ${fallbackError}`);
-        }
       }
     }
     
