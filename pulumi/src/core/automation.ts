@@ -78,10 +78,12 @@ export class StackManager {
 
   /**
    * Create or select a stack for a specific environment and component
-   * Stack name format: "{envId}-{componentName}"
+   * Stack name format: "{envId}-{componentName}" for components
+   * Stack name format: "{envId}-addon-{addonName}" for addons
    */
-  async createOrSelectStack(envId: string, componentName: string, persistSettings = false, workDir?: string): Promise<Stack> {
-    const stackName = `${envId.toLowerCase()}-${componentName.toLowerCase()}`;
+  async createOrSelectStack(envId: string, componentName: string, persistSettings = false, workDir?: string, isAddon = false): Promise<Stack> {
+    const prefix = isAddon ? 'addon-' : '';
+    const stackName = `${envId.toLowerCase()}-${prefix}${componentName.toLowerCase()}`;
     
     // Get environment
     const env = this.project.envs[envId];
@@ -173,11 +175,13 @@ export class StackManager {
 
     const components = env.config.components || {};
     const addons = env.config.addons || {};
-    const allStacks = [
-      ...Object.keys(components),
-      ...Object.keys(addons)
-    ];
-    return allStacks.map(componentName => `${envId.toLowerCase()}-${componentName.toLowerCase()}`);
+    const componentStacks = Object.keys(components).map(componentName => 
+      `${envId.toLowerCase()}-${componentName.toLowerCase()}`
+    );
+    const addonStacks = Object.keys(addons).map(addonName => 
+      `${envId.toLowerCase()}-addon-${addonName.toLowerCase()}`
+    );
+    return [...componentStacks, ...addonStacks];
   }
 
   /**

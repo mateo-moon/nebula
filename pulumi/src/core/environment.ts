@@ -46,35 +46,89 @@ export class Environment {
     // Get current stack name from Pulumi context
     const stackName = pulumi.getStack();
     
+    // Check if this is an addon stack by looking for "addon-" prefix after env prefix
+    const envPrefix = `${this.id.toLowerCase()}-`;
+    const isAddon = stackName.toLowerCase().startsWith(envPrefix) && 
+                    stackName.toLowerCase().substring(envPrefix.length).startsWith('addon-');
+    
     // Parse component name from stack name
     const componentName = this.parseComponentName(stackName);
     
-    // Create the component resource
-    this.createComponentResource(componentName);
+    // Create the component resource (pass isAddon flag)
+    this.createComponentResource(componentName, isAddon);
   }
 
   /**
    * Parse component name from stack name
-   * Stack name format: "{envId}-{componentName}"
-   * We only need the component name part
+   * Stack name format: "{envId}-{componentName}" for components
+   * Stack name format: "{envId}-addon-{addonName}" for addons
+   * We only need the component/addon name part (without addon- prefix)
    */
   private parseComponentName(stackName: string): string {
-    // Remove environment prefix to get component name
+    // Remove environment prefix to get component/addon name
     const envPrefix = `${this.id.toLowerCase()}-`;
     if (stackName.toLowerCase().startsWith(envPrefix)) {
-      return stackName.substring(envPrefix.length);
+      let name = stackName.substring(envPrefix.length);
+      // Remove addon- prefix if present
+      if (name.toLowerCase().startsWith('addon-')) {
+        name = name.substring(6); // Remove 'addon-' (6 characters)
+      }
+      return name;
     }
     return stackName;
   }
 
   /**
    * Create component resource based on component name
+   * @param componentName - The parsed component/addon name (without addon- prefix)
+   * @param isAddon - Whether this is an addon stack (determined from stack name)
    */
-  private createComponentResource(componentName: string): void {
+  private createComponentResource(componentName: string, isAddon: boolean = false): void {
     const components = this.config.components || {};
     const addons = this.config.addons || {};
     
-    // Try to find as a component first
+    // If this is an addon stack, check addons first to avoid conflicts with components
+    if (isAddon) {
+      // Try to find as an addon first
+      const addonKey = Object.keys(addons).find(key => 
+        key.toLowerCase() === componentName.toLowerCase()
+      );
+      
+      if (addonKey) {
+        const addonFactory = addons[addonKey];
+        
+        if (!addonFactory) {
+          throw new Error(`Addon factory for '${addonKey}' not found in environment '${this.id}'`);
+        }
+        
+        // Get config from factory
+        const config = addonFactory(this);
+        
+        // Skip if factory returned a PulumiFn (for programmatic stacks)
+        if (typeof config === 'function') {
+          return;
+        }
+        
+        // Resolve ref+ secrets in config before passing to addon
+        const resolvedConfig = Helpers.resolveRefsInConfig(config);
+        
+        // Create the addon instance with the resolved config
+        const addonInstance = new Addon(`${this.id}-${componentName}`, resolvedConfig);
+        
+        // Register stack outputs
+        try {
+          this.outputs = (addonInstance as any).outputs;
+        } catch (error) {
+          console.warn(`[Environment] Failed to register outputs for addon '${componentName}':`, error);
+        }
+        return;
+      }
+      
+      // If addon not found, throw error (don't fall back to component)
+      throw new Error(`Addon '${componentName}' not found in environment '${this.id}'`);
+    }
+    
+    // For component stacks, check components first
     const componentKey = Object.keys(components).find(key => 
       key.toLowerCase() === componentName.toLowerCase()
     ) as keyof ComponentTypes;
@@ -116,7 +170,7 @@ export class Environment {
       return;
     }
     
-    // Try to find as an addon
+    // Try to find as an addon as fallback (for backward compatibility)
     const addonKey = Object.keys(addons).find(key => 
       key.toLowerCase() === componentName.toLowerCase()
     );
