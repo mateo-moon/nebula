@@ -97,6 +97,12 @@ function outputEnvVarsForShell(envVars: Record<string, string>, project: Project
     console.error('\n# Export these environment variables to your shell:');
     console.error('# eval $(nebula bootstrap)');
     console.error('');
+    console.error('# Required environment variables:');
+    for (const [key, value] of Object.entries(envVars)) {
+      // Print variable name and value to stderr for visibility
+      console.error(`#   ${key}=${value}`);
+    }
+    console.error('');
     
     // Only output export statements to stdout (for eval)
     // Get the original stdout.write function (stored in __original property of override)
@@ -225,23 +231,34 @@ async function handleShellOperation(project: Project, opts: RunnerOptions): Prom
 
   const componentKeys = Object.keys(env.config.components || {});
   const addonKeys = Object.keys(env.config.addons || {});
-  const allKeys = [...componentKeys, ...addonKeys];
   
-  if (allKeys.length === 0) {
+  // Determine which type of resource to use and construct appropriate stack name
+  let stackName: string;
+  if (componentKeys.length > 0) {
+    // Use first component
+    const componentName = componentKeys[0];
+    if (!componentName) {
+      console.log('No component available');
+      return;
+    }
+    stackName = `${envId.toLowerCase()}-${componentName.toLowerCase()}`;
+  } else if (addonKeys.length > 0) {
+    // Use first addon
+    const addonName = addonKeys[0];
+    if (!addonName) {
+      console.log('No addon available');
+      return;
+    }
+    stackName = `${envId.toLowerCase()}-addon-${addonName.toLowerCase()}`;
+  } else {
     console.log('No components or addons found');
-    return;
-  }
-  
-  const componentName = allKeys[0]; // Use first component or addon
-  if (!componentName) {
-    console.log('No component or addon available');
     return;
   }
 
   // Open Pulumi shell (stack will be selected by Pulumi CLI based on YAML files)
   await openPulumiShell({
     workDir,
-    stackName: `${envId.toLowerCase()}-${componentName.toLowerCase()}`,
+    stackName,
     targets: [],
     includeDependents: false,
   });
@@ -281,14 +298,15 @@ async function handleGenerateOperation(project: Project, opts: RunnerOptions): P
     // Create stacks for addons
     for (const addonName of Object.keys(addons)) {
       try {
-        console.log(`Creating stack: ${envId.toLowerCase()}-${addonName.toLowerCase()}`);
+        const stackName = `${envId.toLowerCase()}-addon-${addonName.toLowerCase()}`;
+        console.log(`Creating stack: ${stackName}`);
         
-        // Create or select the stack using StackManager
-        await stackManager.createOrSelectStack(envId, addonName, true, workDir);
+        // Create or select the stack using StackManager (pass isAddon=true)
+        await stackManager.createOrSelectStack(envId, addonName, true, workDir, true);
         
-        console.log(`Created/selected stack: ${envId.toLowerCase()}-${addonName.toLowerCase()}`);
+        console.log(`Created/selected stack: ${stackName}`);
       } catch (error) {
-        console.error(`Failed to create stack ${envId.toLowerCase()}-${addonName.toLowerCase()}:`, error);
+        console.error(`Failed to create stack ${envId.toLowerCase()}-addon-${addonName.toLowerCase()}:`, error);
         // Continue with other stacks even if one fails
       }
     }
