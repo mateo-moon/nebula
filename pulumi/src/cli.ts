@@ -79,15 +79,50 @@ function outputEnvVarsForShell(envVars: Record<string, string>, project: Project
     const files = fs.readdirSync(configDir);
     const kubeconfigFiles = files.filter(f => f.startsWith('kube-config-') || f.startsWith('kube_config'));
     if (kubeconfigFiles.length > 0) {
-      // Use the first kubeconfig found, or try to match environment
+      // Try to match kubeconfig files to environments more precisely
+      // File naming patterns:
+      // - kube-config-${envPrefix}-gke
+      // - kube_config_${envPrefix}_eks
+      // - kube_config_${envPrefix}_${constellationName}_${constellationId}
       const envKeys = Object.keys(project.envs);
-      const preferredEnv = envKeys[0]; // Use first environment
-      const preferredKubeconfig = preferredEnv 
-        ? kubeconfigFiles.find(f => f.includes(preferredEnv)) || kubeconfigFiles[0]
-        : kubeconfigFiles[0];
-      if (preferredKubeconfig) {
-        const kubeconfigPath = path.resolve(configDir, preferredKubeconfig);
-        envVars['KUBECONFIG'] = kubeconfigPath;
+      
+      // Collect ALL matching kubeconfig files for all environments
+      // kubectl supports multiple kubeconfig files via KUBECONFIG env var
+      const matchedKubeconfigs = new Set<string>();
+      
+      // Try to match each environment and collect all matching kubeconfigs
+      for (const env of envKeys) {
+        const envLower = env.toLowerCase();
+        // Match patterns: kube-config-${env}- or kube_config_${env}_
+        const matches = kubeconfigFiles.filter(f => {
+          const fLower = f.toLowerCase();
+          // Check for kube-config-${env}- pattern
+          if (fLower.startsWith('kube-config-')) {
+            const afterPrefix = fLower.substring('kube-config-'.length);
+            return afterPrefix.startsWith(`${envLower}-`);
+          }
+          // Check for kube_config_${env}_ pattern
+          if (fLower.startsWith('kube_config_')) {
+            const afterPrefix = fLower.substring('kube_config_'.length);
+            return afterPrefix.startsWith(`${envLower}_`);
+          }
+          return false;
+        });
+        matches.forEach(match => matchedKubeconfigs.add(match));
+      }
+      
+      // If no matches found, fallback to all kubeconfig files
+      const kubeconfigsToUse = matchedKubeconfigs.size > 0 
+        ? Array.from(matchedKubeconfigs).sort() 
+        : kubeconfigFiles.sort();
+      
+      if (kubeconfigsToUse.length > 0) {
+        // Determine the separator based on platform (Unix/Mac use :, Windows uses ;)
+        const separator = process.platform === 'win32' ? ';' : ':';
+        
+        // Resolve all kubeconfig paths and join them (sorted for deterministic ordering)
+        const kubeconfigPaths = kubeconfigsToUse.map(f => path.resolve(configDir, f));
+        envVars['KUBECONFIG'] = kubeconfigPaths.join(separator);
       }
     }
   }

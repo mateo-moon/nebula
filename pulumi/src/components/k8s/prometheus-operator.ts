@@ -56,11 +56,6 @@ export class PrometheusOperator extends pulumi.ComponentResource {
 
     const storageClassName = args.storageClassName || "standard";
     
-    // Read Google OAuth config - use 'google' namespace like hetzner uses 'hetzner' namespace
-    const googleConfig = new pulumi.Config('google');
-    const googleClientId = googleConfig.get('oidc_client_id');
-    const googleClientSecret = googleConfig.getSecret('oidc_client_secret');
-    
     const defaultValues = {
       prometheus: {
         prometheusSpec: {
@@ -123,10 +118,6 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         service: {
           type: "ClusterIP"
         },
-        env: googleClientId && googleClientSecret ? pulumi.all([googleClientId, googleClientSecret]).apply(([clientId, clientSecret]) => ({
-          GF_AUTH_GOOGLE_CLIENT_ID: clientId,
-          GF_AUTH_GOOGLE_CLIENT_SECRET: clientSecret,
-        })) : {},
       },
       alertmanager: {
         enabled: true,
@@ -183,11 +174,15 @@ export class PrometheusOperator extends pulumi.ComponentResource {
 
     const providedArgs: OptionalChartArgs | undefined = args.args;
     
-    // Merge provided values with default values
+    // Merge provided values with default values synchronously
+    // Since ref+ secrets are resolved synchronously by the transform, we don't need pulumi.all()
+    // IMPORTANT: providedArgs.values must be a plain object (not a Pulumi Output) to avoid serialization issues
+    if (providedArgs?.values && pulumi.Output.isInstance(providedArgs.values)) {
+      throw new Error('prometheus-operator: values must be a plain object, not a Pulumi Output. Helm Charts cannot serialize Outputs in values.');
+    }
+    
     const mergedValues = providedArgs?.values 
-      ? pulumi.all([defaultValues, providedArgs.values]).apply(([defaults, provided]) => {
-          return deepMerge(defaults, provided);
-        })
+      ? deepMerge(defaultValues, providedArgs.values)
       : defaultValues;
     
     const finalChartArgs: ChartArgs = {

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  nebula-test:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      # Mount entire workspace
+      - ..:/workspaces/nebula:cached
+      # Mount GPG agent socket from macOS host (OrbStack will forward it)
+      - ${HOME}/.gnupg/S.gpg-agent:/home/node/.gnupg/S.gpg-agent:ro
+    command: sleep infinity
+    environment:
+      - PATH=/home/node/.pulumi/bin:${PATH}
+    # Override default user to node
+    user: node
+    # Keep container running
+    stdin_open: true
+    tty: true
+

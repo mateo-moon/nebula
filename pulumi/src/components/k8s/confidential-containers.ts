@@ -68,7 +68,8 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
     super("confidential-containers", name, args, opts);
 
     const releaseVersion = args.operator?.version || "v0.16.0";
-    const namespace = "confidential-containers-system";
+    // Use configurable namespace, defaulting to confidential-containers-system
+    const namespace = args.cloudApiAdapter?.namespace || args.operator?.namespace || "confidential-containers-system";
 
 
 
@@ -319,6 +320,11 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
             const k8sObj = obj?.props || obj;
             if (!k8sObj || !k8sObj.kind || !k8sObj.metadata) return obj;
             
+            // Ensure namespace is set correctly for all resources
+            if (k8sObj.metadata) {
+              k8sObj.metadata.namespace = namespace;
+            }
+            
             // Update ConfigMap with our values
             if (k8sObj.kind === "ConfigMap" && k8sObj.metadata.name === "peer-pods-cm") {
               k8sObj.data = k8sObj.data || {};
@@ -330,22 +336,8 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
               k8sObj.data["DISABLECVM"] = podvmDisableCvm || "false";
               k8sObj.data["PODVM_IMAGE_NAME"] = podvmImageName || "";
               k8sObj.data["GCP_ZONE"] = finalGcpZone || "";
-              
-              // Handle GCP_NETWORK: convert relative paths to full URLs
-              const currentNetwork = k8sObj.data["GCP_NETWORK"] || "global/networks/default";
-              if (typeof gcpNetworkRaw === 'string') {
-                // Use the provided string value
-                k8sObj.data["GCP_NETWORK"] = gcpNetworkRaw;
-              } else if (currentNetwork.startsWith("global/networks/") || currentNetwork.startsWith("networks/")) {
-                // Convert kustomize default to full URL
-                const networkName = currentNetwork.split("/").pop() || "default";
-                k8sObj.data["GCP_NETWORK"] = `https://www.googleapis.com/compute/v1/projects/${projectId}/global/networks/${networkName}`;
-              }
-              
-              // Set GCP_SUBNETWORK if it's a string (not an Output)
-              if (typeof gcpSubnetworkRaw === 'string') {
-                k8sObj.data["GCP_SUBNETWORK"] = gcpSubnetworkRaw;
-              }
+              k8sObj.data["GCP_NETWORK"] = gcpNetworkRaw || "";
+              k8sObj.data["GCP_SUBNETWORK"] = gcpSubnetworkRaw || "";
             }
             // Add tolerations for system nodes and override container image
             const podLike = (o: any) => o && o.spec && (o.kind === 'Deployment' || o.kind === 'DaemonSet' || o.kind === 'StatefulSet');

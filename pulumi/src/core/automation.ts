@@ -5,7 +5,6 @@
 import type { Stack } from '@pulumi/pulumi/automation';
 import { LocalWorkspace } from '@pulumi/pulumi/automation';
 import { Project } from './project';
-import { Utils } from '../utils';
 import * as path from 'path';
 
 export type StackOp = 'preview' | 'up' | 'destroy' | 'refresh';
@@ -101,7 +100,6 @@ export class StackManager {
     }
 
     // Create stack-specific configuration
-    // Note: ref+ secrets in config are now resolved automatically by components at runtime
     const wsWithStack = {
       ...baseWorkspaceOpts,
       stackSettings: {
@@ -134,12 +132,6 @@ export class StackManager {
       },
       wsWithStack
     );
-
-    // Note: ref+ secrets are now resolved automatically by components using resolveStackRefsDeep
-    // No need to pre-resolve them here anymore. This means:
-    // 1. No need to run 'nebula generate' every time secrets change
-    // 2. Secrets are resolved at runtime by each component
-    // 3. Secrets are automatically hidden via pulumi.secret()
 
     // Optionally persist settings using the Automation API
     if (persistSettings) {
@@ -189,7 +181,30 @@ export class StackManager {
    */
   private async prepareWorkspaceConfig(env: any): Promise<Record<string, any>> {
     const rawCfg = env.config.settings?.config;
-    return await Utils.convertPulumiConfigToWorkspace(rawCfg);
+    if (!rawCfg) return {};
+    
+    // Parse config if it's a string (JSON)
+    let parsed: Record<string, any> = {};
+    if (typeof rawCfg === 'string') {
+      try {
+        parsed = JSON.parse(rawCfg);
+      } catch {
+        return {};
+      }
+    } else if (rawCfg && typeof rawCfg === 'object') {
+      parsed = rawCfg;
+    }
+    
+    // Convert to workspace format: strings stay as-is, objects wrapped in { value: ... }
+    const out: Record<string, any> = {};
+    Object.entries(parsed).forEach(([k, v]) => {
+      if (typeof v === 'string') {
+        out[k] = v;
+      } else {
+        out[k] = { value: v };
+      }
+    });
+    return out;
   }
 
   /**

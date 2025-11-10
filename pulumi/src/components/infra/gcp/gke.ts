@@ -19,6 +19,8 @@ export interface NodeGroupConfig {
   machineType?: string;
   volumeSizeGb?: number;
   imageType?: string;
+  /** Optional location (zone or region) for this node group. If not provided, uses the cluster location. */
+  location?: string;
   labels?: Record<string, string>;
   tags?: string[];
   /** Optional node taints for this pool */
@@ -131,10 +133,12 @@ export class Gke extends pulumi.ComponentResource {
     // Helper function to create node pools
     const createNodePool = (nodeGroupName: string, nodeGroupConfig: NodeGroupConfig) => {
       const autoscaleEnabled = (nodeGroupConfig.maxNodes ?? 0) > (nodeGroupConfig.minNodes ?? 1);
+      // Use node group location if provided, otherwise fall back to cluster location
+      const nodePoolLocation = nodeGroupConfig.location ?? location;
       const immutablesKey = JSON.stringify({
         machineType: nodeGroupConfig.machineType ?? 'e2-standard-4',
         diskSizeGb: nodeGroupConfig.volumeSizeGb ?? 20,
-        location: location || '',
+        location: nodePoolLocation || '',
       });
       const suffix = stableShortHash(immutablesKey);
       const nodePoolName = `${nodeGroupName}-${suffix}`;
@@ -142,7 +146,7 @@ export class Gke extends pulumi.ComponentResource {
       return new gcp.container.NodePool(nodeGroupName, {
         name: nodePoolName,
         cluster: this.cluster.name,
-        ...(location ? { location } : {}),
+        ...(nodePoolLocation ? { location: nodePoolLocation } : {}),
         ...(autoscaleEnabled
           ? { autoscaling: { minNodeCount: nodeGroupConfig.minNodes ?? 1, maxNodeCount: nodeGroupConfig.maxNodes ?? (nodeGroupConfig.minNodes ?? 1) } }
           : { nodeCount: nodeGroupConfig.minNodes ?? 1 }

@@ -25,6 +25,18 @@ export class Environment {
     public readonly id: string,
     public readonly config: EnvironmentConfig,
   ) {
+    // Register global resource transform for secret resolution
+    // This applies to all resources in the stack, not just components
+    // Note: Transform may already be registered at module load time, but calling
+    // this ensures it's registered even if module-level registration failed
+    // We enable debug if PULUMI_LOG_LEVEL is set to debug or trace
+    // Note: --debug flag sets PULUMI_LOG_LEVEL=debug automatically
+    const isDebug = Boolean(
+      process.env['PULUMI_LOG_LEVEL'] === 'debug' || 
+      process.env['PULUMI_LOG_LEVEL'] === 'trace'
+    );
+    Helpers.registerSecretResolutionTransform(isDebug);
+    
     // Try to create resources if we're in Pulumi context
     try {
       // Check if we're running in Pulumi and if this environment matches the current stack
@@ -87,114 +99,39 @@ export class Environment {
     const components = this.config.components || {};
     const addons = this.config.addons || {};
     
-    // If this is an addon stack, check addons first to avoid conflicts with components
+    // If this is an addon stack, only check addons
     if (isAddon) {
-      // Try to find as an addon first
       const addonKey = Object.keys(addons).find(key => 
         key.toLowerCase() === componentName.toLowerCase()
       );
       
-      if (addonKey) {
-        const addonFactory = addons[addonKey];
-        
-        if (!addonFactory) {
-          throw new Error(`Addon factory for '${addonKey}' not found in environment '${this.id}'`);
-        }
-        
-        // Get config from factory
-        const config = addonFactory(this);
-        
-        // Skip if factory returned a PulumiFn (for programmatic stacks)
-        if (typeof config === 'function') {
-          return;
-        }
-        
-        // Resolve ref+ secrets in config before passing to addon
-        const resolvedConfig = Helpers.resolveRefsInConfig(config);
-        
-        // Create the addon instance with the resolved config
-        const addonInstance = new Addon(`${this.id}-${componentName}`, resolvedConfig);
-        
-        // Register stack outputs
-        try {
-          this.outputs = (addonInstance as any).outputs;
-        } catch (error) {
-          console.warn(`[Environment] Failed to register outputs for addon '${componentName}':`, error);
-        }
-        return;
+      if (!addonKey) {
+        throw new Error(`Addon '${componentName}' not found in environment '${this.id}'`);
       }
       
-      // If addon not found, throw error (don't fall back to component)
-      throw new Error(`Addon '${componentName}' not found in environment '${this.id}'`);
-    }
-    
-    // For component stacks, check components first
-    const componentKey = Object.keys(components).find(key => 
-      key.toLowerCase() === componentName.toLowerCase()
-    ) as keyof ComponentTypes;
-    
-    if (componentKey) {
-      const componentFactory = components[componentKey];
-      
-      if (!componentFactory) {
-        throw new Error(`Component factory for '${componentKey}' not found in environment '${this.id}'`);
-      }
-      
-      // Get config from factory
-      const config = componentFactory(this);
-      
-      // Skip if factory returned a PulumiFn (for programmatic stacks)
-      if (typeof config === 'function') {
-        return;
-      }
-      
-      // Resolve ref+ secrets in config before passing to component
-      const resolvedConfig = Helpers.resolveRefsInConfig(config);
-      
-      // Get the component constructor from the registry using the correct key
-      const ComponentClass = Components[componentKey];
-      if (!ComponentClass) {
-        throw new Error(`Component class '${componentKey}' not found in Components registry`);
-      }
-      
-      // Create the component instance with the resolved config
-      const componentInstance = new ComponentClass(`${this.id}-${componentName}`, resolvedConfig);
-      
-      // Register stack outputs on the Project instance (ESM-friendly), and also
-      // merge them into the *root* module's exports for CommonJS environments.
-      try {
-        this.outputs = (componentInstance as any).outputs;
-      } catch (error) {
-        console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
-      }
-      return;
-    }
-    
-    // Try to find as an addon as fallback (for backward compatibility)
-    const addonKey = Object.keys(addons).find(key => 
-      key.toLowerCase() === componentName.toLowerCase()
-    );
-    
-    if (addonKey) {
       const addonFactory = addons[addonKey];
-      
       if (!addonFactory) {
         throw new Error(`Addon factory for '${addonKey}' not found in environment '${this.id}'`);
       }
       
       // Get config from factory
-      const config = addonFactory(this);
+      let config = addonFactory(this);
       
       // Skip if factory returned a PulumiFn (for programmatic stacks)
       if (typeof config === 'function') {
         return;
       }
       
-      // Resolve ref+ secrets in config before passing to addon
-      const resolvedConfig = Helpers.resolveRefsInConfig(config);
+      // Resolve ref+ secrets in config before creating ComponentResource
+      // ComponentResources don't pass constructor args through super(), so transforms can't process them
+      const isDebug = Boolean(
+        process.env['PULUMI_LOG_LEVEL'] === 'debug' || 
+        process.env['PULUMI_LOG_LEVEL'] === 'trace'
+      );
+      config = Helpers.resolveRefPlusSecretsDeep(config, isDebug, 'config') as AddonTypes[string];
       
       // Create the addon instance with the resolved config
-      const addonInstance = new Addon(`${this.id}-${componentName}`, resolvedConfig);
+      const addonInstance = new Addon(`${this.id}-${componentName}`, config);
       
       // Register stack outputs
       try {
@@ -205,7 +142,51 @@ export class Environment {
       return;
     }
     
-    // If neither component nor addon found, throw error
-    throw new Error(`Component or addon '${componentName}' not found in environment '${this.id}'`);
+    // For component stacks, only check components
+    const componentKey = Object.keys(components).find(key => 
+      key.toLowerCase() === componentName.toLowerCase()
+    ) as keyof ComponentTypes;
+    
+    if (!componentKey) {
+      throw new Error(`Component '${componentName}' not found in environment '${this.id}'`);
+    }
+    
+    const componentFactory = components[componentKey];
+    if (!componentFactory) {
+      throw new Error(`Component factory for '${componentKey}' not found in environment '${this.id}'`);
+    }
+    
+    // Get config from factory
+    let config = componentFactory(this);
+    
+    // Skip if factory returned a PulumiFn (for programmatic stacks)
+    if (typeof config === 'function') {
+      return;
+    }
+    
+    // Resolve ref+ secrets in config before creating ComponentResource
+    // ComponentResources don't pass constructor args through super(), so transforms can't process them
+    const isDebug = Boolean(
+      process.env['PULUMI_LOG_LEVEL'] === 'debug' || 
+      process.env['PULUMI_LOG_LEVEL'] === 'trace'
+    );
+    config = Helpers.resolveRefPlusSecretsDeep(config, isDebug, 'config') as ComponentTypes[typeof componentKey];
+    
+    // Get the component constructor from the registry using the correct key
+    const ComponentClass = Components[componentKey];
+    if (!ComponentClass) {
+      throw new Error(`Component class '${componentKey}' not found in Components registry`);
+    }
+    
+    // Create the component instance with the resolved config
+    const componentInstance = new ComponentClass(`${this.id}-${componentName}`, config);
+    
+    // Register stack outputs on the Project instance (ESM-friendly), and also
+    // merge them into the *root* module's exports for CommonJS environments.
+    try {
+      this.outputs = (componentInstance as any).outputs;
+    } catch (error) {
+      console.warn(`[Environment] Failed to register outputs for component '${componentName}':`, error);
+    }
   }
 }

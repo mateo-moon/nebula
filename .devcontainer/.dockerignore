@@ -1,0 +1,23 @@
+# Docker ignore file for devcontainer builds
+# Exclude unnecessary files to speed up build
+
+node_modules/
+dist/
+build/
+.git/
+.gitignore
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Exclude test outputs
+.pulumi/
+*.pulumi.yaml.backup
+
+# Keep important files
+!pulumi/tests/.secrets/
+!pulumi/Pulumi.*.yaml
+
+
