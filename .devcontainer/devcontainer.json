@@ -1,0 +1,42 @@
+{
+  "name": "Nebula Pulumi Tests",
+  
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "nebula-test",
+  "workspaceFolder": "/workspaces/nebula",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "Pulumi.pulumi",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "postCreateCommand": "cd pulumi && pnpm install && echo 'Dev container ready!'",
+
+  "forwardPorts": [],
+
+  "remoteUser": "node",
+
+  "remoteEnv": {
+    "PULUMI_CONFIG_PASSPHRASE": "password",
+    "PATH": "${containerEnv:PATH}:/home/node/.pulumi/bin"
+  },
+
+  "mounts": [
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gnupg,target=/home/node/.gnupg-host,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/node/.gitconfig-host,type=bind,consistency=cached"
+  ],
+
+  "postStartCommand": "mkdir -p /home/node/.gnupg && chown -R node:node /home/node/.gnupg && chmod 700 /home/node/.gnupg && if [ -d /home/node/.gnupg-host ]; then cp -r /home/node/.gnupg-host/* /home/node/.gnupg/ 2>/dev/null || true; chown -R node:node /home/node/.gnupg; fi && if [ -S /home/node/.gnupg/S.gpg-agent ]; then echo 'GPG agent socket mounted successfully'; chmod 600 /home/node/.gnupg/S.gpg-agent 2>/dev/null || true; else echo 'Warning: GPG agent socket not found at expected location'; fi && if [ -f /home/node/.gitconfig-host ]; then cp /home/node/.gitconfig-host /home/node/.gitconfig; fi && echo 'use-agent' > /home/node/.gnupg/gpg.conf && echo 'pinentry-mode loopback' > /home/node/.gnupg/gpg-agent.conf"
+}
+

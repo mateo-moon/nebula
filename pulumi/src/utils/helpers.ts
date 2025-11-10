@@ -5,6 +5,7 @@ import * as YAML from 'yaml';
 import * as https from 'https';
 import { execSync, execFileSync } from 'child_process';
 import * as pulumi from '@pulumi/pulumi';
+import * as crypto from 'crypto';
 import { S3Client, HeadBucketCommand, CreateBucketCommand, PutBucketVersioningCommand, BucketLocationConstraint } from '@aws-sdk/client-s3';
 import { Storage } from '@google-cloud/storage';
 import { KeyManagementServiceClient } from '@google-cloud/kms';
@@ -25,6 +26,41 @@ declare global {
  * Helper class providing utility methods for project configuration and AWS setup
  */
 export class Helpers {
+  /**
+   * Cache for resolved ref+ secrets: ref+ string -> config key
+   * This ensures we reuse the same config key for the same ref+ string
+   */
+  private static resolvedSecretsCache: Map<string, string> = new Map();
+
+  /**
+   * Get or create a config key for a resolved ref+ secret
+   * Uses hash of ref+ string to generate deterministic key
+   * Format: nebula:resolved-secret:{hash}
+   */
+  private static getConfigKeyForRefSecret(ref: string): string {
+    // Check cache first
+    if (Helpers.resolvedSecretsCache.has(ref)) {
+      return Helpers.resolvedSecretsCache.get(ref)!;
+    }
+
+    // Generate deterministic hash of ref+ string
+    const hash = crypto.createHash('sha256').update(ref).digest('hex').substring(0, 16);
+    
+    // Get project name safely (fallback to 'nebula' if not available)
+    let projectName = 'nebula';
+    try {
+      projectName = pulumi.getProject();
+    } catch {
+      // Pulumi runtime not initialized yet, use default
+    }
+    
+    const configKey = `${projectName}:resolved-secret:${hash}`;
+    
+    // Cache it
+    Helpers.resolvedSecretsCache.set(ref, configKey);
+    
+    return configKey;
+  }
 
   /**
    * Checks if S3 bucket exists and creates it if not
@@ -455,9 +491,33 @@ export class Helpers {
 
     // Parse first available config (string or object) and extract cloud details
     const firstRawConfig = envSettings.find(s => s.config != null)?.config;
-    const parsedCfg = await Helpers.parsePulumiConfigRaw(firstRawConfig as any);
-    const awsConfig = Helpers.extractAwsFromPulumiConfig(parsedCfg);
-    const gcpConfig = Helpers.extractGcpFromPulumiConfig(parsedCfg);
+    
+    // Parse config if it's a string (JSON)
+    let parsedConfig: Record<string, any> = {};
+    if (firstRawConfig) {
+      if (typeof firstRawConfig === 'string') {
+        try {
+          parsedConfig = JSON.parse(firstRawConfig);
+        } catch {
+          // If parsing fails, treat as empty config
+          parsedConfig = {};
+        }
+      } else if (typeof firstRawConfig === 'object') {
+        parsedConfig = firstRawConfig;
+      }
+    }
+    
+    // Extract AWS config
+    const awsConfig = parsedConfig['aws:region'] || parsedConfig['aws:profile'] ? {
+      region: parsedConfig['aws:region'],
+      profile: parsedConfig['aws:profile'],
+    } : undefined;
+    
+    // Extract GCP config
+    const gcpConfig = parsedConfig['gcp:project'] || parsedConfig['gcp:region'] ? {
+      projectId: parsedConfig['gcp:project'],
+      region: parsedConfig['gcp:region'],
+    } : undefined;
 
     const envVars: Record<string, string> = {};
 
@@ -697,6 +757,28 @@ export class Helpers {
     }
   }
 
+  /** Synchronous version of resolveVals for use in transforms (plain strings only) */
+  private static resolveValsSync(ref: string, debug: boolean = false): string {
+    if (debug) {
+      pulumi.log.debug(`[SecretResolution] Calling vals to resolve: ${ref}`);
+    }
+    try {
+      // Use execFileSync for array-based command arguments
+      const stdout = execFileSync('vals', ['get', ref, '-o', 'yaml'], { encoding: 'utf8' });
+      const result = stdout.trim();
+      if (debug) {
+        pulumi.log.debug(`[SecretResolution] vals resolved successfully (length: ${result.length})`);
+      }
+      return result;
+    } catch (e: any) {
+      const msg = e.stderr || e.message || 'vals evaluation failed';
+      if (debug) {
+        pulumi.log.error(`[SecretResolution] vals command failed for ${ref}: ${msg}`);
+      }
+      throw new Error(`Helpers.resolveValsSync failed: ${msg}`);
+    }
+  }
+
   /** Ensure .sops.yaml exists and references the provided GCP KMS key for given patterns. */
   public static ensureSopsConfig(opts: { gcpKmsResourceId: string; patterns: string[] }) {
     const sopsPath = path.resolve(process.cwd(), '.sops.yaml');
@@ -747,98 +829,6 @@ export class Helpers {
     } catch (error) {
       console.log(`Failed to write SOPS config: ${error}`);
     }
-  }
-
-
-  /** Parse a Pulumi config setting provided as string (JSON or vals ref) or object into a plain object. */
-  public static async parsePulumiConfigRaw(raw: any): Promise<Record<string, any>> {
-    if (!raw) return {};
-    if (typeof raw === 'string') {
-      if (raw.startsWith('ref+')) {
-        return JSON.parse(await Helpers.resolveVals(raw));
-      }
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return {};
-      }
-    }
-    if (raw && typeof raw === 'object') return raw as Record<string, any>;
-    return {};
-  }
-
-  /** Convert raw Pulumi config (string or object) into Workspace-ready config map. */
-  public static async convertPulumiConfigToWorkspace(raw: any): Promise<Record<string, any>> {
-    const parsed = await Helpers.parsePulumiConfigRaw(raw);
-    const out: Record<string, any> = {};
-    Object.entries(parsed).forEach(([k, v]) => {
-      if (typeof v === 'string') {
-        // Keep vals references as plain strings - they'll be handled separately
-        out[k] = v;
-      } else {
-        out[k] = { value: v };
-      }
-    });
-    return out;
-  }
-
-  /** Resolve secrets using vals and return them for stack.setConfig() */
-  public static async resolveSecrets(config: Record<string, any>): Promise<Record<string, string>> {
-    const secretEntries = Object.entries(config).filter(([_, v]) => 
-      typeof v === 'string' && v.startsWith('ref+')
-    );
-
-    const resolvedSecrets: Record<string, string> = {};
-    
-    for (const [key, secretRef] of secretEntries) {
-      try {
-        const resolvedValue = await Helpers.resolveVals(secretRef);
-        resolvedSecrets[key] = resolvedValue;
-        console.log(`Successfully resolved ${key}`);
-      } catch (error) {
-        console.warn(`Failed to resolve secret for ${key}: ${error}`);
-      }
-    }
-    
-    return resolvedSecrets;
-  }
-
-
-  /** Get a config entry value supporting both plain string and { value, secret } objects. */
-  public static getConfigValue(v: any): string {
-    if (typeof v === 'string') return v;
-    if (v && typeof v === 'object') {
-      // Check if this is a Pulumi Output - can't serialize Outputs
-      if (pulumi.Output.isInstance(v)) {
-        return '[Unresolved Output]'; // Return placeholder for Output values
-      }
-      if ('value' in v) return String(v.value);
-      if ('secret' in v) return String(v.secret);
-    }
-    try { return JSON.stringify(v); } catch (e) { 
-      // If stringify fails (e.g., Output values), return string representation
-      return '[Object]';
-    }
-  }
-
-  /** Extract minimal AWS details from Pulumi config map if present. */
-  public static extractAwsFromPulumiConfig(config: Record<string, any>): { region?: string; profile?: string; sharedConfigFiles?: string[] } | undefined {
-    const region = Helpers.getConfigValue(config['aws:region']);
-    const profile = Helpers.getConfigValue(config['aws:profile']);
-    if (!region && !profile) return undefined;
-    return {
-      ...(region ? { region } : {}),
-      ...(profile ? { profile } : {}),
-      sharedConfigFiles: [`${projectConfigPath}/aws_config`],
-    };
-  }
-
-  /** Extract minimal GCP details from Pulumi config map if present. */
-  public static extractGcpFromPulumiConfig(config: Record<string, any>): { region?: string; projectId?: string } | undefined {
-    const region = Helpers.getConfigValue(config['gcp:region']);
-    const projectId = Helpers.getConfigValue(config['gcp:project']);
-    if (!region && !projectId) return undefined;
-    return { ...(region ? { region } : {}), ...(projectId ? { projectId } : {}) };
   }
 
   /** Return current envId inferred from stack name (envId-component). */
@@ -932,17 +922,6 @@ export class Helpers {
         const ref = Helpers.getStackRef(parsed.envId, parsed.component);
         return ref.getOutput(parsed.output);
       }
-      // Check if this is a ref+ secret
-      if (value.startsWith('ref+')) {
-        try {
-          const resolved = Helpers.resolveValsSync(value);
-          // Wrap in pulumi.secret() to hide from plain text output
-          return pulumi.secret(resolved);
-        } catch (error) {
-          console.warn(`Failed to resolve secret ${value}: ${error}`);
-          return value; // Return original value on error
-        }
-      }
       return value;
     }
     if (Array.isArray(value)) {
@@ -958,134 +937,286 @@ export class Helpers {
     return value;
   }
 
-  // Cache for resolved secrets to avoid multiple vals calls (only for transform approach)
-  private static secretsCache = new Map<string, string>();
-
-  /** Synchronous version of resolveVals for use in transforms */
-  private static resolveValsSync(ref: string): string {
+  /**
+   * Register a resolved ref+ secret in PULUMI_CONFIG_SECRET_KEYS without wrapping in pulumi.secret()
+   * This is used for Helm Charts where nested Outputs cause serialization issues
+   */
+  private static registerResolvedSecretPlain(ref: string, resolvedValue: string, debug: boolean = false): string {
+    const configKey = Helpers.getConfigKeyForRefSecret(ref);
+    
+    if (debug) {
+      pulumi.log.debug(`[SecretResolution] Registering secret with config key: ${configKey}`);
+    }
+    
     try {
-      const stdout = execFileSync('vals', ['get', ref, '-o', 'yaml'], { encoding: 'utf8' });
-      return stdout.trim();
-    } catch (e: any) {
-      const msg = e.stderr || e.message || 'vals evaluation failed';
-      throw new Error(`Helpers.resolveValsSync failed: ${msg}`);
-    }
-  }
-
-  /**
-   * Resolve ref+ secrets in config object during component initialization
-   * This function recursively walks through the config and resolves any ref+ strings
-   * Returns config with secrets wrapped in pulumi.secret()
-   */
-  public static resolveRefsInConfig<T = any>(config: T): any {
-    if (config == null) return config;
-    
-    if (typeof config === 'string') {
-      // Check if this is a ref+ secret
-      if (config.startsWith('ref+')) {
+      // Add key to PULUMI_CONFIG_SECRET_KEYS environment variable
+      let currentSecretKeys: string[] = [];
+      const envSecretKeys = process.env['PULUMI_CONFIG_SECRET_KEYS'];
+      
+      if (envSecretKeys) {
         try {
-          const resolved = Helpers.resolveValsSync(config);
-          // Wrap in pulumi.secret() to hide from plain text output
-          return pulumi.secret(resolved);
-        } catch (error) {
-          console.warn(`Failed to resolve secret ${config}: ${error}`);
-          return config; // Return original value on error
-        }
-      }
-      return config;
-    }
-    
-    if (Array.isArray(config)) {
-      return config.map(v => Helpers.resolveRefsInConfig(v));
-    }
-    
-    if (typeof config === 'object') {
-      // Check if this is a Pulumi Output before trying to serialize it
-      if (pulumi.Output.isInstance(config)) {
-        return config; // Return Output unchanged - don't try to serialize it
-      }
-      
-      // Check if this is a Pulumi Asset or Archive (has __pulumiAsset property)
-      // These objects should not be recursively processed as they have internal state
-      if ('__pulumiAsset' in config || '__pulumiArchive' in config) {
-        return config;
-      }
-      
-      // Check if this object has properties that suggest it's a Pulumi Output wrapper
-      // (Output objects have special properties that shouldn't be enumerated)
-      if (config && typeof config === 'object' && !Array.isArray(config)) {
-        const hasOutputProperties = '__pulumiType' in config || '__pulumiIsSecret' in config;
-        if (hasOutputProperties) {
-          return config; // Likely an Output wrapper, don't enumerate it
-        }
-      }
-      
-      const out: Record<string, any> = {};
-      for (const [k, v] of Object.entries(config as any)) {
-        out[k] = Helpers.resolveRefsInConfig(v as any);
-      }
-      return out;
-    }
-    
-    return config;
-  }
-
-  /**
-   * Create a transform function that resolves ref+ secrets in resource properties
-   * This can be added to transformations array in ComponentResourceOptions
-   * Note: For most use cases, using resolveStackRefsDeep in component constructors is simpler
-   */
-  public static createSecretResolutionTransform(): (args: any) => any {
-    return (args: any) => {
-      if (!args || !args.props) return args;
-      
-      // Recursively resolve ref+ secrets in props
-      const resolvedProps = Helpers.resolveRefsDeepInProps(args.props);
-      
-      return {
-        ...args,
-        props: resolvedProps,
-      };
-    };
-  }
-
-  /**
-   * Recursively resolve ref+ secrets in resource properties
-   * This is used by the transform approach
-   */
-  private static resolveRefsDeepInProps(props: any): any {
-    if (props == null) return props;
-    
-    if (typeof props === 'string') {
-      if (props.startsWith('ref+')) {
-        // Check cache first
-        let cached = Helpers.secretsCache.get(props);
-        if (!cached) {
-          try {
-            cached = Helpers.resolveValsSync(props);
-            Helpers.secretsCache.set(props, cached);
-          } catch (error) {
-            console.warn(`Failed to resolve secret ${props}: ${error}`);
-            return props;
+          currentSecretKeys = JSON.parse(envSecretKeys) || [];
+          if (debug) {
+            pulumi.log.debug(`[SecretResolution] Found ${currentSecretKeys.length} existing secret keys`);
+          }
+        } catch {
+          currentSecretKeys = [];
+          if (debug) {
+            pulumi.log.debug(`[SecretResolution] Failed to parse existing secret keys, starting fresh`);
           }
         }
-        return pulumi.secret(cached);
       }
-      return props;
+      
+      if (!currentSecretKeys.includes(configKey)) {
+        currentSecretKeys.push(configKey);
+        process.env['PULUMI_CONFIG_SECRET_KEYS'] = JSON.stringify(currentSecretKeys);
+        
+        if (debug) {
+          pulumi.log.debug(`[SecretResolution] Added config key to PULUMI_CONFIG_SECRET_KEYS (total: ${currentSecretKeys.length})`);
+        }
+        
+        // Also update store.config for Pulumi runtime
+        try {
+          const runtimeConfig = require('@pulumi/pulumi/runtime/config') as any;
+          const runtimeState = require('@pulumi/pulumi/runtime/state') as any;
+          const store = runtimeState.getStore();
+          if (store?.config) {
+            store.config[runtimeConfig.configSecretKeysEnvKey] = JSON.stringify(currentSecretKeys);
+            if (debug) {
+              pulumi.log.debug(`[SecretResolution] Updated runtime store config`);
+            }
+          }
+        } catch (e) {
+          if (debug) {
+            pulumi.log.debug(`[SecretResolution] Failed to update runtime store (env var still set): ${e}`);
+          }
+          // Silent fail - env var is set
+        }
+      } else {
+        if (debug) {
+          pulumi.log.debug(`[SecretResolution] Config key already registered, skipping`);
+        }
+      }
+    } catch (e) {
+      if (debug) {
+        pulumi.log.error(`[SecretResolution] Failed to register secret: ${e}`);
+      }
+      // Silent fail
+    }
+
+    // Return plain string (not wrapped in pulumi.secret())
+    // Key-level tracking in PULUMI_CONFIG_SECRET_KEYS enables Pulumi to recognize it as a secret
+    return resolvedValue;
+  }
+
+  /**
+   * Recursively walk through props and resolve ref+ strings to secret outputs
+   * Similar to resolveStackRefsDeep but for ref+ secrets
+   * 
+   * Note: This function only processes plain values. Pulumi Outputs are skipped
+   * because ref+ strings should always be plain strings, not wrapped in Outputs.
+   * If a ref+ string is inside an Output, it cannot be resolved synchronously.
+   * 
+   * @param value - The value to process
+   * @param debug - If true, logs debug information
+   * @param path - Optional path for debugging (shows where in the object tree we are)
+   */
+  public static resolveRefPlusSecretsDeep(
+    value: any, 
+    debug: boolean = false,
+    path: string = ''
+  ): any {
+    if (value == null) {
+      if (debug && path) {
+        pulumi.log.debug(`[SecretResolution] Skipping null/undefined at path: ${path}`);
+      }
+      return value;
     }
     
-    if (Array.isArray(props)) {
-      return props.map(v => Helpers.resolveRefsDeepInProps(v));
+    // Skip Pulumi Outputs - ref+ strings should always be plain strings
+    // If they're wrapped in Outputs, we can't resolve them synchronously anyway
+    if (pulumi.Output.isInstance(value)) {
+      if (debug) {
+        pulumi.log.debug(`[SecretResolution] Skipping Pulumi Output at path: ${path || 'root'}`);
+      }
+      return value;
     }
     
-    if (typeof props === 'object') {
+    // Handle strings - check if they start with ref+
+    if (typeof value === 'string' && value.startsWith('ref+')) {
+      if (debug) {
+        pulumi.log.debug(`[SecretResolution] Found ref+ string at path: ${path || 'root'} - ${value}`);
+      }
+      try {
+        // Resolve the secret synchronously
+        const resolvedValue = Helpers.resolveValsSync(value, debug);
+        if (debug) {
+          pulumi.log.debug(`[SecretResolution] Resolved secret at path: ${path || 'root'} (length: ${resolvedValue.length})`);
+        }
+        // Register in PULUMI_CONFIG_SECRET_KEYS for key-level tracking
+        // This should be sufficient for Pulumi to recognize it as a secret
+        return Helpers.registerResolvedSecretPlain(value, resolvedValue, debug);
+      } catch (error: any) {
+        if (debug) {
+          pulumi.log.error(`[SecretResolution] Failed to resolve ${value} at path: ${path || 'root'}: ${error.message}`);
+        }
+        // If resolution fails, return original value
+        return value;
+      }
+    }
+    
+    // Handle arrays - recursively process each element
+    if (Array.isArray(value)) {
+      if (debug) {
+        pulumi.log.debug(`[SecretResolution] Processing array at path: ${path || 'root'} (length: ${value.length})`);
+      }
+      return value.map((v, idx) => Helpers.resolveRefPlusSecretsDeep(v, debug, path ? `${path}[${idx}]` : `[${idx}]`));
+    }
+    
+    // Handle objects - recursively process each property
+    if (typeof value === 'object') {
+      // Skip certain object types that shouldn't be processed
+      if (value instanceof Date || value instanceof RegExp || value instanceof Error) {
+        if (debug) {
+          pulumi.log.debug(`[SecretResolution] Skipping special object type at path: ${path || 'root'} (${value.constructor.name})`);
+        }
+        return value;
+      }
+      
+      // Check if object has a constructor that's not Object (might be a class instance)
+      const constructor = value.constructor;
+      if (constructor !== Object && constructor !== undefined && constructor.name !== 'Object') {
+        if (debug) {
+          pulumi.log.debug(`[SecretResolution] Skipping object with constructor: ${constructor.name} at path: ${path || 'root'}`);
+        }
+        return value;
+      }
+      
+      if (debug) {
+        const keys = Object.keys(value);
+        pulumi.log.debug(`[SecretResolution] Processing object at path: ${path || 'root'} (keys: ${keys.join(', ')})`);
+      }
+      
       const out: Record<string, any> = {};
-      for (const [k, v] of Object.entries(props)) {
-        out[k] = Helpers.resolveRefsDeepInProps(v);
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = Helpers.resolveRefPlusSecretsDeep(v, debug, path ? `${path}.${k}` : k);
       }
       return out;
     }
     
-    return props;
+    // For other types (numbers, booleans, etc.), return as-is
+    if (debug && path) {
+      pulumi.log.debug(`[SecretResolution] Skipping primitive type at path: ${path} (${typeof value})`);
+    }
+    return value;
   }
+
+  /**
+   * Register a global resource transform that resolves ref+ secrets in resource arguments
+   * This uses pulumi.runtime.registerResourceTransform to apply the transform to all resources
+   * in the stack, rather than adding transformations to individual components.
+   * 
+   * The transform processes only args.props (resource arguments) recursively.
+   * Secrets are resolved as plain strings and registered in PULUMI_CONFIG_SECRET_KEYS
+   * for key-level tracking, which should be sufficient for Pulumi to recognize them
+   * as secrets in preview and state.
+   * 
+   * Note: For Helm Charts, if `values` is a Pulumi Output, it will be skipped to avoid
+   * serialization issues. Helm Chart values must be plain objects (not Outputs).
+   * 
+   * @param debug - If true, logs debug information about transform execution
+   */
+  public static registerSecretResolutionTransform(debug: boolean = false): void {
+    // Use a flag to ensure we only register once, but allow updating debug flag
+    if ((Helpers as any)._secretTransformRegistered) {
+      // If debug is requested, update the debug flag even if already registered
+      if (debug) {
+        (Helpers as any)._secretTransformDebug = true;
+        try {
+          pulumi.log.debug(`[SecretResolution] Transform already registered, enabling debug mode`);
+        } catch {
+          // Pulumi runtime not available yet
+        }
+      }
+      return;
+    }
+
+    // Check if Pulumi runtime is available before trying to register
+    try {
+      if (!pulumi.runtime || typeof pulumi.runtime.registerResourceTransform !== 'function') {
+        // Runtime not available yet, mark as attempted so Environment constructor can retry
+        (Helpers as any)._secretTransformAttempted = true;
+        return;
+      }
+    } catch {
+      // Pulumi runtime not available yet, mark as attempted so Environment constructor can retry
+      (Helpers as any)._secretTransformAttempted = true;
+      return;
+    }
+
+    (Helpers as any)._secretTransformRegistered = true;
+    (Helpers as any)._secretTransformDebug = debug;
+
+    // Log registration if debug is enabled
+    if (debug) {
+      try {
+        pulumi.log.debug(`[SecretResolution] Registering global resource transform for secret resolution`);
+      } catch {
+        // Pulumi runtime not fully initialized yet, but registration will proceed
+      }
+    }
+
+    pulumi.runtime.registerResourceTransform((args: any) => {
+      const isDebug = (Helpers as any)._secretTransformDebug || false;
+      
+      // Only process args.props (resource arguments), not opts
+      if (!args || !args.props) {
+        if (isDebug) {
+          pulumi.log.debug(`[SecretResolution] Skipping transform: no args or props`);
+        }
+        return undefined; // Return undefined to indicate no transformation
+      }
+
+      const resourceType = args.type || 'unknown';
+      const resourceName = args.name || 'unknown';
+      
+      if (isDebug) {
+        pulumi.log.debug(`[SecretResolution] Transform invoked for: ${resourceType}::${resourceName}`);
+        pulumi.log.debug(`[SecretResolution] Processing props (keys: ${Object.keys(args.props).join(', ')})`);
+      }
+
+      // Process only args.props recursively (resource arguments)
+      // The resolveRefPlusSecretsDeep function skips non-plain objects (class instances, etc.)
+      // which should prevent serialization issues with special Pulumi types
+      const resolvedProps = Helpers.resolveRefPlusSecretsDeep(args.props, isDebug, 'props');
+      
+      if (isDebug) {
+        pulumi.log.debug(`[SecretResolution] Transform completed for resource: ${resourceType}::${resourceName}`);
+      }
+      
+      // Return transformed args with resolved props
+      return {
+        props: resolvedProps,
+        opts: args.opts,
+      };
+    });
+  }
+}
+
+// Register the secret resolution transform at module load time
+// This ensures it's registered before any resources are created, regardless of when
+// Project/Environment classes are instantiated. This is critical because transforms
+// only apply to resources created AFTER they are registered.
+// 
+// We use a try-catch to handle cases where Pulumi runtime isn't initialized yet
+// (e.g., during module import in non-Pulumi contexts). The transform will be
+// registered when the module is imported in a Pulumi context.
+try {
+  // Try to register immediately - this will work if Pulumi runtime is available
+  // The registerSecretResolutionTransform function handles the case where runtime isn't ready
+  Helpers.registerSecretResolutionTransform(false); // Register without debug by default
+} catch (e) {
+  // Pulumi runtime not available yet, will be registered when Environment is created
+  // This is a fallback for cases where the module is imported before Pulumi is initialized
+  // Silently continue - registration will happen in Environment constructor
 }

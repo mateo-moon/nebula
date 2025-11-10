@@ -1,0 +1,8 @@
+name: test-secret-resolution
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+main: ref-plus-secret-resolution.ts
+
+
