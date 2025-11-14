@@ -26,8 +26,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx tests/run-test.ts",
-    "test:secret-resolution": "tsx tests/run-test.ts"
+    "test": "tsx tests/run-tests.ts",
+    "test:all": "tsx tests/run-tests.ts",
+    "test:basic": "tsx tests/run-tests.ts basic",
+    "test:component": "tsx tests/run-tests.ts component",
+    "test:sops": "tsx tests/run-tests.ts sops"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.717.0",

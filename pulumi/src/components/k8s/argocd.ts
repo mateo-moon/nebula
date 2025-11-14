@@ -32,11 +32,20 @@ export class ArgoCd extends pulumi.ComponentResource {
   ) {
     super('argocd', name, args, opts);
 
+    // Extract k8s provider from opts if provided
+    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
+    const childOpts = { parent: this, provider: k8sProvider };
+    // Charts need providers array, not provider singular
+    const chartOpts = { parent: this };
+    if (k8sProvider) {
+      (chartOpts as any).providers = [k8sProvider];
+    }
+
     const namespaceName = args.namespace || 'argocd';
 
     const namespace = new k8s.core.v1.Namespace('argocd-namespace', {
       metadata: { name: namespaceName },
-    }, { parent: this });
+    }, childOpts);
 
     // Precreate Redis password secret; ignore future content changes so it remains stable
     const generatedRedisPassword = pulumi.secret(crypto.randomBytes(24).toString('base64'));
@@ -46,7 +55,7 @@ export class ArgoCd extends pulumi.ComponentResource {
         'auth': generatedRedisPassword,
         'redis-password': generatedRedisPassword,
       },
-    }, { parent: this, dependsOn: [namespace], ignoreChanges: ["data", "stringData"] });
+    }, { ...childOpts, dependsOn: [namespace], ignoreChanges: ["data", "stringData"] });
 
     const chartValues: Record<string, unknown> = {
       crds: { install: true },
@@ -92,7 +101,7 @@ export class ArgoCd extends pulumi.ComponentResource {
 
 
     const chart = new k8s.helm.v4.Chart('argo-cd', finalChartArgs, {
-      parent: this,
+      ...chartOpts,
       dependsOn: [namespace, redisSecret],
       transformations: []
     });
@@ -111,7 +120,7 @@ export class ArgoCd extends pulumi.ComponentResource {
           ...(args.project.clusterResourceWhitelist ? { clusterResourceWhitelist: args.project.clusterResourceWhitelist } : {}),
           ...(args.project.namespaceResourceWhitelist ? { namespaceResourceWhitelist: args.project.namespaceResourceWhitelist } : {}),
         },
-      }, { parent: this, dependsOn: [chart] });
+      }, { ...childOpts, dependsOn: [chart] });
     }
 
     this.registerOutputs({});

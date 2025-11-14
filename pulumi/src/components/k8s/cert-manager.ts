@@ -26,15 +26,34 @@ export class CertManager extends pulumi.ComponentResource {
 
     const namespaceName = args.namespace || "cert-manager";
 
+    // Extract k8s provider from opts if provided
+    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
+    const childOpts = { parent: this, provider: k8sProvider };
+    // Charts need providers array, not provider singular
+    const chartOpts = { parent: this };
+    if (k8sProvider) {
+      (chartOpts as any).providers = [k8sProvider];
+    }
+
     const namespace = new k8s.core.v1.Namespace("cert-manager-namespace", {
         metadata: { name: namespaceName },
-      }, { parent: this });
+      }, childOpts);
 
       const defaultValues = {
       installCRDs: true,
         prometheus: { enabled: true },
-        // Add tolerations for system nodes
-        global: {
+        // Add tolerations for system nodes - cert-manager chart requires tolerations per component
+        controller: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+          ],
+        },
+        webhook: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+          ],
+        },
+        cainjector: {
           tolerations: [
             { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
           ],
@@ -48,18 +67,45 @@ export class CertManager extends pulumi.ComponentResource {
       };
 
       const providedArgs: OptionalChartArgs | undefined = args.args;
+      
+      // Deep merge function to ensure tolerations are preserved
+      const deepMergeWithTolerations = (defaults: any, provided: any) => {
+        if (!provided) return defaults;
+        
+        const result = { ...defaults, ...provided };
+        
+        // Ensure tolerations are always included for each component
+        ['controller', 'webhook', 'cainjector'].forEach(component => {
+          if (result[component]) {
+            // If component exists, ensure it has tolerations
+            result[component] = {
+              ...result[component],
+              tolerations: result[component].tolerations || defaults[component]?.tolerations || []
+            };
+          } else if (defaults[component]) {
+            // If component doesn't exist in result but exists in defaults, use defaults
+            result[component] = defaults[component];
+          }
+        });
+        
+        return result;
+      };
+      
+      // Merge default values with provided values, preserving tolerations
+      const mergedValues = deepMergeWithTolerations(defaultValues, providedArgs?.values);
+      
       const finalChartArgs: ChartArgs = {
         chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
         ...defaultChartArgsBase,
         ...(providedArgs || {}),
         namespace: namespaceName,
-        values: defaultValues,
+        values: mergedValues,
       };
 
     const chart = new k8s.helm.v4.Chart(
-        "cert-manager",
-        finalChartArgs,
-        { dependsOn: [namespace], parent: this }
+      "cert-manager",
+      finalChartArgs,
+      { ...chartOpts, dependsOn: [namespace] }
       );
 
 
@@ -76,7 +122,7 @@ export class CertManager extends pulumi.ComponentResource {
           selfSigned: {},
         },
       },
-      { dependsOn: [chart], parent: this }
+      { ...childOpts, dependsOn: [chart] }
     );
 
     new k8s.apiextensions.CustomResource(
@@ -102,7 +148,7 @@ export class CertManager extends pulumi.ComponentResource {
           },
         },
       },
-      { dependsOn: [chart], parent: this }
+      { ...childOpts, dependsOn: [chart] }
     );
 
     new k8s.apiextensions.CustomResource(
@@ -128,7 +174,7 @@ export class CertManager extends pulumi.ComponentResource {
           },
         },
       },
-      { dependsOn: [chart], parent: this }
+      { ...childOpts, dependsOn: [chart] }
     );
   }
 }

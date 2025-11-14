@@ -1,8 +1,7 @@
-name: test-secret-resolution
+name: test_pulumi_secrets
+description: Test project for Pulumi secret resolution - SOPS Diagnostic Suppression
 runtime:
   name: nodejs
   options:
     typescript: true
-main: ref-plus-secret-resolution.ts
-
-
+main: scenarios/sops-diagnostic.ts

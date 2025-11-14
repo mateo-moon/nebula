@@ -29,12 +29,21 @@ export class ClusterAutoscaler extends pulumi.ComponentResource {
   ) {
     super("cluster-autoscaler", name, args, opts);
 
+    // Extract k8s provider from opts if provided
+    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
+    const childOpts = { parent: this, provider: k8sProvider };
+    // Charts need providers array, not provider singular
+    const chartOpts = { parent: this };
+    if (k8sProvider) {
+      (chartOpts as any).providers = [k8sProvider];
+    }
+
     const namespaceName = args.namespace || "kube-system";
     // Only create a namespace resource if it's not kube-system (which already exists)
     const ns = namespaceName !== "kube-system" 
       ? new k8s.core.v1.Namespace("cluster-autoscaler-namespace", {
           metadata: { name: namespaceName },
-        }, { parent: this })
+        }, childOpts)
       : undefined;
 
     // Default: for GKE we recommend native autoscaler (NAP). Only install upstream when install=true.
@@ -106,7 +115,7 @@ export class ClusterAutoscaler extends pulumi.ComponentResource {
       values,
     };
 
-    new k8s.helm.v4.Chart("cluster-autoscaler", finalChartArgs, { parent: this, dependsOn: ns ? [ns] : [] });
+    new k8s.helm.v4.Chart("cluster-autoscaler", finalChartArgs, { ...chartOpts, dependsOn: ns ? [ns] : [] });
 
     this.registerOutputs({});
   }

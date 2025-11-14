@@ -54,9 +54,18 @@ export class ExternalDns extends pulumi.ComponentResource {
     const interval = args.interval || '1m';
     const logLevel = args.logLevel || 'info';
 
+    // Extract k8s provider from opts if provided
+    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
+    const k8sOpts = { parent: this, provider: k8sProvider };
+    // Charts need providers array, not provider singular
+    const chartOpts = { parent: this };
+    if (k8sProvider) {
+      (chartOpts as any).providers = [k8sProvider];
+    }
+
     const namespace = new k8s.core.v1.Namespace('external-dns-namespace', {
       metadata: { name: namespaceName },
-    }, { parent: this });
+    }, k8sOpts);
 
     // Ensure a Google Service Account exists and is bound for Workload Identity (if provider is Google)
     const gcpCfg = new pulumi.Config('gcp');
@@ -153,7 +162,7 @@ export class ExternalDns extends pulumi.ComponentResource {
       namespace: namespaceName,
       values,
     };
-    new k8s.helm.v4.Chart('external-dns', finalChartArgs, { parent: this, dependsOn: [namespace] });
+    new k8s.helm.v4.Chart('external-dns', finalChartArgs, { ...chartOpts, dependsOn: [namespace] });
 
     // If a GSA email is provided, bind KSA to GSA via Workload Identity and optionally grant roles to the GSA
     if (args.gsaEmail) {

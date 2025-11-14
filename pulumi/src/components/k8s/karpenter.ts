@@ -119,12 +119,21 @@ export class Karpenter extends pulumi.ComponentResource {
   ) {
     super("karpenter", name, args, opts);
 
+    // Extract k8s provider from opts if provided
+    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
+    const childOpts = { parent: this, provider: k8sProvider };
+    // Charts need providers array, not provider singular
+    const chartOpts = { parent: this };
+    if (k8sProvider) {
+      (chartOpts as any).providers = [k8sProvider];
+    }
+
     const namespaceName = args.namespace || "karpenter";
     const serviceAccountName = args.serviceAccountName || "karpenter";
 
     const namespace = new k8s.core.v1.Namespace("karpenter-namespace", {
       metadata: { name: namespaceName },
-    }, { parent: this });
+    }, childOpts);
 
     // Resolve project for Workload Identity bindings and IAM role grants
     const gcpCfg = new pulumi.Config("gcp");
@@ -193,7 +202,7 @@ export class Karpenter extends pulumi.ComponentResource {
           "iam.gke.io/gcp-service-account": gsaEmailOut,
         },
       },
-    }, { parent: this, dependsOn: [namespace] });
+    }, { ...childOpts, dependsOn: [namespace] });
 
     // Build Helm values
     const addBootstrap = args.bootstrapHardening !== false;
@@ -259,7 +268,7 @@ export class Karpenter extends pulumi.ComponentResource {
     // Only install the main Karpenter chart if NOT using a provider-specific controller
     // When installProvider=true, the provider chart includes everything needed
     if (args.installProvider !== true) {
-      new k8s.helm.v4.Chart("karpenter", finalChartArgs, { parent: this, dependsOn: [namespace, ksa, wiBinding] });
+      new k8s.helm.v4.Chart("karpenter", finalChartArgs, { ...chartOpts, dependsOn: [namespace, ksa, wiBinding] });
     }
 
     // Optional: install provider-specific controller for GCP
@@ -342,7 +351,7 @@ export class Karpenter extends pulumi.ComponentResource {
       } as ChartArgs;
       // Don't depend on coreChart when installing provider - the core chart waits for AWS which won't work on GCP
       // The provider chart should install independently so it can configure Karpenter for GCP
-      providerChart = new k8s.helm.v4.Chart("karpenter-provider-gcp", providerChartArgs, { parent: this, dependsOn: [namespace, ksa, wiBinding] });
+      providerChart = new k8s.helm.v4.Chart("karpenter-provider-gcp", providerChartArgs, { ...chartOpts, dependsOn: [namespace, ksa, wiBinding] });
     }
 
     // Note: PDB is created by the Helm chart by default, so we don't need to create it separately
@@ -402,7 +411,7 @@ export class Karpenter extends pulumi.ComponentResource {
           },
           spec: nodeClassSpec,
         }, { 
-          parent: this, 
+          ...childOpts, 
           dependsOn: crDeps,
           // Extended timeout to allow CRD establishment on first deployment
           customTimeouts: { create: "5m" },
@@ -448,7 +457,7 @@ export class Karpenter extends pulumi.ComponentResource {
             name: poolName.toLowerCase(),
           },
           spec: nodePoolSpec,
-        }, { parent: this, dependsOn: [nodeClass, ...crDeps] });
+        }, { ...childOpts, dependsOn: [nodeClass, ...crDeps] });
       }
     }
 
