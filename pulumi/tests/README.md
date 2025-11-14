@@ -1,91 +1,111 @@
-# Pulumi Tests
+# Pulumi Secret Resolution Tests
 
-This directory contains test cases for Pulumi resources and transforms.
+## Overview
 
-## Test Files
+This test suite validates the `ref+` secret resolution functionality in Pulumi, ensuring that secrets are properly resolved and obfuscated in `pulumi preview` output.
 
-- **`ref-plus-secret-resolution.ts`**: Tests the ref+ secret resolution transform with ConfigMap resources
-  - Creates a temporary secret file
-  - Uses `ref+file://` to reference the secret
-  - Verifies that the transform resolves the secret and marks it as `[secret]` in preview
+## Architecture
 
-## Documentation
+### Global Transform Approach
 
-- **`REF_SECRET_RESOLUTION.md`**: Detailed documentation about the ref+ secret resolution approach and implementation
+The solution uses a **global resource transform** (`pulumi.runtime.registerResourceTransform`) that:
+1. Intercepts ALL resource creation
+2. Scans resource props for `ref+` patterns (e.g., `ref+file://`, `ref+sops://`)
+3. Resolves secrets synchronously using the `vals` tool
+4. Returns resolved values as plain strings
+
+### Key Features
+
+- **Universal**: Works with all Pulumi resources (Kubernetes, Helm Charts, ComponentResources, etc.)
+- **Recursive**: Deeply scans nested objects and arrays for `ref+` patterns
+- **Automatic**: No manual configuration needed - transform is registered at module load time
+- **Clean**: Single, unified solution without special cases or wrappers
+
+## Test Structure
+
+```
+tests/
+├── run-tests.ts           # Main test runner
+├── scenarios/             # Test scenarios
+│   ├── basic-secret-resolution.ts
+│   ├── component-secret-resolution.ts
+│   └── sops-diagnostic.ts
+├── utils/                 # Test utilities
+│   └── test-helpers.ts
+└── Pulumi.yaml           # Pulumi project configuration
+```
+
+## Test Scenarios
+
+### 1. Basic Secret Resolution
+Tests `ref+` secret resolution with:
+- Kubernetes ConfigMaps
+- Helm Charts with secret values
+- Nested secret structures
+
+### 2. Component Resource Secrets
+Tests `ref+` secrets passed through:
+- ComponentResource props
+- Nested ComponentResources
+- Pre-resolved secret values
+
+### 3. SOPS Diagnostic Suppression
+Tests that SOPS diagnostic messages are properly suppressed when resolving `ref+sops://` patterns.
 
 ## Running Tests
 
-### Using Dev Container (Recommended)
-
-The easiest way to run tests is using the VS Code dev container:
-
-1. Open the workspace in VS Code
-2. Click "Reopen in Container" when prompted
-3. Once the container is ready, run:
-   ```bash
-   cd pulumi
-   npm run test
-   ```
-
-The dev container includes all necessary tools:
-- Pulumi CLI
-- vals (for secret resolution)
-- kubectl & Helm
-- Docker-in-Docker
-
-See `.devcontainer/README.md` for more details.
-
-### Automated Test Runner (Local)
-
-Use the automated test runner which handles setup, execution, and verification:
-
 ```bash
-# From the pulumi directory
+# Run all tests
 npm run test
 
-# Or specifically for secret resolution
-npm run test:secret-resolution
+# Run specific test scenarios
+npm run test:basic      # Basic secret resolution
+npm run test:component  # ComponentResource secrets
+npm run test:sops       # SOPS diagnostic suppression
 ```
 
-The test runner will:
-1. ✅ Check if test stack exists, create if needed
-2. ✅ Run `pulumi preview --diff`
-3. ✅ Verify that secrets are shown as `[secret]`
-4. ✅ Clean up temporary test files
-5. ✅ Exit with appropriate status code
+## How It Works
 
-### Manual Testing
+### Secret Resolution Process
 
-You can also run tests manually:
+1. **Transform Registration**: The global transform is registered at module load time
+2. **Resource Interception**: When any resource is created, the transform intercepts it
+3. **Pattern Detection**: The transform recursively scans props for `ref+` patterns
+4. **Synchronous Resolution**: Uses `vals` tool to resolve secrets synchronously
+5. **Value Return**: Returns resolved values as plain strings (not Pulumi Outputs)
 
-```bash
-# Set up test stack (from pulumi directory)
-cd tests
-pulumi stack init test-secret
+### Why This Works
 
-# Run preview with diff
-PULUMI_CONFIG_PASSPHRASE=password pulumi preview --stack test-secret --diff
-```
+- **Helm Charts**: Can accept plain string values (cannot serialize Pulumi Outputs)
+- **Kubernetes Resources**: Transform processes them before they reach the provider
+- **ComponentResources**: Transform applies to both the component and its children
 
-## Test Configuration
+## Implementation Details
 
-Test stacks use separate Pulumi configuration files:
-- `Pulumi.test-secret.yaml` - Configuration for secret resolution tests
-- `Pulumi.yaml` - Project configuration for test stacks
+The core implementation is in `/pulumi/src/utils/helpers.ts`:
 
-## Test Secrets
+- `registerSecretResolutionTransform()`: Registers the global transform
+- `resolveRefPlusSecretsDeep()`: Recursively resolves `ref+` patterns
+- `resolveValsSync()`: Synchronously resolves secrets using `vals` tool
 
-The `.secrets/` directory contains encrypted secret files used for testing:
-- `secrets-nuconstruct-dev.yaml` - Encrypted secrets for test environments
+## Important Notes
 
-These files are managed by SOPS and can be referenced using `ref+sops://` in test cases.
+1. **Synchronous Resolution**: Secrets are resolved synchronously to work with Helm Charts
+2. **Plain Values**: Resolved values are returned as plain strings, not Pulumi Outputs
+3. **Global Transform**: Applied automatically to ALL resources in the stack
+4. **No Special Cases**: Unified approach works for all resource types
 
-## Test Runner
+## Troubleshooting
 
-The `run-test.ts` script provides automated test execution:
-- Automatically manages test stack lifecycle
-- Validates test output for correct secret handling
-- Provides clear success/failure reporting
-- Cleans up temporary files
+If tests fail:
 
+1. **Clean State**: Delete `.pulumi-backend-*` directories and `Pulumi*.yaml` files
+2. **Check Passphrase**: Default passphrase is "passphrase"
+3. **Verify Transform**: Look for `[SecretResolution] Transform invoked` in debug output
+4. **Check vals**: Ensure `vals` tool is installed and accessible
 
+## Known Limitations
+
+- Secrets passed as Pulumi Outputs (e.g., `pulumi.all()`) cannot be resolved synchronously
+- The warning about `PULUMI_CONFIG_SECRET_KEYS` is expected for runtime values
+- Transform must be registered before resources are created

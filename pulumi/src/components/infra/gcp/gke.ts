@@ -3,6 +3,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Network } from './network';
+import { writeKubeconfig } from '../../../utils/kubeconfig';
 
 function stableShortHash(input: string): string {
   let hash = 0x811c9dc5;
@@ -200,9 +201,8 @@ export class Gke extends pulumi.ComponentResource {
       gcpProject,
     ]).apply(([clusterName, endpoint, auth, projectId]) => {
       // Generate kubeconfig using GKE's standard format
-      const projectName = pulumi.getProject();
-      const clusterNameWithProject = `${projectName}-${clusterName}`;
-      const context = clusterNameWithProject;
+      // Use the cluster name directly as the context to avoid duplicates
+      const context = clusterName;
       
       return `apiVersion: v1
 clusters:
@@ -340,34 +340,13 @@ users:
 `;
     });
 
-    this.kubeconfig.apply(cfgStr => {
-      try {
-        // Validate kubeconfig format before writing
-        if (!cfgStr || typeof cfgStr !== 'string') {
-          console.warn('Invalid kubeconfig: empty or not a string');
-          return cfgStr;
-        }
-        
-        // Check for basic kubeconfig structure
-        if (!cfgStr.includes('apiVersion: v1') || !cfgStr.includes('kind: Config')) {
-          console.warn('Invalid kubeconfig: missing required fields');
-          return cfgStr;
-        }
-        
-        // Note: Node.js script is now properly escaped with literal \n characters
-        
-        const dir = path.resolve((global as any).projectRoot || process.cwd(), '.config');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        const stackName = pulumi.getStack();
-        const envPrefix = String(stackName).split('-')[0];
-        const fileName = `kube-config-${envPrefix}-gke`;
-        fs.writeFileSync(path.resolve(dir, fileName), cfgStr);
-        
-        console.log(`Kubeconfig written to: ${path.resolve(dir, fileName)}`);
-      } catch (error) {
-        console.warn('Failed to write kubeconfig:', error);
-      }
-      return cfgStr;
+    // Write kubeconfig using centralized utility
+    // The project name will be automatically extracted from pulumi.getProject()
+    // This creates filenames like: kube-config-{project}-{env}-gke
+    // e.g., kube-config-kurtosis-dev-gke
+    writeKubeconfig({
+      kubeconfig: this.kubeconfig,
+      provider: 'gke',
     });
 
     this.registerOutputs({

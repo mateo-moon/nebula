@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { StackManager } from './core/automation';
 import { Project } from './core/project';
 import { Utils } from './utils';
+import { findKubeconfigFiles, getKubeconfigPath } from './utils/kubeconfig';
 import { spawn } from 'child_process';
 
 type Operation = 'shell' | 'bootstrap' | 'generate' | 'clear-auth';
@@ -73,58 +74,57 @@ function setupDebugFlags(debugLevel?: 'debug' | 'trace'): void {
 
 /** Output environment variables in a format that can be sourced into parent shell */
 function outputEnvVarsForShell(envVars: Record<string, string>, project: Project): void {
-  // Check for kubeconfig files in .config directory
-  const configDir = path.resolve((global as any).projectRoot || process.cwd(), '.config');
-  if (fs.existsSync(configDir)) {
-    const files = fs.readdirSync(configDir);
-    const kubeconfigFiles = files.filter(f => f.startsWith('kube-config-') || f.startsWith('kube_config'));
-    if (kubeconfigFiles.length > 0) {
-      // Try to match kubeconfig files to environments more precisely
-      // File naming patterns:
-      // - kube-config-${envPrefix}-gke
-      // - kube_config_${envPrefix}_eks
-      // - kube_config_${envPrefix}_${constellationName}_${constellationId}
-      const envKeys = Object.keys(project.envs);
-      
-      // Collect ALL matching kubeconfig files for all environments
-      // kubectl supports multiple kubeconfig files via KUBECONFIG env var
-      const matchedKubeconfigs = new Set<string>();
-      
-      // Try to match each environment and collect all matching kubeconfigs
-      for (const env of envKeys) {
-        const envLower = env.toLowerCase();
-        // Match patterns: kube-config-${env}- or kube_config_${env}_
-        const matches = kubeconfigFiles.filter(f => {
-          const fLower = f.toLowerCase();
-          // Check for kube-config-${env}- pattern
-          if (fLower.startsWith('kube-config-')) {
-            const afterPrefix = fLower.substring('kube-config-'.length);
-            return afterPrefix.startsWith(`${envLower}-`);
-          }
-          // Check for kube_config_${env}_ pattern
-          if (fLower.startsWith('kube_config_')) {
-            const afterPrefix = fLower.substring('kube_config_'.length);
-            return afterPrefix.startsWith(`${envLower}_`);
-          }
-          return false;
-        });
-        matches.forEach(match => matchedKubeconfigs.add(match));
-      }
-      
-      // If no matches found, fallback to all kubeconfig files
-      const kubeconfigsToUse = matchedKubeconfigs.size > 0 
-        ? Array.from(matchedKubeconfigs).sort() 
-        : kubeconfigFiles.sort();
-      
-      if (kubeconfigsToUse.length > 0) {
-        // Determine the separator based on platform (Unix/Mac use :, Windows uses ;)
-        const separator = process.platform === 'win32' ? ';' : ':';
-        
-        // Resolve all kubeconfig paths and join them (sorted for deterministic ordering)
-        const kubeconfigPaths = kubeconfigsToUse.map(f => path.resolve(configDir, f));
-        envVars['KUBECONFIG'] = kubeconfigPaths.join(separator);
+  // Check for kubeconfig files in .config directory using centralized utility
+  const envKeys = Object.keys(project.envs);
+  
+  // Collect kubeconfig files for each environment
+  const kubeconfigsByEnv = new Map<string, string[]>();
+  
+  for (const env of envKeys) {
+    const matches = findKubeconfigFiles(env);
+    if (matches.length > 0) {
+      kubeconfigsByEnv.set(env, matches.map(f => getKubeconfigPath(f)));
+    }
+  }
+  
+  // Also check for any other kubeconfig files not matched to specific envs
+  const allKubeconfigFiles = findKubeconfigFiles();
+  const unmatchedConfigs = allKubeconfigFiles.filter(f => {
+    // Check if this file matches any env
+    return !envKeys.some(env => {
+      const envMatches = findKubeconfigFiles(env);
+      return envMatches.includes(f);
+    });
+  });
+  
+  // IMPORTANT: Don't automatically set KUBECONFIG to multiple files
+  // This causes conflicts and connection issues with Pulumi and kubectl
+  // Instead, provide helpful information about available kubeconfigs
+  
+  // If we have kubeconfig files, add helpful comments but don't set KUBECONFIG
+  if (kubeconfigsByEnv.size > 0 || unmatchedConfigs.length > 0) {
+    console.error('\n# Available kubeconfig files:');
+    
+    // Show kubeconfigs by environment
+    for (const [env, configs] of kubeconfigsByEnv.entries()) {
+      console.error(`#   ${env}:`);
+      for (const config of configs) {
+        console.error(`#     export KUBECONFIG='${config}'`);
       }
     }
+    
+    // Show unmatched configs if any
+    if (unmatchedConfigs.length > 0) {
+      console.error('#   other:');
+      for (const config of unmatchedConfigs) {
+        const fullPath = getKubeconfigPath(config);
+        console.error(`#     export KUBECONFIG='${fullPath}'`);
+      }
+    }
+    
+    console.error('#');
+    console.error('# To use a specific kubeconfig, run the appropriate export command above');
+    console.error('# WARNING: Setting multiple kubeconfigs can cause conflicts');
   }
 
   // Output instructions to stderr (so they don't interfere with eval)

@@ -31,22 +31,92 @@ import type { ClusterAutoscalerConfig } from './cluster-autoscaler';
 
 export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
-  const candidates = Array.from(new Set([
-    args.kubeconfig,
-    path.resolve(process.cwd(), args.kubeconfig || ''),
-    (global as any).projectRoot ? path.resolve((global as any).projectRoot, args.kubeconfig || '') : undefined,
-  ].filter(Boolean) as string[])).map(expandHome);
-
-  let kubeconfigContent = args.kubeconfig || '';
-  for (const pth of candidates) {
-    try {
-      if (pth && fs.existsSync(pth) && fs.statSync(pth).isFile()) {
-        kubeconfigContent = fs.readFileSync(pth, 'utf8');
-        break;
-      }
-    } catch {}
+  
+  // CRITICAL: Check if KUBECONFIG env var contains multiple files, which causes issues
+  const kubeconfigEnv = process.env.KUBECONFIG;
+  const separator = process.platform === 'win32' ? ';' : ':';
+  if (kubeconfigEnv && kubeconfigEnv.includes(separator)) {
+    console.warn(`[createK8sProvider] WARNING: KUBECONFIG env var contains multiple files: ${kubeconfigEnv}`);
+    console.warn(`[createK8sProvider] This can cause conflicts. Will ignore env var and use explicit kubeconfig.`);
+    
+    // IMPORTANT: Temporarily clear KUBECONFIG to prevent provider from using it
+    // We'll restore it after creating the provider
+    delete process.env.KUBECONFIG;
   }
-  return new k8s.Provider(args.name || 'k8s', { kubeconfig: kubeconfigContent });
+  
+  // If kubeconfig is provided, try to resolve and read it
+  if (args.kubeconfig && args.kubeconfig.trim()) {
+    // Add more path resolution candidates
+    const candidates = Array.from(new Set([
+      args.kubeconfig,
+      path.resolve(process.cwd(), args.kubeconfig),
+      path.resolve(args.kubeconfig), // Absolute path
+      (global as any).projectRoot ? path.resolve((global as any).projectRoot, args.kubeconfig) : undefined,
+      // Try relative to the workspace root (up to 3 levels)
+      path.resolve(process.cwd(), '..', args.kubeconfig),
+      path.resolve(process.cwd(), '..', '..', args.kubeconfig),
+      path.resolve(process.cwd(), '..', '..', '..', args.kubeconfig),
+      // Also try looking in common locations
+      path.join(process.cwd(), '.config', path.basename(args.kubeconfig)),
+    ].filter(Boolean) as string[])).map(expandHome);
+
+    console.log(`[createK8sProvider] Looking for kubeconfig at: ${args.kubeconfig}`);
+    console.log(`[createK8sProvider] Current directory: ${process.cwd()}`);
+    console.log(`[createK8sProvider] Project root: ${(global as any).projectRoot || 'not set'}`);
+
+    for (const pth of candidates) {
+      try {
+        if (pth && fs.existsSync(pth) && fs.statSync(pth).isFile()) {
+          // Use absolute path for consistency
+          const absolutePath = path.resolve(pth);
+          console.log(`[createK8sProvider] Found kubeconfig at: ${absolutePath}`);
+          const kubeconfigContent = fs.readFileSync(absolutePath, 'utf8');
+          
+          // Validate that we actually read content
+          if (!kubeconfigContent || kubeconfigContent.trim().length === 0) {
+            console.warn(`[createK8sProvider] WARNING: Kubeconfig file at ${absolutePath} is empty`);
+            continue;
+          }
+          
+          console.log(`[createK8sProvider] Successfully read kubeconfig (${kubeconfigContent.length} bytes)`);
+          
+          // Create provider with explicit kubeconfig content
+          // This ensures it doesn't use KUBECONFIG env var even if present
+          const provider = new k8s.Provider(args.name || 'k8s', { 
+            kubeconfig: kubeconfigContent,
+            // Explicitly disable loading from KUBECONFIG env var
+            suppressDeprecationWarnings: true
+          });
+          
+          // Restore KUBECONFIG env var if we cleared it
+          if (kubeconfigEnv) {
+            process.env.KUBECONFIG = kubeconfigEnv;
+          }
+          
+          return provider;
+        }
+      } catch (err) {
+        console.log(`[createK8sProvider] Failed to read ${pth}: ${err}`);
+      }
+    }
+    
+    console.warn(`[createK8sProvider] WARNING: Could not find kubeconfig file at any of the candidate paths`);
+    console.warn(`[createK8sProvider] The Kubernetes provider will fall back to default behavior (KUBECONFIG env var)`);
+    console.warn(`[createK8sProvider] This may cause issues if KUBECONFIG contains multiple files`);
+  }
+  
+  // If kubeconfig path not provided or not found, don't pass kubeconfig parameter
+  // This allows the provider to use its default behavior (checking KUBECONFIG env var)
+  // However, note that if KUBECONFIG has multiple files, this could still cause issues
+  // The caller should ensure a specific kubeconfig file is provided
+  console.warn(`[createK8sProvider] Creating provider without explicit kubeconfig`);
+  
+  // Restore KUBECONFIG env var if we cleared it
+  if (kubeconfigEnv) {
+    process.env.KUBECONFIG = kubeconfigEnv;
+  }
+  
+  return new k8s.Provider(args.name || 'k8s', {});
 }
 
 export interface K8sConfig  {

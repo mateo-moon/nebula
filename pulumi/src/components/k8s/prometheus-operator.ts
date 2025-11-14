@@ -48,11 +48,20 @@ export class PrometheusOperator extends pulumi.ComponentResource {
   ) {
     super('prometheus-operator', name, args, opts);
 
+    // Extract k8s provider from opts if provided
+    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
+    const childOpts = { parent: this, provider: k8sProvider };
+    // Charts need providers array, not provider singular
+    const chartOpts = { parent: this };
+    if (k8sProvider) {
+      (chartOpts as any).providers = [k8sProvider];
+    }
+
     const namespaceName = args.namespace || "monitoring";
 
     const namespace = new k8s.core.v1.Namespace("prometheus-operator-namespace", {
       metadata: { name: namespaceName },
-    }, { parent: this });
+    }, childOpts);
 
     const storageClassName = args.storageClassName || "standard";
     
@@ -85,7 +94,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       },
       prometheusOperator: {
         tolerations: [
-          { key: 'node.kubernetes.io/system', operator: 'Equal', value: 'true', effect: 'NoSchedule' }
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
         ],
         manageCrds: true, // Installs Prometheus Operator CRDs
         prometheusOperatorSpec: {
@@ -110,6 +119,9 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       grafana: {
         enabled: true,
         adminPassword: "admin",
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+        ],
         persistence: {
           enabled: true,
           storageClassName: storageClassName,
@@ -122,6 +134,9 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       alertmanager: {
         enabled: true,
         alertmanagerSpec: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ],
           storage: {
             volumeClaimTemplate: {
               spec: {
@@ -138,7 +153,10 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         }
       },
       kubeStateMetrics: {
-        enabled: true
+        enabled: true,
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+        ]
       },
       nodeExporter: {
         enabled: true
@@ -163,6 +181,62 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       },
       kubeletServiceMonitor: {
         enabled: true
+      },
+      // Add Loki tolerations to match values-dev.yaml
+      loki: {
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+        ],
+        gateway: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        distributor: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        ingester: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        querier: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        querierFrontend: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        compactor: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        chunksCache: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ],
+          resources: {
+            requests: {
+              cpu: '100m',
+              memory: '2Gi'
+            },
+            limits: {
+              cpu: '500m',
+              memory: '4Gi'
+            }
+          }
+        },
+        resultsCache: {
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        }
       }
     };
 
@@ -196,7 +270,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     const chart = new k8s.helm.v4.Chart(
       "prometheus-operator",
       finalChartArgs,
-      { dependsOn: [namespace], parent: this }
+      { ...chartOpts, dependsOn: [namespace] }
     );
 
     // Create ServiceMonitor for kubelet metrics
@@ -232,7 +306,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         }
       },
-      { dependsOn: [chart], parent: this }
+      { ...childOpts, dependsOn: [chart] }
     );
 
     // Create ServiceMonitor for kube-proxy metrics
@@ -268,7 +342,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         }
       },
-      { dependsOn: [chart], parent: this }
+      { ...childOpts, dependsOn: [chart] }
     );
 
     // Deploy Loki if enabled
@@ -353,7 +427,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             }
           }
         },
-        { dependsOn: [namespace, chart], parent: this }
+        { ...chartOpts, dependsOn: [namespace, chart] }
       );
 
       // Deploy Promtail
@@ -425,7 +499,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             readinessProbe: false
           }
         },
-        { dependsOn: [lokiChart], parent: this }
+        { ...chartOpts, dependsOn: [lokiChart] }
       );
 
       // Patch existing Grafana datasource ConfigMap to add Loki
@@ -458,7 +532,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             ])
           }
         },
-        { dependsOn: [chart, lokiChart, promtailChart], parent: this }
+        { ...childOpts, dependsOn: [chart, lokiChart, promtailChart] }
       );
     }
   }

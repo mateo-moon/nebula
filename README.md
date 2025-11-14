@@ -4,153 +4,332 @@
 
 ## **Overview**
 
-  
-
 Nebula is a universal tool designed for deploying and maintaining crypto nodes and auxiliary infrastructure. Inspired by the initial state of space where various planets begin to form, Nebula aims to provide a cohesive and scalable environment for setting up and managing blockchain networks and their supporting services.
 
-  
-
 ### **Goals**
-
-  
 
 •  **Simplify Deployment**: Streamline the process of deploying crypto nodes on bare-metal or cloud-based instances.
 
 •  **Automate Configuration**: Automate the setup and configuration of instances with necessary dependencies.
 
-•  **Kubernetes Integration**: Install and manage Kubernetes clusters using K0s.
+•  **Kubernetes Integration**: Install and manage Kubernetes clusters using K0s, GKE, EKS, and Constellation.
 
 •  **Resource Management**: Deploy initial Kubernetes resources seamlessly.
 
 •  **Modular Stacks**: Allow for independent deployment of crypto stacks, monitoring, and automation tools.
 
-  
+## **Architecture**
 
-**Architecture**
+Nebula's architecture is based on a series of fundamental steps:
 
-  
-
-Nebula’s architecture is based on a series of fundamental steps:
-
-  
-
-1. **Provisioning**: Setting up bare-metal or cloud-based instances.
+1. **Provisioning**: Setting up bare-metal or cloud-based instances using Pulumi IaC.
 
 2. **Configuration**: Preparing instances with the required settings and dependencies.
 
-3. **K0s Installation**: Installing K0s to create a Kubernetes cluster.
+3. **Kubernetes Setup**: Installing K0s or provisioning managed Kubernetes (GKE, EKS, Constellation).
 
-4. **Initial Resources Deployment**: Deploying essential Kubernetes resources like ArgoCD.
+4. **Initial Resources Deployment**: Deploying essential Kubernetes resources like ArgoCD, cert-manager, ingress controllers.
 
-5. **Crypto Stacks Deployment**: Deploying independent batches of crypto stacks, including monitoring and automation tools.
+5. **Application Deployment**: Deploying applications including crypto stacks, monitoring, and automation tools.
 
-  
+## **Repository Structure**
 
-**Repository Structure**
-
- 
-
-    nebular/
-    ├── docs/
-    │   └── ...
-    ├── scripts/
-    │   ├── provisioning/
-    │   ├── setup/
-    │   ├── k0s/
-    │   ├── resources/
-    │   └── crypto-stacks/
-    ├── charts/
-    │   └── ...
-    ├── examples/
-    │   └── ...
+    nebula/
+    ├── pulumi/           # Pulumi infrastructure as code
+    │   ├── src/
+    │   │   ├── components/  # Reusable infrastructure components
+    │   │   │   ├── infra/  # Cloud infrastructure (GCP, AWS, Constellation)
+    │   │   │   └── k8s/    # Kubernetes components
+    │   │   ├── utils/      # Utility functions and helpers
+    │   │   └── cli.ts      # Nebula CLI commands
+    │   └── tests/          # Infrastructure test scenarios
+    ├── ansible/          # Ansible playbooks for configuration
+    ├── config/           # Configuration files and iPXE scripts
+    ├── qemu/            # QEMU testing environment
+    ├── scripts/         # Shell scripts for automation
     ├── LICENSE
     └── README.md
-      
 
-**Used Tools and Scripts**
+## **Technology Stack**
 
-  
+•  **Infrastructure as Code**: [Pulumi](https://www.pulumi.com/) with TypeScript
 
-•  **Provisioning Tools**: Qemu, IPXE, Terraform, Ansible
+•  **Provisioning Tools**: Qemu, iPXE, Ansible
 
-•  **Kubernetes Distribution**: [K0s](https://k0sproject.io/)
+•  **Kubernetes Distributions**: 
+   - [K0s](https://k0sproject.io/) - Lightweight Kubernetes
+   - GKE (Google Kubernetes Engine)
+   - EKS (Amazon Elastic Kubernetes Service)
+   - Constellation (Confidential Kubernetes)
 
-•  **Continuous Deployment**: [ArgoCD](https://argo-cd.readthedocs.io/), Github Actions
+•  **Continuous Deployment**: [ArgoCD](https://argo-cd.readthedocs.io/), GitHub Actions
 
 •  **Monitoring Tools**: Prometheus, Grafana
 
-•  **Cloud Providers**: WIP
+•  **Cloud Providers**: 
+   - Google Cloud Platform (GCP) - Full support
+   - Amazon Web Services (AWS) - Full support
+   - Microsoft Azure - In progress
 
-  
-
-## **How-to Examples**
-
-  
+## **Getting Started**
 
 ### **Prerequisites**
 
-  
+•  **Operating System**: Linux, macOS
 
-•  **Operating System**: Linux, Mac OS
+•  **Required Tools**: 
+   - Git for version control
+   - Docker (recommend [Orbstack](https://orbstack.dev/) for macOS)
+   - [Just](https://github.com/casey/just) - Command runner
+   - [Pulumi](https://www.pulumi.com/) - Infrastructure as Code
+   - Node.js 18+ and pnpm package manager
 
-•  **Tools**: git, docker(I reccoment [Orbstack](https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://orbstack.dev/&ved=2ahUKEwjHvbTQvs-JAxUraqQEHbeWD6oQFnoECAsQAQ&usg=AOvVaw3BYxm0Yt07hyMlY4dBdASt) for mac os), [just](https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://github.com/casey/just&ved=2ahUKEwifi7m4vs-JAxWWUaQEHdMOJhwQFnoECAoQAQ&usg=AOvVaw1n5qwdopTNFFnm9Tv2bgMn)
+### **Installation**
 
-    brew install just git && brew install --cask orbstack
+```bash
+# macOS installation
+brew install just git node pnpm && brew install --cask orbstack
+curl -fsSL https://get.pulumi.com | sh
+
+# Linux installation
+curl -fsSL https://get.pulumi.com | sh
+npm install -g pnpm
+```
 
 ----
- 
-### **Example: Deploying a Crypto Node**
 
-  
+## **Pulumi Infrastructure Management**
 
-**1. Clone the Repository**
+### **Kubeconfig Naming Convention**
 
+Nebula automatically generates standardized kubeconfig files with a clean, predictable naming pattern:
+
+```
+.config/kube-config-{project}-{environment}-{provider}
+```
+
+**Examples:**
+- `.config/kube-config-kurtosis-dev-gke` - Kurtosis project, dev environment, on GKE
+- `.config/kube-config-myapp-prod-eks` - MyApp project, production environment, on EKS
+- `.config/kube-config-tool-staging-constellation` - Tool project, staging environment, on Constellation
+
+**Features:**
+- ✅ Automatically extracts project name from Pulumi project
+- ✅ Environment prefix derived from stack name (e.g., "dev" from "dev-infra")
+- ✅ Provider-specific configuration (gke, eks, constellation)
+- ✅ Intelligent deduplication prevents redundant naming
+- ✅ Files stored in `.config/` directory at project root
+- ✅ Automatic kubeconfig validation
+
+### **Example: Deploying Infrastructure with Pulumi**
+
+#### **1. Clone the Repository**
+
+```bash
 git clone https://github.com/yourusername/nebula.git
+cd nebula/pulumi
+```
 
+#### **2. Install Dependencies**
+
+```bash
+pnpm install
+```
+
+#### **3. Configure Your Project**
+
+Create a `nebula.config.ts` file in your project directory:
+
+```typescript
+import { Project } from 'nebula';
+import type { InfraConfig, K8sConfig } from 'nebula/components';
+
+export const outputs = new Project('myapp', {
+  backendUrl: 'gs://my-pulumi-state',
+}, {
+  dev: {
+    settings: {
+      config: {
+        'gcp:project': 'my-gcp-project',
+        'gcp:region': 'us-central1',
+      },
+    },
+    components: {
+      Infra: (): InfraConfig => ({
+        gcpConfig: {
+          network: {
+            podsSecondaryCidr: '10.0.0.0/16',
+            servicesSecondaryCidr: '10.1.0.0/16',
+          },
+          gke: {
+            name: 'myapp-dev-gke',
+            location: 'us-central1-a',
+            releaseChannel: 'REGULAR',
+            deletionProtection: false,
+          },
+        },
+      }),
+      K8s: (): K8sConfig => ({
+        kubeconfig: '.config/kube-config-myapp-dev-gke',
+        certManager: { enabled: true },
+        ingressNginx: { enabled: true },
+        // Additional K8s components...
+      }),
+    },
+  },
+}).outputs;
+```
+
+#### **4. Deploy Infrastructure**
+
+```bash
+# Initialize authentication
+nebula bootstrap
+
+# Deploy infrastructure stack
+nebula up dev-infra
+
+# Deploy Kubernetes components
+nebula up dev-k8s
+
+# Deploy applications
+nebula up dev-app
+```
+
+#### **5. Access Your Cluster**
+
+The kubeconfig is automatically generated and placed in the `.config/` directory:
+
+```bash
+# Use the auto-generated kubeconfig
+export KUBECONFIG=$(pwd)/.config/kube-config-myapp-dev-gke
+
+# Verify cluster access
+kubectl get nodes
+kubectl get pods --all-namespaces
+```
+
+## **Nebula CLI Commands**
+
+The Nebula CLI provides convenient commands for managing infrastructure:
+
+```bash
+# Authentication and setup
+nebula bootstrap          # Initialize cloud authentication and setup
+
+# Stack management
+nebula up <stack>        # Deploy a stack
+nebula destroy <stack>   # Destroy a stack  
+nebula preview <stack>   # Preview changes before deploying
+nebula refresh <stack>   # Refresh stack state
+
+# Utility commands
+nebula kubeconfig        # List available kubeconfig files
+nebula test              # Run infrastructure tests
+nebula clean             # Clean up temporary files
+
+# Stack naming convention
+# Format: {environment}-{component}
+# Examples: dev-infra, dev-k8s, dev-app, prod-infra, prod-k8s
+```
+
+## **Project Structure Example**
+
+Here's how to organize a project using Nebula:
+
+```
+my-project/
+├── nebula.config.ts      # Main Nebula configuration
+├── .config/              # Auto-generated kubeconfig files
+│   ├── kube-config-myapp-dev-gke
+│   ├── kube-config-myapp-prod-gke
+│   └── kube-config-myapp-staging-eks
+├── infrastructure/       # Additional infrastructure code
+├── applications/         # Application deployments
+└── package.json         # Project dependencies
+```
+
+## **Advanced Features**
+
+### **Multi-Environment Support**
+
+Nebula supports multiple environments (dev, staging, prod) with isolated configurations:
+
+```typescript
+export const outputs = new Project('myapp', {
+  backendUrl: 'gs://my-pulumi-state',
+}, {
+  dev: { /* dev config */ },
+  staging: { /* staging config */ },
+  prod: { /* prod config */ },
+}).outputs;
+```
+
+### **Secret Management**
+
+Nebula integrates with cloud KMS for secret management:
+
+```typescript
+settings: {
+  secretsProvider: 'gcpkms://projects/my-project/locations/global/keyRings/my-keyring/cryptoKeys/my-key',
+  // Secrets are automatically encrypted/decrypted
+}
+```
+
+### **Component Library**
+
+Nebula provides pre-built components for common infrastructure patterns:
+
+- **Infrastructure Components**: VPCs, subnets, firewalls, load balancers
+- **Kubernetes Components**: cert-manager, ingress-nginx, external-dns, prometheus
+- **Security Components**: workload identity, RBAC, network policies
+- **Autoscaling**: Karpenter, Cluster Autoscaler
+
+## **Contributing**
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### **Development Setup**
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/nebula.git
 cd nebula
 
-**2. Provision Instances**
+# Install dependencies
+cd pulumi && pnpm install
 
-TODO
+# Run tests
+pnpm test
 
-**3. Set Up Instances**
+# Run linting
+pnpm lint
+```
 
-TODO
+## **Roadmap**
 
-**4. Install K0s**
+- ✅ GCP/GKE Support
+- ✅ AWS/EKS Support  
+- ✅ Pulumi Infrastructure as Code
+- ✅ Automated kubeconfig management
+- ✅ Component library
+- 🚧 Azure/AKS Support
+- 🚧 Terraform provider support
+- 📋 Web UI for infrastructure management
+- 📋 Cost optimization recommendations
+- 📋 Compliance and security scanning
 
-Install K0s on the configured instances:
+## **License**
 
-`k0sctl apply`
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-**5. Deploy Initial Kubernetes Resources**
+## **Support**
 
-Deploy ArgoCD and other initial resources:
+- 📖 [Documentation](https://github.com/yourusername/nebula/wiki)
+- 💬 [Discussions](https://github.com/yourusername/nebula/discussions)
+- 🐛 [Issue Tracker](https://github.com/yourusername/nebula/issues)
+- 📧 Contact: support@nebula.dev
 
-TODO
+---
 
-**6. Deploy Crypto Stacks**
-
-Deploy the desired crypto stacks:
-
-TODO
-
-**TODO List**
-
-  
-
-•  **Multi-Cloud Support**: Extend provisioning scripts to support more cloud providers.
-
-•  **CI/CD Integration**: Implement continuous integration and deployment pipelines.
-
-•  **Enhanced Monitoring**: Add more comprehensive monitoring tools and dashboards.
-
-•  **Documentation**: Improve and expand documentation for all modules.
-
-•  **User Interface**: Develop a GUI for easier interaction with Nebula.
-
-•  **Testing Framework**: Implement automated testing for deployments.
-
-  
-
-Feel free to contribute to the project by submitting pull requests or opening issues for any bugs or feature requests.
+Built with ❤️ by the Nebula team
