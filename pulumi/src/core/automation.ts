@@ -107,7 +107,10 @@ export class StackManager {
           ...(env.config.settings?.secretsProvider ? { 
             secretsProvider: env.config.settings.secretsProvider 
           } : {}),
-          config: wsCfg,
+          config: {
+            ...wsCfg,
+            'pulumi:disable-default-providers': ['kubernetes'],
+          },
         },
       },
     };

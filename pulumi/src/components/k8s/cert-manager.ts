@@ -40,8 +40,11 @@ export class CertManager extends pulumi.ComponentResource {
       }, childOpts);
 
       const defaultValues = {
-      installCRDs: true,
+        installCRDs: true,
         prometheus: { enabled: true },
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+        ],
         // Add tolerations for system nodes - cert-manager chart requires tolerations per component
         controller: {
           tolerations: [
