@@ -33,7 +33,7 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
   
   // CRITICAL: Check if KUBECONFIG env var contains multiple files, which causes issues
-  const kubeconfigEnv = process.env.KUBECONFIG;
+  const kubeconfigEnv = process.env['KUBECONFIG'];
   const separator = process.platform === 'win32' ? ';' : ':';
   if (kubeconfigEnv && kubeconfigEnv.includes(separator)) {
     console.warn(`[createK8sProvider] WARNING: KUBECONFIG env var contains multiple files: ${kubeconfigEnv}`);
@@ -41,7 +41,7 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
     
     // IMPORTANT: Temporarily clear KUBECONFIG to prevent provider from using it
     // We'll restore it after creating the provider
-    delete process.env.KUBECONFIG;
+    delete process.env['KUBECONFIG'];
   }
   
   // If kubeconfig is provided, try to resolve and read it
@@ -90,7 +90,7 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
           
           // Restore KUBECONFIG env var if we cleared it
           if (kubeconfigEnv) {
-            process.env.KUBECONFIG = kubeconfigEnv;
+            process.env['KUBECONFIG'] = kubeconfigEnv;
           }
           
           return provider;
@@ -113,7 +113,7 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   
   // Restore KUBECONFIG env var if we cleared it
   if (kubeconfigEnv) {
-    process.env.KUBECONFIG = kubeconfigEnv;
+    process.env['KUBECONFIG'] = kubeconfigEnv;
   }
   
   return new k8s.Provider(args.name || 'k8s', {});

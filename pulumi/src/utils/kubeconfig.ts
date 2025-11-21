@@ -247,7 +247,7 @@ export function extractEnvPrefix(stackName?: string): string {
  * Project name is automatically extracted from pulumi.getProject() if not provided.
  * 
  * @param options - Options for writing the kubeconfig
- * @returns A Pulumi Output that resolves when the file is written, containing the file path
+ * @returns A Pulumi Output that resolves when the file is written, containing the file path and expected path for K8s component
  */
 export function writeKubeconfig(options: KubeconfigWriteOptions): pulumi.Output<KubeconfigWriteResult> {
   return pulumi.output(options.kubeconfig).apply((cfgStr) => {
@@ -358,5 +358,55 @@ export function findKubeconfigFiles(envPrefix?: string): string[] {
 export function getKubeconfigPath(fileName: string): string {
   const configDir = getConfigDirectory();
   return path.resolve(configDir, fileName);
+}
+
+/**
+ * Resolves the kubeconfig path for the current project/environment
+ * This generates the expected filename based on current Pulumi project and stack
+ * @param provider - The provider type (e.g., 'gke', 'eks')
+ * @param options - Optional overrides
+ * @returns The expected kubeconfig path
+ */
+export function resolveKubeconfigPath(provider: string, options?: {
+  projectName?: string;
+  envPrefix?: string;
+  absolute?: boolean;
+}): string {
+  const projectName = options?.projectName || pulumi.getProject();
+  const envPrefix = options?.envPrefix || extractEnvPrefix();
+  
+  const fileName = generateKubeconfigFileName({
+    projectName,
+    envPrefix,
+    provider,
+  });
+  
+  if (options?.absolute) {
+    return getKubeconfigPath(fileName);
+  }
+  
+  // Return relative path for config files
+  return `.config/${fileName}`;
+}
+
+/**
+ * Helper to get the expected kubeconfig path for a given project and environment
+ * Use this in your nebula.config.ts files to ensure the path matches what gets generated
+ * 
+ * @example
+ * import { getKubeconfigPathFor } from 'nebula/utils';
+ * 
+ * K8s: (): K8sConfig => ({
+ *   kubeconfig: getKubeconfigPathFor('kurtosis', 'dev', 'gke'),
+ *   // ...
+ * })
+ */
+export function getKubeconfigPathFor(projectName: string, envPrefix: string, provider: string): string {
+  const fileName = generateKubeconfigFileName({
+    projectName,
+    envPrefix,
+    provider,
+  });
+  return `.config/${fileName}`;
 }
 

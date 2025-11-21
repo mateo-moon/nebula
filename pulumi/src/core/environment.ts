@@ -171,15 +171,26 @@ export class Environment {
       process.env['PULUMI_LOG_LEVEL'] === 'trace'
     );
     config = Helpers.resolveRefPlusSecretsDeep(config, isDebug, 'config') as ComponentTypes[typeof componentKey];
-    
-    // Get the component constructor from the registry using the correct key
-    const ComponentClass = Components[componentKey];
-    if (!ComponentClass) {
-      throw new Error(`Component class '${componentKey}' not found in Components registry`);
+
+    let componentInstance: any;
+    if (componentKey === 'K8s') {
+      const k8sConfig = config as ComponentTypes['K8s'];
+      const kubeconfig = k8sConfig?.kubeconfig;
+      if (!kubeconfig || typeof kubeconfig !== 'string' || kubeconfig.trim().length === 0) {
+        throw new Error(
+          `K8s component '${componentName}' in environment '${this.id}' is missing a 'kubeconfig' path. ` +
+          `Update your environment configuration (e.g., nebula.config.ts) to set 'kubeconfig' for this component.`
+        );
+      }
+      const ComponentClass = Components[componentKey];
+      componentInstance = new ComponentClass(`${this.id}-${componentName}`, k8sConfig);
+    } else if (componentKey === 'Infra') {
+      const ComponentClass = Components[componentKey];
+      const infraConfig = config as ComponentTypes['Infra'];
+      componentInstance = new ComponentClass(`${this.id}-${componentName}`, infraConfig);
+    } else {
+      throw new Error(`Unsupported component key '${componentKey}'`);
     }
-    
-    // Create the component instance with the resolved config
-    const componentInstance = new ComponentClass(`${this.id}-${componentName}`, config);
     
     // Register stack outputs on the Project instance (ESM-friendly), and also
     // merge them into the *root* module's exports for CommonJS environments.
