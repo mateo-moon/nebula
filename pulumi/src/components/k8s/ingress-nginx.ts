@@ -40,19 +40,10 @@ export class IngressNginx extends pulumi.ComponentResource {
   ) {
     super('ingress-nginx', name, args, opts);
 
-    // Extract k8s provider from opts if provided
-    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
-    const childOpts = { parent: this, provider: k8sProvider };
-    // Charts need providers array, not provider singular
-    const chartOpts = { parent: this };
-    if (k8sProvider) {
-      (chartOpts as any).providers = [k8sProvider];
-    }
-
     const namespaceName = args.namespace || 'ingress-nginx';
     const namespace = new k8s.core.v1.Namespace('ingress-nginx-namespace', {
       metadata: { name: namespaceName },
-    }, childOpts);
+    }, { parent: this });
 
     // Self-signed Issuer used by cert-manager for the admission webhook certificate
     const admissionIssuer = new k8s.apiextensions.CustomResource('ingress-nginx-selfsigned-issuer', {
@@ -60,7 +51,7 @@ export class IngressNginx extends pulumi.ComponentResource {
       kind: 'Issuer',
       metadata: { name: 'ingress-nginx-selfsigned', namespace: namespaceName },
       spec: { selfSigned: {} },
-    }, childOpts);
+    }, { parent: this });
 
     // Default tolerations for system nodes
     const defaultTolerations = [
@@ -115,7 +106,7 @@ export class IngressNginx extends pulumi.ComponentResource {
       values,
     };
 
-    new k8s.helm.v4.Chart('ingress-nginx', finalChartArgs, { ...chartOpts, dependsOn: [namespace, admissionIssuer] });
+    new k8s.helm.v4.Chart('ingress-nginx', finalChartArgs, { parent: this, dependsOn: [namespace, admissionIssuer] });
 
     this.registerOutputs({});
   }

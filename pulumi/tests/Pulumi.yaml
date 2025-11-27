@@ -1,7 +1,8 @@
 name: test_pulumi_secrets
-description: Test project for Pulumi secret resolution - SOPS Diagnostic Suppression
+description: Test project for Pulumi secret resolution - Cert-Manager Full Stack
 runtime:
   name: nodejs
   options:
-    typescript: true
-main: scenarios/sops-diagnostic.ts
+    typescript: false
+    nodeargs: --import=tsx/esm
+main: scenarios/cert-manager-full-stack.ts

@@ -83,6 +83,11 @@ Nebula's architecture is based on a series of fundamental steps:
    - [Just](https://github.com/casey/just) - Command runner
    - [Pulumi](https://www.pulumi.com/) - Infrastructure as Code
    - Node.js 18+ and pnpm package manager
+   - [Helm](https://helm.sh/) - Kubernetes package manager
+   - [helm-git plugin](https://github.com/aslafy-z/helm-git) - Required for Karpenter GCP provider:
+     ```bash
+     helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
+     ```
 
 ### **Installation**
 

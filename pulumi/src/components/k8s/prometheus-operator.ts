@@ -1,31 +1,9 @@
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
+import { deepmerge } from "deepmerge-ts";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
-
-// Deep merge helper function
-function deepMerge(target: any, source: any): any {
-  const output = { ...target };
-  if (isObject(target) && isObject(source)) {
-    Object.keys(source).forEach(key => {
-      if (isObject(source[key])) {
-        if (!(key in target)) {
-          Object.assign(output, { [key]: source[key] });
-        } else {
-          output[key] = deepMerge(target[key], source[key]);
-        }
-      } else {
-        Object.assign(output, { [key]: source[key] });
-      }
-    });
-  }
-  return output;
-}
-
-function isObject(item: any): boolean {
-  return item && typeof item === 'object' && !Array.isArray(item);
-}
 
 export interface PrometheusOperatorConfig {
   namespace?: string;
@@ -48,20 +26,11 @@ export class PrometheusOperator extends pulumi.ComponentResource {
   ) {
     super('prometheus-operator', name, args, opts);
 
-    // Extract k8s provider from opts if provided
-    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
-    const childOpts = { parent: this, provider: k8sProvider };
-    // Charts need providers array, not provider singular
-    const chartOpts = { parent: this };
-    if (k8sProvider) {
-      (chartOpts as any).providers = [k8sProvider];
-    }
-
     const namespaceName = args.namespace || "monitoring";
 
     const namespace = new k8s.core.v1.Namespace("prometheus-operator-namespace", {
       metadata: { name: namespaceName },
-    }, childOpts);
+    }, { parent: this });
 
     const storageClassName = args.storageClassName || "standard";
     
@@ -256,7 +225,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     }
     
     const mergedValues = providedArgs?.values 
-      ? deepMerge(defaultValues, providedArgs.values)
+      ? deepmerge(defaultValues, providedArgs.values)
       : defaultValues;
     
     const finalChartArgs: ChartArgs = {
@@ -270,7 +239,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     const chart = new k8s.helm.v4.Chart(
       "prometheus-operator",
       finalChartArgs,
-      { ...chartOpts, dependsOn: [namespace] }
+      { parent: this, dependsOn: [namespace] }
     );
 
     // Create ServiceMonitor for kubelet metrics
@@ -427,7 +396,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             }
           }
         },
-        { ...chartOpts, dependsOn: [namespace, chart] }
+        { parent: this, dependsOn: [namespace, chart] }
       );
 
       // Deploy Promtail
@@ -499,7 +468,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             readinessProbe: false
           }
         },
-        { ...chartOpts, dependsOn: [lokiChart] }
+        { parent: this, dependsOn: [lokiChart] }
       );
 
       // Patch existing Grafana datasource ConfigMap to add Loki
@@ -532,7 +501,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             ])
           }
         },
-        { ...childOpts, dependsOn: [chart, lokiChart, promtailChart] }
+        { parent: this, dependsOn: [chart, lokiChart, promtailChart] }
       );
     }
   }
