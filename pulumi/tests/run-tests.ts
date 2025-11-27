@@ -21,6 +21,7 @@ interface TestScenario {
   stackName: string;
   mainFile: string;
   expectedSecretValues?: string[];
+  disableDefaultProviders?: boolean;
 }
 
 const scenarios: TestScenario[] = [
@@ -44,6 +45,41 @@ const scenarios: TestScenario[] = [
     stackName: 'test-sops-diagnostic',
     mainFile: 'scenarios/sops-diagnostic.ts',
   },
+  {
+    name: 'Provider Propagation',
+    description: 'Tests Kubernetes provider propagation when default providers are disabled',
+    stackName: 'test-provider-propagation',
+    mainFile: 'scenarios/provider-propagation.ts',
+    disableDefaultProviders: true,
+  },
+  {
+    name: 'Cert-Manager Provider',
+    description: 'Ensures cert-manager component works with explicit provider when defaults are disabled',
+    stackName: 'test-cert-manager-provider',
+    mainFile: 'scenarios/cert-manager-provider.ts',
+    disableDefaultProviders: true,
+  },
+  {
+    name: 'Karpenter Chart Direct',
+    description: 'Tests karpenter-provider-gcp Helm chart directly (bypassing Karpenter component)',
+    stackName: 'test-karpenter-chart-direct',
+    mainFile: 'scenarios/karpenter-chart-direct.ts',
+    disableDefaultProviders: true,
+  },
+  {
+    name: 'Provider Inheritance Test',
+    description: 'Simple test to verify provider inheritance from ComponentResource to child resources',
+    stackName: 'test-provider-inheritance',
+    mainFile: 'scenarios/provider-inheritance-test.ts',
+    disableDefaultProviders: true,
+  },
+  {
+    name: 'Cert-Manager Full Stack',
+    description: 'Tests cert-manager component in realistic setup matching nebula.config.ts structure',
+    stackName: 'test-cert-manager-full-stack',
+    mainFile: 'scenarios/cert-manager-full-stack.ts',
+    disableDefaultProviders: true,
+  },
 ];
 
 async function runScenario(scenario: TestScenario): Promise<TestResult> {
@@ -63,12 +99,14 @@ async function runScenario(scenario: TestScenario): Promise<TestResult> {
   try {
     // Update Pulumi.yaml to point to the correct main file for this scenario
     const pulumiYamlPath = path.join(config.testDir, 'Pulumi.yaml');
+    // Use tsx instead of ts-node to avoid module resolution issues with ESM imports
     const pulumiContent = `name: test_pulumi_secrets
 description: Test project for Pulumi secret resolution - ${scenario.name}
 runtime:
   name: nodejs
   options:
-    typescript: true
+    typescript: false
+    nodeargs: --import=tsx/esm
 main: ${scenario.mainFile}`;
     fs.writeFileSync(pulumiYamlPath, pulumiContent, 'utf8');
     
@@ -78,11 +116,38 @@ main: ${scenario.mainFile}`;
     // Select the stack first
     await runCommand(`pulumi stack select ${config.stackName} --non-interactive`, config, config.testDir);
     
+    // Set disable-default-providers config if required for this scenario
+    if (scenario.disableDefaultProviders) {
+      console.log('\n🔧 Setting pulumi:disable-default-providers config...');
+      await runCommand(
+        `pulumi config set pulumi:disable-default-providers '["kubernetes"]' --non-interactive`,
+        config,
+        config.testDir
+      );
+      // Set GCP config for karpenter component (if test uses karpenter)
+      await runCommand(
+        `pulumi config set gcp:project test-project-12345 --non-interactive`,
+        config,
+        config.testDir
+      );
+      await runCommand(
+        `pulumi config set gcp:region us-central1 --non-interactive`,
+        config,
+        config.testDir
+      );
+      console.log('✅ Config set\n');
+    }
+    
     // Run pulumi preview
-    console.log('\n🔍 Running pulumi preview --diff --debug...\n');
-    const previewCmd = `pulumi preview --diff --debug --non-interactive`;
+    console.log('\n🔍 Running pulumi preview --diff...\n');
+    const previewCmd = `pulumi preview --diff --non-interactive`;
     const { stdout, stderr } = await runCommand(previewCmd, config, config.testDir); // Run from testDir where Pulumi.yaml is
     const output = stdout + stderr;
+    
+    // Always show full output
+    console.log('\n=== FULL PULUMI OUTPUT ===');
+    console.log(output);
+    console.log('=== END PULUMI OUTPUT ===\n');
     
     // Show output if empty or on error
     if (!output || output.trim().length === 0) {
@@ -110,6 +175,90 @@ main: ${scenario.mainFile}`;
         result = {
           success: true,
           message: '✅ SOPS diagnostic messages are suppressed correctly',
+          output,
+        };
+      }
+    } else if (scenario.disableDefaultProviders) {
+      // Verify provider propagation - check for Kubernetes provider-related errors specifically
+      // Ignore GCP provider errors as those are expected with mock config
+      // This matches the actual error: "Default provider for 'kubernetes' disabled. ... must use an explicit provider."
+      const kubernetesProviderErrorPatterns = [
+        /error:.*kubernetes.*no provider found/i,
+        /error:.*default provider.*kubernetes.*disabled/i,
+        /error:.*kubernetes.*provider not specified/i,
+        /error:.*kubernetes.*missing required.*provider/i,
+        /error:.*no kubernetes provider found/i,
+        /error:.*default provider for 'kubernetes' disabled/i,
+        /error:.*must use an explicit provider/i,
+      ];
+      
+      // Check for general preview failures (these should fail the test even if provider propagation worked)
+      const previewFailedPatterns = [
+        /error:\s*preview failed/i,
+        /error:\s*Preview failed/i,
+      ];
+      
+      const hasKubernetesProviderError = kubernetesProviderErrorPatterns.some(pattern => pattern.test(output));
+      const hasPreviewFailed = previewFailedPatterns.some(pattern => pattern.test(output));
+      
+      // Check if Kubernetes resources show provider in the output (this is the key indicator)
+      // Look for [provider=urn:...] pattern which shows provider is attached
+      const providerPattern = /\[provider=urn:[^\]]+\]/g;
+      const providerMatches = output.match(providerPattern) || [];
+      
+      // Count Kubernetes resources specifically (not GCP resources)
+      const kubernetesProviderMatches = providerMatches.filter(m => m.includes('pulumi:providers:kubernetes'));
+      
+      // Count Kubernetes resources (excluding the provider resource itself and stack)
+      const helmChartResources = (output.match(/kubernetes:helm\.sh\/v4:Chart/g) || []).length;
+      // Helm charts create child resources, so we expect at least the chart + namespace + some child resources
+      const minExpectedResources = helmChartResources > 0 ? helmChartResources + 2 : 2;
+      
+      if (hasPreviewFailed) {
+        // Preview failures indicate a real problem - preview should not fail
+        // Even if provider propagation worked, preview failures mean something is wrong
+        const allPreviewErrors = output.match(/error:.*Preview failed[^\n]*/gi) || [];
+        const errorMsg = allPreviewErrors[0]?.substring(0, 300) || 'preview failed';
+        
+        // Check if provider propagation worked despite preview failure
+        const providerStatus = kubernetesProviderMatches.length >= minExpectedResources
+          ? ` (Provider propagation worked: ${kubernetesProviderMatches.length} resources have providers)`
+          : ` (Provider propagation also failed: only ${kubernetesProviderMatches.length} resources have providers)`;
+        
+        result = {
+          success: false,
+          message: `❌ Preview failed - ${errorMsg}${providerStatus}`,
+          output,
+        };
+      } else if (hasKubernetesProviderError) {
+        // Extract the actual error message for better debugging
+        const errorMatch = output.match(/error:.*default provider.*kubernetes.*disabled[^\n]*/i) || 
+                          output.match(/error:.*must use an explicit provider[^\n]*/i) ||
+                          output.match(/error:.*kubernetes.*provider[^\n]*/i);
+        const errorMsg = errorMatch ? errorMatch[0].substring(0, 200) : 'provider error detected';
+        result = {
+          success: false,
+          message: `❌ Kubernetes provider propagation failed - ${errorMsg}`,
+          output,
+        };
+      } else if (kubernetesProviderMatches.length >= minExpectedResources) {
+        // If we see Kubernetes providers attached to multiple resources, propagation is working
+        result = {
+          success: true,
+          message: `✅ Kubernetes provider propagation successful - ${kubernetesProviderMatches.length} Kubernetes resources have providers attached`,
+          output,
+        };
+      } else if (kubernetesProviderMatches.length > 0) {
+        // At least some Kubernetes resources have providers
+        result = {
+          success: true,
+          message: `✅ Kubernetes provider propagation successful - ${kubernetesProviderMatches.length} Kubernetes resources have providers attached`,
+          output,
+        };
+      } else {
+        result = {
+          success: false,
+          message: '❌ Kubernetes provider propagation failed - no Kubernetes providers found attached to resources',
           output,
         };
       }

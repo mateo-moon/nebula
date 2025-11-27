@@ -32,95 +32,79 @@ import type { ClusterAutoscalerConfig } from './cluster-autoscaler';
 export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
   
-  // CRITICAL: Check if KUBECONFIG env var contains multiple files, which causes issues
+  // Require explicit kubeconfig - no fallback to env vars or defaults
+  if (!args.kubeconfig || !args.kubeconfig.trim()) {
+    throw new Error('[createK8sProvider] kubeconfig is required. Explicit kubeconfig path must be provided.');
+  }
+  
+  // Temporarily clear KUBECONFIG env var to prevent provider from using it
+  // We only use explicit kubeconfig content
   const kubeconfigEnv = process.env['KUBECONFIG'];
-  const separator = process.platform === 'win32' ? ';' : ':';
-  if (kubeconfigEnv && kubeconfigEnv.includes(separator)) {
-    console.warn(`[createK8sProvider] WARNING: KUBECONFIG env var contains multiple files: ${kubeconfigEnv}`);
-    console.warn(`[createK8sProvider] This can cause conflicts. Will ignore env var and use explicit kubeconfig.`);
-    
-    // IMPORTANT: Temporarily clear KUBECONFIG to prevent provider from using it
-    // We'll restore it after creating the provider
-    delete process.env['KUBECONFIG'];
-  }
+  delete process.env['KUBECONFIG'];
   
-  // If kubeconfig is provided, try to resolve and read it
-  if (args.kubeconfig && args.kubeconfig.trim()) {
-    // Add more path resolution candidates
-    const candidates = Array.from(new Set([
-      args.kubeconfig,
-      path.resolve(process.cwd(), args.kubeconfig),
-      path.resolve(args.kubeconfig), // Absolute path
-      (global as any).projectRoot ? path.resolve((global as any).projectRoot, args.kubeconfig) : undefined,
-      // Try relative to the workspace root (up to 3 levels)
-      path.resolve(process.cwd(), '..', args.kubeconfig),
-      path.resolve(process.cwd(), '..', '..', args.kubeconfig),
-      path.resolve(process.cwd(), '..', '..', '..', args.kubeconfig),
-      // Also try looking in common locations
-      path.join(process.cwd(), '.config', path.basename(args.kubeconfig)),
-    ].filter(Boolean) as string[])).map(expandHome);
+  // Resolve kubeconfig path from multiple candidates
+  const candidates = Array.from(new Set([
+    args.kubeconfig,
+    path.resolve(process.cwd(), args.kubeconfig),
+    path.resolve(args.kubeconfig), // Absolute path
+    (global as any).projectRoot ? path.resolve((global as any).projectRoot, args.kubeconfig) : undefined,
+    // Try relative to the workspace root (up to 3 levels)
+    path.resolve(process.cwd(), '..', args.kubeconfig),
+    path.resolve(process.cwd(), '..', '..', args.kubeconfig),
+    path.resolve(process.cwd(), '..', '..', '..', args.kubeconfig),
+    // Also try looking in common locations
+    path.join(process.cwd(), '.config', path.basename(args.kubeconfig)),
+  ].filter(Boolean) as string[])).map(expandHome);
 
-    console.log(`[createK8sProvider] Looking for kubeconfig at: ${args.kubeconfig}`);
-    console.log(`[createK8sProvider] Current directory: ${process.cwd()}`);
-    console.log(`[createK8sProvider] Project root: ${(global as any).projectRoot || 'not set'}`);
+  console.log(`[createK8sProvider] Looking for kubeconfig at: ${args.kubeconfig}`);
+  console.log(`[createK8sProvider] Current directory: ${process.cwd()}`);
+  console.log(`[createK8sProvider] Project root: ${(global as any).projectRoot || 'not set'}`);
 
-    for (const pth of candidates) {
-      try {
-        if (pth && fs.existsSync(pth) && fs.statSync(pth).isFile()) {
-          // Use absolute path for consistency
-          const absolutePath = path.resolve(pth);
-          console.log(`[createK8sProvider] Found kubeconfig at: ${absolutePath}`);
-          const kubeconfigContent = fs.readFileSync(absolutePath, 'utf8');
-          
-          // Validate that we actually read content
-          if (!kubeconfigContent || kubeconfigContent.trim().length === 0) {
-            console.warn(`[createK8sProvider] WARNING: Kubeconfig file at ${absolutePath} is empty`);
-            continue;
-          }
-          
-          console.log(`[createK8sProvider] Successfully read kubeconfig (${kubeconfigContent.length} bytes)`);
-          
-          // Create provider with explicit kubeconfig content
-          // This ensures it doesn't use KUBECONFIG env var even if present
-          const provider = new k8s.Provider(args.name || 'k8s', { 
-            kubeconfig: kubeconfigContent,
-            // Explicitly disable loading from KUBECONFIG env var
-            suppressDeprecationWarnings: true
-          });
-          
-          // Restore KUBECONFIG env var if we cleared it
-          if (kubeconfigEnv) {
-            process.env['KUBECONFIG'] = kubeconfigEnv;
-          }
-          
-          return provider;
+  for (const pth of candidates) {
+    try {
+      if (pth && fs.existsSync(pth) && fs.statSync(pth).isFile()) {
+        // Use absolute path for consistency
+        const absolutePath = path.resolve(pth);
+        console.log(`[createK8sProvider] Found kubeconfig at: ${absolutePath}`);
+        const kubeconfigContent = fs.readFileSync(absolutePath, 'utf8');
+        
+        // Validate that we actually read content
+        if (!kubeconfigContent || kubeconfigContent.trim().length === 0) {
+          throw new Error(`[createK8sProvider] Kubeconfig file at ${absolutePath} is empty`);
         }
-      } catch (err) {
-        console.log(`[createK8sProvider] Failed to read ${pth}: ${err}`);
+        
+        console.log(`[createK8sProvider] Successfully read kubeconfig (${kubeconfigContent.length} bytes)`);
+        
+        // Create provider with explicit kubeconfig content only
+        // KUBECONFIG env var is cleared, so provider will only use explicit content
+        const provider = new k8s.Provider(args.name || 'k8s', { 
+          kubeconfig: kubeconfigContent,
+          suppressDeprecationWarnings: true
+        });
+        
+        // Restore KUBECONFIG env var if we cleared it
+        if (kubeconfigEnv) {
+          process.env['KUBECONFIG'] = kubeconfigEnv;
+        }
+        
+        return provider;
       }
+    } catch (err) {
+      console.log(`[createK8sProvider] Failed to read ${pth}: ${err}`);
     }
-    
-    console.warn(`[createK8sProvider] WARNING: Could not find kubeconfig file at any of the candidate paths`);
-    console.warn(`[createK8sProvider] The Kubernetes provider will fall back to default behavior (KUBECONFIG env var)`);
-    console.warn(`[createK8sProvider] This may cause issues if KUBECONFIG contains multiple files`);
   }
-  
-  // If kubeconfig path not provided or not found, don't pass kubeconfig parameter
-  // This allows the provider to use its default behavior (checking KUBECONFIG env var)
-  // However, note that if KUBECONFIG has multiple files, this could still cause issues
-  // The caller should ensure a specific kubeconfig file is provided
-  console.warn(`[createK8sProvider] Creating provider without explicit kubeconfig`);
   
   // Restore KUBECONFIG env var if we cleared it
   if (kubeconfigEnv) {
     process.env['KUBECONFIG'] = kubeconfigEnv;
   }
   
-  return new k8s.Provider(args.name || 'k8s', {});
+  // Throw error if kubeconfig not found - no fallback to defaults
+  throw new Error(`[createK8sProvider] Could not find kubeconfig file at: ${args.kubeconfig}. Tried paths: ${candidates.join(', ')}`);
 }
 
 export interface K8sConfig  {
-  kubeconfig?: string;
+  kubeconfig: string; // Required - explicit kubeconfig path must be provided
   certManager?: CertManagerConfig;
   externalDns?: ExternalDnsConfig;
   ingressNginx?: IngressNginxConfig;
@@ -156,8 +140,9 @@ export class K8s extends pulumi.ComponentResource {
   ) {
     super('k8s', name, args, opts);
 
-    this.provider = createK8sProvider({ kubeconfig: args.kubeconfig || '', name: name });
-    const childOpts = { parent: this, providers: this.provider ? [this.provider] : undefined } as pulumi.ComponentResourceOptions;
+    // Require explicit kubeconfig - no fallback to env vars
+    this.provider = createK8sProvider({ kubeconfig: args.kubeconfig, name: name });
+    const childOpts = { parent: this, providers: [this.provider] } as pulumi.ComponentResourceOptions;
     
     // Deploy Cluster Autoscaler first (if requested)
     const clusterAutoscaler = args.clusterAutoscaler ? new ClusterAutoscaler(name, args.clusterAutoscaler, childOpts) : undefined;
@@ -174,15 +159,15 @@ export class K8s extends pulumi.ComponentResource {
     let wi: WorkloadIdentity | undefined = undefined;
     if (args.workloadIdentity) {
       // If external-dns domain filters exist, derive an issuer host like oidc.<root-domain>
-      const rootDomain = args.externalDns?.domainFilters && args.externalDns.domainFilters.length > 0
-        ? args.externalDns.domainFilters[0]
-        : undefined;
-      const issuerHost = rootDomain ? `oidc.${rootDomain}` : undefined;
+      // const rootDomain = args.externalDns?.domainFilters && args.externalDns.domainFilters.length > 0
+      //   ? args.externalDns.domainFilters[0]
+      //   : undefined;
+      // const issuerHost = rootDomain ? `oidc.${rootDomain}` : undefined;
       const wiArgs = {
         ...args.workloadIdentity,
-        ...(issuerHost ? { exposeIssuer: true, issuerHost, issuerRootDomain: rootDomain } : {}),
-        // If not supplied by user but we expose issuer, derive issuerUri from host
-        ...(!args.workloadIdentity.issuerUri && issuerHost ? { issuerUri: `https://${issuerHost}` } : {}),
+        // ...(issuerHost ? { exposeIssuer: true, issuerHost, issuerRootDomain: rootDomain } : {}),
+        // // If not supplied by user but we expose issuer, derive issuerUri from host
+        // ...(!args.workloadIdentity.issuerUri && issuerHost ? { issuerUri: `https://${issuerHost}` } : {}),
       } as WorkloadIdentityConfig;
       wi = new WorkloadIdentity(name, wiArgs, childOpts);
     }

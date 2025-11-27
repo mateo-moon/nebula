@@ -1326,7 +1326,19 @@ export class Helpers {
         // Log the actual props to see what we're dealing with
         pulumi.log.debug(`[SecretResolution] Props content preview: ${JSON.stringify(args.props).substring(0, 200)}`);
       }
-
+      // First, check if there are any ref+ patterns to resolve
+      // This is important - we only want to transform if necessary
+      const hasRefPatterns = JSON.stringify(args.props).includes('ref+');
+      
+      if (!hasRefPatterns) {
+        if (isDebug) {
+          pulumi.log.debug(`[SecretResolution] No ref+ patterns found, skipping transform for: ${resourceType}::${resourceName}`);
+        }
+        // Return undefined to indicate no transformation needed
+        // This preserves provider propagation by not modifying args at all
+        return undefined;
+      }
+      
       // Process args.props recursively to find and resolve ALL ref+ strings
       const resolvedProps = Helpers.resolveRefPlusSecretsDeep(args.props, isDebug, 'props');
       

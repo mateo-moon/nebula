@@ -170,6 +170,33 @@ const cluster = new Eks('my-cluster', {
 
 ### Kubernetes Components
 
+#### Karpenter
+
+**Important**: The Karpenter component with GCP provider support requires the `helm-git` plugin to be installed:
+
+```bash
+helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
+```
+
+This plugin allows Helm to fetch charts directly from Git repositories. The Karpenter GCP provider chart is fetched from the GitHub repository using the `git+https://` protocol.
+
+```typescript
+import { Karpenter } from 'nebula/components/k8s';
+
+const karpenter = new Karpenter('karpenter', {
+  clusterName: 'my-cluster',
+  region: 'us-central1',
+  installProvider: true, // Install GCP provider chart
+  nodePools: {
+    default: {
+      requirements: [
+        { key: 'node.kubernetes.io/instance-type', operator: 'In', values: ['e2-standard-4'] },
+      ],
+    },
+  },
+});
+```
+
 #### Cert-Manager
 
 ```typescript
@@ -208,6 +235,15 @@ pnpm test
 
 # Run specific test scenario
 npx tsx tests/scenarios/basic-secret-resolution.ts
+```
+
+### Local Orbstack kubeconfig
+
+Several scenarios (provider propagation, cert-manager, karpenter) deploy real Kubernetes resources into the local Orbstack cluster. Ensure Orbstack is running and that a kubeconfig exists at `~/.orbstack/k8s/config.yml`. If your kubeconfig lives elsewhere, export `NEBULA_TEST_KUBECONFIG` (or `ORBSTACK_KUBECONFIG`) before running tests so the suite can locate it:
+
+```bash
+export NEBULA_TEST_KUBECONFIG=/path/to/orbstack/kubeconfig
+pnpm test provider
 ```
 
 ## CLI Commands

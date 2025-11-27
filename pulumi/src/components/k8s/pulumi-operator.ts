@@ -33,19 +33,10 @@ export class PulumiOperator extends pulumi.ComponentResource {
   ) {
     super('pulumi-operator', name, args, opts);
 
-    // Extract k8s provider from opts if provided
-    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
-    const childOpts = { parent: this, provider: k8sProvider };
-    // Charts need providers array, not provider singular
-    const chartOpts = { parent: this };
-    if (k8sProvider) {
-      (chartOpts as any).providers = [k8sProvider];
-    }
-
     const namespaceName = args.namespace || 'pulumi-operator';
     const namespace = new k8s.core.v1.Namespace('pulumi-operator-namespace', {
       metadata: { name: namespaceName },
-    }, childOpts);
+    }, { parent: this });
 
     const useOci = !args.repository || args.repository.startsWith('oci://');
     const defaultValues = {
@@ -79,7 +70,7 @@ export class PulumiOperator extends pulumi.ComponentResource {
       values: defaultValues,
     };
 
-    const chart = new k8s.helm.v4.Chart('pulumi-kubernetes-operator', finalChartArgs, { ...chartOpts, dependsOn: [namespace] });
+    const chart = new k8s.helm.v4.Chart('pulumi-kubernetes-operator', finalChartArgs, { parent: this, dependsOn: [namespace] });
 
     if (args.stack) {
       const cfgEntries: any = {};
@@ -101,7 +92,7 @@ export class PulumiOperator extends pulumi.ComponentResource {
           ...(Object.keys(cfgEntries).length > 0 ? { stackConfig: cfgEntries } : {}),
           ...(args.stack.env ? { env: args.stack.env } : {}),
         },
-      }, { ...childOpts, dependsOn: [chart] });
+      }, { parent: this, dependsOn: [chart] });
     }
 
     this.registerOutputs({});

@@ -17,20 +17,11 @@ export class MetricsServer extends pulumi.ComponentResource {
   ) {
     super('metrics-server', name, args, opts);
 
-    // Extract k8s provider from opts if provided
-    const k8sProvider = opts?.providers ? (opts.providers as any)[0] : opts?.provider;
-    const childOpts = { parent: this, provider: k8sProvider };
-    // Charts need providers array, not provider singular
-    const chartOpts = { parent: this };
-    if (k8sProvider) {
-      (chartOpts as any).providers = [k8sProvider];
-    }
-
     const namespaceName = args.namespace || "kube-system";
 
     const namespace = new k8s.core.v1.Namespace("metrics-server-namespace", {
       metadata: { name: namespaceName },
-    }, childOpts);
+    }, { parent: this });
 
     const defaultValues = {
       // Enable metrics server
@@ -96,7 +87,7 @@ export class MetricsServer extends pulumi.ComponentResource {
     const chart = new k8s.helm.v4.Chart(
       "metrics-server",
       finalChartArgs,
-      { ...chartOpts, dependsOn: [namespace] }
+      { parent: this, dependsOn: [namespace] }
     );
 
     // Create APIService for metrics.k8s.io

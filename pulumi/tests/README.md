@@ -64,6 +64,21 @@ npm run test:component  # ComponentResource secrets
 npm run test:sops       # SOPS diagnostic suppression
 ```
 
+### Kubeconfig Requirement (Orbstack)
+
+Provider propagation scenarios talk directly to the local Orbstack Kubernetes cluster. Ensure:
+
+1. Orbstack is running and the local cluster is healthy.
+2. A kubeconfig exists at `~/.orbstack/k8s/config.yml`, or export `NEBULA_TEST_KUBECONFIG`/`ORBSTACK_KUBECONFIG` to point to a different kubeconfig file.
+3. The kubeconfig contains credentials with permissions to create namespaces, ClusterRoles, and CRDs.
+
+If the kubeconfig lives elsewhere, set the environment variable before running tests:
+
+```bash
+export NEBULA_TEST_KUBECONFIG=/path/to/orbstack-kubeconfig
+pnpm test
+```
+
 ## How It Works
 
 ### Secret Resolution Process
