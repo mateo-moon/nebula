@@ -1,8 +1,12 @@
 import * as pulumi from '@pulumi/pulumi';
-import { Aws, type AwsConfig, type AwsOutput } from './aws';
-import { Gcp, type GcpConfig, type GcpOutput } from './gcp';
-import { Dns, type DnsConfig, type DnsOutput } from './dns';
-import { Constellation, type ConstellationConfig, type ConstellationOutput } from './constellation';
+import { Aws } from './aws';
+import { Gcp } from './gcp';
+import { Dns } from './dns';
+import { Constellation } from './constellation';
+import type { AwsConfig, AwsOutput } from './aws';
+import type { GcpConfig, GcpOutput } from './gcp';
+import type { DnsConfig, DnsOutput } from './dns';
+import type { ConstellationConfig, ConstellationOutput } from './constellation';
 
 export interface InfraConfig {
   awsConfig?: AwsConfig;
@@ -14,12 +18,11 @@ export interface InfraConfig {
 }
 
 export interface InfraOutput {
-  aws?: AwsOutput | undefined;
-  gcp?: GcpOutput | undefined;
-  dns?: DnsOutput | undefined;
-  constellation?: ConstellationOutput | undefined;
+  aws?: AwsOutput;
+  gcp?: GcpOutput;
+  dns?: DnsOutput;
+  constellation?: ConstellationOutput;
 }
-
 export class Infra extends pulumi.ComponentResource {
   public readonly aws?: Aws;
   public readonly gcp?: Gcp;
@@ -39,13 +42,15 @@ export class Infra extends pulumi.ComponentResource {
     if (args && args.dnsConfig) this.dns = new Dns(name, args.dnsConfig);
     if (args && args.constellationConfig) this.constellation = new Constellation(name, args.constellationConfig);
 
+    // Collect outputs from all sub-components
     this.outputs = {
-      aws: this.aws?.outputs,
-      gcp: this.gcp?.outputs,
-      dns: this.dns?.outputs,
-      constellation: this.constellation?.outputs,
+      ...(this.aws && { aws: this.aws.outputs }),
+      ...(this.gcp && { gcp: this.gcp.outputs }),
+      ...(this.dns && { dns: this.dns.outputs }),
+      ...(this.constellation && { constellation: this.constellation.outputs }),
     };
 
+    // Register outputs for cross-stack references
     this.registerOutputs(this.outputs);
   }
 }

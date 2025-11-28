@@ -22,9 +22,27 @@ interface TestScenario {
   mainFile: string;
   expectedSecretValues?: string[];
   disableDefaultProviders?: boolean;
+  backendGroupId?: string;
+  deploy?: boolean;
 }
 
 const scenarios: TestScenario[] = [
+  {
+    name: 'Stack Ref Producer',
+    description: 'Producer stack for stack reference tests',
+    stackName: 'producer',
+    mainFile: 'scenarios/stack-ref-producer.ts',
+    backendGroupId: 'stack-refs',
+    deploy: true,
+  },
+  {
+    name: 'Stack Ref Non-Compliant Target',
+    description: 'Tests resolution of stack:// references (including raw stack names)',
+    stackName: 'test-addon-consumer',
+    mainFile: 'scenarios/stack-ref-consumer.ts',
+    backendGroupId: 'stack-refs',
+    expectedSecretValues: ['hello-from-producer', 'MockCC GCP_ZONE: hello-from-producer'], // Check for MockCC output
+  },
   {
     name: 'Basic Secret Resolution',
     description: 'Tests ref+ secret resolution with ConfigMaps',
@@ -92,7 +110,9 @@ async function runScenario(scenario: TestScenario): Promise<TestResult> {
     stackName: scenario.stackName,
     projectName: scenario.stackName.replace(/-/g, '_'),
     testDir: path.join(process.cwd(), 'tests'),
-    backendDir: path.join(process.cwd(), 'tests', `.pulumi-backend-${scenario.stackName}`),
+    backendDir: scenario.backendGroupId 
+      ? path.join(process.cwd(), 'tests', `.pulumi-backend-group-${scenario.backendGroupId}`)
+      : path.join(process.cwd(), 'tests', `.pulumi-backend-${scenario.stackName}`),
     passphrase: 'test123',
   };
 
@@ -136,6 +156,25 @@ main: ${scenario.mainFile}`;
         config.testDir
       );
       console.log('✅ Config set\n');
+    }
+    
+    // Run pulumi up if deploy is requested
+    if (scenario.deploy) {
+      console.log('\n🚀 Running pulumi up...\n');
+      const upCmd = `pulumi up --yes --non-interactive`;
+      const { stdout, stderr } = await runCommand(upCmd, config, config.testDir);
+      const output = stdout + stderr;
+      
+      if (output.includes('error:')) {
+        console.log('❌ Deployment failed');
+        console.log(output.substring(0, 2000));
+        return {
+          success: false,
+          message: '❌ Deployment failed',
+          output
+        };
+      }
+      console.log('✅ Deployment successful');
     }
     
     // Run pulumi preview
@@ -287,8 +326,10 @@ main: ${scenario.mainFile}`;
       message: `❌ Test failed with error: ${error.message}`,
     };
   } finally {
-    // Clean up
-    await cleanup(config);
+    // Clean up only if not sharing backend group
+    if (!scenario.backendGroupId) {
+      await cleanup(config);
+    }
   }
 }
 
@@ -296,6 +337,7 @@ async function runAllTests() {
   console.log('🧪 Starting Pulumi Secret Resolution Tests\n');
 
   const results: Map<string, TestResult> = new Map();
+  const usedBackendGroups = new Set<string>();
   
   // Check for specific test to run
   const testArg = process.argv[2];
@@ -313,6 +355,10 @@ async function runAllTests() {
 
   // Run selected scenarios
   for (const scenario of selectedScenarios) {
+    if (scenario.backendGroupId) {
+      usedBackendGroups.add(scenario.backendGroupId);
+    }
+
     const result = await runScenario(scenario);
     results.set(scenario.name, result);
     
@@ -321,6 +367,18 @@ async function runAllTests() {
       console.log('\n--- Debug Output ---');
       console.log(result.output.substring(0, 8000));
       console.log('--- End Debug Output ---\n');
+    }
+  }
+
+  // Clean up shared backend groups
+  if (usedBackendGroups.size > 0) {
+    console.log('\n🧹 Cleaning up shared backend groups...');
+    for (const groupId of usedBackendGroups) {
+      const backendDir = path.join(process.cwd(), 'tests', `.pulumi-backend-group-${groupId}`);
+      if (fs.existsSync(backendDir)) {
+        fs.rmSync(backendDir, { recursive: true, force: true });
+        console.log(`  ✅ Removed shared backend group: ${groupId}`);
+      }
     }
   }
 

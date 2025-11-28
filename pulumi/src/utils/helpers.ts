@@ -902,41 +902,118 @@ export class Helpers {
    * - stack:component:outputKey
    * - stack:env:component:outputKey
    */
-  public static tryParseStackRef(value: string): { envId?: string; component: string; output: string } | undefined {
+  public static tryParseStackRef(value: string): { envId?: string; component?: string; stackName?: string; output: string; propertyPath?: string } | undefined {
     if (typeof value !== 'string') return undefined;
+    
+    // Helper to process output string for property paths (e.g. "gcp:clusterName" -> output="gcp", path="clusterName")
+    const parseOutput = (rawOutput: string): { output: string; propertyPath?: string } => {
+      // Handle property access via colon or dot
+      if (rawOutput.includes(':')) {
+        const parts = rawOutput.split(':');
+        const output = parts[0]!;
+        const rest = parts.slice(1);
+        const propertyPath = rest.join('.');
+        return propertyPath ? { output, propertyPath } : { output };
+      }
+      if (rawOutput.includes('.')) {
+        const parts = rawOutput.split('.');
+        const output = parts[0]!;
+        const rest = parts.slice(1);
+        const propertyPath = rest.join('.');
+        return propertyPath ? { output, propertyPath } : { output };
+      }
+      return { output: rawOutput };
+    };
+
     if (value.startsWith('stack://')) {
       const rest = value.slice('stack://'.length);
       const raw = rest.split('/');
       const parts = raw.filter((p): p is string => Boolean(p));
+      
       if (parts.length === 2) {
         const e = Helpers.getCurrentEnvId();
-        if (!e) return undefined;
-        const component = parts[0] as string;
-        const output = parts[1] as string;
-        return { envId: e, component, output };
+        const p0 = parts[0]!;
+        const p1 = parts[1]!;
+        
+        if (!e) {
+          // Explicit stack name: stack://my-stack/output
+          const { output, propertyPath } = parseOutput(p1);
+          return propertyPath 
+            ? { stackName: p0, output, propertyPath }
+            : { stackName: p0, output };
+        }
+        // Implicit env: stack://component/output
+        const { output, propertyPath } = parseOutput(p1);
+        return propertyPath
+            ? { envId: e, component: p0, output, propertyPath }
+            : { envId: e, component: p0, output };
       } else if (parts.length === 3) {
-        const envId = parts[0] as string;
-        const component = parts[1] as string;
-        const output = parts[2] as string;
-        return { envId, component, output };
+        // Explicit env: stack://env/component/output
+        const p0 = parts[0]!;
+        const p1 = parts[1]!;
+        const p2 = parts[2]!;
+        const { output, propertyPath } = parseOutput(p2);
+        return propertyPath
+            ? { envId: p0, component: p1, output, propertyPath }
+            : { envId: p0, component: p1, output };
       }
       return undefined;
     }
+    
     if (value.startsWith('stack:')) {
       const rest = value.slice('stack:'.length);
       const raw = rest.split(':');
       const parts = raw.filter((p): p is string => Boolean(p));
+      
       if (parts.length === 2) {
+        // stack:comp:output
         const e = Helpers.getCurrentEnvId();
-        if (!e) return undefined;
-        const component = parts[0] as string;
-        const output = parts[1] as string;
-        return { envId: e, component, output };
-      } else if (parts.length === 3) {
-        const envId = parts[0] as string;
-        const component = parts[1] as string;
-        const output = parts[2] as string;
-        return { envId, component, output };
+        const p0 = parts[0]!;
+        const p1 = parts[1]!;
+        
+        if (!e) {
+          return { stackName: p0, output: p1 };
+        }
+        const { output, propertyPath } = parseOutput(p1);
+        return propertyPath
+            ? { envId: e, component: p0, output, propertyPath }
+            : { envId: e, component: p0, output };
+      } else if (parts.length >= 3) {
+        // Ambiguity: stack:env:comp:output VS stack:comp:output:prop
+        const e = Helpers.getCurrentEnvId();
+        const p0 = parts[0]!;
+        const p1 = parts[1]!;
+        const p2 = parts[2]!;
+        
+        // If the first part matches current env, OR is the escape hatch '_', assume explicit env reference
+        if ((e && p0 === e) || p0 === '_') {
+          // Reconstruct the rest as output + property path
+          const remaining = parts.slice(2);
+          const output = remaining[0]!;
+          const propertyPath = remaining.length > 1 ? remaining.slice(1).join('.') : undefined;
+          
+          return propertyPath
+            ? { envId: p0, component: p1, output, propertyPath }
+            : { envId: p0, component: p1, output };
+        }
+        
+        // Otherwise, assume implicit env with property path
+        // stack:comp:output:prop:subprop
+        if (e) {
+          const propertyPath = parts.slice(2).join('.');
+          return { 
+            envId: e, 
+            component: p0, 
+            output: p1, 
+            propertyPath
+          };
+        }
+        
+        // Fallback for no env context: assume explicit env
+        const propertyPath = parts.length > 3 ? parts.slice(3).join('.') : undefined;
+        return propertyPath
+            ? { envId: p0, component: p1, output: p2, propertyPath }
+            : { envId: p0, component: p1, output: p2 };
       }
       return undefined;
     }
@@ -946,12 +1023,22 @@ export class Helpers {
   private static stackRefCache = new Map<string, pulumi.StackReference>();
 
   /** Get a StackReference for the given envId + component using current project. */
-  public static getStackRef(envId: string | undefined, component: string): pulumi.StackReference {
+  public static getStackRef(envId: string | undefined, component: string | undefined, explicitStackName?: string): pulumi.StackReference {
     const project = pulumi.getProject();
-    const inferred = Helpers.getCurrentEnvId();
-    const cid = String(envId ?? inferred ?? 'default').toLowerCase();
-    const comp = component.toLowerCase();
-    const stackName = `${cid}-${comp}`;
+    
+    let stackName = explicitStackName;
+    if (!stackName) {
+      const inferred = Helpers.getCurrentEnvId();
+      const cid = String(envId ?? inferred ?? 'default').toLowerCase();
+      // Handle escape hatch for non-prefixed stacks
+      if (cid === '_') {
+        stackName = (component || '').toLowerCase();
+      } else {
+        const comp = (component || '').toLowerCase();
+        stackName = `${cid}-${comp}`;
+      }
+    }
+
     // Use fully-qualified ref when running against Pulumi Service
     const orgEnv = process.env['PULUMI_ORG'] || process.env['PULUMI_ORGANIZATION'];
     const pulumiCfg = new pulumi.Config('pulumi');
@@ -974,8 +1061,42 @@ export class Helpers {
     if (typeof value === 'string') {
       const parsed = Helpers.tryParseStackRef(value);
       if (parsed) {
-        const ref = Helpers.getStackRef(parsed.envId, parsed.component);
-        return ref.getOutput(parsed.output);
+        const ref = Helpers.getStackRef(parsed.envId, parsed.component, parsed.stackName);
+        
+        // Try to get the output directly (legacy behavior or when output is top-level)
+        const directOutput = ref.getOutput(parsed.output);
+        
+        // Try to get "outputs" (Project-wrapped behavior where everything is under "outputs")
+        const wrappedOutputs = ref.getOutput("outputs");
+        
+        // Combine them to find the real root object
+        const rootObject = pulumi.all([directOutput, wrappedOutputs]).apply(([direct, wrapped]) => {
+            // If direct output exists, use it
+            if (direct !== undefined) return direct;
+            // Otherwise, look inside "outputs" wrapper if it exists
+            if (wrapped !== undefined && typeof wrapped === 'object' && parsed.output in wrapped) {
+                return wrapped[parsed.output];
+            }
+            // Return undefined if not found in either place
+            return undefined;
+        });
+        
+        if (parsed.propertyPath) {
+          return rootObject.apply((v: any) => {
+            if (v == null) return undefined;
+            
+            // Navigate property path
+            const props = parsed.propertyPath!.split('.');
+            let current = v;
+            for (const prop of props) {
+              if (current == null) return undefined;
+              current = current[prop];
+            }
+            return current;
+          });
+        }
+        
+        return rootObject;
       }
       return value;
     }
