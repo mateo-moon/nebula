@@ -122,13 +122,15 @@ export class Environment {
         return;
       }
       
-      // Resolve ref+ secrets in config before creating ComponentResource
+      // Resolve ref+ secrets and stack:// references in config before creating ComponentResource
       // ComponentResources don't pass constructor args through super(), so transforms can't process them
       const isDebug = Boolean(
         process.env['PULUMI_LOG_LEVEL'] === 'debug' || 
         process.env['PULUMI_LOG_LEVEL'] === 'trace'
       );
       config = Helpers.resolveRefPlusSecretsDeep(config, isDebug, 'config') as AddonTypes[string];
+      // Also resolve stack references (stack:// or stack:component:output)
+      config = Helpers.resolveStackRefsDeep(config) as AddonTypes[string];
       
       // Create the addon instance with the resolved config
       const addonInstance = new Addon(`${this.id}-${componentName}`, config);
@@ -164,13 +166,15 @@ export class Environment {
       return;
     }
     
-    // Resolve ref+ secrets in config before creating ComponentResource
+    // Resolve ref+ secrets and stack:// references in config before creating ComponentResource
     // ComponentResources don't pass constructor args through super(), so transforms can't process them
     const isDebug = Boolean(
       process.env['PULUMI_LOG_LEVEL'] === 'debug' || 
       process.env['PULUMI_LOG_LEVEL'] === 'trace'
     );
     config = Helpers.resolveRefPlusSecretsDeep(config, isDebug, 'config') as ComponentTypes[typeof componentKey];
+    // Also resolve stack references (stack:// or stack:component:output)
+    config = Helpers.resolveStackRefsDeep(config) as ComponentTypes[typeof componentKey];
 
     let componentInstance: any;
     if (componentKey === 'K8s') {

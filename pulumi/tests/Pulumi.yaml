@@ -1,8 +1,8 @@
 name: test_pulumi_secrets
-description: Test project for Pulumi secret resolution - Cert-Manager Full Stack
+description: Test project for Pulumi secret resolution - Stack Ref Non-Compliant Target
 runtime:
   name: nodejs
   options:
     typescript: false
     nodeargs: --import=tsx/esm
-main: scenarios/cert-manager-full-stack.ts
+main: scenarios/stack-ref-consumer.ts

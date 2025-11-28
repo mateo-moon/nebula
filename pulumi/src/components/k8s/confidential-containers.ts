@@ -233,12 +233,9 @@ export class ConfidentialContainers extends pulumi.ComponentResource {
       const gcpNetworkRaw = args.cloudApiAdapter?.gcpNetwork;
       const gcpSubnetworkRaw = args.cloudApiAdapter?.gcpSubnetwork;
       
-      // Determine GCP_ZONE: if region is specified, use "${region}-a" format (matching kustomize config),
-      // otherwise use zone directly (or from config)
-      // Note: Only string values can be used in transforms (Outputs are not accessible synchronously)
-      const finalGcpZone = (typeof gcpRegionRaw === 'string' && gcpRegionRaw)
-        ? `${gcpRegionRaw}-a`
-        : (typeof gcpZoneRaw === 'string' ? gcpZoneRaw : "");
+      // Determine GCP_ZONE:
+      // Prioritize gcpZone (used as-is). Fallback to region-based zone or empty string.
+      const finalGcpZone = gcpZoneRaw || (gcpRegionRaw ? pulumi.output(gcpRegionRaw).apply(r => r ? `${r}-a` : "") : "");
       
       // Create firewall rules for Confidential Containers if enabled (default: true)
       // Required ports per https://confidentialcontainers.org/docs/examples/gcp-simple/#configure-vpc-network

@@ -144,15 +144,23 @@ export class K8s extends pulumi.ComponentResource {
     this.provider = createK8sProvider({ kubeconfig: args.kubeconfig, name: name });
     const childOpts = { parent: this, providers: [this.provider] } as pulumi.ComponentResourceOptions;
     
-    // Deploy Cluster Autoscaler first (if requested)
-    const clusterAutoscaler = args.clusterAutoscaler ? new ClusterAutoscaler(name, args.clusterAutoscaler, childOpts) : undefined;
+    // Deploy Karpenter first (if requested) - needed for node provisioning
+    const karpenter = args.karpenter ? new Karpenter(name, args.karpenter, childOpts) : undefined;
+    
+    // Deploy Cluster Autoscaler after Karpenter (if requested)
+    const clusterAutoscalerOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
+    if (karpenter) clusterAutoscalerOpts.dependsOn = [karpenter];
+    const clusterAutoscaler = args.clusterAutoscaler ? new ClusterAutoscaler(name, args.clusterAutoscaler, clusterAutoscalerOpts) : undefined;
     
     // Deploy components with proper dependencies
     // Pass cert-manager config through as provided (set installCRDs: false explicitly when needed)
     const certManagerConfig = args.certManager ? { ...args.certManager } : undefined;
     
     const certManagerOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-    if (clusterAutoscaler) certManagerOpts.dependsOn = [clusterAutoscaler];
+    const certManagerDeps = [] as any[];
+    if (karpenter) certManagerDeps.push(karpenter);
+    if (clusterAutoscaler) certManagerDeps.push(clusterAutoscaler);
+    if (certManagerDeps.length > 0) certManagerOpts.dependsOn = certManagerDeps;
     const certManager = certManagerConfig ? new CertManager(name, certManagerConfig, certManagerOpts) : undefined;
 
     // Create Workload Identity resources once if configured (so we can wire others to it)
@@ -175,6 +183,7 @@ export class K8s extends pulumi.ComponentResource {
     if (args.externalDns) {
       const externalDnsOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
       const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
       if (clusterAutoscaler) deps.push(clusterAutoscaler);
       if (certManager) deps.push(certManager);
       if (deps.length > 0) externalDnsOpts.dependsOn = deps;
@@ -202,6 +211,7 @@ export class K8s extends pulumi.ComponentResource {
     if (args.ingressNginx) {
       const ingressNginxOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
       const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
       if (clusterAutoscaler) deps.push(clusterAutoscaler);
       if (certManager) deps.push(certManager);
       if (deps.length > 0) ingressNginxOpts.dependsOn = deps;
@@ -211,6 +221,7 @@ export class K8s extends pulumi.ComponentResource {
     if (args.argoCd) {
       const argoCdOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
       const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
       if (clusterAutoscaler) deps.push(clusterAutoscaler);
       if (certManager) deps.push(certManager);
       if (deps.length > 0) argoCdOpts.dependsOn = deps;
@@ -218,17 +229,24 @@ export class K8s extends pulumi.ComponentResource {
     }
     if (args.pulumiOperator) {
       const pulumiOperatorOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-      if (clusterAutoscaler) pulumiOperatorOpts.dependsOn = [clusterAutoscaler];
+      const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
+      if (clusterAutoscaler) deps.push(clusterAutoscaler);
+      if (deps.length > 0) pulumiOperatorOpts.dependsOn = deps;
       new PulumiOperator(name, args.pulumiOperator, pulumiOperatorOpts);
     }
     if (args.confidentialContainers) {
       const ccOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-      if (clusterAutoscaler) ccOpts.dependsOn = [clusterAutoscaler];
+      const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
+      if (clusterAutoscaler) deps.push(clusterAutoscaler);
+      if (deps.length > 0) ccOpts.dependsOn = deps;
       new ConfidentialContainers(name, args.confidentialContainers, ccOpts);
     }
     if (args.prometheusOperator) {
       const promOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
       const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
       if (clusterAutoscaler) deps.push(clusterAutoscaler);
       if (certManager) deps.push(certManager);
       if (deps.length > 0) promOpts.dependsOn = deps;
@@ -236,18 +254,19 @@ export class K8s extends pulumi.ComponentResource {
     }
     if (args.metricsServer) {
       const msOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-      if (clusterAutoscaler) msOpts.dependsOn = [clusterAutoscaler];
+      const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
+      if (clusterAutoscaler) deps.push(clusterAutoscaler);
+      if (deps.length > 0) msOpts.dependsOn = deps;
       new MetricsServer(name, args.metricsServer, msOpts);
     }
     if (args.storageClass) {
       const scOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-      if (clusterAutoscaler) scOpts.dependsOn = [clusterAutoscaler];
+      const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
+      if (clusterAutoscaler) deps.push(clusterAutoscaler);
+      if (deps.length > 0) scOpts.dependsOn = deps;
       new StorageClass(name, args.storageClass, scOpts);
-    }
-    if (args.karpenter) {
-      const kpOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
-      if (clusterAutoscaler) kpOpts.dependsOn = [clusterAutoscaler];
-      new Karpenter(name, args.karpenter, kpOpts);
     }
     this.outputs = {
       providerName: name,

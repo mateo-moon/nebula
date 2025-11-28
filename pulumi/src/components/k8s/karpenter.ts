@@ -2,6 +2,10 @@ import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
+import * as path from "path";
+import * as os from "os";
+import * as fs from "fs";
+import { execSync } from "child_process";
 import { Helpers } from "../../utils/helpers";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
@@ -10,9 +14,9 @@ export interface KarpenterConfig {
   /** Namespace where Karpenter will be installed (default: "karpenter") */
   namespace?: string;
   /** Name of the cluster as seen by Karpenter's controller (required) */
-  clusterName: pulumi.Input<string>;
+  clusterName: string;
   /** GCP region for the provider (required) */
-  region: pulumi.Input<string>;
+  location: pulumi.Input<string>;
   /** GKE cluster endpoint URL (required) */
   clusterEndpoint: pulumi.Input<string>;
   /** Helm chart version and repo overrides */
@@ -178,16 +182,48 @@ export class Karpenter extends pulumi.ComponentResource {
     }, { parent: this, dependsOn: [namespace] }); // Remove explicit provider, test inheritance
 
     // Install provider-specific controller for GCP
-    // NOTE: This requires the helm-git plugin to be installed:
-    //   helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1 --verify=false
-    // The chart is fetched directly from GitHub using helm-git protocol.
-    // Chart path format: git+https://github.com/user/repo@path/to/chart?ref=branch
-    // This chart includes GKE NodeClass CRD and the correct controller image for GCP/GKE.
+    // Clone the chart repository and use local path to avoid helm-git plugin issues
+    // The temp directory will be cleaned up by the OS automatically
+    const chartRepoUrl = "https://github.com/cloudpilot-ai/karpenter-provider-gcp.git";
+    const chartRef = "0a270d61b1cd768635f7cccab26f0aa123b81919"; // Pin to commit before CRD validation cost bug
+    const chartPath = "charts/karpenter";
+    
+    // Create a temporary directory for the chart clone
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "karpenter-chart-"));
+    const chartRepoPath = path.join(tempDir, "karpenter-provider-gcp");
+    
+    try {
+      // Clone the repository and checkout specific commit
+      execSync(`git clone --quiet ${chartRepoUrl} "${chartRepoPath}"`, {
+        stdio: "pipe",
+        cwd: tempDir,
+      });
+      // Checkout the specific commit
+      execSync(`git checkout ${chartRef} --quiet`, {
+        stdio: "pipe",
+        cwd: chartRepoPath,
+      });
+    } catch (error: any) {
+      // Clean up on error
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to clone karpenter chart repository: ${errorMsg}`);
+    }
+    
+    // Get the full path to the chart directory
+    const localChartPath = path.join(chartRepoPath, chartPath);
+    
+    // Verify the chart exists
+    if (!fs.existsSync(path.join(localChartPath, "Chart.yaml"))) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      throw new Error(`Chart not found at ${localChartPath}. Expected Chart.yaml at ${path.join(localChartPath, "Chart.yaml")}`);
+    }
+    
     const addBootstrap = args.bootstrapHardening !== false;
     let providerChart = new k8s.helm.v4.Chart(
       "karpenter-provider-gcp",
       {
-        chart: "git+https://github.com/cloudpilot-ai/karpenter-provider-gcp@charts?ref=main",
+        chart: localChartPath,
         name: "karpenter",
         namespace: namespace.metadata.name,
         values: {
@@ -202,7 +238,7 @@ export class Karpenter extends pulumi.ComponentResource {
             replicaCount: 1,
             settings: {
               projectID: clusterProject,
-              location: args.region,
+              location: args.location,
               clusterName: args.clusterName,
               clusterEndpoint: args.clusterEndpoint,
             },

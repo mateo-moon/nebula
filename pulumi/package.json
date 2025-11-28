@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./cli": "./src/cli.ts",
-    "./components": "./src/components/index.ts"
+    "./components": "./src/components/index.ts",
+    "./components/infra": "./src/components/infra/index.ts"
   },
   "bin": {
     "nebula": "./bin/nebula.js"

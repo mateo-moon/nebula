@@ -24,17 +24,18 @@ export type GcpConfig = {
 };
 
 export interface GcpOutput {
-  networkId?: any;
-  subnetworkId?: any;
-  networkSelfLink?: any;
-  subnetworkSelfLink?: any;
-  podsRangeName?: string;
-  servicesRangeName?: string;
-  gkeClusterName?: any;
-  gkeClusterEndpoint?: any;
-  kubeconfig?: any;
-  externalDnsGsaEmail?: any;
-  certManagerGsaEmail?: any;
+  networkId?: pulumi.Output<string>;
+  subnetworkId?: pulumi.Output<string>;
+  networkSelfLink?: pulumi.Output<string>;
+  subnetworkSelfLink?: pulumi.Output<string>;
+  podsRangeName?: string,
+  servicesRangeName?: string,
+  gkeClusterName?: pulumi.Output<string>;
+  gkeClusterEndpoint?: pulumi.Output<string>;
+  gkeLocation?: pulumi.Output<string>;
+  kubeconfig?: pulumi.Output<string>;
+  externalDnsGsaEmail?: pulumi.Output<string> | undefined;
+  certManagerGsaEmail?: pulumi.Output<string> | undefined;
 }
 
 export class Gcp  extends pulumi.ComponentResource{
@@ -54,31 +55,21 @@ export class Gcp  extends pulumi.ComponentResource{
     this.gke = new Gke(baseName, { ...args.gke, network: this.network }, { parent: this });
     // Use non-suffixed name for IAM to keep GSA accountIds human-readable
     if (args.iam) this.iam = new Iam(name, args.iam);
+    
     this.outputs = {
-      networkId: this.network?.network?.id,
-      subnetworkId: this.network?.subnetwork?.id,
-      networkSelfLink: this.network?.network?.selfLink,
-      subnetworkSelfLink: this.network?.subnetwork?.selfLink,
-      podsRangeName: this.network?.podsRangeName,
-      servicesRangeName: this.network?.servicesRangeName,
-      gkeClusterName: this.gke?.cluster?.name,
-      gkeClusterEndpoint: this.gke?.cluster?.endpoint,
-      kubeconfig: this.gke?.kubeconfig,
+      networkId: this.network.network.id,
+      subnetworkId: this.network.subnetwork.id,
+      networkSelfLink: this.network.network.selfLink,
+      subnetworkSelfLink: this.network.subnetwork.selfLink,
+      podsRangeName: this.network.podsRangeName,
+      servicesRangeName: this.network.servicesRangeName,
+      gkeClusterName: this.gke.cluster.name,
+      gkeClusterEndpoint: this.gke.cluster.endpoint,
+      gkeLocation: this.gke.cluster.location,
+      kubeconfig: this.gke.kubeconfig,
       externalDnsGsaEmail: this.iam?.externalDnsGsaEmail,
       certManagerGsaEmail: this.iam?.certManagerGsaEmail,
     };
-    this.registerOutputs({
-      networkId: this.network?.network?.id,
-      subnetworkId: this.network?.subnetwork?.id,
-      networkSelfLink: this.network?.network?.selfLink,
-      subnetworkSelfLink: this.network?.subnetwork?.selfLink,
-      podsRangeName: this.network?.podsRangeName,
-      servicesRangeName: this.network?.servicesRangeName,
-      gkeClusterName: this.gke?.cluster?.name,
-      gkeClusterEndpoint: this.gke?.cluster?.endpoint,
-      kubeconfig: this.gke?.kubeconfig,
-      externalDnsGsaEmail: this.iam?.externalDnsGsaEmail,
-      certManagerGsaEmail: this.iam?.certManagerGsaEmail,
-    });
+    this.registerOutputs(this.outputs);
   }
 }
