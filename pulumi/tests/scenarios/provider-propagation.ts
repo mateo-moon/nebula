@@ -38,8 +38,9 @@ const karpenter = new Karpenter(
   "test-karpenter",
   {
     clusterName: "test-cluster",
-    region: mockRegion,
-    installProvider: true, // Test with provider chart - this is where the actual bug occurs
+    location: mockRegion,
+    clusterEndpoint: "https://1.2.3.4", // Add required clusterEndpoint
+    // installProvider: true, // Removed as it's not in KarpenterConfig
     // Skip node pools for simpler test
     nodePools: {},
   },

@@ -527,25 +527,53 @@ export class Helpers {
 
     const envVars: Record<string, string> = {};
 
-    // Authenticate with GCP if GCP config is present
-    if (gcpConfig?.projectId) {
+    // Build a map of project IDs to regions from environment configs (for authentication)
+    const projectRegionMap = new Map<string, string>();
+    for (const env of Object.values(environments)) {
+      const envConfig = env?.settings?.config;
+      if (envConfig) {
+        let parsedConfig: Record<string, any> = {};
+        if (typeof envConfig === 'string') {
+          try {
+            parsedConfig = JSON.parse(envConfig);
+          } catch {
+            // Ignore parse errors
+          }
+        } else if (typeof envConfig === 'object') {
+          parsedConfig = envConfig;
+        }
+        const projectId = parsedConfig['gcp:project'];
+        const region = parsedConfig['gcp:region'];
+        if (projectId && region) {
+          projectRegionMap.set(projectId, region);
+        }
+      }
+    }
+
+    // Authenticate for all unique GCP projects upfront
+    if (projectRegionMap.size > 0) {
       const { Auth } = await import('./auth');
-      await Auth.GCP.authenticate(gcpConfig.projectId, gcpConfig.region);
+      const uniqueProjects = Array.from(projectRegionMap.entries());
       
-      // Capture environment variables set by authentication
-      const credsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
-      if (credsFile) {
-        envVars['GOOGLE_APPLICATION_CREDENTIALS'] = credsFile;
-      }
-      if (process.env['CLOUDSDK_CORE_PROJECT']) {
-        envVars['CLOUDSDK_CORE_PROJECT'] = process.env['CLOUDSDK_CORE_PROJECT'];
-      }
-      if (process.env['CLOUDSDK_COMPUTE_ZONE']) {
-        envVars['CLOUDSDK_COMPUTE_ZONE'] = process.env['CLOUDSDK_COMPUTE_ZONE'];
-      }
+      // Authenticate for all projects (can happen in parallel for different projects)
+      await Promise.all(uniqueProjects.map(async ([projectId, region]) => {
+        try {
+          await Auth.GCP.authenticate(projectId, region);
+        } catch (error: any) {
+          console.warn(`⚠️  Failed to authenticate for project ${projectId}: ${error?.message || error}`);
+          // Continue with other projects even if one fails
+        }
+      }));
       
-      // Enable required GCP APIs after authentication
-      await Helpers.enableGcpApis(gcpConfig.projectId);
+      // Enable required GCP APIs for all authenticated projects
+      await Promise.all(uniqueProjects.map(async ([projectId]) => {
+        try {
+          await Helpers.enableGcpApis(projectId);
+        } catch (error: any) {
+          console.warn(`⚠️  Failed to enable APIs for project ${projectId}: ${error?.message || error}`);
+          // Continue with other projects even if one fails
+        }
+      }));
     }
 
     // Ensure backend storage exists prior to workspace init
@@ -561,8 +589,7 @@ export class Helpers {
     // Ensure secrets providers exist
     if (secretsProviders.length > 0) {
       await Helpers.ensureSecretsProvider({ 
-        secretsProviders, 
-        ...(gcpConfig?.projectId ? { projectId: gcpConfig.projectId } : {})
+        secretsProviders
       });
     }
 
@@ -605,7 +632,8 @@ export class Helpers {
   }
 
   /** Ensure secrets provider resources exist before workspace init. For now: supports gcpkms:// only. */
-  public static async ensureSecretsProvider(opts: { secretsProviders: string[]; projectId?: string }) {
+  public static async ensureSecretsProvider(opts: { secretsProviders: string[] }) {
+    // Ensure KMS keys exist (authentication and API enabling should already be done in bootstrap)
     for (const provider of opts.secretsProviders) {
       if (provider.startsWith('gcpkms://')) {
         await Helpers.ensureGcpKmsKeyFromUrlWithRetry(provider);
@@ -1100,6 +1128,19 @@ export class Helpers {
       }
       return value;
     }
+    
+    // Skip special object types that shouldn't be processed (like Pulumi Asset/Archive)
+    if (value instanceof Date || value instanceof RegExp || value instanceof Error) {
+      return value;
+    }
+    // Check if object has a constructor that's not Object (might be a class instance like Asset)
+    if (typeof value === 'object' && value !== null) {
+      const constructor = (value as any).constructor;
+      if (constructor !== Object && constructor !== undefined && constructor.name !== 'Object') {
+        return value;
+      }
+    }
+
     if (Array.isArray(value)) {
       return value.map(v => Helpers.resolveStackRefsDeep(v));
     }

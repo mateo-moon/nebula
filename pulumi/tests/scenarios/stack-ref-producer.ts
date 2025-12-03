@@ -1,4 +1,4 @@
-import * as pulumi from '@pulumi/pulumi';
+import * as _pulumi from '@pulumi/pulumi';
 
 export const producerOutput = 'hello-from-producer';
 export const complexOutput = {

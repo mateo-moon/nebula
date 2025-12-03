@@ -1,6 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
-import * as aws from '@pulumi/aws';
 import * as cloudflare from '@pulumi/cloudflare';
 import * as https from 'https';
 
@@ -21,81 +20,63 @@ export interface HetznerDelegationConfig {
 
 export type DnsDelegationConfig = CloudflareDelegationConfig | HetznerDelegationConfig;
 
-export type DnsProvider = 'gcp' | 'aws' | 'hetzner';
+export type DnsProvider = 'gcp';
 
 export interface DnsConfig {
   provider: DnsProvider;
   dnsDelegations?: DnsDelegationConfig[];
   enabled?: boolean;
-  domain?: string; // e.g. example.com or sub.example.com
+  /** Array of domains and subdomains to manage */
+  domains: string[]; // e.g. ['example.com', 'sub.example.com', 'another.example.com']
   delegations?: DnsDelegationConfig[]; // optional upstream DNS delegations
-  /** Hetzner API token. Can be a plain string or a ref+ secret (e.g., 'ref+sops://...'). 
-   * Required when provider is 'hetzner'. */
-  hetznerApiToken?: string;
 }
 
 export interface DnsOutput {
-  zoneId?: pulumi.Output<string>;
-  nameServers?: pulumi.Output<string[]>;
+  zones: Map<string, { zoneId: pulumi.Output<string>; nameServers: pulumi.Output<string[]> }>;
 }
 
 export class Dns extends pulumi.ComponentResource {
-  public readonly zoneId?: pulumi.Output<string>;
-  public readonly nameServers?: pulumi.Output<string[]>;
+  public readonly zones: Map<string, { zoneId: pulumi.Output<string>; nameServers: pulumi.Output<string[]> }>;
 
   constructor(name: string, cfg: DnsConfig, opts?: pulumi.ComponentResourceOptions) {
     super('dns', name, {}, opts);
 
-    if (cfg.enabled === false || !cfg.domain) {
-      this.registerOutputs({});
+    this.zones = new Map();
+    
+    if (cfg.enabled === false || !cfg.domains || cfg.domains.length === 0) {
+      this.registerOutputs({ zones: this.zones });
       return;
     }
 
-    const domain = cfg.domain.replace(/\.$/, '');
+    const domains = cfg.domains;
 
-    if (cfg.provider === 'gcp') {
-      const zone = new gcp.dns.ManagedZone(`${name}-zone`, {
-        name: `${name}-zone`,
-        dnsName: domain.endsWith('.') ? domain : `${domain}.`,
-        description: 'Managed by Pulumi',
-      }, { parent: this });
-      this.zoneId = zone.id;
-      this.nameServers = zone.nameServers as pulumi.Output<string[]>;
-      this.applyDelegations(name, domain, this.nameServers, cfg.delegations);
-    } else if (cfg.provider === 'aws') {
-      const zone = new aws.route53.Zone(`${name}-zone`, {
-        name: domain,
-        comment: 'Managed by Pulumi',
-        forceDestroy: true,
-      }, { parent: this });
-      // nameServers are available after creation
-      this.zoneId = zone.id;
-      this.nameServers = zone.nameServers as pulumi.Output<string[]>;
-      this.applyDelegations(name, domain, this.nameServers, cfg.delegations);
-    } else if (cfg.provider === 'hetzner') {
-      if (!cfg.hetznerApiToken) {
-        throw new Error('hetznerApiToken is required when provider is "hetzner"');
+    // Create zones for each domain
+    domains.forEach((domain, index) => {
+      const cleanDomain = domain.replace(/\.$/, '');
+      const zoneName = `${name}-zone-${index}`;
+
+      if (cfg.provider === 'gcp') {
+        const zone = new gcp.dns.ManagedZone(zoneName, {
+          name: zoneName,
+          dnsName: cleanDomain.endsWith('.') ? cleanDomain : `${cleanDomain}.`,
+          description: 'Managed by Pulumi',
+        }, { parent: this });
+        const zoneInfo = {
+          zoneId: zone.id,
+          nameServers: zone.nameServers as pulumi.Output<string[]>
+        };
+        this.zones.set(cleanDomain, zoneInfo);
+        this.applyDelegations(`${name}-${index}`, cleanDomain, zoneInfo.nameServers, cfg.delegations);
+      } else {
+        throw new Error(`Unsupported DNS provider: ${cfg.provider}`);
       }
-      // Create Hetzner DNS zone using custom implementation
-      const hetznerZone = this.createHetznerZone(name, domain, cfg.hetznerApiToken);
-      this.zoneId = hetznerZone.zoneId;
-      this.nameServers = hetznerZone.nameServers;
-      this.applyDelegations(name, domain, this.nameServers, cfg.delegations);
-    } else {
-      throw new Error(`Unsupported DNS provider: ${cfg.provider}`);
-    }
+    });
 
-    const outputs: any = {};
-    if (this.zoneId) outputs.zoneId = this.zoneId;
-    if (this.nameServers) outputs.nameServers = this.nameServers;
-    this.registerOutputs(outputs);
+    this.registerOutputs({ zones: this.zones });
   }
 
   public get outputs(): DnsOutput {
-    const o: any = {};
-    if (this.zoneId) o.zoneId = this.zoneId;
-    if (this.nameServers) o.nameServers = this.nameServers;
-    return o as DnsOutput;
+    return { zones: this.zones };
   }
 
   private applyDelegations(name: string, fqdn: string, nsList?: pulumi.Output<string[]>, delegations?: DnsDelegationConfig[]) {
@@ -117,7 +98,6 @@ export class Dns extends pulumi.ComponentResource {
           });
         });
       } else if (d.provider === 'hetzner') {
-        // TypeScript now knows d is HetznerDelegationConfig here
         // Create Hetzner records for each nameserver
         const hetznerToken = d.hetznerApiToken;
         pulumi.all([nsList, d.zoneId]).apply(([servers, zoneId]) => {
@@ -131,25 +111,9 @@ export class Dns extends pulumi.ComponentResource {
     }
   }
 
-  private createHetznerZone(_name: string, domain: string, apiToken: string): { zoneId: pulumi.Output<string>; nameServers: pulumi.Output<string[]> } {
-    // Create a custom resource for Hetzner DNS zone
-    const zoneId = this.makeHetznerApiCall('POST', '/v1/zones', {
-      name: domain,
-      // Lower default TTL for all records in the zone to speed propagation
-      ttl: 120
-    }, apiToken).apply((response: any) => response.zone.id as string);
-
-    const nameServers = zoneId.apply(id => 
-      this.makeHetznerApiCall('GET', `/v1/zones/${id}`, undefined, apiToken)
-        .apply((response: any) => response.zone.ns as string[])
-    );
-
-    return { zoneId, nameServers };
-  }
-
   private createHetznerRecord(_name: string, zoneId: string, recordName: string, type: string, value: string, ttl: number, apiToken: string): void {
     // Create a custom resource for Hetzner DNS record
-    pulumi.output(this.makeHetznerApiCall('POST', `/v1/records`, {
+    pulumi.output(this.makeHetznerApiCall('POST', '/v1/records', {
       zone_id: zoneId,
       name: recordName,
       type: type,

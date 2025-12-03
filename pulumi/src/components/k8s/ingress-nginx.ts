@@ -1,6 +1,8 @@
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
+import { deepmerge } from "deepmerge-ts";
 //
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
@@ -30,9 +32,19 @@ export interface IngressNginxConfig {
   version?: string;
   repository?: string;
   args?: OptionalChartArgs;
+  /** GCP project ID for creating static IP */
+  gcpProjectId?: string;
+  /** GCP region for creating static IP */
+  gcpRegion?: string;
+  /** Whether to create a static IP for the load balancer */
+  createStaticIp?: boolean;
+  /** Name for the static IP resource */
+  staticIpName?: string;
 }
 
 export class IngressNginx extends pulumi.ComponentResource {
+  public readonly staticIp?: gcp.compute.Address;
+
   constructor(
     name: string,
     args: IngressNginxConfig,
@@ -61,7 +73,21 @@ export class IngressNginx extends pulumi.ComponentResource {
     // Merge controller tolerations - allow override but default to system node tolerations
     const controllerTolerations = args.controller?.tolerations || defaultTolerations;
 
-    const values: Record<string, unknown> = {
+    // Create Static IP if requested
+    if (args.createStaticIp) {
+        const ipName = args.staticIpName || `${name}-ingress-ip`;
+        const gcpConfig = new pulumi.Config('gcp');
+        const region = args.gcpRegion || gcpConfig.get('region') || 'europe-west3';
+
+        this.staticIp = new gcp.compute.Address(ipName, {
+            name: ipName,
+            addressType: 'EXTERNAL',
+            region: region,
+            description: pulumi.interpolate`Static IP for Ingress Nginx LoadBalancer in ${namespaceName}`,
+        }, { parent: this });
+    }
+
+    const baseValues = {
       controller: {
         ...(args.controller?.replicaCount != null ? { replicaCount: args.controller.replicaCount } : {}),
         ...(args.controller?.extraArgs ? { extraArgs: args.controller.extraArgs } : {}),
@@ -70,8 +96,12 @@ export class IngressNginx extends pulumi.ComponentResource {
         ...(args.controller?.service ? {
           service: {
             ...(args.controller.service.type ? { type: args.controller.service.type } : {}),
-            ...(args.controller.service.annotations ? { annotations: args.controller.service.annotations } : {}),
+            annotations: {
+              ...(args.controller.service.annotations || {}),
+              ...(this.staticIp ? { "cloud.google.com/load-balancer-ip": this.staticIp.address } : {}),
+            },
             ...(args.controller.service.externalTrafficPolicy ? { externalTrafficPolicy: args.controller.service.externalTrafficPolicy } : {}),
+            ...(this.staticIp ? { loadBalancerIP: this.staticIp.address } : {}),
           }
         } : {}),
         // Ensure admission webhooks certificate management via cert-manager (no Helm hooks required)
@@ -87,9 +117,10 @@ export class IngressNginx extends pulumi.ComponentResource {
           // Disable patch job that normally runs via Helm hooks
           patch: { enabled: false },
         },
-      },
-      ...(args.values || {}),
+      }
     };
+
+    const values: Record<string, unknown> = deepmerge(baseValues, args.values || {}) as Record<string, unknown>;
 
     const defaultChartArgsBase: OptionalChartArgs = {
       chart: 'ingress-nginx',

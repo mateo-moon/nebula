@@ -35,36 +35,22 @@ export class CertManager extends pulumi.ComponentResource {
       const defaultValues = {
         installCRDs: true,
         prometheus: { enabled: true },
-        // Global tolerations are supported by the chart and apply to all components
-        global: {
-          tolerations: [
-            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-            { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
-          ],
-        },
-        // Define component-specific tolerations just in case, though global should cover it
-        controller: {
-          tolerations: [
-            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-            { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
-          ],
-        },
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+        ],
         webhook: {
           tolerations: [
             { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-            { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
           ],
         },
         cainjector: {
           tolerations: [
             { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-            { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
           ],
         },
         startupapicheck: {
           tolerations: [
             { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-            { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
           ],
         },
       };

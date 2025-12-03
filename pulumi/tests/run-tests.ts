@@ -246,7 +246,7 @@ main: ${scenario.mainFile}`;
       const providerMatches = output.match(providerPattern) || [];
       
       // Count Kubernetes resources specifically (not GCP resources)
-      const kubernetesProviderMatches = providerMatches.filter(m => m.includes('pulumi:providers:kubernetes'));
+      const kubernetesProviderMatches = providerMatches.filter((m: string) => m.includes('pulumi:providers:kubernetes'));
       
       // Count Kubernetes resources (excluding the provider resource itself and stack)
       const helmChartResources = (output.match(/kubernetes:helm\.sh\/v4:Chart/g) || []).length;

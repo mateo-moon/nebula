@@ -37,7 +37,7 @@ class MockConfidentialContainers extends pulumi.ComponentResource {
 
 const config = {
   addons: {
-    'consumer': (env: any) => {
+    'consumer': (_env: any) => {
       return {
         name: 'consumer',
         // This should be resolved to an Output
