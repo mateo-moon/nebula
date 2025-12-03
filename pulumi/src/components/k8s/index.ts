@@ -56,16 +56,11 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
     path.join(process.cwd(), '.config', path.basename(args.kubeconfig)),
   ].filter(Boolean) as string[])).map(expandHome);
 
-  console.log(`[createK8sProvider] Looking for kubeconfig at: ${args.kubeconfig}`);
-  console.log(`[createK8sProvider] Current directory: ${process.cwd()}`);
-  console.log(`[createK8sProvider] Project root: ${(global as any).projectRoot || 'not set'}`);
-
   for (const pth of candidates) {
     try {
       if (pth && fs.existsSync(pth) && fs.statSync(pth).isFile()) {
         // Use absolute path for consistency
         const absolutePath = path.resolve(pth);
-        console.log(`[createK8sProvider] Found kubeconfig at: ${absolutePath}`);
         const kubeconfigContent = fs.readFileSync(absolutePath, 'utf8');
         
         // Validate that we actually read content
@@ -73,13 +68,12 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
           throw new Error(`[createK8sProvider] Kubeconfig file at ${absolutePath} is empty`);
         }
         
-        console.log(`[createK8sProvider] Successfully read kubeconfig (${kubeconfigContent.length} bytes)`);
-        
         // Create provider with explicit kubeconfig content only
         // KUBECONFIG env var is cleared, so provider will only use explicit content
         const provider = new k8s.Provider(args.name || 'k8s', { 
           kubeconfig: kubeconfigContent,
-          suppressDeprecationWarnings: true
+          suppressDeprecationWarnings: true,
+          deleteUnreachable: true,
         });
         
         // Restore KUBECONFIG env var if we cleared it
@@ -90,7 +84,7 @@ export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
         return provider;
       }
     } catch (err) {
-      console.log(`[createK8sProvider] Failed to read ${pth}: ${err}`);
+      // Continue to next candidate path
     }
   }
   

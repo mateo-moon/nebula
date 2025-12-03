@@ -1,7 +1,5 @@
 import * as gcp from '@pulumi/gcp';
 import * as pulumi from '@pulumi/pulumi';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Network } from './network';
 import { writeKubeconfig } from '../../../utils/kubeconfig';
 

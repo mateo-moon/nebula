@@ -14,8 +14,8 @@ import open from 'open';
  * Authentication utilities organized by cloud provider
  */
 export class Auth {
-  // Track ongoing authentication to prevent concurrent flows
-  private static ongoingAuth: Promise<any> | null = null;
+  // Track ongoing authentication per project to prevent concurrent flows for the same project
+  private static ongoingAuth: Map<string, Promise<any>> = new Map();
 
   /**
    * Google Cloud Platform authentication utilities
@@ -29,10 +29,11 @@ export class Auth {
     async authenticate(projectId: string, region?: string): Promise<void> {
       console.log(`🔐 Starting authentication for project: ${projectId}`);
       
-      // Check if authentication is already in progress
-      if (Auth.ongoingAuth) {
-        console.log('  ⏳ Authentication already in progress, waiting...');
-        await Auth.ongoingAuth;
+      // Check if authentication is already in progress for this specific project
+      const existingAuth = Auth.ongoingAuth.get(projectId);
+      if (existingAuth) {
+        console.log(`  ⏳ Authentication already in progress for project ${projectId}, waiting...`);
+        await existingAuth;
         return;
       }
       
@@ -44,12 +45,13 @@ export class Auth {
       }
       
       // Step 2: Run OAuth flow to simulate gcloud auth application-default login
-      Auth.ongoingAuth = this.performAuthentication(projectId, region);
+      const authPromise = this.performAuthentication(projectId, region);
+      Auth.ongoingAuth.set(projectId, authPromise);
       
       try {
-        await Auth.ongoingAuth;
+        await authPromise;
       } finally {
-        Auth.ongoingAuth = null;
+        Auth.ongoingAuth.delete(projectId);
       }
     },
 
@@ -70,7 +72,9 @@ export class Auth {
         
         console.log(`  ✅ Authentication successful for project: ${projectId}`);
       } else {
-        console.log(`  ❌ Authentication failed for project: ${projectId}`);
+        const errorMsg = `Authentication failed for project: ${projectId}. OAuth flow did not complete successfully.`;
+        console.log(`  ❌ ${errorMsg}`);
+        throw new Error(errorMsg);
       }
     },
 

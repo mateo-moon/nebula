@@ -22,6 +22,12 @@ export interface KarpenterConfig {
   /** Helm chart version and repo overrides */
   version?: string;
   repository?: string;
+  /** Git repository URL for the chart (default: "https://github.com/cloudpilot-ai/karpenter-provider-gcp.git") */
+  gitRepository?: string;
+  /** Git reference (tag, branch, commit) to checkout (default: pinned commit) */
+  gitRef?: string;
+  /** Local path to the chart (overrides git clone logic) */
+  localChartPath?: string;
   /** Additional chart args (timeouts, transformations, etc.) */
   args?: OptionalChartArgs;
   /** KSA name for controller (default: "karpenter") */
@@ -184,38 +190,43 @@ export class Karpenter extends pulumi.ComponentResource {
     // Install provider-specific controller for GCP
     // Clone the chart repository and use local path to avoid helm-git plugin issues
     // The temp directory will be cleaned up by the OS automatically
-    const chartRepoUrl = "https://github.com/cloudpilot-ai/karpenter-provider-gcp.git";
-    const chartRef = "0a270d61b1cd768635f7cccab26f0aa123b81919"; // Pin to commit before CRD validation cost bug
-    const chartPath = "charts/karpenter";
-    
-    // Create a temporary directory for the chart clone
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "karpenter-chart-"));
-    const chartRepoPath = path.join(tempDir, "karpenter-provider-gcp");
-    
-    try {
-      // Clone the repository and checkout specific commit
-      execSync(`git clone --quiet ${chartRepoUrl} "${chartRepoPath}"`, {
-        stdio: "pipe",
-        cwd: tempDir,
-      });
-      // Checkout the specific commit
-      execSync(`git checkout ${chartRef} --quiet`, {
-        stdio: "pipe",
-        cwd: chartRepoPath,
-      });
-    } catch (error: any) {
-      // Clean up on error
-      fs.rmSync(tempDir, { recursive: true, force: true });
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to clone karpenter chart repository: ${errorMsg}`);
+    let localChartPath = args.localChartPath;
+    let tempDir: string | undefined;
+
+    if (!localChartPath) {
+      const chartRepoUrl = args.gitRepository || "https://github.com/cloudpilot-ai/karpenter-provider-gcp.git";
+      const chartRef = args.gitRef || "0a270d61b1cd768635f7cccab26f0aa123b81919"; // Pin to commit before CRD validation cost bug
+      const chartPath = "charts/karpenter";
+      
+      // Create a temporary directory for the chart clone
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "karpenter-chart-"));
+      const chartRepoPath = path.join(tempDir, "karpenter-provider-gcp");
+      
+      try {
+        // Clone the repository and checkout specific commit
+        execSync(`git clone --quiet ${chartRepoUrl} "${chartRepoPath}"`, {
+          stdio: "pipe",
+          cwd: tempDir,
+        });
+        // Checkout the specific commit
+        execSync(`git checkout ${chartRef} --quiet`, {
+          stdio: "pipe",
+          cwd: chartRepoPath,
+        });
+      } catch (error: any) {
+        // Clean up on error
+        if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to clone karpenter chart repository: ${errorMsg}`);
+      }
+      
+      // Get the full path to the chart directory
+      localChartPath = path.join(chartRepoPath, chartPath);
     }
-    
-    // Get the full path to the chart directory
-    const localChartPath = path.join(chartRepoPath, chartPath);
     
     // Verify the chart exists
     if (!fs.existsSync(path.join(localChartPath, "Chart.yaml"))) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
       throw new Error(`Chart not found at ${localChartPath}. Expected Chart.yaml at ${path.join(localChartPath, "Chart.yaml")}`);
     }
     

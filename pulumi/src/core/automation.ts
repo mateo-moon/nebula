@@ -6,6 +6,7 @@ import type { Stack } from '@pulumi/pulumi/automation';
 import { LocalWorkspace } from '@pulumi/pulumi/automation';
 import { Project } from './project';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export type StackOp = 'preview' | 'up' | 'destroy' | 'refresh';
 
@@ -99,6 +100,31 @@ export class StackManager {
       baseWorkspaceOpts.workDir = path.resolve(workDir);
     }
 
+    const resolvedWorkDir = baseWorkspaceOpts.workDir || process.cwd();
+    const stackConfigDir = baseWorkspaceOpts.projectSettings?.stackConfigDir || '.pulumi';
+    const stackConfigDirPath = path.resolve(resolvedWorkDir, stackConfigDir);
+
+    // Save project settings FIRST (before creating stacks) so stackConfigDir is respected
+    if (persistSettings && !this.projectSettingsSaved) {
+      // Ensure stack config directory exists
+      if (!fs.existsSync(stackConfigDirPath)) {
+        fs.mkdirSync(stackConfigDirPath, { recursive: true });
+      }
+
+      // Create a temporary workspace just to save project settings
+      const tempWorkspace = await LocalWorkspace.create({
+        projectSettings: baseWorkspaceOpts.projectSettings,
+        workDir: resolvedWorkDir,
+      });
+      
+      await tempWorkspace.saveProjectSettings(baseWorkspaceOpts.projectSettings);
+      this.projectSettingsSaved = true;
+      
+      // Log the generated project file
+      const projectFilePath = path.join(resolvedWorkDir, 'Pulumi.yaml');
+      console.log(`Generated: ${projectFilePath}`);
+    }
+
     // Create stack-specific configuration
     const wsWithStack = {
       ...baseWorkspaceOpts,
@@ -115,7 +141,7 @@ export class StackManager {
       },
     };
 
-    // Create or select the stack
+    // Create or select the stack (now Pulumi.yaml should have stackConfigDir set)
     const stack = await LocalWorkspace.createOrSelectStack(
       {
         stackName,
@@ -136,24 +162,22 @@ export class StackManager {
       wsWithStack
     );
 
-    // Optionally persist settings using the Automation API
+    // Log and fix stack file location if needed
     if (persistSettings) {
       const workspace = stack.workspace;
-      
-      // Save project settings only once
-      if (!this.projectSettingsSaved) {
-        await workspace.saveProjectSettings(baseWorkspaceOpts.projectSettings);
-        this.projectSettingsSaved = true;
-        
-        // Log the generated project file
-        const projectFilePath = path.join(workspace.workDir || process.cwd(), 'Pulumi.yaml');
-        console.log(`Generated: ${projectFilePath}`);
-      }
+      const actualWorkDir = workspace.workDir || resolvedWorkDir;
       
       // Stack settings are already processed by createOrSelectStack
-      // Just log the generated stack file
-      const stackFilePath = path.join(workspace.workDir || process.cwd(), `Pulumi.${stackName}.yaml`);
+      // Log the expected stack file location (Automation API should respect stackConfigDir)
+      const stackFilePath = path.join(stackConfigDirPath, `Pulumi.${stackName}.yaml`);
       console.log(`Generated: ${stackFilePath}`);
+      
+      // If stack file was created in root, move it to stackConfigDir
+      const rootStackPath = path.join(actualWorkDir, `Pulumi.${stackName}.yaml`);
+      if (fs.existsSync(rootStackPath) && !fs.existsSync(stackFilePath)) {
+        fs.renameSync(rootStackPath, stackFilePath);
+        console.log(`Moved stack file to: ${stackFilePath}`);
+      }
     }
 
     return stack;
@@ -227,6 +251,10 @@ export class StackManager {
           name: 'nodejs', 
           options: { typescript: false, nodeargs: '--import=tsx/esm' } 
         },
+        options: {
+          refresh: 'always',
+        },
+        stackConfigDir: '.pulumi',
         ...(backendUrl ? { 
           backend: { url: backendUrl } 
         } : {}),

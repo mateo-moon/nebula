@@ -11,9 +11,9 @@ const expandHome = (input: string) =>
   input.startsWith("~") ? path.join(os.homedir(), input.slice(1)) : input;
 
 const defaultCandidates = [
-  process.env.NEBULA_TEST_KUBECONFIG,
-  process.env.ORBSTACK_KUBECONFIG,
-  process.env.KUBECONFIG,
+  process.env['NEBULA_TEST_KUBECONFIG'],
+  process.env['ORBSTACK_KUBECONFIG'],
+  process.env['KUBECONFIG'],
   "~/.orbstack/k8s/config.yml",
   "~/.kube/config",
 ];

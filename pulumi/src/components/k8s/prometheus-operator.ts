@@ -1,21 +1,37 @@
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
 import { deepmerge } from "deepmerge-ts";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
+
+export interface PrometheusOperatorGcpOAuthConfig {
+  /** GCP project ID where OAuth client will be created (defaults to gcp:project config) */
+  projectId?: pulumi.Input<string>;
+  /** Grafana server URL for OAuth redirect URI (e.g., https://grafana.example.com) */
+  serverUrl: pulumi.Input<string>;
+  /** Display name for the OAuth client (default: "Grafana") */
+  displayName?: string;
+  /** Whether to create the OAuth client automatically (default: true) */
+  createClient?: boolean;
+}
 
 export interface PrometheusOperatorConfig {
   namespace?: string;
   args?: OptionalChartArgs;
   /** Storage class name for persistent volumes (default: "standard") */
   storageClassName?: string;
-  /** Enable Loki deployment alongside Prometheus (default: false) */
-  enableLoki?: boolean;
   /** Loki storage size (default: "100Gi") */
   lokiStorageSize?: string;
   /** Loki retention period (default: "30d") */
   lokiRetention?: string;
+  /** Loki Helm chart version (e.g., "6.15.0") */
+  lokiVersion?: string;
+  /** Promtail Helm chart version (e.g., "6.15.0") */
+  promtailVersion?: string;
+  /** GCP OAuth configuration for Grafana Google SSO */
+  gcpOAuth?: PrometheusOperatorGcpOAuthConfig;
 }
 
 export class PrometheusOperator extends pulumi.ComponentResource {
@@ -32,8 +48,81 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       metadata: { name: namespaceName },
     }, { parent: this });
 
+    // Create GCP OAuth client if configured
+    let oauthClientId: pulumi.Output<string> | undefined;
+    let oauthClientSecret: pulumi.Output<string> | undefined;
+    let oauthSecret: k8s.core.v1.Secret | undefined;
+    
+    if (args.gcpOAuth?.createClient !== false && args.gcpOAuth) {
+      // Get GCP project ID from config (same pattern as other modules)
+      const gcpConfig = new pulumi.Config('gcp');
+      const projectId = args.gcpOAuth.projectId || gcpConfig.require('project');
+      const serverUrl = pulumi.output(args.gcpOAuth.serverUrl);
+      const displayName = args.gcpOAuth.displayName || 'Grafana';
+      
+      // Generate a unique client ID based on the component name
+      // Must be 6-63 lowercase letters, digits, or hyphens, start with a letter
+      const sanitizedName = name.replace(/[^a-z0-9-]/g, '-').toLowerCase();
+      const clientId = `${sanitizedName}-grafana-oauth`.slice(0, 63).replace(/-$/, '');
+      // Grafana Google OAuth redirect URI format: {serverUrl}/login/google
+      const redirectUri = serverUrl.apply(url => `${url}/login/google`);
+      
+      // Create OAuth client using Pulumi GCP resource
+      const oauthClient = new gcp.iam.OauthClient(`${name}-oauth-client`, {
+        project: projectId,
+        location: 'global',
+        oauthClientId: clientId,
+        displayName: displayName,
+        description: `OAuth client for Grafana Google SSO (${name})`,
+        clientType: 'CONFIDENTIAL_CLIENT',
+        allowedGrantTypes: ['AUTHORIZATION_CODE_GRANT'],
+        allowedRedirectUris: redirectUri.apply(uri => [uri]),
+        allowedScopes: [
+          'openid',
+          'https://www.googleapis.com/auth/userinfo.email',
+          'https://www.googleapis.com/auth/userinfo.profile',
+        ],
+      }, { parent: this });
+
+      // Get the client ID from the created resource
+      oauthClientId = oauthClient.clientId;
+
+      // Create OAuth client credential (secret)
+      const credentialId = `${clientId}-cred`.slice(0, 32);
+      const oauthCredential = new gcp.iam.OauthClientCredential(`${name}-oauth-credential`, {
+        project: projectId,
+        location: 'global',
+        oauthclient: oauthClient.oauthClientId,
+        oauthClientCredentialId: credentialId,
+        displayName: `${displayName} Credential`,
+      }, { parent: this, dependsOn: [oauthClient] });
+
+      // Get the client secret from the credential
+      oauthClientSecret = oauthCredential.clientSecret;
+
+      // Create Kubernetes secret with OAuth credentials
+      oauthSecret = new k8s.core.v1.Secret('grafana-oauth', {
+        metadata: { 
+          name: 'grafana-oauth', 
+          namespace: namespaceName,
+          labels: {
+            'app.kubernetes.io/part-of': 'prometheus-operator',
+          },
+        },
+        stringData: pulumi.all([oauthClientId, oauthClientSecret]).apply(([id, secret]) => ({
+          'clientID': id,
+          'clientSecret': secret,
+        })),
+      }, { 
+        parent: this, 
+        dependsOn: [namespace, oauthCredential],
+      });
+    }
+
     const storageClassName = args.storageClassName || "standard";
     
+    const childOpts = { parent: this };
+
     const defaultValues = {
       prometheus: {
         prometheusSpec: {
@@ -224,9 +313,38 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       throw new Error('prometheus-operator: values must be a plain object, not a Pulumi Output. Helm Charts cannot serialize Outputs in values.');
     }
     
-    const mergedValues = providedArgs?.values 
+    // Merge provided values with default values
+    let mergedValues = providedArgs?.values 
       ? deepmerge(defaultValues, providedArgs.values)
       : defaultValues;
+    
+    // If OAuth is configured, add env vars to reference the secret
+    if (oauthSecret) {
+      // Merge OAuth env vars into Grafana configuration
+      mergedValues = deepmerge(mergedValues, {
+        grafana: {
+          // Map secret keys to Grafana env var names
+          env: {
+            GF_AUTH_GOOGLE_CLIENT_ID: {
+              valueFrom: {
+                secretKeyRef: {
+                  name: 'grafana-oauth',
+                  key: 'clientID',
+                },
+              },
+            },
+            GF_AUTH_GOOGLE_CLIENT_SECRET: {
+              valueFrom: {
+                secretKeyRef: {
+                  name: 'grafana-oauth',
+                  key: 'clientSecret',
+                },
+              },
+            },
+          },
+        },
+      });
+    }
     
     const finalChartArgs: ChartArgs = {
       chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
@@ -236,10 +354,15 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       values: mergedValues,
     };
 
+    const chartDeps: pulumi.Resource[] = [namespace];
+    if (oauthSecret) {
+      chartDeps.push(oauthSecret);
+    }
+
     const chart = new k8s.helm.v4.Chart(
       "prometheus-operator",
       finalChartArgs,
-      { parent: this, dependsOn: [namespace] }
+      { parent: this, dependsOn: chartDeps }
     );
 
     // Create ServiceMonitor for kubelet metrics
@@ -314,195 +437,260 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       { ...childOpts, dependsOn: [chart] }
     );
 
-    // Deploy Loki if enabled
-    const enableLoki = args.enableLoki || false;
+    // Deploy Loki
     const lokiStorageSize = args.lokiStorageSize || "100Gi";
+    const lokiVersion = args.lokiVersion;
+    const promtailVersion = args.promtailVersion;
     // Note: lokiRetention is available but not currently used in Loki configuration
     // const lokiRetention = args.lokiRetention || "30d";
 
-    if (enableLoki) {
-      // Deploy Loki using basic chart (simple-scalable uses GrafanaAgent CRDs we want to avoid)
-      const lokiChart = new k8s.helm.v4.Chart(
-        "loki",
-        {
-          chart: "loki",
-          repositoryOpts: { repo: "https://grafana.github.io/helm-charts" },
-          namespace: namespaceName,
-          skipCrds: true, // Skip CRDs as they conflict with Prometheus Operator CRDs
-          values: {
-            loki: {
-              auth_enabled: false,
-              limits_config: {
-                reject_old_samples: true,
-                reject_old_samples_max_age: "168h"
-              },
-              storage: {
-                type: "filesystem",
-                bucketNames: {
-                  chunks: "chunks",
-                  ruler: "ruler"
-                }
-              },
-              commonConfig: {
-                replication_factor: 1
-              },
-              memberlistConfig: {
-                join_members: []
-              },
-              ingester: {
-                lifecycler: {
-                  ring: {
-                    kvstore: {
-                      store: "inmemory"
-                    },
-                    replication_factor: 1
-                  }
-                }
-              },
-              useTestSchema: true
-            },
-            deploymentMode: "SingleBinary",
-            singleBinary: {
-              replicas: 1,
-              persistence: {
-                enabled: true,
-                storageClass: storageClassName,
-                size: lokiStorageSize,
-                accessModes: ["ReadWriteOnce"]
-              },
-              resources: {
-                requests: {
-                  cpu: "500m",
-                  memory: "1Gi"
-                },
-                limits: {
-                  cpu: "1",
-                  memory: "2Gi"
-                }
-              },
-              tolerations: [
-                { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
-              ]
-            },
-            // Explicitly disable simpleScalable components
-            read: {
-              replicas: 0
-            },
-            write: {
-              replicas: 0
-            },
-            backend: {
-              replicas: 0
-            }
-          }
-        },
-        { parent: this, dependsOn: [namespace, chart] }
-      );
-
-      // Deploy Promtail
-      const promtailChart = new k8s.helm.v4.Chart(
-        "promtail",
-        {
-          chart: "promtail",
-          repositoryOpts: { repo: "https://grafana.github.io/helm-charts" },
-          namespace: namespaceName,
-          values: {
-            config: {
-              clients: [
-                {
-                  url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
-                }
-              ],
-              snippets: {
-                scrapeConfigs: `- job_name: kubernetes-pods
-  pipeline_stages:
-    - cri: {}
-  kubernetes_sd_configs:
-    - role: pod
-  relabel_configs:
-    - source_labels: ["__meta_kubernetes_pod_controller_kind"]
-      target_label: controller
-    - source_labels: ["__meta_kubernetes_pod_node_name"]
-      target_label: node_name
-    - source_labels: ["__meta_kubernetes_pod_controller_name"]
-      target_label: controller_name
-    - source_labels: ["__meta_kubernetes_pod_label_app"]
-      target_label: app
-    - source_labels: ["__meta_kubernetes_pod_label_name"]
-      target_label: name
-    - source_labels: ["__meta_kubernetes_pod_namespace"]
-      target_label: namespace
-    - source_labels: ["__meta_kubernetes_pod_name"]
-      target_label: pod
-    - source_labels: ["__meta_kubernetes_pod_label_logging"]
-      regex: "true"
-      action: keep
-    - source_labels: ["__meta_kubernetes_pod_node_name"]
-      action: replace
-      target_label: __host__
-    - action: replace
-      replacement: /var/log/pods/*$1/*.log
-      separator: /
-      source_labels:
-      - __meta_kubernetes_pod_uid
-      - __meta_kubernetes_pod_container_name
-      target_label: __path__`
-              }
-            },
-            tolerations: [
-              { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-              { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
-            ],
-            resources: {
-              requests: {
-                cpu: "100m",
-                memory: "128Mi"
-              },
-              limits: {
-                cpu: "200m",
-                memory: "256Mi"
-              }
-            },
-            // Disable readiness probe as it's causing 500 errors
-            // Promtail is functioning but readiness endpoint has issues
-            readinessProbe: false
-          }
-        },
-        { parent: this, dependsOn: [lokiChart] }
-      );
-
-      // Patch existing Grafana datasource ConfigMap to add Loki
-      // Note: We create a separate ConfigMap that Grafana will load
-      // Grafana loads all ConfigMaps with label grafana_datasource=1
-      new k8s.core.v1.ConfigMap(
-        "loki-grafana-datasource",
-        {
-          metadata: {
-            name: "loki-datasource",
-            namespace: namespaceName,
-            labels: {
-              "grafana_datasource": "1"
+    // Deploy Loki using basic chart (simple-scalable uses GrafanaAgent CRDs we want to avoid)
+    const lokiChartArgs: ChartArgs = {
+      chart: "loki",
+      repositoryOpts: { repo: "https://grafana.github.io/helm-charts" },
+      namespace: namespaceName,
+      skipCrds: true, // Skip CRDs as they conflict with Prometheus Operator CRDs
+      values: {
+        loki: {
+          auth_enabled: false,
+          limits_config: {
+            reject_old_samples: true,
+            reject_old_samples_max_age: "168h"
+          },
+          storage: {
+            type: "filesystem",
+            bucketNames: {
+              chunks: "chunks",
+              ruler: "ruler"
             }
           },
-          data: {
-            "datasource.yaml": JSON.stringify([
-              {
-                name: "Loki",
-                type: "loki",
-                uid: "loki",
-                  url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
-                access: "proxy",
-                isDefault: false,
-                editable: true,
-                jsonData: {
-                  maxLines: 1000
-                }
+          commonConfig: {
+            replication_factor: 1
+          },
+          memberlistConfig: {
+            join_members: []
+          },
+          ingester: {
+            lifecycler: {
+              ring: {
+                kvstore: {
+                  store: "inmemory"
+                },
+                replication_factor: 1
               }
-            ])
+            }
+          },
+          useTestSchema: true
+        },
+        deploymentMode: "SingleBinary",
+        serviceAccount: {
+          create: true,
+          name: "loki"
+        },
+        singleBinary: {
+          replicas: 1,
+          persistence: {
+            enabled: true,
+            storageClass: storageClassName,
+            size: lokiStorageSize,
+            accessModes: ["ReadWriteOnce"]
+          },
+          resources: {
+            requests: {
+              cpu: "500m",
+              memory: "1Gi"
+            },
+            limits: {
+              cpu: "1",
+              memory: "2Gi"
+            }
+          },
+          tolerations: (mergedValues as any).loki?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        gateway: {
+          tolerations: (mergedValues as any).loki?.gateway?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        distributor: {
+          tolerations: (mergedValues as any).loki?.distributor?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        ingester: {
+          tolerations: (mergedValues as any).loki?.ingester?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        querier: {
+          tolerations: (mergedValues as any).loki?.querier?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        querierFrontend: {
+          tolerations: (mergedValues as any).loki?.querierFrontend?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        compactor: {
+          tolerations: (mergedValues as any).loki?.compactor?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        chunksCache: {
+          tolerations: (mergedValues as any).loki?.chunksCache?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ],
+          resources: (mergedValues as any).loki?.chunksCache?.resources || {
+            requests: {
+              cpu: '100m',
+              memory: '2Gi'
+            },
+            limits: {
+              cpu: '500m',
+              memory: '4Gi'
+            }
           }
         },
-        { parent: this, dependsOn: [chart, lokiChart, promtailChart] }
-      );
+        resultsCache: {
+          tolerations: (mergedValues as any).loki?.resultsCache?.tolerations || [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+          ]
+        },
+        // Explicitly disable simpleScalable components
+        read: {
+          replicas: 0
+        },
+        write: {
+          replicas: 0
+        },
+        backend: {
+          replicas: 0
+        }
+      }
+    };
+    
+    if (lokiVersion) {
+      lokiChartArgs.version = lokiVersion;
     }
+    
+    const lokiChart = new k8s.helm.v4.Chart(
+      "loki",
+      lokiChartArgs,
+      { parent: this, dependsOn: [namespace, chart] }
+    );
+
+    // Deploy Promtail
+    const promtailChartArgs: ChartArgs = {
+      chart: "promtail",
+      repositoryOpts: { repo: "https://grafana.github.io/helm-charts" },
+      namespace: namespaceName,
+      values: {
+        config: {
+          clients: [
+            {
+              url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
+            }
+          ],
+          snippets: {
+            scrapeConfigs: `- job_name: kubernetes-pods
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: ["__meta_kubernetes_pod_controller_kind"]
+        target_label: controller
+      - source_labels: ["__meta_kubernetes_pod_node_name"]
+        target_label: node_name
+      - source_labels: ["__meta_kubernetes_pod_controller_name"]
+        target_label: controller_name
+      - source_labels: ["__meta_kubernetes_pod_label_app"]
+        target_label: app
+      - source_labels: ["__meta_kubernetes_pod_label_name"]
+        target_label: name
+      - source_labels: ["__meta_kubernetes_pod_namespace"]
+        target_label: namespace
+      - source_labels: ["__meta_kubernetes_pod_name"]
+        target_label: pod
+      - source_labels: ["__meta_kubernetes_pod_label_logging"]
+        regex: "true"
+        action: keep
+      - source_labels: ["__meta_kubernetes_pod_node_name"]
+        action: replace
+        target_label: __host__
+      - action: replace
+        replacement: /var/log/pods/*$1/*.log
+        separator: /
+        source_labels:
+        - __meta_kubernetes_pod_uid
+        - __meta_kubernetes_pod_container_name
+        target_label: __path__`
+          }
+        },
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+          { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
+        ],
+        resources: {
+          requests: {
+            cpu: "100m",
+            memory: "128Mi"
+          },
+          limits: {
+            cpu: "200m",
+            memory: "256Mi"
+          }
+        },
+        // Disable readiness probe as it's causing 500 errors
+        // Promtail is functioning but readiness endpoint has issues
+        readinessProbe: false
+      }
+    };
+    
+    if (promtailVersion) {
+      promtailChartArgs.version = promtailVersion;
+    }
+    
+    const promtailChart = new k8s.helm.v4.Chart(
+      "promtail",
+      promtailChartArgs,
+      { parent: this, dependsOn: [lokiChart] }
+    );
+
+    // Patch existing Grafana datasource ConfigMap to add Loki
+    // Note: We create a separate ConfigMap that Grafana will load
+    // Grafana loads all ConfigMaps with label grafana_datasource=1
+    new k8s.core.v1.ConfigMap(
+      "loki-grafana-datasource",
+      {
+        metadata: {
+          name: "loki-datasource",
+          namespace: namespaceName,
+          labels: {
+            "grafana_datasource": "1"
+          }
+        },
+        data: {
+          "datasource.yaml": JSON.stringify([
+            {
+              name: "Loki",
+              type: "loki",
+              uid: "loki",
+              url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
+              access: "proxy",
+              isDefault: false,
+              editable: true,
+              jsonData: {
+                maxLines: 1000
+              }
+            }
+          ])
+        }
+      },
+      { parent: this, dependsOn: [chart, lokiChart, promtailChart] }
+    );
   }
 }
