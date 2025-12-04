@@ -42,7 +42,8 @@ export class PulumiOperator extends pulumi.ComponentResource {
     const defaultValues = {
       ...(args.values || {}),
       // Add tolerations for system nodes
-      global: {
+      // Pulumi Operator chart uses deployment.tolerations
+      deployment: {
         tolerations: [
           { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
         ],

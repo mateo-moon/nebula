@@ -1,21 +1,9 @@
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
-import * as gcp from "@pulumi/gcp";
 import { deepmerge } from "deepmerge-ts";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
-
-export interface PrometheusOperatorGcpOAuthConfig {
-  /** GCP project ID where OAuth client will be created (defaults to gcp:project config) */
-  projectId?: pulumi.Input<string>;
-  /** Grafana server URL for OAuth redirect URI (e.g., https://grafana.example.com) */
-  serverUrl: pulumi.Input<string>;
-  /** Display name for the OAuth client (default: "Grafana") */
-  displayName?: string;
-  /** Whether to create the OAuth client automatically (default: true) */
-  createClient?: boolean;
-}
 
 export interface PrometheusOperatorConfig {
   namespace?: string;
@@ -30,8 +18,6 @@ export interface PrometheusOperatorConfig {
   lokiVersion?: string;
   /** Promtail Helm chart version (e.g., "6.15.0") */
   promtailVersion?: string;
-  /** GCP OAuth configuration for Grafana Google SSO */
-  gcpOAuth?: PrometheusOperatorGcpOAuthConfig;
 }
 
 export class PrometheusOperator extends pulumi.ComponentResource {
@@ -48,81 +34,8 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       metadata: { name: namespaceName },
     }, { parent: this });
 
-    // Create GCP OAuth client if configured
-    let oauthClientId: pulumi.Output<string> | undefined;
-    let oauthClientSecret: pulumi.Output<string> | undefined;
-    let oauthSecret: k8s.core.v1.Secret | undefined;
-    
-    if (args.gcpOAuth?.createClient !== false && args.gcpOAuth) {
-      // Get GCP project ID from config (same pattern as other modules)
-      const gcpConfig = new pulumi.Config('gcp');
-      const projectId = args.gcpOAuth.projectId || gcpConfig.require('project');
-      const serverUrl = pulumi.output(args.gcpOAuth.serverUrl);
-      const displayName = args.gcpOAuth.displayName || 'Grafana';
-      
-      // Generate a unique client ID based on the component name
-      // Must be 6-63 lowercase letters, digits, or hyphens, start with a letter
-      const sanitizedName = name.replace(/[^a-z0-9-]/g, '-').toLowerCase();
-      const clientId = `${sanitizedName}-grafana-oauth`.slice(0, 63).replace(/-$/, '');
-      // Grafana Google OAuth redirect URI format: {serverUrl}/login/google
-      const redirectUri = serverUrl.apply(url => `${url}/login/google`);
-      
-      // Create OAuth client using Pulumi GCP resource
-      const oauthClient = new gcp.iam.OauthClient(`${name}-oauth-client`, {
-        project: projectId,
-        location: 'global',
-        oauthClientId: clientId,
-        displayName: displayName,
-        description: `OAuth client for Grafana Google SSO (${name})`,
-        clientType: 'CONFIDENTIAL_CLIENT',
-        allowedGrantTypes: ['AUTHORIZATION_CODE_GRANT'],
-        allowedRedirectUris: redirectUri.apply(uri => [uri]),
-        allowedScopes: [
-          'openid',
-          'https://www.googleapis.com/auth/userinfo.email',
-          'https://www.googleapis.com/auth/userinfo.profile',
-        ],
-      }, { parent: this });
-
-      // Get the client ID from the created resource
-      oauthClientId = oauthClient.clientId;
-
-      // Create OAuth client credential (secret)
-      const credentialId = `${clientId}-cred`.slice(0, 32);
-      const oauthCredential = new gcp.iam.OauthClientCredential(`${name}-oauth-credential`, {
-        project: projectId,
-        location: 'global',
-        oauthclient: oauthClient.oauthClientId,
-        oauthClientCredentialId: credentialId,
-        displayName: `${displayName} Credential`,
-      }, { parent: this, dependsOn: [oauthClient] });
-
-      // Get the client secret from the credential
-      oauthClientSecret = oauthCredential.clientSecret;
-
-      // Create Kubernetes secret with OAuth credentials
-      oauthSecret = new k8s.core.v1.Secret('grafana-oauth', {
-        metadata: { 
-          name: 'grafana-oauth', 
-          namespace: namespaceName,
-          labels: {
-            'app.kubernetes.io/part-of': 'prometheus-operator',
-          },
-        },
-        stringData: pulumi.all([oauthClientId, oauthClientSecret]).apply(([id, secret]) => ({
-          'clientID': id,
-          'clientSecret': secret,
-        })),
-      }, { 
-        parent: this, 
-        dependsOn: [namespace, oauthCredential],
-      });
-    }
-
     const storageClassName = args.storageClassName || "standard";
     
-    const childOpts = { parent: this };
-
     const defaultValues = {
       prometheus: {
         prometheusSpec: {
@@ -313,38 +226,9 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       throw new Error('prometheus-operator: values must be a plain object, not a Pulumi Output. Helm Charts cannot serialize Outputs in values.');
     }
     
-    // Merge provided values with default values
-    let mergedValues = providedArgs?.values 
+    const mergedValues = providedArgs?.values 
       ? deepmerge(defaultValues, providedArgs.values)
       : defaultValues;
-    
-    // If OAuth is configured, add env vars to reference the secret
-    if (oauthSecret) {
-      // Merge OAuth env vars into Grafana configuration
-      mergedValues = deepmerge(mergedValues, {
-        grafana: {
-          // Map secret keys to Grafana env var names
-          env: {
-            GF_AUTH_GOOGLE_CLIENT_ID: {
-              valueFrom: {
-                secretKeyRef: {
-                  name: 'grafana-oauth',
-                  key: 'clientID',
-                },
-              },
-            },
-            GF_AUTH_GOOGLE_CLIENT_SECRET: {
-              valueFrom: {
-                secretKeyRef: {
-                  name: 'grafana-oauth',
-                  key: 'clientSecret',
-                },
-              },
-            },
-          },
-        },
-      });
-    }
     
     const finalChartArgs: ChartArgs = {
       chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
@@ -354,15 +238,10 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       values: mergedValues,
     };
 
-    const chartDeps: pulumi.Resource[] = [namespace];
-    if (oauthSecret) {
-      chartDeps.push(oauthSecret);
-    }
-
     const chart = new k8s.helm.v4.Chart(
       "prometheus-operator",
       finalChartArgs,
-      { parent: this, dependsOn: chartDeps }
+      { parent: this, dependsOn: [namespace] }
     );
 
     // Create ServiceMonitor for kubelet metrics
@@ -398,7 +277,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         }
       },
-      { ...childOpts, dependsOn: [chart] }
+      { parent: this, dependsOn: [chart] }
     );
 
     // Create ServiceMonitor for kube-proxy metrics
@@ -434,7 +313,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         }
       },
-      { ...childOpts, dependsOn: [chart] }
+      { parent: this, dependsOn: [chart] }
     );
 
     // Deploy Loki
