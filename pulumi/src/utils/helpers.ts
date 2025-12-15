@@ -551,19 +551,70 @@ export class Helpers {
     }
 
     // Authenticate for all unique GCP projects upfront
+    // IMPORTANT: Authenticate sequentially to avoid multiple OAuth flows with Google SSO
+    // After first successful auth, try to reuse credentials for other projects
+    let primaryProjectId: string | null = null;
+    let primaryRegion: string | null = null;
+    
     if (projectRegionMap.size > 0) {
       const { Auth } = await import('./auth');
       const uniqueProjects = Array.from(projectRegionMap.entries());
       
-      // Authenticate for all projects (can happen in parallel for different projects)
-      await Promise.all(uniqueProjects.map(async ([projectId, region]) => {
+      let firstAuthenticatedProject: string | null = null;
+      
+      // Authenticate projects sequentially (not in parallel) to avoid OAuth conflicts
+      for (const [projectId, region] of uniqueProjects) {
         try {
+          // First, check if we already have valid credentials for this project
+          if (await Auth.GCP.isTokenValid(projectId)) {
+            console.log(`  ✅ Valid token already exists for project: ${projectId}`);
+            Auth.GCP.setAccessTokenEnvVar(projectId, region);
+            if (!firstAuthenticatedProject) {
+              firstAuthenticatedProject = projectId;
+              primaryProjectId = projectId;
+              primaryRegion = region;
+            }
+            continue;
+          }
+          
+          // Try to reuse credentials from the first authenticated project if available
+          if (firstAuthenticatedProject && firstAuthenticatedProject !== projectId) {
+            const reused = await Auth.GCP.tryReuseCredentials(projectId, firstAuthenticatedProject, region);
+            if (reused) {
+              // Successfully reused credentials, skip OAuth flow
+              continue;
+            }
+            // If reuse failed, fall through to authenticate normally
+            console.log(`  ℹ️  Could not reuse credentials for project ${projectId}, will authenticate separately`);
+          }
+          
+          // Authenticate this project (may trigger OAuth flow)
           await Auth.GCP.authenticate(projectId, region);
+          
+          // Track the first successfully authenticated project for credential reuse
+          if (!firstAuthenticatedProject) {
+            firstAuthenticatedProject = projectId;
+            primaryProjectId = projectId;
+            primaryRegion = region;
+          }
         } catch (error: any) {
           console.warn(`⚠️  Failed to authenticate for project ${projectId}: ${error?.message || error}`);
           // Continue with other projects even if one fails
         }
-      }));
+      }
+      
+      // Populate envVars with GCP credentials from the primary project
+      // This allows eval $(nebula bootstrap) to export credentials for gcloud commands
+      if (primaryProjectId) {
+        const homeDir = os.homedir();
+        const accessTokenFilePath = path.join(homeDir, '.config', 'gcloud', `${primaryProjectId}-accesstoken`);
+        envVars['GOOGLE_APPLICATION_CREDENTIALS'] = accessTokenFilePath;
+        envVars['CLOUDSDK_CORE_PROJECT'] = primaryProjectId;
+        if (primaryRegion) {
+          const computeZone = `${primaryRegion}-a`;
+          envVars['CLOUDSDK_COMPUTE_ZONE'] = computeZone;
+        }
+      }
       
       // Enable required GCP APIs for all authenticated projects
       await Promise.all(uniqueProjects.map(async ([projectId]) => {
@@ -604,14 +655,22 @@ export class Helpers {
       
       if (envKmsProvider && envKmsProvider.startsWith('gcpkms://')) {
         const resource = envKmsProvider.replace(/^gcpkms:\/\//, '');
+        // Determine credentials file path for SOPS config metadata
+        const credentialsFilePath = primaryProjectId 
+          ? path.join(os.homedir(), '.config', 'gcloud', `${primaryProjectId}-accesstoken`)
+          : undefined;
         // Each env rule includes both shared secrets.yaml and env-specific secrets
-        Helpers.ensureSopsConfig({ 
-          gcpKmsResourceId: resource, 
+        const sopsConfigOpts: { gcpKmsResourceId: string; patterns: string[]; credentialsFilePath?: string } = {
+          gcpKmsResourceId: resource,
           patterns: [
             `secrets\\.yaml`,
             `secrets-${projectId}-${envName}\\.yaml`
-          ] 
-        });
+          ],
+        };
+        if (credentialsFilePath) {
+          sopsConfigOpts.credentialsFilePath = credentialsFilePath;
+        }
+        Helpers.ensureSopsConfig(sopsConfigOpts);
       }
     }
 
@@ -863,7 +922,7 @@ export class Helpers {
   }
 
   /** Ensure .sops.yaml exists and references the provided GCP KMS key for given patterns. */
-  public static ensureSopsConfig(opts: { gcpKmsResourceId: string; patterns: string[] }) {
+  public static ensureSopsConfig(opts: { gcpKmsResourceId: string; patterns: string[]; credentialsFilePath?: string }) {
     const sopsPath = path.resolve(process.cwd(), '.sops.yaml');
     
     // Read existing config if it exists
@@ -885,12 +944,22 @@ export class Helpers {
       existingRules.push(newRule);
     }
     
-    const cfg = {
+    const cfg: any = {
       creation_rules: existingRules,
       stores: existingConfig?.stores || { yaml: { indent: 2 } },
     };
     
-    Helpers.writeSopsConfig(sopsPath, cfg as any);
+    // Add metadata about credentials file location if provided
+    // This helps users know where to point GOOGLE_APPLICATION_CREDENTIALS
+    if (opts.credentialsFilePath) {
+      cfg._nebula_credentials = {
+        file: opts.credentialsFilePath,
+        env_var: 'GOOGLE_APPLICATION_CREDENTIALS',
+        note: 'SOPS uses GOOGLE_APPLICATION_CREDENTIALS env var to authenticate with GCP KMS. Set it to the credentials file path above.',
+      };
+    }
+    
+    Helpers.writeSopsConfig(sopsPath, cfg);
   }
 
   /** Read existing SOPS config if it exists */
@@ -906,11 +975,61 @@ export class Helpers {
     return null;
   }
 
-  private static writeSopsConfig(pathname: string, cfg: { creation_rules: any[]; stores: { yaml: { indent: number } } }) {
+  private static writeSopsConfig(pathname: string, cfg: any) {
     try {
-      fs.writeFileSync(pathname, '# Generated by Pulumi\n' + YAML.stringify(cfg, { indent: 2 }));
+      // Remove metadata from config before writing (SOPS doesn't use it)
+      const credentialsInfo = cfg._nebula_credentials;
+      delete cfg._nebula_credentials;
+      
+      fs.writeFileSync(pathname, '# Generated by Nebula/Pulumi\n' + YAML.stringify(cfg, { indent: 2 }));
+      
+      // Update VS Code settings if credentials info is available
+      if (credentialsInfo) {
+        Helpers.ensureVSCodeSopsSettings(credentialsInfo.file);
+      }
     } catch (error) {
       console.log(`Failed to write SOPS config: ${error}`);
+    }
+  }
+
+  /** Ensure .vscode/settings.json exists with SOPS credentials configuration */
+  private static ensureVSCodeSopsSettings(credentialsFilePath: string): void {
+    const vscodeDir = path.resolve(process.cwd(), '.vscode');
+    const settingsPath = path.join(vscodeDir, 'settings.json');
+    
+    try {
+      // Ensure .vscode directory exists
+      if (!fs.existsSync(vscodeDir)) {
+        fs.mkdirSync(vscodeDir, { recursive: true });
+      }
+      
+      // Read existing settings or create new
+      let settings: any = {};
+      if (fs.existsSync(settingsPath)) {
+        try {
+          const content = fs.readFileSync(settingsPath, 'utf8');
+          settings = JSON.parse(content);
+        } catch (error) {
+          console.log(`Failed to parse existing VS Code settings: ${error}`);
+          settings = {};
+        }
+      }
+      
+      // Update or add SOPS extension settings
+      // SOPS VS Code extension uses sops.defaults.gcpCredentialsPath
+      if (!settings.sops) {
+        settings.sops = {};
+      }
+      if (!settings.sops.defaults) {
+        settings.sops.defaults = {};
+      }
+      settings.sops.defaults.gcpCredentialsPath = credentialsFilePath;
+      
+      // Write updated settings
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+      console.log(`  ✅ Updated VS Code SOPS settings with credentials path: ${credentialsFilePath}`);
+    } catch (error) {
+      console.log(`Failed to update VS Code settings: ${error}`);
     }
   }
 

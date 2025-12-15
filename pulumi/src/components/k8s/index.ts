@@ -28,6 +28,8 @@ import type { WorkloadIdentityConfig } from './workload-identity';
 import type { WorkloadIdentityOutputs } from './workload-identity';
 import { ClusterAutoscaler } from './cluster-autoscaler';
 import type { ClusterAutoscalerConfig } from './cluster-autoscaler';
+import { Istio } from './istio';
+import type { IstioConfig } from './istio';
 
 export function createK8sProvider(args: { kubeconfig: string; name?: string }) {
   const expandHome = (p: string) => p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
@@ -111,6 +113,7 @@ export interface K8sConfig  {
   karpenter?: KarpenterConfig;
   workloadIdentity?: WorkloadIdentityConfig;
   clusterAutoscaler?: ClusterAutoscalerConfig;
+  istio?: IstioConfig;
   /** Indicates if this is a Constellation cluster (affects cert-manager deployment) */
   isConstellationCluster?: boolean;
 }
@@ -174,12 +177,25 @@ export class K8s extends pulumi.ComponentResource {
       wi = new WorkloadIdentity(name, wiArgs, childOpts);
     }
     
+    // Deploy Istio before External DNS if configured
+    let istio: Istio | undefined = undefined;
+    if (args.istio) {
+      const istioOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
+      const deps = [] as any[];
+      if (karpenter) deps.push(karpenter);
+      if (clusterAutoscaler) deps.push(clusterAutoscaler);
+      if (certManager) deps.push(certManager);
+      if (deps.length > 0) istioOpts.dependsOn = deps;
+      istio = new Istio(name, args.istio, istioOpts);
+    }
+    
     if (args.externalDns) {
       const externalDnsOpts = { ...childOpts } as pulumi.ComponentResourceOptions;
       const deps = [] as any[];
       if (karpenter) deps.push(karpenter);
       if (clusterAutoscaler) deps.push(clusterAutoscaler);
       if (certManager) deps.push(certManager);
+      if (istio) deps.push(istio);
       if (deps.length > 0) externalDnsOpts.dependsOn = deps;
       
       // Pass Constellation cluster flag to External DNS
