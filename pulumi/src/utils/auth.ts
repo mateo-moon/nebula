@@ -712,6 +712,73 @@ export class Auth {
       }
     },
 
+    /**
+     * Try to reuse credentials from another project for this project
+     * This is useful when using SSO with Google - same account can access multiple projects
+     * @param targetProjectId - The project ID to create credentials for
+     * @param sourceProjectId - The project ID to copy credentials from
+     * @param region - The GCP region (optional)
+     * @returns True if credentials were successfully reused, false otherwise
+     */
+    async tryReuseCredentials(targetProjectId: string, sourceProjectId: string, region?: string): Promise<boolean> {
+      const homeDir = os.homedir();
+      const sourceTokenFilePath = path.join(homeDir, '.config', 'gcloud', `${sourceProjectId}-accesstoken`);
+      const targetTokenFilePath = path.join(homeDir, '.config', 'gcloud', `${targetProjectId}-accesstoken`);
+      
+      // Check if source credentials exist
+      if (!fs.existsSync(sourceTokenFilePath)) {
+        return false;
+      }
+      
+      try {
+        // Read source credentials
+        const sourceCredentialContent = fs.readFileSync(sourceTokenFilePath, 'utf8');
+        const sourceCredentials = JSON.parse(sourceCredentialContent);
+        
+        // Check if source has a valid refresh token
+        if (!sourceCredentials.refresh_token || sourceCredentials.type !== 'authorized_user') {
+          return false;
+        }
+        
+        // Try to refresh the token to verify it's still valid
+        const refreshedTokens = await this.refreshAccessToken(sourceProjectId);
+        if (!refreshedTokens) {
+          return false;
+        }
+        
+        // Copy credentials to target project, updating quota_project_id
+        const nowMs = Date.now();
+        const expiresInSec = Number(refreshedTokens.expires_in || 3600);
+        const targetCredentials = {
+          ...sourceCredentials,
+          access_token: refreshedTokens.access_token,
+          quota_project_id: targetProjectId,
+          expires_in: refreshedTokens.expires_in,
+          token_type: refreshedTokens.token_type || 'Bearer',
+          fetched_at: nowMs,
+          expires_at: nowMs + (expiresInSec * 1000),
+        };
+        
+        // Ensure directory exists
+        const gcloudConfigDir = path.join(homeDir, '.config', 'gcloud');
+        if (!fs.existsSync(gcloudConfigDir)) {
+          fs.mkdirSync(gcloudConfigDir, { recursive: true });
+        }
+        
+        // Write credentials for target project
+        fs.writeFileSync(targetTokenFilePath, JSON.stringify(targetCredentials, null, 2));
+        
+        // Set environment variable
+        this.setAccessTokenEnvVar(targetProjectId, region);
+        
+        console.log(`  ✅ Reused credentials from project ${sourceProjectId} for project ${targetProjectId}`);
+        return true;
+      } catch (error) {
+        console.log(`  ⚠️  Failed to reuse credentials from ${sourceProjectId} for ${targetProjectId}: ${error}`);
+        return false;
+      }
+    },
+
   };
 
   /**

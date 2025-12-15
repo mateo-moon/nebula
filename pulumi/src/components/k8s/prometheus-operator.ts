@@ -16,8 +16,6 @@ export interface PrometheusOperatorConfig {
   lokiRetention?: string;
   /** Loki Helm chart version (e.g., "6.15.0") */
   lokiVersion?: string;
-  /** Promtail Helm chart version (e.g., "6.15.0") */
-  promtailVersion?: string;
 }
 
 export class PrometheusOperator extends pulumi.ComponentResource {
@@ -319,7 +317,6 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     // Deploy Loki
     const lokiStorageSize = args.lokiStorageSize || "100Gi";
     const lokiVersion = args.lokiVersion;
-    const promtailVersion = args.promtailVersion;
     // Note: lokiRetention is available but not currently used in Loki configuration
     // const lokiRetention = args.lokiRetention || "30d";
 
@@ -447,34 +444,18 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         },
         backend: {
           replicas: 0
-        }
-      }
-    };
-    
-    if (lokiVersion) {
-      lokiChartArgs.version = lokiVersion;
-    }
-    
-    const lokiChart = new k8s.helm.v4.Chart(
-      "loki",
-      lokiChartArgs,
-      { parent: this, dependsOn: [namespace, chart] }
-    );
-
-    // Deploy Promtail
-    const promtailChartArgs: ChartArgs = {
-      chart: "promtail",
-      repositoryOpts: { repo: "https://grafana.github.io/helm-charts" },
-      namespace: namespaceName,
-      values: {
-        config: {
-          clients: [
-            {
-              url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
-            }
-          ],
-          snippets: {
-            scrapeConfigs: `- job_name: kubernetes-pods
+        },
+        // Enable Promtail as part of Loki chart
+        promtail: {
+          enabled: true,
+          config: {
+            clients: [
+              {
+                url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
+              }
+            ],
+            snippets: {
+              scrapeConfigs: `- job_name: kubernetes-pods
     pipeline_stages:
       - cri: {}
     kubernetes_sd_configs:
@@ -507,36 +488,37 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         - __meta_kubernetes_pod_uid
         - __meta_kubernetes_pod_container_name
         target_label: __path__`
-          }
-        },
-        tolerations: [
-          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-          { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
-        ],
-        resources: {
-          requests: {
-            cpu: "100m",
-            memory: "128Mi"
+            }
           },
-          limits: {
-            cpu: "200m",
-            memory: "256Mi"
-          }
-        },
-        // Disable readiness probe as it's causing 500 errors
-        // Promtail is functioning but readiness endpoint has issues
-        readinessProbe: false
+          tolerations: [
+            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+            { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
+          ],
+          resources: {
+            requests: {
+              cpu: "100m",
+              memory: "128Mi"
+            },
+            limits: {
+              cpu: "200m",
+              memory: "256Mi"
+            }
+          },
+          // Disable readiness probe as it's causing 500 errors
+          // Promtail is functioning but readiness endpoint has issues
+          readinessProbe: false
+        }
       }
     };
     
-    if (promtailVersion) {
-      promtailChartArgs.version = promtailVersion;
+    if (lokiVersion) {
+      lokiChartArgs.version = lokiVersion;
     }
     
-    const promtailChart = new k8s.helm.v4.Chart(
-      "promtail",
-      promtailChartArgs,
-      { parent: this, dependsOn: [lokiChart] }
+    const lokiChart = new k8s.helm.v4.Chart(
+      "loki",
+      lokiChartArgs,
+      { parent: this, dependsOn: [namespace, chart] }
     );
 
     // Patch existing Grafana datasource ConfigMap to add Loki
@@ -569,7 +551,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           ])
         }
       },
-      { parent: this, dependsOn: [chart, lokiChart, promtailChart] }
+      { parent: this, dependsOn: [chart, lokiChart] }
     );
   }
 }
