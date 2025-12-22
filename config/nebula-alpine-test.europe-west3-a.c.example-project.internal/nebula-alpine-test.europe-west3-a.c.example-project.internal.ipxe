@@ -1,0 +1,3 @@
+#!ipxe
+chain https://raw.githubusercontent.com/mateo-moon/nebular/refs/heads/main/config/alpine/alpine.ipxe
+

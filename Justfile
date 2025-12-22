@@ -12,7 +12,7 @@ run target="netboot.xyz":
     -v ./scripts/build_boot_usb.sh:/qemu/build_boot_usb.sh:ro \
     -v ./scripts/start_test_machine.sh:/qemu/start_test_machine.sh:ro \
     -p 2022:22 -p 9443 -p 6443 \
-    -ti --rm --cap-add=SYS_ADMIN --privileged \
+    --rm --cap-add=SYS_ADMIN --privileged \
     qemu_machine
 
 clean:
@@ -25,7 +25,7 @@ usb target="netboot.xyz":
 	  -e HOSTNAME={{ target }} \
 	  -v ./qemu:/qemu \
 	  -v ./scripts/autoexec.ipxe:/qemu/autoexec.ipxe:ro \
-	  -ti --rm --cap-add=SYS_ADMIN --privileged \
+	  --rm --cap-add=SYS_ADMIN --privileged \
 	  qemu_machine \
 	  /usr/local/bin/build_boot_usb.sh --output /qemu/boot.usb --ipxe-efi /ipxe/ipxe.efi --autoexec /qemu/autoexec.ipxe --force
 
