@@ -13,6 +13,19 @@ setup-interfaces -a
 setup-keymap us us
 setup-timezone -i UTC
 setup-ntp chrony || true
+
+echo "--- Setting up physical disk storage ---"
+# Check if /dev/sda3 exists and format it if it doesn't have a filesystem
+if [ -b /dev/sda3 ]; then
+    if ! blkid /dev/sda3 >/dev/null 2>&1; then
+        echo "Formatting /dev/sda3 as ext4..."
+        mkfs.ext4 -O ^has_journal -F /dev/sda3
+    fi
+    echo "Mounting /dev/sda3 to /usr/local/bin..."
+    mkdir -p /usr/local/bin
+    mount /dev/sda3 /usr/local/bin
+fi
+
 true >/etc/apk/repositories
 setup-apkrepos -1
 EOF
