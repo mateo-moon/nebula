@@ -186,7 +186,7 @@ if [ "${USE_GPT}" = "true" ]; then
     docker run --platform linux/amd64 --privileged \
       -v "${temp_dir}:/work" \
       -v "${USB_ABS_PATH}:/input/boot.usb:ro" \
-      -ti --rm qemu_machine \
+      --rm qemu_machine \
       /usr/local/bin/container_build_gpt_disk.sh \
         --usb /input/boot.usb \
         --out /work/disk.raw \
