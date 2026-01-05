@@ -179,35 +179,36 @@ PY
 }
 
 USB_ABS_PATH="$(resolve_abs "${USB_PATH}")"
+TARBALL_NAME="${IMAGE_NAME}.tar.gz"
+TARBALL_PATH="${temp_dir}/${TARBALL_NAME}"
 
 if [ "${USE_GPT}" = "true" ]; then
   echo "Building GPT disk with ESP=${ESP_SIZE}, total size=${DISK_SIZE} (USE_DOCKER=${USE_DOCKER})"
   if [ "${USE_DOCKER}" = "true" ]; then
     docker run --platform linux/amd64 --privileged \
-      -v "${temp_dir}:/work" \
+      -v "${temp_dir}:/output" \
       -v "${USB_ABS_PATH}:/input/boot.usb:ro" \
       --rm qemu_machine \
-      /usr/local/bin/container_build_gpt_disk.sh \
-        --usb /input/boot.usb \
-        --out /work/disk.raw \
-        --disk-size "${DISK_SIZE}" \
-        --esp-size "${ESP_SIZE}"
+      bash -c "
+        # Build inside the container's local filesystem (fast)
+        /usr/local/bin/container_build_gpt_disk.sh \
+          --usb /input/boot.usb \
+          --out /tmp/disk.raw \
+          --disk-size '${DISK_SIZE}' \
+          --esp-size '${ESP_SIZE}' && \
+        
+        # Package and write only the final small tarball to the host mount
+        tar -C /tmp -czSf /output/${TARBALL_NAME} disk.raw
+      "
   else
     echo "Host GPT build not implemented; rerun with --use-docker (default)" >&2
     exit 1
   fi
 else
-  echo "Legacy mode: copying USB image to disk.raw"
+  echo "Legacy mode: copying USB image to disk.raw and tarring"
   cp "${USB_PATH}" "${temp_dir}/disk.raw"
+  tar -C "${temp_dir}" -czSf "${TARBALL_PATH}" disk.raw
 fi
-
-echo "Creating tarball from disk.raw..."
-TARBALL_NAME="${IMAGE_NAME}.tar.gz"
-TARBALL_PATH="${temp_dir}/${TARBALL_NAME}"
-# Package using Linux tar inside the container to ensure a GCE-compatible archive
-docker run --platform linux/amd64 --rm \
-  -v "${temp_dir}:/work" \
-  qemu_machine bash -lc "tar -C /work -czf /work/${TARBALL_NAME} disk.raw"
 
 if [ "${LOCAL_ONLY}" = "true" ]; then
   if [ -n "${TARBALL_OUT}" ]; then
@@ -269,5 +270,3 @@ fi
 gcloud "${create_args[@]}"
 
 echo "Image ${IMAGE_NAME} created successfully in project ${PROJECT_ID}. Source: ${DEST_URI}"
-
-

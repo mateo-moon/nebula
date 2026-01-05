@@ -444,69 +444,6 @@ export class PrometheusOperator extends pulumi.ComponentResource {
         },
         backend: {
           replicas: 0
-        },
-        // Enable Promtail as part of Loki chart
-        promtail: {
-          enabled: true,
-          config: {
-            clients: [
-              {
-                url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
-              }
-            ],
-            snippets: {
-              scrapeConfigs: `- job_name: kubernetes-pods
-    pipeline_stages:
-      - cri: {}
-    kubernetes_sd_configs:
-      - role: pod
-    relabel_configs:
-      - source_labels: ["__meta_kubernetes_pod_controller_kind"]
-        target_label: controller
-      - source_labels: ["__meta_kubernetes_pod_node_name"]
-        target_label: node_name
-      - source_labels: ["__meta_kubernetes_pod_controller_name"]
-        target_label: controller_name
-      - source_labels: ["__meta_kubernetes_pod_label_app"]
-        target_label: app
-      - source_labels: ["__meta_kubernetes_pod_label_name"]
-        target_label: name
-      - source_labels: ["__meta_kubernetes_pod_namespace"]
-        target_label: namespace
-      - source_labels: ["__meta_kubernetes_pod_name"]
-        target_label: pod
-      - source_labels: ["__meta_kubernetes_pod_label_logging"]
-        regex: "true"
-        action: keep
-      - source_labels: ["__meta_kubernetes_pod_node_name"]
-        action: replace
-        target_label: __host__
-      - action: replace
-        replacement: /var/log/pods/*$1/*.log
-        separator: /
-        source_labels:
-        - __meta_kubernetes_pod_uid
-        - __meta_kubernetes_pod_container_name
-        target_label: __path__`
-            }
-          },
-          tolerations: [
-            { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-            { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
-          ],
-          resources: {
-            requests: {
-              cpu: "100m",
-              memory: "128Mi"
-            },
-            limits: {
-              cpu: "200m",
-              memory: "256Mi"
-            }
-          },
-          // Disable readiness probe as it's causing 500 errors
-          // Promtail is functioning but readiness endpoint has issues
-          readinessProbe: false
         }
       }
     };
@@ -520,6 +457,93 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       lokiChartArgs,
       { parent: this, dependsOn: [namespace, chart] }
     );
+
+    // Deploy Promtail separately since it's not part of Loki chart
+    const promtailChartArgs: ChartArgs = {
+      chart: "promtail",
+      repositoryOpts: { repo: "https://grafana.github.io/helm-charts" },
+      namespace: namespaceName,
+      version: "6.16.6", // Using a stable version
+      values: {
+        config: {
+          clients: [
+            {
+              url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
+            }
+          ],
+          snippets: {
+            scrapeConfigs: `- job_name: kubernetes-pods
+  pipeline_stages:
+    - cri: {}
+  kubernetes_sd_configs:
+    - role: pod
+  relabel_configs:
+    - source_labels: ["__meta_kubernetes_pod_controller_kind"]
+      target_label: controller
+    - source_labels: ["__meta_kubernetes_pod_node_name"]
+      target_label: node_name
+    - source_labels: ["__meta_kubernetes_pod_controller_name"]
+      target_label: controller_name
+    - source_labels: ["__meta_kubernetes_pod_label_app"]
+      target_label: app
+    - source_labels: ["__meta_kubernetes_pod_label_name"]
+      target_label: name
+    - source_labels: ["__meta_kubernetes_pod_namespace"]
+      target_label: namespace
+    - source_labels: ["__meta_kubernetes_pod_name"]
+      target_label: pod
+    - source_labels: ["__meta_kubernetes_pod_label_logging"]
+      regex: "true"
+      action: keep
+    - source_labels: ["__meta_kubernetes_pod_node_name"]
+      action: replace
+      target_label: __host__
+    - action: replace
+      replacement: /var/log/pods/*$1/*.log
+      separator: /
+      source_labels:
+      - __meta_kubernetes_pod_uid
+      - __meta_kubernetes_pod_container_name
+      target_label: __path__`
+          }
+        },
+        tolerations: [
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
+          { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
+        ],
+        resources: {
+          requests: {
+            cpu: "100m",
+            memory: "128Mi"
+          },
+          limits: {
+            cpu: "200m",
+            memory: "256Mi"
+          }
+        },
+        // Disable readiness probe as it's causing 500 errors
+        // Promtail is functioning but readiness endpoint has issues
+        // In the Promtail chart, readinessProbe is a top-level value
+        // but passing boolean 'false' might be tricky if the chart expects an object.
+        // However, if we omit it, it uses default. 
+        // We will try setting it to empty object {} to clear defaults or null
+        // But the previous config had explicit 'false'. 
+        // If the goal is to disable it, setting enabled: false inside it? No, standard probe spec doesn't have enabled.
+        // Let's check chart logic. If .Values.readinessProbe is falsy, it skips.
+        readinessProbe: null
+      }
+    };
+    
+    const promtailChart = new k8s.helm.v4.Chart(
+      "promtail",
+      promtailChartArgs,
+      { parent: this, dependsOn: [lokiChart] }
+    );
+    
+    // Ensure Promtail is tracked by the component
+    this.registerOutputs({
+      promtail: promtailChart
+    });
 
     // Patch existing Grafana datasource ConfigMap to add Loki
     // Note: We create a separate ConfigMap that Grafana will load
