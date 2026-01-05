@@ -25,27 +25,44 @@ echo "--- Mounting cgroups ---"
 mkdir -p /sys/fs/cgroup
 mountpoint -q /sys/fs/cgroup || mount -t cgroup2 none /sys/fs/cgroup
 
-echo "--- Setting up physical disk storage for k0s ---"
-# Check if /dev/sda3 exists and format it if it doesn't have a filesystem
+echo "--- Setting up physical disk storage ---"
 if [ -b /dev/sda3 ]; then
     if ! blkid /dev/sda3 | grep -q 'TYPE="ext4"'; then
         echo "Formatting /dev/sda3 as ext4..."
         mkfs.ext4 -O ^has_journal -F /dev/sda3
     fi
-    echo "Mounting /dev/sda3 to /var/lib/k0s..."
-    mkdir -p /var/lib/k0s
-    mount /dev/sda3 /var/lib/k0s
+    mkdir -p /mnt/data
+    mount /dev/sda3 /mnt/data
+    
+    # Create persistent directories
+    mkdir -p /mnt/data/k0s /mnt/data/bin
+    
+    # Symlink persistent k0s data
+    mkdir -p /var/lib
+    ln -sf /mnt/data/k0s /var/lib/k0s
+fi
+
+echo "--- Installing/Ensuring k0s ---"
+if [ ! -f /mnt/data/bin/k0s ]; then
+    echo "Downloading k0s..."
+    curl -sSLf https://get.k0s.sh | sh
+    cp /usr/local/bin/k0s /mnt/data/bin/k0s
+else
+    echo "k0s already exists on persistent disk, linking..."
+    ln -sf /mnt/data/bin/k0s /usr/local/bin/k0s
 fi
 
 echo "--- Loading kernel modules ---"
 modprobe overlay
 modprobe br_netfilter
 
-echo "--- Installing k0s ---"
-curl -sSLf https://get.k0s.sh | sh
-k0s install controller --single --data-dir /var/lib/k0s
+echo "--- Configuring k0s service ---"
+# Always run install to recreate the OpenRC service in memory
+k0s install controller --single --data-dir /var/lib/k0s --force
 
 echo "--- Starting k0s ---"
+# Start networking first as k0s depends on it
+rc-service networking start
 rc-service k0scontroller start
 
 echo "BOOTSTRAP COMPLETE: \$(date)"
