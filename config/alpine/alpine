@@ -5,6 +5,14 @@ cat <<EOF > bootstrap.start
 exec > /var/log/bootstrap.log 2>&1
 echo "BOOTSTRAP START: \$(date)"
 
+# Provide a minimal interfaces file for OpenRC
+echo "--- Fixing networking config ---"
+mkdir -p /etc/network
+echo "auto lo" > /etc/network/interfaces
+echo "iface lo inet loopback" >> /etc/network/interfaces
+echo "auto eth0" >> /etc/network/interfaces
+echo "iface eth0 inet dhcp" >> /etc/network/interfaces
+
 # Ensure networking is up early for all dependencies
 echo "--- Starting networking ---"
 rc-service networking start || true
