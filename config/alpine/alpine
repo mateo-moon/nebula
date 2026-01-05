@@ -1,12 +1,9 @@
 #!/bin/sh
 
 cat <<EOF > bootstrap.start
-echo "BOOTSTRAP START"
-
-# delete this hack
-# otherwise this script will run on the system we newly installed
-rm -f /etc/local.d/bootstrap.start
-rm -f /etc/runlevels/default/local
+#!/bin/sh
+exec > /var/log/bootstrap.log 2>&1
+echo "BOOTSTRAP START: \$(date)"
 
 # do the system installation
 setup-interfaces -a
@@ -14,10 +11,16 @@ setup-keymap us us
 setup-timezone -i UTC
 setup-ntp chrony || true
 
+true >/etc/apk/repositories
+setup-apkrepos -1
+
+echo "--- Installing dependencies ---"
+apk add bash curl iptables util-linux iproute2 coreutils ethtool e2fsprogs
+
 echo "--- Setting up physical disk storage for k0s ---"
 # Check if /dev/sda3 exists and format it if it doesn't have a filesystem
 if [ -b /dev/sda3 ]; then
-    if ! blkid /dev/sda3 >/dev/null 2>&1; then
+    if ! blkid /dev/sda3 | grep -q 'TYPE="ext4"'; then
         echo "Formatting /dev/sda3 as ext4..."
         mkfs.ext4 -O ^has_journal -F /dev/sda3
     fi
@@ -25,12 +28,6 @@ if [ -b /dev/sda3 ]; then
     mkdir -p /var/lib/k0s
     mount /dev/sda3 /var/lib/k0s
 fi
-
-true >/etc/apk/repositories
-setup-apkrepos -1
-
-echo "--- Installing k0s dependencies ---"
-apk add bash curl iptables util-linux iproute2 coreutils ethtool
 
 echo "--- Loading kernel modules ---"
 modprobe overlay
@@ -42,6 +39,13 @@ k0s install controller --single --data-dir /var/lib/k0s
 
 echo "--- Starting k0s ---"
 k0s start
+
+echo "BOOTSTRAP COMPLETE: \$(date)"
+
+# delete this hack
+# otherwise this script will run on the system we newly installed
+rm -f /etc/local.d/bootstrap.start
+rm -f /etc/runlevels/default/local
 EOF
 
 # Turn on local service in busybox init
