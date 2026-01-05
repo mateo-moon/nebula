@@ -153,7 +153,16 @@ export class CertManager extends pulumi.ComponentResource {
             solvers: [
               {
                 http01: {
-                  ingress: { class: "nginx" },
+                  ingress: { 
+                    class: "nginx",
+                    podTemplate: {
+                      spec: {
+                        tolerations: [
+                          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+                        ]
+                      }
+                    }
+                  },
                 },
               },
             ],
@@ -183,7 +192,16 @@ export class CertManager extends pulumi.ComponentResource {
             solvers: [
               {
                 http01: {
-                  ingress: { class: "nginx" },
+                  ingress: { 
+                    class: "nginx",
+                    podTemplate: {
+                      spec: {
+                        tolerations: [
+                          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
+                        ]
+                      }
+                    }
+                  },
                 },
               },
             ],

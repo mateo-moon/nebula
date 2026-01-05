@@ -195,7 +195,7 @@ export class Karpenter extends pulumi.ComponentResource {
 
     if (!localChartPath) {
       const chartRepoUrl = args.gitRepository || "https://github.com/cloudpilot-ai/karpenter-provider-gcp.git";
-      const chartRef = args.gitRef || "0a270d61b1cd768635f7cccab26f0aa123b81919"; // Pin to commit before CRD validation cost bug
+      const chartRef = args.gitRef || "4cb16bdc4ad28408dd64cd86b0c592e799e5816b"; // Pin to commit with fixed CRD validation cost
       const chartPath = "charts/karpenter";
       
       // Create a temporary directory for the chart clone
@@ -247,6 +247,10 @@ export class Karpenter extends pulumi.ComponentResource {
           },
           controller: {
             replicaCount: 1,
+            // Keep nodeSelector to target the system node pool specifically
+            nodeSelector: {
+              "nebula.sh/node-pool": "system"
+            },
             settings: {
               projectID: clusterProject,
               location: args.location,
@@ -320,6 +324,15 @@ export class Karpenter extends pulumi.ComponentResource {
         if (effectiveTaints.length > 0) {
           (templateSpec as any)["taints"] = effectiveTaints;
         }
+
+        // Handle expireAfter from disruption config (move to template.spec for Karpenter v1)
+        if (def.disruption && (def.disruption as any).expireAfter) {
+          const expireAfter = (def.disruption as any).expireAfter;
+          // Delete it from disruption object so it's not passed there
+          delete (def.disruption as any).expireAfter;
+          (templateSpec as any).expireAfter = expireAfter;
+        }
+
         (templateSpec as any).nodeClassRef = { 
           name: nodeClassName,
           group: "karpenter.k8s.gcp",

@@ -177,6 +177,7 @@ export class Gke extends pulumi.ComponentResource {
           maxNodes: 1,
           machineType: 'e2-standard-2',
           tags: ['system'],
+          labels: { 'nebula.sh/node-pool': 'system' }, // Generic label for selecting system nodes
           // Allow GKE managed components (and our autoscaler) to schedule while repelling regular workloads
           taints: [{ key: 'components.gke.io/gke-managed-components', value: 'true', effect: 'NO_SCHEDULE' }],
           ...(args.systemNodeGroup || {}),
