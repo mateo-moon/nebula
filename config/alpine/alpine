@@ -59,9 +59,17 @@ echo "--- Loading kernel modules ---"
 modprobe overlay
 modprobe br_netfilter
 
+echo "--- Configuring k0s service ---"
+# Re-install service to ensure it's in memory
+k0s install controller --single --data-dir /var/lib/k0s --force
+
+# Patch the init script to remove strict dependencies that fail in netboot/local stage
+echo "--- Patching k0s service dependencies ---"
+sed -i 's/need net//g' /etc/init.d/k0scontroller
+sed -i 's/need cgroups//g' /etc/init.d/k0scontroller
+
 echo "--- Starting k0s ---"
-# Start k0s directly in background to avoid OpenRC dependency issues during bootstrap
-/usr/local/bin/k0s controller --single --data-dir /var/lib/k0s > /var/log/k0s.log 2>&1 &
+rc-service k0scontroller start
 
 echo "BOOTSTRAP COMPLETE: \$(date)"
 
