@@ -34,25 +34,18 @@ if [ -b /dev/sda3 ]; then
         echo "Formatting /dev/sda3 as ext4..."
         mkfs.ext4 -O ^has_journal -F /dev/sda3
     fi
-    mkdir -p /mnt/data
-    mount /dev/sda3 /mnt/data
-    
-    # Create persistent directories
-    mkdir -p /mnt/data/k0s /mnt/data/bin
-    
-    # Symlink persistent k0s data
-    mkdir -p /var/lib
-    ln -sf /mnt/data/k0s /var/lib/k0s
+    mkdir -p /var/lib/k0s
+    mount /dev/sda3 /var/lib/k0s
 fi
 
 echo "--- Installing/Ensuring k0s ---"
-if [ ! -f /mnt/data/bin/k0s ]; then
+if [ ! -f /var/lib/k0s/k0s ]; then
     echo "Downloading k0s..."
     curl -sSLf https://get.k0s.sh | sh
-    cp /usr/local/bin/k0s /mnt/data/bin/k0s
+    cp /usr/local/bin/k0s /var/lib/k0s/k0s
 else
     echo "k0s already exists on persistent disk, linking..."
-    ln -sf /mnt/data/bin/k0s /usr/local/bin/k0s
+    ln -sf /var/lib/k0s/k0s /usr/local/bin/k0s
 fi
 
 echo "--- Loading kernel modules ---"
