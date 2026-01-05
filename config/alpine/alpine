@@ -17,6 +17,14 @@ setup-apkrepos -1
 echo "--- Installing dependencies ---"
 apk add bash curl iptables util-linux iproute2 coreutils ethtool e2fsprogs
 
+# Increase limits
+ulimit -n 65536
+
+# Mount cgroups (k0s needs this)
+echo "--- Mounting cgroups ---"
+mkdir -p /sys/fs/cgroup
+mountpoint -q /sys/fs/cgroup || mount -t cgroup2 none /sys/fs/cgroup
+
 echo "--- Setting up physical disk storage for k0s ---"
 # Check if /dev/sda3 exists and format it if it doesn't have a filesystem
 if [ -b /dev/sda3 ]; then
@@ -41,11 +49,6 @@ echo "--- Starting k0s ---"
 k0s start
 
 echo "BOOTSTRAP COMPLETE: \$(date)"
-
-# delete this hack
-# otherwise this script will run on the system we newly installed
-rm -f /etc/local.d/bootstrap.start
-rm -f /etc/runlevels/default/local
 EOF
 
 # Turn on local service in busybox init
