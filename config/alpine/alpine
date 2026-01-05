@@ -5,6 +5,10 @@ cat <<EOF > bootstrap.start
 exec > /var/log/bootstrap.log 2>&1
 echo "BOOTSTRAP START: \$(date)"
 
+# Ensure networking is up early for all dependencies
+echo "--- Starting networking ---"
+rc-service networking start || true
+
 # do the system installation
 setup-interfaces -a
 setup-keymap us us
@@ -22,6 +26,9 @@ ulimit -n 65536
 
 # Mount cgroups (k0s needs this)
 echo "--- Mounting cgroups ---"
+if [ -x /etc/init.d/cgroups ]; then
+    rc-service cgroups start
+fi
 mkdir -p /sys/fs/cgroup
 mountpoint -q /sys/fs/cgroup || mount -t cgroup2 none /sys/fs/cgroup
 
@@ -61,8 +68,6 @@ echo "--- Configuring k0s service ---"
 k0s install controller --single --data-dir /var/lib/k0s --force
 
 echo "--- Starting k0s ---"
-# Start networking first as k0s depends on it
-rc-service networking start
 rc-service k0scontroller start
 
 echo "BOOTSTRAP COMPLETE: \$(date)"
