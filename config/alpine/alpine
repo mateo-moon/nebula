@@ -14,20 +14,34 @@ setup-keymap us us
 setup-timezone -i UTC
 setup-ntp chrony || true
 
-echo "--- Setting up physical disk storage ---"
+echo "--- Setting up physical disk storage for k0s ---"
 # Check if /dev/sda3 exists and format it if it doesn't have a filesystem
 if [ -b /dev/sda3 ]; then
     if ! blkid /dev/sda3 >/dev/null 2>&1; then
         echo "Formatting /dev/sda3 as ext4..."
         mkfs.ext4 -O ^has_journal -F /dev/sda3
     fi
-    echo "Mounting /dev/sda3 to /usr/local/bin..."
-    mkdir -p /usr/local/bin
-    mount /dev/sda3 /usr/local/bin
+    echo "Mounting /dev/sda3 to /var/lib/k0s..."
+    mkdir -p /var/lib/k0s
+    mount /dev/sda3 /var/lib/k0s
 fi
 
 true >/etc/apk/repositories
 setup-apkrepos -1
+
+echo "--- Installing k0s dependencies ---"
+apk add bash curl iptables util-linux iproute2 coreutils ethtool
+
+echo "--- Loading kernel modules ---"
+modprobe overlay
+modprobe br_netfilter
+
+echo "--- Installing k0s ---"
+curl -sSLf https://get.k0s.sh | sh
+k0s install controller --single --data-dir /var/lib/k0s
+
+echo "--- Starting k0s ---"
+k0s start
 EOF
 
 # Turn on local service in busybox init
