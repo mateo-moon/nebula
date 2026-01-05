@@ -46,9 +46,14 @@ curl -sSLf https://get.k0s.sh | sh
 k0s install controller --single --data-dir /var/lib/k0s
 
 echo "--- Starting k0s ---"
-k0s start
+rc-service k0scontroller start
 
 echo "BOOTSTRAP COMPLETE: \$(date)"
+
+# delete this hack
+# otherwise this script will run on the system we newly installed
+rm -f /etc/local.d/bootstrap.start
+rm -f /etc/runlevels/default/local
 EOF
 
 # Turn on local service in busybox init
