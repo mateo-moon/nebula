@@ -8,6 +8,7 @@ run target="netboot.xyz":
   docker run --platform linux/amd64 \
     -e HOSTNAME={{ target }} \
     -v ./qemu:/qemu \
+    -v ./config:/config:ro \
     -v ./scripts/autoexec.ipxe:/qemu/autoexec.ipxe:ro \
     -v ./scripts/build_boot_usb.sh:/qemu/build_boot_usb.sh:ro \
     -v ./scripts/start_test_machine.sh:/qemu/start_test_machine.sh:ro \
@@ -35,6 +36,7 @@ start target="netboot.xyz":
 	docker run --platform linux/amd64 \
 	  -e HOSTNAME={{ target }} \
 	  -v ./qemu:/qemu \
+	  -v ./config:/config:ro \
 	  -v ./scripts/autoexec.ipxe:/qemu/autoexec.ipxe:ro \
 	  -v ./scripts/build_boot_usb.sh:/qemu/build_boot_usb.sh:ro \
 	  -v ./scripts/start_test_machine.sh:/qemu/start_test_machine.sh:ro \
@@ -43,7 +45,7 @@ start target="netboot.xyz":
 	  qemu_machine
 
 # Import GCP image from qemu/boot.usb
-gcp-image image gcs project="" family="" description="" storage="us" disk_size="auto" esp_size="64M":
+gcp-image image gcs project="" family="" description="" storage="us" disk_size="5G" esp_size="200M":
 	./scripts/gcp_create_image_from_usb.sh \
 	  --usb ./qemu/boot.usb \
 	  --image-name "{{image}}" \
@@ -66,8 +68,8 @@ gcp-image-env:
 	  --image-name "$IMAGE_NAME" \
 	  --gcs-uri "$GCS_URI" \
 	  --project "$GCP_PROJECT" \
-	  --disk-size "${DISK_SIZE:-auto}" \
-	  --esp-size "${ESP_SIZE:-64M}" \
+	  --disk-size "${DISK_SIZE:-5G}" \
+	  --esp-size "${ESP_SIZE:-200M}" \
 	  --family "${IMAGE_FAMILY:-nebula}" \
 	  --description "${IMAGE_DESC:-UEFI GPT (ESP+empty OS), minimal}" \
 	  --storage-location "${IMAGE_STORAGE:-us}" \

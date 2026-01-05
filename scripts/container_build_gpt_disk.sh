@@ -9,8 +9,8 @@ set -euo pipefail
 
 USB=""
 OUT=""
-DISK_SIZE="1G"
-ESP_SIZE="64M"
+DISK_SIZE="5G"
+ESP_SIZE="200M"
 
 while [ $# -gt 0 ]; do
   case "$1" in

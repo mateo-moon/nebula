@@ -9,6 +9,12 @@ dhcp
 # Set right time
 ntp pool.ntp.org
 
-# Chainload ipxe script with corresponding name
-chain https://raw.githubusercontent.com/mateo-moon/nebula/main/config/${hostname}/${hostname}.ipxe ||
-chain https://raw.githubusercontent.com/mateo-moon/nebula/main/config/${ip}/${ip}.ipxe
+# chain https://raw.githubusercontent.com/mateo-moon/nebula/main/config/${hostname}/${hostname}.ipxe ||
+# chain https://raw.githubusercontent.com/mateo-moon/nebula/main/config/${ip}/${ip}.ipxe
+
+# set base-url http://10.0.2.2:8000
+set base-url https://raw.githubusercontent.com/mateo-moon/nebula/main
+
+chain ${base-url}/config/${hostname}/${hostname}.ipxe ||
+chain ${base-url}/config/${ip}/${ip}.ipxe ||
+chain ${base-url}/config/alpine/virt.ipxe

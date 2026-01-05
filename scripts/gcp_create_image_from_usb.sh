@@ -74,7 +74,7 @@ PROJECT_ID=""
 IMAGE_FAMILY=""
 IMAGE_DESCRIPTION=""
 STORAGE_LOCATION=""
-DISK_SIZE="2G"
+DISK_SIZE="5G"
 ESP_SIZE="200M"
 USE_GPT="true"
 USE_DOCKER="true"
@@ -224,14 +224,14 @@ fi
 DEST_URI="${GCS_URI_PREFIX}/${TARBALL_NAME}"
 
 echo "Uploading to ${DEST_URI}..."
-if gsutil -q stat "${DEST_URI}"; then
+if gcloud storage ls "${DEST_URI}" >/dev/null 2>&1; then
   if [ "${FORCE}" != "true" ]; then
     echo "GCS object already exists at ${DEST_URI}. Use --force to overwrite." >&2
     exit 1
   fi
-  gsutil -m -q rm "${DEST_URI}" || true
+  gcloud storage rm "${DEST_URI}" || true
 fi
-gsutil -m cp "${TARBALL_PATH}" "${DEST_URI}"
+gcloud storage cp "${TARBALL_PATH}" "${DEST_URI}"
 
 # If image exists and --force, delete it
 if gcloud --project="${PROJECT_ID}" compute images describe "${IMAGE_NAME}" --format='get(name)' >/dev/null 2>&1; then
