@@ -1,3 +1,19 @@
+/**
+ * ArgoCd - GitOps continuous delivery tool for Kubernetes.
+ * 
+ * @example
+ * ```typescript
+ * import { ArgoCd } from 'nebula/k8s/argocd';
+ * 
+ * const argocd = new ArgoCd('argocd', {
+ *   values: {
+ *     server: {
+ *       ingress: { enabled: true, hostname: 'argocd.example.com' }
+ *     }
+ *   }
+ * });
+ * ```
+ */
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
@@ -6,7 +22,8 @@ import bcrypt from "bcryptjs";
 import * as yaml from 'yaml';
 import { deepmerge } from "deepmerge-ts";
 import type { ArgoCdConfig, OptionalChartArgs } from "./types";
-import { defineModule } from "../../../core/module";
+import { BaseModule } from "../../../core/base-module";
+import { Helpers } from "../../../utils/helpers";
 
 export * from "./types";
 
@@ -26,29 +43,32 @@ function flattenKeys(obj: any, prefix = ''): Record<string, any> {
   return result;
 }
 
-export class ArgoCd extends pulumi.ComponentResource {
+export class ArgoCd extends BaseModule {
+  public readonly chart: k8s.helm.v4.Chart;
+  public readonly namespace: k8s.core.v1.Namespace;
+
   constructor(
     name: string,
     args: ArgoCdConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('argocd', name, args, opts);
+    super('nebula:ArgoCd', name, args as unknown as Record<string, unknown>, opts);
 
     const namespaceName = args.namespace || 'argocd';
 
-    const namespace = new k8s.core.v1.Namespace('argocd-namespace', {
+    this.namespace = new k8s.core.v1.Namespace(`${name}-namespace`, {
       metadata: { name: namespaceName },
     }, { parent: this });
 
     // Precreate Redis password secret; ignore future content changes so it remains stable
     const generatedRedisPassword = pulumi.secret(crypto.randomBytes(24).toString('base64'));
-    const redisSecret = new k8s.core.v1.Secret('argocd-redis-secret', {
+    const redisSecret = new k8s.core.v1.Secret(`${name}-redis-secret`, {
       metadata: { name: 'argocd-redis', namespace: namespaceName },
       stringData: {
         'auth': generatedRedisPassword,
         'redis-password': generatedRedisPassword,
       },
-    }, { parent: this, dependsOn: [namespace], ignoreChanges: ["data", "stringData"] });
+    }, { parent: this, dependsOn: [this.namespace], ignoreChanges: ["data", "stringData"] });
 
     const defaultValues: Record<string, unknown> = {
       crds: { install: true },
@@ -66,7 +86,9 @@ export class ArgoCd extends pulumi.ComponentResource {
       notifications: {},
     };
 
-    const chartValues: Record<string, any> = deepmerge(defaultValues, args.values || {});
+    // Merge default values with user-provided values, then resolve any ref+ secrets
+    const mergedValues: Record<string, any> = deepmerge(defaultValues, args.values || {});
+    const chartValues: Record<string, any> = Helpers.resolveRefPlusSecretsDeep(mergedValues, false, 'chartValues');
 
     // Flatten configs.params and configs.cm for nested objects
     if (chartValues["configs"]) {
@@ -97,9 +119,15 @@ export class ArgoCd extends pulumi.ComponentResource {
     let crossplanePasswordHash: pulumi.Input<string> | undefined;
 
     if (args.crossplaneUser?.enabled && args.crossplaneUser.password) {
-      crossplanePassword = args.crossplaneUser.password;
+      // Resolve password if it's a ref+ string
+      const rawPassword = args.crossplaneUser.password;
+      const resolvedPassword = typeof rawPassword === 'string' && rawPassword.startsWith('ref+')
+        ? Helpers.resolveRefPlusSecretsDeep(rawPassword, false, 'crossplanePassword')
+        : rawPassword;
+      
+      crossplanePassword = resolvedPassword;
       const salt = bcrypt.genSaltSync(10);
-      crossplanePasswordHash = bcrypt.hashSync(args.crossplaneUser.password, salt);
+      crossplanePasswordHash = bcrypt.hashSync(resolvedPassword as string, salt);
 
       if (!chartValues["configs"]) chartValues["configs"] = {};
       if (!chartValues["configs"]["cm"]) chartValues["configs"]["cm"] = {};
@@ -135,25 +163,18 @@ export class ArgoCd extends pulumi.ComponentResource {
     };
     const providedArgs: OptionalChartArgs | undefined = args.args;
 
-    const projectRoot = (global as any).projectRoot || process.cwd();
-
     const finalChartArgs: ChartArgs = {
       chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
       ...defaultChartArgsBase,
       ...(providedArgs || {}),
       namespace: namespaceName,
       values: safeChartValues,
-      postRenderer: {
-        command: "/bin/sh",
-        args: ["-lc", `cd ${projectRoot} && vals eval -f -`],
-      },
     };
 
 
-    const chart = new k8s.helm.v4.Chart('argo-cd', finalChartArgs, {
+    this.chart = new k8s.helm.v4.Chart(name, finalChartArgs, {
       parent: this,
-      dependsOn: [namespace, redisSecret],
-      transformations: []
+      dependsOn: [this.namespace, redisSecret],
     });
 
     // Handle Crossplane User Bootstrapping
@@ -163,6 +184,11 @@ export class ArgoCd extends pulumi.ComponentResource {
       const secretName = "argocd-crossplane-creds";
       const targetNamespace = "crossplane-system"; // Hardcoded for standard Nebula convention
 
+      // Create the crossplane-system namespace (needed for Role/RoleBinding before Crossplane is deployed)
+      const crossplaneNamespace = new k8s.core.v1.Namespace(`${name}-crossplane-namespace`, {
+        metadata: { name: targetNamespace },
+      }, { parent: this });
+
       // Create a secret to hold the password for the job
       const bootstrapSecretName = `${jobName}-password`;
       const bootstrapSecret = new k8s.core.v1.Secret(bootstrapSecretName, {
@@ -170,12 +196,12 @@ export class ArgoCd extends pulumi.ComponentResource {
         stringData: {
           password: crossplanePassword!,
         },
-      }, { parent: this });
+      }, { parent: this, dependsOn: [this.namespace] });
 
       // Create ServiceAccount for the Job
       const sa = new k8s.core.v1.ServiceAccount(jobName, {
         metadata: { name: jobName, namespace: namespaceName },
-      }, { parent: this });
+      }, { parent: this, dependsOn: [this.namespace] });
 
       // So we need a Role in crossplane-system.
       const secretRole = new k8s.rbac.v1.Role(`${jobName}-secret`, {
@@ -183,7 +209,7 @@ export class ArgoCd extends pulumi.ComponentResource {
         rules: [
           { apiGroups: [""], resources: ["secrets"], verbs: ["get", "create", "patch", "update"] },
         ],
-      }, { parent: this });
+      }, { parent: this, dependsOn: [crossplaneNamespace] });
 
       new k8s.rbac.v1.RoleBinding(`${jobName}-secret`, {
         metadata: { name: jobName, namespace: targetNamespace },
@@ -227,7 +253,7 @@ export class ArgoCd extends pulumi.ComponentResource {
                   chmod +x /usr/local/bin/argocd
                   
                   echo "Waiting for ArgoCD server..."
-                  until echo "y" | argocd login argo-cd-argocd-server.argocd.svc.cluster.local --username ${user} --password "$USER_PASSWORD" --insecure --grpc-web --plaintext; do
+                  until echo "y" | argocd login argocd-server.${namespaceName}.svc.cluster.local --username ${user} --password "$USER_PASSWORD" --insecure --grpc-web --plaintext; do
                     echo "Login failed, retrying in 5s..."
                     sleep 5
                   done
@@ -257,12 +283,12 @@ export class ArgoCd extends pulumi.ComponentResource {
             },
           },
         },
-      }, { parent: this, dependsOn: [chart] });
+      }, { parent: this, dependsOn: [this.chart] });
     }
 
     // Optional: Create an AppProject
     if (args.project?.name) {
-      new k8s.apiextensions.CustomResource('argocd-project', {
+      new k8s.apiextensions.CustomResource(`${name}-project`, {
         apiVersion: 'argoproj.io/v1alpha1',
         kind: 'AppProject',
         metadata: { name: args.project.name, namespace: namespaceName },
@@ -274,24 +300,9 @@ export class ArgoCd extends pulumi.ComponentResource {
           ...(args.project.clusterResourceWhitelist ? { clusterResourceWhitelist: args.project.clusterResourceWhitelist } : {}),
           ...(args.project.namespaceResourceWhitelist ? { namespaceResourceWhitelist: args.project.namespaceResourceWhitelist } : {}),
         },
-      }, { parent: this, dependsOn: [chart] });
+      }, { parent: this, dependsOn: [this.chart] });
     }
 
     this.registerOutputs({});
   }
 }
-
-/**
- * ArgoCD module with dependency metadata.
- * 
- * Provides:
- * - `argocd`: ArgoCD GitOps continuous delivery tool
- * - `argocd-crds`: Custom Resource Definitions for Applications, AppProjects, etc.
- */
-export default defineModule(
-  {
-    name: 'argocd',
-    provides: ['argocd', 'argocd-crds'],
-  },
-  (args: ArgoCdConfig, opts) => new ArgoCd('argocd', args, opts)
-);

@@ -118,11 +118,11 @@ export class Helpers {
       // Check if bucket exists
       try {
         await client.send(new HeadBucketCommand({ Bucket: config.bucket }));
-        console.log(`  ✅ S3 bucket ${config.bucket} already exists`);
+        console.error(`  ✅ S3 bucket ${config.bucket} already exists`);
       } catch (error: any) {
         if (error.name === 'NotFound') {
           // Bucket doesn't exist, create it
-          console.log(`  📦 Creating S3 bucket: ${config.bucket}`);
+          console.error(`  📦 Creating S3 bucket: ${config.bucket}`);
           const createParams: any = {
             Bucket: config.bucket,
           };
@@ -142,13 +142,13 @@ export class Helpers {
             VersioningConfiguration: { Status: 'Enabled' },
           }));
           
-          console.log(`  ✅ S3 bucket ${config.bucket} created successfully`);
+          console.error(`  ✅ S3 bucket ${config.bucket} created successfully`);
         } else {
           throw error;
         }
       }
     } catch (error: any) {
-      console.log(`S3 bucket operation failed: ${error.message}`);
+      console.error(`S3 bucket operation failed: ${error.message}`);
     }
   }
 
@@ -177,10 +177,10 @@ export class Helpers {
           const credentials = JSON.parse(credentialsContent);
           projectId = credentials.quota_project_id || credentials.project_id;
           if (projectId) {
-            console.log(`Using project ID from credentials: ${projectId}`);
+            console.error(`Using project ID from credentials: ${projectId}`);
           }
         } catch (error) {
-          console.log('Could not read project ID from credentials file');
+          console.error('Could not read project ID from credentials file');
         }
       }
       
@@ -199,12 +199,12 @@ export class Helpers {
       const [exists] = await storage.bucket(config.bucket).exists();
       
       if (exists) {
-        console.log(`  ✅ GCS bucket ${config.bucket} already exists`);
+        console.error(`  ✅ GCS bucket ${config.bucket} already exists`);
         return;
       }
       
       // Create bucket
-      console.log(`  📦 Creating GCS bucket: ${config.bucket}`);
+      console.error(`  📦 Creating GCS bucket: ${config.bucket}`);
       const bucketOptions: any = {};
       
       if (config.location) {
@@ -216,7 +216,7 @@ export class Helpers {
       }
       
       await storage.createBucket(config.bucket, bucketOptions);
-      console.log(`  ✅ GCS bucket ${config.bucket} created successfully`);
+      console.error(`  ✅ GCS bucket ${config.bucket} created successfully`);
       
     } catch (err: any) {
       console.error(`Failed to create GCS bucket ${config.bucket}:`, err?.message || err);
@@ -252,7 +252,7 @@ export class Helpers {
     let credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
     
     if ((!credentialsFile || !fs.existsSync(credentialsFile)) && config.projectId) {
-      console.log('No valid credentials file found, attempting to authenticate...');
+      console.error('No valid credentials file found, attempting to authenticate...');
       const { Auth } = await import('./auth');
       await Auth.GCP.authenticate(config.projectId, config.location);
       credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
@@ -269,7 +269,7 @@ export class Helpers {
     } catch (err: any) {
       // Check if this is an authentication error
       if (err?.message?.includes('invalid_grant') || err?.message?.includes('reauth') || err?.message?.includes('invalid_rapt')) {
-        console.log('Authentication error detected, attempting to refresh credentials...');
+        console.error('Authentication error detected, attempting to refresh credentials...');
         
         // Import Auth utilities
         const { Auth } = await import('./auth');
@@ -298,7 +298,7 @@ export class Helpers {
             // Re-authenticate
             await Auth.GCP.authenticate(projectId, config.location);
             
-            console.log('Credentials refreshed, retrying GCS bucket operation...');
+            console.error('Credentials refreshed, retrying GCS bucket operation...');
             
             // Retry the operation with projectId now set
             await Helpers.checkCreateGcsBucket({ ...config, projectId });
@@ -355,14 +355,14 @@ export class Helpers {
             return refreshed.access_token;
           }
         } catch (error) {
-          console.warn(`Failed to refresh token: ${error}`);
+          console.error(`Failed to refresh token: ${error}`);
           // Fall through to return existing token (might still work)
         }
       }
 
       return tokenData.access_token || null;
     } catch (error) {
-      console.warn(`Failed to read access token: ${error}`);
+      console.error(`Failed to read access token: ${error}`);
       return null;
     }
   }
@@ -413,7 +413,7 @@ export class Helpers {
                   res.statusCode === 409) {
                 resolve(true); // Consider already enabled as success
               } else {
-                console.warn(`Failed to enable ${apiName}: ${errorMessage || res.statusCode}`);
+                console.error(`Failed to enable ${apiName}: ${errorMessage || res.statusCode}`);
                 resolve(false);
               }
             } catch {
@@ -428,9 +428,9 @@ export class Helpers {
             // Log error for debugging
             try {
               const error = JSON.parse(data);
-              console.warn(`Failed to enable ${apiName}: ${error.error?.message || res.statusCode}`);
+              console.error(`Failed to enable ${apiName}: ${error.error?.message || res.statusCode}`);
             } catch {
-              console.warn(`Failed to enable ${apiName}: HTTP ${res.statusCode}`);
+              console.error(`Failed to enable ${apiName}: HTTP ${res.statusCode}`);
             }
             resolve(false);
           }
@@ -438,7 +438,7 @@ export class Helpers {
       });
 
       req.on('error', (error) => {
-        console.warn(`Failed to enable ${apiName}: ${error.message}`);
+        console.error(`Failed to enable ${apiName}: ${error.message}`);
         resolve(false);
       });
 
@@ -464,7 +464,7 @@ export class Helpers {
     // Get access token from credentials (will refresh if expired)
     const accessToken = await Helpers.getAccessToken(projectId);
     if (!accessToken) {
-      console.warn('⚠ No valid access token found. Skipping GCP API enablement. Please ensure you are authenticated.');
+      console.error('⚠ No valid access token found. Skipping GCP API enablement. Please ensure you are authenticated.');
       return;
     }
 
@@ -482,7 +482,7 @@ export class Helpers {
       'serviceusage.googleapis.com',       // Service Usage (used by Karpenter)
     ];
 
-    console.log(`🔧 Enabling required GCP APIs for project: ${projectId}`);
+    process.stderr.write(`🔧 Enabling required GCP APIs for project: ${projectId}\n`);
 
     const enabledApis: string[] = [];
     const failedApis: string[] = [];
@@ -500,12 +500,12 @@ export class Helpers {
     await Promise.all(enablePromises);
 
     if (enabledApis.length > 0) {
-      console.log(`  ✅ Enabled ${enabledApis.length} GCP API(s)`);
+      process.stderr.write(`  ✅ Enabled ${enabledApis.length} GCP APIs\n`);
     }
     if (failedApis.length > 0) {
-      console.warn(`  ⚠️  Failed to enable ${failedApis.length} GCP API(s). Some operations may fail if APIs are not enabled.`);
+      process.stderr.write(`  ⚠️  Failed to enable ${failedApis.length} GCP APIs. Some operations may fail if APIs are not enabled.\n`);
     }
-    console.log('GCP API enablement completed');
+    process.stderr.write('GCP API enablement completed\n');
   }
 
   /**
@@ -588,7 +588,7 @@ export class Helpers {
         // Authenticate this project
         // Check if token exists
         if (await Auth.GCP.isTokenValid(projectId)) {
-             console.log(`  ✅ Valid token already exists for project: ${projectId}`);
+             console.error(`  ✅ Valid token already exists for project: ${projectId}`);
              Auth.GCP.setAccessTokenEnvVar(projectId, region);
         } else {
              await Auth.GCP.authenticate(projectId, region);
@@ -598,7 +598,7 @@ export class Helpers {
         primaryRegion = region ?? null;
         
       } catch (error: any) {
-        console.warn(`⚠️  Failed to authenticate for project ${projectId}: ${error?.message || error}`);
+        console.error(`⚠️  Failed to authenticate for project ${projectId}: ${error?.message || error}`);
       }
       
       // Populate envVars
@@ -616,7 +616,7 @@ export class Helpers {
         try {
           await Helpers.enableGcpApis(primaryProjectId);
         } catch (error: any) {
-           console.warn(`⚠️  Failed to enable APIs for project ${primaryProjectId}: ${error?.message || error}`);
+           console.error(`⚠️  Failed to enable APIs for project ${primaryProjectId}: ${error?.message || error}`);
         }
       }
     }
@@ -718,15 +718,15 @@ export class Helpers {
       // Check if key ring exists
       try {
         await kmsClient.getKeyRing({ name: keyRingPath });
-        console.log(`  ✅ Key ring ${keyRingPath} already exists`);
+        console.error(`  ✅ Key ring ${keyRingPath} already exists`);
       } catch (error: any) {
         if (error.code === 5) { // NOT_FOUND
-          console.log(`  🔐 Creating key ring: ${keyRingPath}`);
+          console.error(`  🔐 Creating key ring: ${keyRingPath}`);
           await kmsClient.createKeyRing({
             parent: kmsClient.locationPath(projectId, location),
             keyRingId: keyRingId
           });
-          console.log(`  ✅ Key ring ${keyRingPath} created successfully`);
+          console.error(`  ✅ Key ring ${keyRingPath} created successfully`);
         } else {
           throw error;
         }
@@ -735,10 +735,10 @@ export class Helpers {
       // Check if crypto key exists
       try {
         await kmsClient.getCryptoKey({ name: cryptoKeyPath });
-        console.log(`  ✅ Crypto key ${cryptoKeyPath} already exists`);
+        console.error(`  ✅ Crypto key ${cryptoKeyPath} already exists`);
       } catch (error: any) {
         if (error.code === 5) { // NOT_FOUND
-          console.log(`  🔐 Creating crypto key: ${cryptoKeyPath}`);
+          console.error(`  🔐 Creating crypto key: ${cryptoKeyPath}`);
           await kmsClient.createCryptoKey({
             parent: keyRingPath,
             cryptoKeyId: cryptoKeyId,
@@ -746,7 +746,7 @@ export class Helpers {
               purpose: 'ENCRYPT_DECRYPT'
             }
           });
-          console.log(`  ✅ Crypto key ${cryptoKeyPath} created successfully`);
+          console.error(`  ✅ Crypto key ${cryptoKeyPath} created successfully`);
         } else {
           throw error;
         }
@@ -779,7 +779,7 @@ export class Helpers {
     let credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
     
     if (!credentialsFile || !fs.existsSync(credentialsFile)) {
-      console.log('No valid credentials file found, attempting to authenticate...');
+      console.error('No valid credentials file found, attempting to authenticate...');
       const { Auth } = await import('./auth');
       await Auth.GCP.authenticate(projectId, location);
       credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
@@ -796,7 +796,7 @@ export class Helpers {
     } catch (error: any) {
       // Check if this is an authentication error
       if (error?.message?.includes('invalid_grant') || error?.message?.includes('reauth') || error?.message?.includes('invalid_rapt')) {
-        console.log('Authentication error detected, attempting to refresh credentials...');
+        console.error('Authentication error detected, attempting to refresh credentials...');
         
         // Import Auth utilities
         const { Auth } = await import('./auth');
@@ -808,7 +808,7 @@ export class Helpers {
           // Re-authenticate
           await Auth.GCP.authenticate(projectId, location);
           
-          console.log('Credentials refreshed, retrying KMS key operation...');
+          console.error('Credentials refreshed, retrying KMS key operation...');
           
           // Retry the operation
           await Helpers.ensureGcpKmsKeyFromUrl(providerUrl);
@@ -866,7 +866,7 @@ export class Helpers {
       // These messages appear even when the key doesn't exist and are misleading
       const result = spawnSync('vals', ['get', ref, '-o', 'yaml'], {
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'] // stdin=ignore, stdout=pipe, stderr=ignore (suppress SOPS diagnostics)
+        stdio: ['ignore', 'pipe', 'pipe'] // Capture stderr for debugging
       });
       
       if (result.error) {
@@ -961,7 +961,7 @@ export class Helpers {
         return YAML.parse(content);
       }
     } catch (error) {
-      console.log(`Failed to read existing SOPS config: ${error}`);
+      console.error(`Failed to read existing SOPS config: ${error}`);
     }
     return null;
   }
@@ -979,7 +979,7 @@ export class Helpers {
         Helpers.ensureVSCodeSopsSettings(credentialsInfo.file);
       }
     } catch (error) {
-      console.log(`Failed to write SOPS config: ${error}`);
+      console.error(`Failed to write SOPS config: ${error}`);
     }
   }
 
@@ -1001,7 +1001,7 @@ export class Helpers {
           const content = fs.readFileSync(settingsPath, 'utf8');
           settings = JSON.parse(content);
         } catch (error) {
-          console.log(`Failed to parse existing VS Code settings: ${error}`);
+          console.error(`Failed to parse existing VS Code settings: ${error}`);
           settings = {};
         }
       }
@@ -1018,9 +1018,9 @@ export class Helpers {
       
       // Write updated settings
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-      console.log(`  ✅ Updated VS Code SOPS settings with credentials path: ${credentialsFilePath}`);
+      console.error(`  ✅ Updated VS Code SOPS settings with credentials path: ${credentialsFilePath}`);
     } catch (error) {
-      console.log(`Failed to update VS Code settings: ${error}`);
+      console.error(`Failed to update VS Code settings: ${error}`);
     }
   }
 
@@ -1536,14 +1536,8 @@ export class Helpers {
   public static registerSecretResolutionTransform(debug: boolean = false): void {
     // Use a flag to ensure we only register once, but allow updating debug flag
     if ((Helpers as any)._secretTransformRegistered) {
-      // If debug is requested, update the debug flag even if already registered
       if (debug) {
         (Helpers as any)._secretTransformDebug = true;
-        try {
-          pulumi.log.debug(`[SecretResolution] Transform already registered, enabling debug mode`);
-        } catch {
-          // Pulumi runtime not available yet
-        }
       }
       return;
     }
@@ -1551,12 +1545,10 @@ export class Helpers {
     // Check if Pulumi runtime is available before trying to register
     try {
       if (!pulumi.runtime || typeof pulumi.runtime.registerResourceTransform !== 'function') {
-        // Runtime not available yet, mark as attempted so Component can retry
         (Helpers as any)._secretTransformAttempted = true;
         return;
       }
     } catch {
-      // Pulumi runtime not available yet, mark as attempted so Component can retry
       (Helpers as any)._secretTransformAttempted = true;
       return;
     }
@@ -1564,74 +1556,107 @@ export class Helpers {
     (Helpers as any)._secretTransformRegistered = true;
     (Helpers as any)._secretTransformDebug = debug;
 
-    // Log registration if debug is enabled
-    if (debug) {
-      try {
-        pulumi.log.debug(`[SecretResolution] Registering global resource transform for secret resolution`);
-      } catch {
-        // Pulumi runtime not fully initialized yet, but registration will proceed
-      }
-    }
-
     pulumi.runtime.registerResourceTransform((args: any) => {
       const isDebug = (Helpers as any)._secretTransformDebug || false;
-      
-      // Log ALL resource registrations in debug mode
       const resourceType = args?.type || 'unknown';
       const resourceName = args?.name || 'unknown';
       
-      if (isDebug) {
-        pulumi.log.debug(`[SecretResolution] Transform called for: ${resourceType}::${resourceName}`);
-      }
-      
-      // Only process args.props (resource arguments), not opts
-      if (!args || !args.props) {
+      try {
         if (isDebug) {
-          pulumi.log.debug(`[SecretResolution] Skipping transform: no args or props for ${resourceType}::${resourceName}`);
+          pulumi.log.debug(`[SecretResolution] Transform called for: ${resourceType}::${resourceName}`);
         }
-        return undefined; // Return undefined to indicate no transformation
-      }
-      
-      if (isDebug) {
-        pulumi.log.debug(`[SecretResolution] Transform invoked for: ${resourceType}::${resourceName}`);
-        pulumi.log.debug(`[SecretResolution] Processing props (keys: ${Object.keys(args.props).join(', ')})`);
-        // Log the actual props to see what we're dealing with
-        pulumi.log.debug(`[SecretResolution] Props content preview: ${JSON.stringify(args.props).substring(0, 200)}`);
-      }
-      // First, check if there are any ref+ patterns to resolve
-      // This is important - we only want to transform if necessary
-      const hasRefPatterns = JSON.stringify(args.props).includes('ref+');
-      
-      if (!hasRefPatterns) {
+        
+        // Only process args.props (resource arguments), not opts
+        if (!args || !args.props) {
+          if (isDebug) {
+            pulumi.log.debug(`[SecretResolution] Skipping transform: no args or props for ${resourceType}::${resourceName}`);
+          }
+          return undefined; // Return undefined to indicate no transformation
+        }
+        
+        // First, check if there are any ref+ patterns to resolve
+        // This is important - we only want to transform if necessary
+        let propsString: string;
+        try {
+          propsString = JSON.stringify(args.props);
+        } catch (e) {
+          // Can't stringify (circular reference, etc.) - skip transform
+          if (isDebug) {
+            pulumi.log.debug(`[SecretResolution] Cannot stringify props for ${resourceType}::${resourceName}, skipping`);
+          }
+          return undefined;
+        }
+        
+        const hasRefPatterns = propsString.includes('ref+');
+        
+        if (!hasRefPatterns) {
+          if (isDebug) {
+            pulumi.log.debug(`[SecretResolution] No ref+ patterns found, skipping transform for: ${resourceType}::${resourceName}`);
+          }
+          // Return undefined to indicate no transformation needed
+          // This preserves provider propagation by not modifying args at all
+          return undefined;
+        }
+        
         if (isDebug) {
-          pulumi.log.debug(`[SecretResolution] No ref+ patterns found, skipping transform for: ${resourceType}::${resourceName}`);
+          pulumi.log.debug(`[SecretResolution] Transform invoked for: ${resourceType}::${resourceName}`);
+          pulumi.log.debug(`[SecretResolution] Processing props (keys: ${Object.keys(args.props).join(', ')})`);
+          pulumi.log.debug(`[SecretResolution] Props content preview: ${propsString.substring(0, 200)}`);
         }
-        // Return undefined to indicate no transformation needed
-        // This preserves provider propagation by not modifying args at all
+        
+        // Process args.props recursively to find and resolve ALL ref+ strings
+        const resolvedProps = Helpers.resolveRefPlusSecretsDeep(args.props, isDebug, 'props');
+        
+        // Check if resolution actually changed anything by comparing JSON strings
+        let resolvedString: string;
+        try {
+          resolvedString = JSON.stringify(resolvedProps);
+        } catch (e) {
+          // Can't stringify resolved props - something went wrong
+          pulumi.log.warn(`[SecretResolution] Cannot stringify resolved props for ${resourceType}::${resourceName}, preserving original`);
+          return undefined;
+        }
+        
+        // Check if ref+ patterns are still present (resolution didn't work)
+        const stillHasRefPatterns = resolvedString.includes('ref+');
+        
+        if (stillHasRefPatterns) {
+          // ref+ patterns still exist - resolution failed
+          pulumi.log.warn(`[SecretResolution] ref+ patterns found but not resolved for ${resourceType}::${resourceName}. ` +
+            `Secrets may not be available. Ensure vals or sops is configured correctly.`);
+          // Return undefined to preserve provider propagation
+          return undefined;
+        }
+        
+        // Check if anything actually changed
+        const propsChanged = resolvedString !== propsString;
+        
+        if (!propsChanged) {
+          if (isDebug) {
+            pulumi.log.debug(`[SecretResolution] No changes after resolution for: ${resourceType}::${resourceName}, preserving default behavior`);
+          }
+          // Return undefined to preserve provider propagation
+          return undefined;
+        }
+        
+        if (isDebug) {
+          pulumi.log.debug(`[SecretResolution] Successfully resolved secrets for: ${resourceType}::${resourceName}`);
+        }
+        
+        // Return transformed args with resolved props
+        // Pass through opts unchanged to preserve provider propagation
+        return {
+          props: resolvedProps,
+          opts: args.opts,
+        };
+      } catch (error: any) {
+        // Catch any unexpected errors and preserve default behavior
+        pulumi.log.warn(`[SecretResolution] Error during transform for ${resourceType}::${resourceName}: ${error.message}. Preserving default behavior.`);
+        if (isDebug) {
+          pulumi.log.error(`[SecretResolution] Full error: ${error.stack || error.message}`);
+        }
         return undefined;
       }
-      
-      // Process args.props recursively to find and resolve ALL ref+ strings
-      const resolvedProps = Helpers.resolveRefPlusSecretsDeep(args.props, isDebug, 'props');
-      
-      if (isDebug) {
-        pulumi.log.debug(`[SecretResolution] Transform completed for resource: ${resourceType}::${resourceName}`);
-      }
-      
-      // Return transformed args with resolved props
-      return {
-        props: resolvedProps,
-        opts: args.opts,
-      };
     });
   }
-}
-
-// Register the secret resolution transform at module load time.
-// This ensures secrets are resolved before any resources are created.
-// Transforms only apply to resources created AFTER registration.
-try {
-  Helpers.registerSecretResolutionTransform(false);
-} catch {
-  // Pulumi runtime not available yet - will be registered when Component is created
 }

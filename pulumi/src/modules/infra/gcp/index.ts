@@ -1,6 +1,19 @@
+/**
+ * Gcp - GCP Infrastructure module (VPC, GKE).
+ * 
+ * @example
+ * ```typescript
+ * import { Gcp } from 'nebula/modules/infra/gcp';
+ * 
+ * const gcp = new Gcp('my-infra', {
+ *   network: { cidr: '10.10.0.0/16' },
+ *   gke: { name: 'my-cluster', location: 'us-central1-a' },
+ * });
+ * ```
+ */
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
-import { defineModule } from '../../../core/module';
+import { BaseModule } from '../../../core/base-module';
 import { Gke } from './gke';
 import type { GkeConfig } from './gke';
 import { Network } from './network';
@@ -9,19 +22,18 @@ import { Iam } from './iam';
 import type { IamConfig } from './iam';
 
 function stableShortHash(input: string): string {
-  // Simple deterministic 32-bit FNV-1a
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i);
     hash = (hash * 0x01000193) >>> 0;
   }
-  // 8 hex chars
   return ('0000000' + hash.toString(16)).slice(-8);
 }
 
 export type GcpConfig = {
   network: NetworkConfig;
-  gke: GkeConfig;
+  /** GKE cluster config (project is injected automatically from provider) */
+  gke: Omit<GkeConfig, 'project' | 'network'>;
   iam?: IamConfig;
 };
 
@@ -40,7 +52,7 @@ export interface GcpOutput {
   certManagerGsaEmail?: pulumi.Output<string> | undefined;
 }
 
-export class Gcp  extends pulumi.ComponentResource{
+export class Gcp extends BaseModule {
   public readonly network: Network;
   public readonly gke: Gke;
   public readonly iam?: Iam;
@@ -48,14 +60,14 @@ export class Gcp  extends pulumi.ComponentResource{
   public readonly project: pulumi.Output<string>;
   
   constructor(name: string, args: GcpConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('gcp', name, args, opts);
+    super('nebula:Gcp', name, args as unknown as Record<string, unknown>, opts);
 
-    // Get GCP provider from inherited __providers via Pulumi's public API
     const gcpProvider = this.getProvider('gcp:project:Project') as gcp.Provider | undefined;
     
     if (!gcpProvider) {
-      throw new Error('GCP provider not found in parent chain. Make sure to pass a GCP provider to the parent Component and ensure opts.parent is set.');
+      throw new Error('GCP provider not found. Make sure to pass a GCP provider via opts.providers.');
     }
+    
     this.project = gcpProvider.project.apply(p => {
       if (!p) throw new Error('GCP provider project is not set');
       return p;
@@ -65,10 +77,10 @@ export class Gcp  extends pulumi.ComponentResource{
     const svcs = args.network?.servicesSecondaryCidr || '';
     const suffix = stableShortHash(`${pods}|${svcs}`);
     const baseName = `${name}-${suffix}`;
-    // Use a suffix tied to secondary ranges so CIDR edits create new resources
+
     this.network = new Network(baseName, args.network, { parent: this });
     this.gke = new Gke(baseName, { ...args.gke, project: this.project, network: this.network }, { parent: this });
-    // Use non-suffixed name for IAM to keep GSA accountIds human-readable
+    
     if (args.iam) this.iam = new Iam(name, args.iam);
     
     this.outputs = {
@@ -85,20 +97,7 @@ export class Gcp  extends pulumi.ComponentResource{
       externalDnsGsaEmail: this.iam?.externalDnsGsaEmail,
       certManagerGsaEmail: this.iam?.certManagerGsaEmail,
     };
+    
     this.registerOutputs(this.outputs);
   }
 }
-/**
- * GCP infrastructure module with dependency metadata.
- * 
- * Provides:
- * - `gcp-network`: VPC network and subnets
- * - `gcp-gke`: Google Kubernetes Engine cluster
- */
-export default defineModule(
-  {
-    name: 'gcp',
-    provides: ['gcp-network', 'gcp-gke'],
-  },
-  (args: GcpConfig, opts) => new Gcp('gcp', args, opts)
-);
