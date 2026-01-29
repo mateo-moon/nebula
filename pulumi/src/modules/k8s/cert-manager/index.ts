@@ -1,8 +1,20 @@
+/**
+ * CertManager - Automated TLS certificate management for Kubernetes.
+ * 
+ * @example
+ * ```typescript
+ * import { CertManager } from 'nebula/k8s/cert-manager';
+ * 
+ * const certManager = new CertManager('cert-manager', {
+ *   acmeEmail: 'admin@example.com',
+ * });
+ * ```
+ */
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import { deepmerge } from "deepmerge-ts";
-import { defineModule } from "../../../core/module";
+import { BaseModule } from "../../../core/base-module";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
@@ -17,77 +29,72 @@ export interface CertManagerConfig {
   acmeEmail: string;
 }
 
-export class CertManager extends pulumi.ComponentResource {
+export class CertManager extends BaseModule {
+  public readonly chart: k8s.helm.v4.Chart;
+  public readonly namespace: k8s.core.v1.Namespace;
+
   constructor(
     name: string,
     args: CertManagerConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('cert-manager', name, args, opts);
+    super('nebula:CertManager', name, args as unknown as Record<string, unknown>, opts);
 
     const namespaceName = args.namespace || "cert-manager";
 
-    // Ensure provider is available from opts for inheritance
-    // Providers passed via opts.providers should be inherited by child resources via parent: this
-    const namespace = new k8s.core.v1.Namespace("cert-manager-namespace", {
-        metadata: { name: namespaceName },
-      }, { parent: this });
+    this.namespace = new k8s.core.v1.Namespace(`${name}-namespace`, {
+      metadata: { name: namespaceName },
+    }, { parent: this });
 
-      const defaultValues = {
-        installCRDs: true,
-        prometheus: { enabled: true },
-        webhook: {},
-        cainjector: {},
-        startupapicheck: {},
-      };
-      const defaultChartArgsBase: OptionalChartArgs = {
-        chart: "cert-manager",
-        version: args.version || "v1.15.2",
-        repositoryOpts: { repo: args.repository || "https://charts.jetstack.io" },
-        namespace: namespaceName,
-      };
+    const defaultValues = {
+      installCRDs: true,
+      prometheus: { enabled: true },
+      webhook: {},
+      cainjector: {},
+      startupapicheck: {},
+    };
 
-      const providedArgs: OptionalChartArgs | undefined = args.args;
-      
-      // Merge default values with provided values using deepmerge
-      const mergedValues = providedArgs?.values 
-        ? deepmerge(defaultValues, providedArgs.values)
-        : defaultValues;
-      
-      const finalChartArgs: ChartArgs = {
-        chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
-        ...defaultChartArgsBase,
-        ...(providedArgs || {}),
-        namespace: namespaceName,
-        values: mergedValues,
-      };
+    const defaultChartArgsBase: OptionalChartArgs = {
+      chart: "cert-manager",
+      version: args.version || "v1.15.2",
+      repositoryOpts: { repo: args.repository || "https://charts.jetstack.io" },
+      namespace: namespaceName,
+    };
 
-    // Helm chart will inherit provider from parent ComponentResource via parent: this
-    // Use transformations to add waitFor annotation to webhook resources
-    // This ensures Pulumi waits for the webhook to be ready before considering the chart complete
-    const chart = new k8s.helm.v4.Chart(
-      "cert-manager",
+    const providedArgs: OptionalChartArgs | undefined = args.args;
+    
+    const mergedValues = providedArgs?.values 
+      ? deepmerge(defaultValues, providedArgs.values)
+      : defaultValues;
+    
+    const finalChartArgs: ChartArgs = {
+      chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
+      ...defaultChartArgsBase,
+      ...(providedArgs || {}),
+      namespace: namespaceName,
+      values: mergedValues,
+    };
+
+    this.chart = new k8s.helm.v4.Chart(
+      name,
       finalChartArgs,
       { 
         parent: this, 
-        dependsOn: [namespace],
+        dependsOn: [this.namespace],
         transformations: [
           (args: any) => {
-            // Add waitFor annotation to webhook deployment to ensure it's ready
             if (args.kind === "Deployment" && args.metadata?.name === "cert-manager-webhook") {
               args.metadata.annotations = {
                 ...(args.metadata.annotations || {}),
                 "pulumi.com/waitFor": "jsonpath={.status.conditions[?(@.type=='Available')].status}=True",
               };
             }
-            // Add waitFor annotation to ValidatingWebhookConfiguration to wait for caBundle
             if (args.kind === "ValidatingWebhookConfiguration" && args.metadata?.name?.includes("cert-manager")) {
               args.metadata.annotations = {
                 ...(args.metadata.annotations || {}),
                 "pulumi.com/waitFor": "jsonpath={.webhooks[*].clientConfig.caBundle}",
               };
             }
-            // Add waitFor annotation to webhook Service to ensure endpoints are available
             if (args.kind === "Service" && args.metadata?.name === "cert-manager-webhook") {
               args.metadata.annotations = {
                 ...(args.metadata.annotations || {}),
@@ -100,106 +107,64 @@ export class CertManager extends pulumi.ComponentResource {
       }
     );
 
-    // Create self-signed ClusterIssuer for internal certificates
-    // The chart transformation adds waitFor annotation to webhook deployment,
-    // so Pulumi will wait for the webhook to be ready before considering chart complete
-    // ClusterIssuers depend on chart, ensuring webhook is ready first
+    // ClusterIssuers - skipAwait to avoid webhook validation during preview
+    // The webhook won't be available until the chart is fully deployed
     new k8s.apiextensions.CustomResource(
-      "selfsigned-clusterissuer",
+      `${name}-selfsigned-issuer`,
       {
         apiVersion: "cert-manager.io/v1",
         kind: "ClusterIssuer",
-        metadata: {
+        metadata: { 
           name: "selfsigned",
+          annotations: { "pulumi.com/skipAwait": "true" },
         },
-        spec: {
-          selfSigned: {},
-        },
+        spec: { selfSigned: {} },
       },
-      { 
-        parent: this, 
-        dependsOn: [chart],
-        customTimeouts: { create: "10m" }, // Extended timeout to allow webhook to become ready
-      }
+      { parent: this, dependsOn: [this.chart], customTimeouts: { create: "10m" } }
     );
 
     new k8s.apiextensions.CustomResource(
-      "letsencrypt-stage-clusterissuer",
+      `${name}-letsencrypt-stage`,
       {
         apiVersion: "cert-manager.io/v1",
         kind: "ClusterIssuer",
-        metadata: {
+        metadata: { 
           name: "letsencrypt-stage",
+          annotations: { "pulumi.com/skipAwait": "true" },
         },
         spec: {
           acme: {
             email: args.acmeEmail,
             server: "https://acme-staging-v02.api.letsencrypt.org/directory",
             privateKeySecretRef: { name: "letsencrypt-stage-private-key" },
-            solvers: [
-              {
-                http01: {
-                  ingress: { 
-                    class: "nginx",
-                  },
-                },
-              },
-            ],
+            solvers: [{ http01: { ingress: { class: "nginx" } } }],
           },
         },
       },
-      { 
-        parent: this, 
-        dependsOn: [chart],
-        customTimeouts: { create: "10m" }, // Extended timeout to allow webhook to become ready
-      }
+      { parent: this, dependsOn: [this.chart], customTimeouts: { create: "10m" } }
     );
 
     new k8s.apiextensions.CustomResource(
-      "letsencrypt-prod-clusterissuer",
+      `${name}-letsencrypt-prod`,
       {
         apiVersion: "cert-manager.io/v1",
         kind: "ClusterIssuer",
-        metadata: {
+        metadata: { 
           name: "letsencrypt-prod",
+          annotations: { "pulumi.com/skipAwait": "true" },
         },
         spec: {
           acme: {
             email: args.acmeEmail,
             server: "https://acme-v02.api.letsencrypt.org/directory",
             privateKeySecretRef: { name: "letsencrypt-prod-private-key" },
-            solvers: [
-              {
-                http01: {
-                  ingress: { 
-                    class: "nginx",
-                  },
-                },
-              },
-            ],
+            solvers: [{ http01: { ingress: { class: "nginx" } } }],
           },
         },
       },
-      { 
-        parent: this, 
-        dependsOn: [chart],
-        customTimeouts: { create: "10m" }, // Extended timeout to allow webhook to become ready
-      }
+      { parent: this, dependsOn: [this.chart], customTimeouts: { create: "10m" } }
     );
+
+    this.registerOutputs({});
   }
 }
-
-/**
- * Cert-Manager module with dependency metadata.
- * 
- * Provides:
- * - `cert-manager-crds`: Custom Resource Definitions for Certificates, Issuers, etc.
- * - `cluster-issuers`: Pre-configured ClusterIssuers (selfsigned, letsencrypt-stage, letsencrypt-prod)
- */
-export default defineModule(
-  {
-    name: 'cert-manager',
-    provides: ['cert-manager-crds', 'cluster-issuers'],
-  },
-  (args: CertManagerConfig, opts) => new CertManager('cert-manager', args, opts)
-);

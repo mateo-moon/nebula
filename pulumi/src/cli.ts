@@ -1,179 +1,50 @@
+#!/usr/bin/env node
 /**
- * Nebula CLI - Bootstrap and setup tool for Pulumi projects
+ * Nebula CLI - Bootstrap tool for Pulumi projects
  * 
- * Main command: `nebula bootstrap`
- * - Authenticates with cloud providers (GCP, AWS)
- * - Creates backend storage buckets
- * - Sets up secrets providers (KMS keys)
- * - Generates Pulumi.yaml and stack configuration files
- * - Outputs environment variables for shell export
+ * Usage: nebula bootstrap
+ * 
+ * Discovers environment files (dev.ts, stage.ts, prod.ts) in the working directory,
+ * reads their configuration via setConfig(), and creates Pulumi stacks.
  */
 import * as path from 'path';
 import * as fs from 'fs';
 import { Command } from 'commander';
 import { pathToFileURL } from 'node:url';
 import { StackManager } from './core/automation';
-import { Component } from './core/component';
-import { Utils } from './utils';
-import { findKubeconfigFiles, getKubeconfigPath } from './utils/kubeconfig';
+import { getConfig, ConfigReadComplete } from './core/config';
+import { Helpers } from './utils/helpers';
+import { Auth } from './utils/auth';
 
 interface BootstrapOptions {
   workDir?: string;
-  debugLevel?: 'debug' | 'trace';
-  envName?: string;
+  debug?: boolean;
 }
 
-interface CLIOptions {
-  config?: string;
-  workdir?: string;
-  debug?: string | boolean;
-  env?: string;
+// Helper to print to stderr (for progress messages)
+function log(msg: string): void {
+  process.stderr.write(msg + '\n');
+}
+
+// Collected environment variables to export at the end
+const envVarsToExport: Record<string, string> = {};
+
+/**
+ * Extract GCP project ID from a gcpkms:// URL
+ * Format: gcpkms://projects/PROJECT_ID/locations/LOCATION/...
+ */
+function extractGcpProjectId(secretsProvider: string): string | null {
+  const match = secretsProvider.match(/^gcpkms:\/\/projects\/([^/]+)\//);
+  return match?.[1] ?? null;
 }
 
 /**
- * Normalize debug level input to valid Pulumi log levels
+ * Extract GCP region/location from a gcpkms:// URL
+ * Format: gcpkms://projects/PROJECT_ID/locations/LOCATION/...
  */
-function normalizeDebugLevel(input?: string | boolean): 'debug' | 'trace' | undefined {
-  if (!input) return undefined;
-  if (typeof input === 'boolean') return input ? 'debug' : undefined;
-  const v = input.toLowerCase();
-  return (v === 'trace' || v === 'debug') ? (v as 'debug' | 'trace') : 'debug';
-}
-
-/**
- * Configure debug environment variables for Pulumi and Terraform
- */
-function setupDebugFlags(debugLevel?: 'debug' | 'trace'): void {
-  if (!debugLevel) return;
-  process.env['PULUMI_LOG_LEVEL'] = debugLevel;
-  process.env['PULUMI_LOG_FLOW'] = 'true';
-  process.env['TF_LOG'] = debugLevel;
-}
-
-/**
- * Output environment variables in a format that can be sourced by the shell.
- * Export statements go to stdout (for `eval $(nebula bootstrap)`),
- * informational messages go to stderr.
- */
-function outputEnvVarsForShell(envVars: Record<string, string>): void {
-  // Show available kubeconfig files (informational)
-  const kubeconfigFiles = findKubeconfigFiles();
-  if (kubeconfigFiles.length > 0) {
-    console.error('\n# Available kubeconfig files:');
-    for (const config of kubeconfigFiles) {
-      console.error(`#   export KUBECONFIG='${getKubeconfigPath(config)}'`);
-    }
-    console.error('#');
-    console.error('# To use a specific kubeconfig, run the appropriate export command above');
-    console.error('# WARNING: Setting multiple kubeconfigs can cause conflicts');
-  }
-
-  if (Object.keys(envVars).length === 0) return;
-
-  // Output instructions to stderr
-  console.error('\n# Export these environment variables to your shell:');
-  console.error('# eval $(nebula bootstrap)');
-  console.error('');
-  console.error('# Required environment variables:');
-  for (const [key, value] of Object.entries(envVars)) {
-    console.error(`#   ${key}=${value}`);
-  }
-  console.error('');
-
-  // Build export statements for stdout
-  const exportLines = Object.entries(envVars).map(([key, value]) => {
-    const escapedValue = value.replace(/'/g, "'\\''");
-    return `export ${key}='${escapedValue}'`;
-  });
-
-  // Write exports to stdout using original write function (bypass interception)
-  const output = exportLines.join('\n') + '\n';
-  const originalWrite = (process.stdout.write as any).__original;
-  const writeFn = originalWrite || process.stdout.write.bind(process.stdout);
-  
-  try {
-    writeFn(output, 'utf8');
-  } catch (error) {
-    console.error('[Error writing exports]:', error);
-    exportLines.forEach(line => console.error('  ', line));
-  }
-}
-
-/**
- * Execute the bootstrap process for a component
- */
-async function executeBootstrap(component: Component, opts: BootstrapOptions): Promise<void> {
-  const stackName = opts.envName || component.id;
-  
-  // Step 1: Bootstrap cloud resources (auth, buckets, KMS keys, APIs)
-  let bootstrapResult: { envVars: Record<string, string> } | undefined;
-  try {
-    console.log(`\n🚀 Bootstrapping component (Stack: ${stackName})...\n`);
-    bootstrapResult = await Utils.bootstrap(component.id, component.config, opts.workDir);
-    console.log('\n✅ Bootstrap completed successfully\n');
-  } catch (error) {
-    console.error('\n❌ Bootstrap failed:', error);
-    throw error;
-  }
-
-  // Step 2: Setup debug flags if requested
-  setupDebugFlags(opts.debugLevel);
-
-  // Step 3: Generate Pulumi configuration files
-  try {
-    console.log('📝 Generating Pulumi files...');
-    const workDir = opts.workDir || process.cwd();
-    const stackManager = new StackManager(component);
-    
-    console.log(`Creating stack: ${stackName}`);
-    await stackManager.createOrSelectStack(stackName, true, workDir);
-    console.log(`Created/selected stack: ${stackName}`);
-    console.log('Generation and stack creation completed successfully');
-  } catch (error) {
-    console.error('⚠️  Failed to generate Pulumi files:', error);
-    // Continue - bootstrap may still be useful without Pulumi files
-  }
-
-  // Step 4: Output environment variables for shell export
-  if (bootstrapResult && Object.keys(bootstrapResult.envVars).length > 0) {
-    outputEnvVarsForShell(bootstrapResult.envVars);
-    if (process.stdout.writable) {
-      process.stdout.emit('drain');
-    }
-  }
-}
-
-/**
- * Load a Component from a TypeScript configuration file.
- * Sets bootstrap mode to use lightweight Component (no Pulumi runtime required).
- */
-async function loadComponentFromFile(filePath: string): Promise<Component> {
-  const absolutePath = path.resolve(process.cwd(), filePath);
-  
-  // Reset global component state
-  (globalThis as any).__nebulaComponent = undefined;
-  
-  // Enable bootstrap mode - Component will use lightweight class
-  (globalThis as any).__nebulaBootstrapMode = true;
-
-  try {
-    const fileUrl = pathToFileURL(absolutePath).href;
-    await import(fileUrl);
-  } catch (e: any) {
-    throw new Error(`Failed to import config at ${filePath}: ${e?.message || e}`);
-  }
-
-  const component = (globalThis as any).__nebulaComponent;
-  if (!component) {
-    throw new Error(`Config file ${filePath} must instantiate a Component at the top level`);
-  }
-
-  // Wait for async initialization if present
-  if (component.ready && typeof component.ready.then === 'function') {
-    await component.ready;
-  }
-
-  return component as Component;
+function extractGcpRegion(secretsProvider: string): string | null {
+  const match = secretsProvider.match(/^gcpkms:\/\/projects\/[^/]+\/locations\/([^/]+)\//);
+  return match?.[1] ?? null;
 }
 
 /**
@@ -189,181 +60,284 @@ function findEnvironmentFiles(workDir: string): string[] {
       !f.endsWith('.d.ts') && 
       f !== 'index.ts' && 
       !f.startsWith('nebula.config')
-    )
-    .map(f => path.join(workDir, f));
+    );
 }
 
 /**
- * Intercept stdout during bootstrap to ensure only export statements reach stdout.
- * All other output is redirected to stderr for clean `eval $(nebula bootstrap)` usage.
+ * Load config from an environment file by importing it.
+ * The file should call setConfig() at the top.
  */
-function setupStdoutInterception(originalWrite: typeof process.stdout.write) {
-  const interceptor = function(chunk: any, _encoding?: any, cb?: any): boolean {
-    const str = typeof chunk === 'string' ? chunk : chunk.toString();
-    
-    // Block non-export lines, redirect to stderr for debugging
-    for (const line of str.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('export ')) {
-        const preview = trimmed.length > 50 ? trimmed.substring(0, 50) + '...' : trimmed;
-        console.error('[stdout blocked]:', preview);
+async function loadConfigFromFile(filePath: string, debug?: boolean): Promise<{ backendUrl: string; secretsProvider?: string } | null> {
+  // Set bootstrap mode so setConfig() will throw after storing config
+  process.env['NEBULA_BOOTSTRAP'] = '1';
+  
+  try {
+    const fileUrl = pathToFileURL(filePath).href;
+    await import(fileUrl);
+  } catch (error: any) {
+    // ConfigReadComplete is expected - it means setConfig() was called
+    if (error instanceof ConfigReadComplete || error.name === 'ConfigReadComplete') {
+      // Success - config was stored
+    } else {
+      if (debug) {
+        console.error(`[Nebula] Debug: Error during import:`, error.message);
       }
     }
-    
-    if (typeof cb === 'function') cb();
-    return true;
-  };
+  }
   
-  (interceptor as any).__original = originalWrite;
-  return interceptor;
+  const config = getConfig();
+  return config || null;
 }
 
-/**
- * Main CLI entry point
- */
-async function cliMain(argv: string[]) {
-  const isBootstrap = argv.includes('bootstrap');
-  const originalLog = console.log;
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-
-  // During bootstrap, redirect all output to stderr to keep stdout clean for exports
-  if (isBootstrap) {
-    console.log = (...args: any[]) => console.error(...args);
-    process.stdout.write = setupStdoutInterception(originalStdoutWrite);
-  }
-
-  const program = new Command();
-  program
-    .name('nebula')
-    .description('Nebula CLI - Bootstrap and manage Pulumi infrastructure projects')
-    .option('-c, --config <file>', 'Path to component configuration file')
-    .option('-w, --workdir <dir>', 'Working directory')
-    .option('-e, --env <id>', 'Target environment (matches filename, e.g., "dev" for dev.ts)')
-    .option('-d, --debug [level]', 'Enable debug logging (debug or trace)')
-    .option('-h, --help', 'Display help');
-
-  program
-    .command('bootstrap')
-    .description('Bootstrap cloud resources and generate Pulumi configuration files')
-    .action(async () => {
-      try {
-        const cliOpts = program.opts<CLIOptions>();
-        const opts: BootstrapOptions = {};
-        
-        if (cliOpts.workdir) opts.workDir = cliOpts.workdir;
-        const debugLevel = normalizeDebugLevel(cliOpts.debug);
-        if (debugLevel) opts.debugLevel = debugLevel;
-        
-        const workDir = cliOpts.workdir || process.cwd();
-        if (!opts.workDir) opts.workDir = workDir;
-
-        // Option 1: Explicit config file provided
-        if (cliOpts.config) {
-          const component = await loadComponentFromFile(cliOpts.config);
-          if (cliOpts.env) opts.envName = cliOpts.env;
-          await executeBootstrap(component, opts);
-          return;
-        }
-
-        // Option 2: Auto-discover environment files (dev.ts, prod.ts, etc.)
-        const envFiles = findEnvironmentFiles(workDir);
-        if (envFiles.length > 0) {
-          let targetFiles = envFiles;
-
-          // Filter by --env if provided
-          if (cliOpts.env) {
-            const match = envFiles.find(f => path.basename(f, '.ts') === cliOpts.env);
-            if (!match) {
-              console.error(`Error: Environment '${cliOpts.env}' not found`);
-              process.exit(1);
-            }
-            targetFiles = [match];
-          } else if (envFiles.length > 1) {
-            console.error(`Note: Bootstrapping all environments: ${envFiles.map(f => path.basename(f, '.ts')).join(', ')}`);
-          }
-
-          for (const file of targetFiles) {
-            const envName = path.basename(file, '.ts');
-            const component = await loadComponentFromFile(file);
-            opts.envName = envName;
-            await executeBootstrap(component, opts);
-          }
-
-          if (process.stdout.writable) process.stdout.emit('drain');
-          process.exit(0);
-          return;
-        }
-
-        // Option 3: Fallback to index.ts
-        const indexFile = path.join(workDir, 'index.ts');
-        if (fs.existsSync(indexFile)) {
-          const component = await loadComponentFromFile('index.ts');
-          opts.envName = cliOpts.env || 'dev';
-          await executeBootstrap(component, opts);
-          process.exit(0);
-          return;
-        }
-
-        console.error('Error: No configuration found. Expected *.ts environment files or index.ts');
-        process.exit(1);
-      } catch (error) {
-        throw error;
-      }
-    });
-
-  // Handle help or missing subcommand
-  const tokens = argv.slice(2);
-  const hasSubcommand = tokens.some(t => t === 'bootstrap');
+async function bootstrap(options: BootstrapOptions): Promise<void> {
+  const workDir = options.workDir || process.cwd();
   
-  if (!hasSubcommand) {
-    if (tokens.includes('-h') || tokens.includes('--help')) {
-      return program.outputHelp();
-    }
-    return program.outputHelp();
-  }
+  log('');
+  log('🚀 Nebula Bootstrap');
+  log('─'.repeat(50));
+  log(`📁 Working directory: ${workDir}`);
 
-  try {
-    await program.parseAsync(argv);
-  } catch (error) {
-    console.error('Error:', error);
-    throw error;
-  } finally {
-    // Restore stdout/console only for non-bootstrap operations
-    if (!isBootstrap) {
-      process.stdout.write = originalStdoutWrite;
-      console.log = originalLog;
-    }
-  }
-}
-
-/**
- * Check if this module is the main entry point
- */
-const isMain = (() => {
-  try {
-    if (typeof require !== 'undefined' && typeof module !== 'undefined') {
-      // @ts-ignore - CommonJS check
-      return require.main === module;
-    }
-  } catch {}
-  try {
-    const entry = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
-    // @ts-ignore - ESM check
-    return import.meta && import.meta.url === entry;
-  } catch {}
-  return false;
-})();
-
-if (isMain) {
-  cliMain(process.argv).catch(err => {
-    console.error(err?.message || err);
+  // Find environment files
+  const envFiles = findEnvironmentFiles(workDir);
+  
+  if (envFiles.length === 0) {
+    log('');
+    log('❌ No environment files found (e.g., dev.ts, stage.ts, prod.ts)');
+    log(`   Create an environment file like dev.ts in ${workDir}`);
     process.exit(1);
-  });
+  }
+
+  const envNames = envFiles.map(f => f.replace('.ts', ''));
+  log(`🔍 Found environments: ${envNames.join(', ')}`);
+
+  // Determine project name from package.json or directory name
+  let projectName = path.basename(workDir);
+  const packageJsonPath = path.join(workDir, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+      projectName = pkg.name || projectName;
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Process each environment file
+  for (const envFile of envFiles) {
+    const envName = envFile.replace('.ts', '');
+    const filePath = path.join(workDir, envFile);
+    
+    log('');
+    log(`📦 Processing ${envFile}`);
+    log('─'.repeat(50));
+    
+    // Load config from the environment file
+    const config = await loadConfigFromFile(filePath, options.debug);
+    
+    if (!config) {
+      log(`❌ No config found in ${envFile}`);
+      log(`   Add setConfig({ backendUrl: '...', secretsProvider: '...' }) at the top`);
+      continue;
+    }
+    
+    log(`   Backend:  ${config.backendUrl}`);
+    if (config.secretsProvider) {
+      log(`   Secrets:  ${config.secretsProvider}`);
+    }
+    
+    // GCP setup (only for first environment to avoid duplicate work)
+    if (envFiles.indexOf(envFile) === 0) {
+      const gcpProjectId = extractGcpProjectId(config.secretsProvider || '');
+      const gcpRegion = extractGcpRegion(config.secretsProvider || '');
+      
+      if (gcpProjectId) {
+        // Step 1: Authenticate with GCP
+        log('');
+        log(`🔐 Authenticating with GCP project: ${gcpProjectId}`);
+        log('─'.repeat(50));
+        try {
+          if (await Auth.GCP.isTokenValid(gcpProjectId)) {
+            log(`   ✅ Valid token found for project: ${gcpProjectId}`);
+            Auth.GCP.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
+          } else {
+            await Auth.GCP.authenticate(gcpProjectId, gcpRegion ?? undefined);
+          }
+          // Capture env vars for export
+          const homeDir = (await import('os')).homedir();
+          const tokenPath = path.join(homeDir, '.config', 'gcloud', `${gcpProjectId}-accesstoken`);
+          envVarsToExport['GOOGLE_APPLICATION_CREDENTIALS'] = tokenPath;
+          envVarsToExport['CLOUDSDK_CORE_PROJECT'] = gcpProjectId;
+          if (gcpRegion) {
+            envVarsToExport['CLOUDSDK_COMPUTE_ZONE'] = `${gcpRegion}-a`;
+          }
+        } catch (error: any) {
+          log(`   ⚠️  Authentication failed: ${error.message}`);
+          if (options.debug) {
+            log(`   Debug: ${error}`);
+          }
+        }
+        
+        // Step 2: Enable GCP APIs
+        log('');
+        log(`🔧 Enabling GCP APIs for project: ${gcpProjectId}`);
+        log('─'.repeat(50));
+        try {
+          await Helpers.enableGcpApis(gcpProjectId);
+        } catch (error: any) {
+          if (options.debug) {
+            log(`   ⚠️  Failed to enable APIs: ${error.message}`);
+          }
+        }
+        
+        // Step 3: Ensure backend storage exists (GCS bucket)
+        if (config.backendUrl?.startsWith('gs://')) {
+          log('');
+          log(`🪣 Ensuring backend storage exists`);
+          log('─'.repeat(50));
+          try {
+            await Helpers.ensureBackendForUrl({
+              backendUrl: config.backendUrl,
+              gcp: { 
+                projectId: gcpProjectId,
+                ...(gcpRegion ? { region: gcpRegion } : {}),
+              },
+            });
+            log(`   ✅ Backend storage ready`);
+          } catch (error: any) {
+            log(`   ⚠️  Failed to ensure backend: ${error.message}`);
+          }
+        }
+        
+        // Step 4: Ensure KMS key exists
+        if (config.secretsProvider?.startsWith('gcpkms://')) {
+          log('');
+          log(`🔑 Ensuring KMS key exists`);
+          log('─'.repeat(50));
+          try {
+            await Helpers.ensureSecretsProvider({
+              secretsProviders: [config.secretsProvider],
+            });
+            log(`   ✅ KMS key ready`);
+          } catch (error: any) {
+            log(`   ⚠️  Failed to ensure KMS key: ${error.message}`);
+          }
+          
+          // Step 5: Setup SOPS config
+          log('');
+          log(`📄 Setting up SOPS config`);
+          log('─'.repeat(50));
+          try {
+            const resource = config.secretsProvider.replace(/^gcpkms:\/\//, '');
+            Helpers.ensureSopsConfig({
+              gcpKmsResourceId: resource,
+              patterns: ['secrets\\.yaml', 'secrets-.*\\.yaml'],
+              workDir,
+            });
+            log(`   ✅ SOPS config ready`);
+          } catch (error: any) {
+            log(`   ⚠️  Failed to setup SOPS config: ${error.message}`);
+          }
+        }
+        
+        log('');
+        log(`📦 Continuing with ${envFile}`);
+        log('─'.repeat(50));
+      }
+    }
+    
+    // Create stack using StackManager
+    const stackManager = new StackManager({
+      projectName,
+      stackName: envName,
+      workDir,
+      backendUrl: config.backendUrl,
+      ...(config.secretsProvider ? { secretsProvider: config.secretsProvider } : {}),
+      program: async () => {
+        // Empty program - we're just creating the stack
+      },
+    });
+    
+    let stack;
+    try {
+      // Create/select stack via Automation API
+      log(`   ⏳ Creating stack...`);
+      stack = await stackManager.createOrSelectStack();
+      log(`   ✅ Stack created: ${envName}`);
+    } catch (error: any) {
+      log(`   ⚠️  Stack creation failed`);
+      if (options.debug) {
+        log(`   Debug: ${JSON.stringify(error, null, 2)}`);
+      } else {
+        const msg = error.message || error.stderr || String(error);
+        log(`   ${msg.split('\n')[0]}`);
+      }
+    }
+    
+    // Write Pulumi.yaml (only for first environment to avoid overwriting)
+    if (envFiles.indexOf(envFile) === 0) {
+      log(`   📝 Writing Pulumi.yaml`);
+      await stackManager.writePulumiYaml();
+    }
+    
+    // Write Pulumi.<env>.yaml with secretsprovider
+    log(`   📝 Writing Pulumi.${envName}.yaml`);
+    await stackManager.writeStackConfig({});
+    
+    // Initialize encryption to generate encryptedkey (after YAML files are written)
+    if (stack && config.secretsProvider) {
+      try {
+        log(`   🔐 Initializing encryption...`);
+        await stackManager.initializeEncryption(stack);
+        log(`   ✅ Encryption initialized`);
+      } catch (error: any) {
+        log(`   ⚠️  Could not initialize encryption`);
+        if (options.debug) {
+          log(`   Debug: ${JSON.stringify(error, null, 2)}`);
+        }
+      }
+    }
+  }
+
+  log('');
+  log('─'.repeat(50));
+  log('✨ Bootstrap complete!');
+  log('');
+  log('📋 Next steps:');
+  for (const envName of envNames) {
+    log(`   pulumi up --stack ${envName}`);
+  }
+  log('');
+  
+  // Output environment variables to stdout for eval
+  // Usage: eval $(npx nebula bootstrap)
+  for (const [key, value] of Object.entries(envVarsToExport)) {
+    console.log(`export ${key}="${value}"`);
+  }
 }
 
-/**
- * Programmatic CLI entry point
- */
-export async function runCli(argv?: string[]) {
-  return cliMain(argv ?? process.argv);
-}
+// CLI setup
+const program = new Command();
+
+program
+  .name('nebula')
+  .description('Nebula CLI - Bootstrap Pulumi projects')
+  .version('1.3.1');
+
+program
+  .command('bootstrap')
+  .description('Bootstrap Pulumi project (discovers environment files like dev.ts, stage.ts)')
+  .option('-w, --work-dir <dir>', 'Working directory (default: current directory)')
+  .option('--debug', 'Enable debug logging')
+  .action(async (opts) => {
+    try {
+      await bootstrap({
+        workDir: opts.workDir,
+        debug: opts.debug,
+      });
+    } catch (error) {
+      log(`[Nebula] Error: ${error}`);
+      process.exit(1);
+    }
+  });
+
+program.parse();

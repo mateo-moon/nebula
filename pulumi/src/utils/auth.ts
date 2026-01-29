@@ -27,19 +27,19 @@ export class Auth {
      * @param region - The GCP region (optional)
      */
     async authenticate(projectId: string, region?: string): Promise<void> {
-      console.log(`🔐 Starting authentication for project: ${projectId}`);
+      console.error(`🔐 Starting authentication for project: ${projectId}`);
       
       // Check if authentication is already in progress for this specific project
       const existingAuth = Auth.ongoingAuth.get(projectId);
       if (existingAuth) {
-        console.log(`  ⏳ Authentication already in progress for project ${projectId}, waiting...`);
+        console.error(`  ⏳ Authentication already in progress for project ${projectId}, waiting...`);
         await existingAuth;
         return;
       }
       
       // Step 1: Check if existing token is valid
       if (await this.isTokenValid(projectId)) {
-        console.log(`  ✅ Valid token found for project: ${projectId}`);
+        console.error(`  ✅ Valid token found for project: ${projectId}`);
         this.setAccessTokenEnvVar(projectId, region);
         return;
       }
@@ -70,10 +70,10 @@ export class Auth {
         // Step 4: Set environment variable
         this.setAccessTokenEnvVar(projectId, region);
         
-        console.log(`  ✅ Authentication successful for project: ${projectId}`);
+        console.error(`  ✅ Authentication successful for project: ${projectId}`);
       } else {
         const errorMsg = `Authentication failed for project: ${projectId}. OAuth flow did not complete successfully.`;
-        console.log(`  ❌ ${errorMsg}`);
+        console.error(`  ❌ ${errorMsg}`);
         throw new Error(errorMsg);
       }
     },
@@ -93,7 +93,7 @@ export class Auth {
         const credentials = JSON.parse(credentialContent);
         
         if (!credentials.refresh_token) {
-          console.log('No refresh token available for token renewal');
+          console.error('No refresh token available for token renewal');
           return null;
         }
         
@@ -121,15 +121,15 @@ export class Auth {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          console.log(`Token refresh failed: ${response.status} ${response.statusText}`);
+          console.error(`Token refresh failed: ${response.status} ${response.statusText}`);
           const errorText = await response.text();
-          console.log('Error response:', errorText);
+          console.error('Error response:', errorText);
           
           // Check for invalid_rapt error and clear credentials
           try {
             const errorData = JSON.parse(errorText);
             if (errorData.error === 'invalid_grant' && errorData.error_subtype === 'invalid_rapt') {
-              console.log('Invalid RAPT error detected - clearing expired credentials');
+              console.error('Invalid RAPT error detected - clearing expired credentials');
               this.clearExpiredCredentials(projectId);
             }
           } catch {
@@ -140,7 +140,7 @@ export class Auth {
         }
         
         const newTokens = await response.json();
-        console.log('  ✅ Token refresh successful');
+        console.error('  ✅ Token refresh successful');
         
         // Update the credential file with new tokens
         const nowMs = Date.now();
@@ -165,9 +165,9 @@ export class Auth {
         
       } catch (error: any) {
         if (error.name === 'AbortError') {
-          console.log('Token refresh request timed out');
+          console.error('Token refresh request timed out');
         } else {
-          console.log(`Token refresh error: ${error}`);
+          console.error(`Token refresh error: ${error}`);
         }
         return null;
       }
@@ -195,7 +195,7 @@ export class Auth {
         // Basic structure check
         if (credentials.type !== 'authorized_user') return false;
         if (!credentials.refresh_token) {
-          console.log('No refresh token found - will need to re-authenticate');
+          console.error('No refresh token found - will need to re-authenticate');
           this.clearExpiredCredentials(projectId);
           return false;
         }
@@ -222,15 +222,15 @@ export class Auth {
         // Expired or unknown expiry: try to refresh
         const refreshedTokens = await this.refreshAccessToken(projectId);
         if (refreshedTokens) {
-          console.log('Token refreshed successfully');
+          console.error('Token refreshed successfully');
           return true;
         }
-        console.log('Token refresh failed - will need to re-authenticate');
+        console.error('Token refresh failed - will need to re-authenticate');
         this.clearExpiredCredentials(projectId);
         return false;
       } catch (error) {
         // If command fails, token is expired or invalid
-        console.log('Token validation failed:', error);
+        console.error('Token validation failed:', error);
         // Clear expired credentials to ensure fresh authentication
         this.clearExpiredCredentials(projectId);
         return false;
@@ -258,7 +258,7 @@ export class Auth {
           codeChallengeMethod: params.get('code_challenge_method')
         };
       } catch (error) {
-        console.log(`Failed to parse OAuth URL: ${error}`);
+        console.error(`Failed to parse OAuth URL: ${error}`);
         return null;
       }
     },
@@ -280,7 +280,7 @@ export class Auth {
         // Parse the provided OAuth URL
         const parsedParams = this.parseOAuthUrl(oauthUrl);
         if (!parsedParams) {
-          console.log('Failed to parse provided OAuth URL');
+          console.error('Failed to parse provided OAuth URL');
           return null;
         }
         
@@ -300,7 +300,7 @@ export class Auth {
         authUrl.searchParams.set('code_challenge', this.generateCodeChallenge(codeVerifier));
         authUrl.searchParams.set('code_challenge_method', parsedParams.codeChallengeMethod || 'S256');
         
-        console.log('Using provided OAuth URL parameters');
+        console.error('Using provided OAuth URL parameters');
       } else {
         // Generate PKCE parameters
         codeVerifier = this.generateCodeVerifier();
@@ -319,18 +319,18 @@ export class Auth {
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
         
-        console.log('Generated OAuth URL parameters');
+        console.error('Generated OAuth URL parameters');
       }
       
-        console.log('  🔗 Starting OAuth flow...');
-        console.log('  🌐 Auth URL:', authUrl.toString());
+        console.error('  🔗 Starting OAuth flow...');
+        console.error('  🌐 Auth URL:', authUrl.toString());
       
       try {
         // Start local server to handle callback
         const authCode = await this.startCallbackServer(port, state, codeVerifier);
         
         if (!authCode) {
-          console.log('Failed to get authorization code');
+          console.error('Failed to get authorization code');
           return null;
         }
         
@@ -338,11 +338,11 @@ export class Auth {
         const tokens = await this.exchangeCodeForTokens(authCode, redirectUri, codeVerifier);
         
         if (!tokens) {
-          console.log('Failed to exchange code for tokens');
+          console.error('Failed to exchange code for tokens');
           return null;
         }
         
-        console.log('  ✅ OAuth flow completed successfully');
+        console.error('  ✅ OAuth flow completed successfully');
         return {
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
@@ -351,7 +351,7 @@ export class Auth {
         };
         
       } catch (error) {
-        console.log(`  ❌ OAuth flow failed: ${error}`);
+        console.error(`  ❌ OAuth flow failed: ${error}`);
         return null;
       }
     },
@@ -441,15 +441,15 @@ export class Auth {
         });
         
         server.listen(port, () => {
-          console.log(`Callback server listening on port ${port}`);
+          console.error(`Callback server listening on port ${port}`);
         });
         
         server.on('error', (err: any) => {
           if (err.code === 'EADDRINUSE') {
-            console.log(`Port ${port} is already in use - authentication already in progress`);
+            console.error(`Port ${port} is already in use - authentication already in progress`);
             resolve(null);
           } else {
-            console.log(`Server error: ${err.message}`);
+            console.error(`Server error: ${err.message}`);
             resolve(null);
           }
         });
@@ -468,10 +468,10 @@ export class Auth {
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
         
-        console.log('Opening browser for authentication...');
+        console.error('Opening browser for authentication...');
         open(authUrl.toString()).catch((error) => {
-          console.log(`Failed to open browser: ${error}`);
-          console.log('Please manually open this URL:', authUrl.toString());
+          console.error(`Failed to open browser: ${error}`);
+          console.error('Please manually open this URL:', authUrl.toString());
         });
         
         // Timeout after 5 minutes
@@ -519,18 +519,18 @@ export class Auth {
         });
         
         if (!response.ok) {
-          console.log(`Token exchange failed: ${response.status} ${response.statusText}`);
+          console.error(`Token exchange failed: ${response.status} ${response.statusText}`);
           const errorText = await response.text();
-          console.log('Error response:', errorText);
+          console.error('Error response:', errorText);
           return null;
         }
         
         const tokens = await response.json();
-        console.log('Token exchange successful');
+        console.error('Token exchange successful');
         return tokens;
         
       } catch (error) {
-        console.log(`Token exchange error: ${error}`);
+        console.error(`Token exchange error: ${error}`);
         return null;
       }
     },
@@ -541,7 +541,7 @@ export class Auth {
      */
     runGcloudAuthLogin(): Promise<string | null> {
       return new Promise((resolve) => {
-        console.log('Launching gcloud auth login...');
+        console.error('Launching gcloud auth login...');
         
         // Execute gcloud auth login with HTTP logging and no activate
         const command = 'CLOUDSDK_CORE_LOG_HTTP_REDACT_TOKEN=false gcloud auth login --log-http --no-activate';
@@ -562,9 +562,9 @@ export class Auth {
         });
         
         child.on('close', (code) => {
-          console.log(`gcloud auth login exited with code: ${code}`);
-          console.log('Raw stdout:', stdout);
-          console.log('Raw stderr:', stderr);
+          console.error(`gcloud auth login exited with code: ${code}`);
+          console.error('Raw stdout:', stdout);
+          console.error('Raw stderr:', stderr);
           
           // Extract access token from output
           let accessToken = this.extractAccessTokenFromOutput(stdout);
@@ -573,24 +573,24 @@ export class Auth {
           }
           
           if (accessToken) {
-            console.log('Access token extracted successfully');
+            console.error('Access token extracted successfully');
             resolve(accessToken);
           } else {
-            console.log('Failed to extract access token from output');
-            console.log('Looking for pattern: "access_token": "..."');
+            console.error('Failed to extract access token from output');
+            console.error('Looking for pattern: "access_token": "..."');
             resolve(null);
           }
         });
         
         child.on('error', (error: Error) => {
-          console.log(`gcloud auth login failed: ${error.message}`);
+          console.error(`gcloud auth login failed: ${error.message}`);
           resolve(null);
         });
         
         // Set a timeout to kill the process if it takes too long
         setTimeout(() => {
           if (!child.killed) {
-            console.log('Killing gcloud auth login process due to timeout');
+            console.error('Killing gcloud auth login process due to timeout');
             child.kill();
             resolve(null);
           }
@@ -646,11 +646,11 @@ export class Auth {
       // Write credential JSON to file
       fs.writeFileSync(accessTokenFilePath, JSON.stringify(credentialData, null, 2));
       
-      console.log(`Tokens written to: ${accessTokenFilePath}`);
+      console.error(`Tokens written to: ${accessTokenFilePath}`);
       if (tokenResponse.refresh_token) {
-        console.log('Refresh token included for automatic token renewal');
+        console.error('Refresh token included for automatic token renewal');
       } else {
-        console.log('WARNING: No refresh token received');
+        console.error('WARNING: No refresh token received');
       }
     },
 
@@ -665,10 +665,10 @@ export class Auth {
       try {
         if (fs.existsSync(accessTokenFilePath)) {
           fs.unlinkSync(accessTokenFilePath);
-          console.log(`Cleared expired credentials for project: ${projectId}`);
+          console.error(`Cleared expired credentials for project: ${projectId}`);
         }
       } catch (error) {
-        console.warn(`Failed to clear credentials for project ${projectId}:`, error);
+        console.error(`Failed to clear credentials for project ${projectId}:`, error);
       }
     },
 
@@ -689,9 +689,9 @@ export class Auth {
       const computeZone = region ? `${region}-a` : 'us-central1-a';
       process.env['CLOUDSDK_COMPUTE_ZONE'] = computeZone;
       
-      console.log(`Set GOOGLE_APPLICATION_CREDENTIALS=${accessTokenFilePath}`);
-      console.log(`Set CLOUDSDK_CORE_PROJECT=${projectId}`);
-      console.log(`Set CLOUDSDK_COMPUTE_ZONE=${computeZone}`);
+      console.error(`Set GOOGLE_APPLICATION_CREDENTIALS=${accessTokenFilePath}`);
+      console.error(`Set CLOUDSDK_CORE_PROJECT=${projectId}`);
+      console.error(`Set CLOUDSDK_COMPUTE_ZONE=${computeZone}`);
     },
 
     /**
@@ -700,14 +700,14 @@ export class Auth {
      * @returns True if refresh was successful
      */
     async refreshToken(projectId: string): Promise<boolean> {
-      console.log(`Refreshing token for project: ${projectId}`);
+      console.error(`Refreshing token for project: ${projectId}`);
       
       const refreshedTokens = await this.refreshAccessToken(projectId);
       if (refreshedTokens) {
-        console.log(`Token refresh successful for project: ${projectId}`);
+        console.error(`Token refresh successful for project: ${projectId}`);
         return true;
       } else {
-        console.log(`Token refresh failed for project: ${projectId}`);
+        console.error(`Token refresh failed for project: ${projectId}`);
         return false;
       }
     },
@@ -771,10 +771,10 @@ export class Auth {
         // Set environment variable
         this.setAccessTokenEnvVar(targetProjectId, region);
         
-        console.log(`  ✅ Reused credentials from project ${sourceProjectId} for project ${targetProjectId}`);
+        console.error(`  ✅ Reused credentials from project ${sourceProjectId} for project ${targetProjectId}`);
         return true;
       } catch (error) {
-        console.log(`  ⚠️  Failed to reuse credentials from ${sourceProjectId} for ${targetProjectId}: ${error}`);
+        console.error(`  ⚠️  Failed to reuse credentials from ${sourceProjectId} for ${targetProjectId}: ${error}`);
         return false;
       }
     },

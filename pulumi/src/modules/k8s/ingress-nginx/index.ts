@@ -1,9 +1,24 @@
+/**
+ * IngressNginx - NGINX Ingress Controller for Kubernetes.
+ * 
+ * @example
+ * ```typescript
+ * import { IngressNginx } from 'nebula/k8s/ingress-nginx';
+ * import { CertManager } from 'nebula/k8s/cert-manager';
+ * 
+ * const certManager = new CertManager('cert-manager', { acmeEmail: 'admin@example.com' });
+ * 
+ * const ingressNginx = new IngressNginx('ingress-nginx', {
+ *   createStaticIp: true,
+ * }, { dependsOn: [certManager] });
+ * ```
+ */
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { deepmerge } from "deepmerge-ts";
-import { defineModule } from "../../../core/module";
+import { BaseModule } from "../../../core/base-module";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
@@ -32,61 +47,57 @@ export interface IngressNginxConfig {
   version?: string;
   repository?: string;
   args?: OptionalChartArgs;
-  /** GCP project ID for creating static IP */
   gcpProjectId?: string;
-  /** GCP region for creating static IP */
   gcpRegion?: string;
-  /** Whether to create a static IP for the load balancer */
   createStaticIp?: boolean;
-  /** Name for the static IP resource */
   staticIpName?: string;
 }
 
-export class IngressNginx extends pulumi.ComponentResource {
+export class IngressNginx extends BaseModule {
   public readonly staticIp?: gcp.compute.Address;
+  public readonly chart: k8s.helm.v4.Chart;
+  public readonly namespace: k8s.core.v1.Namespace;
 
   constructor(
     name: string,
     args: IngressNginxConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('ingress-nginx', name, args, opts);
+    super('nebula:IngressNginx', name, args as unknown as Record<string, unknown>, opts);
 
     const namespaceName = args.namespace || 'ingress-nginx';
-    const namespace = new k8s.core.v1.Namespace('ingress-nginx-namespace', {
+    
+    this.namespace = new k8s.core.v1.Namespace(`${name}-namespace`, {
       metadata: { name: namespaceName },
     }, { parent: this });
 
-    // Self-signed Issuer used by cert-manager for the admission webhook certificate
-    const admissionIssuer = new k8s.apiextensions.CustomResource('ingress-nginx-selfsigned-issuer', {
+    // Self-signed Issuer for admission webhook certificate
+    const admissionIssuer = new k8s.apiextensions.CustomResource(`${name}-selfsigned-issuer`, {
       apiVersion: 'cert-manager.io/v1',
       kind: 'Issuer',
       metadata: { name: 'ingress-nginx-selfsigned', namespace: namespaceName },
       spec: { selfSigned: {} },
-    }, { parent: this });
+    }, { parent: this, dependsOn: [this.namespace] });
 
-    // Default tolerations for system nodes
     const defaultTolerations = [
       { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
     ];
 
-    // Merge controller tolerations - allow override but default to system node tolerations
     const controllerTolerations = args.controller?.tolerations || defaultTolerations;
 
     // Create Static IP if requested
     if (args.createStaticIp) {
-        const ipName = args.staticIpName || `${name}-ingress-ip`;
-        // Get GCP provider from inherited __providers via Pulumi's public API
-        const gcpProvider = this.getProvider('gcp:project:Project') as gcp.Provider | undefined;
-        const region: pulumi.Input<string> = args.gcpRegion || 
-          (gcpProvider?.region ? gcpProvider.region.apply(r => r || 'europe-west3') : 'europe-west3');
+      const ipName = args.staticIpName || `${name}-ingress-ip`;
+      const gcpProvider = this.getProvider('gcp:project:Project') as gcp.Provider | undefined;
+      const region: pulumi.Input<string> = args.gcpRegion || 
+        (gcpProvider?.region ? gcpProvider.region.apply(r => r || 'europe-west3') : 'europe-west3');
 
-        this.staticIp = new gcp.compute.Address(ipName, {
-            name: ipName,
-            addressType: 'EXTERNAL',
-            region: region,
-            description: pulumi.interpolate`Static IP for Ingress Nginx LoadBalancer in ${namespaceName}`,
-        }, { parent: this });
+      this.staticIp = new gcp.compute.Address(ipName, {
+        name: ipName,
+        addressType: 'EXTERNAL',
+        region: region,
+        description: pulumi.interpolate`Static IP for Ingress Nginx LoadBalancer in ${namespaceName}`,
+      }, { parent: this });
     }
 
     const baseValues = {
@@ -106,7 +117,6 @@ export class IngressNginx extends pulumi.ComponentResource {
             ...(this.staticIp ? { loadBalancerIP: this.staticIp.address } : {}),
           }
         } : {}),
-        // Ensure admission webhooks certificate management via cert-manager (no Helm hooks required)
         admissionWebhooks: {
           certManager: {
             enabled: true,
@@ -116,13 +126,12 @@ export class IngressNginx extends pulumi.ComponentResource {
               group: 'cert-manager.io',
             },
           },
-          // Disable patch job that normally runs via Helm hooks
           patch: { enabled: false },
         },
       }
     };
 
-    const values: Record<string, unknown> = deepmerge(baseValues, args.values || {}) as Record<string, unknown>;
+    const values = deepmerge(baseValues, args.values || {}) as Record<string, unknown>;
 
     const defaultChartArgsBase: OptionalChartArgs = {
       chart: 'ingress-nginx',
@@ -130,6 +139,7 @@ export class IngressNginx extends pulumi.ComponentResource {
       version: args.version || '4.14.2',
       namespace: namespaceName,
     };
+
     const providedArgs: OptionalChartArgs | undefined = args.args;
     const finalChartArgs: ChartArgs = {
       chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
@@ -139,26 +149,11 @@ export class IngressNginx extends pulumi.ComponentResource {
       values,
     };
 
-    new k8s.helm.v4.Chart('ingress-nginx', finalChartArgs, { parent: this, dependsOn: [namespace, admissionIssuer] });
+    this.chart = new k8s.helm.v4.Chart(name, finalChartArgs, { 
+      parent: this, 
+      dependsOn: [this.namespace, admissionIssuer] 
+    });
 
     this.registerOutputs({});
   }
 }
-
-/**
- * Ingress-NGINX module with dependency metadata.
- * 
- * Requires:
- * - `cert-manager-crds`: Needs cert-manager CRDs for the admission webhook Issuer
- * 
- * Provides:
- * - `ingress-controller`: Ingress controller for routing external traffic
- */
-export default defineModule(
-  {
-    name: 'ingress-nginx',
-    requires: ['cert-manager-crds'],
-    provides: ['ingress-controller'],
-  },
-  (args: IngressNginxConfig, opts) => new IngressNginx('ingress-nginx', args, opts)
-);

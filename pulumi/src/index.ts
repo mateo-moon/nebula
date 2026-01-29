@@ -1,25 +1,29 @@
 /**
- * Nebula - A framework for building Pulumi infrastructure with modular components.
+ * Nebula - A library of reusable Pulumi modules for cloud infrastructure.
+ * 
+ * Usage: Import modules directly and instantiate them in your Pulumi program.
+ * Dependencies between modules are handled via Pulumi's native `dependsOn`.
+ * Secret resolution (ref+sops://...) is automatic when using any module.
  * 
  * @example
  * ```typescript
- * import { Component, Utils, defineModule } from 'nebula';
+ * import { CertManager } from 'nebula/k8s/cert-manager';
+ * import { IngressNginx } from 'nebula/k8s/ingress-nginx';
  * 
- * new Component('my-app', {
- *   backendUrl: 'gs://my-state-bucket',
- *   modules: [MyInfraModule()],
+ * const certManager = new CertManager('cert-manager', {
+ *   acmeEmail: 'admin@example.com',
  * });
+ * 
+ * const ingressNginx = new IngressNginx('ingress-nginx', {
+ *   createStaticIp: true,
+ * }, { dependsOn: [certManager] });
  * ```
  */
 
-export { Component, getCurrentComponent } from './core/component';
-export type { ComponentConfig, ModuleFactory } from './core/component';
+// Core
+export { BaseModule } from './core/base-module';
+export { setConfig } from './core/config';
+export type { NebulaConfig } from './core/config';
 
-export { defineModule } from './core/module';
-export type { ModuleMetadata, ModuleFactory as TypedModuleFactory } from './core/module';
-
-export { Utils, Auth } from './utils';
-export { buildDependencyGraph, detectCycle, topologicalSort, formatDependencyGraph } from './utils/graph';
-export type { DependencyGraph } from './utils/graph';
-
-export { runCli as runComponentCli } from './cli';
+// Utilities  
+export { Utils, Auth, Helpers } from './utils';
