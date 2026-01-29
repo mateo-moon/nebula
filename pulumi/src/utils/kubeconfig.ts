@@ -395,9 +395,12 @@ export function resolveKubeconfigPath(provider: string, options?: {
  * 
  * @example
  * import { getKubeconfigPathFor } from 'nebula/utils';
+ * import * as k8s from '@pulumi/kubernetes';
  * 
  * K8s: (): K8sConfig => ({
- *   kubeconfig: getKubeconfigPathFor('kurtosis', 'dev', 'gke'),
+ *   provider: new k8s.Provider('k8s', { 
+ *     kubeconfig: getKubeconfigPathFor('kurtosis', 'dev', 'gke') 
+ *   }),
  *   // ...
  * })
  */

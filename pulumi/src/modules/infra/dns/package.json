@@ -1,0 +1,12 @@
+{
+  "name": "@nebula/infra-dns",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "@pulumi/cloudflare": "^5.35.0",
+    "@pulumi/gcp": "^9.2.0",
+    "@pulumi/pulumi": "^3.198.0"
+  }
+}

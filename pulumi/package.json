@@ -8,8 +8,17 @@
   "exports": {
     ".": "./src/index.ts",
     "./cli": "./src/cli.ts",
-    "./components": "./src/components/index.ts",
-    "./components/infra": "./src/components/infra/index.ts"
+    "./modules/infra/aws": "./src/modules/infra/aws/index.ts",
+    "./modules/infra/gcp": "./src/modules/infra/gcp/index.ts",
+    "./modules/infra/dns": "./src/modules/infra/dns/index.ts",
+    "./k8s/cert-manager": "./src/modules/k8s/cert-manager/index.ts",
+    "./k8s/external-dns": "./src/modules/k8s/external-dns/index.ts",
+    "./k8s/cluster-api-operator": "./src/modules/k8s/cluster-api-operator/index.ts",
+    "./k8s/argocd": "./src/modules/k8s/argocd/index.ts",
+    "./k8s/ingress-nginx": "./src/modules/k8s/ingress-nginx/index.ts",
+    "./k8s/prometheus-operator": "./src/modules/k8s/prometheus-operator/index.ts",
+    "./k8s/crossplane": "./src/modules/k8s/crossplane/index.ts",
+    "./crossplane-crds/argocd": "./src/crossplane-crds/argocd/index.ts"
   },
   "bin": {
     "nebula": "./bin/nebula.js"
@@ -34,6 +43,16 @@
     "test:sops": "tsx tests/run-tests.ts sops"
   },
   "dependencies": {
+    "@nebula/infra-aws": "file:./src/modules/infra/aws",
+    "@nebula/infra-gcp": "file:./src/modules/infra/gcp",
+    "@nebula/infra-dns": "file:./src/modules/infra/dns",
+    "@nebula/k8s-cert-manager": "file:./src/modules/k8s/cert-manager",
+    "@nebula/k8s-external-dns": "file:./src/modules/k8s/external-dns",
+    "@nebula/k8s-cluster-api-operator": "file:./src/modules/k8s/cluster-api-operator",
+    "@nebula/k8s-argocd": "file:./src/modules/k8s/argocd",
+    "@nebula/k8s-ingress-nginx": "file:./src/modules/k8s/ingress-nginx",
+    "@nebula/k8s-prometheus-operator": "file:./src/modules/k8s/prometheus-operator",
+    "@nebula/k8s-crossplane": "file:./src/modules/k8s/crossplane",
     "@aws-sdk/client-s3": "^3.717.0",
     "@aws-sdk/client-sso": "^3.716.0",
     "@aws-sdk/client-sts": "^3.738.0",
@@ -43,7 +62,6 @@
     "@pulumi/aws": "^6.59.0",
     "@pulumi/awsx": "^2.15.0",
     "@pulumi/cloudflare": "^5.35.0",
-    "@pulumi/constellation": "file:sdks/constellation",
     "@pulumi/eks": "^2.6.3",
     "@pulumi/gcp": "^9.2.0",
     "@pulumi/kubernetes": "^4.23.0",

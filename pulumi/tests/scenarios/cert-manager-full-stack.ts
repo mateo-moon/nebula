@@ -16,8 +16,10 @@
  *   })
  */
 
-import { K8s as K8sComponent } from "../../src/components/k8s/index.js";
+import { K8s as K8sComponent, component } from "../../src/modules/k8s/index.js";
+import { CertManager } from "nebula/k8s/cert-manager";
 import { getOrbstackKubeconfig } from "../utils/kubeconfig.js";
+import * as k8s from '@pulumi/kubernetes';
 
 console.log("=== Testing Cert-Manager with Full Stack Setup ===\n");
 console.log("This test mirrors the real nebula.config.ts structure:\n");
@@ -35,12 +37,14 @@ console.log(`Using kubeconfig path: ${kubeconfigPath}\n`);
 const k8sComponent = new K8sComponent(
   "test-k8s",
   {
-    kubeconfig: kubeconfigPath, // Path, not content - K8s component reads it internally
-    certManager: {
-      namespace: 'cert-manager',
-      acmeEmail: 'dev@example.com',
-      // No args.skipAwait in real config - test without it to match reality
-    },
+    provider: new k8s.Provider("test-k8s", { kubeconfig: kubeconfigPath }),
+    components: [
+      component(CertManager, {
+        namespace: 'cert-manager',
+        acmeEmail: 'dev@example.com',
+        // No args.skipAwait in real config - test without it to match reality
+      })
+    ]
   }
   // No opts passed - K8s component creates provider internally
 );

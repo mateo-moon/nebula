@@ -1,0 +1,297 @@
+import * as k8s from "@pulumi/kubernetes";
+import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
+import * as pulumi from "@pulumi/pulumi";
+import * as crypto from "crypto";
+import bcrypt from "bcryptjs";
+import * as yaml from 'yaml';
+import { deepmerge } from "deepmerge-ts";
+import type { ArgoCdConfig, OptionalChartArgs } from "./types";
+import { defineModule } from "../../../core/module";
+
+export * from "./types";
+
+function flattenKeys(obj: any, prefix = ''): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      const newKey = prefix ? `${prefix}.${key}` : key;
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        Object.assign(result, flattenKeys(value, newKey));
+      } else {
+        result[newKey] = value;
+      }
+    }
+  }
+  return result;
+}
+
+export class ArgoCd extends pulumi.ComponentResource {
+  constructor(
+    name: string,
+    args: ArgoCdConfig,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('argocd', name, args, opts);
+
+    const namespaceName = args.namespace || 'argocd';
+
+    const namespace = new k8s.core.v1.Namespace('argocd-namespace', {
+      metadata: { name: namespaceName },
+    }, { parent: this });
+
+    // Precreate Redis password secret; ignore future content changes so it remains stable
+    const generatedRedisPassword = pulumi.secret(crypto.randomBytes(24).toString('base64'));
+    const redisSecret = new k8s.core.v1.Secret('argocd-redis-secret', {
+      metadata: { name: 'argocd-redis', namespace: namespaceName },
+      stringData: {
+        'auth': generatedRedisPassword,
+        'redis-password': generatedRedisPassword,
+      },
+    }, { parent: this, dependsOn: [namespace], ignoreChanges: ["data", "stringData"] });
+
+    const defaultValues: Record<string, unknown> = {
+      crds: { install: true },
+      configs: {
+      },
+      repoServer: {},
+      controller: {},
+      server: {},
+      applicationSet: {},
+      redis: { 
+        // The Argo CD chart's internal Redis uses secret 'argocd-redis' with key 'auth'.
+        auth: { existingSecret: 'argocd-redis', existingSecretPasswordKey: 'redis-password' },
+      },
+      dex: {},
+      notifications: {},
+    };
+
+    const chartValues: Record<string, any> = deepmerge(defaultValues, args.values || {});
+
+    // Flatten configs.params and configs.cm for nested objects
+    if (chartValues["configs"]) {
+      if (chartValues["configs"]["params"]) {
+        chartValues["configs"]["params"] = flattenKeys(chartValues["configs"]["params"]);
+      }
+      if (chartValues["configs"]["cm"]) {
+         // Note: configs.cm normally takes simple key-value pairs where values are strings. 
+         // If we added nested objects there (like application: { instanceLabelKey: "..." }), 
+         // we might need flattening or special handling. 
+         // Based on types.ts update, we have application? and oidc?.
+         if (chartValues["configs"]["cm"]["dex"] && chartValues["configs"]["cm"]["dex"]["config"] && typeof chartValues["configs"]["cm"]["dex"]["config"] !== 'string') {
+           chartValues["configs"]["cm"]["dex"]["config"] = yaml.stringify(chartValues["configs"]["cm"]["dex"]["config"]);
+         }
+         chartValues["configs"]["cm"] = flattenKeys(chartValues["configs"]["cm"]);
+      }
+      if (chartValues["configs"]["clusterCredentials"]) {
+       
+        const credsMap = chartValues["configs"]["clusterCredentials"];
+        if (credsMap && !Array.isArray(credsMap)) {
+           chartValues["configs"]["clusterCredentials"] = Object.values(credsMap);
+        }
+      }
+    }
+
+    // Handle Crossplane User configuration merging
+    let crossplanePassword: pulumi.Input<string> | undefined;
+    let crossplanePasswordHash: pulumi.Input<string> | undefined;
+
+    if (args.crossplaneUser?.enabled && args.crossplaneUser.password) {
+      crossplanePassword = args.crossplaneUser.password;
+      const salt = bcrypt.genSaltSync(10);
+      crossplanePasswordHash = bcrypt.hashSync(args.crossplaneUser.password, salt);
+
+      if (!chartValues["configs"]) chartValues["configs"] = {};
+      if (!chartValues["configs"]["cm"]) chartValues["configs"]["cm"] = {};
+      
+      // 1. Add user to argocd-cm
+      chartValues["configs"]["cm"]["accounts.crossplane"] = "apiKey, login";
+
+      // 2. Add password hash to argocd-secret
+      if (!chartValues["configs"]["secret"]) chartValues["configs"]["secret"] = {};
+      if (!chartValues["configs"]["secret"]["extra"]) chartValues["configs"]["secret"]["extra"] = {};
+      
+      chartValues["configs"]["secret"]["extra"]["accounts.crossplane.password"] = crossplanePasswordHash;
+      chartValues["configs"]["secret"]["extra"]["accounts.crossplane.passwordMtime"] = new Date().toISOString();
+      chartValues["configs"]["secret"]["extra"]["accounts.crossplane.enabled"] = "true";
+      
+      // Ensure server.secretkey is present. ArgoCD needs this for JWT token generation.
+      // If we don't provide it, the chart generates one, but since we are modifying the secret via 'extra',
+      // we need to make sure we don't accidentally suppress the default secret generation or we need to provide one.
+      // The error "server.secretkey is missing" suggests it's missing from the secret.
+      // We can generate a random key here.
+      if (!chartValues["configs"]["secret"]["extra"]["server.secretkey"]) {
+          chartValues["configs"]["secret"]["extra"]["server.secretkey"] = bcrypt.genSaltSync(10); // Using genSalt as a source of random string for key
+      }
+    }
+
+    const safeChartValues = chartValues;
+
+    const defaultChartArgsBase: OptionalChartArgs = {
+      chart: 'argo-cd',
+      repositoryOpts: { repo: args.repository || 'https://argoproj.github.io/argo-helm' },
+      version: args.version || '9.3.5',
+      namespace: namespaceName,
+    };
+    const providedArgs: OptionalChartArgs | undefined = args.args;
+
+    const projectRoot = (global as any).projectRoot || process.cwd();
+
+    const finalChartArgs: ChartArgs = {
+      chart: (providedArgs?.chart ?? defaultChartArgsBase.chart) as pulumi.Input<string>,
+      ...defaultChartArgsBase,
+      ...(providedArgs || {}),
+      namespace: namespaceName,
+      values: safeChartValues,
+      postRenderer: {
+        command: "/bin/sh",
+        args: ["-lc", `cd ${projectRoot} && vals eval -f -`],
+      },
+    };
+
+
+    const chart = new k8s.helm.v4.Chart('argo-cd', finalChartArgs, {
+      parent: this,
+      dependsOn: [namespace, redisSecret],
+      transformations: []
+    });
+
+    // Handle Crossplane User Bootstrapping
+    if (args.crossplaneUser?.enabled) {
+      const user = "crossplane";
+      const jobName = `argocd-token-bootstrap-${user}`;
+      const secretName = "argocd-crossplane-creds";
+      const targetNamespace = "crossplane-system"; // Hardcoded for standard Nebula convention
+
+      // Create a secret to hold the password for the job
+      const bootstrapSecretName = `${jobName}-password`;
+      const bootstrapSecret = new k8s.core.v1.Secret(bootstrapSecretName, {
+        metadata: { name: bootstrapSecretName, namespace: namespaceName },
+        stringData: {
+          password: crossplanePassword!,
+        },
+      }, { parent: this });
+
+      // Create ServiceAccount for the Job
+      const sa = new k8s.core.v1.ServiceAccount(jobName, {
+        metadata: { name: jobName, namespace: namespaceName },
+      }, { parent: this });
+
+      // So we need a Role in crossplane-system.
+      const secretRole = new k8s.rbac.v1.Role(`${jobName}-secret`, {
+        metadata: { name: jobName, namespace: targetNamespace },
+        rules: [
+          { apiGroups: [""], resources: ["secrets"], verbs: ["get", "create", "patch", "update"] },
+        ],
+      }, { parent: this });
+
+      new k8s.rbac.v1.RoleBinding(`${jobName}-secret`, {
+        metadata: { name: jobName, namespace: targetNamespace },
+        roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: jobName },
+        subjects: [{ kind: "ServiceAccount", name: jobName, namespace: namespaceName }], // Binding SA from argocd ns
+      }, { parent: this, dependsOn: [sa, secretRole] });
+
+      // The Job
+      new k8s.batch.v1.Job(jobName, {
+        metadata: { 
+          name: jobName, 
+          namespace: namespaceName,
+          annotations: {
+            "pulumi.com/waitFor": "condition=complete", // Wait for completion
+          }
+        },
+        spec: {
+          backoffLimit: 4,
+          template: {
+            spec: {
+              serviceAccountName: jobName,
+              restartPolicy: "OnFailure",
+              containers: [{
+                name: "argocd-cli",
+                image: "debian:bookworm-slim",
+                command: ["/bin/bash", "-c"],
+                args: [`
+                  set -e
+                  
+                  # Install dependencies
+                  apt-get update && apt-get install -y curl ca-certificates
+                  
+                  # Install kubectl
+                  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                  chmod +x kubectl
+                  mv kubectl /usr/local/bin/
+                  
+                  # Install argocd cli
+                  echo "Installing ArgoCD CLI..."
+                  curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.13.2/argocd-linux-amd64
+                  chmod +x /usr/local/bin/argocd
+                  
+                  echo "Waiting for ArgoCD server..."
+                  until echo "y" | argocd login argo-cd-argocd-server.argocd.svc.cluster.local --username ${user} --password "$USER_PASSWORD" --insecure --grpc-web --plaintext; do
+                    echo "Login failed, retrying in 5s..."
+                    sleep 5
+                  done
+                  echo "Logged in successfully."
+
+                  echo "Generating token..."
+                  TOKEN=$(argocd account generate-token --account ${user})
+
+                  echo "Creating Secret ${secretName} in ${targetNamespace}..."
+                  kubectl create secret generic ${secretName} \
+                    --namespace ${targetNamespace} \
+                    --from-literal=authToken=$TOKEN \
+                    --dry-run=client -o yaml | kubectl apply -f -
+                `],
+                env: [
+                  { 
+                    name: "USER_PASSWORD", 
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: bootstrapSecret.metadata.name,
+                        key: "password",
+                      },
+                    },
+                  },
+                ],
+              }],
+            },
+          },
+        },
+      }, { parent: this, dependsOn: [chart] });
+    }
+
+    // Optional: Create an AppProject
+    if (args.project?.name) {
+      new k8s.apiextensions.CustomResource('argocd-project', {
+        apiVersion: 'argoproj.io/v1alpha1',
+        kind: 'AppProject',
+        metadata: { name: args.project.name, namespace: namespaceName },
+        spec: {
+          description: args.project.description || '',
+          sourceRepos: args.project.sourceRepos || ['*'],
+          destinations: (args.project.destinations || [{ server: 'https://kubernetes.default.svc', namespace: '*' }])
+            .map(d => ({ server: d.server || 'https://kubernetes.default.svc', namespace: d.namespace || '*', name: d.name })),
+          ...(args.project.clusterResourceWhitelist ? { clusterResourceWhitelist: args.project.clusterResourceWhitelist } : {}),
+          ...(args.project.namespaceResourceWhitelist ? { namespaceResourceWhitelist: args.project.namespaceResourceWhitelist } : {}),
+        },
+      }, { parent: this, dependsOn: [chart] });
+    }
+
+    this.registerOutputs({});
+  }
+}
+
+/**
+ * ArgoCD module with dependency metadata.
+ * 
+ * Provides:
+ * - `argocd`: ArgoCD GitOps continuous delivery tool
+ * - `argocd-crds`: Custom Resource Definitions for Applications, AppProjects, etc.
+ */
+export default defineModule(
+  {
+    name: 'argocd',
+    provides: ['argocd', 'argocd-crds'],
+  },
+  (args: ArgoCdConfig, opts) => new ArgoCd('argocd', args, opts)
+);

@@ -1,7 +1,11 @@
-// Re-export everything from the new modular structure
+/**
+ * Nebula utilities - authentication, helpers, and configuration management.
+ */
+
 export { Helpers } from './helpers';
 export { Auth } from './auth';
 export * from './kubeconfig';
+export * from './graph';
 
-// Keep Utils as an alias for backward compatibility
+// Utils is the primary export name for the Helpers class
 export { Helpers as Utils } from './helpers';
