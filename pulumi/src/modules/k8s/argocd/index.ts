@@ -70,9 +70,52 @@ export class ArgoCd extends BaseModule {
       },
     }, { parent: this, dependsOn: [this.namespace], ignoreChanges: ["data", "stringData"] });
 
+    // Handle Crossplane User - need to process this early for the argocd-secret
+    let crossplanePassword: pulumi.Input<string> | undefined;
+    let crossplanePasswordHash: string | undefined;
+    
+    if (args.crossplaneUser?.enabled && args.crossplaneUser.password) {
+      // Resolve password if it's a ref+ string
+      const rawPassword = args.crossplaneUser.password;
+      const resolvedPassword = typeof rawPassword === 'string' && rawPassword.startsWith('ref+')
+        ? Helpers.resolveRefPlusSecretsDeep(rawPassword, false, 'crossplanePassword')
+        : rawPassword;
+      
+      crossplanePassword = resolvedPassword;
+      const salt = bcrypt.genSaltSync(10);
+      crossplanePasswordHash = bcrypt.hashSync(resolvedPassword as string, salt);
+    }
+
+    // Precreate ArgoCD server secret; ignore future changes so JWT tokens remain valid
+    const generatedServerSecretKey = pulumi.secret(crypto.randomBytes(32).toString('base64'));
+    const argocdSecretData: Record<string, pulumi.Input<string>> = {
+      'server.secretkey': generatedServerSecretKey,
+    };
+    
+    // Add crossplane user password to the pre-created secret if enabled
+    if (crossplanePasswordHash) {
+      argocdSecretData['accounts.crossplane.password'] = crossplanePasswordHash;
+      argocdSecretData['accounts.crossplane.enabled'] = 'true';
+    }
+    
+    const argocdServerSecret = new k8s.core.v1.Secret(`${name}-server-secret`, {
+      metadata: { 
+        name: 'argocd-secret', 
+        namespace: namespaceName,
+        labels: {
+          'app.kubernetes.io/name': 'argocd-secret',
+          'app.kubernetes.io/part-of': 'argocd',
+        },
+      },
+      stringData: argocdSecretData,
+    }, { parent: this, dependsOn: [this.namespace], ignoreChanges: ["data", "stringData"] });
+
     const defaultValues: Record<string, unknown> = {
       crds: { install: true },
       configs: {
+        secret: {
+          createSecret: false, // We pre-create argocd-secret to keep server.secretkey stable
+        },
       },
       repoServer: {},
       controller: {},
@@ -114,43 +157,11 @@ export class ArgoCd extends BaseModule {
       }
     }
 
-    // Handle Crossplane User configuration merging
-    let crossplanePassword: pulumi.Input<string> | undefined;
-    let crossplanePasswordHash: pulumi.Input<string> | undefined;
-
-    if (args.crossplaneUser?.enabled && args.crossplaneUser.password) {
-      // Resolve password if it's a ref+ string
-      const rawPassword = args.crossplaneUser.password;
-      const resolvedPassword = typeof rawPassword === 'string' && rawPassword.startsWith('ref+')
-        ? Helpers.resolveRefPlusSecretsDeep(rawPassword, false, 'crossplanePassword')
-        : rawPassword;
-      
-      crossplanePassword = resolvedPassword;
-      const salt = bcrypt.genSaltSync(10);
-      crossplanePasswordHash = bcrypt.hashSync(resolvedPassword as string, salt);
-
+    // Add crossplane user to argocd-cm if enabled
+    if (args.crossplaneUser?.enabled) {
       if (!chartValues["configs"]) chartValues["configs"] = {};
       if (!chartValues["configs"]["cm"]) chartValues["configs"]["cm"] = {};
-      
-      // 1. Add user to argocd-cm
       chartValues["configs"]["cm"]["accounts.crossplane"] = "apiKey, login";
-
-      // 2. Add password hash to argocd-secret
-      if (!chartValues["configs"]["secret"]) chartValues["configs"]["secret"] = {};
-      if (!chartValues["configs"]["secret"]["extra"]) chartValues["configs"]["secret"]["extra"] = {};
-      
-      chartValues["configs"]["secret"]["extra"]["accounts.crossplane.password"] = crossplanePasswordHash;
-      chartValues["configs"]["secret"]["extra"]["accounts.crossplane.passwordMtime"] = new Date().toISOString();
-      chartValues["configs"]["secret"]["extra"]["accounts.crossplane.enabled"] = "true";
-      
-      // Ensure server.secretkey is present. ArgoCD needs this for JWT token generation.
-      // If we don't provide it, the chart generates one, but since we are modifying the secret via 'extra',
-      // we need to make sure we don't accidentally suppress the default secret generation or we need to provide one.
-      // The error "server.secretkey is missing" suggests it's missing from the secret.
-      // We can generate a random key here.
-      if (!chartValues["configs"]["secret"]["extra"]["server.secretkey"]) {
-          chartValues["configs"]["secret"]["extra"]["server.secretkey"] = bcrypt.genSaltSync(10); // Using genSalt as a source of random string for key
-      }
     }
 
     const safeChartValues = chartValues;
@@ -174,7 +185,7 @@ export class ArgoCd extends BaseModule {
 
     this.chart = new k8s.helm.v4.Chart(name, finalChartArgs, {
       parent: this,
-      dependsOn: [this.namespace, redisSecret],
+      dependsOn: [this.namespace, redisSecret, argocdServerSecret],
     });
 
     // Handle Crossplane User Bootstrapping
@@ -217,13 +228,15 @@ export class ArgoCd extends BaseModule {
         subjects: [{ kind: "ServiceAccount", name: jobName, namespace: namespaceName }], // Binding SA from argocd ns
       }, { parent: this, dependsOn: [sa, secretRole] });
 
-      // The Job
+      // The Job - recreate when argocd-secret changes (e.g., after manual deletion)
       new k8s.batch.v1.Job(jobName, {
         metadata: { 
           name: jobName, 
           namespace: namespaceName,
           annotations: {
             "pulumi.com/waitFor": "condition=complete", // Wait for completion
+            // Track argocd-secret UID to trigger job recreation if secret is recreated
+            "argocd-secret-uid": argocdServerSecret.metadata.uid,
           }
         },
         spec: {
@@ -283,7 +296,12 @@ export class ArgoCd extends BaseModule {
             },
           },
         },
-      }, { parent: this, dependsOn: [this.chart] });
+      }, { 
+        parent: this, 
+        dependsOn: [this.chart, argocdServerSecret],
+        deleteBeforeReplace: true,  // Delete old job before creating new one
+        replaceOnChanges: ["metadata.annotations"],  // Replace job when annotations change
+      });
     }
 
     // Optional: Create an AppProject

@@ -94,7 +94,7 @@ export class Crossplane extends BaseModule {
             key: 'authToken',
           },
         },
-        serverAddr: 'argo-cd-argocd-server.argocd.svc.cluster.local',
+        serverAddr: 'argocd-server.argocd.svc.cluster.local',
         insecure: true,
         plainText: true,
       },
