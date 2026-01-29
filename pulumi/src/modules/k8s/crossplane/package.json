@@ -1,0 +1,11 @@
+{
+  "name": "@nebula/k8s-crossplane",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "type": "module",
+  "dependencies": {
+    "@pulumi/kubernetes": "^4.23.0",
+    "@pulumi/pulumi": "^3.198.0",
+    "deepmerge-ts": "^7.1.5"
+  }
+}

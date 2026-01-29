@@ -4,7 +4,7 @@
  */
 
 import * as k8s from "@pulumi/kubernetes";
-import { CertManager } from "../../src/components/k8s/cert-manager.js";
+import { CertManager } from "../../src/modules/k8s/cert-manager/index.js";
 import { getOrbstackKubeconfig } from "../utils/kubeconfig.js";
 
 console.log("=== Testing Cert-Manager Component with Explicit Provider ===\n");

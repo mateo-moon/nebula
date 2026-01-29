@@ -140,7 +140,7 @@ main: ${scenario.mainFile}`;
     if (scenario.disableDefaultProviders) {
       console.log('\n🔧 Setting pulumi:disable-default-providers config...');
       await runCommand(
-        `pulumi config set pulumi:disable-default-providers '["kubernetes"]' --non-interactive`,
+        `pulumi config set pulumi:disable-default-providers '["kubernetes", "gcp"]' --non-interactive`,
         config,
         config.testDir
       );

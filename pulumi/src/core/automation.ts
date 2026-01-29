@@ -1,293 +1,169 @@
 /**
- * Automation helpers operating on Pulumi Automation API Stacks.
- * Handles stack creation/management separate from resource definition.
+ * Stack Manager - Pulumi Automation API utilities for stack management.
+ * 
+ * Handles:
+ * - Creating and selecting Pulumi stacks
+ * - Generating Pulumi.yaml project files
+ * - Generating Pulumi.<stack>.yaml configuration files
+ * - Managing workspace settings (backend, secrets provider, etc.)
  */
 import type { Stack } from '@pulumi/pulumi/automation';
 import { LocalWorkspace } from '@pulumi/pulumi/automation';
-import { Project } from './project';
+import { Component } from './component';
 import * as path from 'path';
-import * as fs from 'fs';
-
-export type StackOp = 'preview' | 'up' | 'destroy' | 'refresh';
-
-interface BaseOpts {
-  onOutput?: (out: string) => void;
-  color?: 'always' | 'never' | 'auto';
-  target?: string[];
-  /** Include dependent resources of the provided targets */
-  targetDependents?: boolean;
-}
-
-export async function runStack(stack: Stack, op: StackOp, opts?: BaseOpts) {
-  const io = { onOutput: opts?.onOutput || ((out: string) => process.stdout.write(out)) } as const;
-  const base = {
-    color: opts?.color || 'always',
-    target: opts?.target,
-    ...(opts?.targetDependents ? { targetDependents: true } : {}),
-    ...io,
-  } as const;
-
-
-  const runWithSignals = async <T>(fn: () => Promise<T>): Promise<T> => {
-    let cancelled = false;
-    const cancelFn = async () => {
-      if (cancelled) return;
-      cancelled = true;
-      try { process.stderr.write('\nSignal received. Cancelling current Pulumi operation...\n'); } catch {}
-      try { await stack.cancel(); } catch {}
-    };
-    const add = () => { process.once('SIGINT', cancelFn); process.once('SIGTERM', cancelFn); };
-    const remove = () => { process.removeListener('SIGINT', cancelFn); process.removeListener('SIGTERM', cancelFn); };
-    add();
-    try { return await fn(); }
-    finally { 
-      remove();
-    }
-  };
-
-  if (op === 'preview') return await runWithSignals(() => stack.preview({ diff: true, ...base } as any));
-  if (op === 'up') return await runWithSignals(() => stack.up({ ...base } as any));
-  if (op === 'destroy') return await runWithSignals(() => stack.destroy({ ...base } as any));
-  if (op === 'refresh') return await runWithSignals(() => stack.refresh({ ...base } as any));
-  return; // satisfy all code paths
-}
-
-export async function previewStack(stack: Stack, opts?: BaseOpts): Promise<void> { 
-  await runStack(stack, 'preview', opts); 
-}
-
-export async function upStack(stack: Stack, opts?: BaseOpts): Promise<void> { 
-  await runStack(stack, 'up', opts); 
-}
-
-export async function destroyStack(stack: Stack, opts?: BaseOpts): Promise<void> { 
-  await runStack(stack, 'destroy', opts); 
-}
-
-export async function refreshStack(stack: Stack, opts?: BaseOpts): Promise<void> { 
-  await runStack(stack, 'refresh', opts); 
-}
 
 /**
- * Stack Manager - handles stack creation/management separate from resource definition
+ * Manages Pulumi stack creation and configuration
  */
 export class StackManager {
   private projectSettingsSaved = false;
-  
-  constructor(private project: Project) {}
+
+  constructor(private component: Component) {}
 
   /**
-   * Create or select a stack for a specific environment and component
-   * Stack name format: "{envId}-{componentName}" for components
-   * Stack name format: "{envId}-addon-{addonName}" for addons
+   * Create or select a Pulumi stack, optionally persisting configuration files.
+   * 
+   * @param stackName - Name of the stack (e.g., "dev", "prod")
+   * @param persistSettings - Whether to write Pulumi.yaml and stack config files
+   * @param workDir - Working directory for file generation
    */
-  async createOrSelectStack(envId: string, componentName: string, persistSettings = false, workDir?: string, isAddon = false): Promise<Stack> {
-    const prefix = isAddon ? 'addon-' : '';
-    const stackName = `${envId.toLowerCase()}-${prefix}${componentName.toLowerCase()}`;
-    
-    // Get environment
-    const env = this.project.envs[envId];
-    if (!env) {
-      throw new Error(`Environment '${envId}' not found in project '${this.project.id}'`);
-    }
+  async createOrSelectStack(
+    stackName: string,
+    persistSettings = false,
+    workDir?: string
+  ): Promise<Stack> {
+    const workspaceConfig = this.buildWorkspaceConfig();
+    const baseOptions = this.buildWorkspaceOptions();
 
-    // Prepare workspace configuration
-    const wsCfg = await this.prepareWorkspaceConfig(env);
-    const baseWorkspaceOpts = this.buildBaseWorkspaceOptions(env);
-
-    // Add work directory if provided
     if (workDir) {
-      baseWorkspaceOpts.workDir = path.resolve(workDir);
+      baseOptions.workDir = path.resolve(workDir);
     }
 
-    const resolvedWorkDir = baseWorkspaceOpts.workDir || process.cwd();
-    const stackConfigDir = baseWorkspaceOpts.projectSettings?.stackConfigDir || '.pulumi';
-    const stackConfigDirPath = path.resolve(resolvedWorkDir, stackConfigDir);
+    const resolvedWorkDir = baseOptions.workDir || process.cwd();
 
-    // Save project settings FIRST (before creating stacks) so stackConfigDir is respected
+    // Generate Pulumi.yaml if requested
     if (persistSettings && !this.projectSettingsSaved) {
-      // Ensure stack config directory exists
-      if (!fs.existsSync(stackConfigDirPath)) {
-        fs.mkdirSync(stackConfigDirPath, { recursive: true });
-      }
-
-      // Create a temporary workspace just to save project settings
-      const tempWorkspace = await LocalWorkspace.create({
-        projectSettings: baseWorkspaceOpts.projectSettings,
+      const workspace = await LocalWorkspace.create({
+        projectSettings: baseOptions.projectSettings,
         workDir: resolvedWorkDir,
       });
-      
-      await tempWorkspace.saveProjectSettings(baseWorkspaceOpts.projectSettings);
+
+      await workspace.saveProjectSettings(baseOptions.projectSettings);
       this.projectSettingsSaved = true;
-      
-      // Log the generated project file
-      const projectFilePath = path.join(resolvedWorkDir, 'Pulumi.yaml');
-      console.log(`Generated: ${projectFilePath}`);
+
+      console.log(`Generated: ${path.join(resolvedWorkDir, 'Pulumi.yaml')}`);
     }
 
-    // Create stack-specific configuration
-    const wsWithStack = {
-      ...baseWorkspaceOpts,
+    // Build stack-specific settings
+    const settings = this.component.config.settings;
+    const stackOptions = {
+      ...baseOptions,
       stackSettings: {
         [stackName]: {
-          ...(env.config.settings?.secretsProvider ? { 
-            secretsProvider: env.config.settings.secretsProvider 
-          } : {}),
+          ...(settings?.secretsProvider && { secretsProvider: settings.secretsProvider }),
           config: {
-            ...wsCfg,
-            'pulumi:disable-default-providers': ['kubernetes'],
+            ...workspaceConfig,
+            'pulumi:disable-default-providers': ['kubernetes', 'gcp'],
           },
         },
       },
     };
 
-    // Create or select the stack (now Pulumi.yaml should have stackConfigDir set)
+    // Create or select the stack
     const stack = await LocalWorkspace.createOrSelectStack(
       {
         stackName,
-        projectName: this.project.id,
+        projectName: this.component.id,
         program: async () => {
-          // Import and execute the nebula.config.ts program
-          // This will trigger Environment.getResourcesForStack()
-          // which uses pulumi.getStack() to determine what to create
+          // The program imports index.ts which instantiates the Component
           try {
-            const configPath = workDir ? path.resolve(workDir, 'nebula.config.ts') : path.resolve(process.cwd(), 'nebula.config.ts');
+            const configPath = path.resolve(workDir || process.cwd(), 'index.ts');
             await import(configPath);
           } catch (error) {
-            console.warn(`Failed to load nebula.config.ts: ${error}`);
-            // Continue without throwing - stack creation should still succeed
+            console.warn(`Failed to load index.ts: ${error}`);
           }
         },
       },
-      wsWithStack
+      stackOptions
     );
 
-    // Log and fix stack file location if needed
     if (persistSettings) {
-      const workspace = stack.workspace;
-      const actualWorkDir = workspace.workDir || resolvedWorkDir;
-      
-      // Stack settings are already processed by createOrSelectStack
-      // Log the expected stack file location (Automation API should respect stackConfigDir)
-      const stackFilePath = path.join(stackConfigDirPath, `Pulumi.${stackName}.yaml`);
-      console.log(`Generated: ${stackFilePath}`);
-      
-      // If stack file was created in root, move it to stackConfigDir
-      const rootStackPath = path.join(actualWorkDir, `Pulumi.${stackName}.yaml`);
-      if (fs.existsSync(rootStackPath) && !fs.existsSync(stackFilePath)) {
-        fs.renameSync(rootStackPath, stackFilePath);
-        console.log(`Moved stack file to: ${stackFilePath}`);
-      }
+      console.log(`Generated: ${path.join(resolvedWorkDir, `Pulumi.${stackName}.yaml`)}`);
     }
 
     return stack;
   }
 
   /**
-   * Get all available stacks for an environment
+   * Parse component config into Pulumi workspace config format
    */
-  getAvailableStacks(envId: string): string[] {
-    const env = this.project.envs[envId];
-    if (!env) {
-      throw new Error(`Environment '${envId}' not found in project '${this.project.id}'`);
-    }
+  private buildWorkspaceConfig(): Record<string, any> {
+    const rawConfig = this.component.config.settings?.config;
+    if (!rawConfig) return {};
 
-    const components = env.config.components || {};
-    const addons = env.config.addons || {};
-    const componentStacks = Object.keys(components).map(componentName => 
-      `${envId.toLowerCase()}-${componentName.toLowerCase()}`
-    );
-    const addonStacks = Object.keys(addons).map(addonName => 
-      `${envId.toLowerCase()}-addon-${addonName.toLowerCase()}`
-    );
-    return [...componentStacks, ...addonStacks];
-  }
-
-  /**
-   * Prepare workspace configuration
-   */
-  private async prepareWorkspaceConfig(env: any): Promise<Record<string, any>> {
-    const rawCfg = env.config.settings?.config;
-    if (!rawCfg) return {};
-    
-    // Parse config if it's a string (JSON)
+    // Parse JSON string if needed
     let parsed: Record<string, any> = {};
-    if (typeof rawCfg === 'string') {
+    if (typeof rawConfig === 'string') {
       try {
-        parsed = JSON.parse(rawCfg);
+        parsed = JSON.parse(rawConfig);
       } catch {
         return {};
       }
-    } else if (rawCfg && typeof rawCfg === 'object') {
-      parsed = rawCfg;
+    } else if (typeof rawConfig === 'object') {
+      parsed = rawConfig;
     }
-    
-    // Convert to workspace format: strings stay as-is, objects wrapped in { value: ... }
-    const out: Record<string, any> = {};
-    Object.entries(parsed).forEach(([k, v]) => {
-      if (typeof v === 'string') {
-        out[k] = v;
-      } else {
-        out[k] = { value: v };
-      }
-    });
-    return out;
+
+    // Convert to workspace format: wrap non-string values in { value: ... }
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      result[key] = typeof value === 'string' ? value : { value };
+    }
+    return result;
   }
 
   /**
-   * Build base workspace options shared by all stacks
+   * Build base workspace options shared across all stacks
    */
-  private buildBaseWorkspaceOptions(env: any): any {
+  private buildWorkspaceOptions(): any {
+    const { backendUrl, settings } = this.component.config;
     const isDebug = Boolean(process.env['PULUMI_LOG_LEVEL'] || process.env['TF_LOG']);
-    
-    // Get backend URL from project-level config only
-    const backendUrl = this.project.config?.backendUrl;
-    
-    const baseOpts: any = {
+
+    const options: any = {
       projectSettings: {
-        name: this.project.id,
-        main: 'nebula.config.ts',
-        runtime: { 
-          name: 'nodejs', 
-          options: { typescript: false, nodeargs: '--import=tsx/esm' } 
+        name: this.component.id,
+        main: 'index.ts',
+        runtime: {
+          name: 'nodejs',
+          options: { typescript: false, nodeargs: '--import=tsx/esm' }
         },
-        options: {
-          refresh: 'always',
-        },
-        stackConfigDir: '.pulumi',
-        ...(backendUrl ? { 
-          backend: { url: backendUrl } 
-        } : {}),
+        options: { refresh: 'always' },
+        ...(backendUrl && { backend: { url: backendUrl } }),
+      },
+      envVars: {
+        // Debug logging
+        ...(isDebug && {
+          ...(process.env['TF_LOG'] && { TF_LOG: process.env['TF_LOG'] }),
+          ...(process.env['TF_LOG_PROVIDER'] && { TF_LOG_PROVIDER: process.env['TF_LOG_PROVIDER'] }),
+          TF_LOG_PATH: '/tmp/terraform.log',
+          TF_APPEND_LOGS: '1',
+          ...(process.env['PULUMI_LOG_LEVEL'] && { PULUMI_LOG_LEVEL: process.env['PULUMI_LOG_LEVEL'] }),
+          PULUMI_LOG_FLOW: 'true',
+        }),
+        // GCP authentication
+        ...(process.env['GOOGLE_APPLICATION_CREDENTIALS'] && {
+          GOOGLE_APPLICATION_CREDENTIALS: process.env['GOOGLE_APPLICATION_CREDENTIALS']
+        }),
       },
     };
 
-    // Add environment variables for all stacks
-    baseOpts.envVars = {
-      // Debug environment variables if needed
-      ...(isDebug ? {
-        ...(process.env['TF_LOG'] ? { TF_LOG: process.env['TF_LOG'] } : {}),
-        ...(process.env['TF_LOG_PROVIDER'] ? { TF_LOG_PROVIDER: process.env['TF_LOG_PROVIDER'] } : {}),
-        TF_LOG_PATH: '/tmp/terraform.log',
-        TF_APPEND_LOGS: '1',
-        ...(process.env['PULUMI_LOG_LEVEL'] ? { PULUMI_LOG_LEVEL: process.env['PULUMI_LOG_LEVEL'] } : {}),
-        PULUMI_LOG_FLOW: 'true',
-      } : {}),
-      // GCP authentication environment variable
-      ...(process.env['GOOGLE_APPLICATION_CREDENTIALS'] ? { 
-        GOOGLE_APPLICATION_CREDENTIALS: process.env['GOOGLE_APPLICATION_CREDENTIALS'] 
-      } : {}),
-    };
-
-    // Add work directory if specified
-    if (env.config.settings?.workDir) {
-      baseOpts.workDir = path.resolve(env.config.settings.workDir);
+    if (settings?.workDir) {
+      options.workDir = path.resolve(settings.workDir);
     }
 
-    // Add secrets provider if specified
-    if (env.config.settings?.secretsProvider) {
-      baseOpts.secretsProvider = env.config.settings.secretsProvider;
+    if (settings?.secretsProvider) {
+      options.secretsProvider = settings.secretsProvider;
     }
 
-    return baseOpts;
+    return options;
   }
 }

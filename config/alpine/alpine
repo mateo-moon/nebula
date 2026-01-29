@@ -5,6 +5,13 @@ cat <<EOF > bootstrap.start
 exec > /var/log/bootstrap.log 2>&1
 echo "BOOTSTRAP START: \$(date)"
 
+# Ensure loopback is up
+echo "--- Starting loopback ---"
+ip link set lo up
+
+# Force localhost to IPv4 only to avoid [::1] connection issues
+sed -i '/^::1/d' /etc/hosts
+
 # do the system installation
 setup-interfaces -a
 setup-keymap us us
@@ -39,13 +46,14 @@ if [ -b /dev/sda3 ]; then
 fi
 
 echo "--- Installing/Ensuring k0s ---"
-if [ ! -f /var/lib/k0s/k0s ]; then
+if [ ! -f /var/lib/k0s/bin/k0s ]; then
     echo "Downloading k0s..."
     curl -sSLf https://get.k0s.sh | sh
-    cp /usr/local/bin/k0s /var/lib/k0s/k0s
+    mkdir -p /var/lib/k0s/bin
+    cp /usr/local/bin/k0s /var/lib/k0s/bin/k0s
 else
     echo "k0s already exists on persistent disk, linking..."
-    ln -sf /var/lib/k0s/k0s /usr/local/bin/k0s
+    ln -sf /var/lib/k0s/bin/k0s /usr/local/bin/k0s
 fi
 
 echo "--- Loading kernel modules ---"

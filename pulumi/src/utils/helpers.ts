@@ -23,7 +23,15 @@ declare global {
 }
 
 /**
- * Helper class providing utility methods for project configuration and AWS setup
+ * Helpers - Utility methods for cloud provider setup, authentication, and secrets management.
+ * 
+ * Key capabilities:
+ * - Cloud bucket creation (S3, GCS) for Pulumi state storage
+ * - GCP KMS key management for secrets encryption
+ * - GCP API enablement
+ * - Secret resolution (ref+ pattern) via vals
+ * - Stack reference resolution
+ * - SOPS configuration management
  */
 export class Helpers {
   /**
@@ -37,6 +45,23 @@ export class Helpers {
    * This allows us to recognize already-resolved secrets when they appear in resource properties
    */
   private static resolvedSecretValues: Map<string, string> = new Map();
+
+  /**
+   * Find the nearest project root (directory containing package.json)
+   * moving up from the start directory.
+   */
+  private static findNearestProjectRoot(startDir: string): string {
+    let currentDir = path.resolve(startDir);
+    const root = path.parse(currentDir).root;
+    while (currentDir !== root) {
+      if (fs.existsSync(path.join(currentDir, 'package.json'))) {
+        return currentDir;
+      }
+      currentDir = path.dirname(currentDir);
+    }
+    // Fallback to startDir if no package.json found
+    return startDir;
+  }
 
   /**
    * Get or create a config key for a resolved ref+ secret
@@ -484,32 +509,30 @@ export class Helpers {
   }
 
   /**
-   * Bootstrap backend storage and secrets providers for all environments.
+   * Bootstrap backend storage and secrets providers for the component.
    * This is a utility function that should be called from the CLI layer.
    */
-  public static async bootstrap(projectId: string, environments: Record<string, any>, projectConfig?: any): Promise<{ envVars: Record<string, string> }> {
-    // Extract settings from environment configs
-    const envConfigs = Object.values(environments).filter(Boolean) as any[];
-    const envSettings = envConfigs.map(cfg => cfg.settings || {});
+  public static async bootstrap(_componentId: string, config: any, workDir?: string): Promise<{ envVars: Record<string, string> }> {
+    // Extract settings from component config
+    const settings = config.settings || {};
 
     // Backend URL taken from project config
-    const backendUrl = projectConfig?.backendUrl;
+    const backendUrl = config.backendUrl;
 
-    // Parse first available config (string or object) and extract cloud details
-    const firstRawConfig = envSettings.find(s => s.config != null)?.config;
-    
     // Parse config if it's a string (JSON)
     let parsedConfig: Record<string, any> = {};
-    if (firstRawConfig) {
-      if (typeof firstRawConfig === 'string') {
+    const rawConfig = settings.config;
+    
+    if (rawConfig) {
+      if (typeof rawConfig === 'string') {
         try {
-          parsedConfig = JSON.parse(firstRawConfig);
+          parsedConfig = JSON.parse(rawConfig);
         } catch {
           // If parsing fails, treat as empty config
           parsedConfig = {};
         }
-      } else if (typeof firstRawConfig === 'object') {
-        parsedConfig = firstRawConfig;
+      } else if (typeof rawConfig === 'object') {
+        parsedConfig = rawConfig;
       }
     }
     
@@ -519,92 +542,66 @@ export class Helpers {
       profile: parsedConfig['aws:profile'],
     } : undefined;
     
-    // Extract GCP config
-    const gcpConfig = parsedConfig['gcp:project'] || parsedConfig['gcp:region'] ? {
-      projectId: parsedConfig['gcp:project'],
-      region: parsedConfig['gcp:region'],
-    } : undefined;
+    // Extract GCP config from settings.config
+    let gcpConfig: { projectId?: string; region?: string } | undefined = 
+      parsedConfig['gcp:project'] || parsedConfig['gcp:region'] ? {
+        projectId: parsedConfig['gcp:project'],
+        region: parsedConfig['gcp:region'],
+      } : undefined;
+    
+    // If no GCP config in settings.config, try to extract from secretsProvider URL
+    // Format: gcpkms://projects/PROJECT_ID/locations/LOCATION/keyRings/...
+    if (!gcpConfig && settings.secretsProvider?.startsWith('gcpkms://')) {
+      try {
+        const url = new URL(settings.secretsProvider);
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts.length >= 4) {
+          const extractedProjectId = pathParts[0];
+          const extractedLocation = pathParts[2];
+          if (extractedProjectId && extractedLocation) {
+            gcpConfig = { projectId: extractedProjectId, region: extractedLocation };
+          }
+        }
+      } catch {
+        // Invalid URL, continue without GCP config
+      }
+    }
+    
+    // If still no GCP config, try to extract from backendUrl (gs://bucket-name)
+    // Note: This doesn't give us projectId directly, but we might be able to infer from bucket name
+    if (!gcpConfig && backendUrl?.startsWith('gs://')) {
+      // Can't extract projectId from bucket URL alone, but note for future enhancement
+    }
 
     const envVars: Record<string, string> = {};
 
-    // Build a map of project IDs to regions from environment configs (for authentication)
-    const projectRegionMap = new Map<string, string>();
-    for (const env of Object.values(environments)) {
-      const envConfig = env?.settings?.config;
-      if (envConfig) {
-        let parsedConfig: Record<string, any> = {};
-        if (typeof envConfig === 'string') {
-          try {
-            parsedConfig = JSON.parse(envConfig);
-          } catch {
-            // Ignore parse errors
-          }
-        } else if (typeof envConfig === 'object') {
-          parsedConfig = envConfig;
-        }
-        const projectId = parsedConfig['gcp:project'];
-        const region = parsedConfig['gcp:region'];
-        if (projectId && region) {
-          projectRegionMap.set(projectId, region);
-        }
-      }
-    }
-
-    // Authenticate for all unique GCP projects upfront
-    // IMPORTANT: Authenticate sequentially to avoid multiple OAuth flows with Google SSO
-    // After first successful auth, try to reuse credentials for other projects
+    // Authenticate if GCP project is configured
     let primaryProjectId: string | null = null;
     let primaryRegion: string | null = null;
     
-    if (projectRegionMap.size > 0) {
+    if (gcpConfig?.projectId) {
       const { Auth } = await import('./auth');
-      const uniqueProjects = Array.from(projectRegionMap.entries());
+      const projectId = gcpConfig.projectId;
+      const region = gcpConfig.region;
       
-      let firstAuthenticatedProject: string | null = null;
-      
-      // Authenticate projects sequentially (not in parallel) to avoid OAuth conflicts
-      for (const [projectId, region] of uniqueProjects) {
-        try {
-          // First, check if we already have valid credentials for this project
-          if (await Auth.GCP.isTokenValid(projectId)) {
-            console.log(`  ✅ Valid token already exists for project: ${projectId}`);
-            Auth.GCP.setAccessTokenEnvVar(projectId, region);
-            if (!firstAuthenticatedProject) {
-              firstAuthenticatedProject = projectId;
-              primaryProjectId = projectId;
-              primaryRegion = region;
-            }
-            continue;
-          }
-          
-          // Try to reuse credentials from the first authenticated project if available
-          if (firstAuthenticatedProject && firstAuthenticatedProject !== projectId) {
-            const reused = await Auth.GCP.tryReuseCredentials(projectId, firstAuthenticatedProject, region);
-            if (reused) {
-              // Successfully reused credentials, skip OAuth flow
-              continue;
-            }
-            // If reuse failed, fall through to authenticate normally
-            console.log(`  ℹ️  Could not reuse credentials for project ${projectId}, will authenticate separately`);
-          }
-          
-          // Authenticate this project (may trigger OAuth flow)
-          await Auth.GCP.authenticate(projectId, region);
-          
-          // Track the first successfully authenticated project for credential reuse
-          if (!firstAuthenticatedProject) {
-            firstAuthenticatedProject = projectId;
-            primaryProjectId = projectId;
-            primaryRegion = region;
-          }
-        } catch (error: any) {
-          console.warn(`⚠️  Failed to authenticate for project ${projectId}: ${error?.message || error}`);
-          // Continue with other projects even if one fails
+      try {
+        // Authenticate this project
+        // Check if token exists
+        if (await Auth.GCP.isTokenValid(projectId)) {
+             console.log(`  ✅ Valid token already exists for project: ${projectId}`);
+             Auth.GCP.setAccessTokenEnvVar(projectId, region);
+        } else {
+             await Auth.GCP.authenticate(projectId, region);
         }
+        
+        primaryProjectId = projectId;
+        primaryRegion = region ?? null;
+        
+      } catch (error: any) {
+        console.warn(`⚠️  Failed to authenticate for project ${projectId}: ${error?.message || error}`);
       }
       
-      // Populate envVars with GCP credentials from the primary project
-      // This allows eval $(nebula bootstrap) to export credentials for gcloud commands
+      // Populate envVars
       if (primaryProjectId) {
         const homeDir = os.homedir();
         const accessTokenFilePath = path.join(homeDir, '.config', 'gcloud', `${primaryProjectId}-accesstoken`);
@@ -614,17 +611,14 @@ export class Helpers {
           const computeZone = `${primaryRegion}-a`;
           envVars['CLOUDSDK_COMPUTE_ZONE'] = computeZone;
         }
-      }
-      
-      // Enable required GCP APIs for all authenticated projects
-      await Promise.all(uniqueProjects.map(async ([projectId]) => {
+        
+        // Enable APIs
         try {
-          await Helpers.enableGcpApis(projectId);
+          await Helpers.enableGcpApis(primaryProjectId);
         } catch (error: any) {
-          console.warn(`⚠️  Failed to enable APIs for project ${projectId}: ${error?.message || error}`);
-          // Continue with other projects even if one fails
+           console.warn(`⚠️  Failed to enable APIs for project ${primaryProjectId}: ${error?.message || error}`);
         }
-      }));
+      }
     }
 
     // Ensure backend storage exists prior to workspace init
@@ -634,44 +628,37 @@ export class Helpers {
       ...(gcpConfig ? { gcp: gcpConfig } : {}),
     });
 
-    // Collect all secrets providers
-    const secretsProviders = Array.from(new Set(envSettings.map(s => s.secretsProvider).filter(Boolean) as string[]));
-
-    // Ensure secrets providers exist
-    if (secretsProviders.length > 0) {
+    // Ensure secrets provider exists
+    if (settings.secretsProvider) {
       await Helpers.ensureSecretsProvider({ 
-        secretsProviders
+        secretsProviders: [settings.secretsProvider]
       });
     }
 
-    // Setup SOPS config for GCP KMS - handle multiple providers
-    // Create separate rules for each environment
-    // Each environment gets access to shared secrets.yaml AND its own env-specific secrets
-    const envNames = Object.keys(environments);
-    for (const envName of envNames) {
-      // Use the KMS key for this environment (get from env settings)
-      const envConfig = environments[envName];
-      const envKmsProvider = envConfig?.settings?.secretsProvider;
-      
-      if (envKmsProvider && envKmsProvider.startsWith('gcpkms://')) {
-        const resource = envKmsProvider.replace(/^gcpkms:\/\//, '');
+    // Setup SOPS config for GCP KMS
+    if (settings.secretsProvider && settings.secretsProvider.startsWith('gcpkms://')) {
+        const resource = settings.secretsProvider.replace(/^gcpkms:\/\//, '');
         // Determine credentials file path for SOPS config metadata
         const credentialsFilePath = primaryProjectId 
           ? path.join(os.homedir(), '.config', 'gcloud', `${primaryProjectId}-accesstoken`)
           : undefined;
-        // Each env rule includes both shared secrets.yaml and env-specific secrets
+        
+        // Include shared secrets.yaml and any secrets-*.yaml
         const sopsConfigOpts: { gcpKmsResourceId: string; patterns: string[]; credentialsFilePath?: string } = {
           gcpKmsResourceId: resource,
           patterns: [
             `secrets\\.yaml`,
-            `secrets-${projectId}-${envName}\\.yaml`
+            `secrets-.*\\.yaml`
           ],
         };
         if (credentialsFilePath) {
           sopsConfigOpts.credentialsFilePath = credentialsFilePath;
         }
+        // Pass workDir to ensureSopsConfig
+        if (workDir) {
+          (sopsConfigOpts as any).workDir = workDir;
+        }
         Helpers.ensureSopsConfig(sopsConfigOpts);
-      }
     }
 
     return { envVars };
@@ -922,8 +909,12 @@ export class Helpers {
   }
 
   /** Ensure .sops.yaml exists and references the provided GCP KMS key for given patterns. */
-  public static ensureSopsConfig(opts: { gcpKmsResourceId: string; patterns: string[]; credentialsFilePath?: string }) {
-    const sopsPath = path.resolve(process.cwd(), '.sops.yaml');
+  public static ensureSopsConfig(opts: { gcpKmsResourceId: string; patterns: string[]; credentialsFilePath?: string; workDir?: string }) {
+    // Use workDir if provided, otherwise process.cwd()
+    const startDir = opts.workDir ? path.resolve(opts.workDir) : process.cwd();
+    // Find the project root (where package.json is) relative to startDir
+    const targetDir = Helpers.findNearestProjectRoot(startDir);
+    const sopsPath = path.resolve(targetDir, '.sops.yaml');
     
     // Read existing config if it exists
     const existingConfig = Helpers.readSopsConfig(sopsPath);
@@ -1210,10 +1201,10 @@ export class Helpers {
       if (parsed) {
         const ref = Helpers.getStackRef(parsed.envId, parsed.component, parsed.stackName);
         
-        // Try to get the output directly (legacy behavior or when output is top-level)
+        // Try to get the output directly (standard behavior)
         const directOutput = ref.getOutput(parsed.output);
         
-        // Try to get "outputs" (Project-wrapped behavior where everything is under "outputs")
+        // Also check "outputs" wrapper (for components that wrap all outputs)
         const wrappedOutputs = ref.getOutput("outputs");
         
         // Combine them to find the real root object
@@ -1431,7 +1422,7 @@ export class Helpers {
       }
       
       // Check if this string matches a known resolved secret value
-      // This handles the case where secrets are resolved in Environment before ComponentResources receive them
+      // This handles secrets that were resolved earlier in the resource tree
       if (Helpers.resolvedSecretValues.has(value)) {
         const originalRef = Helpers.resolvedSecretValues.get(value)!;
         if (debug) {
@@ -1560,12 +1551,12 @@ export class Helpers {
     // Check if Pulumi runtime is available before trying to register
     try {
       if (!pulumi.runtime || typeof pulumi.runtime.registerResourceTransform !== 'function') {
-        // Runtime not available yet, mark as attempted so Environment constructor can retry
+        // Runtime not available yet, mark as attempted so Component can retry
         (Helpers as any)._secretTransformAttempted = true;
         return;
       }
     } catch {
-      // Pulumi runtime not available yet, mark as attempted so Environment constructor can retry
+      // Pulumi runtime not available yet, mark as attempted so Component can retry
       (Helpers as any)._secretTransformAttempted = true;
       return;
     }
@@ -1636,20 +1627,11 @@ export class Helpers {
   }
 }
 
-// Register the secret resolution transform at module load time
-// This ensures it's registered before any resources are created, regardless of when
-// Project/Environment classes are instantiated. This is critical because transforms
-// only apply to resources created AFTER they are registered.
-// 
-// We use a try-catch to handle cases where Pulumi runtime isn't initialized yet
-// (e.g., during module import in non-Pulumi contexts). The transform will be
-// registered when the module is imported in a Pulumi context.
+// Register the secret resolution transform at module load time.
+// This ensures secrets are resolved before any resources are created.
+// Transforms only apply to resources created AFTER registration.
 try {
-  // Try to register immediately - this will work if Pulumi runtime is available
-  // The registerSecretResolutionTransform function handles the case where runtime isn't ready
-  Helpers.registerSecretResolutionTransform(false); // Register without debug by default
-} catch (e) {
-  // Pulumi runtime not available yet, will be registered when Environment is created
-  // This is a fallback for cases where the module is imported before Pulumi is initialized
-  // Silently continue - registration will happen in Environment constructor
+  Helpers.registerSecretResolutionTransform(false);
+} catch {
+  // Pulumi runtime not available yet - will be registered when Component is created
 }

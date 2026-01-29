@@ -8,37 +8,84 @@ This directory contains the Pulumi infrastructure-as-code implementation for Neb
 pulumi/
 ├── src/
 │   ├── cli.ts              # Nebula CLI implementation
-│   ├── components/         # Reusable infrastructure components
-│   │   ├── infra/         # Cloud infrastructure components
-│   │   │   ├── aws/       # AWS-specific resources (VPC, EKS, IAM)
-│   │   │   ├── constellation/ # Constellation Kubernetes
-│   │   │   ├── dns/       # DNS management
-│   │   │   └── gcp/       # GCP-specific resources (VPC, GKE, IAM)
-│   │   ├── k8s/           # Kubernetes components
-│   │   │   ├── argocd.ts
-│   │   │   ├── cert-manager.ts
-│   │   │   ├── cluster-autoscaler.ts
-│   │   │   ├── external-dns.ts
-│   │   │   ├── ingress-nginx.ts
-│   │   │   ├── karpenter.ts
-│   │   │   ├── prometheus-operator.ts
-│   │   │   └── ...
-│   │   ├── addon.ts       # Addon system for extensions
-│   │   ├── application.ts # Application deployment component
-│   │   └── index.ts
-│   ├── core/              # Core framework
-│   │   ├── automation.ts  # Pulumi automation API wrapper
-│   │   ├── environment.ts # Environment management
-│   │   └── project.ts     # Project configuration
-│   ├── types/             # TypeScript type definitions
-│   └── utils/             # Utility functions
-│       ├── auth.ts        # Authentication utilities
-│       ├── helpers.ts     # Helper functions
-│       ├── kubeconfig.ts  # Kubeconfig management
+│   ├── index.ts            # Main exports
+│   ├── core/               # Core framework
+│   │   ├── automation.ts   # Pulumi automation API wrapper
+│   │   └── component.ts    # Component class with provider management
+│   ├── modules/            # Infrastructure modules
+│   │   ├── infra/          # Cloud infrastructure modules
+│   │   │   ├── dns/        # DNS management
+│   │   │   └── gcp/        # GCP resources (Network, GKE, IAM)
+│   │   └── k8s/            # Kubernetes modules
+│   │       ├── argocd/
+│   │       ├── cert-manager/
+│   │       ├── crossplane/
+│   │       ├── external-dns/
+│   │       └── ingress-nginx/
+│   └── utils/              # Utility functions
+│       ├── auth.ts         # Authentication utilities
+│       ├── helpers.ts      # Helper functions
+│       ├── kubeconfig.ts   # Kubeconfig management
 │       └── index.ts
-├── tests/                 # Test scenarios
-├── template/             # Project template
+├── tests/                  # Test scenarios
 └── package.json
+```
+
+## Component Pattern
+
+Nebula uses a `Component` class as the main entry point for infrastructure definitions. Components manage providers and modules with automatic provider inheritance.
+
+### Basic Usage
+
+```typescript
+import { Component } from 'nebula';
+import * as gcp from '@pulumi/gcp';
+import * as k8s from '@pulumi/kubernetes';
+import Gcp from 'nebula/modules/infra/gcp';
+import CertManager from 'nebula/modules/k8s/cert-manager';
+
+new Component('my-app', {
+  backendUrl: 'gs://my-state-bucket',
+  providers: [
+    new gcp.Provider('gcp', { project: 'my-project', region: 'us-central1' }),
+    new k8s.Provider('k8s', { kubeconfig: myKubeconfig }),
+  ],
+  modules: [
+    Gcp({ network: { name: 'main' }, gke: { name: 'cluster' } }),
+    CertManager({ acmeEmail: 'admin@example.com' }),
+  ],
+});
+```
+
+### Creating Custom Modules
+
+Modules are factory functions that return a function creating resources:
+
+```typescript
+import * as pulumi from '@pulumi/pulumi';
+import { getCurrentComponent } from 'nebula';
+
+export interface MyModuleConfig {
+  name: string;
+}
+
+export class MyModule extends pulumi.ComponentResource {
+  constructor(name: string, args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
+    super('my-module', name, args, opts);
+    
+    // Access inherited providers via Pulumi's public API
+    const gcpProvider = this.getProvider('gcp:project:Project');
+    
+    // Create resources...
+  }
+}
+
+export default function(args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
+  return () => {
+    const parent = opts?.parent ?? getCurrentComponent();
+    return new MyModule('my-module', args, parent ? { ...opts, parent } : opts);
+  };
+}
 ```
 
 ## Kubeconfig Management
@@ -64,165 +111,132 @@ Examples:
 - `kube-config-myapp-prod-eks`
 - `kube-config-tool-staging-constellation`
 
-### API Reference
+## Module Usage
 
-#### `writeKubeconfig(options: KubeconfigWriteOptions)`
+### Infrastructure Modules
 
-Writes a kubeconfig file to the `.config` directory.
+#### GCP Infrastructure
 
-```typescript
-import { writeKubeconfig } from 'nebula/utils';
-
-writeKubeconfig({
-  kubeconfig: myKubeconfigContent,  // Pulumi Output<string>
-  provider: 'gke',                  // Provider type
-  projectName: 'myapp',             // Optional, auto-detected from Pulumi
-  envPrefix: 'dev',                 // Optional, auto-detected from stack
-});
-```
-
-#### `generateKubeconfigFileName(options)`
-
-Generates a standardized kubeconfig filename.
+The GCP module creates network and GKE cluster resources:
 
 ```typescript
-import { generateKubeconfigFileName } from 'nebula/utils';
+import Gcp from 'nebula/modules/infra/gcp';
 
-const filename = generateKubeconfigFileName({
-  projectName: 'myapp',
-  envPrefix: 'dev',
-  provider: 'gke',
-});
-// Returns: "kube-config-myapp-dev-gke"
-```
-
-#### `findKubeconfigFiles(envPrefix?: string)`
-
-Finds kubeconfig files in the `.config` directory.
-
-```typescript
-import { findKubeconfigFiles } from 'nebula/utils';
-
-// Find all kubeconfig files
-const allConfigs = findKubeconfigFiles();
-
-// Find only dev environment configs
-const devConfigs = findKubeconfigFiles('dev');
-```
-
-#### `cleanClusterName(name: string)`
-
-Cleans up redundant parts in cluster names.
-
-```typescript
-import { cleanClusterName } from 'nebula/utils';
-
-cleanClusterName('kurtosis-kurtosis-dev-gke');
-// Returns: "kurtosis-dev-gke"
-```
-
-## Component Usage
-
-### Infrastructure Components
-
-#### GKE (Google Kubernetes Engine)
-
-```typescript
-import { Gke } from 'nebula/components/infra/gcp';
-
-const cluster = new Gke('my-cluster', {
-  name: 'myapp-dev-gke',
-  location: 'us-central1-a',
-  releaseChannel: 'REGULAR',
-  nodeGroups: {
-    default: {
-      minNodes: 1,
-      maxNodes: 5,
-      machineType: 'e2-standard-4',
+// Use within a Component's modules array:
+modules: [
+  Gcp({
+    network: {
+      name: 'main',
+      region: 'europe-west3',
+      subnetCidr: '10.0.0.0/20',
+      podsSecondaryCidr: '10.4.0.0/14',
+      servicesSecondaryCidr: '10.8.0.0/20',
     },
-  },
-});
+    gke: {
+      name: 'cluster',
+      location: 'europe-west3-a',
+      releaseChannel: 'REGULAR',
+    },
+  }),
+]
 ```
 
-The GKE component automatically:
-- Creates the cluster with best practices
-- Generates and writes kubeconfig to `.config/kube-config-{project}-dev-gke`
-- Sets up workload identity
-- Configures node pools with autoscaling
+The GCP module automatically:
+- Creates VPC network and subnetwork with secondary ranges
+- Creates GKE cluster with workload identity enabled
+- Extracts project ID from the GCP provider (no need to pass explicitly)
+- Generates kubeconfig for cluster access
 
-#### EKS (Elastic Kubernetes Service)
+#### DNS Management
 
 ```typescript
-import { Eks } from 'nebula/components/infra/aws';
+import Dns from 'nebula/modules/infra/dns';
 
-const cluster = new Eks('my-cluster', {
-  name: 'myapp-prod-eks',
-  version: '1.27',
-  nodeGroups: {
-    default: {
-      minSize: 2,
-      maxSize: 10,
-      instanceTypes: ['t3.medium'],
+modules: [
+  Dns({
+    zoneName: 'my-zone',
+    dnsName: 'example.com.',
+    delegation: {
+      provider: 'cloudflare',
+      zoneId: 'your-zone-id',
     },
-  },
-});
+  }),
+]
 ```
 
-### Kubernetes Components
-
-#### Karpenter
-
-**Important**: The Karpenter component with GCP provider support requires the `helm-git` plugin to be installed:
-
-```bash
-helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
-```
-
-This plugin allows Helm to fetch charts directly from Git repositories. The Karpenter GCP provider chart is fetched from the GitHub repository using the `git+https://` protocol.
-
-```typescript
-import { Karpenter } from 'nebula/components/k8s';
-
-const karpenter = new Karpenter('karpenter', {
-  clusterName: 'my-cluster',
-  region: 'us-central1',
-  installProvider: true, // Install GCP provider chart
-  nodePools: {
-    default: {
-      requirements: [
-        { key: 'node.kubernetes.io/instance-type', operator: 'In', values: ['e2-standard-4'] },
-      ],
-    },
-  },
-});
-```
+### Kubernetes Modules
 
 #### Cert-Manager
 
 ```typescript
-import { CertManager } from 'nebula/components/k8s';
+import CertManager from 'nebula/modules/k8s/cert-manager';
 
-const certManager = new CertManager('cert-manager', {
-  version: 'v1.13.0',
-  installCRDs: true,
-  clusterIssuers: [{
-    name: 'letsencrypt-prod',
-    email: 'admin@example.com',
-  }],
-});
+modules: [
+  CertManager({
+    version: 'v1.17.2',
+    acmeEmail: 'admin@example.com',
+    createClusterIssuer: true,
+  }),
+]
+```
+
+#### External DNS
+
+```typescript
+import ExternalDns from 'nebula/modules/k8s/external-dns';
+
+modules: [
+  ExternalDns({
+    provider: 'google',
+    domainFilters: ['example.com'],
+    // GCP project is automatically extracted from inherited provider
+  }),
+]
 ```
 
 #### Ingress NGINX
 
 ```typescript
-import { IngressNginx } from 'nebula/components/k8s';
+import IngressNginx from 'nebula/modules/k8s/ingress-nginx';
 
-const ingress = new IngressNginx('ingress-nginx', {
-  replicaCount: 3,
-  service: {
-    type: 'LoadBalancer',
-  },
-});
+modules: [
+  IngressNginx({
+    createStaticIp: true,
+    controller: {
+      replicaCount: 2,
+      service: { type: 'LoadBalancer' },
+    },
+  }),
+]
+```
+
+#### ArgoCD
+
+```typescript
+import ArgoCd from 'nebula/modules/k8s/argocd';
+
+modules: [
+  ArgoCd({
+    hostname: 'argocd.example.com',
+    oidc: {
+      issuer: 'https://accounts.google.com',
+      clientId: 'your-client-id',
+      clientSecret: 'your-client-secret',
+    },
+  }),
+]
+```
+
+#### Crossplane
+
+```typescript
+import Crossplane from 'nebula/modules/k8s/crossplane';
+
+modules: [
+  Crossplane({
+    version: '1.18.2',
+  }),
+]
 ```
 
 ## Testing
@@ -261,23 +275,44 @@ nebula test        # Run tests
 
 ## Development
 
-### Adding a New Component
+### Adding a New Module
 
-1. Create component file in appropriate directory:
-   - Infrastructure: `src/components/infra/{provider}/`
-   - Kubernetes: `src/components/k8s/`
+1. Create module directory in appropriate location:
+   - Infrastructure: `src/modules/infra/{provider}/`
+   - Kubernetes: `src/modules/k8s/{module-name}/`
 
-2. Export from index file:
+2. Create `index.ts` with the module class and default export:
    ```typescript
-   export { MyComponent } from './my-component';
-   ```
+   import * as pulumi from '@pulumi/pulumi';
+   import { getCurrentComponent } from '../../../core/component';
 
-3. Add configuration interface:
-   ```typescript
-   export interface MyComponentConfig {
-     // Component configuration options
+   export interface MyModuleConfig {
+     // Module configuration options
+   }
+
+   export class MyModule extends pulumi.ComponentResource {
+     constructor(name: string, args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
+       super('my-module', name, args, opts);
+       
+       // Use this.getProvider() to access inherited providers
+       // Create resources with { parent: this }
+       
+       this.registerOutputs({});
+     }
+   }
+
+   export default function(args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
+     return () => {
+       const parent = opts?.parent ?? getCurrentComponent();
+       return new MyModule('my-module', args, parent ? { ...opts, parent } : opts);
+     };
    }
    ```
+
+3. The default export pattern ensures:
+   - Module inherits providers from parent Component
+   - Resources are properly parented for Pulumi's resource graph
+   - Provider configuration can be accessed via `this.getProvider()`
 
 ### Testing Changes
 

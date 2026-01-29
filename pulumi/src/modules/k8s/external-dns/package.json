@@ -1,0 +1,11 @@
+{
+  "name": "@nebula/k8s-external-dns",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "@pulumi/gcp": "^9.2.0",
+    "@pulumi/kubernetes": "^4.23.0",
+    "@pulumi/pulumi": "^3.198.0"
+  }
+}
