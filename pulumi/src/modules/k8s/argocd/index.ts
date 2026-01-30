@@ -373,6 +373,13 @@ export class ArgoCd extends BaseModule {
           member: pulumi.interpolate`serviceAccount:${gcpServiceAccount.email}`,
         }, { parent: this, dependsOn: [gcpServiceAccount] });
 
+        // Grant KMS Viewer for key ring and key inspection (needed for bootstrap)
+        new gcp.projects.IAMMember(`${name}-nebula-gsa-kms-viewer`, {
+          project: gcpProject,
+          role: 'roles/cloudkms.viewer',
+          member: pulumi.interpolate`serviceAccount:${gcpServiceAccount.email}`,
+        }, { parent: this, dependsOn: [gcpServiceAccount] });
+
         // Set up Workload Identity binding
         new gcp.serviceaccount.IAMMember(`${name}-nebula-wi`, {
           serviceAccountId: gcpServiceAccount.name,
