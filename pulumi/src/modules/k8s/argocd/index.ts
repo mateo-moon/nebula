@@ -514,18 +514,16 @@ export NEBULA_RENDER_DIR=./manifests
 echo "Running pulumi up --stack \$STACK_NAME..." >&2
 pulumi up --stack "\$STACK_NAME" --yes --non-interactive --skip-preview 2>&1
 
-# Debug: show what's in manifests directory
-echo "Manifests directory contents:" >&2
-ls -la manifests/ >&2 || echo "manifests dir does not exist or is empty" >&2
+# Pulumi Kubernetes provider creates subdirectories (0-crd, 1-manifest, etc.)
+# Find all YAML files recursively and concatenate them
+YAML_FILES=\$(find manifests -name "*.yaml" -type f 2>/dev/null | sort)
 
-# If manifests directory has files, output them
-if [ -d "manifests" ] && [ "$(ls -A manifests 2>/dev/null)" ]; then
-  # Concatenate all YAML files with document separators
-  for f in manifests/*.yaml manifests/*.yml; do
-    if [ -f "$f" ]; then
-      echo "---"
-      cat "$f"
-    fi
+if [ -n "\$YAML_FILES" ]; then
+  echo "Found manifest files:" >&2
+  echo "\$YAML_FILES" >&2
+  for f in \$YAML_FILES; do
+    echo "---"
+    cat "\$f"
   done
 else
   echo "No manifests generated" >&2
