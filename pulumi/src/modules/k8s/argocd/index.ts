@@ -513,7 +513,11 @@ export NEBULA_RENDER_DIR=./manifests
 # Run pulumi up to generate manifests (renderYamlToDirectory writes files during 'up')
 # With renderYamlToDirectory set, 'up' writes YAML files instead of applying to cluster
 # --target ensures only Kubernetes resources are processed
-pulumi up --stack "$STACK_NAME" --yes --non-interactive --skip-preview --suppress-outputs --target '**$kubernetes**' 2>&2
+echo "Running pulumi up --stack $STACK_NAME..." >&2
+if ! pulumi up --stack "$STACK_NAME" --yes --non-interactive --skip-preview --target '**\$kubernetes**' 2>&1; then
+  echo "pulumi up failed with exit code $?" >&2
+  exit 1
+fi
 
 # If manifests directory has files, output them
 if [ -d "manifests" ] && [ "$(ls -A manifests 2>/dev/null)" ]; then
