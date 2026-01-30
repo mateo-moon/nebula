@@ -488,14 +488,14 @@ set -e
 rm -rf manifests
 mkdir -p manifests
 
+# Determine stack name from NEBULA_STACK, ARGOCD_APP_NAME, or default to 'dev'
+STACK_NAME="\${NEBULA_STACK:-\${ARGOCD_APP_NAME:-dev}}"
+
 # Run nebula bootstrap if Pulumi files don't exist
 if [ ! -f "Pulumi.yaml" ]; then
-  echo "Running nebula bootstrap..." >&2
-  pnpm exec nebula bootstrap --stack "\$ARGOCD_APP_NAME" 2>&2 || true
+  echo "Running nebula bootstrap --stack $STACK_NAME..." >&2
+  pnpm exec nebula bootstrap --stack "$STACK_NAME" 2>&2 || true
 fi
-
-# Determine stack name from ARGOCD_APP_NAME or default to 'dev'
-STACK_NAME="\${ARGOCD_APP_NAME:-dev}"
 
 # Set environment to render mode
 export NEBULA_RENDER_MODE=true
