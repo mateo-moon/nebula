@@ -517,11 +517,14 @@ echo "DEBUG: NEBULA_RENDER_DIR=$NEBULA_RENDER_DIR" >&2
 # Run pulumi up to generate manifests (renderYamlToDirectory writes files during 'up')
 # With renderYamlToDirectory set, 'up' writes YAML files instead of applying to cluster
 echo "Running pulumi up --stack $STACK_NAME..." >&2
-pulumi up --stack "$STACK_NAME" --yes --non-interactive --skip-preview 2>&1 || {
-  PULUMI_EXIT=$?
+PULUMI_OUTPUT=$(pulumi up --stack "$STACK_NAME" --yes --non-interactive --skip-preview 2>&1)
+PULUMI_EXIT=$?
+echo "Pulumi output:" >&2
+echo "$PULUMI_OUTPUT" >&2
+if [ $PULUMI_EXIT -ne 0 ]; then
   echo "pulumi up failed with exit code $PULUMI_EXIT" >&2
   exit $PULUMI_EXIT
-}
+fi
 
 # Debug: show what's in manifests directory
 echo "Manifests directory contents:" >&2
