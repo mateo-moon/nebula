@@ -510,20 +510,18 @@ fi
 export NEBULA_RENDER_MODE=true
 export NEBULA_RENDER_DIR=./manifests
 
-# Debug: verify environment variables
-echo "DEBUG: NEBULA_RENDER_MODE=$NEBULA_RENDER_MODE" >&2
-echo "DEBUG: NEBULA_RENDER_DIR=$NEBULA_RENDER_DIR" >&2
+# For render mode, we need to delete existing stack state so resources appear as "new"
+# This ensures renderYamlToDirectory writes all manifests, not just changed ones
+echo "Removing stack state for fresh render..." >&2
+pulumi stack rm "$STACK_NAME" --yes --force 2>/dev/null || true
+pulumi stack init "$STACK_NAME" 2>&2
 
 # Run pulumi up to generate manifests (renderYamlToDirectory writes files during 'up')
 # With renderYamlToDirectory set, 'up' writes YAML files instead of applying to cluster
 echo "Running pulumi up --stack $STACK_NAME..." >&2
-PULUMI_OUTPUT=$(pulumi up --stack "$STACK_NAME" --yes --non-interactive --skip-preview 2>&1)
-PULUMI_EXIT=$?
-echo "Pulumi output:" >&2
-echo "$PULUMI_OUTPUT" >&2
-if [ $PULUMI_EXIT -ne 0 ]; then
-  echo "pulumi up failed with exit code $PULUMI_EXIT" >&2
-  exit $PULUMI_EXIT
+if ! pulumi up --stack "$STACK_NAME" --yes --non-interactive --skip-preview 2>&1; then
+  echo "pulumi up failed" >&2
+  exit 1
 fi
 
 # Debug: show what's in manifests directory
