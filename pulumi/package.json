@@ -43,16 +43,6 @@
     "test:sops": "tsx tests/run-tests.ts sops"
   },
   "dependencies": {
-    "@nebula/infra-aws": "file:./src/modules/infra/aws",
-    "@nebula/infra-gcp": "file:./src/modules/infra/gcp",
-    "@nebula/infra-dns": "file:./src/modules/infra/dns",
-    "@nebula/k8s-cert-manager": "file:./src/modules/k8s/cert-manager",
-    "@nebula/k8s-external-dns": "file:./src/modules/k8s/external-dns",
-    "@nebula/k8s-cluster-api-operator": "file:./src/modules/k8s/cluster-api-operator",
-    "@nebula/k8s-argocd": "file:./src/modules/k8s/argocd",
-    "@nebula/k8s-ingress-nginx": "file:./src/modules/k8s/ingress-nginx",
-    "@nebula/k8s-prometheus-operator": "file:./src/modules/k8s/prometheus-operator",
-    "@nebula/k8s-crossplane": "file:./src/modules/k8s/crossplane",
     "@aws-sdk/client-s3": "^3.717.0",
     "@aws-sdk/client-sso": "^3.716.0",
     "@aws-sdk/client-sts": "^3.738.0",
