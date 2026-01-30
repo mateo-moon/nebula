@@ -77,6 +77,11 @@ export function createK8sProvider(
   const renderMode = isRenderMode();
   const renderDir = getRenderDir();
 
+  // Debug: log environment variable values
+  console.log(`[Nebula] DEBUG: NEBULA_RENDER_MODE env = '${process.env['NEBULA_RENDER_MODE']}'`);
+  console.log(`[Nebula] DEBUG: NEBULA_RENDER_DIR env = '${process.env['NEBULA_RENDER_DIR']}'`);
+  console.log(`[Nebula] DEBUG: isRenderMode() = ${renderMode}`);
+
   const providerArgs: k8s.ProviderArgs = {
     ...args,
   };
@@ -87,6 +92,8 @@ export function createK8sProvider(
     // Don't need kubeconfig in render mode
     delete providerArgs.kubeconfig;
     console.log(`[Nebula] Render mode enabled, outputting manifests to: ${renderDir}`);
+  } else {
+    console.log(`[Nebula] Normal mode - will apply to cluster`);
   }
 
   return new k8s.Provider(name, providerArgs, opts);
