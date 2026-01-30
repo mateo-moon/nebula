@@ -491,7 +491,7 @@ mkdir -p manifests
 # Run nebula bootstrap if Pulumi files don't exist
 if [ ! -f "Pulumi.yaml" ]; then
   echo "Running nebula bootstrap..." >&2
-  ./node_modules/.bin/nebula bootstrap --stack "$ARGOCD_APP_NAME" 2>&2 || true
+  node --import=tsx/esm ./node_modules/nebula/bin/nebula.js bootstrap --stack "$ARGOCD_APP_NAME" 2>&2 || true
 fi
 
 # Determine stack name from ARGOCD_APP_NAME or default to 'dev'
