@@ -493,9 +493,10 @@ mkdir -p manifests
 STACK_NAME="\${NEBULA_STACK:-\${ARGOCD_ENV_NEBULA_STACK:-\${ARGOCD_APP_NAME:-dev}}}"
 
 # Run nebula bootstrap if Pulumi files don't exist
+# Use --ci flag to skip interactive auth (credentials come from Workload Identity)
 if [ ! -f "Pulumi.yaml" ]; then
-  echo "Running nebula bootstrap --stack $STACK_NAME..." >&2
-  pnpm exec nebula bootstrap --stack "$STACK_NAME" 2>&2 || true
+  echo "Running nebula bootstrap --stack $STACK_NAME --ci..." >&2
+  pnpm exec nebula bootstrap --stack "$STACK_NAME" --ci 2>&2 || true
 fi
 
 # Set environment to render mode

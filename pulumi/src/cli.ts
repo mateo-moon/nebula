@@ -19,6 +19,7 @@ import { Auth } from './utils/auth';
 interface BootstrapOptions {
   workDir?: string;
   stack?: string;
+  ci?: boolean;
   debug?: boolean;
 }
 
@@ -159,7 +160,8 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     }
     
     // GCP setup (only for first environment to avoid duplicate work)
-    if (envFiles.indexOf(envFile) === 0) {
+    // Skip in CI mode - assumes credentials are already available (Workload Identity, service account, etc.)
+    if (envFiles.indexOf(envFile) === 0 && !options.ci) {
       const gcpProjectId = extractGcpProjectId(config.secretsProvider || '');
       const gcpRegion = extractGcpRegion(config.secretsProvider || '');
       
@@ -256,6 +258,10 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
         log(`📦 Continuing with ${envFile}`);
         log('─'.repeat(50));
       }
+    } else if (options.ci && envFiles.indexOf(envFile) === 0) {
+      log('');
+      log(`🤖 CI mode: Skipping authentication and resource setup`);
+      log('   (Assuming credentials available via Workload Identity or service account)');
     }
     
     // Create stack using StackManager
@@ -341,12 +347,14 @@ program
   .description('Bootstrap Pulumi project (discovers environment files like dev.ts, stage.ts)')
   .option('-w, --work-dir <dir>', 'Working directory (default: current directory)')
   .option('-s, --stack <name>', 'Bootstrap only a specific stack (e.g., dev, prod)')
+  .option('--ci', 'CI/non-interactive mode: skip authentication and resource setup (assumes credentials are already available)')
   .option('--debug', 'Enable debug logging')
   .action(async (opts) => {
     try {
       await bootstrap({
         workDir: opts.workDir,
         stack: opts.stack,
+        ci: opts.ci,
         debug: opts.debug,
       });
     } catch (error) {
