@@ -18,6 +18,7 @@ import { Auth } from './utils/auth';
 
 interface BootstrapOptions {
   workDir?: string;
+  stack?: string;
   debug?: boolean;
 }
 
@@ -98,7 +99,7 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
   log(`📁 Working directory: ${workDir}`);
 
   // Find environment files
-  const envFiles = findEnvironmentFiles(workDir);
+  let envFiles = findEnvironmentFiles(workDir);
   
   if (envFiles.length === 0) {
     log('');
@@ -107,8 +108,20 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     process.exit(1);
   }
 
+  // Filter to specific stack if --stack flag is provided
+  if (options.stack) {
+    const targetFile = `${options.stack}.ts`;
+    if (!envFiles.includes(targetFile)) {
+      log('');
+      log(`❌ Stack '${options.stack}' not found`);
+      log(`   Available stacks: ${envFiles.map(f => f.replace('.ts', '')).join(', ')}`);
+      process.exit(1);
+    }
+    envFiles = [targetFile];
+  }
+
   const envNames = envFiles.map(f => f.replace('.ts', ''));
-  log(`🔍 Found environments: ${envNames.join(', ')}`);
+  log(`🔍 ${options.stack ? 'Selected stack' : 'Found environments'}: ${envNames.join(', ')}`);
 
   // Determine project name from package.json or directory name
   let projectName = path.basename(workDir);
@@ -327,11 +340,13 @@ program
   .command('bootstrap')
   .description('Bootstrap Pulumi project (discovers environment files like dev.ts, stage.ts)')
   .option('-w, --work-dir <dir>', 'Working directory (default: current directory)')
+  .option('-s, --stack <name>', 'Bootstrap only a specific stack (e.g., dev, prod)')
   .option('--debug', 'Enable debug logging')
   .action(async (opts) => {
     try {
       await bootstrap({
         workDir: opts.workDir,
+        stack: opts.stack,
         debug: opts.debug,
       });
     } catch (error) {
