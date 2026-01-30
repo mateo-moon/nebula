@@ -511,24 +511,24 @@ export NEBULA_RENDER_MODE=true
 export NEBULA_RENDER_DIR=./manifests
 
 # Use a separate render stack with passphrase-based secrets (no KMS needed for rendering)
-RENDER_STACK="${STACK_NAME}-render"
+RENDER_STACK="\${STACK_NAME}-render"
 export PULUMI_CONFIG_PASSPHRASE="render"
 
 # For render mode, we need to delete existing stack state so resources appear as "new"
 # This ensures renderYamlToDirectory writes all manifests, not just changed ones
 echo "Setting up fresh render stack..." >&2
-pulumi stack rm "$RENDER_STACK" --yes --force 2>/dev/null || true
-pulumi stack init "$RENDER_STACK" --secrets-provider passphrase 2>&2
+pulumi stack rm "\$RENDER_STACK" --yes --force 2>/dev/null || true
+pulumi stack init "\$RENDER_STACK" --secrets-provider passphrase 2>&2
 
 # Copy config from original stack to render stack
-if [ -f "Pulumi.${STACK_NAME}.yaml" ]; then
-  cp "Pulumi.${STACK_NAME}.yaml" "Pulumi.${RENDER_STACK}.yaml"
+if [ -f "Pulumi.\${STACK_NAME}.yaml" ]; then
+  cp "Pulumi.\${STACK_NAME}.yaml" "Pulumi.\${RENDER_STACK}.yaml"
 fi
 
 # Run pulumi up to generate manifests (renderYamlToDirectory writes files during 'up')
 # With renderYamlToDirectory set, 'up' writes YAML files instead of applying to cluster
-echo "Running pulumi up --stack $RENDER_STACK..." >&2
-if ! pulumi up --stack "$RENDER_STACK" --yes --non-interactive --skip-preview 2>&1; then
+echo "Running pulumi up --stack \$RENDER_STACK..." >&2
+if ! pulumi up --stack "\$RENDER_STACK" --yes --non-interactive --skip-preview 2>&1; then
   echo "pulumi up failed" >&2
   exit 1
 fi
