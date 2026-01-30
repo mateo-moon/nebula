@@ -160,35 +160,40 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     }
     
     // GCP setup (only for first environment to avoid duplicate work)
-    // Skip in CI mode - assumes credentials are already available (Workload Identity, service account, etc.)
-    if (envFiles.indexOf(envFile) === 0 && !options.ci) {
+    if (envFiles.indexOf(envFile) === 0) {
       const gcpProjectId = extractGcpProjectId(config.secretsProvider || '');
       const gcpRegion = extractGcpRegion(config.secretsProvider || '');
       
       if (gcpProjectId) {
-        // Step 1: Authenticate with GCP
-        log('');
-        log(`🔐 Authenticating with GCP project: ${gcpProjectId}`);
-        log('─'.repeat(50));
-        try {
-          if (await Auth.GCP.isTokenValid(gcpProjectId)) {
-            log(`   ✅ Valid token found for project: ${gcpProjectId}`);
-            Auth.GCP.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
-          } else {
-            await Auth.GCP.authenticate(gcpProjectId, gcpRegion ?? undefined);
-          }
-          // Capture env vars for export
-          const homeDir = (await import('os')).homedir();
-          const tokenPath = path.join(homeDir, '.config', 'gcloud', `${gcpProjectId}-accesstoken`);
-          envVarsToExport['GOOGLE_APPLICATION_CREDENTIALS'] = tokenPath;
-          envVarsToExport['CLOUDSDK_CORE_PROJECT'] = gcpProjectId;
-          if (gcpRegion) {
-            envVarsToExport['CLOUDSDK_COMPUTE_ZONE'] = `${gcpRegion}-a`;
-          }
-        } catch (error: any) {
-          log(`   ⚠️  Authentication failed: ${error.message}`);
-          if (options.debug) {
-            log(`   Debug: ${error}`);
+        // Step 1: Authenticate with GCP (skip in CI mode - credentials come from Workload Identity)
+        if (options.ci) {
+          log('');
+          log(`🤖 CI mode: Skipping interactive authentication`);
+          log('   (Assuming credentials available via Workload Identity or service account)');
+        } else {
+          log('');
+          log(`🔐 Authenticating with GCP project: ${gcpProjectId}`);
+          log('─'.repeat(50));
+          try {
+            if (await Auth.GCP.isTokenValid(gcpProjectId)) {
+              log(`   ✅ Valid token found for project: ${gcpProjectId}`);
+              Auth.GCP.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
+            } else {
+              await Auth.GCP.authenticate(gcpProjectId, gcpRegion ?? undefined);
+            }
+            // Capture env vars for export
+            const homeDir = (await import('os')).homedir();
+            const tokenPath = path.join(homeDir, '.config', 'gcloud', `${gcpProjectId}-accesstoken`);
+            envVarsToExport['GOOGLE_APPLICATION_CREDENTIALS'] = tokenPath;
+            envVarsToExport['CLOUDSDK_CORE_PROJECT'] = gcpProjectId;
+            if (gcpRegion) {
+              envVarsToExport['CLOUDSDK_COMPUTE_ZONE'] = `${gcpRegion}-a`;
+            }
+          } catch (error: any) {
+            log(`   ⚠️  Authentication failed: ${error.message}`);
+            if (options.debug) {
+              log(`   Debug: ${error}`);
+            }
           }
         }
         
@@ -258,10 +263,6 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
         log(`📦 Continuing with ${envFile}`);
         log('─'.repeat(50));
       }
-    } else if (options.ci && envFiles.indexOf(envFile) === 0) {
-      log('');
-      log(`🤖 CI mode: Skipping authentication and resource setup`);
-      log('   (Assuming credentials available via Workload Identity or service account)');
     }
     
     // Create stack using StackManager
@@ -347,7 +348,7 @@ program
   .description('Bootstrap Pulumi project (discovers environment files like dev.ts, stage.ts)')
   .option('-w, --work-dir <dir>', 'Working directory (default: current directory)')
   .option('-s, --stack <name>', 'Bootstrap only a specific stack (e.g., dev, prod)')
-  .option('--ci', 'CI/non-interactive mode: skip authentication and resource setup (assumes credentials are already available)')
+  .option('--ci', 'CI/non-interactive mode: skip interactive OAuth authentication (assumes credentials from Workload Identity or service account)')
   .option('--debug', 'Enable debug logging')
   .action(async (opts) => {
     try {
