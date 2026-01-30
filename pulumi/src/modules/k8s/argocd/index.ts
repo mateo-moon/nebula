@@ -503,6 +503,11 @@ fi
 export NEBULA_RENDER_MODE=true
 export NEBULA_RENDER_DIR=./manifests
 
+# Ensure stack exists in backend (create if not exists)
+# This is needed because nebula bootstrap --ci skips stack creation to avoid interactive auth
+echo "Selecting/creating stack: $STACK_NAME" >&2
+pulumi stack select --create "$STACK_NAME" 2>&2
+
 # Run pulumi up to generate manifests (renderYamlToDirectory writes files during 'up')
 # With renderYamlToDirectory set, 'up' writes YAML files instead of applying to cluster
 # --target ensures only Kubernetes resources are processed
