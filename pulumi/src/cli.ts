@@ -229,44 +229,34 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
         }
         
         // Step 4: Ensure KMS key exists
-        // Skip in CI mode - requires credentials file, should already exist
         if (config.secretsProvider?.startsWith('gcpkms://')) {
-          if (options.ci) {
-            log('');
-            log(`🔑 CI mode: Skipping KMS key check (should already exist)`);
-          } else {
-            log('');
-            log(`🔑 Ensuring KMS key exists`);
-            log('─'.repeat(50));
-            try {
-              await Helpers.ensureSecretsProvider({
-                secretsProviders: [config.secretsProvider],
-              });
-              log(`   ✅ KMS key ready`);
-            } catch (error: any) {
-              log(`   ⚠️  Failed to ensure KMS key: ${error.message}`);
-            }
+          log('');
+          log(`🔑 Ensuring KMS key exists`);
+          log('─'.repeat(50));
+          try {
+            await Helpers.ensureSecretsProvider({
+              secretsProviders: [config.secretsProvider],
+              skipInteractiveAuth: options.ci, // In CI mode, skip interactive auth (use ADC/Workload Identity)
+            });
+            log(`   ✅ KMS key ready`);
+          } catch (error: any) {
+            log(`   ⚠️  Failed to ensure KMS key: ${error.message}`);
           }
           
           // Step 5: Setup SOPS config
-          // Skip in CI mode - not needed for rendering manifests
-          if (options.ci) {
-            log(`📄 CI mode: Skipping SOPS config setup`);
-          } else {
-            log('');
-            log(`📄 Setting up SOPS config`);
-            log('─'.repeat(50));
-            try {
-              const resource = config.secretsProvider.replace(/^gcpkms:\/\//, '');
-              Helpers.ensureSopsConfig({
-                gcpKmsResourceId: resource,
-                patterns: ['secrets\\.yaml', 'secrets-.*\\.yaml'],
-                workDir,
-              });
-              log(`   ✅ SOPS config ready`);
-            } catch (error: any) {
-              log(`   ⚠️  Failed to setup SOPS config: ${error.message}`);
-            }
+          log('');
+          log(`📄 Setting up SOPS config`);
+          log('─'.repeat(50));
+          try {
+            const resource = config.secretsProvider.replace(/^gcpkms:\/\//, '');
+            Helpers.ensureSopsConfig({
+              gcpKmsResourceId: resource,
+              patterns: ['secrets\\.yaml', 'secrets-.*\\.yaml'],
+              workDir,
+            });
+            log(`   ✅ SOPS config ready`);
+          } catch (error: any) {
+            log(`   ⚠️  Failed to setup SOPS config: ${error.message}`);
           }
         }
         

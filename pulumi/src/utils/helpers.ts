@@ -678,11 +678,11 @@ export class Helpers {
   }
 
   /** Ensure secrets provider resources exist before workspace init. For now: supports gcpkms:// only. */
-  public static async ensureSecretsProvider(opts: { secretsProviders: string[] }) {
+  public static async ensureSecretsProvider(opts: { secretsProviders: string[]; skipInteractiveAuth?: boolean }) {
     // Ensure KMS keys exist (authentication and API enabling should already be done in bootstrap)
     for (const provider of opts.secretsProviders) {
       if (provider.startsWith('gcpkms://')) {
-        await Helpers.ensureGcpKmsKeyFromUrlWithRetry(provider);
+        await Helpers.ensureGcpKmsKeyFromUrlWithRetry(provider, { skipInteractiveAuth: opts.skipInteractiveAuth });
       }
     }
   }
@@ -700,15 +700,11 @@ export class Helpers {
     
     const credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
     
-    if (!credentialsFile || !fs.existsSync(credentialsFile)) {
-      console.error('No credentials file available for KMS key creation');
-      return;
-    }
-    
     try {
-      // Initialize KMS client with credentials
+      // Initialize KMS client
+      // If GOOGLE_APPLICATION_CREDENTIALS is set, use it; otherwise use ADC (Workload Identity)
       const kmsClient = new KeyManagementServiceClient({
-        keyFilename: credentialsFile,
+        ...(credentialsFile && fs.existsSync(credentialsFile) ? { keyFilename: credentialsFile } : {}),
         projectId: projectId
       });
       
@@ -765,7 +761,7 @@ export class Helpers {
     }
   }
 
-  private static async ensureGcpKmsKeyFromUrlWithRetry(providerUrl: string) {
+  private static async ensureGcpKmsKeyFromUrlWithRetry(providerUrl: string, options?: { skipInteractiveAuth?: boolean }) {
     // Parse the provider URL to get project ID
     const url = new URL(providerUrl);
     const pathParts = url.pathname.split('/').filter(Boolean);
@@ -776,26 +772,28 @@ export class Helpers {
       throw new Error(`Invalid gcpkms URL: ${providerUrl}`);
     }
     
-    let credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
+    const credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
+    const hasCredentialsFile = credentialsFile && fs.existsSync(credentialsFile);
     
-    if (!credentialsFile || !fs.existsSync(credentialsFile)) {
+    // If no credentials file and not in CI mode, try interactive auth
+    if (!hasCredentialsFile && !options?.skipInteractiveAuth) {
       console.error('No valid credentials file found, attempting to authenticate...');
       const { Auth } = await import('./auth');
       await Auth.GCP.authenticate(projectId, location);
-      credentialsFile = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
-    }
-    
-    if (!credentialsFile || !fs.existsSync(credentialsFile)) {
-      console.error('No credentials file available for KMS key creation');
-      return;
     }
     
     try {
-      // Try the operation first
+      // Try the operation (will use ADC/Workload Identity if no credentials file)
       await Helpers.ensureGcpKmsKeyFromUrl(providerUrl);
     } catch (error: any) {
       // Check if this is an authentication error
       if (error?.message?.includes('invalid_grant') || error?.message?.includes('reauth') || error?.message?.includes('invalid_rapt')) {
+        // Only attempt interactive re-auth if not in CI mode
+        if (options?.skipInteractiveAuth) {
+          console.error('Authentication error in CI mode - ensure Workload Identity is properly configured');
+          throw error;
+        }
+        
         console.error('Authentication error detected, attempting to refresh credentials...');
         
         // Import Auth utilities
