@@ -118,5 +118,24 @@ export interface ArgoCdConfig {
     // Password for the bootstrapper job to login.
     password?: string;
   };
+  /** Enable Nebula CMP plugin for processing Pulumi-based applications.
+   * When enabled with a GCP provider, automatically sets up:
+   * - GCP Service Account with Storage Admin and KMS permissions
+   * - Workload Identity binding for the repo-server
+   * - Kubernetes RBAC for full cluster access
+   */
+  nebulaPlugin?: {
+    enabled: boolean;
+    /** Docker image for the Nebula sidecar (defaults to nebula:latest) */
+    image?: string;
+    /** Image pull policy (defaults to IfNotPresent) */
+    imagePullPolicy?: 'Always' | 'IfNotPresent' | 'Never';
+    /** Pulumi access token secret name (optional, for Pulumi Cloud backend instead of GCS) */
+    pulumiAccessTokenSecret?: string;
+    /** GCP credentials secret for GCS backend and KMS (alternative to Workload Identity) */
+    gcpCredentialsSecret?: string;
+    /** Additional environment variables */
+    env?: Array<{ name: string; value?: string; valueFrom?: any }>;
+  };
   args?: OptionalChartArgs;
 }
