@@ -541,6 +541,8 @@ fi
         { name: 'PULUMI_HOME', value: '/tmp/.pulumi' },
         { name: 'NPM_CONFIG_CACHE', value: '/tmp/.npm' }, // Writable npm cache location
         { name: 'COREPACK_HOME', value: '/tmp/.corepack' }, // Writable corepack location
+        { name: 'USER', value: 'argocd' }, // Required by Pulumi CLI (Go os/user package without cgo)
+        { name: 'HOME', value: '/tmp' }, // Ensure HOME is set for tools that need it
       ];
 
       // Add GCP credentials if specified
