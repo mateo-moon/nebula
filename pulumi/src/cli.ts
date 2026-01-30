@@ -279,24 +279,19 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     });
     
     let stack;
-    // In CI mode, skip stack creation via Automation API (requires backend access)
-    // The stack should already exist, and pulumi up will handle selection
-    if (options.ci) {
-      log(`   🤖 CI mode: Skipping stack creation (using existing stack)`);
-    } else {
-      try {
-        // Create/select stack via Automation API
-        log(`   ⏳ Creating stack...`);
-        stack = await stackManager.createOrSelectStack();
-        log(`   ✅ Stack created: ${envName}`);
-      } catch (error: any) {
-        log(`   ⚠️  Stack creation failed`);
-        if (options.debug) {
-          log(`   Debug: ${JSON.stringify(error, null, 2)}`);
-        } else {
-          const msg = error.message || error.stderr || String(error);
-          log(`   ${msg.split('\n')[0]}`);
-        }
+    try {
+      // Create/select stack via Automation API
+      // In CI mode, this uses ADC (Application Default Credentials) from Workload Identity
+      log(`   ⏳ Creating stack...`);
+      stack = await stackManager.createOrSelectStack();
+      log(`   ✅ Stack created: ${envName}`);
+    } catch (error: any) {
+      log(`   ⚠️  Stack creation failed`);
+      if (options.debug) {
+        log(`   Debug: ${JSON.stringify(error, null, 2)}`);
+      } else {
+        const msg = error.message || error.stderr || String(error);
+        log(`   ${msg.split('\n')[0]}`);
       }
     }
     
