@@ -287,12 +287,15 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
       log(`   ✅ Stack created: ${envName}`);
     } catch (error: any) {
       log(`   ⚠️  Stack creation failed`);
-      if (options.debug) {
-        log(`   Debug: ${JSON.stringify(error, null, 2)}`);
-      } else {
-        const msg = error.message || error.stderr || String(error);
-        log(`   ${msg.split('\n')[0]}`);
-      }
+      // Always show detailed error to help diagnose issues
+      const code = error.code ?? error.exitCode ?? 'unknown';
+      const message = error.message || 'No message';
+      const stderr = error.stderr || '';
+      const stdout = error.stdout || '';
+      log(`   Error code: ${code}`);
+      log(`   Message: ${message}`);
+      if (stderr) log(`   Stderr: ${stderr.substring(0, 500)}`);
+      if (stdout) log(`   Stdout: ${stdout.substring(0, 500)}`);
     }
     
     // Write Pulumi.yaml (only for first environment to avoid overwriting)
