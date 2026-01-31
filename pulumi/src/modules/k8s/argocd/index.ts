@@ -510,9 +510,10 @@ fi
 export NEBULA_RENDER_MODE=true
 export NEBULA_RENDER_DIR=./manifests
 
-# Run pulumi up to generate manifests (renderYamlToDirectory writes files during 'up')
-echo "Running pulumi up --stack \$STACK_NAME..." >&2
-pulumi up --stack "\$STACK_NAME" --yes --non-interactive --skip-preview 2>&1
+# Run pulumi preview to generate manifests (renderYamlToDirectory writes files during preview)
+# All pulumi output goes to stderr so only YAML manifests appear on stdout
+echo "Running pulumi preview --stack \$STACK_NAME..." >&2
+pulumi preview --stack "\$STACK_NAME" --non-interactive >&2
 
 # Pulumi Kubernetes provider creates subdirectories (0-crd, 1-manifest, etc.)
 # Find all YAML files recursively and concatenate them
