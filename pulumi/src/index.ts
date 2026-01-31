@@ -57,8 +57,18 @@ export interface NebulaK8sProviderArgs {
 }
 
 /**
+ * Custom Kubernetes provider plugin URL for render mode.
+ * This version includes a fix for renderYamlToDirectory not rendering unchanged resources.
+ * See: https://github.com/pulumi/pulumi-kubernetes/issues/4121
+ */
+const RENDER_MODE_PLUGIN_URL = 'https://github.com/mateo-moon/pulumi-kubernetes/releases/download/v4.99.0-yaml-render-fix';
+
+/**
  * Create a Kubernetes provider that automatically handles render mode.
  * When NEBULA_RENDER_MODE=true, manifests are rendered to NEBULA_RENDER_DIR instead of being applied.
+ * 
+ * In render mode, a custom provider plugin is used that fixes the issue where unchanged
+ * resources were not being rendered to YAML files.
  * 
  * @example
  * ```typescript
@@ -77,13 +87,13 @@ export function createK8sProvider(
   const renderMode = isRenderMode();
   const renderDir = getRenderDir();
 
-  // Debug: log environment variable values
-  console.log(`[Nebula] DEBUG: NEBULA_RENDER_MODE env = '${process.env['NEBULA_RENDER_MODE']}'`);
-  console.log(`[Nebula] DEBUG: NEBULA_RENDER_DIR env = '${process.env['NEBULA_RENDER_DIR']}'`);
-  console.log(`[Nebula] DEBUG: isRenderMode() = ${renderMode}`);
-
   const providerArgs: k8s.ProviderArgs = {
     ...args,
+  };
+
+  // Merge options, adding custom plugin URL in render mode
+  const mergedOpts: pulumi.ResourceOptions = {
+    ...opts,
   };
 
   if (renderMode) {
@@ -91,10 +101,11 @@ export function createK8sProvider(
     providerArgs.renderYamlToDirectory = renderDir;
     // Don't need kubeconfig in render mode
     delete providerArgs.kubeconfig;
+    // Use custom provider plugin that renders all resources (including unchanged ones)
+    mergedOpts.pluginDownloadURL = RENDER_MODE_PLUGIN_URL;
     console.log(`[Nebula] Render mode enabled, outputting manifests to: ${renderDir}`);
-  } else {
-    console.log(`[Nebula] Normal mode - will apply to cluster`);
+    console.log(`[Nebula] Using custom k8s provider plugin from: ${RENDER_MODE_PLUGIN_URL}`);
   }
 
-  return new k8s.Provider(name, providerArgs, opts);
+  return new k8s.Provider(name, providerArgs, mergedOpts);
 }
