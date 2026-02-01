@@ -1,13 +1,17 @@
 /**
- * Nebula configuration - Set backend URL and secrets provider in your Pulumi program.
+ * Nebula configuration - Set environment config for your Pulumi program.
  * 
  * @example
  * ```typescript
  * import { setConfig } from 'nebula';
  * 
  * setConfig({
+ *   env: 'dev',
  *   backendUrl: 'gs://my-bucket',
  *   secretsProvider: 'gcpkms://projects/my-project/locations/global/keyRings/my-ring/cryptoKeys/my-key',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ *   domain: 'dev.example.com',
  * });
  * ```
  */
@@ -17,6 +21,8 @@ export interface NebulaConfig {
   backendUrl: string;
   /** Secrets provider URL (e.g., gcpkms://..., awskms://...) */
   secretsProvider?: string;
+  /** Environment/stack name (e.g., 'dev', 'prod') - used by nebula bootstrap */
+  env?: string;
   /** GCP project ID */
   gcpProject?: string;
   /** GCP region */
@@ -39,8 +45,8 @@ export class ConfigReadComplete extends Error {
 }
 
 /**
- * Set Nebula configuration (backend URL and secrets provider).
- * Call this at the top of your Pulumi program (e.g., dev.ts).
+ * Set Nebula configuration for the current environment.
+ * Call this at the top of your Pulumi program (in config.ts or index.ts).
  * 
  * During `nebula bootstrap`, this will stop execution after storing the config.
  */

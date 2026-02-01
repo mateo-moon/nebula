@@ -4,8 +4,10 @@
  * 
  * Usage: nebula bootstrap
  * 
- * Discovers environment files (dev.ts, stage.ts, prod.ts) in the working directory,
- * reads their configuration via setConfig(), and creates Pulumi stacks.
+ * Discovers environment files in the working directory and creates Pulumi stacks.
+ * Supports two patterns:
+ * 1. Named files: dev.ts, stage.ts, prod.ts (stack name from filename)
+ * 2. index.ts: stack name from parent directory (e.g., infra/dev/cert-manager/index.ts → dev)
  */
 import * as path from 'path';
 import * as fs from 'fs';
@@ -50,26 +52,22 @@ function extractGcpRegion(secretsProvider: string): string | null {
 }
 
 /**
- * Find TypeScript environment files in a directory.
- * Returns files like dev.ts, prod.ts but excludes index.ts and .d.ts files.
+ * Find the entry file (index.ts) in a directory.
  */
-function findEnvironmentFiles(workDir: string): string[] {
-  if (!fs.existsSync(workDir)) return [];
+function findEntryFile(workDir: string): string | null {
+  if (!fs.existsSync(workDir)) return null;
   
-  return fs.readdirSync(workDir)
-    .filter(f => 
-      f.endsWith('.ts') && 
-      !f.endsWith('.d.ts') && 
-      f !== 'index.ts' && 
-      !f.startsWith('nebula.config')
-    );
+  const indexPath = path.join(workDir, 'index.ts');
+  if (fs.existsSync(indexPath)) return 'index.ts';
+  
+  return null;
 }
 
 /**
  * Load config from an environment file by importing it.
  * The file should call setConfig() at the top.
  */
-async function loadConfigFromFile(filePath: string, debug?: boolean): Promise<{ backendUrl: string; secretsProvider?: string } | null> {
+async function loadConfigFromFile(filePath: string, debug?: boolean): Promise<{ backendUrl: string; secretsProvider?: string; env?: string } | null> {
   // Set bootstrap mode so setConfig() will throw after storing config
   process.env['NEBULA_BOOTSTRAP'] = '1';
   
@@ -99,30 +97,17 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
   log('─'.repeat(50));
   log(`📁 Working directory: ${workDir}`);
 
-  // Find environment files
-  let envFiles = findEnvironmentFiles(workDir);
+  // Find entry file (index.ts)
+  const entryFile = findEntryFile(workDir);
   
-  if (envFiles.length === 0) {
+  if (!entryFile) {
     log('');
-    log('❌ No environment files found (e.g., dev.ts, stage.ts, prod.ts)');
-    log(`   Create an environment file like dev.ts in ${workDir}`);
+    log('❌ No index.ts found');
+    log(`   Create index.ts with setConfig({ env: "dev", ... }) in ${workDir}`);
     process.exit(1);
   }
 
-  // Filter to specific stack if --stack flag is provided
-  if (options.stack) {
-    const targetFile = `${options.stack}.ts`;
-    if (!envFiles.includes(targetFile)) {
-      log('');
-      log(`❌ Stack '${options.stack}' not found`);
-      log(`   Available stacks: ${envFiles.map(f => f.replace('.ts', '')).join(', ')}`);
-      process.exit(1);
-    }
-    envFiles = [targetFile];
-  }
-
-  const envNames = envFiles.map(f => f.replace('.ts', ''));
-  log(`🔍 ${options.stack ? 'Selected stack' : 'Found environments'}: ${envNames.join(', ')}`);
+  const filePath = path.join(workDir, entryFile);
 
   // Determine project name from package.json or directory name
   let projectName = path.basename(workDir);
@@ -136,190 +121,183 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     }
   }
 
-  // Process each environment file
-  for (const envFile of envFiles) {
-    const envName = envFile.replace('.ts', '');
-    const filePath = path.join(workDir, envFile);
-    
+  // Load config from the entry file
+  const config = await loadConfigFromFile(filePath, options.debug);
+  
+  if (!config) {
     log('');
-    log(`📦 Processing ${envFile}`);
-    log('─'.repeat(50));
-    
-    // Load config from the environment file
-    const config = await loadConfigFromFile(filePath, options.debug);
-    
-    if (!config) {
-      log(`❌ No config found in ${envFile}`);
-      log(`   Add setConfig({ backendUrl: '...', secretsProvider: '...' }) at the top`);
-      continue;
-    }
-    
-    log(`   Backend:  ${config.backendUrl}`);
-    if (config.secretsProvider) {
-      log(`   Secrets:  ${config.secretsProvider}`);
-    }
-    
-    // GCP setup (only for first environment to avoid duplicate work)
-    if (envFiles.indexOf(envFile) === 0) {
-      const gcpProjectId = extractGcpProjectId(config.secretsProvider || '');
-      const gcpRegion = extractGcpRegion(config.secretsProvider || '');
-      
-      if (gcpProjectId) {
-        // Step 1: Authenticate with GCP (skip in CI mode - credentials come from Workload Identity)
-        if (options.ci) {
-          log('');
-          log(`🤖 CI mode: Skipping interactive authentication`);
-          log('   (Assuming credentials available via Workload Identity or service account)');
+    log(`❌ No config found in ${entryFile}`);
+    log(`   Add setConfig({ env: 'dev', backendUrl: '...', ... }) at the top`);
+    process.exit(1);
+  }
+  
+  // Get env name from config.env (required)
+  if (!config.env) {
+    log('');
+    log(`❌ Missing 'env' in config`);
+    log(`   Add env: 'dev' (or 'prod', etc.) to setConfig()`);
+    process.exit(1);
+  }
+  const envName = config.env;
+  
+  log(`   Env:      ${envName}`);
+  log(`   Backend:  ${config.backendUrl}`);
+  if (config.secretsProvider) {
+    log(`   Secrets:  ${config.secretsProvider}`);
+  }
+  
+  // GCP setup
+  const gcpProjectId = extractGcpProjectId(config.secretsProvider || '');
+  const gcpRegion = extractGcpRegion(config.secretsProvider || '');
+  
+  if (gcpProjectId) {
+    // Step 1: Authenticate with GCP (skip in CI mode - credentials come from Workload Identity)
+    if (options.ci) {
+      log('');
+      log(`🤖 CI mode: Skipping interactive authentication`);
+      log('   (Assuming credentials available via Workload Identity or service account)');
+    } else {
+      log('');
+      log(`🔐 Authenticating with GCP project: ${gcpProjectId}`);
+      log('─'.repeat(50));
+      try {
+        if (await Auth.GCP.isTokenValid(gcpProjectId)) {
+          log(`   ✅ Valid token found for project: ${gcpProjectId}`);
+          Auth.GCP.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
         } else {
-          log('');
-          log(`🔐 Authenticating with GCP project: ${gcpProjectId}`);
-          log('─'.repeat(50));
-          try {
-            if (await Auth.GCP.isTokenValid(gcpProjectId)) {
-              log(`   ✅ Valid token found for project: ${gcpProjectId}`);
-              Auth.GCP.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
-            } else {
-              await Auth.GCP.authenticate(gcpProjectId, gcpRegion ?? undefined);
-            }
-            // Capture env vars for export
-            const homeDir = (await import('os')).homedir();
-            const tokenPath = path.join(homeDir, '.config', 'gcloud', `${gcpProjectId}-accesstoken`);
-            envVarsToExport['GOOGLE_APPLICATION_CREDENTIALS'] = tokenPath;
-            envVarsToExport['CLOUDSDK_CORE_PROJECT'] = gcpProjectId;
-            if (gcpRegion) {
-              envVarsToExport['CLOUDSDK_COMPUTE_ZONE'] = `${gcpRegion}-a`;
-            }
-          } catch (error: any) {
-            log(`   ⚠️  Authentication failed: ${error.message}`);
-            if (options.debug) {
-              log(`   Debug: ${error}`);
-            }
-          }
+          await Auth.GCP.authenticate(gcpProjectId, gcpRegion ?? undefined);
         }
-        
-        // Step 2: Enable GCP APIs
-        log('');
-        log(`🔧 Enabling GCP APIs for project: ${gcpProjectId}`);
-        log('─'.repeat(50));
-        try {
-          await Helpers.enableGcpApis(gcpProjectId);
-        } catch (error: any) {
-          if (options.debug) {
-            log(`   ⚠️  Failed to enable APIs: ${error.message}`);
-          }
+        // Capture env vars for export
+        const homeDir = (await import('os')).homedir();
+        const tokenPath = path.join(homeDir, '.config', 'gcloud', `${gcpProjectId}-accesstoken`);
+        envVarsToExport['GOOGLE_APPLICATION_CREDENTIALS'] = tokenPath;
+        envVarsToExport['CLOUDSDK_CORE_PROJECT'] = gcpProjectId;
+        if (gcpRegion) {
+          envVarsToExport['CLOUDSDK_COMPUTE_ZONE'] = `${gcpRegion}-a`;
         }
-        
-        // Step 3: Ensure backend storage exists (GCS bucket)
-        if (config.backendUrl?.startsWith('gs://')) {
-          log('');
-          log(`🪣 Ensuring backend storage exists`);
-          log('─'.repeat(50));
-          try {
-            await Helpers.ensureBackendForUrl({
-              backendUrl: config.backendUrl,
-              gcp: { 
-                projectId: gcpProjectId,
-                ...(gcpRegion ? { region: gcpRegion } : {}),
-              },
-            });
-            log(`   ✅ Backend storage ready`);
-          } catch (error: any) {
-            log(`   ⚠️  Failed to ensure backend: ${error.message}`);
-          }
+      } catch (error: any) {
+        log(`   ⚠️  Authentication failed: ${error.message}`);
+        if (options.debug) {
+          log(`   Debug: ${error}`);
         }
-        
-        // Step 4: Ensure KMS key exists
-        if (config.secretsProvider?.startsWith('gcpkms://')) {
-          log('');
-          log(`🔑 Ensuring KMS key exists`);
-          log('─'.repeat(50));
-          try {
-            await Helpers.ensureSecretsProvider({
-              secretsProviders: [config.secretsProvider],
-              skipInteractiveAuth: options.ci, // In CI mode, skip interactive auth (use ADC/Workload Identity)
-            });
-            log(`   ✅ KMS key ready`);
-          } catch (error: any) {
-            log(`   ⚠️  Failed to ensure KMS key: ${error.message}`);
-          }
-          
-          // Step 5: Setup SOPS config
-          log('');
-          log(`📄 Setting up SOPS config`);
-          log('─'.repeat(50));
-          try {
-            const resource = config.secretsProvider.replace(/^gcpkms:\/\//, '');
-            Helpers.ensureSopsConfig({
-              gcpKmsResourceId: resource,
-              patterns: ['secrets\\.yaml', 'secrets-.*\\.yaml'],
-              workDir,
-            });
-            log(`   ✅ SOPS config ready`);
-          } catch (error: any) {
-            log(`   ⚠️  Failed to setup SOPS config: ${error.message}`);
-          }
-        }
-        
-        log('');
-        log(`📦 Continuing with ${envFile}`);
-        log('─'.repeat(50));
       }
     }
     
-    // Create stack using StackManager
-    const stackManager = new StackManager({
-      projectName,
-      stackName: envName,
-      workDir,
-      backendUrl: config.backendUrl,
-      ...(config.secretsProvider ? { secretsProvider: config.secretsProvider } : {}),
-      program: async () => {
-        // Empty program - we're just creating the stack
-      },
-    });
-    
-    let stack;
+    // Step 2: Enable GCP APIs
+    log('');
+    log(`🔧 Enabling GCP APIs for project: ${gcpProjectId}`);
+    log('─'.repeat(50));
     try {
-      // Create/select stack via Automation API
-      // In CI mode, this uses ADC (Application Default Credentials) from Workload Identity
-      log(`   ⏳ Creating stack...`);
-      stack = await stackManager.createOrSelectStack();
-      log(`   ✅ Stack created: ${envName}`);
+      await Helpers.enableGcpApis(gcpProjectId);
     } catch (error: any) {
-      log(`   ⚠️  Stack creation failed`);
-      // Always show detailed error to help diagnose issues
-      const code = error.code ?? error.exitCode ?? 'unknown';
-      const message = error.message || 'No message';
-      const stderr = error.stderr || '';
-      const stdout = error.stdout || '';
-      log(`   Error code: ${code}`);
-      log(`   Message: ${message}`);
-      if (stderr) log(`   Stderr: ${stderr.substring(0, 500)}`);
-      if (stdout) log(`   Stdout: ${stdout.substring(0, 500)}`);
+      if (options.debug) {
+        log(`   ⚠️  Failed to enable APIs: ${error.message}`);
+      }
     }
     
-    // Write Pulumi.yaml (only for first environment to avoid overwriting)
-    if (envFiles.indexOf(envFile) === 0) {
-      log(`   📝 Writing Pulumi.yaml`);
-      await stackManager.writePulumiYaml();
-    }
-    
-    // Write Pulumi.<env>.yaml with secretsprovider
-    log(`   📝 Writing Pulumi.${envName}.yaml`);
-    await stackManager.writeStackConfig({});
-    
-    // Initialize encryption to generate encryptedkey (after YAML files are written)
-    // Skip in CI mode - requires backend access and encryption should already be set up
-    if (stack && config.secretsProvider && !options.ci) {
+    // Step 3: Ensure backend storage exists (GCS bucket)
+    if (config.backendUrl?.startsWith('gs://')) {
+      log('');
+      log(`🪣 Ensuring backend storage exists`);
+      log('─'.repeat(50));
       try {
-        log(`   🔐 Initializing encryption...`);
-        await stackManager.initializeEncryption(stack);
-        log(`   ✅ Encryption initialized`);
+        await Helpers.ensureBackendForUrl({
+          backendUrl: config.backendUrl,
+          gcp: { 
+            projectId: gcpProjectId,
+            ...(gcpRegion ? { region: gcpRegion } : {}),
+          },
+        });
+        log(`   ✅ Backend storage ready`);
       } catch (error: any) {
-        log(`   ⚠️  Could not initialize encryption`);
-        if (options.debug) {
-          log(`   Debug: ${JSON.stringify(error, null, 2)}`);
-        }
+        log(`   ⚠️  Failed to ensure backend: ${error.message}`);
+      }
+    }
+    
+    // Step 4: Ensure KMS key exists
+    if (config.secretsProvider?.startsWith('gcpkms://')) {
+      log('');
+      log(`🔑 Ensuring KMS key exists`);
+      log('─'.repeat(50));
+      try {
+        await Helpers.ensureSecretsProvider({
+          secretsProviders: [config.secretsProvider],
+          skipInteractiveAuth: options.ci ?? false,
+        });
+        log(`   ✅ KMS key ready`);
+      } catch (error: any) {
+        log(`   ⚠️  Failed to ensure KMS key: ${error.message}`);
+      }
+      
+      // Step 5: Setup SOPS config
+      log('');
+      log(`📄 Setting up SOPS config`);
+      log('─'.repeat(50));
+      try {
+        const resource = config.secretsProvider.replace(/^gcpkms:\/\//, '');
+        Helpers.ensureSopsConfig({
+          gcpKmsResourceId: resource,
+          patterns: ['secrets\\.yaml', 'secrets-.*\\.yaml'],
+          workDir,
+        });
+        log(`   ✅ SOPS config ready`);
+      } catch (error: any) {
+        log(`   ⚠️  Failed to setup SOPS config: ${error.message}`);
+      }
+    }
+  }
+  
+  // Create stack using StackManager
+  log('');
+  log(`📦 Creating Pulumi stack`);
+  log('─'.repeat(50));
+  
+  const stackManager = new StackManager({
+    projectName,
+    stackName: envName,
+    workDir,
+    backendUrl: config.backendUrl,
+    ...(config.secretsProvider ? { secretsProvider: config.secretsProvider } : {}),
+    program: async () => {
+      // Empty program - we're just creating the stack
+    },
+  });
+  
+  let stack;
+  try {
+    log(`   ⏳ Creating stack...`);
+    stack = await stackManager.createOrSelectStack();
+    log(`   ✅ Stack created: ${envName}`);
+  } catch (error: any) {
+    log(`   ⚠️  Stack creation failed`);
+    const code = error.code ?? error.exitCode ?? 'unknown';
+    const message = error.message || 'No message';
+    const stderr = error.stderr || '';
+    const stdout = error.stdout || '';
+    log(`   Error code: ${code}`);
+    log(`   Message: ${message}`);
+    if (stderr) log(`   Stderr: ${stderr.substring(0, 500)}`);
+    if (stdout) log(`   Stdout: ${stdout.substring(0, 500)}`);
+  }
+  
+  // Write Pulumi.yaml
+  log(`   📝 Writing Pulumi.yaml`);
+  await stackManager.writePulumiYaml();
+  
+  // Write Pulumi.<env>.yaml with secretsprovider
+  log(`   📝 Writing Pulumi.${envName}.yaml`);
+  await stackManager.writeStackConfig({});
+  
+  // Initialize encryption (skip in CI mode)
+  if (stack && config.secretsProvider && !options.ci) {
+    try {
+      log(`   🔐 Initializing encryption...`);
+      await stackManager.initializeEncryption(stack);
+      log(`   ✅ Encryption initialized`);
+    } catch (error: any) {
+      log(`   ⚠️  Could not initialize encryption`);
+      if (options.debug) {
+        log(`   Debug: ${JSON.stringify(error, null, 2)}`);
       }
     }
   }
@@ -329,9 +307,7 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
   log('✨ Bootstrap complete!');
   log('');
   log('📋 Next steps:');
-  for (const envName of envNames) {
-    log(`   pulumi up --stack ${envName}`);
-  }
+  log(`   pulumi up --stack ${envName}`);
   log('');
   
   // Output environment variables to stdout for eval

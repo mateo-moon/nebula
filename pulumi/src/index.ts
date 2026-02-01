@@ -1,22 +1,37 @@
 /**
  * Nebula - A library of reusable Pulumi modules for cloud infrastructure.
  * 
- * Usage: Import modules directly and instantiate them in your Pulumi program.
- * Dependencies between modules are handled via Pulumi's native `dependsOn`.
+ * Setup:
+ * 1. Create index.ts with setConfig() to configure your environment
+ * 2. Import config from shared file, then use nebula modules
+ * 3. Run `npx nebula bootstrap` to initialize Pulumi stack
+ * 
+ * Providers and kubeconfig are auto-injected from infrastructure stack.
  * Secret resolution (ref+sops://...) is automatic when using any module.
  * 
  * @example
  * ```typescript
- * import { CertManager } from 'nebula/k8s/cert-manager';
- * import { IngressNginx } from 'nebula/k8s/ingress-nginx';
+ * // config.ts - shared environment config
+ * import { setConfig } from 'nebula';
  * 
- * const certManager = new CertManager('cert-manager', {
+ * setConfig({
+ *   env: 'dev',
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ *   domain: 'dev.example.com',
+ * });
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // index.ts - module entry point
+ * import '../config';
+ * import { CertManager } from 'nebula/k8s/cert-manager';
+ * 
+ * new CertManager('cert-manager', {
  *   acmeEmail: 'admin@example.com',
  * });
- * 
- * const ingressNginx = new IngressNginx('ingress-nginx', {
- *   createStaticIp: true,
- * }, { dependsOn: [certManager] });
  * ```
  */
 
