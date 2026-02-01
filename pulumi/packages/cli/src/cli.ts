@@ -4,23 +4,29 @@
  * 
  * Usage: nebula bootstrap
  * 
- * Discovers environment files in the working directory and creates Pulumi stacks.
- * Supports two patterns:
- * 1. Named files: dev.ts, stage.ts, prod.ts (stack name from filename)
- * 2. index.ts: stack name from parent directory (e.g., infra/dev/cert-manager/index.ts → dev)
+ * Discovers nebula.config.ts by walking up directories and creates Pulumi stacks.
+ * This package is independent from the nebula runtime library.
  */
 import * as path from 'path';
 import * as fs from 'fs';
 import { Command } from 'commander';
-import { pathToFileURL } from 'node:url';
-import { StackManager } from './core/automation';
-import { getConfig, ConfigReadComplete } from './core/config';
-import { Helpers } from './utils/helpers';
-import { Auth } from './utils/auth';
+import { execSync } from 'node:child_process';
+import { StackManager } from './automation';
+import { GcpAuth } from './auth';
+import { GcpHelpers } from './helpers';
+
+// Type for config loaded from nebula.config.ts
+interface NebulaConfig {
+  env: string;
+  backendUrl: string;
+  secretsProvider?: string;
+  gcpProject?: string;
+  gcpRegion?: string;
+  domain?: string;
+}
 
 interface BootstrapOptions {
   workDir?: string;
-  stack?: string;
   ci?: boolean;
   debug?: boolean;
 }
@@ -34,8 +40,61 @@ function log(msg: string): void {
 const envVarsToExport: Record<string, string> = {};
 
 /**
+ * Find nebula.config.ts by walking up the directory tree.
+ * Stops at filesystem root or when config is found.
+ */
+function findConfigFile(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+  
+  while (true) {
+    const configPath = path.join(dir, 'nebula.config.ts');
+    if (fs.existsSync(configPath)) {
+      return configPath;
+    }
+    
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      // Reached filesystem root
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+/**
+ * Load config from nebula.config.ts by running it in a subprocess.
+ * Uses tsx to execute the TypeScript file and outputs the default export as JSON.
+ */
+function loadConfig(configPath: string, debug?: boolean): NebulaConfig | null {
+  const configDir = path.dirname(configPath);
+  const configFile = path.basename(configPath);
+  
+  try {
+    // Run tsx to import the config and output as JSON
+    const result = execSync(
+      `npx tsx -e "import c from './${configFile}'; console.log(JSON.stringify(c.default || c))"`,
+      {
+        cwd: configDir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    );
+    
+    const trimmed = result.trim();
+    if (!trimmed) return null;
+    
+    return JSON.parse(trimmed) as NebulaConfig;
+  } catch (error: any) {
+    if (debug) {
+      console.error(`[Nebula] Debug: Error loading config:`, error.message);
+      if (error.stderr) console.error(`[Nebula] Debug: stderr:`, error.stderr);
+    }
+    return null;
+  }
+}
+
+/**
  * Extract GCP project ID from a gcpkms:// URL
- * Format: gcpkms://projects/PROJECT_ID/locations/LOCATION/...
  */
 function extractGcpProjectId(secretsProvider: string): string | null {
   const match = secretsProvider.match(/^gcpkms:\/\/projects\/([^/]+)\//);
@@ -44,49 +103,10 @@ function extractGcpProjectId(secretsProvider: string): string | null {
 
 /**
  * Extract GCP region/location from a gcpkms:// URL
- * Format: gcpkms://projects/PROJECT_ID/locations/LOCATION/...
  */
 function extractGcpRegion(secretsProvider: string): string | null {
   const match = secretsProvider.match(/^gcpkms:\/\/projects\/[^/]+\/locations\/([^/]+)\//);
   return match?.[1] ?? null;
-}
-
-/**
- * Find the entry file (index.ts) in a directory.
- */
-function findEntryFile(workDir: string): string | null {
-  if (!fs.existsSync(workDir)) return null;
-  
-  const indexPath = path.join(workDir, 'index.ts');
-  if (fs.existsSync(indexPath)) return 'index.ts';
-  
-  return null;
-}
-
-/**
- * Load config from an environment file by importing it.
- * The file should call setConfig() at the top.
- */
-async function loadConfigFromFile(filePath: string, debug?: boolean): Promise<{ backendUrl: string; secretsProvider?: string; env?: string } | null> {
-  // Set bootstrap mode so setConfig() will throw after storing config
-  process.env['NEBULA_BOOTSTRAP'] = '1';
-  
-  try {
-    const fileUrl = pathToFileURL(filePath).href;
-    await import(fileUrl);
-  } catch (error: any) {
-    // ConfigReadComplete is expected - it means setConfig() was called
-    if (error instanceof ConfigReadComplete || error.name === 'ConfigReadComplete') {
-      // Success - config was stored
-    } else {
-      if (debug) {
-        console.error(`[Nebula] Debug: Error during import:`, error.message);
-      }
-    }
-  }
-  
-  const config = getConfig();
-  return config || null;
 }
 
 async function bootstrap(options: BootstrapOptions): Promise<void> {
@@ -97,47 +117,43 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
   log('─'.repeat(50));
   log(`📁 Working directory: ${workDir}`);
 
-  // Find entry file (index.ts)
-  const entryFile = findEntryFile(workDir);
+  // Find nebula.config.ts by walking up directories
+  const configPath = findConfigFile(workDir);
   
-  if (!entryFile) {
+  if (!configPath) {
     log('');
-    log('❌ No index.ts found');
-    log(`   Create index.ts with setConfig({ env: "dev", ... }) in ${workDir}`);
+    log('❌ No nebula.config.ts found');
+    log(`   Create nebula.config.ts in ${workDir} or a parent directory`);
+    log('');
+    log('   Example nebula.config.ts:');
+    log('   ```');
+    log('   export default {');
+    log("     env: 'dev',");
+    log("     backendUrl: 'gs://my-bucket',");
+    log("     gcpProject: 'my-project',");
+    log('   };');
+    log('   ```');
     process.exit(1);
   }
 
-  const filePath = path.join(workDir, entryFile);
+  log(`   Config:   ${configPath}`);
 
-  // Determine project name from package.json or directory name
-  let projectName = path.basename(workDir);
-  const packageJsonPath = path.join(workDir, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-      projectName = pkg.name || projectName;
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Load config from the entry file
-  const config = await loadConfigFromFile(filePath, options.debug);
+  // Load config from file
+  const config = loadConfig(configPath, options.debug);
   
   if (!config) {
     log('');
-    log(`❌ No config found in ${entryFile}`);
-    log(`   Add setConfig({ env: 'dev', backendUrl: '...', ... }) at the top`);
+    log(`❌ Failed to load config from ${configPath}`);
     process.exit(1);
   }
   
-  // Get env name from config.env (required)
   if (!config.env) {
     log('');
     log(`❌ Missing 'env' in config`);
-    log(`   Add env: 'dev' (or 'prod', etc.) to setConfig()`);
+    log(`   Add env: 'dev' (or 'prod', etc.) to nebula.config.ts`);
     process.exit(1);
   }
+
   const envName = config.env;
   
   log(`   Env:      ${envName}`);
@@ -146,12 +162,15 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     log(`   Secrets:  ${config.secretsProvider}`);
   }
   
+  // Determine project name from directory
+  const projectName = path.basename(workDir);
+
   // GCP setup
-  const gcpProjectId = extractGcpProjectId(config.secretsProvider || '');
-  const gcpRegion = extractGcpRegion(config.secretsProvider || '');
+  const gcpProjectId = config.gcpProject || extractGcpProjectId(config.secretsProvider || '');
+  const gcpRegion = config.gcpRegion || extractGcpRegion(config.secretsProvider || '');
   
   if (gcpProjectId) {
-    // Step 1: Authenticate with GCP (skip in CI mode - credentials come from Workload Identity)
+    // Step 1: Authenticate with GCP (skip in CI mode)
     if (options.ci) {
       log('');
       log(`🤖 CI mode: Skipping interactive authentication`);
@@ -161,11 +180,11 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
       log(`🔐 Authenticating with GCP project: ${gcpProjectId}`);
       log('─'.repeat(50));
       try {
-        if (await Auth.GCP.isTokenValid(gcpProjectId)) {
+        if (await GcpAuth.isTokenValid(gcpProjectId)) {
           log(`   ✅ Valid token found for project: ${gcpProjectId}`);
-          Auth.GCP.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
+          GcpAuth.setAccessTokenEnvVar(gcpProjectId, gcpRegion ?? undefined);
         } else {
-          await Auth.GCP.authenticate(gcpProjectId, gcpRegion ?? undefined);
+          await GcpAuth.authenticate(gcpProjectId, gcpRegion ?? undefined);
         }
         // Capture env vars for export
         const homeDir = (await import('os')).homedir();
@@ -188,7 +207,7 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
     log(`🔧 Enabling GCP APIs for project: ${gcpProjectId}`);
     log('─'.repeat(50));
     try {
-      await Helpers.enableGcpApis(gcpProjectId);
+      await GcpHelpers.enableGcpApis(gcpProjectId);
     } catch (error: any) {
       if (options.debug) {
         log(`   ⚠️  Failed to enable APIs: ${error.message}`);
@@ -201,12 +220,10 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
       log(`🪣 Ensuring backend storage exists`);
       log('─'.repeat(50));
       try {
-        await Helpers.ensureBackendForUrl({
-          backendUrl: config.backendUrl,
-          gcp: { 
-            projectId: gcpProjectId,
-            ...(gcpRegion ? { region: gcpRegion } : {}),
-          },
+        await GcpHelpers.ensureGcsBucket({
+          bucket: config.backendUrl.replace('gs://', ''),
+          projectId: gcpProjectId,
+          location: gcpRegion,
         });
         log(`   ✅ Backend storage ready`);
       } catch (error: any) {
@@ -220,10 +237,7 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
       log(`🔑 Ensuring KMS key exists`);
       log('─'.repeat(50));
       try {
-        await Helpers.ensureSecretsProvider({
-          secretsProviders: [config.secretsProvider],
-          skipInteractiveAuth: options.ci ?? false,
-        });
+        await GcpHelpers.ensureKmsKey(config.secretsProvider, { skipInteractiveAuth: options.ci });
         log(`   ✅ KMS key ready`);
       } catch (error: any) {
         log(`   ⚠️  Failed to ensure KMS key: ${error.message}`);
@@ -235,7 +249,7 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
       log('─'.repeat(50));
       try {
         const resource = config.secretsProvider.replace(/^gcpkms:\/\//, '');
-        Helpers.ensureSopsConfig({
+        GcpHelpers.ensureSopsConfig({
           gcpKmsResourceId: resource,
           patterns: ['secrets\\.yaml', 'secrets-.*\\.yaml'],
           workDir,
@@ -311,7 +325,6 @@ async function bootstrap(options: BootstrapOptions): Promise<void> {
   log('');
   
   // Output environment variables to stdout for eval
-  // Usage: eval $(npx nebula bootstrap)
   for (const [key, value] of Object.entries(envVarsToExport)) {
     console.log(`export ${key}="${value}"`);
   }
@@ -323,20 +336,18 @@ const program = new Command();
 program
   .name('nebula')
   .description('Nebula CLI - Bootstrap Pulumi projects')
-  .version('1.3.1');
+  .version('2.0.0');
 
 program
   .command('bootstrap')
-  .description('Bootstrap Pulumi project (discovers environment files like dev.ts, stage.ts)')
+  .description('Bootstrap Pulumi project (finds nebula.config.ts in current or parent directories)')
   .option('-w, --work-dir <dir>', 'Working directory (default: current directory)')
-  .option('-s, --stack <name>', 'Bootstrap only a specific stack (e.g., dev, prod)')
-  .option('--ci', 'CI/non-interactive mode: skip interactive OAuth authentication (assumes credentials from Workload Identity or service account)')
+  .option('--ci', 'CI/non-interactive mode: skip interactive OAuth authentication')
   .option('--debug', 'Enable debug logging')
   .action(async (opts) => {
     try {
       await bootstrap({
         workDir: opts.workDir,
-        stack: opts.stack,
         ci: opts.ci,
         debug: opts.debug,
       });
