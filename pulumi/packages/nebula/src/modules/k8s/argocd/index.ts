@@ -2,19 +2,25 @@
  * ArgoCd - GitOps continuous delivery tool for Kubernetes.
  * 
  * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * Config is loaded from nebula.config.ts (auto-discovered by walking up directories).
  * 
  * @example
  * ```typescript
- * import { setConfig } from 'nebula';
- * import { ArgoCd } from 'nebula/k8s/argocd';
- * 
- * setConfig({
+ * // nebula.config.ts (in env directory)
+ * export default {
+ *   env: 'dev',
  *   backendUrl: 'gs://my-bucket',
  *   gcpProject: 'my-project',
- *   gcpRegion: 'europe-west3',
- * });
+ * };
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // argocd/index.ts
+ * import { ArgoCd } from 'nebula/k8s/argocd';
  * 
  * new ArgoCd('argocd', {
+ *   nebulaPlugin: { enabled: true },
  *   values: {
  *     server: {
  *       ingress: { enabled: true, hostname: 'argocd.example.com' }
@@ -477,6 +483,7 @@ export class ArgoCd extends BaseModule {
       }
 
       // Create ConfigMap with the Nebula CMP plugin configuration
+      // Updated for new structure: package.json and nebula.config.ts in parent env directory
       new k8s.core.v1.ConfigMap(`${name}-nebula-cmp-plugin`, {
         metadata: {
           name: 'argocd-cmp-nebula',
@@ -493,40 +500,83 @@ export class ArgoCd extends BaseModule {
               version: 'v1.0',
               init: {
                 command: ['/bin/sh', '-c'],
-                args: ['npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install'],
+                args: [`
+set -e
+
+# Find the env directory (contains package.json and nebula.config.ts)
+# Walk up from current module directory until we find package.json
+ENV_DIR="."
+while [ ! -f "\$ENV_DIR/package.json" ] && [ "\$ENV_DIR" != "/" ]; do
+  ENV_DIR="\$(dirname "\$ENV_DIR")"
+done
+
+if [ ! -f "\$ENV_DIR/package.json" ]; then
+  echo "Error: Could not find package.json in parent directories" >&2
+  exit 1
+fi
+
+echo "Found env directory: \$ENV_DIR" >&2
+
+# Install dependencies from env directory
+cd "\$ENV_DIR"
+echo "Installing dependencies..." >&2
+npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install
+`],
               },
               generate: {
                 command: ['/bin/sh', '-c'],
                 args: [`
 set -e
 
-# Create manifests directory
-rm -rf manifests
-mkdir -p manifests
+# Save current module directory
+MODULE_DIR="\$(pwd)"
+
+# Find the env directory (contains package.json and nebula.config.ts)
+ENV_DIR="."
+while [ ! -f "\$ENV_DIR/package.json" ] && [ "\$ENV_DIR" != "/" ]; do
+  ENV_DIR="\$(dirname "\$ENV_DIR")"
+done
+
+if [ ! -f "\$ENV_DIR/package.json" ]; then
+  echo "Error: Could not find package.json in parent directories" >&2
+  exit 1
+fi
+
+# Get absolute paths
+ENV_DIR="\$(cd "\$ENV_DIR" && pwd)"
+MODULE_DIR="\$(cd "\$MODULE_DIR" && pwd)"
+
+echo "Env directory: \$ENV_DIR" >&2
+echo "Module directory: \$MODULE_DIR" >&2
+
+# Create manifests directory in module
+rm -rf "\$MODULE_DIR/manifests"
+mkdir -p "\$MODULE_DIR/manifests"
 
 # Determine stack name from NEBULA_STACK (or ARGOCD_ENV_NEBULA_STACK), ARGOCD_APP_NAME, or default to 'dev'
 # ArgoCD passes plugin env vars with ARGOCD_ENV_ prefix
 STACK_NAME="\${NEBULA_STACK:-\${ARGOCD_ENV_NEBULA_STACK:-\${ARGOCD_APP_NAME:-dev}}}"
 
 # Run nebula bootstrap if Pulumi files don't exist
-# Use --ci flag to skip interactive auth (credentials come from Workload Identity)
-if [ ! -f "Pulumi.yaml" ]; then
-  echo "Running nebula bootstrap --stack $STACK_NAME --ci..." >&2
-  pnpm exec nebula bootstrap --stack "$STACK_NAME" --ci 2>&2 || true
+# The CLI finds nebula.config.ts by walking up directories
+if [ ! -f "\$MODULE_DIR/Pulumi.yaml" ]; then
+  echo "Running nebula bootstrap --ci..." >&2
+  cd "\$MODULE_DIR"
+  # Use npx from env directory's node_modules
+  PATH="\$ENV_DIR/node_modules/.bin:\$PATH" nebula bootstrap --ci 2>&2 || true
 fi
 
 # Set environment to render mode
 export NEBULA_RENDER_MODE=true
-export NEBULA_RENDER_DIR=./manifests
+export NEBULA_RENDER_DIR="\$MODULE_DIR/manifests"
 
-# Run pulumi preview to generate manifests (renderYamlToDirectory writes files during preview)
-# All pulumi output goes to stderr so only YAML manifests appear on stdout
+# Run pulumi preview from module directory
+cd "\$MODULE_DIR"
 echo "Running pulumi preview --stack \$STACK_NAME..." >&2
-pulumi preview --stack "\$STACK_NAME" --non-interactive >&2
+PATH="\$ENV_DIR/node_modules/.bin:\$PATH" pulumi preview --stack "\$STACK_NAME" --non-interactive >&2
 
-# Pulumi Kubernetes provider creates subdirectories (0-crd, 1-manifest, etc.)
 # Find all YAML files recursively and concatenate them
-YAML_FILES=\$(find manifests -name "*.yaml" -type f 2>/dev/null | sort)
+YAML_FILES=\$(find "\$MODULE_DIR/manifests" -name "*.yaml" -type f 2>/dev/null | sort)
 
 if [ -n "\$YAML_FILES" ]; then
   echo "Found manifest files:" >&2
@@ -544,7 +594,9 @@ fi
               discover: {
                 find: {
                   command: ['/bin/sh', '-c'],
-                  args: ['find . -name "package.json" -not -path "*/node_modules/*" | head -1 | xargs dirname'],
+                  // Discover modules by finding index.ts files (not in node_modules)
+                  // Return the directory containing index.ts
+                  args: ['find . -name "index.ts" -not -path "*/node_modules/*" | head -1 | xargs dirname'],
                 },
               },
             },
