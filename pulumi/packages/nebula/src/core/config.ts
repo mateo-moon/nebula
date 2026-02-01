@@ -20,7 +20,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
-import { createRequire } from 'module';
+import { pathToFileURL } from 'url';
 
 export interface NebulaConfig {
   /** Environment/stack name (e.g., 'dev', 'prod') */
@@ -61,14 +61,11 @@ function findConfigFile(startDir: string): string | null {
   }
 }
 
-// Create require function for ESM compatibility
-const require = createRequire(import.meta.url);
-
 /**
- * Load config from nebula.config.ts
- * Called lazily on first getConfig() call.
+ * Load config from nebula.config.ts using dynamic import.
+ * Uses top-level await for synchronous API compatibility.
  */
-function loadConfig(): NebulaConfig | undefined {
+async function loadConfigAsync(): Promise<NebulaConfig | undefined> {
   if (_config) return _config;
   
   const configPath = findConfigFile(process.cwd());
@@ -77,9 +74,10 @@ function loadConfig(): NebulaConfig | undefined {
   }
   
   try {
-    // Use createRequire for ESM compatibility
-    // This works because tsx handles TypeScript
-    const configModule = require(configPath);
+    // Use dynamic import() which properly handles ESM files
+    // Convert path to file:// URL for cross-platform compatibility
+    const configUrl = pathToFileURL(configPath).href;
+    const configModule = await import(configUrl);
     _config = configModule.default || configModule;
     _configPath = configPath;
     return _config;
@@ -89,19 +87,21 @@ function loadConfig(): NebulaConfig | undefined {
   }
 }
 
+// Load config at module initialization using top-level await
+await loadConfigAsync();
+
 /**
  * Get the current Nebula configuration.
- * Loads from nebula.config.ts on first call.
+ * Config is loaded at module initialization via top-level await.
  */
 export function getConfig(): NebulaConfig | undefined {
-  return loadConfig();
+  return _config;
 }
 
 /**
  * Get the path to the loaded config file.
  */
 export function getConfigPath(): string | undefined {
-  loadConfig();
   return _configPath;
 }
 
