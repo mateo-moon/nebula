@@ -526,7 +526,7 @@ export NEBULA_RENDER_MODE=true
 export NEBULA_RENDER_DIR="\$(pwd)/manifests"
 
 echo "Running pulumi preview..." >&2
-npx pulumi preview --non-interactive >&2
+pulumi preview --non-interactive >&2
 
 # Output all generated YAML manifests
 for f in \$(find manifests -name "*.yaml" -type f | sort); do
