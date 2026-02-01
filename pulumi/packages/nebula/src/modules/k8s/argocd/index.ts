@@ -619,6 +619,16 @@ done
           runAsNonRoot: true,
           runAsUser: 999,
         },
+        resources: {
+          requests: {
+            memory: args.nebulaPlugin.resources?.requests?.memory || '512Mi',
+            cpu: args.nebulaPlugin.resources?.requests?.cpu || '100m',
+          },
+          limits: {
+            memory: args.nebulaPlugin.resources?.limits?.memory || '4Gi',
+            cpu: args.nebulaPlugin.resources?.limits?.cpu || '2',
+          },
+        },
         env: sidecarEnv,
         volumeMounts: [
           ...volumeMounts,

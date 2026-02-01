@@ -136,6 +136,13 @@ export interface ArgoCdConfig {
     gcpCredentialsSecret?: string;
     /** Additional environment variables */
     env?: Array<{ name: string; value?: string; valueFrom?: any }>;
+    /** Resource requests and limits for the nebula-cmp sidecar container.
+     * Defaults: requests: 512Mi/100m, limits: 4Gi/2 CPU
+     */
+    resources?: {
+      requests?: { memory?: string; cpu?: string };
+      limits?: { memory?: string; cpu?: string };
+    };
   };
   args?: OptionalChartArgs;
 }
