@@ -7,6 +7,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./types": "./src/types.ts",
     "./modules/infra/aws": "./src/modules/infra/aws/index.ts",
     "./modules/infra/gcp": "./src/modules/infra/gcp/index.ts",
     "./modules/infra/dns": "./src/modules/infra/dns/index.ts",
