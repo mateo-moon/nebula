@@ -1,16 +1,20 @@
 /**
  * Crossplane - Universal control plane for cloud infrastructure.
  * 
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { Crossplane } from 'nebula/k8s/crossplane';
- * import { ArgoCd } from 'nebula/k8s/argocd';
  * 
- * const argocd = new ArgoCd('argocd', { ... });
- * 
- * const crossplane = new Crossplane('crossplane', {}, { 
- *   dependsOn: [argocd] 
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
  * });
+ * 
+ * new Crossplane('crossplane', {});
  * ```
  */
 import * as k8s from "@pulumi/kubernetes";

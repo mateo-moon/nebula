@@ -1,11 +1,20 @@
 /**
  * CertManager - Automated TLS certificate management for Kubernetes.
  * 
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { CertManager } from 'nebula/k8s/cert-manager';
  * 
- * const certManager = new CertManager('cert-manager', {
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ * });
+ * 
+ * new CertManager('cert-manager', {
  *   acmeEmail: 'admin@example.com',
  * });
  * ```
