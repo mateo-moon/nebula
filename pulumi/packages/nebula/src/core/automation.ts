@@ -84,7 +84,7 @@ export class StackManager {
         name: 'nodejs',
         options: {
           typescript: false,
-          nodeargs: '--import=tsx/esm',
+          nodeargs: '--experimental-strip-types --import=tsx/esm',
         },
       },
       ...(backendUrl ? { backend: { url: backendUrl } } : {}),
