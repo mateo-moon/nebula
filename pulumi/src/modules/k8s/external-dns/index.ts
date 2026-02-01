@@ -76,6 +76,7 @@ export class ExternalDns extends BaseModule {
     const registry = args.registry || 'txt';
     const interval = args.interval || '1m';
     const logLevel = args.logLevel || 'info';
+    const domainFilters = args.domainFilters ?? (nebulaConfig?.domain ? [nebulaConfig.domain] : []);
 
     this.namespace = new k8s.core.v1.Namespace(`${name}-namespace`, {
       metadata: { name: namespaceName },
@@ -146,7 +147,7 @@ export class ExternalDns extends BaseModule {
       tolerations: [
         { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
       ],
-      ...(args.domainFilters && args.domainFilters.length > 0 ? { domainFilters: args.domainFilters } : {}),
+      ...(domainFilters.length > 0 ? { domainFilters } : {}),
       ...(args.txtOwnerId ? { txtOwnerId: args.txtOwnerId } : {}),
       ...(args.txtPrefix ? { txtPrefix: args.txtPrefix } : {}),
       ...(args.serviceAccountAnnotations || willUseGoogle ? {
@@ -159,8 +160,8 @@ export class ExternalDns extends BaseModule {
           }
         }
       } : { serviceAccount: { create: true, name: 'external-dns' } }),
-      ...(provider === 'google' && args.googleProject
-        ? { extraArgs: [`--google-project=${args.googleProject}`, ...(args.extraArgs || [])] }
+      ...(provider === 'google' && clusterProject
+        ? { extraArgs: [`--google-project=${clusterProject}`, ...(args.extraArgs || [])] }
         : (args.extraArgs ? { extraArgs: args.extraArgs } : {})),
       ...(args.values || {}),
     };
