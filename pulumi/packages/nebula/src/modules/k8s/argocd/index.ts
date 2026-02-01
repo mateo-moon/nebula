@@ -505,13 +505,15 @@ set -e
 
 # Find the env directory (contains package.json and nebula.config.ts)
 # Walk up from current module directory until we find package.json
-ENV_DIR="."
+MODULE_DIR="\$(pwd)"
+ENV_DIR="\$MODULE_DIR"
 while [ ! -f "\$ENV_DIR/package.json" ] && [ "\$ENV_DIR" != "/" ]; do
   ENV_DIR="\$(dirname "\$ENV_DIR")"
 done
 
 if [ ! -f "\$ENV_DIR/package.json" ]; then
   echo "Error: Could not find package.json in parent directories" >&2
+  echo "Searched from: \$MODULE_DIR" >&2
   exit 1
 fi
 
@@ -528,23 +530,20 @@ npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install
                 args: [`
 set -e
 
-# Save current module directory
+# Save current module directory (absolute path)
 MODULE_DIR="\$(pwd)"
 
 # Find the env directory (contains package.json and nebula.config.ts)
-ENV_DIR="."
+ENV_DIR="\$MODULE_DIR"
 while [ ! -f "\$ENV_DIR/package.json" ] && [ "\$ENV_DIR" != "/" ]; do
   ENV_DIR="\$(dirname "\$ENV_DIR")"
 done
 
 if [ ! -f "\$ENV_DIR/package.json" ]; then
   echo "Error: Could not find package.json in parent directories" >&2
+  echo "Searched from: \$MODULE_DIR" >&2
   exit 1
 fi
-
-# Get absolute paths
-ENV_DIR="\$(cd "\$ENV_DIR" && pwd)"
-MODULE_DIR="\$(cd "\$MODULE_DIR" && pwd)"
 
 echo "Env directory: \$ENV_DIR" >&2
 echo "Module directory: \$MODULE_DIR" >&2
@@ -553,25 +552,30 @@ echo "Module directory: \$MODULE_DIR" >&2
 rm -rf "\$MODULE_DIR/manifests"
 mkdir -p "\$MODULE_DIR/manifests"
 
-# Determine stack name from NEBULA_STACK (or ARGOCD_ENV_NEBULA_STACK), ARGOCD_APP_NAME, or default to 'dev'
-# ArgoCD passes plugin env vars with ARGOCD_ENV_ prefix
-STACK_NAME="\${NEBULA_STACK:-\${ARGOCD_ENV_NEBULA_STACK:-\${ARGOCD_APP_NAME:-dev}}}"
-
 # Run nebula bootstrap if Pulumi files don't exist
-# The CLI finds nebula.config.ts by walking up directories
+# The CLI finds nebula.config.ts by walking up directories and reads env from there
 if [ ! -f "\$MODULE_DIR/Pulumi.yaml" ]; then
   echo "Running nebula bootstrap --ci..." >&2
   cd "\$MODULE_DIR"
-  # Use npx from env directory's node_modules
   PATH="\$ENV_DIR/node_modules/.bin:\$PATH" nebula bootstrap --ci 2>&2 || true
 fi
+
+# Determine stack name from Pulumi.<stack>.yaml file that nebula bootstrap created
+# This ensures we use the same stack name from nebula.config.ts
+cd "\$MODULE_DIR"
+STACK_NAME=\$(ls Pulumi.*.yaml 2>/dev/null | head -1 | sed 's/Pulumi\\.\\(.*\\)\\.yaml/\\1/')
+if [ -z "\$STACK_NAME" ]; then
+  echo "Error: No Pulumi.<stack>.yaml found. Did nebula bootstrap fail?" >&2
+  exit 1
+fi
+
+echo "Using stack: \$STACK_NAME" >&2
 
 # Set environment to render mode
 export NEBULA_RENDER_MODE=true
 export NEBULA_RENDER_DIR="\$MODULE_DIR/manifests"
 
 # Run pulumi preview from module directory
-cd "\$MODULE_DIR"
 echo "Running pulumi preview --stack \$STACK_NAME..." >&2
 PATH="\$ENV_DIR/node_modules/.bin:\$PATH" pulumi preview --stack "\$STACK_NAME" --non-interactive >&2
 
