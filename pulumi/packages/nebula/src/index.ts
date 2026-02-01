@@ -2,31 +2,31 @@
  * Nebula - A library of reusable Pulumi modules for cloud infrastructure.
  * 
  * Setup:
- * 1. Create index.ts with setConfig() to configure your environment
- * 2. Import config from shared file, then use nebula modules
- * 3. Run `npx nebula bootstrap` to initialize Pulumi stack
+ * 1. Create nebula.config.ts in your environment directory with config
+ * 2. Create index.ts and import nebula modules
+ * 3. Run `npx @nebula/cli bootstrap` to initialize Pulumi stack
  * 
+ * Config is automatically loaded from nebula.config.ts by walking up directories.
  * Providers and kubeconfig are auto-injected from infrastructure stack.
  * Secret resolution (ref+sops://...) is automatic when using any module.
  * 
  * @example
  * ```typescript
- * // config.ts - shared environment config
- * import { setConfig } from 'nebula';
+ * // nebula.config.ts - environment config
+ * import type { NebulaConfig } from 'nebula';
  * 
- * setConfig({
+ * export default {
  *   env: 'dev',
  *   backendUrl: 'gs://my-bucket',
  *   gcpProject: 'my-project',
  *   gcpRegion: 'europe-west3',
  *   domain: 'dev.example.com',
- * });
+ * } satisfies NebulaConfig;
  * ```
  * 
  * @example
  * ```typescript
  * // index.ts - module entry point
- * import '../config';
  * import { CertManager } from 'nebula/k8s/cert-manager';
  * 
  * new CertManager('cert-manager', {
@@ -40,7 +40,7 @@ import type * as pulumi from '@pulumi/pulumi';
 
 // Core
 export { BaseModule } from './core/base-module';
-export { setConfig, getConfig } from './core/config';
+export { getConfig, getConfigPath, resetConfig } from './core/config';
 export type { NebulaConfig } from './core/config';
 export { getK8sProvider, getGcpProvider, resetProviders } from './core/providers';
 
