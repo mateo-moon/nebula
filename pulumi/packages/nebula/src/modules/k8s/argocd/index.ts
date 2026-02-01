@@ -624,10 +624,13 @@ done
             memory: args.nebulaPlugin.resources?.requests?.memory || '512Mi',
             cpu: args.nebulaPlugin.resources?.requests?.cpu || '100m',
           },
-          limits: {
-            memory: args.nebulaPlugin.resources?.limits?.memory || '4Gi',
-            cpu: args.nebulaPlugin.resources?.limits?.cpu || '2',
-          },
+          // Only set limits if explicitly provided
+          ...(args.nebulaPlugin.resources?.limits ? {
+            limits: {
+              memory: args.nebulaPlugin.resources.limits.memory,
+              cpu: args.nebulaPlugin.resources.limits.cpu,
+            },
+          } : {}),
         },
         env: sidecarEnv,
         volumeMounts: [
