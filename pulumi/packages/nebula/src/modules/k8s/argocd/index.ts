@@ -502,27 +502,8 @@ export class ArgoCd extends BaseModule {
                 command: ['/bin/sh', '-c'],
                 args: [`
 set -e
-
-# Find the env directory (contains package.json and nebula.config.ts)
-# Walk up from current module directory until we find package.json
-MODULE_DIR="\$(pwd)"
-ENV_DIR="\$MODULE_DIR"
-while [ ! -f "\$ENV_DIR/package.json" ] && [ "\$ENV_DIR" != "/" ]; do
-  ENV_DIR="\$(dirname "\$ENV_DIR")"
-done
-
-if [ ! -f "\$ENV_DIR/package.json" ]; then
-  echo "Error: Could not find package.json in parent directories" >&2
-  echo "Searched from: \$MODULE_DIR" >&2
-  exit 1
-fi
-
-echo "Found env directory: \$ENV_DIR" >&2
-
-# Install dependencies from env directory
-cd "\$ENV_DIR"
 echo "Installing dependencies..." >&2
-npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install
+pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 `],
               },
               generate: {
@@ -530,69 +511,28 @@ npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install
                 args: [`
 set -e
 
-# Save current module directory (absolute path)
-MODULE_DIR="\$(pwd)"
-
-# Find the env directory (contains package.json and nebula.config.ts)
-ENV_DIR="\$MODULE_DIR"
-while [ ! -f "\$ENV_DIR/package.json" ] && [ "\$ENV_DIR" != "/" ]; do
-  ENV_DIR="\$(dirname "\$ENV_DIR")"
-done
-
-if [ ! -f "\$ENV_DIR/package.json" ]; then
-  echo "Error: Could not find package.json in parent directories" >&2
-  echo "Searched from: \$MODULE_DIR" >&2
-  exit 1
-fi
-
-echo "Env directory: \$ENV_DIR" >&2
-echo "Module directory: \$MODULE_DIR" >&2
-
-# Create manifests directory in module
-rm -rf "\$MODULE_DIR/manifests"
-mkdir -p "\$MODULE_DIR/manifests"
+# Create manifests directory
+rm -rf manifests
+mkdir -p manifests
 
 # Run nebula bootstrap if Pulumi files don't exist
-# The CLI finds nebula.config.ts by walking up directories and reads env from there
-if [ ! -f "\$MODULE_DIR/Pulumi.yaml" ]; then
+if [ ! -f Pulumi.yaml ]; then
   echo "Running nebula bootstrap --ci..." >&2
-  cd "\$MODULE_DIR"
-  PATH="\$ENV_DIR/node_modules/.bin:\$PATH" nebula bootstrap --ci 2>&2 || true
+  npx nebula bootstrap --ci 2>&2 || true
 fi
 
-# Determine stack name from Pulumi.<stack>.yaml file that nebula bootstrap created
-# This ensures we use the same stack name from nebula.config.ts
-cd "\$MODULE_DIR"
-STACK_NAME=\$(ls Pulumi.*.yaml 2>/dev/null | head -1 | sed 's/Pulumi\\.\\(.*\\)\\.yaml/\\1/')
-if [ -z "\$STACK_NAME" ]; then
-  echo "Error: No Pulumi.<stack>.yaml found. Did nebula bootstrap fail?" >&2
-  exit 1
-fi
-
-echo "Using stack: \$STACK_NAME" >&2
-
-# Set environment to render mode
+# Set render mode and run pulumi preview (uses default stack)
 export NEBULA_RENDER_MODE=true
-export NEBULA_RENDER_DIR="\$MODULE_DIR/manifests"
+export NEBULA_RENDER_DIR="\$(pwd)/manifests"
 
-# Run pulumi preview from module directory
-echo "Running pulumi preview --stack \$STACK_NAME..." >&2
-PATH="\$ENV_DIR/node_modules/.bin:\$PATH" pulumi preview --stack "\$STACK_NAME" --non-interactive >&2
+echo "Running pulumi preview..." >&2
+npx pulumi preview --non-interactive >&2
 
-# Find all YAML files recursively and concatenate them
-YAML_FILES=\$(find "\$MODULE_DIR/manifests" -name "*.yaml" -type f 2>/dev/null | sort)
-
-if [ -n "\$YAML_FILES" ]; then
-  echo "Found manifest files:" >&2
-  echo "\$YAML_FILES" >&2
-  for f in \$YAML_FILES; do
-    echo "---"
-    cat "\$f"
-  done
-else
-  echo "No manifests generated" >&2
-  exit 1
-fi
+# Output all generated YAML manifests
+for f in \$(find manifests -name "*.yaml" -type f | sort); do
+  echo "---"
+  cat "\$f"
+done
 `],
               },
               discover: {
