@@ -1,13 +1,22 @@
 /**
  * ClusterApiOperator - Kubernetes Cluster API Operator for managing cluster lifecycle.
  * 
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { ClusterApiOperator } from 'nebula/k8s/cluster-api-operator';
  * 
- * const capiOperator = new ClusterApiOperator('capi', {
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ * });
+ * 
+ * new ClusterApiOperator('capi', {
  *   version: '0.24.1',
- * }, { providers: [k8sProvider] });
+ * });
  * ```
  */
 import * as k8s from "@pulumi/kubernetes";

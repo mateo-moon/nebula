@@ -1,13 +1,22 @@
 /**
  * Dns - DNS zone management with delegation support.
  * 
+ * GCP provider is auto-injected from config. Domain defaults to config.domain if not specified.
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { Dns } from 'nebula/modules/infra/dns';
  * 
- * const dns = new Dns('my-dns', {
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ *   domain: 'example.com',
+ * });
+ * 
+ * new Dns('my-dns', {
  *   provider: 'gcp',
- *   domains: ['example.com'],
  *   delegations: [{ provider: 'cloudflare', zoneId: '...' }],
  * });
  * ```
@@ -17,6 +26,7 @@ import * as gcp from '@pulumi/gcp';
 import * as cloudflare from '@pulumi/cloudflare';
 import * as https from 'https';
 import { BaseModule } from '../../../core/base-module';
+import { getConfig } from '../../../core/config';
 
 export type DnsDelegationProvider = 'cloudflare' | 'hetzner';
 
@@ -40,7 +50,8 @@ export interface DnsConfig {
   provider: DnsProvider;
   dnsDelegations?: DnsDelegationConfig[];
   enabled?: boolean;
-  domains: string[];
+  /** Domains to manage. Defaults to [config.domain] if not specified. */
+  domains?: string[];
   delegations?: DnsDelegationConfig[];
 }
 
@@ -52,16 +63,18 @@ export class Dns extends BaseModule {
   public readonly zones: Map<string, { zoneId: pulumi.Output<string>; nameServers: pulumi.Output<string[]> }>;
 
   constructor(name: string, cfg: DnsConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:Dns', name, cfg as unknown as Record<string, unknown>, opts);
+    super('nebula:Dns', name, cfg as unknown as Record<string, unknown>, opts, { needsGcp: true });
 
     this.zones = new Map();
     
-    if (cfg.enabled === false || !cfg.domains || cfg.domains.length === 0) {
+    // Get domains from config if not specified
+    const nebulaConfig = getConfig();
+    const domains = cfg.domains ?? (nebulaConfig?.domain ? [nebulaConfig.domain] : []);
+    
+    if (cfg.enabled === false || domains.length === 0) {
       this.registerOutputs({ zones: this.zones });
       return;
     }
-
-    const domains = cfg.domains;
 
     domains.forEach((domain, index) => {
       const cleanDomain = domain.replace(/\.$/, '');

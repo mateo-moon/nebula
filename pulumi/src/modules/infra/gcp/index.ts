@@ -1,11 +1,20 @@
 /**
  * Gcp - GCP Infrastructure module (VPC, GKE).
  * 
+ * GCP provider is auto-injected from config (gcpProject, gcpRegion).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { Gcp } from 'nebula/modules/infra/gcp';
  * 
- * const gcp = new Gcp('my-infra', {
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ * });
+ * 
+ * new Gcp('my-infra', {
  *   network: { cidr: '10.10.0.0/16' },
  *   gke: { name: 'my-cluster', location: 'us-central1-a' },
  * });
@@ -14,6 +23,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
 import { BaseModule } from '../../../core/base-module';
+import { getConfig } from '../../../core/config';
 import { Gke } from './gke';
 import type { GkeConfig } from './gke';
 import { Network } from './network';
@@ -60,18 +70,22 @@ export class Gcp extends BaseModule {
   public readonly project: pulumi.Output<string>;
   
   constructor(name: string, args: GcpConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('nebula:Gcp', name, args as unknown as Record<string, unknown>, opts);
+    super('nebula:Gcp', name, args as unknown as Record<string, unknown>, opts, { needsGcp: true });
 
+    const nebulaConfig = getConfig();
     const gcpProvider = this.getProvider('gcp:project:Project') as gcp.Provider | undefined;
     
-    if (!gcpProvider) {
-      throw new Error('GCP provider not found. Make sure to pass a GCP provider via opts.providers.');
+    // Get project from provider or config
+    if (gcpProvider?.project) {
+      this.project = gcpProvider.project.apply(p => {
+        if (!p) throw new Error('GCP provider project is not set');
+        return p;
+      });
+    } else if (nebulaConfig?.gcpProject) {
+      this.project = pulumi.output(nebulaConfig.gcpProject);
+    } else {
+      throw new Error('GCP project not found. Set gcpProject in config or pass a GCP provider.');
     }
-    
-    this.project = gcpProvider.project.apply(p => {
-      if (!p) throw new Error('GCP provider project is not set');
-      return p;
-    });
 
     const pods = args.network?.podsSecondaryCidr || '';
     const svcs = args.network?.servicesSecondaryCidr || '';

@@ -25,6 +25,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { deepmerge } from "deepmerge-ts";
 import { BaseModule } from "../../../core/base-module";
+import { getConfig } from "../../../core/config";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
@@ -71,6 +72,7 @@ export class IngressNginx extends BaseModule {
   ) {
     super('nebula:IngressNginx', name, args as unknown as Record<string, unknown>, opts, { needsGcp: true });
 
+    const nebulaConfig = getConfig();
     const namespaceName = args.namespace || 'ingress-nginx';
     
     this.namespace = new k8s.core.v1.Namespace(`${name}-namespace`, {
@@ -94,9 +96,7 @@ export class IngressNginx extends BaseModule {
     // Create Static IP if requested
     if (args.createStaticIp) {
       const ipName = args.staticIpName || `${name}-ingress-ip`;
-      const gcpProvider = this.getProvider('gcp:project:Project') as gcp.Provider | undefined;
-      const region: pulumi.Input<string> = args.gcpRegion || 
-        (gcpProvider?.region ? gcpProvider.region.apply(r => r || 'europe-west3') : 'europe-west3');
+      const region: pulumi.Input<string> = args.gcpRegion || nebulaConfig?.gcpRegion || 'europe-west3';
 
       this.staticIp = new gcp.compute.Address(ipName, {
         name: ipName,
