@@ -1,11 +1,20 @@
 /**
  * ArgoCd - GitOps continuous delivery tool for Kubernetes.
  * 
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { ArgoCd } from 'nebula/k8s/argocd';
  * 
- * const argocd = new ArgoCd('argocd', {
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ * });
+ * 
+ * new ArgoCd('argocd', {
  *   values: {
  *     server: {
  *       ingress: { enabled: true, hostname: 'argocd.example.com' }
@@ -53,7 +62,7 @@ export class ArgoCd extends BaseModule {
     args: ArgoCdConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:ArgoCd', name, args as unknown as Record<string, unknown>, opts);
+    super('nebula:ArgoCd', name, args as unknown as Record<string, unknown>, opts, { needsGcp: true });
 
     const namespaceName = args.namespace || 'argocd';
 

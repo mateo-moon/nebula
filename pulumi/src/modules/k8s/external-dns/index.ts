@@ -1,14 +1,22 @@
 /**
  * ExternalDns - Automatic DNS record management for Kubernetes.
  * 
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { ExternalDns } from 'nebula/k8s/external-dns';
  * 
- * const externalDns = new ExternalDns('external-dns', {
- *   provider: 'google',
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ * });
+ * 
+ * new ExternalDns('external-dns', {
  *   domainFilters: ['example.com'],
- *   googleProject: 'my-project',
+ *   policy: 'sync',
  * });
  * ```
  */
@@ -17,6 +25,7 @@ import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { BaseModule } from "../../../core/base-module";
+import { getConfig } from "../../../core/config";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
@@ -55,8 +64,11 @@ export class ExternalDns extends BaseModule {
     args: ExternalDnsConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:ExternalDns', name, args as unknown as Record<string, unknown>, opts);
+    super('nebula:ExternalDns', name, args as unknown as Record<string, unknown>, opts, { needsGcp: true });
 
+    // Get config for defaults
+    const nebulaConfig = getConfig();
+    
     const namespaceName = args.namespace || 'external-dns';
     const provider: ExternalDnsProvider = args.provider ?? 'google';
     const sources = args.sources && args.sources.length > 0 ? args.sources : ['service', 'ingress'];
@@ -72,7 +84,7 @@ export class ExternalDns extends BaseModule {
     const gcpProvider = this.getProvider('gcp:project:Project') as gcp.Provider | undefined;
     
     const clusterProject: pulumi.Output<string> | string | undefined = 
-      args.googleProject || gcpProvider?.project.apply(p => p || '');
+      args.googleProject || nebulaConfig?.gcpProject || gcpProvider?.project.apply(p => p || '');
     
     if (provider === 'google' && !clusterProject) {
       throw new Error('GCP project is required when provider is "google".');

@@ -1,16 +1,22 @@
 /**
  * IngressNginx - NGINX Ingress Controller for Kubernetes.
  * 
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
  * @example
  * ```typescript
+ * import { setConfig } from 'nebula';
  * import { IngressNginx } from 'nebula/k8s/ingress-nginx';
- * import { CertManager } from 'nebula/k8s/cert-manager';
  * 
- * const certManager = new CertManager('cert-manager', { acmeEmail: 'admin@example.com' });
+ * setConfig({
+ *   backendUrl: 'gs://my-bucket',
+ *   gcpProject: 'my-project',
+ *   gcpRegion: 'europe-west3',
+ * });
  * 
- * const ingressNginx = new IngressNginx('ingress-nginx', {
+ * new IngressNginx('ingress-nginx', {
  *   createStaticIp: true,
- * }, { dependsOn: [certManager] });
+ * });
  * ```
  */
 import * as k8s from "@pulumi/kubernetes";
@@ -63,7 +69,7 @@ export class IngressNginx extends BaseModule {
     args: IngressNginxConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('nebula:IngressNginx', name, args as unknown as Record<string, unknown>, opts);
+    super('nebula:IngressNginx', name, args as unknown as Record<string, unknown>, opts, { needsGcp: true });
 
     const namespaceName = args.namespace || 'ingress-nginx';
     

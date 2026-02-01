@@ -25,8 +25,9 @@ import type * as pulumi from '@pulumi/pulumi';
 
 // Core
 export { BaseModule } from './core/base-module';
-export { setConfig } from './core/config';
+export { setConfig, getConfig } from './core/config';
 export type { NebulaConfig } from './core/config';
+export { getK8sProvider, getGcpProvider, resetProviders } from './core/providers';
 
 // Utilities  
 export { Utils, Auth, Helpers } from './utils';
