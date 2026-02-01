@@ -20,6 +20,7 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 
 export interface NebulaConfig {
   /** Environment/stack name (e.g., 'dev', 'prod') */
@@ -60,6 +61,9 @@ function findConfigFile(startDir: string): string | null {
   }
 }
 
+// Create require function for ESM compatibility
+const require = createRequire(import.meta.url);
+
 /**
  * Load config from nebula.config.ts
  * Called lazily on first getConfig() call.
@@ -73,7 +77,7 @@ function loadConfig(): NebulaConfig | undefined {
   }
   
   try {
-    // Dynamic require to load the config file
+    // Use createRequire for ESM compatibility
     // This works because tsx handles TypeScript
     const configModule = require(configPath);
     _config = configModule.default || configModule;
