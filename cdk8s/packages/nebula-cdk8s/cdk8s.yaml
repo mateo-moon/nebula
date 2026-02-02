@@ -1,0 +1,12 @@
+language: typescript
+app: npx ts-node src/main.ts
+imports:
+  # Crossplane GCP Provider CRDs (local files)
+  - crds/compute.gcp.upbound.io_networks.yaml
+  - crds/compute.gcp.upbound.io_subnetworks.yaml
+  - crds/compute.gcp.upbound.io_firewalls.yaml
+  - crds/container.gcp.upbound.io_clusters.yaml
+  - crds/container.gcp.upbound.io_nodepools.yaml
+  - crds/cloudplatform.gcp.upbound.io_serviceaccounts.yaml
+  - crds/cloudplatform.gcp.upbound.io_serviceaccountiammembers.yaml
+  - crds/cloudplatform.gcp.upbound.io_projectiammembers.yaml
