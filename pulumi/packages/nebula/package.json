@@ -18,7 +18,8 @@
     "./k8s/ingress-nginx": "./src/modules/k8s/ingress-nginx/index.ts",
     "./k8s/prometheus-operator": "./src/modules/k8s/prometheus-operator/index.ts",
     "./k8s/crossplane": "./src/modules/k8s/crossplane/index.ts",
-    "./crossplane-crds/argocd": "./src/crossplane-crds/argocd/index.ts"
+    "./crossplane-crds/argocd": "./src/crossplane-crds/argocd/index.ts",
+    "./crossplane-crds/gcp": "./src/crossplane-crds/gcp/index.ts"
   },
   "typesVersions": {
     "*": {
