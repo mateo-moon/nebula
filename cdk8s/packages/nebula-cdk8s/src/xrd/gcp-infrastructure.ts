@@ -1,6 +1,6 @@
 import { Chart, ChartProps } from 'cdk8s';
 import { Construct } from 'constructs';
-import { CompositeResourceDefinition, Composition, CompositionSpecMode } from '../../imports/index.js';
+import { CompositeResourceDefinition, Composition, CompositionSpecMode } from '../../imports';
 
 /**
  * Creates the XGcpInfrastructure CompositeResourceDefinition and its Composition.
