@@ -15,12 +15,14 @@ import {
   CertManagerXrd,
   ExternalDnsXrd,
   IngressNginxXrd,
+  DnsXrd,
 } from '../src';
 
 const app = new App();
 
-// Infrastructure XRD
+// Infrastructure XRDs
 new GcpInfrastructureXrd(app, 'gcp-infrastructure-xrd');
+new DnsXrd(app, 'dns-xrd');
 
 // Platform module XRDs
 new CertManagerXrd(app, 'cert-manager-xrd');

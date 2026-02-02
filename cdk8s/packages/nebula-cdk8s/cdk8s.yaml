@@ -18,3 +18,7 @@ imports:
   - crds/externaldns.nebula.io.yaml
   - crds/ingressnginxs.nebula.io.yaml
   - crds/gcpinfrastructures.nebula.io.yaml
+  - crds/dns.gcp.upbound.io_managedzones.yaml
+  - crds/record.cloudflare.upbound.io_records.yaml
+  - crds/cloudflare-record.yaml
+  - crds/dns.nebula.io.yaml
