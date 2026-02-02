@@ -439,7 +439,7 @@ export interface BootstrapSpecGcpSecretRef {
   readonly key?: string;
 
   /**
-   * Secret name
+   * Secret name (default: gcp-adc for Application Default Credentials)
    *
    * @schema BootstrapSpecGcpSecretRef#name
    */

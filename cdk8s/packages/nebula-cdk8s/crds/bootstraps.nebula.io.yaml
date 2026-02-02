@@ -82,8 +82,9 @@ spec:
                           description: Key in the secret
                           type: string
                         name:
-                          default: gcp-credentials
-                          description: Secret name
+                          default: gcp-adc
+                          description: "Secret name (default: gcp-adc for Application Default
+                            Credentials)"
                           type: string
                         namespace:
                           default: crossplane-system

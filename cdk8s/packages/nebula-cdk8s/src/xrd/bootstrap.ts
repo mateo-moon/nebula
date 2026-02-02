@@ -11,9 +11,21 @@ import { CompositeResourceDefinition, Composition, CompositionSpecMode } from '.
  * - Cloudflare ProviderConfig (optional)
  * - Kubernetes ProviderConfig
  * 
+ * ## Local Bootstrap Setup (using Application Default Credentials)
+ * 
+ * ```bash
+ * # 1. Login with gcloud (one-time)
+ * gcloud auth application-default login
+ * 
+ * # 2. Create secret from your ADC
+ * kubectl create secret generic gcp-adc \
+ *   -n crossplane-system \
+ *   --from-file=credentials.json=$HOME/.config/gcloud/application_default_credentials.json
+ * ```
+ * 
  * @example
  * ```yaml
- * # For local bootstrap cluster
+ * # For local bootstrap cluster (ephemeral, not in Git)
  * apiVersion: nebula.io/v1alpha1
  * kind: Bootstrap
  * metadata:
@@ -22,16 +34,9 @@ import { CompositeResourceDefinition, Composition, CompositionSpecMode } from '.
  *   clusterType: local
  *   gcp:
  *     project: my-project
- *     secretRef:
- *       name: gcp-credentials
- *       namespace: crossplane-system
- *   cloudflare:
- *     enabled: true
- *     secretRef:
- *       name: cloudflare-credentials
- *       namespace: crossplane-system
+ *     # Uses gcp-adc secret by default (Application Default Credentials)
  * ---
- * # For managed GKE cluster (after pivot)
+ * # For managed GKE cluster (in Git, synced by ArgoCD)
  * apiVersion: nebula.io/v1alpha1
  * kind: Bootstrap
  * metadata:
@@ -41,11 +46,6 @@ import { CompositeResourceDefinition, Composition, CompositionSpecMode } from '.
  *   gcp:
  *     project: my-project
  *     # No secretRef needed - uses Workload Identity
- *   cloudflare:
- *     enabled: true
- *     secretRef:
- *       name: cloudflare-credentials
- *       namespace: crossplane-system
  * ```
  */
 export class BootstrapXrd extends Chart {
@@ -122,8 +122,8 @@ export class BootstrapXrd extends Chart {
                             properties: {
                               name: {
                                 type: 'string',
-                                default: 'gcp-credentials',
-                                description: 'Secret name',
+                                default: 'gcp-adc',
+                                description: 'Secret name (default: gcp-adc for Application Default Credentials)',
                               },
                               namespace: {
                                 type: 'string',
@@ -280,7 +280,7 @@ spec:
     source: Secret
     secretRef:
       namespace: {{ default "crossplane-system" $spec.gcp.secretRef.namespace }}
-      name: {{ default "gcp-credentials" $spec.gcp.secretRef.name }}
+      name: {{ default "gcp-adc" $spec.gcp.secretRef.name }}
       key: {{ default "credentials.json" $spec.gcp.secretRef.key }}
 {{- else if eq $clusterType "gke" }}
   credentials:
