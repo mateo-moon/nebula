@@ -41,6 +41,8 @@ class DevInfrastructureClaim extends Chart {
         namespace: 'default',
       },
       spec: {
+        // Optional: specify composition version (defaults to gcp-infrastructure-v1)
+        // compositionRef: { name: 'gcp-infrastructure-v2' },
         project: 'geometric-watch-472309-h6',
         region: 'europe-west3',
         network: {

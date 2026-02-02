@@ -13,7 +13,7 @@ export class GcpInfrastructure extends ApiObject {
    * Returns the apiVersion and kind for "GcpInfrastructure"
    */
   public static readonly GVK: GroupVersionKind = {
-    apiVersion: 'nebula.kalatori.io/v1alpha1',
+    apiVersion: 'nebula.io/v1alpha1',
     kind: 'GcpInfrastructure',
   }
 
@@ -92,6 +92,13 @@ export function toJson_GcpInfrastructureProps(obj: GcpInfrastructureProps | unde
  */
 export interface GcpInfrastructureSpec {
   /**
+   * Reference to a specific composition version
+   *
+   * @schema GcpInfrastructureSpec#compositionRef
+   */
+  readonly compositionRef?: GcpInfrastructureSpecCompositionRef;
+
+  /**
    * GKE cluster configuration
    *
    * @schema GcpInfrastructureSpec#gke
@@ -141,12 +148,41 @@ export interface GcpInfrastructureSpec {
 export function toJson_GcpInfrastructureSpec(obj: GcpInfrastructureSpec | undefined): Record<string, any> | undefined {
   if (obj === undefined) { return undefined; }
   const result = {
+    'compositionRef': toJson_GcpInfrastructureSpecCompositionRef(obj.compositionRef),
     'gke': toJson_GcpInfrastructureSpecGke(obj.gke),
     'network': toJson_GcpInfrastructureSpecNetwork(obj.network),
     'nodePools': obj.nodePools?.map(y => toJson_GcpInfrastructureSpecNodePools(y)),
     'project': obj.project,
     'region': obj.region,
     'writeConnectionSecretToRef': toJson_GcpInfrastructureSpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a specific composition version
+ *
+ * @schema GcpInfrastructureSpecCompositionRef
+ */
+export interface GcpInfrastructureSpecCompositionRef {
+  /**
+   * Composition name (e.g., gcp-infrastructure-v1, gcp-infrastructure-v2)
+   *
+   * @schema GcpInfrastructureSpecCompositionRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'GcpInfrastructureSpecCompositionRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_GcpInfrastructureSpecCompositionRef(obj: GcpInfrastructureSpecCompositionRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});

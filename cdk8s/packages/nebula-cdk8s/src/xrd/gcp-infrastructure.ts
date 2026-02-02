@@ -15,7 +15,7 @@ import { CompositeResourceDefinition, Composition, CompositionSpecMode } from '.
  * 
  * @example
  * ```yaml
- * apiVersion: nebula.kalatori.io/v1alpha1
+ * apiVersion: nebula.io/v1alpha1
  * kind: GcpInfrastructure
  * metadata:
  *   name: dev
@@ -42,10 +42,10 @@ export class GcpInfrastructureXrd extends Chart {
     // ==================== XRD ====================
     this.xrd = new CompositeResourceDefinition(this, 'xrd', {
       metadata: {
-        name: 'xgcpinfrastructures.nebula.kalatori.io',
+        name: 'xgcpinfrastructures.nebula.io',
       },
       spec: {
-        group: 'nebula.kalatori.io',
+        group: 'nebula.io',
         names: {
           kind: 'XGcpInfrastructure',
           plural: 'xgcpinfrastructures',
@@ -59,6 +59,9 @@ export class GcpInfrastructureXrd extends Chart {
           'clusterEndpoint',
           'clusterCaCertificate',
         ],
+        defaultCompositionRef: {
+          name: 'gcp-infrastructure-v1',
+        },
         versions: [
           {
             name: 'v1alpha1',
@@ -72,6 +75,17 @@ export class GcpInfrastructureXrd extends Chart {
                     type: 'object',
                     required: ['project', 'region', 'gke', 'nodePools'],
                     properties: {
+                      // Composition version selection
+                      compositionRef: {
+                        type: 'object',
+                        description: 'Reference to a specific composition version',
+                        properties: {
+                          name: {
+                            type: 'string',
+                            description: 'Composition name (e.g., gcp-infrastructure-v1, gcp-infrastructure-v2)',
+                          },
+                        },
+                      },
                       // GCP Project
                       project: {
                         type: 'string',
@@ -226,15 +240,16 @@ export class GcpInfrastructureXrd extends Chart {
     // ==================== COMPOSITION ====================
     this.composition = new Composition(this, 'composition', {
       metadata: {
-        name: 'gcp-infrastructure',
+        name: 'gcp-infrastructure-v1',
         labels: {
-          'crossplane.io/xrd': 'xgcpinfrastructures.nebula.kalatori.io',
+          'crossplane.io/xrd': 'xgcpinfrastructures.nebula.io',
+          'nebula.io/version': 'v1',
           provider: 'gcp',
         },
       },
       spec: {
         compositeTypeRef: {
-          apiVersion: 'nebula.kalatori.io/v1alpha1',
+          apiVersion: 'nebula.io/v1alpha1',
           kind: 'XGcpInfrastructure',
         },
         mode: CompositionSpecMode.PIPELINE,

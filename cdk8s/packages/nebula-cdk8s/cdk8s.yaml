@@ -13,3 +13,8 @@ imports:
   - crds/apiextensions.crossplane.io_compositions.yaml
   - dist/gcp-infra-xrd.k8s.yaml
   - crds/gcpinfrastructures.nebula.kalatori.io.yaml
+  - crds/helm.crossplane.io_releases.yaml
+  - crds/certmanagers.nebula.io.yaml
+  - crds/externaldns.nebula.io.yaml
+  - crds/ingressnginxs.nebula.io.yaml
+  - crds/gcpinfrastructures.nebula.io.yaml
