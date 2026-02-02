@@ -1,7 +1,4 @@
-// Infrastructure module (direct resource generation)
-export * from './infrastructure/index.js';
-
-// XRDs and Compositions (Crossplane abstractions)
+// XRDs and Compositions
 export * from './xrd/gcp-infrastructure.js';
 
 // Re-export Crossplane CRD types for direct use

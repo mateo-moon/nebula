@@ -7,7 +7,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./infrastructure": "./src/infrastructure/index.ts",
+    "./xrd": "./src/xrd/gcp-infrastructure.ts",
     "./imports": "./imports/index.ts"
   },
   "scripts": {
