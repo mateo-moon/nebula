@@ -22,6 +22,7 @@ export * from './managedzone';
 export * from './cloudflare-record';
 
 // Nebula Claims (auto-generated from XRDs)
+export * from './bootstrap-claim';
 export * from './certmanager-claim';
 export * from './dns-claim';
 export * from './externaldns-claim';
