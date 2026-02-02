@@ -11,6 +11,7 @@
  */
 import { App } from 'cdk8s';
 import { 
+  BootstrapXrd,
   GcpInfrastructureXrd,
   CertManagerXrd,
   ExternalDnsXrd,
@@ -19,6 +20,9 @@ import {
 } from '../src';
 
 const app = new App();
+
+// Bootstrap XRD (ProviderConfigs)
+new BootstrapXrd(app, 'bootstrap-xrd');
 
 // Infrastructure XRDs
 new GcpInfrastructureXrd(app, 'gcp-infrastructure-xrd');

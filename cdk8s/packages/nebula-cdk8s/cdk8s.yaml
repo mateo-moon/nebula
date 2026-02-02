@@ -22,3 +22,4 @@ imports:
   - crds/record.cloudflare.upbound.io_records.yaml
   - crds/cloudflare-record.yaml
   - crds/dns.nebula.io.yaml
+  - crds/bootstraps.nebula.io.yaml

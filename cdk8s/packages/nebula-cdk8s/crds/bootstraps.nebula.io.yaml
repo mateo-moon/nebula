@@ -1,0 +1,140 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: bootstraps.nebula.io
+spec:
+  group: nebula.io
+  names:
+    kind: Bootstrap
+    plural: bootstraps
+    singular: bootstrap
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              properties:
+                cloudflare:
+                  description: Cloudflare ProviderConfig settings (optional)
+                  properties:
+                    enabled:
+                      default: false
+                      description: Enable Cloudflare provider
+                      type: boolean
+                    providerConfigName:
+                      default: default
+                      description: Name for the Cloudflare ProviderConfig
+                      type: string
+                    secretRef:
+                      description: Secret reference for Cloudflare API token
+                      properties:
+                        key:
+                          default: api-token
+                          description: Key in the secret
+                          type: string
+                        name:
+                          default: cloudflare-credentials
+                          description: Secret name
+                          type: string
+                        namespace:
+                          default: crossplane-system
+                          description: Secret namespace
+                          type: string
+                      type: object
+                  type: object
+                clusterType:
+                  description: "Type of cluster: local (uses Secret) or gke (uses
+                    WorkloadIdentity)"
+                  enum:
+                    - local
+                    - gke
+                  type: string
+                compositionRef:
+                  description: Reference to a specific composition version
+                  properties:
+                    name:
+                      description: Composition name (e.g., bootstrap-v1)
+                      type: string
+                  type: object
+                gcp:
+                  description: GCP ProviderConfig settings
+                  properties:
+                    project:
+                      description: GCP project ID
+                      type: string
+                    providerConfigName:
+                      default: default
+                      description: Name for the GCP ProviderConfig
+                      type: string
+                    secretRef:
+                      description: "Secret reference for credentials (required for clusterType:
+                        local)"
+                      properties:
+                        key:
+                          default: credentials.json
+                          description: Key in the secret
+                          type: string
+                        name:
+                          default: gcp-credentials
+                          description: Secret name
+                          type: string
+                        namespace:
+                          default: crossplane-system
+                          description: Secret namespace
+                          type: string
+                      type: object
+                  required:
+                    - project
+                  type: object
+                helm:
+                  description: Helm ProviderConfig settings
+                  properties:
+                    providerConfigName:
+                      default: default
+                      description: Name for the Helm ProviderConfig
+                      type: string
+                  type: object
+                kubernetes:
+                  description: Kubernetes ProviderConfig settings
+                  properties:
+                    providerConfigName:
+                      default: default
+                      description: Name for the Kubernetes ProviderConfig
+                      type: string
+                  type: object
+                writeConnectionSecretToRef:
+                  type: object
+                  description: Write connection secret to this reference
+                  properties:
+                    name:
+                      type: string
+                      description: Secret name
+                    namespace:
+                      type: string
+                      description: Secret namespace
+              required:
+                - clusterType
+                - gcp
+              type: object
+            status:
+              properties:
+                cloudflareProviderConfigReady:
+                  description: Cloudflare ProviderConfig is ready
+                  type: boolean
+                gcpProviderConfigReady:
+                  description: GCP ProviderConfig is ready
+                  type: boolean
+                helmProviderConfigReady:
+                  description: Helm ProviderConfig is ready
+                  type: boolean
+                kubernetesProviderConfigReady:
+                  description: Kubernetes ProviderConfig is ready
+                  type: boolean
+              type: object

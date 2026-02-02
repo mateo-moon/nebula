@@ -1,4 +1,5 @@
 // XRDs and Compositions
+export * from './xrd/bootstrap';
 export * from './xrd/gcp-infrastructure';
 export * from './xrd/cert-manager';
 export * from './xrd/external-dns';
