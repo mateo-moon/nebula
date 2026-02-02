@@ -1,4 +1,8 @@
-// Re-export all Crossplane GCP CRDs
+// Crossplane core CRDs
+export * from './xrd';
+export * from './composition';
+
+// Crossplane GCP Provider CRDs
 export * from './cluster';
 export * from './nodepool';
 export * from './network';
