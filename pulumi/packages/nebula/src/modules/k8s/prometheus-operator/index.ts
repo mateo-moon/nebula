@@ -1,16 +1,40 @@
 /**
- * PrometheusOperator - Full observability stack with Prometheus, Grafana, and Loki.
+ * PrometheusOperator - Full observability stack with Prometheus, Grafana, Loki, and Thanos.
  * 
- * Deploys kube-prometheus-stack with Loki for logging and Promtail for log collection.
- * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * Deploys kube-prometheus-stack with Loki for logging, Promtail for log collection,
+ * and optional Thanos for multi-cluster metrics aggregation and long-term storage.
+ * 
+ * When Thanos is enabled, the module automatically (via Crossplane CRDs):
+ * - Creates a GCS bucket for long-term metrics storage
+ * - Creates a GCP service account with Workload Identity
+ * - Deploys Thanos Query, Store Gateway, and Compactor
+ * - Adds Thanos as a Grafana datasource
+ * 
+ * Note: Thanos GCP resources are managed via Crossplane provider-gcp CRDs.
  * 
  * @example
  * ```typescript
  * import { PrometheusOperator } from 'nebula/k8s/prometheus-operator';
  * 
+ * // Basic setup without Thanos
  * new PrometheusOperator('monitoring', {
  *   storageClassName: 'standard',
- *   lokiStorageSize: '100Gi',
+ * });
+ * 
+ * // With Thanos for multi-cluster metrics aggregation (GCS bucket auto-created)
+ * new PrometheusOperator('monitoring', {
+ *   thanos: {
+ *     enabled: true,
+ *   },
+ * });
+ * 
+ * // With Thanos using existing bucket and external stores
+ * new PrometheusOperator('monitoring', {
+ *   thanos: {
+ *     enabled: true,
+ *     existingBucket: 'my-existing-thanos-bucket',
+ *     externalStores: ['thanos-sidecar.other-cluster.svc:10901'],
+ *   },
  * });
  * ```
  */
@@ -20,8 +44,21 @@ import * as pulumi from "@pulumi/pulumi";
 import { deepmerge } from "deepmerge-ts";
 import { BaseModule } from "../../../core/base-module";
 import { getConfig } from "../../../core/config";
+import { storage, cloudplatform } from "../../../crossplane-crds/gcp";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
+
+/** Thanos configuration */
+export interface ThanosConfig {
+  /** Enable Thanos for long-term metrics storage and multi-cluster querying */
+  enabled: boolean;
+  /** Thanos version (default: v0.34.1) */
+  version?: string;
+  /** Use existing GCS bucket name (if not provided, bucket is created automatically) */
+  existingBucket?: string;
+  /** External Prometheus/Thanos endpoints to query (for cross-cluster querying) */
+  externalStores?: string[];
+}
 
 export interface PrometheusOperatorConfig {
   namespace?: string;
@@ -36,6 +73,8 @@ export interface PrometheusOperatorConfig {
   lokiVersion?: string;
   /** Loki Basic Auth htpasswd content */
   lokiAuthHtpasswd?: string | pulumi.Output<string>;
+  /** Thanos configuration for multi-cluster metrics aggregation */
+  thanos?: ThanosConfig;
 }
 
 export class PrometheusOperator extends BaseModule {
@@ -59,6 +98,8 @@ export class PrometheusOperator extends BaseModule {
     }, { parent: this });
 
     const storageClassName = args.storageClassName || "standard";
+    const thanosEnabled = args.thanos?.enabled || false;
+    const thanosVersion = args.thanos?.version || "v0.34.1";
     
     const defaultValues = {
       prometheus: {
@@ -66,7 +107,7 @@ export class PrometheusOperator extends BaseModule {
           tolerations: [
             { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
           ],
-          retention: "30d",
+          retention: thanosEnabled ? "6h" : "30d", // Short retention when Thanos handles long-term storage
           storageSpec: {
             volumeClaimTemplate: {
               spec: {
@@ -74,7 +115,7 @@ export class PrometheusOperator extends BaseModule {
                 accessModes: ["ReadWriteOnce"],
                 resources: {
                   requests: {
-                    storage: "50Gi"
+                    storage: thanosEnabled ? "20Gi" : "50Gi" // Less storage needed with Thanos
                   }
                 }
               }
@@ -84,8 +125,37 @@ export class PrometheusOperator extends BaseModule {
           ruleSelectorNilUsesHelmValues: false,
           podMonitorSelectorNilUsesHelmValues: false,
           probeSelectorNilUsesHelmValues: false,
-          scrapeConfigSelectorNilUsesHelmValues: false
-        }
+          scrapeConfigSelectorNilUsesHelmValues: false,
+          // Thanos sidecar configuration
+          ...(thanosEnabled ? {
+            thanos: {
+              image: `quay.io/thanos/thanos:${thanosVersion}`,
+              version: thanosVersion,
+              objectStorageConfig: {
+                existingSecret: {
+                  name: "thanos-objstore-config",
+                  key: "objstore.yml"
+                }
+              }
+            }
+          } : {})
+        },
+        // Expose Thanos sidecar service for Thanos Query to discover
+        ...(thanosEnabled ? {
+          thanosService: {
+            enabled: true
+          },
+          thanosServiceMonitor: {
+            enabled: true
+          },
+          // Configure Prometheus service account for Workload Identity
+          serviceAccount: {
+            create: true,
+            annotations: {
+              'iam.gke.io/gcp-service-account': `${name}-thanos@${nebulaConfig?.gcpProject}.iam.gserviceaccount.com`
+            }
+          }
+        } : {})
       },
       prometheusOperator: {
         tolerations: [
@@ -620,6 +690,278 @@ export class PrometheusOperator extends BaseModule {
       },
       { parent: this, dependsOn: [this.chart, lokiChart] }
     );
+
+    // Deploy Thanos components if enabled
+    if (thanosEnabled) {
+      const gcpProject = nebulaConfig?.gcpProject;
+      const gcpRegion = nebulaConfig?.gcpRegion || 'europe-west3';
+      const externalStores = args.thanos?.externalStores || [];
+
+      if (!gcpProject) {
+        throw new Error('Thanos requires gcpProject to be configured in nebula.config.ts');
+      }
+
+      // Normalize service account ID
+      const normalizeAccountId = (raw: string): string => {
+        let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        if (!/^[a-z]/.test(s)) s = `a-${s}`;
+        if (s.length < 6) s = (s + '-aaaaaa').slice(0, 6);
+        if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
+        return s;
+      };
+
+      // Create or use existing GCS bucket for Thanos (via Crossplane)
+      const thanosBucketK8sName = `${name}-thanos-bucket`;
+      let bucketName: pulumi.Output<string>;
+      if (args.thanos?.existingBucket) {
+        bucketName = pulumi.output(args.thanos.existingBucket);
+      } else {
+        const bucket = new storage.v1beta1.Bucket(thanosBucketK8sName, {
+          metadata: {
+            name: thanosBucketK8sName,
+            namespace: namespaceName,
+          },
+          spec: {
+            forProvider: {
+              location: gcpRegion.toUpperCase(),
+              storageClass: 'STANDARD',
+              uniformBucketLevelAccess: true,
+              lifecycleRule: [
+                {
+                  action: [{ type: 'Delete' }],
+                  condition: [{ age: 365 }], // Delete data older than 1 year
+                },
+              ],
+            },
+          },
+        }, { parent: this, dependsOn: [this.namespace] });
+        // Crossplane generates bucket name in status.atProvider.name or uses metadata.name
+        bucketName = bucket.metadata.apply(m => m?.name || thanosBucketK8sName);
+      }
+
+      // Create GCP Service Account for Thanos (via Crossplane)
+      const thanosGsaK8sName = normalizeAccountId(`${name}-thanos`);
+      const thanosGsa = new cloudplatform.v1beta1.ServiceAccount(`${name}-thanos-gsa`, {
+        metadata: {
+          name: thanosGsaK8sName,
+          namespace: namespaceName,
+        },
+        spec: {
+          forProvider: {
+            displayName: `Thanos for ${name}`,
+            project: gcpProject,
+          },
+        },
+      }, { parent: this, dependsOn: [this.namespace] });
+
+      // Grant Storage Object Admin role to the service account on the bucket (via Crossplane)
+      new storage.v1beta1.BucketIAMMember(`${name}-thanos-bucket-iam`, {
+        metadata: {
+          name: `${name}-thanos-bucket-iam`,
+          namespace: namespaceName,
+        },
+        spec: {
+          forProvider: {
+            bucket: bucketName,
+            role: 'roles/storage.objectAdmin',
+            member: pulumi.interpolate`serviceAccount:${thanosGsaK8sName}@${gcpProject}.iam.gserviceaccount.com`,
+          },
+        },
+      }, { parent: this, dependsOn: [this.namespace, thanosGsa] });
+
+      // Setup Workload Identity for Thanos components (via Crossplane)
+      // Prometheus sidecar uses the prometheus service account
+      const prometheusKsaName = `${name}-kube-prometheus-prometheus`;
+      new cloudplatform.v1beta1.ServiceAccountIAMMember(`${name}-thanos-wi-prometheus`, {
+        metadata: {
+          name: `${name}-thanos-wi-prometheus`,
+          namespace: namespaceName,
+        },
+        spec: {
+          forProvider: {
+            serviceAccountId: pulumi.interpolate`projects/${gcpProject}/serviceAccounts/${thanosGsaK8sName}@${gcpProject}.iam.gserviceaccount.com`,
+            role: 'roles/iam.workloadIdentityUser',
+            member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/${prometheusKsaName}]`,
+          },
+        },
+      }, { parent: this, dependsOn: [this.namespace, thanosGsa] });
+
+      // Thanos components service accounts (via Crossplane)
+      const thanosKsaNames = ['thanos-storegateway', 'thanos-compactor', 'thanos-query'];
+      thanosKsaNames.forEach((ksaName, idx) => {
+        new cloudplatform.v1beta1.ServiceAccountIAMMember(`${name}-thanos-wi-${idx}`, {
+          metadata: {
+            name: `${name}-thanos-wi-${ksaName}`,
+            namespace: namespaceName,
+          },
+          spec: {
+            forProvider: {
+              serviceAccountId: pulumi.interpolate`projects/${gcpProject}/serviceAccounts/${thanosGsaK8sName}@${gcpProject}.iam.gserviceaccount.com`,
+              role: 'roles/iam.workloadIdentityUser',
+              member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/${ksaName}]`,
+            },
+          },
+        }, { parent: this, dependsOn: [this.namespace, thanosGsa] });
+      });
+
+      // Create object storage config secret for Thanos
+      const objstoreConfig = pulumi.interpolate`type: GCS
+config:
+  bucket: "${bucketName}"`;
+
+      new k8s.core.v1.Secret(
+        `${name}-thanos-objstore-config`,
+        {
+          metadata: {
+            name: "thanos-objstore-config",
+            namespace: namespaceName,
+          },
+          stringData: {
+            "objstore.yml": objstoreConfig,
+          },
+        },
+        { parent: this, dependsOn: [this.namespace] }
+      );
+
+      // Build Thanos Query stores list
+      const thanosStores: string[] = [
+        // Local Prometheus Thanos sidecar
+        `dnssrv+_grpc._tcp.${name}-kube-prometheus-thanos-discovery.${namespaceName}.svc.cluster.local`,
+        // Store Gateway
+        `dnssrv+_grpc._tcp.thanos-storegateway.${namespaceName}.svc.cluster.local`,
+      ];
+
+      // Add external stores for cross-cluster querying
+      thanosStores.push(...externalStores);
+
+      // Common tolerations
+      const tolerations = [
+        { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
+      ];
+
+      // Deploy Thanos using bitnami chart with all components
+      new k8s.helm.v4.Chart(
+        `${name}-thanos`,
+        {
+          chart: "thanos",
+          repositoryOpts: { repo: "https://charts.bitnami.com/bitnami" },
+          namespace: namespaceName,
+          values: {
+            image: {
+              tag: thanosVersion,
+            },
+            existingObjstoreSecret: "thanos-objstore-config",
+            
+            // Query component - aggregates data from sidecars and store gateway
+            query: {
+              enabled: true,
+              replicaCount: 1,
+              tolerations,
+              stores: thanosStores,
+              serviceAccount: {
+                create: true,
+                name: 'thanos-query',
+                annotations: {
+                  'iam.gke.io/gcp-service-account': `${thanosGsaK8sName}@${gcpProject}.iam.gserviceaccount.com`,
+                },
+              },
+            },
+            
+            // Query Frontend - caching layer for queries
+            queryFrontend: {
+              enabled: true,
+              tolerations,
+            },
+            
+            // Store Gateway - serves historical data from GCS
+            storegateway: {
+              enabled: true,
+              tolerations,
+              persistence: {
+                enabled: true,
+                storageClass: storageClassName,
+                size: "10Gi",
+              },
+              serviceAccount: {
+                create: true,
+                name: 'thanos-storegateway',
+                annotations: {
+                  'iam.gke.io/gcp-service-account': `${thanosGsaK8sName}@${gcpProject}.iam.gserviceaccount.com`,
+                },
+              },
+            },
+            
+            // Compactor - downsamples and compacts data in GCS
+            compactor: {
+              enabled: true,
+              tolerations,
+              persistence: {
+                enabled: true,
+                storageClass: storageClassName,
+                size: "10Gi",
+              },
+              retentionResolutionRaw: "30d",
+              retentionResolution5m: "120d",
+              retentionResolution1h: "1y",
+              serviceAccount: {
+                create: true,
+                name: 'thanos-compactor',
+                annotations: {
+                  'iam.gke.io/gcp-service-account': `${thanosGsaK8sName}@${gcpProject}.iam.gserviceaccount.com`,
+                },
+              },
+            },
+            
+            // Disable components we don't need
+            bucketweb: { enabled: false },
+            ruler: { enabled: false },
+            receive: { enabled: false },
+            receiveDistributor: { enabled: false },
+            
+            // Enable metrics and service monitors
+            metrics: {
+              enabled: true,
+              serviceMonitor: {
+                enabled: true,
+              },
+            },
+          },
+        },
+        { parent: this, dependsOn: [this.chart] }
+      );
+
+      // Add Thanos Query as a Grafana datasource
+      new k8s.core.v1.ConfigMap(
+        `${name}-thanos-grafana-datasource`,
+        {
+          metadata: {
+            name: "thanos-datasource",
+            namespace: namespaceName,
+            labels: {
+              "grafana_datasource": "1"
+            }
+          },
+          data: {
+            "datasource.yaml": JSON.stringify([
+              {
+                name: "Thanos",
+                type: "prometheus",
+                uid: "thanos",
+                url: `http://${name}-thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
+                access: "proxy",
+                isDefault: false,
+                editable: true,
+                jsonData: {
+                  httpMethod: "POST",
+                  timeInterval: "30s"
+                }
+              }
+            ])
+          }
+        },
+        { parent: this, dependsOn: [this.chart] }
+      );
+    }
 
     this.registerOutputs({});
   }
