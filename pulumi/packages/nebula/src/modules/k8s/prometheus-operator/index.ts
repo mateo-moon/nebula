@@ -1,7 +1,25 @@
+/**
+ * PrometheusOperator - Full observability stack with Prometheus, Grafana, and Loki.
+ * 
+ * Deploys kube-prometheus-stack with Loki for logging and Promtail for log collection.
+ * Providers are auto-injected from infrastructure stack (org/infrastructure/env).
+ * 
+ * @example
+ * ```typescript
+ * import { PrometheusOperator } from 'nebula/k8s/prometheus-operator';
+ * 
+ * new PrometheusOperator('monitoring', {
+ *   storageClassName: 'standard',
+ *   lokiStorageSize: '100Gi',
+ * });
+ * ```
+ */
 import * as k8s from "@pulumi/kubernetes";
 import type { ChartArgs } from "@pulumi/kubernetes/helm/v4";
 import * as pulumi from "@pulumi/pulumi";
 import { deepmerge } from "deepmerge-ts";
+import { BaseModule } from "../../../core/base-module";
+import { getConfig } from "../../../core/config";
 
 type OptionalChartArgs = Omit<ChartArgs, "chart"> & { chart?: ChartArgs["chart"] };
 
@@ -20,17 +38,23 @@ export interface PrometheusOperatorConfig {
   lokiAuthHtpasswd?: string | pulumi.Output<string>;
 }
 
-export class PrometheusOperator extends pulumi.ComponentResource {
+export class PrometheusOperator extends BaseModule {
+  public readonly namespace: k8s.core.v1.Namespace;
+  public readonly chart: k8s.helm.v4.Chart;
+
   constructor(
     name: string,
     args: PrometheusOperatorConfig,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super('prometheus-operator', name, args, opts);
+    super('nebula:PrometheusOperator', name, args as unknown as Record<string, unknown>, opts);
+
+    // Get config for defaults
+    const nebulaConfig = getConfig();
 
     const namespaceName = args.namespace || "monitoring";
 
-    const namespace = new k8s.core.v1.Namespace("prometheus-operator-namespace", {
+    this.namespace = new k8s.core.v1.Namespace(`${name}-namespace`, {
       metadata: { name: namespaceName },
     }, { parent: this });
 
@@ -238,15 +262,15 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       values: mergedValues,
     };
 
-    const chart = new k8s.helm.v4.Chart(
-      "prometheus-operator",
+    this.chart = new k8s.helm.v4.Chart(
+      name,
       finalChartArgs,
-      { parent: this, dependsOn: [namespace] }
+      { parent: this, dependsOn: [this.namespace] }
     );
 
     // Create ServiceMonitor for kubelet metrics
     new k8s.apiextensions.CustomResource(
-      "kubelet-servicemonitor",
+      `${name}-kubelet-servicemonitor`,
       {
         apiVersion: "monitoring.coreos.com/v1",
         kind: "ServiceMonitor",
@@ -277,12 +301,12 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         }
       },
-      { parent: this, dependsOn: [chart] }
+      { parent: this, dependsOn: [this.chart] }
     );
 
     // Create ServiceMonitor for kube-proxy metrics
     new k8s.apiextensions.CustomResource(
-      "kube-proxy-servicemonitor",
+      `${name}-kube-proxy-servicemonitor`,
       {
         apiVersion: "monitoring.coreos.com/v1",
         kind: "ServiceMonitor",
@@ -313,7 +337,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         }
       },
-      { parent: this, dependsOn: [chart] }
+      { parent: this, dependsOn: [this.chart] }
     );
 
     // Deploy Loki
@@ -459,15 +483,15 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     }
     
     const lokiChart = new k8s.helm.v4.Chart(
-      "loki",
+      `${name}-loki`,
       lokiChartArgs,
-      { parent: this, dependsOn: [namespace, chart] }
+      { parent: this, dependsOn: [this.namespace, this.chart] }
     );
 
     // Create Loki auth secret if htpasswd is provided
     if (args.lokiAuthHtpasswd) {
       new k8s.core.v1.Secret(
-        "loki-auth-secret",
+        `${name}-loki-auth-secret`,
         {
           metadata: {
             name: "loki-auth",
@@ -477,7 +501,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
             auth: args.lokiAuthHtpasswd,
           },
         },
-        { parent: this, dependsOn: [namespace] }
+        { parent: this, dependsOn: [this.namespace] }
       );
     }
 
@@ -558,21 +582,17 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     };
     
     const promtailChart = new k8s.helm.v4.Chart(
-      "promtail",
+      `${name}-promtail`,
       promtailChartArgs,
       { parent: this, dependsOn: [lokiChart] }
     );
     
-    // Ensure Promtail is tracked by the component
-    this.registerOutputs({
-      promtail: promtailChart
-    });
 
     // Patch existing Grafana datasource ConfigMap to add Loki
     // Note: We create a separate ConfigMap that Grafana will load
     // Grafana loads all ConfigMaps with label grafana_datasource=1
     new k8s.core.v1.ConfigMap(
-      "loki-grafana-datasource",
+      `${name}-loki-grafana-datasource`,
       {
         metadata: {
           name: "loki-datasource",
@@ -598,7 +618,9 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           ])
         }
       },
-      { parent: this, dependsOn: [chart, lokiChart] }
+      { parent: this, dependsOn: [this.chart, lokiChart] }
     );
+
+    this.registerOutputs({});
   }
 }
