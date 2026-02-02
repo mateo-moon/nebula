@@ -12,5 +12,11 @@ export * from './serviceaccount';
 export * from './serviceaccountiammember';
 export * from './projectiammember';
 
-// Nebula Claims (auto-generated from XRD)
+// Crossplane Helm Provider CRDs
+export * from './helm-release';
+
+// Nebula Claims (auto-generated from XRDs)
+export * from './certmanager-claim';
+export * from './externaldns-claim';
 export * from './gcpinfrastructure-claim';
+export * from './ingressnginx-claim';
