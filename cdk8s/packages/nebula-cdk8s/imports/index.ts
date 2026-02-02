@@ -15,8 +15,15 @@ export * from './projectiammember';
 // Crossplane Helm Provider CRDs
 export * from './helm-release';
 
+// Crossplane GCP DNS Provider CRDs
+export * from './managedzone';
+
+// Crossplane Cloudflare Provider CRDs
+export * from './cloudflare-record';
+
 // Nebula Claims (auto-generated from XRDs)
 export * from './certmanager-claim';
+export * from './dns-claim';
 export * from './externaldns-claim';
 export * from './gcpinfrastructure-claim';
 export * from './ingressnginx-claim';

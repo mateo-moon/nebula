@@ -124,7 +124,16 @@ for (const file of distFiles) {
         
         // Import with cdk8s
         const importName = claimNames.kind.toLowerCase();
-        execSync(`npx cdk8s import ${crdPath} --output imports/${importName}-claim.ts`, {
+        const claimFile = `imports/${importName}-claim.ts`;
+        
+        // Remove existing file/directory if exists
+        try {
+          execSync(`rm -rf "${claimFile}"`, { cwd: process.cwd() });
+        } catch (e) {
+          // Ignore if doesn't exist
+        }
+        
+        execSync(`npx cdk8s import ${crdPath} --output ${claimFile}`, {
           stdio: 'inherit',
           cwd: process.cwd(),
         });

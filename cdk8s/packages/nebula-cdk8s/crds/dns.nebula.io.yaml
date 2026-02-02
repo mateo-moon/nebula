@@ -1,0 +1,89 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: dns.nebula.io
+spec:
+  group: nebula.io
+  names:
+    kind: Dns
+    plural: dns
+    singular: dns
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              properties:
+                compositionRef:
+                  description: Reference to a specific composition version
+                  properties:
+                    name:
+                      description: Composition name (e.g., dns-v1, dns-v2)
+                      type: string
+                  type: object
+                delegations:
+                  description: External DNS providers to delegate NS records to
+                  items:
+                    properties:
+                      provider:
+                        description: Delegation provider (cloudflare)
+                        enum:
+                          - cloudflare
+                        type: string
+                      providerConfigRef:
+                        default: default
+                        description: ProviderConfig reference for the delegation provider
+                        type: string
+                      ttl:
+                        default: 3600
+                        description: TTL for NS records
+                        type: integer
+                      zoneId:
+                        description: Zone ID in the delegation provider
+                        type: string
+                    required:
+                      - provider
+                    type: object
+                  type: array
+                description:
+                  default: Managed by Crossplane
+                  description: Description for the DNS zone
+                  type: string
+                domain:
+                  description: Domain name to manage (e.g., example.com)
+                  type: string
+                project:
+                  description: GCP project ID
+                  type: string
+                writeConnectionSecretToRef:
+                  type: object
+                  description: Write connection secret to this reference
+                  properties:
+                    name:
+                      type: string
+                      description: Secret name
+                    namespace:
+                      type: string
+                      description: Secret namespace
+              required:
+                - project
+                - domain
+              type: object
+            status:
+              properties:
+                nameServers:
+                  description: Zone nameservers
+                  items:
+                    type: string
+                  type: array
+                zoneId:
+                  description: GCP DNS zone ID
+                  type: string
+              type: object
