@@ -1,5 +1,5 @@
 // XRDs and Compositions
 export * from './xrd/gcp-infrastructure';
 
-// Re-export Crossplane CRD types for direct use
+// Re-export Crossplane CRD types and Claims
 export * from '../imports';

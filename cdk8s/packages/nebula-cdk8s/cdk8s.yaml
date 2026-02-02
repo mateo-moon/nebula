@@ -11,3 +11,5 @@ imports:
   - crds/cloudplatform.gcp.upbound.io_projectiammembers.yaml
   - crds/apiextensions.crossplane.io_compositeresourcedefinitions.yaml
   - crds/apiextensions.crossplane.io_compositions.yaml
+  - dist/gcp-infra-xrd.k8s.yaml
+  - crds/gcpinfrastructures.nebula.kalatori.io.yaml

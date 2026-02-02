@@ -4,7 +4,7 @@
  * This generates:
  * 1. The XRD (CompositeResourceDefinition) - installed once in the cluster
  * 2. The Composition - maps XRD to managed resources
- * 3. A Claim - actual infrastructure request
+ * 3. A Claim - actual infrastructure request (with full type safety)
  * 
  * Usage:
  *   npx cdk8s synth --app "npx tsx examples/xrd-infrastructure.ts"
@@ -13,9 +13,14 @@
  *   dist/gcp-infra-xrd.k8s.yaml  - Install this first (XRD + Composition)
  *   dist/dev-claim.k8s.yaml      - Then apply this claim
  */
-import { App, Chart, ApiObject } from 'cdk8s';
+import { App, Chart } from 'cdk8s';
 import { Construct } from 'constructs';
-import { GcpInfrastructureXrd } from '../src';
+import { 
+  GcpInfrastructureXrd, 
+  GcpInfrastructure,
+  GcpInfrastructureSpecGkeReleaseChannel,
+  GcpInfrastructureSpecNodePoolsTaintsEffect,
+} from '../src';
 
 const app = new App();
 
@@ -25,13 +30,12 @@ new GcpInfrastructureXrd(app, 'gcp-infra-xrd');
 
 // ==================== CLAIM ====================
 // This is what users create to provision infrastructure
+// Now with full TypeScript type safety!
 class DevInfrastructureClaim extends Chart {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    new ApiObject(this, 'claim', {
-      apiVersion: 'nebula.kalatori.io/v1alpha1',
-      kind: 'GcpInfrastructure',
+    new GcpInfrastructure(this, 'claim', {
       metadata: {
         name: 'dev',
         namespace: 'default',
@@ -47,7 +51,7 @@ class DevInfrastructureClaim extends Chart {
         gke: {
           name: 'dev-gke',
           location: 'europe-west3-a',
-          releaseChannel: 'REGULAR',
+          releaseChannel: GcpInfrastructureSpecGkeReleaseChannel.REGULAR,
           deletionProtection: false,
         },
         nodePools: [
@@ -67,9 +71,17 @@ class DevInfrastructureClaim extends Chart {
             maxNodes: 1,
             spot: true,
             labels: { workload: 'argocd' },
-            taints: [{ key: 'workload', value: 'argocd', effect: 'NoSchedule' }],
+            taints: [{ 
+              key: 'workload', 
+              value: 'argocd', 
+              effect: GcpInfrastructureSpecNodePoolsTaintsEffect.NO_SCHEDULE,
+            }],
           },
         ],
+        writeConnectionSecretToRef: {
+          name: 'dev-gke-kubeconfig',
+          namespace: 'default',
+        },
       },
     });
   }

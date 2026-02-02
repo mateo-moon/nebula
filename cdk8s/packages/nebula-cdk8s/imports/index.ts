@@ -11,3 +11,6 @@ export * from './firewall';
 export * from './serviceaccount';
 export * from './serviceaccountiammember';
 export * from './projectiammember';
+
+// Nebula Claims (auto-generated from XRD)
+export * from './gcpinfrastructure-claim';
