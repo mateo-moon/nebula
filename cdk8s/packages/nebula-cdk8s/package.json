@@ -10,10 +10,14 @@
     "./xrd": "./src/xrd/gcp-infrastructure.ts",
     "./imports": "./imports/index.ts"
   },
+  "typesVersions": {
+    "*": {
+      "*": ["src/*"]
+    }
+  },
   "scripts": {
     "synth": "cdk8s synth",
-    "import": "cdk8s import",
-    "build": "tsc"
+    "import": "cdk8s import"
   },
   "engines": {
     "node": ">=20"
@@ -28,5 +32,6 @@
     "cdk8s-cli": "^2.198.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2"
-  }
+  },
+  "files": ["src/", "imports/", "tsconfig.json", "README.md"]
 }

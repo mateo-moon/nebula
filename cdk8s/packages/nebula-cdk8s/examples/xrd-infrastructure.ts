@@ -15,7 +15,7 @@
  */
 import { App, Chart, ApiObject } from 'cdk8s';
 import { Construct } from 'constructs';
-import { GcpInfrastructureXrd } from '../src/index.js';
+import { GcpInfrastructureXrd } from '../src';
 
 const app = new App();
 
