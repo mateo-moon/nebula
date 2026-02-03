@@ -1,0 +1,41 @@
+language: typescript
+imports:
+  # Crossplane core CRDs
+  - https://raw.githubusercontent.com/crossplane/crossplane/v2.1.3/cluster/crds/apiextensions.crossplane.io_compositeresourcedefinitions.yaml
+  - https://raw.githubusercontent.com/crossplane/crossplane/v2.1.3/cluster/crds/apiextensions.crossplane.io_compositions.yaml
+  - https://raw.githubusercontent.com/crossplane/crossplane/v2.1.3/cluster/crds/apiextensions.crossplane.io_compositionrevisions.yaml
+  - https://raw.githubusercontent.com/crossplane/crossplane/v2.1.3/cluster/crds/pkg.crossplane.io_providers.yaml
+  - https://raw.githubusercontent.com/crossplane/crossplane/v2.1.3/cluster/crds/pkg.crossplane.io_functions.yaml
+  # GCP Provider - ProviderConfig
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/gcp.upbound.io_providerconfigs.yaml
+  # TODO: Cloudflare Provider CRDs (uncomment when provider is available)
+  # - https://raw.githubusercontent.com/cdloh/provider-cloudflare/main/package/crds/cloudflare.upbound.io_providerconfigs.yaml
+  # - https://raw.githubusercontent.com/cdloh/provider-cloudflare/main/package/crds/dns.cloudflare.upbound.io_records.yaml
+  # GCP Provider CRDs - Compute
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_networks.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_subnetworks.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_addresses.yaml
+  # GCP Provider CRDs - DNS
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/dns.gcp.upbound.io_managedzones.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/dns.gcp.upbound.io_recordsets.yaml
+  # GCP Provider CRDs - Container (GKE)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/container.gcp.upbound.io_clusters.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/container.gcp.upbound.io_nodepools.yaml
+  # GCP Provider CRDs - IAM / Cloud Platform
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_serviceaccounts.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_projectiammembers.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_serviceaccountiammembers.yaml
+  # GCP Provider CRDs - Storage (GCS)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/storage.gcp.upbound.io_buckets.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/storage.gcp.upbound.io_bucketiammembers.yaml
+  # cert-manager CRDs (using v1.18.0 - CRDs are backward compatible)
+  - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-clusterissuers.yaml
+  - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-issuers.yaml
+  - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-certificates.yaml
+  # Prometheus Operator CRDs
+  - https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.75.0/jsonnet/prometheus-operator/servicemonitors-crd.json
+  # ArgoCD CRDs
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/appproject-crd.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/application-crd.yaml
+  # Crossplane ArgoCD Provider CRDs
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-argocd/v0.13.0/package/crds/argocd.crossplane.io_providerconfigs.yaml

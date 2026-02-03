@@ -1,0 +1,22 @@
+{
+  "name": "@nebula/cli",
+  "version": "1.0.0",
+  "license": "MPL-2.0",
+  "bin": {
+    "nebula": "./bin/nebula"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "yaml": "^2.8.2",
+    "chalk": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2"
+  },
+  "files": ["src/", "bin/", "tsconfig.json"]
+}

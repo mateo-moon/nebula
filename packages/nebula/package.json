@@ -1,0 +1,50 @@
+{
+  "name": "nebula-cdk8s",
+  "version": "1.0.0",
+  "license": "MPL-2.0",
+  "types": "./src/index.ts",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./xrd": "./src/xrd/gcp-infrastructure.ts",
+    "./imports": "./imports/index.ts"
+  },
+  "imports": {
+    "#imports/*": "./imports/*"
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "src/*"
+      ]
+    }
+  },
+  "scripts": {
+    "synth": "cdk8s synth",
+    "import": "cdk8s import",
+    "generate-claims": "tsx scripts/generate-claim-types.ts",
+    "test:synth": "cdk8s synth --app 'tsx test/main.ts'"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cdk8s": "^2.69.0",
+    "cdk8s-plus-33": "^2.4.23",
+    "constructs": "^10.4.2",
+    "deepmerge-ts": "^7.1.5",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "cdk8s-cli": "github:mateo-moon/cdk8s-cli#combined-fixes",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2"
+  },
+  "files": [
+    "src/",
+    "imports/",
+    "tsconfig.json",
+    "README.md"
+  ]
+}
