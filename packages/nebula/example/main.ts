@@ -17,7 +17,7 @@ const chart = new Chart(app, 'nebula-infra-test');
 
 // Create GCP Provider and ProviderConfig (including dns family)
 new GcpProvider(chart, 'gcp-provider', {
-  projectId: 'geometric-watch-472309-h6',
+  projectId: 'my-gcp-project',
   families: ['compute', 'container', 'cloudplatform', 'dns'],
   credentials: {
     type: 'secret',
@@ -30,7 +30,7 @@ new GcpProvider(chart, 'gcp-provider', {
 });
 
 new Gcp(chart, 'nebula', {
-  project: 'geometric-watch-472309-h6',
+  project: 'my-gcp-project',
   region: 'europe-west3',
   providerConfigRef: 'default',
   deletionPolicy: NetworkSpecDeletionPolicy.DELETE,
@@ -96,22 +96,22 @@ new Gcp(chart, 'nebula', {
 });
 
 // Create DNS zone with manual delegation
-// NS records need to be created manually in Cloudflare (zone: 2863158632d3ac4026316b87c1482a2c)
-// Point 'dev.kampe.la' to GCP nameservers:
+// NS records need to be created manually in your DNS provider
+// Point 'dev.example.com' to GCP nameservers:
 //   - ns-cloud-a1.googledomains.com
 //   - ns-cloud-a2.googledomains.com
 //   - ns-cloud-a3.googledomains.com
 //   - ns-cloud-a4.googledomains.com
 new Dns(chart, 'dns', {
-  project: 'geometric-watch-472309-h6',
+  project: 'my-gcp-project',
   providerConfigRef: 'default',
   deletionPolicy: ManagedZoneSpecDeletionPolicy.DELETE,
   zones: [
     {
       name: 'dev',
-      dnsName: 'dev.kampe.la',
+      dnsName: 'dev.example.com',
       description: 'Dev zone for nebula',
-      // Using manual delegation - create NS records in Cloudflare manually
+      // Using manual delegation - create NS records in your DNS provider manually
       delegation: {
         provider: 'manual',
       },
@@ -132,7 +132,7 @@ new Dns(chart, 'dns', {
 // Kubernetes Modules
 // ============================================================================
 
-const domain = 'dev.kampe.la';
+const domain = 'dev.example.com';
 
 // Define shared config for inter-module dependencies
 const crossplaneNamespace = 'crossplane-system';
@@ -153,7 +153,7 @@ const crossplane = new Crossplane(chart, 'crossplane', {
 
 // CertManager - TLS certificate management
 new CertManager(chart, 'cert-manager', {
-  acmeEmail: 'devops@kampe.la',
+  acmeEmail: 'admin@example.com',
 });
 
 // ClusterApiOperator - Cluster lifecycle management
@@ -181,10 +181,10 @@ new IngressNginx(chart, 'ingress-nginx', {
 
 // ExternalDns - DNS record management
 new ExternalDns(chart, 'external-dns', {
-  project: 'geometric-watch-472309-h6',
-  domainFilters: ['dev.kampe.la'],
+  project: 'my-gcp-project',
+  domainFilters: ['dev.example.com'],
   policy: 'sync',
-  txtOwnerId: 'kampe-la-dev',
+  txtOwnerId: 'example-dev',
   logLevel: 'debug',
   providerConfigRef: 'default',
 });
@@ -235,15 +235,15 @@ new ArgoCd(chart, 'argocd', {
         },
         type: 'Opaque',
         stringData: {
-          clientID: 'github-client-id', // In production, use secrets manager
-          clientSecret: 'github-client-secret',
+          clientID: 'your-github-client-id', // In production, use secrets manager
+          clientSecret: 'your-github-client-secret',
         },
       },
       {
         apiVersion: 'v1',
         kind: 'Secret',
         metadata: {
-          name: 'repo-kalapaja-devops',
+          name: 'repo-my-org-devops',
           namespace: 'argocd',
           labels: {
             'argocd.argoproj.io/secret-type': 'repository',
@@ -252,7 +252,7 @@ new ArgoCd(chart, 'argocd', {
         type: 'Opaque',
         stringData: {
           type: 'git',
-          url: 'git@github.com:Kalapaja/devops.git',
+          url: 'git@github.com:my-org/devops.git',
           sshPrivateKey: '-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----',
         },
       },
@@ -275,8 +275,8 @@ new ArgoCd(chart, 'argocd', {
         'policy.csv': `p, role:developer, applications, *, development/*, allow
 p, role:developer, logs, *, development/*, allow
 p, role:developer, exec, *, development/*, allow
-g, Kalapaja:DevOps, role:admin
-g, Kalapaja:Engineers, role:developer
+g, MyOrg:DevOps, role:admin
+g, MyOrg:Engineers, role:developer
 g, crossplane, role:admin`,
       },
       cm: {
@@ -295,7 +295,7 @@ g, crossplane, role:admin`,
                 clientID: '$clientID',
                 clientSecret: '$clientSecret',
                 orgs: [{
-                  name: 'Kalapaja',
+                  name: 'MyOrg',
                 }],
               },
             }],
@@ -335,7 +335,7 @@ g, crossplane, role:admin`,
         },
         ingressClassName: 'nginx',
         tls: [{
-          secretName: 'argocd-dev-tls',
+          secretName: 'argocd-tls',
           hosts: [`argocd.${domain}`],
         }],
       },
