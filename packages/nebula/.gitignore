@@ -1,6 +1,5 @@
 node_modules/
 dist/
-imports/
 *.js
 *.d.ts
 *.js.map

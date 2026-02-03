@@ -17,6 +17,6 @@
       "#imports/*": ["./imports/*"]
     }
   },
-  "include": ["src/**/*", "imports/**/*", "examples/**/*", "test/**/*"],
+  "include": ["src/**/*", "imports/**/*", "example/**/*"],
   "exclude": ["node_modules", "dist", "crds"]
 }
