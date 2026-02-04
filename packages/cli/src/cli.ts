@@ -3,7 +3,7 @@
  * Nebula CLI - Bootstrap tool for Crossplane/cdk8s projects
  * 
  * Commands:
- *   bootstrap   - Create Kind cluster, install Crossplane, setup GCP credentials
+ *   bootstrap   - Create Kind cluster and setup GCP credentials
  *   synth       - Synthesize cdk8s manifests
  *   apply       - Apply synthesized manifests to cluster
  *   destroy     - Delete Kind cluster
@@ -25,12 +25,11 @@ program
 
 program
   .command('bootstrap')
-  .description('Create Kind cluster, install Crossplane, and setup GCP credentials')
+  .description('Create Kind cluster and setup GCP credentials')
   .option('-n, --name <name>', 'Kind cluster name', 'nebula')
   .option('-p, --project <project>', 'GCP project ID')
   .option('-c, --credentials <path>', 'Path to GCP credentials JSON file')
   .option('--skip-kind', 'Skip Kind cluster creation (use existing cluster)')
-  .option('--skip-crossplane', 'Skip Crossplane installation')
   .option('--skip-credentials', 'Skip GCP credentials setup')
   .action(async (opts: BootstrapOptions) => {
     try {

@@ -182,6 +182,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
 
     this.helm = new Helm(this, 'helm', {
       chart: 'kube-prometheus-stack',
+      releaseName: 'prometheus',
       repo: this.config.repository ?? 'https://prometheus-community.github.io/helm-charts',
       version: this.config.version ?? '81.4.3',
       namespace: namespaceName,
@@ -248,6 +249,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
 
       this.lokiHelm = new Helm(this, 'loki', {
         chart: 'loki',
+        releaseName: 'loki',
         repo: 'https://grafana.github.io/helm-charts',
         version: this.config.loki?.version ?? '6.51.0',
         namespace: namespaceName,
@@ -280,6 +282,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
     if (this.config.promtail?.enabled !== false) {
       this.promtailHelm = new Helm(this, 'promtail', {
         chart: 'promtail',
+        releaseName: 'promtail',
         repo: 'https://grafana.github.io/helm-charts',
         version: this.config.promtail?.version ?? '6.17.1',
         namespace: namespaceName,
@@ -454,6 +457,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       // Deploy Thanos using Bitnami Helm chart
       this.thanosHelm = new Helm(this, 'thanos', {
         chart: 'thanos',
+        releaseName: 'thanos',
         repo: 'https://charts.bitnami.com/bitnami',
         version: '15.7.25',
         namespace: namespaceName,

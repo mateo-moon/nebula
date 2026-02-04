@@ -61,6 +61,7 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
 
     this.helm = new Helm(this, 'helm', {
       chart: 'cert-manager',
+      releaseName: 'cert-manager',
       repo: this.config.repository ?? 'https://charts.jetstack.io',
       version: this.config.version ?? 'v1.19.3',
       namespace: namespaceName,

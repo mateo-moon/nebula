@@ -396,6 +396,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
 
     this.helm = new Helm(this, 'helm', {
       chart: 'argo-cd',
+      releaseName: 'argocd',
       repo: this.config.repository ?? 'https://argoproj.github.io/argo-helm',
       version: this.config.version ?? '9.4.0',
       namespace: namespaceName,
