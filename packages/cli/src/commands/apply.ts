@@ -244,7 +244,9 @@ async function waitForProviders(timeout: number = 300): Promise<void> {
 }
 
 function writeResourcesAsYaml(resources: K8sResource[], filePath: string): void {
-  const content = resources.map(r => yaml.stringify(r)).join('---\n');
+  // Use YAML 1.1 mode to properly quote strings like "no", "yes", "on", "off"
+  // that would otherwise be interpreted as booleans by kubectl (which uses YAML 1.1)
+  const content = resources.map(r => yaml.stringify(r, { version: '1.1' })).join('---\n');
   fs.writeFileSync(filePath, content);
 }
 
