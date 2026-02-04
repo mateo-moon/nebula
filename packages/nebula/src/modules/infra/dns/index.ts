@@ -33,6 +33,8 @@ export {
 export type {
   DnsCloudflareCompositionConfig,
   DnsZoneCloudflareConfig,
+  DnsGkeWorkloadIdentityConfig,
+  DnsWorkloadIdentityConfig, // @deprecated - use DnsGkeWorkloadIdentityConfig
 } from './cloudflare-composition';
 
 export interface DnsZoneConfig {

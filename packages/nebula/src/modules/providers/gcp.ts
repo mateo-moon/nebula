@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { ApiObject } from 'cdk8s';
 import { Provider as CpProvider } from '#imports/pkg.crossplane.io';
 import {
   ProviderConfig as CpProviderConfig,
@@ -43,11 +44,27 @@ export interface GcpProviderConfig {
   credentials: GcpCredentialSource;
   /** Provider families to install (default: ['compute', 'container', 'cloudplatform']) */
   families?: GcpProviderFamily[];
+  /**
+   * Enable deterministic service account names for Workload Identity.
+   * When true, creates DeploymentRuntimeConfig for each provider family
+   * with predictable KSA names (e.g., 'provider-gcp-dns').
+   * This is required for modules like DNS that need to set up IAM bindings.
+   */
+  enableDeterministicServiceAccounts?: boolean;
 }
 
 export class GcpProvider extends Construct {
   public readonly providers: Record<string, CpProvider> = {};
   public readonly providerConfig: CpProviderConfig;
+  public readonly runtimeConfigs: Record<string, ApiObject> = {};
+
+  /** 
+   * Get the deterministic KSA name for a provider family.
+   * Use this for Workload Identity IAM bindings.
+   */
+  static getProviderKsaName(family: GcpProviderFamily, namePrefix: string = 'provider-gcp'): string {
+    return `${namePrefix}-${family}`;
+  }
 
   constructor(scope: Construct, id: string, config: GcpProviderConfig) {
     super(scope, id);
@@ -59,10 +76,37 @@ export class GcpProvider extends Construct {
     // Default families needed for infra module
     const families = config.families ?? ['compute', 'container', 'cloudplatform'];
 
+    // Create DeploymentRuntimeConfig for each family if deterministic SA names are enabled
+    // This allows other modules to set up Workload Identity bindings with known KSA names
+    if (config.enableDeterministicServiceAccounts) {
+      for (const family of families) {
+        const runtimeConfigName = `${providerNamePrefix}-${family}-runtime`;
+        const serviceAccountName = GcpProvider.getProviderKsaName(family, providerNamePrefix);
+        
+        this.runtimeConfigs[family] = new ApiObject(this, `runtime-config-${family}`, {
+          apiVersion: 'pkg.crossplane.io/v1beta1',
+          kind: 'DeploymentRuntimeConfig',
+          metadata: {
+            name: runtimeConfigName,
+          },
+          spec: {
+            serviceAccountTemplate: {
+              metadata: {
+                name: serviceAccountName,
+              },
+            },
+          },
+        });
+      }
+    }
+
     // Create Provider for each family
     for (const family of families) {
       const providerName = `${providerNamePrefix}-${family}`;
       const providerPackage = `xpkg.upbound.io/upbound/provider-gcp-${family}`;
+      const runtimeConfigName = config.enableDeterministicServiceAccounts 
+        ? `${providerNamePrefix}-${family}-runtime` 
+        : undefined;
       
       this.providers[family] = new CpProvider(this, `provider-${family}`, {
         metadata: {
@@ -70,6 +114,11 @@ export class GcpProvider extends Construct {
         },
         spec: {
           package: `${providerPackage}:${providerVersion}`,
+          ...(runtimeConfigName ? {
+            runtimeConfigRef: {
+              name: runtimeConfigName,
+            },
+          } : {}),
         },
       });
     }
