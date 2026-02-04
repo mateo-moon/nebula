@@ -656,7 +656,8 @@ done
               find: {
                 command: ['/bin/sh', '-c'],
                 // Discover cdk8s projects by checking for package.json with cdk8s dependency
-                args: ['test -f package.json && grep -q "cdk8s" package.json 2>/dev/null && echo "." || true'],
+                // Also checks parent directories for monorepo setups where subdirs don't have their own package.json
+                args: ['d="."; while [ "$d" != "/" ]; do if test -f "$d/package.json" && grep -q "cdk8s" "$d/package.json" 2>/dev/null; then echo "."; exit 0; fi; d="$(dirname "$d")"; done; true'],
               },
             },
           },
