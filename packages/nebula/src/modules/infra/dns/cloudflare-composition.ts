@@ -4,6 +4,7 @@
  * This module creates:
  * 1. A CompositeResourceDefinition (XRD) for DnsZoneCloudflare
  * 2. A Composition that creates GCP ManagedZone and delegates to Cloudflare via HTTP provider
+ * 3. An HTTP ProviderConfig for Cloudflare API authentication
  * 
  * The HTTP provider is used instead of a Cloudflare-specific provider because:
  * - Existing Cloudflare Crossplane providers are outdated
@@ -11,8 +12,8 @@
  * - Easier to maintain and update
  * 
  * Prerequisites:
- * - crossplane-contrib/provider-http must be installed
- * - Cloudflare API token must be stored in a Secret
+ * - crossplane-contrib/provider-http v1.0.3+ must be installed
+ * - Cloudflare API credentials (API Key + Email)
  * 
  * @example
  * ```typescript
@@ -20,7 +21,7 @@
  * // Uses API Key + Email authentication (ref+sops:// supported for vals integration)
  * new DnsCloudflareComposition(chart, 'dns-cloudflare-setup', {
  *   gcpProviderConfigName: 'default',
- *   httpProviderConfigName: 'http-provider',
+ *   httpProviderConfigName: 'cloudflare-http',
  *   cloudflareApiKey: 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_key',
  *   cloudflareEmail: 'ref+sops://../.secrets/secrets.yaml#cloudflare/email',
  * });
@@ -48,24 +49,24 @@ import {
 import { BaseConstruct } from '../../../core';
 
 export interface DnsCloudflareCompositionConfig {
-  /** Name of the HTTP ProviderConfig to use for Cloudflare API calls */
+  /** Name of the HTTP ProviderConfig to use for Cloudflare API calls (default: 'cloudflare-http') */
   httpProviderConfigName?: string;
   /** Name of the GCP ProviderConfig to use for ManagedZone */
   gcpProviderConfigName?: string;
-  /** Name of the Secret containing Cloudflare credentials */
+  /** Name of the Secret containing Cloudflare credentials (default: 'cloudflare-api') */
   cloudflareSecretName?: string;
-  /** Namespace of the Cloudflare secret */
+  /** Namespace of the Cloudflare secret (default: 'crossplane-system') */
   cloudflareSecretNamespace?: string;
   /** 
-   * Cloudflare API Key. If provided along with email, creates the secret automatically.
-   * Uses X-Auth-Key header for authentication.
+   * Cloudflare API Key. If provided along with email, creates the secret and ProviderConfig automatically.
+   * The secret stores credentials that are injected as X-Auth-Key header.
    * Supports ref+sops:// references for vals integration.
    * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_key'
    */
   cloudflareApiKey?: string;
   /** 
    * Cloudflare account email. Required when using cloudflareApiKey.
-   * Uses X-Auth-Email header for authentication.
+   * Stored in secret and injected as X-Auth-Email header.
    * Supports ref+sops:// references for vals integration.
    * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/email'
    */
@@ -82,28 +83,57 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
   public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
   public readonly secret?: kplus.Secret;
+  public readonly httpProviderConfig?: ApiObject;
 
   constructor(scope: Construct, id: string, config: DnsCloudflareCompositionConfig = {}) {
     super(scope, id, config);
 
     // Use this.config for resolved secrets (ref+sops:// patterns are decrypted)
-    const httpProviderConfig = this.config.httpProviderConfigName ?? 'http-provider';
+    const httpProviderConfigName = this.config.httpProviderConfigName ?? 'cloudflare-http';
     const gcpProviderConfig = this.config.gcpProviderConfigName ?? 'default';
     const cfSecretName = this.config.cloudflareSecretName ?? 'cloudflare-api';
     const cfSecretNamespace = this.config.cloudflareSecretNamespace ?? 'crossplane-system';
 
     // Create Cloudflare API secret if credentials are provided
-    // Uses API Key + Email authentication (X-Auth-Key and X-Auth-Email headers)
+    // The secret format is a JSON object with headers for the HTTP provider
     // ref+sops:// references are resolved by BaseConstruct
     if (this.config.cloudflareApiKey && this.config.cloudflareEmail) {
+      // Create secret with credentials as JSON containing the auth headers
+      // The HTTP provider reads this as the credentials blob
+      const credentialsJson = JSON.stringify({
+        headers: {
+          'X-Auth-Key': [this.config.cloudflareApiKey],
+          'X-Auth-Email': [this.config.cloudflareEmail],
+          'Content-Type': ['application/json'],
+        },
+      });
+
       this.secret = new kplus.Secret(this, 'cloudflare-secret', {
         metadata: {
           name: cfSecretName,
           namespace: cfSecretNamespace,
         },
         stringData: {
-          api_key: this.config.cloudflareApiKey,
-          email: this.config.cloudflareEmail,
+          credentials: credentialsJson,
+        },
+      });
+
+      // Create HTTP ProviderConfig that references the credentials secret
+      this.httpProviderConfig = new ApiObject(this, 'http-provider-config', {
+        apiVersion: 'http.crossplane.io/v1alpha1',
+        kind: 'ProviderConfig',
+        metadata: {
+          name: httpProviderConfigName,
+        },
+        spec: {
+          credentials: {
+            source: 'Secret',
+            secretRef: {
+              name: cfSecretName,
+              namespace: cfSecretNamespace,
+              key: 'credentials',
+            },
+          },
         },
       });
     }
@@ -206,10 +236,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                 // Resource 0: GCP ManagedZone
                 this.createManagedZoneResource(gcpProviderConfig),
                 // Resources 1-4: HTTP Requests for Cloudflare NS records
-                this.createCloudflareNsResource(0, httpProviderConfig, cfSecretName, cfSecretNamespace),
-                this.createCloudflareNsResource(1, httpProviderConfig, cfSecretName, cfSecretNamespace),
-                this.createCloudflareNsResource(2, httpProviderConfig, cfSecretName, cfSecretNamespace),
-                this.createCloudflareNsResource(3, httpProviderConfig, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(0, httpProviderConfigName),
+                this.createCloudflareNsResource(1, httpProviderConfigName),
+                this.createCloudflareNsResource(2, httpProviderConfigName),
+                this.createCloudflareNsResource(3, httpProviderConfigName),
               ],
             },
           },
@@ -283,55 +313,35 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
 
   /**
    * Creates a Cloudflare NS record resource for the function-patch-and-transform input.
-   * Uses provider-http to make direct API calls to Cloudflare.
+   * Uses provider-http v1.0.3+ to make direct API calls to Cloudflare.
    * 
-   * Authentication uses API Key + Email (X-Auth-Key and X-Auth-Email headers).
+   * Authentication is handled via ProviderConfig which injects headers from the credentials secret.
    * 
-   * Note: HTTP provider Request is defined inline as there are no typed imports.
-   * The provider-http CRD would need to be added to cdk8s.yaml for typed support.
+   * Note: provider-http v1.0.3 uses `mappings[]` array instead of direct `url` field.
    */
   private createCloudflareNsResource(
     index: number,
-    httpProviderConfig: string,
-    secretName: string,
-    secretNamespace: string,
+    httpProviderConfigName: string,
   ): object {
-    // HTTP provider Request manifest (no typed import available)
-    // Uses Cloudflare API Key + Email authentication
+    // HTTP provider v1.0.3+ Request manifest using mappings[] array
+    // Headers are injected from ProviderConfig credentials
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
       kind: 'Request',
       spec: {
         forProvider: {
-          // URL will be patched with zone ID
-          url: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
-          method: 'POST',
-          headers: {
-            'Content-Type': ['application/json'],
-          },
-          secretInjectionConfigs: [
+          // mappings array - each element is a request to make
+          // URL and body will be patched from XR
+          mappings: [
             {
-              secretRef: {
-                name: secretName,
-                namespace: secretNamespace,
-              },
-              secretKey: 'api_key',
-              responsePath: 'request.headers.X-Auth-Key[0]',
-            },
-            {
-              secretRef: {
-                name: secretName,
-                namespace: secretNamespace,
-              },
-              secretKey: 'email',
-              responsePath: 'request.headers.X-Auth-Email[0]',
+              method: 'POST',
+              url: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
+              body: '{}',
             },
           ],
-          // Body will be patched with combined values
-          body: '{}',
         },
         providerConfigRef: {
-          name: httpProviderConfig,
+          name: httpProviderConfigName,
         },
       },
     };
@@ -350,17 +360,17 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             string: { type: 'Format', fmt: `%s-cf-ns-${index}` },
           }],
         },
-        // Patch URL with Cloudflare zone ID
+        // Patch URL with Cloudflare zone ID (now in mappings[0].url)
         {
           type: 'FromCompositeFieldPath',
           fromFieldPath: 'spec.cloudflareZoneId',
-          toFieldPath: 'spec.forProvider.url',
+          toFieldPath: 'spec.forProvider.mappings[0].url',
           transforms: [{
             type: 'string',
             string: { type: 'Format', fmt: 'https://api.cloudflare.com/client/v4/zones/%s/dns_records' },
           }],
         },
-        // Combine DNS name and nameserver into JSON body
+        // Combine DNS name and nameserver into JSON body (now in mappings[0].body)
         {
           type: 'CombineFromComposite',
           combine: {
@@ -372,7 +382,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             strategy: 'string',
             string: { fmt: '{"type":"NS","name":"%s","content":"%s","ttl":%s}' },
           },
-          toFieldPath: 'spec.forProvider.body',
+          toFieldPath: 'spec.forProvider.mappings[0].body',
           policy: { fromFieldPath: 'Required' },
         },
       ],
