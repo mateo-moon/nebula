@@ -111,6 +111,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
     ];
 
     const defaultValues: Record<string, unknown> = {
+      crds: { install: true },
       prometheus: {
         prometheusSpec: {
           tolerations: defaultTolerations,
@@ -135,7 +136,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
         tolerations: defaultTolerations,
         admissionWebhooks: {
           enabled: true,
-          patch: { enabled: false },
+          patch: { enabled: true }, // Enable self-signed cert patching as fallback
           certManager: {
             enabled: true,
             issuerRef: { name: 'selfsigned', kind: 'ClusterIssuer', group: 'cert-manager.io' },
@@ -176,6 +177,8 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       kubeScheduler: { enabled: true },
       kubeEtcd: { enabled: true },
       kubeProxy: { enabled: true },
+      // Enable ServiceMonitors via the Helm chart
+      kubeletServiceMonitor: { enabled: true },
     };
 
     const chartValues = deepmerge(defaultValues, this.config.values ?? {});
@@ -242,6 +245,21 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
             },
           } : {}),
         },
+        // Tolerations for all Loki components
+        chunksCache: {
+          tolerations: defaultTolerations,
+          resources: {
+            requests: { cpu: '100m', memory: '2Gi' },
+            limits: { cpu: '500m', memory: '4Gi' },
+          },
+        },
+        resultsCache: { tolerations: defaultTolerations },
+        distributor: { tolerations: defaultTolerations },
+        ingester: { tolerations: defaultTolerations },
+        querier: { tolerations: defaultTolerations },
+        queryFrontend: { tolerations: defaultTolerations },
+        compactor: { tolerations: defaultTolerations },
+        // Disable scalable components
         read: { replicas: 0 },
         write: { replicas: 0 },
         backend: { replicas: 0 },
@@ -298,6 +316,8 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
             requests: { cpu: '100m', memory: '128Mi' },
             limits: { cpu: '200m', memory: '256Mi' },
           },
+          // Disable readiness probe as it can cause issues
+          readinessProbe: null,
         },
       });
     }
@@ -450,7 +470,8 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
           namespace: namespaceName,
         },
         stringData: {
-          'objstore.yaml': JSON.stringify(objstoreConfig),
+          // Use objstore.yml to match Thanos default expectations
+          'objstore.yml': JSON.stringify(objstoreConfig),
         },
       });
 
