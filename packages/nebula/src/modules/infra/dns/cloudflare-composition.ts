@@ -37,7 +37,7 @@ import { Construct } from 'constructs';
 import { ApiObject } from 'cdk8s';
 import * as kplus from 'cdk8s-plus-33';
 import {
-  CompositeResourceDefinition,
+  CompositeResourceDefinitionV2,
   Composition,
   CompositionSpecMode,
 } from '#imports/apiextensions.crossplane.io';
@@ -79,37 +79,38 @@ export interface DnsCloudflareCompositionConfig {
  * DNS zones with automatic Cloudflare delegation.
  */
 export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareCompositionConfig> {
-  public readonly xrd: CompositeResourceDefinition;
+  public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
   public readonly secret?: kplus.Secret;
 
   constructor(scope: Construct, id: string, config: DnsCloudflareCompositionConfig = {}) {
     super(scope, id, config);
 
-    const httpProviderConfig = config.httpProviderConfigName ?? 'http-provider';
-    const gcpProviderConfig = config.gcpProviderConfigName ?? 'default';
-    const cfSecretName = config.cloudflareSecretName ?? 'cloudflare-api';
-    const cfSecretNamespace = config.cloudflareSecretNamespace ?? 'crossplane-system';
+    // Use this.config for resolved secrets (ref+sops:// patterns are decrypted)
+    const httpProviderConfig = this.config.httpProviderConfigName ?? 'http-provider';
+    const gcpProviderConfig = this.config.gcpProviderConfigName ?? 'default';
+    const cfSecretName = this.config.cloudflareSecretName ?? 'cloudflare-api';
+    const cfSecretNamespace = this.config.cloudflareSecretNamespace ?? 'crossplane-system';
 
     // Create Cloudflare API secret if credentials are provided
     // Uses API Key + Email authentication (X-Auth-Key and X-Auth-Email headers)
-    // Supports ref+sops:// references for vals integration
-    if (config.cloudflareApiKey && config.cloudflareEmail) {
+    // ref+sops:// references are resolved by BaseConstruct
+    if (this.config.cloudflareApiKey && this.config.cloudflareEmail) {
       this.secret = new kplus.Secret(this, 'cloudflare-secret', {
         metadata: {
           name: cfSecretName,
           namespace: cfSecretNamespace,
         },
         stringData: {
-          api_key: config.cloudflareApiKey,
-          email: config.cloudflareEmail,
+          api_key: this.config.cloudflareApiKey,
+          email: this.config.cloudflareEmail,
         },
       });
     }
 
-    // Create the XRD (CompositeResourceDefinition)
+    // Create the XRD (CompositeResourceDefinition) using v2 API
     // Note: In Crossplane v2, claimNames is deprecated - use XR directly
-    this.xrd = new CompositeResourceDefinition(this, 'xrd', {
+    this.xrd = new CompositeResourceDefinitionV2(this, 'xrd', {
       metadata: {
         name: 'xdnszonecloudflares.nebula.io',
       },
