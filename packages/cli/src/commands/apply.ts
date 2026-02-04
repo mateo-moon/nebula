@@ -46,6 +46,13 @@ function exec(cmd: string, options?: { silent?: boolean; ignoreErrors?: boolean 
 }
 
 function findManifestFiles(pattern: string): string[] {
+  // Handle recursive glob patterns like dist/**/*.k8s.yaml
+  if (pattern.includes('**')) {
+    const [baseDir, ...rest] = pattern.split('/**/');
+    const filePattern = rest.join('/**/');
+    return findFilesRecursively(baseDir, filePattern);
+  }
+  
   const dir = path.dirname(pattern);
   const filePattern = path.basename(pattern);
   
@@ -59,6 +66,30 @@ function findManifestFiles(pattern: string): string[] {
   return files
     .filter(f => regex.test(f))
     .map(f => path.join(dir, f));
+}
+
+function findFilesRecursively(dir: string, filePattern: string): string[] {
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
+  
+  const results: string[] = [];
+  const regex = new RegExp('^' + filePattern.replace(/\*/g, '.*') + '$');
+  
+  function walk(currentDir: string) {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (regex.test(entry.name)) {
+        results.push(fullPath);
+      }
+    }
+  }
+  
+  walk(dir);
+  return results;
 }
 
 function parseManifest(filePath: string): K8sResource[] {

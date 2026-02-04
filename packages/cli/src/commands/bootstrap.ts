@@ -298,26 +298,28 @@ async function deployToGke(): Promise<void> {
   if (fs.existsSync('dist')) {
     fs.rmSync('dist', { recursive: true, force: true });
   }
+  fs.mkdirSync('dist', { recursive: true });
 
-  // Synth each module (use --no-purge to preserve previous outputs)
+  // Synth each module to its own subdirectory (cdk8s clears output dir by default)
   log('   Synthesizing GKE workloads...');
   for (const moduleName of gkeModuleNames) {
     // Try directory structure first (module/dev.ts), then flat (module.ts)
     const dirPath = `${moduleName}/dev.ts`;
     const flatPath = `${moduleName}.ts`;
+    const outputDir = `dist/${moduleName}`;
     
     if (fs.existsSync(dirPath)) {
       log(`   - ${dirPath}`);
-      exec(`npx cdk8s synth --no-purge --app "npx tsx ${dirPath}"`, { silent: true });
+      exec(`npx cdk8s synth -o "${outputDir}" --app "npx tsx ${dirPath}"`, { silent: true });
     } else if (fs.existsSync(flatPath)) {
       log(`   - ${flatPath}`);
-      exec(`npx cdk8s synth --no-purge --app "npx tsx ${flatPath}"`, { silent: true });
+      exec(`npx cdk8s synth -o "${outputDir}" --app "npx tsx ${flatPath}"`, { silent: true });
     }
   }
 
-  // Apply with phased approach
+  // Apply with phased approach - look in subdirectories
   log('   Applying manifests...');
-  exec('npx nebula apply');
+  exec('npx nebula apply --file "dist/**/*.k8s.yaml"');
 
   log(`   ✅ Workloads deployed to GKE`);
 }
