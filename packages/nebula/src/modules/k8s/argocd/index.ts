@@ -582,35 +582,13 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
               args: [`
 set -e
 echo "Installing dependencies..." >&2
-
-# Find directory with package.json (may be in parent for monorepo subdirs)
-PKG_DIR="."
-for d in . .. ../.. ../../..; do
-  if [ -f "$d/package.json" ]; then
-    PKG_DIR="$d"
-    break
-  fi
-done
-cd "$PKG_DIR"
-
-# Install project dependencies
-npm install 2>/dev/null || npm install
+pnpm install
 `],
             },
             generate: {
               command: ['/bin/sh', '-c'],
               args: [`
 set -e
-
-# Find directory with package.json (may be in parent for monorepo subdirs)
-PKG_DIR="."
-for d in . .. ../.. ../../..; do
-  if [ -f "$d/package.json" ]; then
-    PKG_DIR="$d"
-    break
-  fi
-done
-cd "$PKG_DIR"
 
 # Clear previous output
 rm -rf dist
