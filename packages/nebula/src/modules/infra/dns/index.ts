@@ -25,6 +25,16 @@ export type {
   ManualDelegationConfig,
 } from './delegation';
 
+// Re-export Cloudflare Composition classes
+export {
+  DnsCloudflareComposition,
+  DnsZoneCloudflareClaim,
+} from './cloudflare-composition';
+export type {
+  DnsCloudflareCompositionConfig,
+  DnsZoneCloudflareClaimConfig,
+} from './cloudflare-composition';
+
 export interface DnsZoneConfig {
   /** Zone name (used as resource name) */
   name: string;
