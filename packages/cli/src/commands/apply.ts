@@ -111,6 +111,43 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function waitForDeployments(timeout: number = 120): Promise<void> {
+  log('   Waiting for deployments to be ready...');
+  const start = Date.now();
+  
+  while ((Date.now() - start) < timeout * 1000) {
+    // Get all deployments and check if they're ready
+    const result = exec(
+      'kubectl get deployments -A -o jsonpath="{range .items[*]}{.metadata.name}={.status.readyReplicas}/{.status.replicas} {end}" 2>/dev/null || echo ""',
+      { silent: true }
+    );
+    
+    const deployments = result.trim().split(' ').filter(s => s);
+    if (deployments.length === 0) {
+      // No deployments yet, wait a bit
+      await sleep(3000);
+      continue;
+    }
+    
+    // Check if all deployments have ready replicas
+    const allReady = deployments.every(d => {
+      const match = d.match(/=(\d+)\/(\d+)/);
+      if (!match) return false;
+      const [, ready, desired] = match;
+      return parseInt(ready) >= parseInt(desired) && parseInt(desired) > 0;
+    });
+    
+    if (allReady) {
+      log('   ✅ Deployments ready');
+      return;
+    }
+    
+    await sleep(5000);
+  }
+  
+  log('   ⚠️  Some deployments may not be fully ready yet, continuing...');
+}
+
 async function waitForCrds(timeout: number = 120): Promise<void> {
   log('   Waiting for CRDs to be established...');
   const start = Date.now();
@@ -227,8 +264,8 @@ export async function apply(options: ApplyOptions): Promise<void> {
   }
 
   log(`   Phase 1: ${phase1.length} CRDs/Namespaces`);
-  log(`   Providers: ${providers.length} Crossplane Providers`);
   log(`   Phase 2: ${phase2.length} Operators/Services`);
+  log(`   Providers: ${providers.length} Crossplane Providers`);
   log(`   ProviderConfigs: ${providerConfigs.length} Provider Configs`);
   log(`   Phase 3: ${phase3.length} Custom Resources`);
   log('');
@@ -249,7 +286,24 @@ export async function apply(options: ApplyOptions): Promise<void> {
       }
     }
 
-    // Apply Crossplane Providers
+    // Phase 2: Operators and Services (includes Crossplane controller)
+    // Must be applied BEFORE Crossplane Providers since Crossplane installs the Provider CRD
+    if (phase2.length > 0) {
+      log('');
+      log('📦 Phase 2: Applying Operators and Services...');
+      const phase2File = path.join(tempDir, 'phase2.yaml');
+      writeResourcesAsYaml(phase2, phase2File);
+      exec(`kubectl apply -f ${phase2File} ${dryRunFlag}`, { ignoreErrors: true });
+      
+      if (!dryRun) {
+        // Wait for operators to create their CRDs (Crossplane creates Provider CRD)
+        log('   Waiting for operators to initialize...');
+        await waitForDeployments(120);
+        await waitForCrds(120);
+      }
+    }
+
+    // Apply Crossplane Providers (after Crossplane controller is running)
     if (providers.length > 0) {
       log('');
       log('📦 Applying Crossplane Providers...');
@@ -262,23 +316,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
       }
     }
 
-    // Phase 2: Operators and Services
-    if (phase2.length > 0) {
-      log('');
-      log('📦 Phase 2: Applying Operators and Services...');
-      const phase2File = path.join(tempDir, 'phase2.yaml');
-      writeResourcesAsYaml(phase2, phase2File);
-      exec(`kubectl apply -f ${phase2File} ${dryRunFlag}`, { ignoreErrors: true });
-      
-      if (!dryRun) {
-        // Wait a bit for operators to create their CRDs
-        log('   Waiting for operators to initialize...');
-        await sleep(15000);
-        await waitForCrds(60);
-      }
-    }
-
-    // Apply ProviderConfigs
+    // Apply ProviderConfigs (after Providers are healthy)
     if (providerConfigs.length > 0) {
       log('');
       log('📦 Applying ProviderConfigs...');

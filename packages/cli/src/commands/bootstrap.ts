@@ -280,22 +280,36 @@ async function deployToGke(): Promise<void> {
   log('─'.repeat(50));
 
   // List of GKE workload modules (everything except bootstrap)
-  const gkeModules = [
-    'providers.ts',
-    'crossplane.ts',
-    'cert-manager.ts',
-    'cluster-api.ts',
-    'ingress-nginx.ts',
-    'external-dns.ts',
-    'monitoring.ts',
-    'argocd.ts',
+  // Support both flat structure (module.ts) and directory structure (module/dev.ts)
+  const gkeModuleNames = [
+    'providers',
+    'crossplane',
+    'cert-manager',
+    'cluster-api',
+    'ingress-nginx',
+    'external-dns',
+    'monitoring',
+    'argocd',
   ];
+
+  // Clear previous dist to avoid mixing bootstrap and GKE manifests
+  if (fs.existsSync('dist')) {
+    fs.rmSync('dist', { recursive: true, force: true });
+  }
 
   // Synth each module
   log('   Synthesizing GKE workloads...');
-  for (const module of gkeModules) {
-    if (fs.existsSync(module)) {
-      exec(`npx cdk8s synth --app "npx tsx ${module}"`, { silent: true });
+  for (const moduleName of gkeModuleNames) {
+    // Try directory structure first (module/dev.ts), then flat (module.ts)
+    const dirPath = `${moduleName}/dev.ts`;
+    const flatPath = `${moduleName}.ts`;
+    
+    if (fs.existsSync(dirPath)) {
+      log(`   - ${dirPath}`);
+      exec(`npx cdk8s synth --app "npx tsx ${dirPath}"`, { silent: true });
+    } else if (fs.existsSync(flatPath)) {
+      log(`   - ${flatPath}`);
+      exec(`npx cdk8s synth --app "npx tsx ${flatPath}"`, { silent: true });
     }
   }
 
