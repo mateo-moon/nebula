@@ -34,6 +34,7 @@
  */
 import { Construct } from 'constructs';
 import { ApiObject } from 'cdk8s';
+import * as kplus from 'cdk8s-plus-33';
 import {
   CompositeResourceDefinition,
   Composition,
@@ -73,7 +74,7 @@ export interface DnsCloudflareCompositionConfig {
 export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareCompositionConfig> {
   public readonly xrd: CompositeResourceDefinition;
   public readonly composition: Composition;
-  public readonly secret?: ApiObject;
+  public readonly secret?: kplus.Secret;
 
   constructor(scope: Construct, id: string, config: DnsCloudflareCompositionConfig = {}) {
     super(scope, id, config);
@@ -87,14 +88,11 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     // Create Cloudflare API secret if token is provided
     // Supports ref+sops:// references for vals integration
     if (config.cloudflareApiToken) {
-      this.secret = new ApiObject(this, 'cloudflare-secret', {
-        apiVersion: 'v1',
-        kind: 'Secret',
+      this.secret = new kplus.Secret(this, 'cloudflare-secret', {
         metadata: {
           name: cfSecretName,
           namespace: cfSecretNamespace,
         },
-        type: 'Opaque',
         stringData: {
           [cfSecretKey]: config.cloudflareApiToken,
         },
