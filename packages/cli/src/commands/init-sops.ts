@@ -197,7 +197,16 @@ export async function initSops(options: InitSopsOptions): Promise<void> {
       console.log(chalk.green(`Creating template ${secretsPath}`));
       const template = createSecretsTemplate();
       fs.writeFileSync(secretsPath, template);
-      console.log(chalk.gray(`  Encrypt with: sops -e -i ${secretsPath}`));
+      
+      // Auto-encrypt the template
+      console.log(chalk.gray(`  Encrypting ${secretsPath}...`));
+      const encryptResult = exec('sops', ['-e', '-i', secretsPath]);
+      if (encryptResult.success) {
+        console.log(chalk.green(`  ✓ Encrypted successfully`));
+      } else {
+        console.log(chalk.yellow(`  ⚠ Could not auto-encrypt: ${encryptResult.stderr}`));
+        console.log(chalk.gray(`  Encrypt manually with: sops -e -i ${secretsPath}`));
+      }
     } else {
       console.log(chalk.yellow(`Secrets file already exists: ${secretsPath}`));
     }
@@ -213,16 +222,16 @@ export async function initSops(options: InitSopsOptions): Promise<void> {
 `));
 
   console.log(`${chalk.bold('Next steps:')}
-1. Edit secrets.yaml with your actual secrets
-2. Encrypt it: ${chalk.cyan('sops -e -i secrets.yaml')}
-3. Reference secrets in your code: ${chalk.cyan("ref+sops://./secrets.yaml#path/to/secret")}
+1. Edit secrets.yaml: ${chalk.cyan('sops secrets.yaml')}
+2. Reference secrets in your code: ${chalk.cyan("ref+sops://./secrets.yaml#path/to/secret")}
 
 For more info: ${chalk.blue('https://github.com/getsops/sops')}
 `);
 }
 
 function createSopsConfig(options: InitSopsOptions, patterns: string[]): SopsConfig {
-  const pathRegex = patterns.map(p => `.*/${p}`).join('|');
+  // Match both with and without directory prefix (e.g., "secrets.yaml" and "path/to/secrets.yaml")
+  const pathRegex = patterns.map(p => `(^|.*/?)${p}$`).join('|');
   
   const rule: SopsConfig['creation_rules'][0] = {
     path_regex: pathRegex,
