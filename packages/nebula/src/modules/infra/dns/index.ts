@@ -16,8 +16,8 @@ import {
 import { BaseConstruct } from '../../../core';
 
 // Re-export delegation types
-export {
-  DnsDelegation,
+export { DnsDelegation } from './delegation';
+export type {
   DnsDelegationConfig,
   GcpDelegationConfig,
   CloudflareDelegationConfig,

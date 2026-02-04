@@ -2,6 +2,7 @@
   "name": "nebula-cdk8s",
   "version": "1.0.0",
   "license": "MPL-2.0",
+  "type": "module",
   "types": "./src/index.ts",
   "main": "./src/index.ts",
   "exports": {
