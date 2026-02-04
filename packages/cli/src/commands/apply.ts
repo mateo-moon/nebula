@@ -141,12 +141,13 @@ async function waitForDeployments(timeout: number = 120): Promise<void> {
     
     // Check if all deployments have ready replicas
     // Deployments with 0 desired replicas are considered ready (intentionally scaled to 0)
+    // Empty values from jsonpath mean 0 (e.g., "=/1" means 0/1, "=/" means 0/0)
     const allReady = deployments.every(d => {
-      const match = d.match(/=(\d+|undefined)\/(\d+)/);
+      const match = d.match(/=(\d*)\/(\d*)/);
       if (!match) return false;
       const [, readyStr, desiredStr] = match;
-      const ready = readyStr === 'undefined' ? 0 : parseInt(readyStr);
-      const desired = parseInt(desiredStr);
+      const ready = readyStr === '' ? 0 : parseInt(readyStr);
+      const desired = desiredStr === '' ? 0 : parseInt(desiredStr);
       // Ready if: desired is 0 (scaled down) OR ready >= desired
       return desired === 0 || ready >= desired;
     });
