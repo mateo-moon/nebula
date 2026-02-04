@@ -468,10 +468,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
               action: 'OBSERVE',
               method: 'GET',
               // Query Cloudflare API by name, type, and content to find existing records
-              // Parse name and content from the JSON body string using JQ's fromjson
+              // Access name and content directly from payload.body (already an object internally)
               // This handles the "record already exists" case where CREATE failed
               // Response: { result: [{ id: "...", ... }] } (array)
-              url: '.payload.baseUrl + "?name=" + (.payload.body | fromjson | .name) + "&type=NS&content=" + (.payload.body | fromjson | .content)',
+              url: '.payload.baseUrl + "?name=" + .payload.body.name + "&type=NS&content=" + .payload.body.content',
               // Explicit headers for OBSERVE
               headers: cfAuthHeaders,
             },
