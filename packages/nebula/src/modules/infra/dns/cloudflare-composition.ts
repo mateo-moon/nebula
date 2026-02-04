@@ -17,11 +17,12 @@
  * @example
  * ```typescript
  * // First, deploy the XRD and Composition (one-time setup)
- * // The cloudflareApiToken supports ref+sops:// for vals integration
+ * // Uses API Key + Email authentication (ref+sops:// supported for vals integration)
  * new DnsCloudflareComposition(chart, 'dns-cloudflare-setup', {
  *   gcpProviderConfigName: 'default',
  *   httpProviderConfigName: 'http-provider',
- *   cloudflareApiToken: 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_token',
+ *   cloudflareApiKey: 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_key',
+ *   cloudflareEmail: 'ref+sops://../.secrets/secrets.yaml#cloudflare/email',
  * });
  * 
  * // Then, create zones using XR (Composite Resource)
@@ -51,18 +52,24 @@ export interface DnsCloudflareCompositionConfig {
   httpProviderConfigName?: string;
   /** Name of the GCP ProviderConfig to use for ManagedZone */
   gcpProviderConfigName?: string;
-  /** Name of the Secret containing Cloudflare API token */
+  /** Name of the Secret containing Cloudflare credentials */
   cloudflareSecretName?: string;
   /** Namespace of the Cloudflare secret */
   cloudflareSecretNamespace?: string;
-  /** Key in the secret containing the API token (default: 'token') */
-  cloudflareSecretKey?: string;
   /** 
-   * Cloudflare API token value. If provided, creates the secret automatically.
+   * Cloudflare API Key. If provided along with email, creates the secret automatically.
+   * Uses X-Auth-Key header for authentication.
    * Supports ref+sops:// references for vals integration.
-   * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_token'
+   * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_key'
    */
-  cloudflareApiToken?: string;
+  cloudflareApiKey?: string;
+  /** 
+   * Cloudflare account email. Required when using cloudflareApiKey.
+   * Uses X-Auth-Email header for authentication.
+   * Supports ref+sops:// references for vals integration.
+   * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/email'
+   */
+  cloudflareEmail?: string;
 }
 
 /**
@@ -83,18 +90,19 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     const gcpProviderConfig = config.gcpProviderConfigName ?? 'default';
     const cfSecretName = config.cloudflareSecretName ?? 'cloudflare-api';
     const cfSecretNamespace = config.cloudflareSecretNamespace ?? 'crossplane-system';
-    const cfSecretKey = config.cloudflareSecretKey ?? 'token';
 
-    // Create Cloudflare API secret if token is provided
+    // Create Cloudflare API secret if credentials are provided
+    // Uses API Key + Email authentication (X-Auth-Key and X-Auth-Email headers)
     // Supports ref+sops:// references for vals integration
-    if (config.cloudflareApiToken) {
+    if (config.cloudflareApiKey && config.cloudflareEmail) {
       this.secret = new kplus.Secret(this, 'cloudflare-secret', {
         metadata: {
           name: cfSecretName,
           namespace: cfSecretNamespace,
         },
         stringData: {
-          [cfSecretKey]: config.cloudflareApiToken,
+          api_key: config.cloudflareApiKey,
+          email: config.cloudflareEmail,
         },
       });
     }
@@ -197,10 +205,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                 // Resource 0: GCP ManagedZone
                 this.createManagedZoneResource(gcpProviderConfig),
                 // Resources 1-4: HTTP Requests for Cloudflare NS records
-                this.createCloudflareNsResource(0, httpProviderConfig, cfSecretName, cfSecretNamespace, cfSecretKey),
-                this.createCloudflareNsResource(1, httpProviderConfig, cfSecretName, cfSecretNamespace, cfSecretKey),
-                this.createCloudflareNsResource(2, httpProviderConfig, cfSecretName, cfSecretNamespace, cfSecretKey),
-                this.createCloudflareNsResource(3, httpProviderConfig, cfSecretName, cfSecretNamespace, cfSecretKey),
+                this.createCloudflareNsResource(0, httpProviderConfig, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(1, httpProviderConfig, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(2, httpProviderConfig, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(3, httpProviderConfig, cfSecretName, cfSecretNamespace),
               ],
             },
           },
@@ -276,6 +284,8 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    * Creates a Cloudflare NS record resource for the function-patch-and-transform input.
    * Uses provider-http to make direct API calls to Cloudflare.
    * 
+   * Authentication uses API Key + Email (X-Auth-Key and X-Auth-Email headers).
+   * 
    * Note: HTTP provider Request is defined inline as there are no typed imports.
    * The provider-http CRD would need to be added to cdk8s.yaml for typed support.
    */
@@ -284,9 +294,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     httpProviderConfig: string,
     secretName: string,
     secretNamespace: string,
-    secretKey: string,
   ): object {
     // HTTP provider Request manifest (no typed import available)
+    // Uses Cloudflare API Key + Email authentication
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
       kind: 'Request',
@@ -298,15 +308,24 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           headers: {
             'Content-Type': ['application/json'],
           },
-          secretInjectionConfigs: [{
-            secretRef: {
-              name: secretName,
-              namespace: secretNamespace,
+          secretInjectionConfigs: [
+            {
+              secretRef: {
+                name: secretName,
+                namespace: secretNamespace,
+              },
+              secretKey: 'api_key',
+              responsePath: 'request.headers.X-Auth-Key[0]',
             },
-            secretKey: secretKey,
-            responsePath: 'request.headers.Authorization[0]',
-            setValueAs: 'Bearer',
-          }],
+            {
+              secretRef: {
+                name: secretName,
+                namespace: secretNamespace,
+              },
+              secretKey: 'email',
+              responsePath: 'request.headers.X-Auth-Email[0]',
+            },
+          ],
           // Body will be patched with combined values
           body: '{}',
         },
