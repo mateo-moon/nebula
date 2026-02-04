@@ -108,7 +108,7 @@ export class GcpProvider extends Construct {
         ? `${providerNamePrefix}-${family}-runtime` 
         : undefined;
       
-      this.providers[family] = new CpProvider(this, `provider-${family}`, {
+      const provider = new CpProvider(this, `provider-${family}`, {
         metadata: {
           name: providerName,
         },
@@ -121,6 +121,13 @@ export class GcpProvider extends Construct {
           } : {}),
         },
       });
+      
+      // Ensure DeploymentRuntimeConfig is created before Provider references it
+      if (config.enableDeterministicServiceAccounts && this.runtimeConfigs[family]) {
+        provider.node.addDependency(this.runtimeConfigs[family]);
+      }
+      
+      this.providers[family] = provider;
     }
 
     // Build credentials spec based on source type
