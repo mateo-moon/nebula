@@ -2,29 +2,26 @@
  * Kubernetes modules for deploying common infrastructure components.
  */
 
-export { Crossplane, CrossplaneConfig, ArgoCdProviderOptions } from './crossplane';
-export { CertManager, CertManagerConfig } from './cert-manager';
-export { ClusterApiOperator, ClusterApiOperatorConfig } from './cluster-api-operator';
-export { 
-  IngressNginx, 
-  IngressNginxConfig, 
-  IngressNginxControllerConfig,
-  ServiceType,
-  ExternalTrafficPolicy,
-} from './ingress-nginx';
-export { 
-  ExternalDns, 
-  ExternalDnsConfig,
-  ExternalDnsProvider,
-  ExternalDnsPolicy,
-} from './external-dns';
-export {
-  PrometheusOperator,
-  PrometheusOperatorConfig,
-  ThanosConfig,
-} from './prometheus-operator';
-export {
-  ArgoCd,
+export { Crossplane } from './crossplane';
+export type { CrossplaneConfig, ArgoCdProviderOptions } from './crossplane';
+
+export { CertManager } from './cert-manager';
+export type { CertManagerConfig } from './cert-manager';
+
+export { ClusterApiOperator } from './cluster-api-operator';
+export type { ClusterApiOperatorConfig } from './cluster-api-operator';
+
+export { IngressNginx } from './ingress-nginx';
+export type { IngressNginxConfig, IngressNginxControllerConfig, ServiceType, ExternalTrafficPolicy } from './ingress-nginx';
+
+export { ExternalDns } from './external-dns';
+export type { ExternalDnsConfig, ExternalDnsProvider, ExternalDnsPolicy } from './external-dns';
+
+export { PrometheusOperator } from './prometheus-operator';
+export type { PrometheusOperatorConfig, ThanosConfig } from './prometheus-operator';
+
+export { ArgoCd } from './argocd';
+export type {
   ArgoCdConfig,
   ArgoCdProjectConfig,
   ArgoCdProjectDestination,

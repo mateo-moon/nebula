@@ -6,9 +6,12 @@ import { NetworkSpecDeletionPolicy } from '#imports/compute.gcp.upbound.io';
 import { ClusterSpecDeletionPolicy } from '#imports/container.gcp.upbound.io';
 import { BaseConstruct } from '../../../core';
 
-export { Network, NetworkConfig } from './network';
-export { Gke, GkeConfig, NodePoolConfig } from './gke';
-export { Iam, IamConfig, WorkloadIdentityConfig } from './iam';
+export { Network } from './network';
+export type { NetworkConfig } from './network';
+export { Gke } from './gke';
+export type { GkeConfig, NodePoolConfig } from './gke';
+export { Iam } from './iam';
+export type { IamConfig, WorkloadIdentityConfig } from './iam';
 export { NetworkSpecDeletionPolicy } from '#imports/compute.gcp.upbound.io';
 export { ClusterSpecDeletionPolicy } from '#imports/container.gcp.upbound.io';
 
