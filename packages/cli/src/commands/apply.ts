@@ -128,8 +128,8 @@ async function waitForDeployments(timeout: number = 120): Promise<void> {
   while ((Date.now() - start) < timeout * 1000) {
     // Get all deployments and check if they're ready
     const result = exec(
-      'kubectl get deployments -A -o jsonpath="{range .items[*]}{.metadata.name}={.status.readyReplicas}/{.status.replicas} {end}" 2>/dev/null || echo ""',
-      { silent: true }
+      `kubectl get deployments -A -o jsonpath='{range .items[*]}{.metadata.name}={.status.readyReplicas}/{.status.replicas} {end}'`,
+      { silent: true, ignoreErrors: true }
     );
     
     const deployments = result.trim().split(' ').filter(s => s);
@@ -168,15 +168,22 @@ async function waitForCrds(timeout: number = 120): Promise<void> {
   const start = Date.now();
   
   while ((Date.now() - start) < timeout * 1000) {
+    // Check if any CRDs exist and are established
     const result = exec(
-      'kubectl get crd -o jsonpath="{.items[*].status.conditions[?(@.type==\'Established\')].status}" 2>/dev/null || echo ""',
-      { silent: true }
+      `kubectl get crd -o jsonpath='{.items[*].status.conditions[?(@.type=="Established")].status}'`,
+      { silent: true, ignoreErrors: true }
     );
     
     // If all CRDs are established (all values are "True")
     const statuses = result.trim().split(' ').filter(s => s);
     if (statuses.length > 0 && statuses.every(s => s === 'True')) {
       log('   ✅ CRDs established');
+      return;
+    }
+    
+    // If no CRDs exist yet (phase 1 only has namespace), that's fine
+    if (statuses.length === 0) {
+      log('   ✅ No CRDs to wait for');
       return;
     }
     
@@ -192,8 +199,8 @@ async function waitForProviders(timeout: number = 300): Promise<void> {
   
   while ((Date.now() - start) < timeout * 1000) {
     const result = exec(
-      'kubectl get providers -o jsonpath="{.items[*].status.conditions[?(@.type==\'Healthy\')].status}" 2>/dev/null || echo ""',
-      { silent: true }
+      `kubectl get providers -o jsonpath='{.items[*].status.conditions[?(@.type=="Healthy")].status}'`,
+      { silent: true, ignoreErrors: true }
     );
     
     const statuses = result.trim().split(' ').filter(s => s);
@@ -203,8 +210,8 @@ async function waitForProviders(timeout: number = 300): Promise<void> {
     }
     
     // Check if there are providers at all
-    const providerCount = exec('kubectl get providers --no-headers 2>/dev/null | wc -l', { silent: true });
-    if (parseInt(providerCount.trim()) === 0) {
+    const providerCount = exec('kubectl get providers --no-headers 2>/dev/null | wc -l', { silent: true, ignoreErrors: true });
+    if (parseInt(providerCount.trim() || '0') === 0) {
       log('   No providers to wait for');
       return;
     }
