@@ -79,6 +79,15 @@ function isPhase1Resource(resource: K8sResource): boolean {
 
 function isPhase2Resource(resource: K8sResource): boolean {
   // Phase 2: Core Kubernetes resources + Operators that install CRDs
+  // Must be core K8s apiVersions only - not Crossplane managed resources
+  const coreApiVersions = [
+    'v1',
+    'apps/v1',
+    'batch/v1',
+    'rbac.authorization.k8s.io/v1',
+    'networking.k8s.io/v1',
+  ];
+  
   const operatorKinds = [
     'ServiceAccount',
     'Secret',
@@ -93,7 +102,8 @@ function isPhase2Resource(resource: K8sResource): boolean {
     'Service',
     'Job',
   ];
-  return operatorKinds.includes(resource.kind);
+  
+  return coreApiVersions.includes(resource.apiVersion) && operatorKinds.includes(resource.kind);
 }
 
 function isCrossplaneProvider(resource: K8sResource): boolean {
