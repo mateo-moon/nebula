@@ -12,7 +12,7 @@
  * - Easier to maintain and update
  * 
  * Prerequisites:
- * - crossplane-contrib/provider-http v1.0.3+ must be installed
+ * - crossplane-contrib/provider-http v1.0.8+ must be installed
  * - Cloudflare API credentials (API Key + Email)
  * 
  * @example
@@ -400,19 +400,20 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
 
   /**
    * Creates a Cloudflare NS record resource for the function-patch-and-transform input.
-   * Uses provider-http v1.0.3+ to make direct API calls to Cloudflare.
+   * Uses provider-http v1.0.8+ to make direct API calls to Cloudflare.
    * 
    * Authentication is handled via ProviderConfig which injects headers from the credentials secret.
    * 
-   * Note: provider-http v1.0.3+ v1alpha2 API uses:
+   * Note: provider-http v1.0.8+ v1alpha2 API uses:
    * - payload: contains the actual data (baseUrl, body)
-   * - mappings: defines actions with JQ expressions referencing .payload
+   * - mappings: defines actions (CREATE, OBSERVE, UPDATE, REMOVE) with JQ expressions
+   *   referencing .payload fields
    */
   private createCloudflareNsResource(
     index: number,
     httpProviderConfigName: string,
   ): object {
-    // HTTP provider v1.0.3+ Request manifest using v1alpha2 API
+    // HTTP provider v1.0.8+ Request manifest using v1alpha2 API
     // payload contains the actual data, mappings use JQ to reference it
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
@@ -428,18 +429,22 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           mappings: [
             {
               action: 'CREATE',
+              method: 'POST',
               url: '.payload.baseUrl',
               body: '.payload.body',
             },
             {
               action: 'OBSERVE',
               method: 'GET',
-              // After creation, we'd need the record ID - for now just observe via POST url
+              // For OBSERVE, we need to list records and find the one we created
+              // Cloudflare doesn't have a simple GET by content, so we use the same endpoint
               url: '.payload.baseUrl',
             },
             {
               action: 'REMOVE',
               method: 'DELETE',
+              // Note: DELETE requires the record ID which we'd need to extract from CREATE response
+              // For now, this is a placeholder - proper deletion would need response ID extraction
               url: '.payload.baseUrl',
             },
           ],
