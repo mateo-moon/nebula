@@ -24,7 +24,10 @@
     "synth": "cdk8s synth",
     "import": "cdk8s import",
     "generate-claims": "tsx scripts/generate-claim-types.ts",
-    "example:synth": "cdk8s synth --app 'tsx example/main.ts'"
+    "example:bootstrap": "cdk8s synth --app 'tsx example/bootstrap.ts'",
+    "example:infra": "cdk8s synth --app 'tsx example/infra.ts'",
+    "example:workloads": "cdk8s synth --app 'tsx example/workloads.ts'",
+    "example:all": "cdk8s synth --app 'tsx example/main.ts'"
   },
   "engines": {
     "node": ">=20"
