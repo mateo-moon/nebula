@@ -1,26 +1,3 @@
-/**
- * Combined Example - All modules in one file
- * 
- * This is a reference showing all modules together. In practice, you should
- * split this into separate files based on deployment target:
- * 
- *   1. bootstrap.ts  → Kind cluster (Crossplane + GCP Provider)
- *   2. infra.ts      → Kind cluster via Crossplane (GCP resources: VPC, GKE, IAM)
- *   3. workloads.ts  → GKE cluster (ArgoCD, Prometheus, Ingress, etc.)
- * 
- * Deployment flow:
- *   # 1. Bootstrap Kind with Crossplane
- *   nebula bootstrap --project my-gcp-project
- *   nebula synth --app example/bootstrap.ts && nebula apply
- *   
- *   # 2. Create GCP infrastructure
- *   nebula synth --app example/infra.ts && nebula apply
- *   # Wait for GKE cluster to be ready
- *   
- *   # 3. Switch to GKE and deploy workloads
- *   gcloud container clusters get-credentials dev-gke --zone europe-west3-a
- *   nebula synth --app example/workloads.ts && nebula apply
- */
 import { App, Chart } from 'cdk8s';
 import { Gcp, NetworkSpecDeletionPolicy } from '../src/modules/infra/gcp';
 import { Dns, ManagedZoneSpecDeletionPolicy } from '../src/modules/infra/dns';
@@ -80,26 +57,19 @@ new Gcp(chart, 'nebula', {
       maxNodes: 2,
       spot: true,
     },
-    nodePools: {
-      argocd: {
-        imageType: 'UBUNTU_CONTAINERD',
-        machineType: 'e2-standard-8',  // 8 vCPU, 32GB RAM - best value for bursty workloads
-        diskSizeGb: 100,
-        minNodes: 1,
-        maxNodes: 1,
-        spot: true,
-        labels: {
-          'workload': 'argocd',
-        },
-        taints: [
-          {
-            key: 'workload',
-            value: 'argocd',
-            effect: 'NO_SCHEDULE',
-          },
-        ],
-      },
-    },
+    // Optional: dedicated node pools for specific workloads
+    // nodePools: {
+    //   argocd: {
+    //     imageType: 'UBUNTU_CONTAINERD',
+    //     machineType: 'e2-standard-8',
+    //     diskSizeGb: 100,
+    //     minNodes: 1,
+    //     maxNodes: 1,
+    //     spot: true,
+    //     labels: { 'workload': 'argocd' },
+    //     taints: [{ key: 'workload', value: 'argocd', effect: 'NO_SCHEDULE' }],
+    //   },
+    // },
   },
 
   iam: {
@@ -284,9 +254,9 @@ new ArgoCd(chart, 'argocd', {
       env: [
         { name: 'ARGOCD_EXEC_TIMEOUT', value: '5m' },
       ],
-      // Schedule repo-server on dedicated argocd node
-      nodeSelector: { 'workload': 'argocd' },
-      tolerations: [{ key: 'workload', value: 'argocd', effect: 'NoSchedule' }],
+      // For dedicated node pools, uncomment:
+      // nodeSelector: { 'workload': 'argocd' },
+      // tolerations: [{ key: 'workload', value: 'argocd', effect: 'NoSchedule' }],
     },
     configs: {
       params: {
