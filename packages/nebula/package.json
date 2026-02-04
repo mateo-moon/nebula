@@ -8,16 +8,16 @@
   "exports": {
     ".": "./src/index.ts",
     "./xrd": "./src/xrd/gcp-infrastructure.ts",
-    "./imports": "./imports/index.ts"
+    "./imports": "./imports/index.ts",
+    "./imports/*": "./imports/*"
   },
   "imports": {
     "#imports/*": "./imports/*"
   },
   "typesVersions": {
     "*": {
-      "*": [
-        "src/*"
-      ]
+      "imports/*": ["imports/*"],
+      "*": ["src/*"]
     }
   },
   "scripts": {

@@ -37,5 +37,6 @@ imports:
   # ArgoCD CRDs
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/appproject-crd.yaml
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/application-crd.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/applicationset-crd.yaml
   # Crossplane ArgoCD Provider CRDs
   - https://raw.githubusercontent.com/crossplane-contrib/provider-argocd/v0.13.0/package/crds/argocd.crossplane.io_providerconfigs.yaml
