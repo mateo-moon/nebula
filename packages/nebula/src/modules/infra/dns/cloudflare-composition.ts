@@ -405,13 +405,15 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    * Creates a Cloudflare NS record resource for the function-patch-and-transform input.
    * Uses provider-http v1.0.8+ to make direct API calls to Cloudflare.
    * 
-   * Authentication headers are defined at forProvider.headers level.
-   * Secret injection syntax {{ name:namespace:key }} is used to inject credentials.
+   * Authentication uses secret injection syntax {{ name:namespace:key }} in headers.
+   * The provider-http controller resolves these at runtime by reading the secret.
+   * Headers are set both globally AND per-mapping to ensure all actions are authenticated.
    * 
    * Note: provider-http v1.0.8+ v1alpha2 API uses:
-   * - payload: contains the actual data (baseUrl, body)
-   * - headers: global headers applied to all requests (with secret injection)
+   * - headers: global headers with optional secret injection
+   * - payload: contains the actual data (baseUrl, body)  
    * - mappings: defines actions (CREATE, OBSERVE, UPDATE, REMOVE) with JQ expressions
+   *   - Each mapping can have its own headers that override/extend global headers
    */
   private createCloudflareNsResource(
     index: number,
@@ -419,45 +421,53 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     cfSecretName: string = 'cloudflare-api',
     cfSecretNamespace: string = 'crossplane-system',
   ): object {
+    // Cloudflare authentication headers using secret injection
+    // The provider-http controller resolves {{ name:namespace:key }} at runtime
+    const cfAuthHeaders = {
+      'Content-Type': ['application/json'],
+      'X-Auth-Email': [`{{ ${cfSecretName}:${cfSecretNamespace}:email }}`],
+      'X-Auth-Key': [`{{ ${cfSecretName}:${cfSecretNamespace}:api_key }}`],
+    };
+
     // HTTP provider v1.0.8+ Request manifest using v1alpha2 API
-    // Headers use secret injection syntax: {{ secret-name:namespace:key }}
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
       kind: 'Request',
       spec: {
         forProvider: {
-          // Global headers - applied to all requests
-          // Using secret injection to get Cloudflare credentials
-          headers: {
-            'Content-Type': ['application/json'],
-            'X-Auth-Email': [`{{ ${cfSecretName}:${cfSecretNamespace}:email }}`],
-            'X-Auth-Key': [`{{ ${cfSecretName}:${cfSecretNamespace}:api_key }}`],
-          },
+          // Global headers - provider-http resolves secret injection at runtime
+          headers: cfAuthHeaders,
           // payload contains the actual request data
           payload: {
             baseUrl: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
             body: '{}',
           },
           // mappings define how to CREATE/OBSERVE/REMOVE using JQ expressions
-          // OBSERVE and REMOVE use .response.body.result.id from CREATE response
+          // Each mapping has explicit headers to ensure authentication works for all actions
           mappings: [
             {
               action: 'CREATE',
               method: 'POST',
               url: '.payload.baseUrl',
               body: '.payload.body',
+              // Explicit headers for CREATE
+              headers: cfAuthHeaders,
             },
             {
               action: 'OBSERVE',
               method: 'GET',
               // Use record ID from CREATE response (Cloudflare returns { result: { id: "..." } })
               url: '.payload.baseUrl + "/" + .response.body.result.id',
+              // Explicit headers for OBSERVE - this was the missing piece!
+              headers: cfAuthHeaders,
             },
             {
               action: 'REMOVE',
               method: 'DELETE',
               // Use record ID from response for deletion
               url: '.payload.baseUrl + "/" + .response.body.result.id',
+              // Explicit headers for REMOVE
+              headers: cfAuthHeaders,
             },
           ],
         },
