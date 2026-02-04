@@ -385,13 +385,6 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
           existingSecretPasswordKey: 'redis-password',
         },
         tolerations: defaultTolerations,
-        // Override default args to avoid YAML 1.1 boolean coercion issue
-        // where 'no' gets interpreted as boolean false during server-side apply
-        args: [
-          '--save', '',
-          '--appendonly', 'false',  // Use 'false' instead of 'no' to avoid YAML boolean issue
-          '--requirepass', '$(REDIS_PASSWORD)',
-        ],
       },
       dex: { tolerations: defaultTolerations },
       notifications: { tolerations: defaultTolerations },
