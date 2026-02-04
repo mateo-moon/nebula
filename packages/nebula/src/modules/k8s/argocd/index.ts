@@ -583,13 +583,11 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
 set -e
 echo "Installing dependencies..." >&2
 
-# Install pnpm if not available
-if ! command -v pnpm &> /dev/null; then
-  npm install -g pnpm
-fi
+# Enable corepack for pnpm support (comes with Node.js)
+corepack enable 2>/dev/null || true
 
-# Install project dependencies
-pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+# Install project dependencies using npx pnpm (no global install needed)
+npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install
 `],
             },
             generate: {
