@@ -411,12 +411,13 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    * 
    * Note: provider-http v1.0.8+ v1alpha2 API uses:
    * - headers: global headers with optional secret injection
-   * - payload: contains baseUrl, body, plus separate fields for query construction
+   * - payload: contains baseUrl and body (schema is fixed, no custom fields)
    * - mappings: defines actions (CREATE, OBSERVE, UPDATE, REMOVE) with JQ expressions
    *   - Each mapping can have its own headers that override/extend global headers
    * 
    * OBSERVE Strategy:
    * - Use Cloudflare's filter API to query by name, type, and content
+   * - Parse name/content from payload.body using JQ's fromjson
    * - This handles the case where CREATE fails with "record already exists"
    * - Query URL: baseUrl?name={name}&type=NS&content={content}
    * - Response is an array: { result: [{id, ...}] }, use result[0].id
@@ -446,15 +447,11 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
         forProvider: {
           // Global headers - provider-http resolves secret injection at runtime
           headers: cfAuthHeaders,
-          // payload contains:
-          // - baseUrl: Cloudflare API endpoint
-          // - body: JSON body for CREATE (POST)
-          // - name, content: separate fields used by OBSERVE to query existing records
+          // payload contains only baseUrl and body (schema is fixed)
+          // We use JQ's fromjson in mappings to parse name/content from body
           payload: {
             baseUrl: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
             body: '{}',
-            name: 'placeholder.example.com',  // patched by composition
-            content: 'ns-cloud-x.googledomains.com.',  // patched by composition
           },
           // mappings define how to CREATE/OBSERVE/REMOVE using JQ expressions
           // Each mapping has explicit headers to ensure authentication works for all actions
@@ -471,9 +468,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
               action: 'OBSERVE',
               method: 'GET',
               // Query Cloudflare API by name, type, and content to find existing records
+              // Parse name and content from the JSON body string using JQ's fromjson
               // This handles the "record already exists" case where CREATE failed
               // Response: { result: [{ id: "...", ... }] } (array)
-              url: '.payload.baseUrl + "?name=" + .payload.name + "&type=NS&content=" + .payload.content',
+              url: '.payload.baseUrl + "?name=" + (.payload.body | fromjson | .name) + "&type=NS&content=" + (.payload.body | fromjson | .content)',
               // Explicit headers for OBSERVE
               headers: cfAuthHeaders,
             },
@@ -516,19 +514,6 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             type: 'string',
             string: { type: 'Format', fmt: 'https://api.cloudflare.com/client/v4/zones/%s/dns_records' },
           }],
-        },
-        // Patch name field for OBSERVE query
-        {
-          type: 'FromCompositeFieldPath',
-          fromFieldPath: 'spec.dnsName',
-          toFieldPath: 'spec.forProvider.payload.name',
-        },
-        // Patch content field (nameserver) for OBSERVE query
-        {
-          type: 'FromCompositeFieldPath',
-          fromFieldPath: `status.nameServers[${index}]`,
-          toFieldPath: 'spec.forProvider.payload.content',
-          policy: { fromFieldPath: 'Required' },
         },
         // Combine DNS name and nameserver into JSON body in payload
         // TTL is a string in the XRD to avoid fmt conversion issues
