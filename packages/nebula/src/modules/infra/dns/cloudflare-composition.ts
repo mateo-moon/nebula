@@ -147,27 +147,30 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     // The secret format is a JSON object with headers for the HTTP provider
     // ref+sops:// references are resolved by BaseConstruct
     if (this.config.cloudflareApiKey && this.config.cloudflareEmail) {
-      // Create secret with credentials as JSON containing the auth headers
-      // The HTTP provider reads this as the credentials blob
-      const credentialsJson = JSON.stringify({
-        headers: {
-          'X-Auth-Key': [this.config.cloudflareApiKey],
-          'X-Auth-Email': [this.config.cloudflareEmail],
-          'Content-Type': ['application/json'],
-        },
-      });
-
+      // Create secret with individual keys for header injection
+      // The provider-http uses {{ secret:namespace:key }} syntax to inject values
       this.secret = new kplus.Secret(this, 'cloudflare-secret', {
         metadata: {
           name: cfSecretName,
           namespace: cfSecretNamespace,
         },
         stringData: {
-          credentials: credentialsJson,
+          // Individual keys for secret injection in Request headers
+          email: this.config.cloudflareEmail,
+          api_key: this.config.cloudflareApiKey,
+          // Also keep credentials JSON for ProviderConfig (backward compatibility)
+          credentials: JSON.stringify({
+            headers: {
+              'X-Auth-Key': [this.config.cloudflareApiKey],
+              'X-Auth-Email': [this.config.cloudflareEmail],
+              'Content-Type': ['application/json'],
+            },
+          }),
         },
       });
 
       // Create HTTP ProviderConfig that references the credentials secret
+      // This provides default credentials, but Request-level headers take precedence
       this.httpProviderConfig = new HttpProviderConfig(this, 'http-provider-config', {
         metadata: {
           name: httpProviderConfigName,
@@ -323,10 +326,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                 // Resource 0: GCP ManagedZone
                 this.createManagedZoneResource(gcpProviderConfig),
                 // Resources 1-4: HTTP Requests for Cloudflare NS records
-                this.createCloudflareNsResource(0, httpProviderConfigName),
-                this.createCloudflareNsResource(1, httpProviderConfigName),
-                this.createCloudflareNsResource(2, httpProviderConfigName),
-                this.createCloudflareNsResource(3, httpProviderConfigName),
+                this.createCloudflareNsResource(0, httpProviderConfigName, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(1, httpProviderConfigName, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(2, httpProviderConfigName, cfSecretName, cfSecretNamespace),
+                this.createCloudflareNsResource(3, httpProviderConfigName, cfSecretName, cfSecretNamespace),
               ],
             },
           },
@@ -402,30 +405,41 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    * Creates a Cloudflare NS record resource for the function-patch-and-transform input.
    * Uses provider-http v1.0.8+ to make direct API calls to Cloudflare.
    * 
-   * Authentication is handled via ProviderConfig which injects headers from the credentials secret.
+   * Authentication headers are defined at forProvider.headers level.
+   * Secret injection syntax {{ name:namespace:key }} is used to inject credentials.
    * 
    * Note: provider-http v1.0.8+ v1alpha2 API uses:
    * - payload: contains the actual data (baseUrl, body)
+   * - headers: global headers applied to all requests (with secret injection)
    * - mappings: defines actions (CREATE, OBSERVE, UPDATE, REMOVE) with JQ expressions
-   *   referencing .payload fields
    */
   private createCloudflareNsResource(
     index: number,
     httpProviderConfigName: string,
+    cfSecretName: string = 'cloudflare-api',
+    cfSecretNamespace: string = 'crossplane-system',
   ): object {
     // HTTP provider v1.0.8+ Request manifest using v1alpha2 API
-    // payload contains the actual data, mappings use JQ to reference it
+    // Headers use secret injection syntax: {{ secret-name:namespace:key }}
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
       kind: 'Request',
       spec: {
         forProvider: {
+          // Global headers - applied to all requests
+          // Using secret injection to get Cloudflare credentials
+          headers: {
+            'Content-Type': ['application/json'],
+            'X-Auth-Email': [`{{ ${cfSecretName}:${cfSecretNamespace}:email }}`],
+            'X-Auth-Key': [`{{ ${cfSecretName}:${cfSecretNamespace}:api_key }}`],
+          },
           // payload contains the actual request data
           payload: {
             baseUrl: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
             body: '{}',
           },
           // mappings define how to CREATE/OBSERVE/REMOVE using JQ expressions
+          // OBSERVE and REMOVE use .response.body.result.id from CREATE response
           mappings: [
             {
               action: 'CREATE',
@@ -436,16 +450,14 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             {
               action: 'OBSERVE',
               method: 'GET',
-              // For OBSERVE, we need to list records and find the one we created
-              // Cloudflare doesn't have a simple GET by content, so we use the same endpoint
-              url: '.payload.baseUrl',
+              // Use record ID from CREATE response (Cloudflare returns { result: { id: "..." } })
+              url: '.payload.baseUrl + "/" + .response.body.result.id',
             },
             {
               action: 'REMOVE',
               method: 'DELETE',
-              // Note: DELETE requires the record ID which we'd need to extract from CREATE response
-              // For now, this is a placeholder - proper deletion would need response ID extraction
-              url: '.payload.baseUrl',
+              // Use record ID from response for deletion
+              url: '.payload.baseUrl + "/" + .response.body.result.id',
             },
           ],
         },
