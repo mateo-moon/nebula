@@ -284,12 +284,14 @@ async function deployToGke(): Promise<void> {
   const gkeModuleNames = [
     'providers',
     'crossplane',
+    'infra',
     'cert-manager',
     'cluster-api',
     'ingress-nginx',
     'external-dns',
     'monitoring',
     'argocd',
+    'argocd-apps',
   ];
 
   // Clear previous dist to avoid mixing bootstrap and GKE manifests
@@ -297,7 +299,7 @@ async function deployToGke(): Promise<void> {
     fs.rmSync('dist', { recursive: true, force: true });
   }
 
-  // Synth each module
+  // Synth each module (use --no-purge to preserve previous outputs)
   log('   Synthesizing GKE workloads...');
   for (const moduleName of gkeModuleNames) {
     // Try directory structure first (module/dev.ts), then flat (module.ts)
@@ -306,10 +308,10 @@ async function deployToGke(): Promise<void> {
     
     if (fs.existsSync(dirPath)) {
       log(`   - ${dirPath}`);
-      exec(`npx cdk8s synth --app "npx tsx ${dirPath}"`, { silent: true });
+      exec(`npx cdk8s synth --no-purge --app "npx tsx ${dirPath}"`, { silent: true });
     } else if (fs.existsSync(flatPath)) {
       log(`   - ${flatPath}`);
-      exec(`npx cdk8s synth --app "npx tsx ${flatPath}"`, { silent: true });
+      exec(`npx cdk8s synth --no-purge --app "npx tsx ${flatPath}"`, { silent: true });
     }
   }
 
