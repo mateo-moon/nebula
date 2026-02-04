@@ -7,6 +7,10 @@
  * 
  * new ArgoCd(chart, 'argocd', {
  *   crossplaneUser: { enabled: true, password: 'my-password' },
+ *   nebulaPlugin: { 
+ *     enabled: true, 
+ *     gcpProject: 'my-project',
+ *   },
  *   values: {
  *     configs: {
  *       cm: {
@@ -38,6 +42,11 @@ import { deepmerge } from 'deepmerge-ts';
 import * as crypto from 'crypto';
 import * as yaml from 'yaml';
 import { AppProject } from '#imports/argoproj.io';
+import { 
+  ServiceAccount as GcpServiceAccount, 
+  ProjectIamMember, 
+  ServiceAccountIamMember 
+} from '#imports/cloudplatform.gcp.upbound.io';
 import { BaseConstruct } from '../../../core';
 
 // Dex configuration types
@@ -76,6 +85,28 @@ export interface ArgoCdProjectConfig {
   destinations?: ArgoCdProjectDestination[];
   clusterResourceWhitelist?: Array<{ group: string; kind: string }>;
   namespaceResourceWhitelist?: Array<{ group: string; kind: string }>;
+}
+
+export interface NebulaPluginConfig {
+  /** Enable the Nebula CMP plugin */
+  enabled: boolean;
+  /** Sidecar image (default: node:20-alpine) */
+  image?: string;
+  /** Image pull policy */
+  imagePullPolicy?: 'Always' | 'IfNotPresent' | 'Never';
+  /** GCP project ID for Workload Identity */
+  gcpProject?: string;
+  /** Crossplane ProviderConfig name for GCP resources */
+  providerConfigRef?: string;
+  /** Secret containing GCP credentials (alternative to Workload Identity) */
+  gcpCredentialsSecret?: string;
+  /** Custom environment variables */
+  env?: Array<{ name: string; value?: string; valueFrom?: unknown }>;
+  /** Resource requests/limits */
+  resources?: {
+    requests?: { memory?: string; cpu?: string };
+    limits?: { memory?: string; cpu?: string };
+  };
 }
 
 export interface ArgoCdConfig {
@@ -185,6 +216,8 @@ export interface ArgoCdConfig {
     /** Skip creating the target namespace (use when Crossplane module creates it) */
     skipNamespaceCreation?: boolean;
   };
+  /** Nebula CMP Plugin configuration */
+  nebulaPlugin?: NebulaPluginConfig;
   /** Server configuration (shorthand for values.configs.params.server) */
   server?: {
     /** Enable ingress */
@@ -394,6 +427,11 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       (configs['cm'] as Record<string, unknown>)['accounts.crossplane'] = 'apiKey, login';
     }
 
+    // Handle Nebula CMP Plugin
+    if (this.config.nebulaPlugin?.enabled) {
+      this.setupNebulaPlugin(chartValues, namespaceName);
+    }
+
     this.helm = new Helm(this, 'helm', {
       chart: 'argo-cd',
       releaseName: 'argocd',
@@ -427,80 +465,365 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
 
     // Handle Crossplane User Bootstrapping
     if (this.config.crossplaneUser?.enabled && this.config.crossplaneUser.password) {
-      const user = 'crossplane';
-      const jobName = `argocd-token-bootstrap-${user}`;
-      
-      // Use configurable values or defaults - these should match Crossplane module's expectations
-      const targetNamespace = this.config.crossplaneUser.targetNamespace ?? 'crossplane-system';
-      const credentialsSecretName = this.config.crossplaneUser.credentialsSecretName ?? 'argocd-crossplane-creds';
-      const credentialsSecretKey = this.config.crossplaneUser.credentialsSecretKey ?? 'authToken';
+      this.setupCrossplaneUserBootstrap(namespaceName);
+    }
+  }
 
-      // Create the target namespace only if not skipped (e.g., Crossplane module creates it)
-      let crossplaneNs: kplus.Namespace | undefined;
-      if (!this.config.crossplaneUser.skipNamespaceCreation) {
-        crossplaneNs = new kplus.Namespace(this, 'crossplane-namespace', {
-          metadata: { name: targetNamespace },
-        });
-      }
+  /**
+   * Setup Nebula CMP Plugin for cdk8s-based GitOps
+   */
+  private setupNebulaPlugin(chartValues: Record<string, unknown>, namespaceName: string): void {
+    const pluginConfig = this.config.nebulaPlugin!;
+    const pluginImage = pluginConfig.image ?? 'node:25-alpine';
+    const imagePullPolicy = pluginConfig.imagePullPolicy ?? 'IfNotPresent';
+    const gcpProject = pluginConfig.gcpProject;
+    const providerConfigRef = pluginConfig.providerConfigRef ?? 'gcp-provider';
 
-      // Create a secret to hold the password for the job
-      const bootstrapSecretName = `${jobName}-password`;
-      new kplus.Secret(this, 'bootstrap-password-secret', {
-        metadata: { name: bootstrapSecretName, namespace: namespaceName },
-        stringData: {
-          password: this.config.crossplaneUser.password,
-        },
-      });
+    // GCP IAM setup for Workload Identity (if gcpProject is specified)
+    let gcpServiceAccountEmail: string | undefined;
+    if (gcpProject) {
+      const gsaName = 'argocd-nebula-cmp';
+      gcpServiceAccountEmail = `${gsaName}@${gcpProject}.iam.gserviceaccount.com`;
 
-      // Create ServiceAccount for the Job
-      new kplus.ServiceAccount(this, 'bootstrap-sa', {
-        metadata: { name: jobName, namespace: namespaceName },
-      });
-
-      // Create Role in target namespace for creating secrets
-      const bootstrapRole = new ApiObject(this, 'bootstrap-role', {
-        apiVersion: 'rbac.authorization.k8s.io/v1',
-        kind: 'Role',
-        metadata: { name: jobName, namespace: targetNamespace },
-        rules: [
-          { apiGroups: [''], resources: ['secrets'], verbs: ['get', 'create', 'patch', 'update'] },
-        ],
-      });
-
-      // Create RoleBinding
-      const bootstrapRoleBinding = new ApiObject(this, 'bootstrap-rolebinding', {
-        apiVersion: 'rbac.authorization.k8s.io/v1',
-        kind: 'RoleBinding',
-        metadata: { name: jobName, namespace: targetNamespace },
-        roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: jobName },
-        subjects: [{ kind: 'ServiceAccount', name: jobName, namespace: namespaceName }],
-      });
-
-      // Add dependencies: Role and RoleBinding depend on namespace (if we created it)
-      if (crossplaneNs) {
-        bootstrapRole.addDependency(crossplaneNs);
-        bootstrapRoleBinding.addDependency(crossplaneNs);
-      }
-
-      // Create the bootstrap Job
-      const bootstrapJob = new ApiObject(this, 'bootstrap-job', {
-        apiVersion: 'batch/v1',
-        kind: 'Job',
-        metadata: {
-          name: jobName,
-          namespace: namespaceName,
-        },
+      // Create GCP Service Account (name comes from metadata.name)
+      new GcpServiceAccount(this, 'nebula-gsa', {
+        metadata: { name: gsaName },
         spec: {
-          backoffLimit: 4,
-          template: {
-            spec: {
-              serviceAccountName: jobName,
-              restartPolicy: 'OnFailure',
-              containers: [{
-                name: 'argocd-cli',
-                image: 'debian:bookworm-slim',
-                command: ['/bin/bash', '-c'],
-                args: [`
+          forProvider: {
+            displayName: 'ArgoCD Nebula CMP Service Account',
+            description: 'Service account for ArgoCD Nebula CMP plugin to access KMS for SOPS',
+            project: gcpProject,
+          },
+          providerConfigRef: { name: providerConfigRef },
+        },
+      });
+
+      // Grant KMS CryptoKey Encrypter/Decrypter for SOPS secrets
+      new ProjectIamMember(this, 'nebula-kms', {
+        metadata: { name: `${gsaName}-kms` },
+        spec: {
+          forProvider: {
+            project: gcpProject,
+            role: 'roles/cloudkms.cryptoKeyEncrypterDecrypter',
+            member: `serviceAccount:${gcpServiceAccountEmail}`,
+          },
+          providerConfigRef: { name: providerConfigRef },
+        },
+      });
+
+      // Grant KMS Viewer for key ring inspection
+      new ProjectIamMember(this, 'nebula-kms-viewer', {
+        metadata: { name: `${gsaName}-kms-viewer` },
+        spec: {
+          forProvider: {
+            project: gcpProject,
+            role: 'roles/cloudkms.viewer',
+            member: `serviceAccount:${gcpServiceAccountEmail}`,
+          },
+          providerConfigRef: { name: providerConfigRef },
+        },
+      });
+
+      // Workload Identity binding - allow repo-server SA to impersonate GCP SA
+      new ServiceAccountIamMember(this, 'nebula-wi', {
+        metadata: { name: `${gsaName}-wi` },
+        spec: {
+          forProvider: {
+            serviceAccountId: `projects/${gcpProject}/serviceAccounts/${gcpServiceAccountEmail}`,
+            role: 'roles/iam.workloadIdentityUser',
+            member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/argocd-repo-server]`,
+          },
+          providerConfigRef: { name: providerConfigRef },
+        },
+      });
+    }
+
+    // Create K8s ServiceAccount for Nebula CMP
+    const nebulaSaName = 'argocd-nebula-cmp';
+    new kplus.ServiceAccount(this, 'nebula-sa', {
+      metadata: {
+        name: nebulaSaName,
+        namespace: namespaceName,
+        ...(gcpServiceAccountEmail && {
+          annotations: {
+            'iam.gke.io/gcp-service-account': gcpServiceAccountEmail,
+          },
+        }),
+      },
+    });
+
+    // Create ClusterRole with full admin permissions
+    // Using ApiObject because kplus doesn't support wildcard RBAC rules
+    new ApiObject(this, 'nebula-cluster-role', {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: 'ClusterRole',
+      metadata: { name: 'argocd-nebula-cmp' },
+      rules: [
+        { apiGroups: ['*'], resources: ['*'], verbs: ['*'] },
+        { nonResourceURLs: ['*'], verbs: ['*'] },
+      ],
+    });
+
+    // Create ClusterRoleBinding
+    new ApiObject(this, 'nebula-cluster-role-binding', {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: 'ClusterRoleBinding',
+      metadata: { name: 'argocd-nebula-cmp' },
+      roleRef: {
+        apiGroup: 'rbac.authorization.k8s.io',
+        kind: 'ClusterRole',
+        name: 'argocd-nebula-cmp',
+      },
+      subjects: [
+        { kind: 'ServiceAccount', name: nebulaSaName, namespace: namespaceName },
+        { kind: 'ServiceAccount', name: 'argocd-repo-server', namespace: namespaceName },
+      ],
+    });
+
+    // Create ConfigMap with Nebula CMP plugin configuration
+    new kplus.ConfigMap(this, 'nebula-cmp-plugin', {
+      metadata: {
+        name: 'argocd-cmp-nebula',
+        namespace: namespaceName,
+      },
+      data: {
+        'plugin.yaml': yaml.stringify({
+          apiVersion: 'argoproj.io/v1alpha1',
+          kind: 'ConfigManagementPlugin',
+          metadata: { name: 'nebula' },
+          spec: {
+            version: 'v1.0',
+            init: {
+              command: ['/bin/sh', '-c'],
+              args: [`
+set -e
+echo "Installing dependencies..." >&2
+
+# Install pnpm if not available
+if ! command -v pnpm &> /dev/null; then
+  npm install -g pnpm
+fi
+
+# Install project dependencies
+pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+`],
+            },
+            generate: {
+              command: ['/bin/sh', '-c'],
+              args: [`
+set -e
+
+# Clear previous output
+rm -rf dist
+
+# Determine entry file based on ArgoCD application name
+# Can be overridden via ARGOCD_ENV_ENTRY_FILE
+ENTRY="\${ARGOCD_ENV_ENTRY_FILE:-}"
+
+if [ -z "$ENTRY" ]; then
+  # Use ArgoCD app name to find the entry file
+  if [ -n "\${ARGOCD_APP_NAME:-}" ]; then
+    ENTRY="\${ARGOCD_APP_NAME}.ts"
+  fi
+fi
+
+# Fallback to common entry points if app-specific file not found
+if [ -z "$ENTRY" ] || [ ! -f "$ENTRY" ]; then
+  for f in index.ts main.ts; do
+    if [ -f "$f" ]; then
+      ENTRY="$f"
+      break
+    fi
+  done
+fi
+
+if [ -z "$ENTRY" ] || [ ! -f "$ENTRY" ]; then
+  echo "ERROR: Entry file not found. Tried \${ARGOCD_APP_NAME:-<no app name>}.ts and common entry points." >&2
+  exit 1
+fi
+
+echo "Running cdk8s synth for $ENTRY..." >&2
+npx cdk8s synth --app "npx tsx $ENTRY" >&2
+
+# Output all generated YAML manifests
+for f in $(find dist -name "*.yaml" -type f | sort); do
+  echo "---"
+  cat "$f"
+done
+`],
+            },
+            discover: {
+              find: {
+                command: ['/bin/sh', '-c'],
+                // Discover cdk8s projects by checking for package.json with cdk8s dependency
+                args: ['test -f package.json && grep -q "cdk8s" package.json 2>/dev/null && echo "." || true'],
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    // Build environment variables for the sidecar
+    const sidecarEnv: Array<{ name: string; value?: string; valueFrom?: unknown }> = [
+      { name: 'ARGOCD_EXEC_TIMEOUT', value: '5m' },
+      { name: 'NPM_CONFIG_CACHE', value: '/tmp/.npm' },
+      { name: 'COREPACK_HOME', value: '/tmp/.corepack' },
+      { name: 'HOME', value: '/tmp' },
+      { name: 'USER', value: 'argocd' },
+    ];
+
+    // Add GCP credentials if using secret-based auth (not Workload Identity)
+    if (pluginConfig.gcpCredentialsSecret) {
+      sidecarEnv.push({
+        name: 'GOOGLE_APPLICATION_CREDENTIALS',
+        value: '/secrets/gcp/credentials.json',
+      });
+    }
+
+    // Add custom environment variables
+    if (pluginConfig.env) {
+      sidecarEnv.push(...pluginConfig.env);
+    }
+
+    // Build volume mounts
+    const volumeMounts: Array<{ name: string; mountPath: string; subPath?: string }> = [
+      { name: 'cmp-plugin', mountPath: '/home/argocd/cmp-server/config/plugin.yaml', subPath: 'plugin.yaml' },
+      { name: 'cmp-tmp', mountPath: '/tmp' },
+    ];
+
+    // Build volumes
+    const volumes: Array<{ name: string; configMap?: { name: string }; emptyDir?: Record<string, never>; secret?: { secretName: string } }> = [
+      { name: 'cmp-plugin', configMap: { name: 'argocd-cmp-nebula' } },
+      { name: 'cmp-tmp', emptyDir: {} },
+    ];
+
+    // Add GCP credentials volume if specified
+    if (pluginConfig.gcpCredentialsSecret) {
+      volumeMounts.push({ name: 'gcp-credentials', mountPath: '/secrets/gcp' });
+      volumes.push({ name: 'gcp-credentials', secret: { secretName: pluginConfig.gcpCredentialsSecret } });
+    }
+
+    // Build sidecar container configuration
+    const sidecarContainer = {
+      name: 'nebula-cmp',
+      image: pluginImage,
+      imagePullPolicy: imagePullPolicy,
+      command: ['/var/run/argocd/argocd-cmp-server'],
+      securityContext: {
+        runAsNonRoot: true,
+        runAsUser: 999,
+      },
+      resources: {
+        requests: {
+          memory: pluginConfig.resources?.requests?.memory ?? '512Mi',
+          cpu: pluginConfig.resources?.requests?.cpu ?? '100m',
+        },
+        ...(pluginConfig.resources?.limits && {
+          limits: {
+            memory: pluginConfig.resources.limits.memory,
+            cpu: pluginConfig.resources.limits.cpu,
+          },
+        }),
+      },
+      env: sidecarEnv,
+      volumeMounts: [
+        ...volumeMounts,
+        { name: 'var-files', mountPath: '/var/run/argocd' },
+        { name: 'plugins', mountPath: '/home/argocd/cmp-server/plugins' },
+      ],
+    };
+
+    // Merge sidecar config into repoServer chart values
+    if (!chartValues['repoServer']) chartValues['repoServer'] = {};
+    const repoServer = chartValues['repoServer'] as Record<string, unknown>;
+
+    // Add sidecar container
+    if (!repoServer['extraContainers']) repoServer['extraContainers'] = [];
+    (repoServer['extraContainers'] as unknown[]).push(sidecarContainer);
+
+    // Add volumes
+    if (!repoServer['volumes']) repoServer['volumes'] = [];
+    (repoServer['volumes'] as unknown[]).push(...volumes);
+
+    // Add Workload Identity annotation to repo-server service account
+    if (gcpServiceAccountEmail) {
+      if (!repoServer['serviceAccount']) repoServer['serviceAccount'] = {};
+      const sa = repoServer['serviceAccount'] as Record<string, unknown>;
+      if (!sa['annotations']) sa['annotations'] = {};
+      (sa['annotations'] as Record<string, string>)['iam.gke.io/gcp-service-account'] = gcpServiceAccountEmail;
+    }
+  }
+
+  /**
+   * Setup Crossplane User Bootstrap Job
+   */
+  private setupCrossplaneUserBootstrap(namespaceName: string): void {
+    const user = 'crossplane';
+    const jobName = `argocd-token-bootstrap-${user}`;
+    
+    // Use configurable values or defaults
+    const targetNamespace = this.config.crossplaneUser!.targetNamespace ?? 'crossplane-system';
+    const credentialsSecretName = this.config.crossplaneUser!.credentialsSecretName ?? 'argocd-crossplane-creds';
+    const credentialsSecretKey = this.config.crossplaneUser!.credentialsSecretKey ?? 'authToken';
+
+    // Create the target namespace only if not skipped
+    let crossplaneNs: kplus.Namespace | undefined;
+    if (!this.config.crossplaneUser!.skipNamespaceCreation) {
+      crossplaneNs = new kplus.Namespace(this, 'crossplane-namespace', {
+        metadata: { name: targetNamespace },
+      });
+    }
+
+    // Create a secret to hold the password for the job
+    const bootstrapSecretName = `${jobName}-password`;
+    const bootstrapSecret = new kplus.Secret(this, 'bootstrap-password-secret', {
+      metadata: { name: bootstrapSecretName, namespace: namespaceName },
+      stringData: {
+        password: this.config.crossplaneUser!.password!,
+      },
+    });
+
+    // Create ServiceAccount for the Job
+    const bootstrapSa = new kplus.ServiceAccount(this, 'bootstrap-sa', {
+      metadata: { name: jobName, namespace: namespaceName },
+    });
+
+    // Create Role in target namespace for creating secrets
+    const bootstrapRole = new ApiObject(this, 'bootstrap-role', {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: 'Role',
+      metadata: { name: jobName, namespace: targetNamespace },
+      rules: [
+        { apiGroups: [''], resources: ['secrets'], verbs: ['get', 'create', 'patch', 'update'] },
+      ],
+    });
+
+    // Create RoleBinding
+    const bootstrapRoleBinding = new ApiObject(this, 'bootstrap-rolebinding', {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: 'RoleBinding',
+      metadata: { name: jobName, namespace: targetNamespace },
+      roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: jobName },
+      subjects: [{ kind: 'ServiceAccount', name: jobName, namespace: namespaceName }],
+    });
+
+    // Create the bootstrap Job
+    const bootstrapJob = new ApiObject(this, 'bootstrap-job', {
+      apiVersion: 'batch/v1',
+      kind: 'Job',
+      metadata: { name: jobName, namespace: namespaceName },
+      spec: {
+        backoffLimit: 4,
+        template: {
+          spec: {
+            serviceAccountName: jobName,
+            restartPolicy: 'OnFailure',
+            containers: [{
+              name: 'argocd-cli',
+              image: 'debian:bookworm-slim',
+              command: ['/bin/bash', '-c'],
+              args: [`
 set -e
 
 # Install dependencies
@@ -532,28 +855,28 @@ kubectl create secret generic ${credentialsSecretName} \\
   --from-literal=${credentialsSecretKey}=$TOKEN \\
   --dry-run=client -o yaml | kubectl apply -f -
 `],
-                env: [{
-                  name: 'USER_PASSWORD',
-                  valueFrom: {
-                    secretKeyRef: {
-                      name: bootstrapSecretName,
-                      key: 'password',
-                    },
+              env: [{
+                name: 'USER_PASSWORD',
+                valueFrom: {
+                  secretKeyRef: {
+                    name: bootstrapSecretName,
+                    key: 'password',
                   },
-                }],
+                },
               }],
-            },
+            }],
           },
         },
-      });
+      },
+    });
 
-      // Add dependencies: Job depends on namespace (if we created it), role, and rolebinding
-      if (crossplaneNs) {
-        bootstrapJob.addDependency(crossplaneNs);
-      }
-      bootstrapJob.addDependency(bootstrapRole);
-      bootstrapJob.addDependency(bootstrapRoleBinding);
-      bootstrapJob.addDependency(this.helm);  // Job depends on ArgoCD being deployed
+    // Add dependencies using cdk8s node dependencies
+    if (crossplaneNs) {
+      bootstrapRole.node.addDependency(crossplaneNs);
+      bootstrapRoleBinding.node.addDependency(crossplaneNs);
+      bootstrapJob.node.addDependency(crossplaneNs);
     }
+    bootstrapJob.node.addDependency(bootstrapRole);
+    bootstrapJob.node.addDependency(bootstrapRoleBinding);
   }
 }
