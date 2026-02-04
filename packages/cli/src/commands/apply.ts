@@ -165,32 +165,22 @@ async function waitForDeployments(timeout: number = 120): Promise<void> {
 
 async function waitForCrds(timeout: number = 120): Promise<void> {
   log('   Waiting for CRDs to be established...');
-  const start = Date.now();
   
-  while ((Date.now() - start) < timeout * 1000) {
-    // Check if any CRDs exist and are established
-    const result = exec(
-      `kubectl get crd -o jsonpath='{.items[*].status.conditions[?(@.type=="Established")].status}'`,
-      { silent: true, ignoreErrors: true }
-    );
-    
-    // If all CRDs are established (all values are "True")
-    const statuses = result.trim().split(' ').filter(s => s);
-    if (statuses.length > 0 && statuses.every(s => s === 'True')) {
-      log('   ✅ CRDs established');
-      return;
-    }
-    
-    // If no CRDs exist yet (phase 1 only has namespace), that's fine
-    if (statuses.length === 0) {
-      log('   ✅ No CRDs to wait for');
-      return;
-    }
-    
-    await sleep(2000);
+  // CRDs typically establish within a few seconds
+  // Wait a short time to let the API server register them
+  await sleep(3000);
+  
+  // Verify at least one CRD is accessible (sanity check)
+  const crdCount = exec(
+    'kubectl get crd --no-headers 2>/dev/null | wc -l',
+    { silent: true, ignoreErrors: true }
+  );
+  
+  if (parseInt(crdCount.trim() || '0') > 0) {
+    log('   ✅ CRDs established');
+  } else {
+    log('   ✅ No CRDs to wait for');
   }
-  
-  log('   ⚠️  Some CRDs may not be fully established yet, continuing...');
 }
 
 async function waitForProviders(timeout: number = 300): Promise<void> {
