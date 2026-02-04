@@ -278,10 +278,8 @@ function hashPassword(password: string): string {
 export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
-  public readonly redisSecret: kplus.Secret;
   public readonly serverSecret: kplus.Secret;
   public readonly appProject?: AppProject;
-  public readonly redisPassword: string;
   public readonly serverSecretKey: string;
   public readonly crossplanePasswordHash?: string;
 
@@ -301,8 +299,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
     // Keep local variable for backward compatibility within this file
     const namespaceName = this.namespaceName;
 
-    // Generate secrets
-    this.redisPassword = crypto.randomBytes(24).toString('base64');
+    // Generate server secret key
     this.serverSecretKey = crypto.randomBytes(32).toString('base64');
 
     // Handle crossplane user password hashing
@@ -315,17 +312,8 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       metadata: { name: namespaceName },
     });
 
-    // Create Redis secret
-    this.redisSecret = new kplus.Secret(this, 'redis-secret', {
-      metadata: {
-        name: 'argocd-redis',
-        namespace: namespaceName,
-      },
-      stringData: {
-        auth: this.redisPassword,
-        'redis-password': this.redisPassword,
-      },
-    });
+    // Note: Redis secret is managed by the Helm chart's redis-secret-init job
+    // to ensure password stability across synths
 
     // Build argocd-secret data
     const argocdSecretData: Record<string, string> = {
@@ -380,10 +368,6 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       },
       applicationSet: { tolerations: defaultTolerations },
       redis: {
-        auth: {
-          existingSecret: 'argocd-redis',
-          existingSecretPasswordKey: 'redis-password',
-        },
         tolerations: defaultTolerations,
       },
       dex: { tolerations: defaultTolerations },
