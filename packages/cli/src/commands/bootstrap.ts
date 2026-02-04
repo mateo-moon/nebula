@@ -4,7 +4,7 @@
  * 1. Create Kind cluster
  * 2. Setup GCP credentials
  * 3. Deploy bootstrap.ts to Kind (Crossplane, providers, infra)
- * 4. Wait for GKE cluster to be ready
+ * 4. Wait for GKE cluster to be ready (discovered from Crossplane resource)
  * 5. Deploy workloads to GKE
  */
 import { execSync } from 'node:child_process';
@@ -15,11 +15,15 @@ export interface BootstrapOptions {
   name?: string;
   project?: string;
   credentials?: string;
-  gkeCluster?: string;
-  gkeZone?: string;
   skipKind?: boolean;
   skipCredentials?: boolean;
   skipGke?: boolean;
+}
+
+interface GkeClusterInfo {
+  name: string;
+  location: string;
+  project: string;
 }
 
 function log(msg: string): void {
@@ -164,6 +168,62 @@ async function waitForProviders(timeoutSeconds: number): Promise<void> {
   log('   ⚠️  Some providers may not be fully healthy yet');
 }
 
+/**
+ * Discover GKE cluster info from Crossplane managed resources in Kind cluster
+ */
+function discoverGkeCluster(): GkeClusterInfo | null {
+  try {
+    // Get cluster name
+    const name = exec(
+      'kubectl get cluster.container.gcp.upbound.io -o jsonpath="{.items[0].metadata.name}" 2>/dev/null',
+      { silent: true }
+    ).trim();
+
+    if (!name) {
+      return null;
+    }
+
+    // Get cluster location (zone)
+    const location = exec(
+      'kubectl get cluster.container.gcp.upbound.io -o jsonpath="{.items[0].spec.forProvider.location}" 2>/dev/null',
+      { silent: true }
+    ).trim();
+
+    // Get project from spec
+    const project = exec(
+      'kubectl get cluster.container.gcp.upbound.io -o jsonpath="{.items[0].spec.forProvider.project}" 2>/dev/null',
+      { silent: true }
+    ).trim();
+
+    if (name && location) {
+      return { name, location, project };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForGkeClusterResource(timeoutSeconds: number): Promise<GkeClusterInfo> {
+  log('');
+  log('🔍 Discovering GKE cluster from Crossplane...');
+  log('─'.repeat(50));
+  
+  const start = Date.now();
+  
+  while ((Date.now() - start) < timeoutSeconds * 1000) {
+    const cluster = discoverGkeCluster();
+    if (cluster) {
+      log(`   Found cluster: ${cluster.name} in ${cluster.location}`);
+      return cluster;
+    }
+    
+    await sleep(5000);
+  }
+  
+  throw new Error('No GKE cluster resource found in Kind cluster');
+}
+
 async function waitForGke(project: string, clusterName: string, zone: string, timeoutSeconds: number): Promise<void> {
   log('');
   log('⏳ Step 4: Waiting for GKE cluster');
@@ -248,16 +308,17 @@ async function deployToGke(): Promise<void> {
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
   const clusterName = options.name || 'nebula';
-  const project = options.project || 'geometric-watch-472309-h6';
-  const gkeCluster = options.gkeCluster || 'dev-gke';
-  const gkeZone = options.gkeZone || 'europe-west3-a';
+  const project = options.project;
+
+  if (!project) {
+    throw new Error('GCP project ID is required. Use --project <id>');
+  }
 
   log('');
   log('🚀 Nebula Full Bootstrap');
   log('═'.repeat(50));
   log(`   Kind cluster: ${clusterName}`);
   log(`   GCP project: ${project}`);
-  log(`   GKE cluster: ${gkeCluster} (${gkeZone})`);
 
   // Check prerequisites
   if (!commandExists('kubectl')) {
@@ -280,12 +341,27 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
   // Step 3: Deploy bootstrap to Kind
   await deployToKind();
 
-  // Step 4: Wait for GKE cluster
+  // Step 4-6: GKE deployment
+  let gkeCluster: GkeClusterInfo | null = null;
+  
   if (!options.skipGke) {
-    await waitForGke(project, gkeCluster, gkeZone, 900); // 15 min timeout
+    // Discover GKE cluster from Crossplane resource
+    gkeCluster = await waitForGkeClusterResource(60);
+    
+    // Wait for GKE cluster to be ready
+    await waitForGke(
+      gkeCluster.project || project,
+      gkeCluster.name,
+      gkeCluster.location,
+      900 // 15 min timeout
+    );
 
     // Step 5: Switch to GKE
-    await switchToGke(project, gkeCluster, gkeZone);
+    await switchToGke(
+      gkeCluster.project || project,
+      gkeCluster.name,
+      gkeCluster.location
+    );
 
     // Step 6: Deploy workloads to GKE
     await deployToGke();
@@ -297,14 +373,14 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
   log('');
   log('📋 Clusters:');
   log(`   Kind (management): kind-${clusterName}`);
-  if (!options.skipGke) {
-    log(`   GKE (workloads): ${gkeCluster}`);
+  if (gkeCluster) {
+    log(`   GKE (workloads): ${gkeCluster.name}`);
   }
   log('');
   log('📋 Switch contexts:');
   log(`   Kind: kubectl config use-context kind-${clusterName}`);
-  if (!options.skipGke) {
-    log(`   GKE:  gcloud container clusters get-credentials ${gkeCluster} --zone ${gkeZone}`);
+  if (gkeCluster) {
+    log(`   GKE:  gcloud container clusters get-credentials ${gkeCluster.name} --zone ${gkeCluster.location} --project ${gkeCluster.project || project}`);
   }
   log('');
 }
