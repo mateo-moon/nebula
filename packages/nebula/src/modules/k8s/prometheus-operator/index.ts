@@ -219,6 +219,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
             retention_enabled: true,
             retention_delete_delay: '2h',
             retention_delete_worker_count: 150,
+            delete_request_store: 'filesystem',
           },
         },
         deploymentMode: 'SingleBinary',
