@@ -46,7 +46,46 @@ import {
   ManagedZone,
   ManagedZoneSpecDeletionPolicy,
 } from '#imports/dns.gcp.upbound.io';
+import {
+  ServiceAccountIamMember,
+} from '#imports/cloudplatform.gcp.upbound.io';
+import {
+  ProviderConfig as HttpProviderConfig,
+  ProviderConfigSpecCredentialsSource as HttpCredentialsSource,
+} from '#imports/http.crossplane.io';
 import { BaseConstruct } from '../../../core';
+
+/** 
+ * Workload Identity configuration for GKE clusters.
+ * 
+ * Uses conventions:
+ * - GSA: crossplane-provider@{project}.iam.gserviceaccount.com
+ * - KSA: provider-gcp-dns (requires GcpProvider with enableDeterministicServiceAccounts: true)
+ * 
+ * Prerequisites:
+ * - GcpProvider must be deployed with enableDeterministicServiceAccounts: true
+ * - The GSA must have roles/dns.admin permission
+ */
+export interface DnsGkeWorkloadIdentityConfig {
+  /** GCP project ID */
+  project: string;
+  /** 
+   * GCP Service Account email (optional).
+   * Default: crossplane-provider@{project}.iam.gserviceaccount.com
+   */
+  gcpServiceAccount?: string;
+  /**
+   * Provider name prefix (optional).
+   * Must match GcpProvider's name config.
+   * Default: 'provider-gcp'
+   */
+  providerNamePrefix?: string;
+  /** Namespace where Crossplane providers run (default: 'crossplane-system') */
+  providerNamespace?: string;
+}
+
+/** @deprecated Use DnsGkeWorkloadIdentityConfig instead */
+export type DnsWorkloadIdentityConfig = DnsGkeWorkloadIdentityConfig;
 
 export interface DnsCloudflareCompositionConfig {
   /** Name of the HTTP ProviderConfig to use for Cloudflare API calls (default: 'cloudflare-http') */
@@ -71,6 +110,16 @@ export interface DnsCloudflareCompositionConfig {
    * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/email'
    */
   cloudflareEmail?: string;
+  /**
+   * Workload Identity configuration for GKE.
+   * When provided, creates IAM bindings and KSA annotations for Crossplane DNS provider.
+   * Required when using injectedIdentity credentials on GKE.
+   * 
+   * Prerequisites:
+   * - GcpProvider must be deployed with enableDeterministicServiceAccounts: true
+   * - The GSA (default: crossplane-provider@{project}.iam.gserviceaccount.com) must have roles/dns.admin
+   */
+  workloadIdentity?: DnsGkeWorkloadIdentityConfig;
 }
 
 /**
@@ -83,7 +132,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
   public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
   public readonly secret?: kplus.Secret;
-  public readonly httpProviderConfig?: ApiObject;
+  public readonly httpProviderConfig?: HttpProviderConfig;
 
   constructor(scope: Construct, id: string, config: DnsCloudflareCompositionConfig = {}) {
     super(scope, id, config);
@@ -119,20 +168,58 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
       });
 
       // Create HTTP ProviderConfig that references the credentials secret
-      this.httpProviderConfig = new ApiObject(this, 'http-provider-config', {
-        apiVersion: 'http.crossplane.io/v1alpha1',
-        kind: 'ProviderConfig',
+      this.httpProviderConfig = new HttpProviderConfig(this, 'http-provider-config', {
         metadata: {
           name: httpProviderConfigName,
         },
         spec: {
           credentials: {
-            source: 'Secret',
+            source: HttpCredentialsSource.SECRET,
             secretRef: {
               name: cfSecretName,
               namespace: cfSecretNamespace,
               key: 'credentials',
             },
+          },
+        },
+      });
+    }
+
+    // Setup Workload Identity for Crossplane DNS provider (GKE only)
+    // This allows the provider-gcp-dns pod to authenticate using the specified GSA
+    if (this.config.workloadIdentity) {
+      const wi = this.config.workloadIdentity;
+      const providerNamespace = wi.providerNamespace ?? 'crossplane-system';
+      const providerNamePrefix = wi.providerNamePrefix ?? 'provider-gcp';
+      // Convention: KSA name matches DeploymentRuntimeConfig service account name
+      const providerKsaName = `${providerNamePrefix}-dns`;
+      // Convention: GSA follows project naming pattern
+      const gcpServiceAccount = wi.gcpServiceAccount ?? `crossplane-provider@${wi.project}.iam.gserviceaccount.com`;
+
+      // Create IAM binding: allow KSA to impersonate GSA
+      new ServiceAccountIamMember(this, 'dns-provider-wi', {
+        metadata: {
+          name: 'crossplane-dns-provider-wi',
+        },
+        spec: {
+          forProvider: {
+            serviceAccountId: `projects/${wi.project}/serviceAccounts/${gcpServiceAccount}`,
+            role: 'roles/iam.workloadIdentityUser',
+            member: `serviceAccount:${wi.project}.svc.id.goog[${providerNamespace}/${providerKsaName}]`,
+          },
+          providerConfigRef: {
+            name: gcpProviderConfig,
+          },
+        },
+      });
+
+      // Annotate the Crossplane DNS provider's KSA to use Workload Identity
+      new kplus.k8s.KubeServiceAccount(this, 'dns-provider-ksa', {
+        metadata: {
+          name: providerKsaName,
+          namespace: providerNamespace,
+          annotations: {
+            'iam.gke.io/gcp-service-account': gcpServiceAccount,
           },
         },
       });
