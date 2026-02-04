@@ -582,6 +582,8 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
               args: [`
 set -e
 echo "Installing dependencies..." >&2
+corepack enable
+corepack prepare pnpm@latest --activate
 pnpm install
 `],
             },
