@@ -17,11 +17,11 @@
  * @example
  * ```typescript
  * // First, deploy the XRD and Composition (one-time setup)
+ * // The cloudflareApiToken supports ref+sops:// for vals integration
  * new DnsCloudflareComposition(chart, 'dns-cloudflare-setup', {
+ *   gcpProviderConfigName: 'default',
  *   httpProviderConfigName: 'http-provider',
- *   gcpProviderConfigName: 'gcp-provider',
- *   cloudflareSecretName: 'cloudflare-api',
- *   cloudflareSecretNamespace: 'crossplane-system',
+ *   cloudflareApiToken: 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_token',
  * });
  * 
  * // Then, create zones using XR (Composite Resource)
@@ -56,6 +56,12 @@ export interface DnsCloudflareCompositionConfig {
   cloudflareSecretNamespace?: string;
   /** Key in the secret containing the API token (default: 'token') */
   cloudflareSecretKey?: string;
+  /** 
+   * Cloudflare API token value. If provided, creates the secret automatically.
+   * Supports ref+sops:// references for vals integration.
+   * @example 'ref+sops://../.secrets/secrets.yaml#cloudflare/api_token'
+   */
+  cloudflareApiToken?: string;
 }
 
 /**
@@ -67,6 +73,7 @@ export interface DnsCloudflareCompositionConfig {
 export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareCompositionConfig> {
   public readonly xrd: CompositeResourceDefinition;
   public readonly composition: Composition;
+  public readonly secret?: ApiObject;
 
   constructor(scope: Construct, id: string, config: DnsCloudflareCompositionConfig = {}) {
     super(scope, id, config);
@@ -76,6 +83,23 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     const cfSecretName = config.cloudflareSecretName ?? 'cloudflare-api';
     const cfSecretNamespace = config.cloudflareSecretNamespace ?? 'crossplane-system';
     const cfSecretKey = config.cloudflareSecretKey ?? 'token';
+
+    // Create Cloudflare API secret if token is provided
+    // Supports ref+sops:// references for vals integration
+    if (config.cloudflareApiToken) {
+      this.secret = new ApiObject(this, 'cloudflare-secret', {
+        apiVersion: 'v1',
+        kind: 'Secret',
+        metadata: {
+          name: cfSecretName,
+          namespace: cfSecretNamespace,
+        },
+        type: 'Opaque',
+        stringData: {
+          [cfSecretKey]: config.cloudflareApiToken,
+        },
+      });
+    }
 
     // Create the XRD (CompositeResourceDefinition)
     // Note: In Crossplane v2, claimNames is deprecated - use XR directly
