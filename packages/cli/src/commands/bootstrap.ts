@@ -1,35 +1,40 @@
 /**
- * Bootstrap command - Creates Kind cluster and sets up GCP credentials
+ * Bootstrap command - Full deployment workflow
  * 
- * Note: Crossplane should be deployed via generated manifests (nebula synth + apply)
- * rather than being installed separately by bootstrap.
+ * 1. Create Kind cluster
+ * 2. Setup GCP credentials
+ * 3. Deploy bootstrap.ts to Kind (Crossplane, providers, infra)
+ * 4. Wait for GKE cluster to be ready
+ * 5. Deploy workloads to GKE
  */
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as readline from 'node:readline';
 
 export interface BootstrapOptions {
   name?: string;
   project?: string;
   credentials?: string;
+  gkeCluster?: string;
+  gkeZone?: string;
   skipKind?: boolean;
   skipCredentials?: boolean;
+  skipGke?: boolean;
 }
 
 function log(msg: string): void {
   console.log(msg);
 }
 
-function exec(cmd: string, options?: { silent?: boolean }): string {
+function exec(cmd: string, options?: { silent?: boolean; ignoreErrors?: boolean }): string {
   try {
     return execSync(cmd, {
       encoding: 'utf-8',
       stdio: options?.silent ? ['pipe', 'pipe', 'pipe'] : 'inherit',
     });
   } catch (error: any) {
-    if (options?.silent) {
-      return '';
+    if (options?.silent || options?.ignoreErrors) {
+      return error.stdout || '';
     }
     throw error;
   }
@@ -53,22 +58,13 @@ function kindClusterExists(name: string): boolean {
   }
 }
 
-async function prompt(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function createKindCluster(name: string): Promise<void> {
   log('');
-  log('🐳 Creating Kind cluster');
+  log('🐳 Step 1: Creating Kind cluster');
   log('─'.repeat(50));
 
   if (!commandExists('kind')) {
@@ -83,7 +79,6 @@ async function createKindCluster(name: string): Promise<void> {
 
   log(`   Creating cluster '${name}'...`);
   
-  // Create Kind config for mounting gcloud credentials
   const kindConfig = `
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -102,22 +97,18 @@ nodes:
 
 async function setupGcpCredentials(project: string, credentialsPath?: string): Promise<void> {
   log('');
-  log('🔐 Setting up GCP credentials');
+  log('🔐 Step 2: Setting up GCP credentials');
   log('─'.repeat(50));
 
   let credsPath = credentialsPath;
 
-  // If no credentials path provided, try to find ADC
   if (!credsPath) {
     const adcPath = path.join(process.env.HOME || '', '.config/gcloud/application_default_credentials.json');
     if (fs.existsSync(adcPath)) {
       log(`   Found ADC at: ${adcPath}`);
       credsPath = adcPath;
     } else {
-      log('   No credentials file provided and ADC not found.');
-      log('   Run: gcloud auth application-default login');
-      log('   Or provide --credentials <path>');
-      return;
+      throw new Error('No credentials file provided and ADC not found. Run: gcloud auth application-default login');
     }
   }
 
@@ -125,40 +116,155 @@ async function setupGcpCredentials(project: string, credentialsPath?: string): P
     throw new Error(`Credentials file not found: ${credsPath}`);
   }
 
-  // Create secret in crossplane-system namespace
   log('   Creating GCP credentials secret...');
   exec('kubectl create namespace crossplane-system --dry-run=client -o yaml | kubectl apply -f -', { silent: true });
-  
-  // Delete existing secret if it exists
   exec('kubectl delete secret gcp-creds -n crossplane-system --ignore-not-found', { silent: true });
-  
-  // Create new secret
   exec(`kubectl create secret generic gcp-creds --from-file=creds=${credsPath} -n crossplane-system`);
 
   log(`   ✅ GCP credentials secret created`);
+}
+
+async function deployToKind(): Promise<void> {
   log('');
-  log('   Use this in your ProviderConfig:');
-  log(`   credentials: {`);
-  log(`     type: 'secret',`);
-  log(`     secretRef: {`);
-  log(`       name: 'gcp-creds',`);
-  log(`       namespace: 'crossplane-system',`);
-  log(`       key: 'creds',`);
-  log(`     },`);
-  log(`   }`);
+  log('📦 Step 3: Deploying bootstrap to Kind');
+  log('─'.repeat(50));
+
+  // Synth bootstrap.ts
+  log('   Synthesizing bootstrap.ts...');
+  exec('npx cdk8s synth --app "npx tsx bootstrap.ts"');
+
+  // Apply with phased approach
+  log('   Applying manifests...');
+  exec('npx nebula apply');
+
+  // Wait for providers to be healthy
+  log('   Waiting for Crossplane providers...');
+  await waitForProviders(300);
+
+  log(`   ✅ Bootstrap deployed to Kind`);
+}
+
+async function waitForProviders(timeoutSeconds: number): Promise<void> {
+  const start = Date.now();
+  
+  while ((Date.now() - start) < timeoutSeconds * 1000) {
+    const result = exec(
+      'kubectl get providers -o jsonpath="{.items[*].status.conditions[?(@.type==\'Healthy\')].status}" 2>/dev/null || echo ""',
+      { silent: true }
+    );
+    
+    const statuses = result.trim().split(' ').filter(s => s);
+    if (statuses.length > 0 && statuses.every(s => s === 'True')) {
+      return;
+    }
+    
+    await sleep(5000);
+  }
+  
+  log('   ⚠️  Some providers may not be fully healthy yet');
+}
+
+async function waitForGke(project: string, clusterName: string, zone: string, timeoutSeconds: number): Promise<void> {
+  log('');
+  log('⏳ Step 4: Waiting for GKE cluster');
+  log('─'.repeat(50));
+  log(`   Cluster: ${clusterName} in ${zone}`);
+  
+  const start = Date.now();
+  
+  while ((Date.now() - start) < timeoutSeconds * 1000) {
+    // Check Crossplane cluster status
+    const status = exec(
+      `kubectl get cluster.container.gcp.upbound.io ${clusterName} -o jsonpath="{.status.conditions[?(@.type=='Ready')].status}" 2>/dev/null || echo ""`,
+      { silent: true }
+    ).trim();
+    
+    if (status === 'True') {
+      log(`   ✅ GKE cluster is ready`);
+      return;
+    }
+    
+    // Also check directly with gcloud
+    const gcloudStatus = exec(
+      `gcloud container clusters describe ${clusterName} --zone ${zone} --project ${project} --format="value(status)" 2>/dev/null || echo ""`,
+      { silent: true }
+    ).trim();
+    
+    if (gcloudStatus === 'RUNNING') {
+      log(`   ✅ GKE cluster is running`);
+      return;
+    }
+    
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    log(`   Waiting... (${elapsed}s elapsed, status: ${gcloudStatus || 'PROVISIONING'})`);
+    
+    await sleep(30000);
+  }
+  
+  throw new Error(`GKE cluster did not become ready within ${timeoutSeconds} seconds`);
+}
+
+async function switchToGke(project: string, clusterName: string, zone: string): Promise<void> {
+  log('');
+  log('🔄 Step 5: Switching to GKE cluster');
+  log('─'.repeat(50));
+  
+  exec(`gcloud container clusters get-credentials ${clusterName} --zone ${zone} --project ${project}`);
+  
+  log(`   ✅ Now using GKE cluster: ${clusterName}`);
+}
+
+async function deployToGke(): Promise<void> {
+  log('');
+  log('📦 Step 6: Deploying workloads to GKE');
+  log('─'.repeat(50));
+
+  // List of GKE workload modules (everything except bootstrap)
+  const gkeModules = [
+    'providers.ts',
+    'crossplane.ts',
+    'cert-manager.ts',
+    'cluster-api.ts',
+    'ingress-nginx.ts',
+    'external-dns.ts',
+    'monitoring.ts',
+    'argocd.ts',
+  ];
+
+  // Synth each module
+  log('   Synthesizing GKE workloads...');
+  for (const module of gkeModules) {
+    if (fs.existsSync(module)) {
+      exec(`npx cdk8s synth --app "npx tsx ${module}"`, { silent: true });
+    }
+  }
+
+  // Apply with phased approach
+  log('   Applying manifests...');
+  exec('npx nebula apply');
+
+  log(`   ✅ Workloads deployed to GKE`);
 }
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
   const clusterName = options.name || 'nebula';
-  const project = options.project;
+  const project = options.project || 'geometric-watch-472309-h6';
+  const gkeCluster = options.gkeCluster || 'dev-gke';
+  const gkeZone = options.gkeZone || 'europe-west3-a';
 
   log('');
-  log('🚀 Nebula Bootstrap');
+  log('🚀 Nebula Full Bootstrap');
   log('═'.repeat(50));
+  log(`   Kind cluster: ${clusterName}`);
+  log(`   GCP project: ${project}`);
+  log(`   GKE cluster: ${gkeCluster} (${gkeZone})`);
 
   // Check prerequisites
   if (!commandExists('kubectl')) {
     throw new Error('kubectl is not installed');
+  }
+  if (!commandExists('gcloud')) {
+    throw new Error('gcloud is not installed');
   }
 
   // Step 1: Create Kind cluster
@@ -167,16 +273,38 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
   }
 
   // Step 2: Setup GCP credentials
-  if (!options.skipCredentials && (project || options.credentials)) {
-    await setupGcpCredentials(project || '', options.credentials);
+  if (!options.skipCredentials) {
+    await setupGcpCredentials(project, options.credentials);
+  }
+
+  // Step 3: Deploy bootstrap to Kind
+  await deployToKind();
+
+  // Step 4: Wait for GKE cluster
+  if (!options.skipGke) {
+    await waitForGke(project, gkeCluster, gkeZone, 900); // 15 min timeout
+
+    // Step 5: Switch to GKE
+    await switchToGke(project, gkeCluster, gkeZone);
+
+    // Step 6: Deploy workloads to GKE
+    await deployToGke();
   }
 
   log('');
   log('═'.repeat(50));
   log('✨ Bootstrap complete!');
   log('');
-  log('📋 Next steps:');
-  log('   1. Run: nebula synth --app main.ts');
-  log('   2. Run: nebula apply');
+  log('📋 Clusters:');
+  log(`   Kind (management): kind-${clusterName}`);
+  if (!options.skipGke) {
+    log(`   GKE (workloads): ${gkeCluster}`);
+  }
+  log('');
+  log('📋 Switch contexts:');
+  log(`   Kind: kubectl config use-context kind-${clusterName}`);
+  if (!options.skipGke) {
+    log(`   GKE:  gcloud container clusters get-credentials ${gkeCluster} --zone ${gkeZone}`);
+  }
   log('');
 }

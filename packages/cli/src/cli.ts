@@ -25,12 +25,15 @@ program
 
 program
   .command('bootstrap')
-  .description('Create Kind cluster and setup GCP credentials')
+  .description('Full deployment: Kind → Crossplane → GKE → Workloads')
   .option('-n, --name <name>', 'Kind cluster name', 'nebula')
   .option('-p, --project <project>', 'GCP project ID')
   .option('-c, --credentials <path>', 'Path to GCP credentials JSON file')
-  .option('--skip-kind', 'Skip Kind cluster creation (use existing cluster)')
+  .option('--gke-cluster <name>', 'GKE cluster name', 'dev-gke')
+  .option('--gke-zone <zone>', 'GKE cluster zone', 'europe-west3-a')
+  .option('--skip-kind', 'Skip Kind cluster creation')
   .option('--skip-credentials', 'Skip GCP credentials setup')
+  .option('--skip-gke', 'Skip GKE deployment (Kind only)')
   .action(async (opts: BootstrapOptions) => {
     try {
       await bootstrap(opts);
