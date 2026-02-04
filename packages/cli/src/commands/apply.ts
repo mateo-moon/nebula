@@ -144,6 +144,14 @@ function isCrossplaneProvider(resource: K8sResource): boolean {
   );
 }
 
+function isDeploymentRuntimeConfig(resource: K8sResource): boolean {
+  // DeploymentRuntimeConfig must be applied BEFORE Providers that reference them
+  return (
+    resource.apiVersion.includes('pkg.crossplane.io') &&
+    resource.kind === 'DeploymentRuntimeConfig'
+  );
+}
+
 function isProviderConfig(resource: K8sResource): boolean {
   return resource.kind === 'ProviderConfig';
 }
@@ -289,6 +297,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
 
   // Group resources by phase
   const phase1: K8sResource[] = []; // CRDs, Namespaces
+  const runtimeConfigs: K8sResource[] = []; // DeploymentRuntimeConfigs (must be before providers)
   const providers: K8sResource[] = []; // Crossplane Providers
   const phase2: K8sResource[] = []; // Operators, Deployments, Services
   const providerConfigs: K8sResource[] = []; // ProviderConfigs
@@ -297,6 +306,8 @@ export async function apply(options: ApplyOptions): Promise<void> {
   for (const resource of allResources) {
     if (isPhase1Resource(resource)) {
       phase1.push(resource);
+    } else if (isDeploymentRuntimeConfig(resource)) {
+      runtimeConfigs.push(resource);
     } else if (isCrossplaneProvider(resource)) {
       providers.push(resource);
     } else if (isProviderConfig(resource)) {
@@ -310,6 +321,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
 
   log(`   Phase 1: ${phase1.length} CRDs/Namespaces`);
   log(`   Phase 2: ${phase2.length} Operators/Services`);
+  log(`   RuntimeConfigs: ${runtimeConfigs.length} DeploymentRuntimeConfigs`);
   log(`   Providers: ${providers.length} Crossplane Providers`);
   log(`   ProviderConfigs: ${providerConfigs.length} Provider Configs`);
   log(`   Phase 3: ${phase3.length} Custom Resources`);
@@ -349,7 +361,16 @@ export async function apply(options: ApplyOptions): Promise<void> {
       }
     }
 
-    // Apply Crossplane Providers (after Crossplane controller is running)
+    // Apply DeploymentRuntimeConfigs (must be before Providers that reference them)
+    if (runtimeConfigs.length > 0) {
+      log('');
+      log('📦 Applying DeploymentRuntimeConfigs...');
+      const runtimeConfigsFile = path.join(tempDir, 'runtimeconfigs.yaml');
+      writeResourcesAsYaml(runtimeConfigs, runtimeConfigsFile);
+      exec(`kubectl apply --server-side --force-conflicts -f ${runtimeConfigsFile} ${dryRunFlag}`);
+    }
+
+    // Apply Crossplane Providers (after Crossplane controller is running and RuntimeConfigs exist)
     if (providers.length > 0) {
       log('');
       log('📦 Applying Crossplane Providers...');
