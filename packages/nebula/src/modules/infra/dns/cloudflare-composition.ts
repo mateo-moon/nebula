@@ -24,8 +24,8 @@
  *   cloudflareSecretNamespace: 'crossplane-system',
  * });
  * 
- * // Then, create zones using claims
- * new DnsZoneCloudflareClaim(chart, 'my-zone', {
+ * // Then, create zones using XR (Composite Resource)
+ * new DnsZoneCloudflare(chart, 'my-zone', {
  *   dnsName: 'sub.example.com',
  *   project: 'my-gcp-project',
  *   cloudflareZoneId: 'abc123',
@@ -78,6 +78,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     const cfSecretKey = config.cloudflareSecretKey ?? 'token';
 
     // Create the XRD (CompositeResourceDefinition)
+    // Note: In Crossplane v2, claimNames is deprecated - use XR directly
     this.xrd = new CompositeResourceDefinition(this, 'xrd', {
       metadata: {
         name: 'xdnszonecloudflares.nebula.io',
@@ -88,10 +89,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           kind: 'XDnsZoneCloudflare',
           plural: 'xdnszonecloudflares',
         },
-        claimNames: {
-          kind: 'DnsZoneCloudflare',
-          plural: 'dnszonecloudflares',
-        },
+        // claimNames removed - Crossplane v2 uses XRs directly (cluster-scoped)
         versions: [{
           name: 'v1alpha1',
           served: true,
@@ -341,9 +339,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
 }
 
 /**
- * Configuration for a DNS zone with Cloudflare delegation claim
+ * Configuration for a DNS zone with Cloudflare delegation (Composite Resource)
  */
-export interface DnsZoneCloudflareClaimConfig {
+export interface DnsZoneCloudflareConfig {
   /** DNS name for the zone (e.g., sub.example.com) */
   dnsName: string;
   /** GCP project ID */
@@ -354,28 +352,29 @@ export interface DnsZoneCloudflareClaimConfig {
   description?: string;
   /** TTL for NS records (default: 3600) */
   ttl?: number;
-  /** Namespace for the claim (default: 'default') */
-  namespace?: string;
 }
 
 /**
- * Creates a claim for a DNS zone with automatic Cloudflare delegation.
+ * Creates an XR (Composite Resource) for a DNS zone with automatic Cloudflare delegation.
+ * 
+ * In Crossplane v2, Claims are deprecated. This creates the XR directly (cluster-scoped).
  * 
  * Prerequisites: DnsCloudflareComposition must be deployed first.
  */
-export class DnsZoneCloudflareClaim extends Construct {
-  public readonly claim: ApiObject;
+export class DnsZoneCloudflare extends Construct {
+  public readonly xr: ApiObject;
 
-  constructor(scope: Construct, id: string, config: DnsZoneCloudflareClaimConfig) {
+  constructor(scope: Construct, id: string, config: DnsZoneCloudflareConfig) {
     super(scope, id);
 
-    // Create the claim using ApiObject since it's a custom resource
-    this.claim = new ApiObject(this, 'claim', {
+    // Create the XR (Composite Resource) directly - Crossplane v2 approach
+    // XRs are cluster-scoped (no namespace)
+    this.xr = new ApiObject(this, 'xr', {
       apiVersion: 'nebula.io/v1alpha1',
-      kind: 'DnsZoneCloudflare',
+      kind: 'XDnsZoneCloudflare',
       metadata: {
         name: id,
-        namespace: config.namespace ?? 'default',
+        // No namespace - XRs are cluster-scoped in Crossplane v2
       },
       spec: {
         dnsName: config.dnsName,

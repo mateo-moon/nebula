@@ -25,14 +25,14 @@ export type {
   ManualDelegationConfig,
 } from './delegation';
 
-// Re-export Cloudflare Composition classes
+// Re-export Cloudflare Composition classes (Crossplane v2)
 export {
   DnsCloudflareComposition,
-  DnsZoneCloudflareClaim,
+  DnsZoneCloudflare,
 } from './cloudflare-composition';
 export type {
   DnsCloudflareCompositionConfig,
-  DnsZoneCloudflareClaimConfig,
+  DnsZoneCloudflareConfig,
 } from './cloudflare-composition';
 
 export interface DnsZoneConfig {
