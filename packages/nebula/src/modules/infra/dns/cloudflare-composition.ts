@@ -267,9 +267,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                       description: 'Description for the DNS zone',
                     },
                     ttl: {
-                      type: 'integer',
-                      description: 'TTL for NS records (default: 3600)',
-                      default: 3600,
+                      type: 'string',
+                      description: 'TTL for NS records (default: "3600")',
+                      default: '3600',
                     },
                   },
                 },
@@ -466,20 +466,14 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           }],
         },
         // Combine DNS name and nameserver into JSON body (now in mappings[0].body)
-        // Note: TTL needs to be converted to string for the fmt %s to work correctly
+        // TTL is a string in the XRD to avoid fmt conversion issues
         {
           type: 'CombineFromComposite',
           combine: {
             variables: [
               { fromFieldPath: 'spec.dnsName' },
               { fromFieldPath: `status.nameServers[${index}]` },
-              {
-                fromFieldPath: 'spec.ttl',
-                transforms: [{
-                  type: 'convert',
-                  convert: { toType: 'string' },
-                }],
-              },
+              { fromFieldPath: 'spec.ttl' },
             ],
             strategy: 'string',
             string: { fmt: '{"type":"NS","name":"%s","content":"%s","ttl":%s}' },
@@ -504,8 +498,8 @@ export interface DnsZoneCloudflareConfig {
   cloudflareZoneId: string;
   /** Description for the DNS zone */
   description?: string;
-  /** TTL for NS records (default: 3600) */
-  ttl?: number;
+  /** TTL for NS records (default: "3600") */
+  ttl?: string;
 }
 
 /**
@@ -535,7 +529,7 @@ export class DnsZoneCloudflare extends Construct {
         project: config.project,
         cloudflareZoneId: config.cloudflareZoneId,
         description: config.description ?? `DNS zone for ${config.dnsName}`,
-        ttl: config.ttl ?? 3600,
+        ttl: config.ttl ?? '3600',
       },
     });
   }
