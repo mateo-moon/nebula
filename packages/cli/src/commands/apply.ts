@@ -287,11 +287,12 @@ export async function apply(options: ApplyOptions): Promise<void> {
 
   try {
     // Phase 1: CRDs and Namespaces
+    // Use --server-side for CRDs to avoid annotation size limits (>262KB)
     if (phase1.length > 0) {
       log('📦 Phase 1: Applying CRDs and Namespaces...');
       const phase1File = path.join(tempDir, 'phase1.yaml');
       writeResourcesAsYaml(phase1, phase1File);
-      exec(`kubectl apply -f ${phase1File} ${dryRunFlag}`, { ignoreErrors: true });
+      exec(`kubectl apply --server-side --force-conflicts -f ${phase1File} ${dryRunFlag}`, { ignoreErrors: true });
       
       if (!dryRun) {
         await waitForCrds(60);
@@ -305,7 +306,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Phase 2: Applying Operators and Services...');
       const phase2File = path.join(tempDir, 'phase2.yaml');
       writeResourcesAsYaml(phase2, phase2File);
-      exec(`kubectl apply -f ${phase2File} ${dryRunFlag}`, { ignoreErrors: true });
+      exec(`kubectl apply --server-side --force-conflicts -f ${phase2File} ${dryRunFlag}`, { ignoreErrors: true });
       
       if (!dryRun) {
         // Wait for operators to create their CRDs (Crossplane creates Provider CRD)
@@ -321,7 +322,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Applying Crossplane Providers...');
       const providersFile = path.join(tempDir, 'providers.yaml');
       writeResourcesAsYaml(providers, providersFile);
-      exec(`kubectl apply -f ${providersFile} ${dryRunFlag}`);
+      exec(`kubectl apply --server-side --force-conflicts -f ${providersFile} ${dryRunFlag}`);
       
       if (!dryRun) {
         await waitForProviders(300);
@@ -334,7 +335,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Applying ProviderConfigs...');
       const configsFile = path.join(tempDir, 'providerconfigs.yaml');
       writeResourcesAsYaml(providerConfigs, configsFile);
-      exec(`kubectl apply -f ${configsFile} ${dryRunFlag}`, { ignoreErrors: true });
+      exec(`kubectl apply --server-side --force-conflicts -f ${configsFile} ${dryRunFlag}`, { ignoreErrors: true });
     }
 
     // Phase 3: Custom Resources
@@ -345,13 +346,13 @@ export async function apply(options: ApplyOptions): Promise<void> {
       writeResourcesAsYaml(phase3, phase3File);
       
       // Try to apply, may fail for some CRs if CRDs not ready
-      exec(`kubectl apply -f ${phase3File} ${dryRunFlag}`, { ignoreErrors: true });
+      exec(`kubectl apply --server-side --force-conflicts -f ${phase3File} ${dryRunFlag}`, { ignoreErrors: true });
       
       if (!dryRun) {
         // Retry after waiting for any remaining CRDs
         log('   Retrying failed resources...');
         await sleep(10000);
-        exec(`kubectl apply -f ${phase3File} ${dryRunFlag}`, { ignoreErrors: true });
+        exec(`kubectl apply --server-side --force-conflicts -f ${phase3File} ${dryRunFlag}`, { ignoreErrors: true });
       }
     }
 
