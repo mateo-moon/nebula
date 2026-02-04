@@ -404,13 +404,16 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    * 
    * Authentication is handled via ProviderConfig which injects headers from the credentials secret.
    * 
-   * Note: provider-http v1.0.3 uses `mappings[]` array instead of direct `url` field.
+   * Note: provider-http v1.0.3+ v1alpha2 API requires both:
+   * - mappings[] array with method, url, body
+   * - payload object (can be empty but must exist)
    */
   private createCloudflareNsResource(
     index: number,
     httpProviderConfigName: string,
   ): object {
-    // HTTP provider v1.0.3+ Request manifest using mappings[] array
+    // HTTP provider v1.0.3+ Request manifest using v1alpha2 API
+    // Both mappings and payload are required fields
     // Headers are injected from ProviderConfig credentials
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
@@ -426,6 +429,11 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
               body: '{}',
             },
           ],
+          // payload is required by the v1alpha2 schema (can be empty)
+          payload: {
+            baseUrl: '',
+            body: '',
+          },
         },
         providerConfigRef: {
           name: httpProviderConfigName,
@@ -458,13 +466,20 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           }],
         },
         // Combine DNS name and nameserver into JSON body (now in mappings[0].body)
+        // Note: TTL needs to be converted to string for the fmt %s to work correctly
         {
           type: 'CombineFromComposite',
           combine: {
             variables: [
               { fromFieldPath: 'spec.dnsName' },
               { fromFieldPath: `status.nameServers[${index}]` },
-              { fromFieldPath: 'spec.ttl' },
+              {
+                fromFieldPath: 'spec.ttl',
+                transforms: [{
+                  type: 'convert',
+                  convert: { toType: 'string' },
+                }],
+              },
             ],
             strategy: 'string',
             string: { fmt: '{"type":"NS","name":"%s","content":"%s","ttl":%s}' },
