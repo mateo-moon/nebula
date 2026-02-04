@@ -175,6 +175,7 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
 
     this.helm = new Helm(this, 'helm', {
       chart: 'ingress-nginx',
+      releaseName: 'ingress-nginx',
       repo: this.config.repository ?? 'https://kubernetes.github.io/ingress-nginx',
       version: this.config.version ?? '4.14.3',
       namespace: namespaceName,

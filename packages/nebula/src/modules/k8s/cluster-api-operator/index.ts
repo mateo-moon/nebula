@@ -94,6 +94,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
 
     this.helm = new Helm(this, 'helm', {
       chart: 'cluster-api-operator',
+      releaseName: 'capi-operator',
       repo: this.config.repository ?? 'https://kubernetes-sigs.github.io/cluster-api-operator',
       version: this.config.version ?? '0.25.0',
       namespace: namespaceName,

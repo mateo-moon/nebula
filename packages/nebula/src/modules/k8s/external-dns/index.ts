@@ -216,6 +216,7 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
 
     this.helm = new Helm(this, 'helm', {
       chart: 'external-dns',
+      releaseName: 'external-dns',
       repo: this.config.repository ?? 'https://kubernetes-sigs.github.io/external-dns/',
       ...(this.config.version ? { version: this.config.version } : {}),
       namespace: namespaceName,

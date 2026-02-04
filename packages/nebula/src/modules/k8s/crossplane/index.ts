@@ -80,6 +80,7 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
 
     this.helm = new Helm(this, 'helm', {
       chart: 'crossplane',
+      releaseName: 'crossplane',
       repo: this.config.repository ?? 'https://charts.crossplane.io/stable',
       version: this.config.version ?? '2.1.3',
       namespace: this.namespaceName,

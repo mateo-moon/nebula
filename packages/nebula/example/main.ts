@@ -57,26 +57,19 @@ new Gcp(chart, 'nebula', {
       maxNodes: 2,
       spot: true,
     },
-    nodePools: {
-      argocd: {
-        imageType: 'UBUNTU_CONTAINERD',
-        machineType: 'e2-standard-8',  // 8 vCPU, 32GB RAM - best value for bursty workloads
-        diskSizeGb: 100,
-        minNodes: 1,
-        maxNodes: 1,
-        spot: true,
-        labels: {
-          'workload': 'argocd',
-        },
-        taints: [
-          {
-            key: 'workload',
-            value: 'argocd',
-            effect: 'NO_SCHEDULE',
-          },
-        ],
-      },
-    },
+    // Optional: dedicated node pools for specific workloads
+    // nodePools: {
+    //   argocd: {
+    //     imageType: 'UBUNTU_CONTAINERD',
+    //     machineType: 'e2-standard-8',
+    //     diskSizeGb: 100,
+    //     minNodes: 1,
+    //     maxNodes: 1,
+    //     spot: true,
+    //     labels: { 'workload': 'argocd' },
+    //     taints: [{ key: 'workload', value: 'argocd', effect: 'NO_SCHEDULE' }],
+    //   },
+    // },
   },
 
   iam: {
@@ -261,9 +254,9 @@ new ArgoCd(chart, 'argocd', {
       env: [
         { name: 'ARGOCD_EXEC_TIMEOUT', value: '5m' },
       ],
-      // Schedule repo-server on dedicated argocd node
-      nodeSelector: { 'workload': 'argocd' },
-      tolerations: [{ key: 'workload', value: 'argocd', effect: 'NoSchedule' }],
+      // For dedicated node pools, uncomment:
+      // nodeSelector: { 'workload': 'argocd' },
+      // tolerations: [{ key: 'workload', value: 'argocd', effect: 'NoSchedule' }],
     },
     configs: {
       params: {

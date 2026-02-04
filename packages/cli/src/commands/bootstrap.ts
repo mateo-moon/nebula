@@ -1,5 +1,8 @@
 /**
- * Bootstrap command - Creates Kind cluster, installs Crossplane, and sets up GCP credentials
+ * Bootstrap command - Creates Kind cluster and sets up GCP credentials
+ * 
+ * Note: Crossplane should be deployed via generated manifests (nebula synth + apply)
+ * rather than being installed separately by bootstrap.
  */
 import { execSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -11,7 +14,6 @@ export interface BootstrapOptions {
   project?: string;
   credentials?: string;
   skipKind?: boolean;
-  skipCrossplane?: boolean;
   skipCredentials?: boolean;
 }
 
@@ -98,40 +100,6 @@ nodes:
   log(`   ✅ Cluster '${name}' created`);
 }
 
-async function installCrossplane(): Promise<void> {
-  log('');
-  log('⚙️  Installing Crossplane');
-  log('─'.repeat(50));
-
-  if (!commandExists('helm')) {
-    throw new Error('helm is not installed. Install it with: brew install helm');
-  }
-
-  // Add Crossplane Helm repo
-  log('   Adding Crossplane Helm repo...');
-  exec('helm repo add crossplane-stable https://charts.crossplane.io/stable', { silent: true });
-  exec('helm repo update', { silent: true });
-
-  // Check if Crossplane is already installed
-  const installed = exec('helm list -n crossplane-system -q 2>/dev/null || true', { silent: true });
-  if (installed.includes('crossplane')) {
-    log('   ✅ Crossplane is already installed');
-    return;
-  }
-
-  // Install Crossplane
-  log('   Installing Crossplane...');
-  exec('kubectl create namespace crossplane-system --dry-run=client -o yaml | kubectl apply -f -', { silent: true });
-  exec('helm install crossplane crossplane-stable/crossplane --namespace crossplane-system --wait');
-
-  // Wait for Crossplane to be ready
-  log('   Waiting for Crossplane to be ready...');
-  exec('kubectl wait --for=condition=available deployment/crossplane --namespace crossplane-system --timeout=120s');
-  exec('kubectl wait --for=condition=available deployment/crossplane-rbac-manager --namespace crossplane-system --timeout=120s');
-
-  log('   ✅ Crossplane installed');
-}
-
 async function setupGcpCredentials(project: string, credentialsPath?: string): Promise<void> {
   log('');
   log('🔐 Setting up GCP credentials');
@@ -198,12 +166,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
     await createKindCluster(clusterName);
   }
 
-  // Step 2: Install Crossplane
-  if (!options.skipCrossplane) {
-    await installCrossplane();
-  }
-
-  // Step 3: Setup GCP credentials
+  // Step 2: Setup GCP credentials
   if (!options.skipCredentials && (project || options.credentials)) {
     await setupGcpCredentials(project || '', options.credentials);
   }
@@ -213,8 +176,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
   log('✨ Bootstrap complete!');
   log('');
   log('📋 Next steps:');
-  log('   1. Update test/main.ts with your GCP project ID');
-  log('   2. Run: pnpm run test:synth');
-  log('   3. Run: kubectl apply -f dist/');
+  log('   1. Run: nebula synth --app main.ts');
+  log('   2. Run: nebula apply');
   log('');
 }
