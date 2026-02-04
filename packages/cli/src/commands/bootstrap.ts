@@ -285,6 +285,7 @@ async function deployToGke(): Promise<void> {
     'providers',
     'crossplane',
     'infra',
+    'dns',
     'cert-manager',
     'cluster-api',
     'ingress-nginx',
