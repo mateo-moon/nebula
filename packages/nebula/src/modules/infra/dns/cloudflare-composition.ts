@@ -404,36 +404,45 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    * 
    * Authentication is handled via ProviderConfig which injects headers from the credentials secret.
    * 
-   * Note: provider-http v1.0.3+ v1alpha2 API requires both:
-   * - mappings[] array with method, url, body
-   * - payload object (can be empty but must exist)
+   * Note: provider-http v1.0.3+ v1alpha2 API uses:
+   * - payload: contains the actual data (baseUrl, body)
+   * - mappings: defines actions with JQ expressions referencing .payload
    */
   private createCloudflareNsResource(
     index: number,
     httpProviderConfigName: string,
   ): object {
     // HTTP provider v1.0.3+ Request manifest using v1alpha2 API
-    // Both mappings and payload are required fields
-    // Headers are injected from ProviderConfig credentials
+    // payload contains the actual data, mappings use JQ to reference it
     const httpRequestBase = {
       apiVersion: 'http.crossplane.io/v1alpha2',
       kind: 'Request',
       spec: {
         forProvider: {
-          // mappings array - each element is a request to make
-          // URL and body will be patched from XR
+          // payload contains the actual request data
+          payload: {
+            baseUrl: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
+            body: '{}',
+          },
+          // mappings define how to CREATE/OBSERVE/REMOVE using JQ expressions
           mappings: [
             {
-              method: 'POST',
-              url: 'https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records',
-              body: '{}',
+              action: 'CREATE',
+              url: '.payload.baseUrl',
+              body: '.payload.body',
+            },
+            {
+              action: 'OBSERVE',
+              method: 'GET',
+              // After creation, we'd need the record ID - for now just observe via POST url
+              url: '.payload.baseUrl',
+            },
+            {
+              action: 'REMOVE',
+              method: 'DELETE',
+              url: '.payload.baseUrl',
             },
           ],
-          // payload is required by the v1alpha2 schema (can be empty)
-          payload: {
-            baseUrl: '',
-            body: '',
-          },
         },
         providerConfigRef: {
           name: httpProviderConfigName,
@@ -455,17 +464,17 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             string: { type: 'Format', fmt: `%s-cf-ns-${index}` },
           }],
         },
-        // Patch URL with Cloudflare zone ID (now in mappings[0].url)
+        // Patch baseUrl with Cloudflare zone ID
         {
           type: 'FromCompositeFieldPath',
           fromFieldPath: 'spec.cloudflareZoneId',
-          toFieldPath: 'spec.forProvider.mappings[0].url',
+          toFieldPath: 'spec.forProvider.payload.baseUrl',
           transforms: [{
             type: 'string',
             string: { type: 'Format', fmt: 'https://api.cloudflare.com/client/v4/zones/%s/dns_records' },
           }],
         },
-        // Combine DNS name and nameserver into JSON body (now in mappings[0].body)
+        // Combine DNS name and nameserver into JSON body in payload
         // TTL is a string in the XRD to avoid fmt conversion issues
         {
           type: 'CombineFromComposite',
@@ -478,7 +487,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             strategy: 'string',
             string: { fmt: '{"type":"NS","name":"%s","content":"%s","ttl":%s}' },
           },
-          toFieldPath: 'spec.forProvider.mappings[0].body',
+          toFieldPath: 'spec.forProvider.payload.body',
           policy: { fromFieldPath: 'Required' },
         },
       ],
