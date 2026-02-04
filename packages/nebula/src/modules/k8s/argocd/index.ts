@@ -583,17 +583,34 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
 set -e
 echo "Installing dependencies..." >&2
 
-# Enable corepack for pnpm support (comes with Node.js)
-corepack enable 2>/dev/null || true
+# Find directory with package.json (may be in parent for monorepo subdirs)
+PKG_DIR="."
+for d in . .. ../.. ../../..; do
+  if [ -f "$d/package.json" ]; then
+    PKG_DIR="$d"
+    break
+  fi
+done
+cd "$PKG_DIR"
 
-# Install project dependencies using npx pnpm (no global install needed)
-npx pnpm install --frozen-lockfile 2>/dev/null || npx pnpm install
+# Install project dependencies
+npm install 2>/dev/null || npm install
 `],
             },
             generate: {
               command: ['/bin/sh', '-c'],
               args: [`
 set -e
+
+# Find directory with package.json (may be in parent for monorepo subdirs)
+PKG_DIR="."
+for d in . .. ../.. ../../..; do
+  if [ -f "$d/package.json" ]; then
+    PKG_DIR="$d"
+    break
+  fi
+done
+cd "$PKG_DIR"
 
 # Clear previous output
 rm -rf dist
