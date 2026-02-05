@@ -580,9 +580,12 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
             init: {
               command: ['/bin/sh', '-c'],
               args: [`
-echo "Installing dependencies in $(pwd)..." >&2
+echo "Current dir: $(pwd)" >&2
 echo "Contents: $(ls -la)" >&2
-pnpm install 2>&1 || { echo "pnpm failed with $?"; exit 1; }
+echo "Parent contents: $(ls -la ..)" >&2
+echo "Looking for package.json..." >&2
+cd .. && ls -la >&2
+pnpm install 2>&1 || { echo "pnpm failed"; exit 1; }
 `],
             },
             generate: {
