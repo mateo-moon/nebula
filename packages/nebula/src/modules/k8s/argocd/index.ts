@@ -580,12 +580,9 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
             init: {
               command: ['/bin/sh', '-c'],
               args: [`
-echo "Current dir: $(pwd)" >&2
-echo "Contents: $(ls -la)" >&2
-echo "Parent contents: $(ls -la ..)" >&2
-echo "Looking for package.json..." >&2
-cd .. && ls -la >&2
-pnpm install 2>&1 || { echo "pnpm failed"; exit 1; }
+set -e
+echo "Installing dependencies in $(pwd)..." >&2
+pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
 `],
             },
             generate: {
@@ -593,39 +590,22 @@ pnpm install 2>&1 || { echo "pnpm failed"; exit 1; }
               args: [`
 set -e
 
-# Clear previous output
-rm -rf dist
-
-# Determine entry file based on ArgoCD application name
-# Can be overridden via ARGOCD_ENV_ENTRY_FILE
 ENTRY="\${ARGOCD_ENV_ENTRY_FILE:-}"
 
 if [ -z "$ENTRY" ]; then
-  # Use ArgoCD app name to find the entry file
-  if [ -n "\${ARGOCD_APP_NAME:-}" ]; then
-    ENTRY="\${ARGOCD_APP_NAME}.ts"
-  fi
+  echo "ERROR: ARGOCD_ENV_ENTRY_FILE not set" >&2
+  exit 1
 fi
 
-# Fallback to common entry points if app-specific file not found
-if [ -z "$ENTRY" ] || [ ! -f "$ENTRY" ]; then
-  for f in index.ts main.ts; do
-    if [ -f "$f" ]; then
-      ENTRY="$f"
-      break
-    fi
-  done
-fi
-
-if [ -z "$ENTRY" ] || [ ! -f "$ENTRY" ]; then
-  echo "ERROR: Entry file not found. Tried \${ARGOCD_APP_NAME:-<no app name>}.ts and common entry points." >&2
+if [ ! -f "$ENTRY" ]; then
+  echo "ERROR: Entry file not found: $ENTRY" >&2
   exit 1
 fi
 
 echo "Running cdk8s synth for $ENTRY..." >&2
-npx cdk8s synth --app "npx tsx $ENTRY" >&2
+rm -rf dist
+npx cdk8s synth --app "npx tsx $ENTRY" 2>&1
 
-# Output all generated YAML manifests
 for f in $(find dist -name "*.yaml" -type f | sort); do
   echo "---"
   cat "$f"
