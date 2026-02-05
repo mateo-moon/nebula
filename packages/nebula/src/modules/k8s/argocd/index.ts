@@ -580,9 +580,9 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
             init: {
               command: ['/bin/sh', '-c'],
               args: [`
-set -e
-echo "Installing dependencies..." >&2
-pnpm install 2>&1
+echo "Installing dependencies in $(pwd)..." >&2
+echo "Contents: $(ls -la)" >&2
+pnpm install 2>&1 || { echo "pnpm failed with $?"; exit 1; }
 `],
             },
             generate: {
