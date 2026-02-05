@@ -582,7 +582,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
               args: [`
 set -e
 echo "Installing dependencies..." >&2
-pnpm install
+pnpm install 2>&1
 `],
             },
             generate: {
