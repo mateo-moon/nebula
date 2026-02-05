@@ -581,31 +581,35 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
               command: ['/bin/sh', '-c'],
               args: [`
 set -e
+mkdir -p /tmp/bin
+export PATH="/tmp/bin:$PATH"
+echo "Installing helm..." >&2
+wget -qO- https://get.helm.sh/helm-v3.17.0-linux-amd64.tar.gz | tar xz -C /tmp >&2
+mv /tmp/linux-amd64/helm /tmp/bin/helm
+echo "Installing vals..." >&2
+VALS_VERSION=\${VALS_VERSION:-0.40.2}
+wget -qO- "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" | tar xz -C /tmp/bin vals >&2
 echo "Installing dependencies in $(pwd)..." >&2
-pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
+pnpm install --frozen-lockfile 2>&1 >&2 || pnpm install 2>&1 >&2
 `],
             },
             generate: {
               command: ['/bin/sh', '-c'],
               args: [`
 set -e
-
+export PATH="/tmp/bin:$PATH"
 ENTRY="\${ARGOCD_ENV_ENTRY_FILE:-}"
-
 if [ -z "$ENTRY" ]; then
   echo "ERROR: ARGOCD_ENV_ENTRY_FILE not set" >&2
   exit 1
 fi
-
 if [ ! -f "$ENTRY" ]; then
   echo "ERROR: Entry file not found: $ENTRY" >&2
   exit 1
 fi
-
 echo "Running cdk8s synth for $ENTRY..." >&2
 rm -rf dist
-npx cdk8s synth --app "npx tsx $ENTRY" 2>&1
-
+npx cdk8s synth --app "npx tsx $ENTRY" >&2
 for f in $(find dist -name "*.yaml" -type f | sort); do
   echo "---"
   cat "$f"
