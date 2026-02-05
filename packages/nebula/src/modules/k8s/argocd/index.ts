@@ -458,7 +458,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
    */
   private setupNebulaPlugin(chartValues: Record<string, unknown>, namespaceName: string): void {
     const pluginConfig = this.config.nebulaPlugin!;
-    const pluginImage = pluginConfig.image ?? 'jana19/pnpm:25-alpine';
+    const pluginImage = pluginConfig.image ?? 'jana19/pnpm:24-alpine';
     const imagePullPolicy = pluginConfig.imagePullPolicy ?? 'IfNotPresent';
     const gcpProject = pluginConfig.gcpProject;
     const providerConfigRef = pluginConfig.providerConfigRef ?? 'gcp-provider';
