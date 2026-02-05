@@ -489,7 +489,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
 
       // Workload Identity bindings - enabled by default
       // Requires Crossplane GSA to have roles/iam.serviceAccountAdmin
-      if (thanos.createWorkloadIdentityBindings !== false) {
+      if (this.config.thanos.createWorkloadIdentityBindings !== false) {
         // Workload Identity binding for Prometheus sidecar
         new ServiceAccountIamMember(this, "thanos-wi-prometheus", {
           metadata: {
