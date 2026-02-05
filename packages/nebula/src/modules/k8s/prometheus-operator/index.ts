@@ -42,29 +42,12 @@ export interface ThanosConfig {
   /** ProviderConfig name for Crossplane GCP resources */
   providerConfigRef?: string;
   /**
-   * Whether to create Workload Identity IAM bindings via Crossplane (default: false).
+   * Whether to create Workload Identity IAM bindings via Crossplane (default: true).
    *
-   * Set to true ONLY if Crossplane's GSA already has roles/iam.serviceAccountAdmin.
-   * Otherwise, the IAM bindings will fail with permission denied.
+   * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
+   * This is automatically granted by the Gcp module's enableCrossplaneIamAdmin option.
    *
-   * For initial setup, leave this false and create the bindings manually:
-   * ```bash
-   * # For prometheus sidecar
-   * gcloud iam service-accounts add-iam-policy-binding \
-   *   {id}-thanos@{gcpProject}.iam.gserviceaccount.com \
-   *   --project={gcpProject} \
-   *   --role=roles/iam.workloadIdentityUser \
-   *   --member="serviceAccount:{gcpProject}.svc.id.goog[{namespace}/{id}-kube-prometheus-prometheus]"
-   *
-   * # For each Thanos component (storegateway, compactor, query)
-   * for component in thanos-storegateway thanos-compactor thanos-query; do
-   *   gcloud iam service-accounts add-iam-policy-binding \
-   *     {id}-thanos@{gcpProject}.iam.gserviceaccount.com \
-   *     --project={gcpProject} \
-   *     --role=roles/iam.workloadIdentityUser \
-   *     --member="serviceAccount:{gcpProject}.svc.id.goog[{namespace}/$component]"
-   * done
-   * ```
+   * Set to false to skip creating the IAM bindings (e.g., if managing them externally).
    */
   createWorkloadIdentityBindings?: boolean;
 }
@@ -504,9 +487,9 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
         },
       });
 
-      // Workload Identity bindings - only create if explicitly requested
-      // By default, this is skipped due to chicken-and-egg permission problem
-      if (thanos.createWorkloadIdentityBindings) {
+      // Workload Identity bindings - enabled by default
+      // Requires Crossplane GSA to have roles/iam.serviceAccountAdmin
+      if (thanos.createWorkloadIdentityBindings !== false) {
         // Workload Identity binding for Prometheus sidecar
         new ServiceAccountIamMember(this, "thanos-wi-prometheus", {
           metadata: {

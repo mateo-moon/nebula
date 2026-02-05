@@ -67,19 +67,12 @@ export interface ExternalDnsConfig {
   /** Additional IAM roles to grant */
   additionalIamRoles?: string[];
   /**
-   * Whether to create the Workload Identity IAM binding via Crossplane (default: false).
+   * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
-   * Set to true ONLY if Crossplane's GSA already has roles/iam.serviceAccountAdmin.
-   * Otherwise, the IAM binding will fail with permission denied.
+   * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
+   * This is automatically granted by the Gcp module's enableCrossplaneIamAdmin option.
    *
-   * For initial setup, leave this false and create the binding manually:
-   * ```bash
-   * gcloud iam service-accounts add-iam-policy-binding \
-   *   {accountId}-external-dns@{project}.iam.gserviceaccount.com \
-   *   --project={project} \
-   *   --role=roles/iam.workloadIdentityUser \
-   *   --member="serviceAccount:{project}.svc.id.goog[external-dns/external-dns]"
-   * ```
+   * Set to false to skip creating the IAM binding (e.g., if managing it externally).
    */
   createWorkloadIdentityBinding?: boolean;
   /** Tolerations */
@@ -177,8 +170,8 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       });
 
       // Grant Workload Identity User role (on the service account itself)
-      // Only create if explicitly requested (default: false due to chicken-and-egg permission problem)
-      if (this.config.createWorkloadIdentityBinding) {
+      // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
+      if (this.config.createWorkloadIdentityBinding !== false) {
         new ServiceAccountIamMember(this, "workload-identity-role", {
           metadata: {
             name: `${id}-external-dns-wi`,
