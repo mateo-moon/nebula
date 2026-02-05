@@ -28,9 +28,16 @@ import {
   Composition,
 } from "#imports/apiextensions.crossplane.io";
 
-/** k0smotron releases URL for fetchConfig */
-const K0SMOTRON_RELEASES_URL =
-  "https://github.com/k0sproject/k0smotron/releases";
+/** k0smotron releases base URL for fetchConfig */
+const K0SMOTRON_RELEASES_BASE =
+  "https://github.com/k0sproject/k0smotron/releases/latest/download";
+
+/** k0smotron fetchConfig URLs for each provider type */
+const K0SMOTRON_FETCH_URLS = {
+  infrastructure: `${K0SMOTRON_RELEASES_BASE}/infrastructure-components.yaml`,
+  controlPlane: `${K0SMOTRON_RELEASES_BASE}/control-plane-components.yaml`,
+  bootstrap: `${K0SMOTRON_RELEASES_BASE}/bootstrap-components.yaml`,
+};
 
 /** GCP IAM configuration for CAPG */
 export interface ClusterApiOperatorGcpConfig {
@@ -124,7 +131,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         k0smotron: {
           version: this.config.infrastructure?.k0smotron?.version ?? "v1.7.0",
           fetchConfig: {
-            url: K0SMOTRON_RELEASES_URL,
+            url: K0SMOTRON_FETCH_URLS.infrastructure,
           },
         },
       },
@@ -137,7 +144,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         k0smotron: {
           version: this.config.controlPlane?.k0smotron?.version ?? "v1.7.0",
           fetchConfig: {
-            url: K0SMOTRON_RELEASES_URL,
+            url: K0SMOTRON_FETCH_URLS.controlPlane,
           },
         },
       },
@@ -145,7 +152,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         k0smotron: {
           version: this.config.bootstrap?.k0smotron?.version ?? "v1.7.0",
           fetchConfig: {
-            url: K0SMOTRON_RELEASES_URL,
+            url: K0SMOTRON_FETCH_URLS.bootstrap,
           },
         },
       },
