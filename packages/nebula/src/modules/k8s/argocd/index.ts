@@ -535,7 +535,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
     const pluginImage = pluginConfig.image ?? "jana19/pnpm:24-alpine";
     const imagePullPolicy = pluginConfig.imagePullPolicy ?? "IfNotPresent";
     const gcpProject = pluginConfig.gcpProject;
-    const providerConfigRef = pluginConfig.providerConfigRef ?? "gcp-provider";
+    const providerConfigRef = pluginConfig.providerConfigRef ?? "default";
 
     // GCP IAM setup for Workload Identity (if gcpProject is specified)
     let gcpServiceAccountEmail: string | undefined;
