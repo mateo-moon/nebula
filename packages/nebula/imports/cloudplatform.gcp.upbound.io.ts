@@ -4597,3 +4597,1016 @@ export enum ServiceAccountIamMemberV1Beta2SpecInitProviderServiceAccountIdSelect
   IF_NOT_PRESENT = "IfNotPresent",
 }
 
+
+/**
+ * ServiceAccountKey is the Schema for the ServiceAccountKeys API. Allows management of a Google Cloud Platform service account Key
+ *
+ * @schema ServiceAccountKey
+ */
+export class ServiceAccountKey extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "ServiceAccountKey"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cloudplatform.gcp.upbound.io/v1beta1',
+    kind: 'ServiceAccountKey',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "ServiceAccountKey".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: ServiceAccountKeyProps): any {
+    return {
+      ...ServiceAccountKey.GVK,
+      ...toJson_ServiceAccountKeyProps(props),
+    };
+  }
+
+  /**
+   * Defines a "ServiceAccountKey" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: ServiceAccountKeyProps) {
+    super(scope, id, {
+      ...ServiceAccountKey.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...ServiceAccountKey.GVK,
+      ...toJson_ServiceAccountKeyProps(resolved),
+    };
+  }
+}
+
+/**
+ * ServiceAccountKey is the Schema for the ServiceAccountKeys API. Allows management of a Google Cloud Platform service account Key
+ *
+ * @schema ServiceAccountKey
+ */
+export interface ServiceAccountKeyProps {
+  /**
+   * @schema ServiceAccountKey#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * ServiceAccountKeySpec defines the desired state of ServiceAccountKey
+   *
+   * @schema ServiceAccountKey#spec
+   */
+  readonly spec: ServiceAccountKeySpec;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeyProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeyProps(obj: ServiceAccountKeyProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_ServiceAccountKeySpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ServiceAccountKeySpec defines the desired state of ServiceAccountKey
+ *
+ * @schema ServiceAccountKeySpec
+ */
+export interface ServiceAccountKeySpec {
+  /**
+   * DeletionPolicy specifies what will happen to the underlying external
+   * when this managed resource is deleted - either "Delete" or "Orphan" the
+   * external resource.
+   * This field is planned to be deprecated in favor of the ManagementPolicies
+   * field in a future release. Currently, both could be set independently and
+   * non-default values would be honored if the feature flag is enabled.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   *
+   * @schema ServiceAccountKeySpec#deletionPolicy
+   */
+  readonly deletionPolicy?: ServiceAccountKeySpecDeletionPolicy;
+
+  /**
+   * @schema ServiceAccountKeySpec#forProvider
+   */
+  readonly forProvider: ServiceAccountKeySpecForProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It will be honored
+   * unless the Management Policies feature flag is disabled.
+   * InitProvider holds the same fields as ForProvider, with the exception
+   * of Identifier and other resource reference fields. The fields that are
+   * in InitProvider are merged into ForProvider when the resource is created.
+   * The same fields are also added to the terraform ignore_changes hook, to
+   * avoid updating them after creation. This is useful for fields that are
+   * required on creation, but we do not desire to update them after creation,
+   * for example because of an external controller is managing them, like an
+   * autoscaler.
+   *
+   * @schema ServiceAccountKeySpec#initProvider
+   */
+  readonly initProvider?: ServiceAccountKeySpecInitProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It is on by default but can be opted out
+   * through a Crossplane feature flag.
+   * ManagementPolicies specify the array of actions Crossplane is allowed to
+   * take on the managed and external resources.
+   * This field is planned to replace the DeletionPolicy field in a future
+   * release. Currently, both could be set independently and non-default
+   * values would be honored if the feature flag is enabled. If both are
+   * custom, the DeletionPolicy field will be ignored.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   * and this one: https://github.com/crossplane/crossplane/blob/444267e84783136daa93568b364a5f01228cacbe/design/one-pager-ignore-changes.md
+   *
+   * @schema ServiceAccountKeySpec#managementPolicies
+   */
+  readonly managementPolicies?: ServiceAccountKeySpecManagementPolicies[];
+
+  /**
+   * ProviderConfigReference specifies how the provider that will be used to
+   * create, observe, update, and delete this managed resource should be
+   * configured.
+   *
+   * @schema ServiceAccountKeySpec#providerConfigRef
+   */
+  readonly providerConfigRef?: ServiceAccountKeySpecProviderConfigRef;
+
+  /**
+   * WriteConnectionSecretToReference specifies the namespace and name of a
+   * Secret to which any connection details for this managed resource should
+   * be written. Connection details frequently include the endpoint, username,
+   * and password required to connect to the managed resource.
+   *
+   * @schema ServiceAccountKeySpec#writeConnectionSecretToRef
+   */
+  readonly writeConnectionSecretToRef?: ServiceAccountKeySpecWriteConnectionSecretToRef;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpec(obj: ServiceAccountKeySpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deletionPolicy': obj.deletionPolicy,
+    'forProvider': toJson_ServiceAccountKeySpecForProvider(obj.forProvider),
+    'initProvider': toJson_ServiceAccountKeySpecInitProvider(obj.initProvider),
+    'managementPolicies': obj.managementPolicies?.map(y => y),
+    'providerConfigRef': toJson_ServiceAccountKeySpecProviderConfigRef(obj.providerConfigRef),
+    'writeConnectionSecretToRef': toJson_ServiceAccountKeySpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DeletionPolicy specifies what will happen to the underlying external
+ * when this managed resource is deleted - either "Delete" or "Orphan" the
+ * external resource.
+ * This field is planned to be deprecated in favor of the ManagementPolicies
+ * field in a future release. Currently, both could be set independently and
+ * non-default values would be honored if the feature flag is enabled.
+ * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+ *
+ * @schema ServiceAccountKeySpecDeletionPolicy
+ */
+export enum ServiceAccountKeySpecDeletionPolicy {
+  /** Orphan */
+  ORPHAN = "Orphan",
+  /** Delete */
+  DELETE = "Delete",
+}
+
+/**
+ * @schema ServiceAccountKeySpecForProvider
+ */
+export interface ServiceAccountKeySpecForProvider {
+  /**
+   * Arbitrary map of values that, when changed, will trigger a new key to be generated.
+   *
+   * @schema ServiceAccountKeySpecForProvider#keepers
+   */
+  readonly keepers?: { [key: string]: string };
+
+  /**
+   * The algorithm used to generate the key. KEY_ALG_RSA_2048 is the default algorithm.
+   * Valid values are listed at
+   * ServiceAccountPrivateKeyType
+   * (only used on create)
+   *
+   * @schema ServiceAccountKeySpecForProvider#keyAlgorithm
+   */
+  readonly keyAlgorithm?: string;
+
+  /**
+   * The output format of the private key. TYPE_GOOGLE_CREDENTIALS_FILE is the default output format.
+   *
+   * @schema ServiceAccountKeySpecForProvider#privateKeyType
+   */
+  readonly privateKeyType?: string;
+
+  /**
+   * Public key data to create a service account key for given service account. The expected format for this field is a base64 encoded X509_PEM and it conflicts with public_key_type and private_key_type.
+   *
+   * @schema ServiceAccountKeySpecForProvider#publicKeyData
+   */
+  readonly publicKeyData?: string;
+
+  /**
+   * The output format of the public key requested. TYPE_X509_PEM_FILE is the default output format.
+   *
+   * @schema ServiceAccountKeySpecForProvider#publicKeyType
+   */
+  readonly publicKeyType?: string;
+
+  /**
+   * The Service account id of the Key. This can be a string in the format
+   * {ACCOUNT} or projects/{PROJECT_ID}/serviceAccounts/{ACCOUNT}. If the {ACCOUNT}-only syntax is used, either
+   * the full email address of the service account or its name can be specified as a value, in which case the project will
+   * automatically be inferred from the account. Otherwise, if the projects/{PROJECT_ID}/serviceAccounts/{ACCOUNT}
+   * syntax is used, the {ACCOUNT} specified can be the full email address of the service account or the service account's
+   * unique id. Substituting - as a wildcard for the {PROJECT_ID} will infer the project from the account.
+   *
+   * @schema ServiceAccountKeySpecForProvider#serviceAccountId
+   */
+  readonly serviceAccountId?: string;
+
+  /**
+   * Reference to a ServiceAccount in cloudplatform to populate serviceAccountId.
+   *
+   * @schema ServiceAccountKeySpecForProvider#serviceAccountIdRef
+   */
+  readonly serviceAccountIdRef?: ServiceAccountKeySpecForProviderServiceAccountIdRef;
+
+  /**
+   * Selector for a ServiceAccount in cloudplatform to populate serviceAccountId.
+   *
+   * @schema ServiceAccountKeySpecForProvider#serviceAccountIdSelector
+   */
+  readonly serviceAccountIdSelector?: ServiceAccountKeySpecForProviderServiceAccountIdSelector;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecForProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecForProvider(obj: ServiceAccountKeySpecForProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'keepers': ((obj.keepers) === undefined) ? undefined : (Object.entries(obj.keepers).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'keyAlgorithm': obj.keyAlgorithm,
+    'privateKeyType': obj.privateKeyType,
+    'publicKeyData': obj.publicKeyData,
+    'publicKeyType': obj.publicKeyType,
+    'serviceAccountId': obj.serviceAccountId,
+    'serviceAccountIdRef': toJson_ServiceAccountKeySpecForProviderServiceAccountIdRef(obj.serviceAccountIdRef),
+    'serviceAccountIdSelector': toJson_ServiceAccountKeySpecForProviderServiceAccountIdSelector(obj.serviceAccountIdSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * THIS IS A BETA FIELD. It will be honored
+ * unless the Management Policies feature flag is disabled.
+ * InitProvider holds the same fields as ForProvider, with the exception
+ * of Identifier and other resource reference fields. The fields that are
+ * in InitProvider are merged into ForProvider when the resource is created.
+ * The same fields are also added to the terraform ignore_changes hook, to
+ * avoid updating them after creation. This is useful for fields that are
+ * required on creation, but we do not desire to update them after creation,
+ * for example because of an external controller is managing them, like an
+ * autoscaler.
+ *
+ * @schema ServiceAccountKeySpecInitProvider
+ */
+export interface ServiceAccountKeySpecInitProvider {
+  /**
+   * Arbitrary map of values that, when changed, will trigger a new key to be generated.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#keepers
+   */
+  readonly keepers?: { [key: string]: string };
+
+  /**
+   * The algorithm used to generate the key. KEY_ALG_RSA_2048 is the default algorithm.
+   * Valid values are listed at
+   * ServiceAccountPrivateKeyType
+   * (only used on create)
+   *
+   * @schema ServiceAccountKeySpecInitProvider#keyAlgorithm
+   */
+  readonly keyAlgorithm?: string;
+
+  /**
+   * The output format of the private key. TYPE_GOOGLE_CREDENTIALS_FILE is the default output format.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#privateKeyType
+   */
+  readonly privateKeyType?: string;
+
+  /**
+   * Public key data to create a service account key for given service account. The expected format for this field is a base64 encoded X509_PEM and it conflicts with public_key_type and private_key_type.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#publicKeyData
+   */
+  readonly publicKeyData?: string;
+
+  /**
+   * The output format of the public key requested. TYPE_X509_PEM_FILE is the default output format.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#publicKeyType
+   */
+  readonly publicKeyType?: string;
+
+  /**
+   * The Service account id of the Key. This can be a string in the format
+   * {ACCOUNT} or projects/{PROJECT_ID}/serviceAccounts/{ACCOUNT}. If the {ACCOUNT}-only syntax is used, either
+   * the full email address of the service account or its name can be specified as a value, in which case the project will
+   * automatically be inferred from the account. Otherwise, if the projects/{PROJECT_ID}/serviceAccounts/{ACCOUNT}
+   * syntax is used, the {ACCOUNT} specified can be the full email address of the service account or the service account's
+   * unique id. Substituting - as a wildcard for the {PROJECT_ID} will infer the project from the account.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#serviceAccountId
+   */
+  readonly serviceAccountId?: string;
+
+  /**
+   * Reference to a ServiceAccount in cloudplatform to populate serviceAccountId.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#serviceAccountIdRef
+   */
+  readonly serviceAccountIdRef?: ServiceAccountKeySpecInitProviderServiceAccountIdRef;
+
+  /**
+   * Selector for a ServiceAccount in cloudplatform to populate serviceAccountId.
+   *
+   * @schema ServiceAccountKeySpecInitProvider#serviceAccountIdSelector
+   */
+  readonly serviceAccountIdSelector?: ServiceAccountKeySpecInitProviderServiceAccountIdSelector;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecInitProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecInitProvider(obj: ServiceAccountKeySpecInitProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'keepers': ((obj.keepers) === undefined) ? undefined : (Object.entries(obj.keepers).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'keyAlgorithm': obj.keyAlgorithm,
+    'privateKeyType': obj.privateKeyType,
+    'publicKeyData': obj.publicKeyData,
+    'publicKeyType': obj.publicKeyType,
+    'serviceAccountId': obj.serviceAccountId,
+    'serviceAccountIdRef': toJson_ServiceAccountKeySpecInitProviderServiceAccountIdRef(obj.serviceAccountIdRef),
+    'serviceAccountIdSelector': toJson_ServiceAccountKeySpecInitProviderServiceAccountIdSelector(obj.serviceAccountIdSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A ManagementAction represents an action that the Crossplane controllers
+ * can take on an external resource.
+ *
+ * @schema ServiceAccountKeySpecManagementPolicies
+ */
+export enum ServiceAccountKeySpecManagementPolicies {
+  /** Observe */
+  OBSERVE = "Observe",
+  /** Create */
+  CREATE = "Create",
+  /** Update */
+  UPDATE = "Update",
+  /** Delete */
+  DELETE = "Delete",
+  /** LateInitialize */
+  LATE_INITIALIZE = "LateInitialize",
+  /** * */
+  VALUE_ASTERISK = "*",
+}
+
+/**
+ * ProviderConfigReference specifies how the provider that will be used to
+ * create, observe, update, and delete this managed resource should be
+ * configured.
+ *
+ * @schema ServiceAccountKeySpecProviderConfigRef
+ */
+export interface ServiceAccountKeySpecProviderConfigRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema ServiceAccountKeySpecProviderConfigRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema ServiceAccountKeySpecProviderConfigRef#policy
+   */
+  readonly policy?: ServiceAccountKeySpecProviderConfigRefPolicy;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecProviderConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecProviderConfigRef(obj: ServiceAccountKeySpecProviderConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_ServiceAccountKeySpecProviderConfigRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * WriteConnectionSecretToReference specifies the namespace and name of a
+ * Secret to which any connection details for this managed resource should
+ * be written. Connection details frequently include the endpoint, username,
+ * and password required to connect to the managed resource.
+ *
+ * @schema ServiceAccountKeySpecWriteConnectionSecretToRef
+ */
+export interface ServiceAccountKeySpecWriteConnectionSecretToRef {
+  /**
+   * Name of the secret.
+   *
+   * @schema ServiceAccountKeySpecWriteConnectionSecretToRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace of the secret.
+   *
+   * @schema ServiceAccountKeySpecWriteConnectionSecretToRef#namespace
+   */
+  readonly namespace: string;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecWriteConnectionSecretToRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecWriteConnectionSecretToRef(obj: ServiceAccountKeySpecWriteConnectionSecretToRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a ServiceAccount in cloudplatform to populate serviceAccountId.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdRef
+ */
+export interface ServiceAccountKeySpecForProviderServiceAccountIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdRef#policy
+   */
+  readonly policy?: ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecForProviderServiceAccountIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecForProviderServiceAccountIdRef(obj: ServiceAccountKeySpecForProviderServiceAccountIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a ServiceAccount in cloudplatform to populate serviceAccountId.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelector
+ */
+export interface ServiceAccountKeySpecForProviderServiceAccountIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelector#policy
+   */
+  readonly policy?: ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecForProviderServiceAccountIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecForProviderServiceAccountIdSelector(obj: ServiceAccountKeySpecForProviderServiceAccountIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a ServiceAccount in cloudplatform to populate serviceAccountId.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRef
+ */
+export interface ServiceAccountKeySpecInitProviderServiceAccountIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRef#policy
+   */
+  readonly policy?: ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecInitProviderServiceAccountIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecInitProviderServiceAccountIdRef(obj: ServiceAccountKeySpecInitProviderServiceAccountIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a ServiceAccount in cloudplatform to populate serviceAccountId.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelector
+ */
+export interface ServiceAccountKeySpecInitProviderServiceAccountIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelector#policy
+   */
+  readonly policy?: ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecInitProviderServiceAccountIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecInitProviderServiceAccountIdSelector(obj: ServiceAccountKeySpecInitProviderServiceAccountIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema ServiceAccountKeySpecProviderConfigRefPolicy
+ */
+export interface ServiceAccountKeySpecProviderConfigRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema ServiceAccountKeySpecProviderConfigRefPolicy#resolution
+   */
+  readonly resolution?: ServiceAccountKeySpecProviderConfigRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema ServiceAccountKeySpecProviderConfigRefPolicy#resolve
+   */
+  readonly resolve?: ServiceAccountKeySpecProviderConfigRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecProviderConfigRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecProviderConfigRefPolicy(obj: ServiceAccountKeySpecProviderConfigRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy
+ */
+export interface ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy#resolution
+   */
+  readonly resolution?: ServiceAccountKeySpecForProviderServiceAccountIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy#resolve
+   */
+  readonly resolve?: ServiceAccountKeySpecForProviderServiceAccountIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy(obj: ServiceAccountKeySpecForProviderServiceAccountIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy
+ */
+export interface ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy#resolution
+   */
+  readonly resolution?: ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy#resolve
+   */
+  readonly resolve?: ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy(obj: ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy
+ */
+export interface ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy#resolution
+   */
+  readonly resolution?: ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy#resolve
+   */
+  readonly resolve?: ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy(obj: ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy
+ */
+export interface ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy#resolution
+   */
+  readonly resolution?: ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy#resolve
+   */
+  readonly resolve?: ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy(obj: ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema ServiceAccountKeySpecProviderConfigRefPolicyResolution
+ */
+export enum ServiceAccountKeySpecProviderConfigRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema ServiceAccountKeySpecProviderConfigRefPolicyResolve
+ */
+export enum ServiceAccountKeySpecProviderConfigRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdRefPolicyResolution
+ */
+export enum ServiceAccountKeySpecForProviderServiceAccountIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdRefPolicyResolve
+ */
+export enum ServiceAccountKeySpecForProviderServiceAccountIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicyResolution
+ */
+export enum ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicyResolve
+ */
+export enum ServiceAccountKeySpecForProviderServiceAccountIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicyResolution
+ */
+export enum ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicyResolve
+ */
+export enum ServiceAccountKeySpecInitProviderServiceAccountIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicyResolution
+ */
+export enum ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicyResolve
+ */
+export enum ServiceAccountKeySpecInitProviderServiceAccountIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
