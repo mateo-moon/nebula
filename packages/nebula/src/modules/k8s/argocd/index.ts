@@ -871,6 +871,7 @@ done
     // Create ServiceAccount for the Job
     const bootstrapSa = new kplus.ServiceAccount(this, "bootstrap-sa", {
       metadata: { name: jobName, namespace: namespaceName },
+      automountToken: true,
     });
 
     // Create Role in target namespace for creating secrets
