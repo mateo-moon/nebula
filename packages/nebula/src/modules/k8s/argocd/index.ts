@@ -587,7 +587,7 @@ echo "Installing helm..." >&2
 wget -qO- https://get.helm.sh/helm-v3.17.0-linux-amd64.tar.gz | tar xz -C /tmp >&2
 mv /tmp/linux-amd64/helm /tmp/bin/helm
 echo "Installing vals..." >&2
-VALS_VERSION=\${VALS_VERSION:-0.40.2}
+VALS_VERSION=\${VALS_VERSION:-0.43.1}
 wget -qO- "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" | tar xz -C /tmp/bin vals >&2
 echo "Installing dependencies in $(pwd)..." >&2
 pnpm install --frozen-lockfile 2>&1 >&2 || pnpm install 2>&1 >&2
