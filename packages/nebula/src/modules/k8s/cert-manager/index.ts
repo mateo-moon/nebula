@@ -1,21 +1,21 @@
 /**
  * CertManager - Automated TLS certificate management for Kubernetes.
- * 
+ *
  * @example
  * ```typescript
  * import { CertManager } from 'nebula/modules/k8s/cert-manager';
- * 
+ *
  * new CertManager(chart, 'cert-manager', {
  *   acmeEmail: 'admin@example.com',
  * });
  * ```
  */
-import { Construct } from 'constructs';
-import { Helm } from 'cdk8s';
-import * as kplus from 'cdk8s-plus-33';
-import { deepmerge } from 'deepmerge-ts';
-import { ClusterIssuer } from '#imports/cert-manager.io';
-import { BaseConstruct } from '../../../core';
+import { Construct } from "constructs";
+import { Helm } from "cdk8s";
+import * as kplus from "cdk8s-plus-33";
+import { deepmerge } from "deepmerge-ts";
+import { ClusterIssuer } from "#imports/cert-manager.io";
+import { BaseConstruct } from "../../../core";
 
 export interface CertManagerConfig {
   /** Namespace for cert-manager (defaults to cert-manager) */
@@ -30,6 +30,13 @@ export interface CertManagerConfig {
   values?: Record<string, unknown>;
   /** Create ClusterIssuers (defaults to true) */
   createClusterIssuers?: boolean;
+  /**
+   * Use external recursive DNS servers for HTTP-01 ACME challenge self-checks.
+   * This is useful for GKE clusters where internal DNS may not resolve newly
+   * created domains immediately.
+   * @default true
+   */
+  useExternalDnsForAcme?: boolean;
 }
 
 export class CertManager extends BaseConstruct<CertManagerConfig> {
@@ -42,12 +49,16 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
   constructor(scope: Construct, id: string, config: CertManagerConfig) {
     super(scope, id, config);
 
-    const namespaceName = this.config.namespace ?? 'cert-manager';
+    const namespaceName = this.config.namespace ?? "cert-manager";
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, 'namespace', {
+    this.namespace = new kplus.Namespace(this, "namespace", {
       metadata: { name: namespaceName },
     });
+
+    // Use external DNS servers for ACME HTTP-01 challenge self-checks by default.
+    // GKE's internal DNS (via metadata server) can return SERVFAIL for newly created domains.
+    const useExternalDns = this.config.useExternalDnsForAcme !== false;
 
     const defaultValues: Record<string, unknown> = {
       installCRDs: true,
@@ -55,15 +66,18 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
       webhook: {},
       cainjector: {},
       startupapicheck: {},
+      ...(useExternalDns && {
+        extraArgs: ["--acme-http01-solver-nameservers=8.8.8.8:53,8.8.4.4:53"],
+      }),
     };
 
     const chartValues = deepmerge(defaultValues, this.config.values ?? {});
 
-    this.helm = new Helm(this, 'helm', {
-      chart: 'cert-manager',
-      releaseName: 'cert-manager',
-      repo: this.config.repository ?? 'https://charts.jetstack.io',
-      version: this.config.version ?? 'v1.19.3',
+    this.helm = new Helm(this, "helm", {
+      chart: "cert-manager",
+      releaseName: "cert-manager",
+      repo: this.config.repository ?? "https://charts.jetstack.io",
+      version: this.config.version ?? "v1.19.3",
       namespace: namespaceName,
       values: chartValues,
     });
@@ -71,33 +85,37 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
     // Create ClusterIssuers
     if (this.config.createClusterIssuers !== false) {
       // Self-signed issuer
-      this.selfsignedIssuer = new ClusterIssuer(this, 'selfsigned-issuer', {
-        metadata: { name: 'selfsigned' },
+      this.selfsignedIssuer = new ClusterIssuer(this, "selfsigned-issuer", {
+        metadata: { name: "selfsigned" },
         spec: { selfSigned: {} },
       });
 
       // Let's Encrypt staging
-      this.letsencryptStageIssuer = new ClusterIssuer(this, 'letsencrypt-stage', {
-        metadata: { name: 'letsencrypt-stage' },
-        spec: {
-          acme: {
-            email: this.config.acmeEmail,
-            server: 'https://acme-staging-v02.api.letsencrypt.org/directory',
-            privateKeySecretRef: { name: 'letsencrypt-stage-private-key' },
-            solvers: [{ http01: { ingress: { ingressClassName: 'nginx' } } }],
+      this.letsencryptStageIssuer = new ClusterIssuer(
+        this,
+        "letsencrypt-stage",
+        {
+          metadata: { name: "letsencrypt-stage" },
+          spec: {
+            acme: {
+              email: this.config.acmeEmail,
+              server: "https://acme-staging-v02.api.letsencrypt.org/directory",
+              privateKeySecretRef: { name: "letsencrypt-stage-private-key" },
+              solvers: [{ http01: { ingress: { ingressClassName: "nginx" } } }],
+            },
           },
         },
-      });
+      );
 
       // Let's Encrypt production
-      this.letsencryptProdIssuer = new ClusterIssuer(this, 'letsencrypt-prod', {
-        metadata: { name: 'letsencrypt-prod' },
+      this.letsencryptProdIssuer = new ClusterIssuer(this, "letsencrypt-prod", {
+        metadata: { name: "letsencrypt-prod" },
         spec: {
           acme: {
             email: this.config.acmeEmail,
-            server: 'https://acme-v02.api.letsencrypt.org/directory',
-            privateKeySecretRef: { name: 'letsencrypt-prod-private-key' },
-            solvers: [{ http01: { ingress: { ingressClassName: 'nginx' } } }],
+            server: "https://acme-v02.api.letsencrypt.org/directory",
+            privateKeySecretRef: { name: "letsencrypt-prod-private-key" },
+            solvers: [{ http01: { ingress: { ingressClassName: "nginx" } } }],
           },
         },
       });
