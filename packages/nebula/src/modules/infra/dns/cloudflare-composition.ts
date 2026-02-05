@@ -39,6 +39,7 @@ import { ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import {
   CompositeResourceDefinitionV2,
+  CompositeResourceDefinitionV2SpecScope,
   Composition,
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
@@ -263,7 +264,8 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           kind: "XDnsZoneCloudflare",
           plural: "xdnszonecloudflares",
         },
-        // claimNames removed - Crossplane v2 uses XRs directly (cluster-scoped)
+        // XRs that compose cluster-scoped resources (like ManagedZone) must be cluster-scoped
+        scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
         versions: [
           {
             name: "v1alpha1",
