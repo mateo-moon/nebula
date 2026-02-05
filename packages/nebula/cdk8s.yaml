@@ -25,6 +25,7 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/container.gcp.upbound.io_nodepools.yaml
   # GCP Provider CRDs - IAM / Cloud Platform
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_serviceaccounts.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_serviceaccountkeys.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_projectiammembers.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/cloudplatform.gcp.upbound.io_serviceaccountiammembers.yaml
   # GCP Provider CRDs - Storage (GCS)
