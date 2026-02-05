@@ -346,7 +346,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           {
             step: "patch-and-transform",
             functionRef: {
-              name: "crossplane-contrib-function-patch-and-transform",
+              name: "function-patch-and-transform",
             },
             input: {
               apiVersion: "pt.fn.crossplane.io/v1beta1",
