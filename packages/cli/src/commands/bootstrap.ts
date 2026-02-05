@@ -368,11 +368,88 @@ async function deployToGke(): Promise<void> {
     }
   }
 
-  // Apply with phased approach - look in subdirectories
-  log("   Applying manifests...");
-  exec('npx nebula apply --file "dist/**/*.k8s.yaml"');
+  // Apply in phases to ensure dependencies are ready
+  // Phase 1: Core infrastructure (providers, crossplane)
+  log("   Phase 1: Applying core infrastructure...");
+  const phase1 = ["providers", "crossplane"];
+  for (const mod of phase1) {
+    const modDir = `dist/${mod}`;
+    if (fs.existsSync(modDir)) {
+      exec(`npx nebula apply --file "${modDir}/*.k8s.yaml"`, { silent: true });
+    }
+  }
+
+  // Wait for Crossplane functions to be healthy (required for Compositions)
+  log("   Waiting for Crossplane functions to be healthy...");
+  await waitForCrossplaneFunctions(120);
+
+  // Phase 2: Everything else
+  log("   Phase 2: Applying workloads...");
+  const phase2 = gkeModuleNames.filter((m) => !phase1.includes(m));
+  for (const mod of phase2) {
+    const modDir = `dist/${mod}`;
+    if (fs.existsSync(modDir)) {
+      exec(`npx nebula apply --file "${modDir}/*.k8s.yaml"`, { silent: true });
+    }
+  }
 
   log(`   ✅ Workloads deployed to GKE`);
+}
+
+/**
+ * Wait for all Crossplane Functions to become healthy.
+ * Functions must be healthy before XRs using Compositions can be created.
+ */
+async function waitForCrossplaneFunctions(
+  timeoutSeconds: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutSeconds * 1000;
+
+  while (Date.now() < deadline) {
+    try {
+      // Check if any functions exist
+      const functionsJson = exec(
+        "kubectl get functions.pkg.crossplane.io -o json 2>/dev/null || echo '{\"items\":[]}'",
+        { silent: true },
+      );
+      const functions = JSON.parse(functionsJson);
+
+      if (functions.items.length === 0) {
+        // No functions installed, skip wait
+        log("   No Crossplane functions found, skipping wait");
+        return;
+      }
+
+      // Check if all functions are healthy
+      let allHealthy = true;
+      for (const fn of functions.items) {
+        const installed =
+          fn.status?.conditions?.find(
+            (c: { type: string }) => c.type === "Installed",
+          )?.status === "True";
+        const healthy =
+          fn.status?.conditions?.find(
+            (c: { type: string }) => c.type === "Healthy",
+          )?.status === "True";
+
+        if (!installed || !healthy) {
+          allHealthy = false;
+          break;
+        }
+      }
+
+      if (allHealthy) {
+        log(`   ✅ All ${functions.items.length} Crossplane functions healthy`);
+        return;
+      }
+    } catch {
+      // Ignore errors, keep waiting
+    }
+
+    await sleep(5000);
+  }
+
+  log("   ⚠️  Timeout waiting for functions, continuing anyway...");
 }
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
