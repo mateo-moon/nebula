@@ -6,6 +6,7 @@ import {
   ProviderConfigSpecCredentials,
   ProviderConfigSpecCredentialsSource,
 } from "#imports/gcp.upbound.io";
+import { ServiceAccountIamMember } from "#imports/cloudplatform.gcp.upbound.io";
 
 /** Credential source for GCP provider */
 export type GcpCredentialSource =
@@ -61,6 +62,21 @@ export interface GcpProviderConfig {
    * Example: 'crossplane-provider@PROJECT.iam.gserviceaccount.com'
    */
   workloadIdentityServiceAccount?: string;
+  /**
+   * Create Workload Identity IAM bindings for all provider KSAs.
+   * When true, creates ServiceAccountIamMember resources that bind each
+   * provider KSA to the workloadIdentityServiceAccount GSA.
+   *
+   * This should be enabled during bootstrap (on Kind with ADC credentials)
+   * so the bindings are created before switching to GKE.
+   *
+   * Requires:
+   * - enableDeterministicServiceAccounts: true
+   * - workloadIdentityServiceAccount to be set
+   *
+   * @default false
+   */
+  createWorkloadIdentityBindings?: boolean;
 }
 
 export class GcpProvider extends Construct {
@@ -182,6 +198,40 @@ export class GcpProvider extends Construct {
         credentials: credentialsSpec,
       },
     });
+
+    // Create Workload Identity IAM bindings for all provider KSAs
+    // This allows the providers to authenticate via Workload Identity on GKE
+    if (
+      config.createWorkloadIdentityBindings &&
+      config.enableDeterministicServiceAccounts &&
+      config.workloadIdentityServiceAccount
+    ) {
+      const providerNamespace = "crossplane-system";
+      const gsaEmail = config.workloadIdentityServiceAccount;
+
+      for (const family of families) {
+        const ksaName = GcpProvider.getProviderKsaName(
+          family,
+          providerNamePrefix,
+        );
+
+        new ServiceAccountIamMember(this, `wi-binding-${family}`, {
+          metadata: {
+            name: `crossplane-provider-wi-${family}`,
+          },
+          spec: {
+            forProvider: {
+              serviceAccountId: `projects/${config.projectId}/serviceAccounts/${gsaEmail}`,
+              role: "roles/iam.workloadIdentityUser",
+              member: `serviceAccount:${config.projectId}.svc.id.goog[${providerNamespace}/${ksaName}]`,
+            },
+            providerConfigRef: {
+              name: providerConfigName,
+            },
+          },
+        });
+      }
+    }
   }
 
   private buildCredentialsSpec(
