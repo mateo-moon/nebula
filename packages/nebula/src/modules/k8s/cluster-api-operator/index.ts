@@ -249,12 +249,12 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     }
 
     // Create XR instance to generate the credentials secret
+    // The Composition uses function-go-templating to compose the Secret directly
     new ApiObject(this, "capg-credentials-xr", {
       apiVersion: "nebula.io/v1alpha1",
       kind: "XCapgCredentials",
       metadata: {
         name: "capg-credentials",
-        namespace: capgNamespace,
         annotations: {
           "argocd.argoproj.io/sync-wave": "0", // Create XR after XRD and Composition
         },
@@ -263,9 +263,8 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         serviceAccountEmail: gsaEmail,
         projectId: projectId,
         providerConfigRef: providerConfigRef,
-        publishConnectionDetailsTo: {
-          name: credentialsSecretName,
-        },
+        secretName: credentialsSecretName,
+        secretNamespace: capgNamespace,
       },
     });
 
@@ -275,6 +274,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
   /**
    * Create XRD (CompositeResourceDefinition) for CAPG credentials
    * Crossplane v2: uses scope instead of claimNames
+   * Uses Cluster scope and composes Secret via function-go-templating (no connectionSecretKeys)
    */
   private createCapgCredentialsXrd(): void {
     new CompositeResourceDefinition(this, "capg-credentials-xrd", {
@@ -290,9 +290,9 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
           kind: "XCapgCredentials",
           plural: "xcapgcredentials",
         },
-        // Crossplane v2: use scope instead of claimNames
-        scope: CompositeResourceDefinitionSpecScope.NAMESPACED,
-        connectionSecretKeys: ["GCP_B64ENCODED_CREDENTIALS"],
+        // Cluster scope - we compose our own Secret using function-go-templating
+        // (connectionSecretKeys not supported in non-LegacyCluster scopes)
+        scope: CompositeResourceDefinitionSpecScope.CLUSTER,
         versions: [
           {
             name: "v1alpha1",
@@ -308,8 +308,15 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
                       serviceAccountEmail: { type: "string" },
                       projectId: { type: "string" },
                       providerConfigRef: { type: "string", default: "default" },
+                      secretName: { type: "string" },
+                      secretNamespace: { type: "string" },
                     },
-                    required: ["serviceAccountEmail", "projectId"],
+                    required: [
+                      "serviceAccountEmail",
+                      "projectId",
+                      "secretName",
+                      "secretNamespace",
+                    ],
                   },
                 },
               },
@@ -322,10 +329,31 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
 
   /**
    * Create Composition for CAPG credentials
-   * Uses Crossplane v2 Pipeline mode with function-patch-and-transform
-   * Creates ServiceAccountKey and maps attribute.private_key -> GCP_B64ENCODED_CREDENTIALS
+   * Uses Crossplane v2 Pipeline mode with:
+   * 1. function-patch-and-transform: Creates ServiceAccountKey with writeConnectionSecretToRef
+   * 2. function-go-templating: Composes Secret with GCP_B64ENCODED_CREDENTIALS key
    */
   private createCapgCredentialsComposition(): void {
+    // Go template for composing the Secret with the correct key name
+    // Reads from the intermediate connection secret and creates final secret
+    const secretTemplate = `
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .observed.composite.resource.spec.secretName }}
+  namespace: {{ .observed.composite.resource.spec.secretNamespace }}
+  annotations:
+    crossplane.io/composition-resource-name: capg-credentials-secret
+type: Opaque
+{{ if .observed.resources }}
+{{ $key := index .observed.resources "service-account-key" }}
+{{ if $key.connectionDetails }}
+data:
+  GCP_B64ENCODED_CREDENTIALS: {{ index $key.connectionDetails "attribute.private_key" }}
+{{ end }}
+{{ end }}
+`.trim();
+
     new Composition(this, "capg-credentials-composition", {
       metadata: {
         name: "capg-credentials",
@@ -338,8 +366,9 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
           apiVersion: "nebula.io/v1alpha1",
           kind: "XCapgCredentials",
         },
-        // Crossplane v2: Pipeline mode with function-patch-and-transform
+        // Crossplane v2: Pipeline mode
         pipeline: [
+          // Step 1: Create ServiceAccountKey with connection secret
           {
             step: "patch-and-transform",
             functionRef: {
@@ -359,6 +388,11 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
                         keyAlgorithm: "KEY_ALG_RSA_2048",
                         privateKeyType: "TYPE_GOOGLE_CREDENTIALS_FILE",
                       },
+                      // Write to intermediate secret for go-templating to read
+                      writeConnectionSecretToRef: {
+                        name: "capg-credentials-raw",
+                        namespace: "crossplane-system",
+                      },
                     },
                   },
                   patches: [
@@ -373,14 +407,23 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
                       toFieldPath: "spec.providerConfigRef.name",
                     },
                   ],
-                  connectionDetails: [
-                    {
-                      name: "GCP_B64ENCODED_CREDENTIALS",
-                      fromConnectionSecretKey: "attribute.private_key",
-                    },
-                  ],
                 },
               ],
+            },
+          },
+          // Step 2: Compose Secret with correct key name using go-templating
+          {
+            step: "render-secret",
+            functionRef: {
+              name: "function-go-templating",
+            },
+            input: {
+              apiVersion: "gotemplating.fn.crossplane.io/v1beta1",
+              kind: "GoTemplate",
+              source: "Inline",
+              inline: {
+                template: secretTemplate,
+              },
             },
           },
         ],
