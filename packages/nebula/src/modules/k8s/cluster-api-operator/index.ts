@@ -255,6 +255,9 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       metadata: {
         name: "capg-credentials",
         namespace: capgNamespace,
+        annotations: {
+          "argocd.argoproj.io/sync-wave": "0", // Create XR after XRD and Composition
+        },
       },
       spec: {
         serviceAccountEmail: gsaEmail,
@@ -275,7 +278,12 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
    */
   private createCapgCredentialsXrd(): void {
     new CompositeResourceDefinition(this, "capg-credentials-xrd", {
-      metadata: { name: "xcapgcredentials.nebula.io" },
+      metadata: {
+        name: "xcapgcredentials.nebula.io",
+        annotations: {
+          "argocd.argoproj.io/sync-wave": "-10", // Create XRD first
+        },
+      },
       spec: {
         group: "nebula.io",
         names: {
@@ -319,7 +327,12 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
    */
   private createCapgCredentialsComposition(): void {
     new Composition(this, "capg-credentials-composition", {
-      metadata: { name: "capg-credentials" },
+      metadata: {
+        name: "capg-credentials",
+        annotations: {
+          "argocd.argoproj.io/sync-wave": "-5", // Create Composition after XRD
+        },
+      },
       spec: {
         compositeTypeRef: {
           apiVersion: "nebula.io/v1alpha1",
