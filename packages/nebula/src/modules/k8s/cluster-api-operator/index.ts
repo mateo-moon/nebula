@@ -336,6 +336,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
   private createCapgCredentialsComposition(): void {
     // Go template for composing the Secret with the correct key name
     // Reads from the intermediate connection secret and creates final secret
+    // NOTE: Must use gotemplating.fn.crossplane.io/composition-resource-name annotation
     const secretTemplate = `
 apiVersion: v1
 kind: Secret
@@ -343,7 +344,7 @@ metadata:
   name: {{ .observed.composite.resource.spec.secretName }}
   namespace: {{ .observed.composite.resource.spec.secretNamespace }}
   annotations:
-    crossplane.io/composition-resource-name: capg-credentials-secret
+    gotemplating.fn.crossplane.io/composition-resource-name: capg-credentials-secret
 type: Opaque
 {{ if .observed.resources }}
 {{ $key := index .observed.resources "service-account-key" }}
