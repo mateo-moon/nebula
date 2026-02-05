@@ -24,19 +24,12 @@ export interface WorkloadIdentityConfig {
   /** Project ID for role grants (defaults to cluster project) */
   projectId?: string;
   /**
-   * Whether to create the IAM binding via Crossplane (default: false).
+   * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
-   * Set to true ONLY if Crossplane's GSA already has roles/iam.serviceAccountAdmin.
-   * Otherwise, the IAM binding will fail with permission denied.
+   * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
+   * This is automatically granted by the Gcp module's enableCrossplaneIamAdmin option.
    *
-   * For initial setup, leave this false and create the binding manually:
-   * ```bash
-   * gcloud iam service-accounts add-iam-policy-binding \
-   *   GSA_EMAIL@PROJECT.iam.gserviceaccount.com \
-   *   --project=PROJECT \
-   *   --role=roles/iam.workloadIdentityUser \
-   *   --member="serviceAccount:PROJECT.svc.id.goog[NAMESPACE/KSA_NAME]"
-   * ```
+   * Set to false to skip creating the IAM binding (e.g., if managing it externally).
    */
   createIamBinding?: boolean;
 }
@@ -140,9 +133,11 @@ export class Iam extends Construct {
       });
 
       // Setup Workload Identity binding
-      // Only create if explicitly requested (default: false due to chicken-and-egg permission problem)
+      // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
+      // (granted by Gcp module's enableCrossplaneIamAdmin option)
       const enableWorkloadIdentity = spec.workloadIdentity !== false;
-      if (enableWorkloadIdentity && spec.createIamBinding) {
+      const createIamBinding = spec.createIamBinding !== false;
+      if (enableWorkloadIdentity && createIamBinding) {
         const wiMember = `serviceAccount:${config.project}.svc.id.goog[${ns}/${ksa}]`;
         new CpServiceAccountIamMember(this, `${kind}-wi`, {
           metadata: {

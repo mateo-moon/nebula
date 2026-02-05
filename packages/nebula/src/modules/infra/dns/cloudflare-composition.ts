@@ -63,20 +63,7 @@ import { BaseConstruct } from "../../../core";
  * Prerequisites:
  * - GcpProvider must be deployed with enableDeterministicServiceAccounts: true
  * - The GSA must have roles/dns.admin permission
- *
- * IMPORTANT: By default, only the KSA annotation is created. The IAM binding
- * (ServiceAccountIamMember) requires Crossplane to have iam.serviceAccounts.getIamPolicy
- * permission, which creates a chicken-and-egg problem. Set `createIamBinding: true` only if
- * Crossplane's GSA has been pre-configured with roles/iam.serviceAccountAdmin.
- *
- * For initial bootstrap, create the IAM binding manually:
- * ```bash
- * gcloud iam service-accounts add-iam-policy-binding \
- *   crossplane-provider@PROJECT.iam.gserviceaccount.com \
- *   --project=PROJECT \
- *   --role=roles/iam.workloadIdentityUser \
- *   --member="serviceAccount:PROJECT.svc.id.goog[crossplane-system/provider-gcp-dns]"
- * ```
+ * - Crossplane's GSA must have roles/iam.serviceAccountAdmin (auto-granted by Gcp module)
  */
 export interface DnsGkeWorkloadIdentityConfig {
   /** GCP project ID */
@@ -95,12 +82,12 @@ export interface DnsGkeWorkloadIdentityConfig {
   /** Namespace where Crossplane providers run (default: 'crossplane-system') */
   providerNamespace?: string;
   /**
-   * Whether to create the IAM binding via Crossplane (default: false).
+   * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
-   * Set to true ONLY if Crossplane's GSA already has roles/iam.serviceAccountAdmin.
-   * Otherwise, the IAM binding will fail with permission denied.
+   * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
+   * This is automatically granted by the Gcp module's enableCrossplaneIamAdmin option.
    *
-   * For initial setup, leave this false and create the binding manually or via Terraform.
+   * Set to false to skip creating the IAM binding (e.g., if managing it externally).
    */
   createIamBinding?: boolean;
 }
@@ -232,10 +219,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
         wi.gcpServiceAccount ??
         `crossplane-provider@${wi.project}.iam.gserviceaccount.com`;
 
-      // Create IAM binding only if explicitly requested
-      // By default, this is skipped because Crossplane typically doesn't have
-      // iam.serviceAccounts.getIamPolicy permission on its own GSA (chicken-and-egg problem)
-      if (wi.createIamBinding) {
+      // Create IAM binding - enabled by default
+      // Requires Crossplane GSA to have roles/iam.serviceAccountAdmin
+      if (wi.createIamBinding !== false) {
         new ServiceAccountIamMember(this, "dns-provider-wi", {
           metadata: {
             name: "crossplane-dns-provider-wi",

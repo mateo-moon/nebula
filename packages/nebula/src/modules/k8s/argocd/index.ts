@@ -110,19 +110,12 @@ export interface NebulaPluginConfig {
   /** Secret containing GCP credentials (alternative to Workload Identity) */
   gcpCredentialsSecret?: string;
   /**
-   * Whether to create the Workload Identity IAM binding via Crossplane (default: false).
+   * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
-   * Set to true ONLY if Crossplane's GSA already has roles/iam.serviceAccountAdmin.
-   * Otherwise, the IAM binding will fail with permission denied.
+   * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
+   * This is automatically granted by the Gcp module's enableCrossplaneIamAdmin option.
    *
-   * For initial setup, leave this false and create the binding manually:
-   * ```bash
-   * gcloud iam service-accounts add-iam-policy-binding \
-   *   argocd-nebula-cmp@{gcpProject}.iam.gserviceaccount.com \
-   *   --project={gcpProject} \
-   *   --role=roles/iam.workloadIdentityUser \
-   *   --member="serviceAccount:{gcpProject}.svc.id.goog[argocd/argocd-repo-server]"
-   * ```
+   * Set to false to skip creating the IAM binding (e.g., if managing it externally).
    */
   createWorkloadIdentityBinding?: boolean;
   /** Custom environment variables */
@@ -591,8 +584,8 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       });
 
       // Workload Identity binding - allow repo-server SA to impersonate GCP SA
-      // Only create if explicitly requested (default: false due to chicken-and-egg permission problem)
-      if (pluginConfig.createWorkloadIdentityBinding) {
+      // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
+      if (pluginConfig.createWorkloadIdentityBinding !== false) {
         new ServiceAccountIamMember(this, "nebula-wi", {
           metadata: { name: `${gsaName}-wi` },
           spec: {
