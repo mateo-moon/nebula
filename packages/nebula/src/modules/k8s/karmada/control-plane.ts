@@ -122,6 +122,9 @@ export class KarmadaControlPlane extends Construct {
               "BeforeHookCreation",
             ),
           );
+          // Suspend the job so it doesn't run when created by kubectl apply
+          // ArgoCD will handle running it only during PostDelete
+          obj.addJsonPatch(JsonPatch.add("/spec/suspend", true));
           // Remove helm.sh/hook annotation so ArgoCD doesn't double-process
           obj.addJsonPatch(
             JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
