@@ -44,8 +44,10 @@ export type {
 
 export {
   Karmada,
-  KarmadaCluster,
+  Cluster,
+  KarmadaClusterRegistration,
   KarmadaCapiClusterRegistration,
+  KarmadaCluster, // deprecated alias
   PropagationPolicy,
   ClusterPropagationPolicy,
   OverridePolicy,
@@ -57,6 +59,11 @@ export type {
   KarmadaConfig,
   KarmadaInstallMode,
   KarmadaClusterMode,
+  KarmadaClusterSpec,
+  KarmadaClusterProps,
+  ClusterSyncMode,
+  LocalSecretReference,
+  ClusterTaint,
   ClusterAffinity,
   LabelSelector,
   Placement,
