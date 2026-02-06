@@ -192,7 +192,7 @@ export class Gke extends Construct {
                 }),
             nodeConfig: [
               {
-                index: 0, // Required for server-side apply merge key
+                index: "0", // Required for server-side apply merge key (must be string)
                 machineType: poolConfig.machineType ?? "e2-standard-4",
                 diskSizeGb: poolConfig.diskSizeGb ?? 100,
                 diskType: poolConfig.diskType ?? "pd-standard",
