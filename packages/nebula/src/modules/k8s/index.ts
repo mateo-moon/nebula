@@ -81,3 +81,6 @@ export type {
   OverridePolicyProps,
   ClusterOverridePolicyProps,
 } from "./karmada";
+
+export { Descheduler } from "./descheduler";
+export type { DeschedulerConfig, DeschedulerKind } from "./descheduler";
