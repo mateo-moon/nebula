@@ -218,7 +218,12 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       version: this.config.version ?? "81.4.3",
       namespace: namespaceName,
       values: chartValues,
-      helmFlags: ["--include-crds"], // Include CRDs in helm template output
+      // Include CRDs unless explicitly disabled via values.crds.enabled
+      helmFlags:
+        (this.config.values as { crds?: { enabled?: boolean } })?.crds
+          ?.enabled === false
+          ? []
+          : ["--include-crds"],
     });
 
     // Deploy Loki
