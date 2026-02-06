@@ -1,11 +1,11 @@
-import { Construct } from 'constructs';
+import { Construct } from "constructs";
 import {
   Cluster as CpCluster,
   ClusterSpecDeletionPolicy,
   NodePool as CpNodePool,
   NodePoolSpecDeletionPolicy,
-} from '#imports/container.gcp.upbound.io';
-import { Network } from './network';
+} from "#imports/container.gcp.upbound.io";
+import { Network } from "./network";
 
 export interface NodePoolConfig {
   /** Minimum number of nodes */
@@ -30,7 +30,7 @@ export interface NodePoolConfig {
   taints?: Array<{
     key: string;
     value?: string;
-    effect: 'NO_SCHEDULE' | 'PREFER_NO_SCHEDULE' | 'NO_EXECUTE';
+    effect: "NO_SCHEDULE" | "PREFER_NO_SCHEDULE" | "NO_EXECUTE";
   }>;
 }
 
@@ -44,7 +44,7 @@ export interface GkeConfig {
   /** Network reference */
   network: Network;
   /** Release channel */
-  releaseChannel?: 'RAPID' | 'REGULAR' | 'STABLE';
+  releaseChannel?: "RAPID" | "REGULAR" | "STABLE";
   /** Enable deletion protection */
   deletionProtection?: boolean;
   /** Node pools configuration */
@@ -66,16 +66,17 @@ export class Gke extends Construct {
   constructor(scope: Construct, id: string, config: GkeConfig) {
     super(scope, id);
 
-    const providerConfigRef = config.providerConfigRef ?? 'default';
-    const clusterDeletionPolicy = config.deletionPolicy ?? ClusterSpecDeletionPolicy.DELETE;
+    const providerConfigRef = config.providerConfigRef ?? "default";
+    const clusterDeletionPolicy =
+      config.deletionPolicy ?? ClusterSpecDeletionPolicy.DELETE;
     const nodePoolDeletionPolicy = config.deletionPolicy
-      ? (config.deletionPolicy === ClusterSpecDeletionPolicy.ORPHAN
-          ? NodePoolSpecDeletionPolicy.ORPHAN
-          : NodePoolSpecDeletionPolicy.DELETE)
+      ? config.deletionPolicy === ClusterSpecDeletionPolicy.ORPHAN
+        ? NodePoolSpecDeletionPolicy.ORPHAN
+        : NodePoolSpecDeletionPolicy.DELETE
       : NodePoolSpecDeletionPolicy.DELETE;
 
     // Create GKE Cluster
-    this.cluster = new CpCluster(this, 'cluster', {
+    this.cluster = new CpCluster(this, "cluster", {
       metadata: {
         name: config.name,
       },
@@ -91,34 +92,50 @@ export class Gke extends Construct {
           },
           initialNodeCount: 1,
           removeDefaultNodePool: true,
-          networkingMode: 'VPC_NATIVE',
-          ipAllocationPolicy: [{
-            clusterSecondaryRangeName: config.network.podsRangeName,
-            servicesSecondaryRangeName: config.network.servicesRangeName,
-          }],
-          ...(config.releaseChannel ? {
-            releaseChannel: [{
-              channel: config.releaseChannel,
-            }],
-          } : {}),
-          loggingService: 'logging.googleapis.com/kubernetes',
-          monitoringService: 'monitoring.googleapis.com/kubernetes',
+          networkingMode: "VPC_NATIVE",
+          ipAllocationPolicy: [
+            {
+              clusterSecondaryRangeName: config.network.podsRangeName,
+              servicesSecondaryRangeName: config.network.servicesRangeName,
+            },
+          ],
+          ...(config.releaseChannel
+            ? {
+                releaseChannel: [
+                  {
+                    channel: config.releaseChannel,
+                  },
+                ],
+              }
+            : {}),
+          loggingService: "logging.googleapis.com/kubernetes",
+          monitoringService: "monitoring.googleapis.com/kubernetes",
           deletionProtection: config.deletionProtection ?? false,
-          workloadIdentityConfig: [{
-            workloadPool: `${config.project}.svc.id.goog`,
-          }],
+          workloadIdentityConfig: [
+            {
+              workloadPool: `${config.project}.svc.id.goog`,
+            },
+          ],
           enableShieldedNodes: true,
-          verticalPodAutoscaling: [{
-            enabled: true,
-          }],
-          addonsConfig: [{
-            httpLoadBalancing: [{
-              disabled: false,
-            }],
-            horizontalPodAutoscaling: [{
-              disabled: false,
-            }],
-          }],
+          verticalPodAutoscaling: [
+            {
+              enabled: true,
+            },
+          ],
+          addonsConfig: [
+            {
+              httpLoadBalancing: [
+                {
+                  disabled: false,
+                },
+              ],
+              horizontalPodAutoscaling: [
+                {
+                  disabled: false,
+                },
+              ],
+            },
+          ],
         },
         providerConfigRef: {
           name: providerConfigRef,
@@ -128,16 +145,18 @@ export class Gke extends Construct {
     });
 
     // Build node pools
-    const nodePoolsConfig: Record<string, NodePoolConfig> = { ...(config.nodePools ?? {}) };
+    const nodePoolsConfig: Record<string, NodePoolConfig> = {
+      ...(config.nodePools ?? {}),
+    };
 
     // Add system node pool if requested
-    if (config.createSystemNodePool && !nodePoolsConfig['system']) {
-      nodePoolsConfig['system'] = {
+    if (config.createSystemNodePool && !nodePoolsConfig["system"]) {
+      nodePoolsConfig["system"] = {
         minNodes: 1,
         maxNodes: 1,
-        machineType: 'e2-standard-2',
-        labels: { 'nebula.sh/node-pool': 'system' },
-        tags: ['system'],
+        machineType: "e2-standard-2",
+        labels: { "nebula.sh/node-pool": "system" },
+        tags: ["system"],
         ...(config.systemNodePoolConfig ?? {}),
       };
     }
@@ -145,7 +164,8 @@ export class Gke extends Construct {
     // Create node pools
     for (const [poolName, poolConfig] of Object.entries(nodePoolsConfig)) {
       const nodePoolId = `${config.name}-${poolName}`;
-      const autoscalingEnabled = (poolConfig.maxNodes ?? 0) > (poolConfig.minNodes ?? 1);
+      const autoscalingEnabled =
+        (poolConfig.maxNodes ?? 0) > (poolConfig.minNodes ?? 1);
 
       this.nodePools[poolName] = new CpNodePool(this, `nodepool-${poolName}`, {
         metadata: {
@@ -158,40 +178,53 @@ export class Gke extends Construct {
             },
             location: config.location,
             project: config.project,
-            ...(autoscalingEnabled ? {
-              autoscaling: [{
-                minNodeCount: poolConfig.minNodes ?? 1,
-                maxNodeCount: poolConfig.maxNodes ?? 1,
-              }],
-            } : {
-              nodeCount: poolConfig.minNodes ?? 1,
-            }),
-            nodeConfig: [{
-              machineType: poolConfig.machineType ?? 'e2-standard-4',
-              diskSizeGb: poolConfig.diskSizeGb ?? 100,
-              diskType: poolConfig.diskType ?? 'pd-standard',
-              imageType: poolConfig.imageType ?? 'COS_CONTAINERD',
-              spot: poolConfig.spot ?? false,
-              labels: poolConfig.labels ?? {},
-              tags: poolConfig.tags ?? [],
-              workloadMetadataConfig: [{
-                mode: 'GKE_METADATA',
-              }],
-              metadata: {
-                'disable-legacy-endpoints': 'true',
+            ...(autoscalingEnabled
+              ? {
+                  autoscaling: [
+                    {
+                      minNodeCount: poolConfig.minNodes ?? 1,
+                      maxNodeCount: poolConfig.maxNodes ?? 1,
+                    },
+                  ],
+                }
+              : {
+                  nodeCount: poolConfig.minNodes ?? 1,
+                }),
+            nodeConfig: [
+              {
+                index: 0, // Required for server-side apply merge key
+                machineType: poolConfig.machineType ?? "e2-standard-4",
+                diskSizeGb: poolConfig.diskSizeGb ?? 100,
+                diskType: poolConfig.diskType ?? "pd-standard",
+                imageType: poolConfig.imageType ?? "COS_CONTAINERD",
+                spot: poolConfig.spot ?? false,
+                labels: poolConfig.labels ?? {},
+                tags: poolConfig.tags ?? [],
+                workloadMetadataConfig: [
+                  {
+                    mode: "GKE_METADATA",
+                  },
+                ],
+                metadata: {
+                  "disable-legacy-endpoints": "true",
+                },
+                ...(poolConfig.taints && poolConfig.taints.length > 0
+                  ? {
+                      taint: poolConfig.taints.map((t) => ({
+                        key: t.key,
+                        value: t.value ?? "true",
+                        effect: t.effect,
+                      })),
+                    }
+                  : {}),
               },
-              ...(poolConfig.taints && poolConfig.taints.length > 0 ? {
-                taint: poolConfig.taints.map(t => ({
-                  key: t.key,
-                  value: t.value ?? 'true',
-                  effect: t.effect,
-                })),
-              } : {}),
-            }],
-            management: [{
-              autoRepair: true,
-              autoUpgrade: true,
-            }],
+            ],
+            management: [
+              {
+                autoRepair: true,
+                autoUpgrade: true,
+              },
+            ],
           },
           providerConfigRef: {
             name: providerConfigRef,
