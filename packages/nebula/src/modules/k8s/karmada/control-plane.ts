@@ -94,6 +94,17 @@ export class KarmadaControlPlane extends Construct {
         obj.addJsonPatch(priorityPatch);
         obj.addJsonPatch(preemptionPatch);
       }
+
+      // Add ArgoCD annotation to Jobs so they don't affect sync status when deleted by TTL
+      // See: https://argo-cd.readthedocs.io/en/stable/user-guide/compare-options/
+      if (obj.kind === "Job") {
+        obj.addJsonPatch(
+          JsonPatch.add(
+            "/metadata/annotations/argocd.argoproj.io~1compare-options",
+            "IgnoreExtraneous",
+          ),
+        );
+      }
     }
 
     // API server service name for ArgoCD registration
