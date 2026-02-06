@@ -73,12 +73,12 @@ imports:
   # k0smotron Core CRDs (v1.7.0)
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/k0smotron.io/k0smotron.io_clusters.yaml
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/k0smotron.io/k0smotron.io_jointokenrequests.yaml
-  # Karmada CRDs (v1.16.2) - Policy APIs
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/policy/policy.karmada.io_propagationpolicies.yaml
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/policy/policy.karmada.io_clusterpropagationpolicies.yaml
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/policy/policy.karmada.io_overridepolicies.yaml
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/policy/policy.karmada.io_clusteroverridepolicies.yaml
-  # Karmada CRDs (v1.16.2) - Work APIs
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/work/work.karmada.io_resourcebindings.yaml
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/work/work.karmada.io_clusterresourcebindings.yaml
-  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.2/charts/karmada/_crds/bases/work/work.karmada.io_works.yaml
+  # Karmada CRDs (v1.16.0) - Policy APIs
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_propagationpolicies.yaml
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_clusterpropagationpolicies.yaml
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_overridepolicies.yaml
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_clusteroverridepolicies.yaml
+  # Karmada CRDs (v1.16.0) - Work APIs
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_resourcebindings.yaml
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_clusterresourcebindings.yaml
+  - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_works.yaml
