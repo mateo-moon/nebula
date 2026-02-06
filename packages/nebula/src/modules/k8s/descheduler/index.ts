@@ -137,8 +137,15 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       deschedulePlugins.push("RemovePodsHavingTooManyRestarts");
     }
 
-    // Build plugin configurations
+    // Build plugin configurations - every enabled plugin needs a config entry
     const pluginConfig: Record<string, unknown>[] = [];
+
+    if (this.config.enableRemoveDuplicates !== false) {
+      pluginConfig.push({
+        name: "RemoveDuplicates",
+        args: {},
+      });
+    }
 
     if (this.config.enableLowNodeUtilization !== false) {
       pluginConfig.push({
@@ -174,6 +181,20 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         args: {
           nodeAffinityType: ["requiredDuringSchedulingIgnoredDuringExecution"],
         },
+      });
+    }
+
+    if (this.config.enableRemovePodsViolatingNodeTaints !== false) {
+      pluginConfig.push({
+        name: "RemovePodsViolatingNodeTaints",
+        args: {},
+      });
+    }
+
+    if (this.config.enableRemovePodsViolatingInterPodAntiAffinity !== false) {
+      pluginConfig.push({
+        name: "RemovePodsViolatingInterPodAntiAffinity",
+        args: {},
       });
     }
 
