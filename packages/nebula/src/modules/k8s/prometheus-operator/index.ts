@@ -22,8 +22,8 @@ import {
   ServiceAccountIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
 import {
-  Bucket as GcsBucket,
-  BucketIamMember,
+  BucketV1Beta2 as GcsBucket,
+  BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
 import { BaseConstruct } from "../../../core";
 
