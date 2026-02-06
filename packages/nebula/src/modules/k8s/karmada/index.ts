@@ -41,9 +41,11 @@ import * as kplus from "cdk8s-plus-33";
 import { BaseConstruct } from "../../../core";
 import { KarmadaControlPlane, KARMADA_VERSION } from "./control-plane";
 import {
-  KarmadaCluster,
+  KarmadaClusterRegistration,
   KarmadaCapiClusterRegistration,
+  KarmadaCluster, // deprecated alias
 } from "./cluster-registration";
+import { Cluster } from "./cluster";
 import type {
   KarmadaConfig,
   ClusterRegistrationConfig,
@@ -80,10 +82,21 @@ export type {
   CapiClusterRegistrationConfig,
 } from "./types";
 
-// Re-export cluster registration
+// Re-export Cluster type (aggregated API - manually typed)
+export { Cluster } from "./cluster";
+export type {
+  KarmadaClusterSpec,
+  KarmadaClusterProps,
+  ClusterSyncMode,
+  LocalSecretReference,
+  ClusterTaint,
+} from "./cluster";
+
+// Re-export cluster registration helpers
 export {
-  KarmadaCluster,
+  KarmadaClusterRegistration,
   KarmadaCapiClusterRegistration,
+  KarmadaCluster, // deprecated alias for KarmadaClusterRegistration
 } from "./cluster-registration";
 
 // Re-export generated Karmada API types for direct use

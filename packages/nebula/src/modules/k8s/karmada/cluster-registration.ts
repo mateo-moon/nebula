@@ -6,7 +6,8 @@
  * CAPI-provisioned clusters with Karmada.
  */
 import { Construct } from "constructs";
-import { ApiObject } from "cdk8s";
+import * as kplus from "cdk8s-plus-33";
+import { Cluster } from "./cluster";
 import type {
   ClusterRegistrationConfig,
   CapiClusterRegistrationConfig,
@@ -14,7 +15,7 @@ import type {
 } from "./types";
 
 /**
- * KarmadaCluster - Registers a Kubernetes cluster with Karmada.
+ * KarmadaClusterRegistration - Registers a Kubernetes cluster with Karmada.
  *
  * This creates a Karmada Cluster resource that references the cluster's
  * kubeconfig secret for authentication.
@@ -22,11 +23,11 @@ import type {
  * @example
  * ```typescript
  * // Register a CAPI-provisioned cluster with Karmada
- * new KarmadaCluster(chart, 'dev-cluster', {
+ * new KarmadaClusterRegistration(chart, 'dev-cluster', {
  *   name: 'dev-cluster',
  *   apiEndpoint: 'https://dev-cluster-api.example.com:6443',
  *   secretName: 'dev-cluster-kubeconfig',
- *   secretNamespace: 'default',
+ *   secretNamespace: 'karmada-system',
  *   labels: {
  *     env: 'dev',
  *     provider: 'gcp',
@@ -35,8 +36,8 @@ import type {
  * });
  * ```
  */
-export class KarmadaCluster extends Construct {
-  public readonly cluster: ApiObject;
+export class KarmadaClusterRegistration extends Construct {
+  public readonly cluster: Cluster;
 
   constructor(scope: Construct, id: string, config: ClusterRegistrationConfig) {
     super(scope, id);
@@ -60,25 +61,22 @@ export class KarmadaCluster extends Construct {
       labels["zone"] = config.zone;
     }
 
-    // Create Karmada Cluster resource
-    // API: cluster.karmada.io/v1alpha1
-    this.cluster = new ApiObject(this, "cluster", {
-      apiVersion: "cluster.karmada.io/v1alpha1",
-      kind: "Cluster",
+    // Create Karmada Cluster resource using typed class
+    this.cluster = new Cluster(this, "cluster", {
       metadata: {
         name: config.name,
         labels: Object.keys(labels).length > 0 ? labels : undefined,
       },
       spec: {
-        // Sync mode: Push (Karmada connects to cluster) or Pull (agent connects to Karmada)
         syncMode: mode,
-        // API endpoint of the member cluster
         apiEndpoint: config.apiEndpoint,
-        // Secret reference containing kubeconfig
         secretRef: {
           name: config.secretName,
           namespace: secretNamespace,
         },
+        provider: config.provider,
+        region: config.region,
+        zone: config.zone,
       },
     });
   }
@@ -89,6 +87,7 @@ export class KarmadaCluster extends Construct {
  *
  * This creates:
  * 1. A Karmada Cluster resource referencing the CAPI cluster's kubeconfig
+ * 2. Reflector annotations on the kubeconfig secret for cross-namespace replication
  *
  * Note: CAPI creates a kubeconfig secret named `{cluster-name}-kubeconfig` in the
  * same namespace as the Cluster resource. This secret needs to be copied to the
@@ -109,8 +108,8 @@ export class KarmadaCluster extends Construct {
  * ```
  */
 export class KarmadaCapiClusterRegistration extends Construct {
-  public readonly cluster: ApiObject;
-  public readonly secretCopy: ApiObject;
+  public readonly cluster: Cluster;
+  public readonly secretReflection: kplus.Secret;
 
   constructor(
     scope: Construct,
@@ -140,15 +139,8 @@ export class KarmadaCapiClusterRegistration extends Construct {
       labels["zone"] = config.zone;
     }
 
-    // Create a Crossplane Composition to copy the secret
-    // Or use a simple Secret with external-secrets or reflector
-    // For now, we'll create a placeholder that expects the secret to exist
-    // in Karmada namespace (can be copied by external-secrets or manually)
-
-    // Create Karmada Cluster resource
-    this.cluster = new ApiObject(this, "karmada-cluster", {
-      apiVersion: "cluster.karmada.io/v1alpha1",
-      kind: "Cluster",
+    // Create Karmada Cluster resource using typed class
+    this.cluster = new Cluster(this, "karmada-cluster", {
       metadata: {
         name: config.clusterName,
         labels,
@@ -166,15 +158,16 @@ export class KarmadaCapiClusterRegistration extends Construct {
           name: kubeconfigSecretName,
           namespace: karmadaNamespace,
         },
+        provider: config.provider,
+        region: config.region,
+        zone: config.zone,
       },
     });
 
-    // Create a reflector annotation on the original secret to replicate it
+    // Create a secret with reflector annotations to replicate to karmada-system
     // This uses kubernetes-reflector to copy secrets across namespaces
-    // Alternative: Use Crossplane to create the secret copy
-    this.secretCopy = new ApiObject(this, "secret-reflection", {
-      apiVersion: "v1",
-      kind: "Secret",
+    // The actual secret content is created by CAPI - we just add annotations
+    this.secretReflection = new kplus.Secret(this, "secret-reflection", {
       metadata: {
         name: kubeconfigSecretName,
         namespace: clusterNamespace,
@@ -191,3 +184,7 @@ export class KarmadaCapiClusterRegistration extends Construct {
     });
   }
 }
+
+// Re-export with old names for backwards compatibility
+/** @deprecated Use KarmadaClusterRegistration instead */
+export const KarmadaCluster = KarmadaClusterRegistration;
