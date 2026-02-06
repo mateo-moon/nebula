@@ -670,12 +670,31 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
 set -e
 mkdir -p /tmp/bin
 export PATH="/tmp/bin:$PATH"
-echo "Installing helm..." >&2
-wget -qO- https://get.helm.sh/helm-v3.17.0-linux-amd64.tar.gz | tar xz -C /tmp >&2
-mv /tmp/linux-amd64/helm /tmp/bin/helm
-echo "Installing vals..." >&2
-VALS_VERSION=\${VALS_VERSION:-0.43.1}
-wget -qO- "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" | tar xz -C /tmp/bin vals >&2
+
+# Skip tool installation if already present
+if [ ! -x /tmp/bin/helm ]; then
+  echo "Installing helm..." >&2
+  HELM_VERSION=\${HELM_VERSION:-3.17.0}
+  if ! wget -O /tmp/helm.tar.gz "https://get.helm.sh/helm-v\${HELM_VERSION}-linux-amd64.tar.gz" 2>&1; then
+    echo "ERROR: Failed to download helm" >&2
+    exit 1
+  fi
+  tar xzf /tmp/helm.tar.gz -C /tmp >&2
+  mv /tmp/linux-amd64/helm /tmp/bin/helm
+  rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
+fi
+
+if [ ! -x /tmp/bin/vals ]; then
+  echo "Installing vals..." >&2
+  VALS_VERSION=\${VALS_VERSION:-0.43.1}
+  if ! wget -O /tmp/vals.tar.gz "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" 2>&1; then
+    echo "ERROR: Failed to download vals" >&2
+    exit 1
+  fi
+  tar xzf /tmp/vals.tar.gz -C /tmp/bin vals >&2
+  rm -f /tmp/vals.tar.gz
+fi
+
 echo "Installing dependencies in $(pwd)..." >&2
 pnpm install --frozen-lockfile 2>&1 >&2 || pnpm install 2>&1 >&2
 `,
