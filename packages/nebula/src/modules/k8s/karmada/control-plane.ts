@@ -95,10 +95,10 @@ export class KarmadaControlPlane extends Construct {
         obj.addJsonPatch(preemptionPatch);
       }
 
-      // Add ArgoCD annotation to Jobs so they don't affect sync status when deleted by TTL
+      // Handle Jobs: Add ArgoCD annotations and convert Helm hooks to ArgoCD hooks
       // See: https://argo-cd.readthedocs.io/en/stable/user-guide/compare-options/
       if (obj.kind === "Job") {
-        // First ensure annotations object exists, then add the annotation
+        // First ensure annotations object exists
         obj.addJsonPatch(JsonPatch.add("/metadata/annotations", {}));
         obj.addJsonPatch(
           JsonPatch.add(
@@ -106,6 +106,27 @@ export class KarmadaControlPlane extends Construct {
             "IgnoreExtraneous",
           ),
         );
+
+        // Convert helm.sh/hook to argocd.argoproj.io/hook
+        // The post-delete job should only run when the app is deleted
+        if (obj.name === "karmada-post-delete") {
+          obj.addJsonPatch(
+            JsonPatch.add(
+              "/metadata/annotations/argocd.argoproj.io~1hook",
+              "PostDelete",
+            ),
+          );
+          obj.addJsonPatch(
+            JsonPatch.add(
+              "/metadata/annotations/argocd.argoproj.io~1hook-delete-policy",
+              "BeforeHookCreation",
+            ),
+          );
+          // Remove helm.sh/hook annotation so ArgoCD doesn't double-process
+          obj.addJsonPatch(
+            JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
+          );
+        }
       }
     }
 
