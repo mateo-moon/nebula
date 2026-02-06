@@ -98,6 +98,8 @@ export class KarmadaControlPlane extends Construct {
       // Add ArgoCD annotation to Jobs so they don't affect sync status when deleted by TTL
       // See: https://argo-cd.readthedocs.io/en/stable/user-guide/compare-options/
       if (obj.kind === "Job") {
+        // First ensure annotations object exists, then add the annotation
+        obj.addJsonPatch(JsonPatch.add("/metadata/annotations", {}));
         obj.addJsonPatch(
           JsonPatch.add(
             "/metadata/annotations/argocd.argoproj.io~1compare-options",
