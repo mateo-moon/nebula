@@ -264,6 +264,8 @@ export interface ArgoCdConfig {
     effect: string;
     value?: string;
   }>;
+  /** Extra data to add to the argocd-secret (e.g., OIDC clientID, clientSecret) */
+  extraSecretData?: Record<string, string>;
 }
 
 /**
@@ -365,6 +367,11 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       argocdSecretData["accounts.crossplane.password"] =
         this.crossplanePasswordHash;
       argocdSecretData["accounts.crossplane.enabled"] = "true";
+    }
+
+    // Add extra secret data (e.g., OIDC clientID, clientSecret)
+    if (this.config.extraSecretData) {
+      Object.assign(argocdSecretData, this.config.extraSecretData);
     }
 
     // Create ArgoCD server secret
