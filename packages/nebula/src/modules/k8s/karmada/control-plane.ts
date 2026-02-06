@@ -2,7 +2,7 @@
  * Karmada Control Plane - Helm-based installation of Karmada.
  */
 import { Construct } from "constructs";
-import { Helm } from "cdk8s";
+import { Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import type { KarmadaConfig } from "./types";
@@ -79,6 +79,22 @@ export class KarmadaControlPlane extends Construct {
       namespace: namespaceName,
       values: chartValues,
     });
+
+    // Workaround for Karmada Helm chart bug: it sets both priorityClassName and
+    // a hardcoded priority value (2000001000). When priorityClassName is empty
+    // but priority is set, GKE's priority admission controller rejects the pods.
+    // We patch out the priority field from Deployment/StatefulSet pod specs.
+    const priorityPatch = JsonPatch.remove("/spec/template/spec/priority");
+    const preemptionPatch = JsonPatch.remove(
+      "/spec/template/spec/preemptionPolicy",
+    );
+
+    for (const obj of this.helm.apiObjects) {
+      if (obj.kind === "Deployment" || obj.kind === "StatefulSet") {
+        obj.addJsonPatch(priorityPatch);
+        obj.addJsonPatch(preemptionPatch);
+      }
+    }
 
     // API server service name for ArgoCD registration
     this.apiServerService = `karmada-apiserver.${namespaceName}.svc.cluster.local`;
