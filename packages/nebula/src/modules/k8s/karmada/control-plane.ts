@@ -8,7 +8,7 @@ import { deepmerge } from "deepmerge-ts";
 import type { KarmadaConfig } from "./types";
 
 /** Default Karmada version */
-export const KARMADA_VERSION = "1.16.2";
+export const KARMADA_VERSION = "1.16.0";
 
 /** Karmada Helm repository URL */
 export const KARMADA_HELM_REPO =
@@ -62,8 +62,7 @@ export class KarmadaControlPlane extends Construct {
             endpoints: config.externalEtcd.endpoints,
             secretRef: {
               name: config.externalEtcd.secretName,
-              namespace:
-                config.externalEtcd.secretNamespace ?? namespaceName,
+              namespace: config.externalEtcd.secretNamespace ?? namespaceName,
             },
           },
         }),
