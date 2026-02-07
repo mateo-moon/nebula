@@ -74,7 +74,7 @@ export interface ClusterApiOperatorHetznerConfig {
   secretNamespace?: string;
   /**
    * CAPH provider version
-   * @default 'v1.0.0'
+   * @default 'v1.0.7'
    */
   version?: string;
 }
@@ -174,7 +174,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         this.config.hetzner.secretNamespace ?? caphNamespace;
 
       infrastructureProviders.hetzner = {
-        version: this.config.infrastructure?.hetzner?.version ?? "v1.0.0",
+        version: this.config.infrastructure?.hetzner?.version ?? "v1.0.7",
         configSecret: {
           name: hetznerSecretName,
           namespace: hetznerSecretNamespace,
