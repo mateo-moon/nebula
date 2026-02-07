@@ -47,17 +47,13 @@ export {
   Cluster,
   KarmadaClusterRegistration,
   KarmadaCapiClusterRegistration,
-  KarmadaCluster, // deprecated alias
   PropagationPolicy,
   ClusterPropagationPolicy,
   OverridePolicy,
   ClusterOverridePolicy,
-  createDuplicatedPropagationPolicy,
-  createCrdPropagationPolicy,
 } from "./karmada";
 export type {
   KarmadaConfig,
-  KarmadaInstallMode,
   KarmadaClusterMode,
   KarmadaClusterSpec,
   KarmadaClusterProps,
