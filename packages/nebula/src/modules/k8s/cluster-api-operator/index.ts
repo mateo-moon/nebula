@@ -58,6 +58,27 @@ export interface ClusterApiOperatorGcpConfig {
   createIamBindings?: boolean;
 }
 
+/** Hetzner configuration for CAPH */
+export interface ClusterApiOperatorHetznerConfig {
+  /**
+   * Name of the Kubernetes secret containing Hetzner credentials.
+   * The secret must contain key 'hcloud' with the HCloud API token.
+   * For bare metal, also include 'robot-user' and 'robot-password'.
+   * @default 'hetzner'
+   */
+  secretName?: string;
+  /**
+   * Namespace where the secret is located.
+   * @default 'caph-system'
+   */
+  secretNamespace?: string;
+  /**
+   * CAPH provider version
+   * @default 'v1.0.0'
+   */
+  version?: string;
+}
+
 export interface ClusterApiOperatorConfig {
   /** Namespace for the operator (defaults to capi-operator-system) */
   namespace?: string;
@@ -70,6 +91,7 @@ export interface ClusterApiOperatorConfig {
   /** Infrastructure providers configuration */
   infrastructure?: {
     gcp?: { version?: string };
+    hetzner?: { version?: string };
     k0smotron?: { version?: string };
   };
   /** Core providers configuration */
@@ -86,6 +108,8 @@ export interface ClusterApiOperatorConfig {
   };
   /** GCP configuration for CAPG IAM setup */
   gcp?: ClusterApiOperatorGcpConfig;
+  /** Hetzner configuration for CAPH setup */
+  hetzner?: ClusterApiOperatorHetznerConfig;
 }
 
 export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> {
@@ -105,16 +129,58 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
 
     const namespaceName = this.config.namespace ?? "capi-operator-system";
     const capgNamespace = "capg-system";
+    const caphNamespace = "caph-system";
 
     // Create namespace
     this.namespace = new kplus.Namespace(this, "namespace", {
       metadata: { name: namespaceName },
     });
 
-    // Create CAPG namespace for credentials secret
-    new kplus.Namespace(this, "capg-namespace", {
-      metadata: { name: capgNamespace },
-    });
+    // Create CAPG namespace for credentials secret (if GCP is configured)
+    if (this.config.gcp) {
+      new kplus.Namespace(this, "capg-namespace", {
+        metadata: { name: capgNamespace },
+      });
+    }
+
+    // Create CAPH namespace for credentials secret (if Hetzner is configured)
+    if (this.config.hetzner) {
+      new kplus.Namespace(this, "caph-namespace", {
+        metadata: { name: caphNamespace },
+      });
+    }
+
+    // Build infrastructure providers based on config
+    const infrastructureProviders: Record<string, unknown> = {
+      k0smotron: {
+        version: this.config.infrastructure?.k0smotron?.version ?? "v1.7.0",
+        fetchConfig: {
+          url: K0SMOTRON_FETCH_URLS.infrastructure,
+        },
+      },
+    };
+
+    // Add GCP provider if configured
+    if (this.config.gcp) {
+      infrastructureProviders.gcp = {
+        version: this.config.infrastructure?.gcp?.version ?? "v1.10.0",
+      };
+    }
+
+    // Add Hetzner provider if configured
+    if (this.config.hetzner) {
+      const hetznerSecretName = this.config.hetzner.secretName ?? "hetzner";
+      const hetznerSecretNamespace =
+        this.config.hetzner.secretNamespace ?? caphNamespace;
+
+      infrastructureProviders.hetzner = {
+        version: this.config.infrastructure?.hetzner?.version ?? "v1.0.0",
+        configSecret: {
+          name: hetznerSecretName,
+          namespace: hetznerSecretNamespace,
+        },
+      };
+    }
 
     const defaultValues: Record<string, unknown> = {
       tolerations: [
@@ -124,17 +190,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
           effect: "NoSchedule",
         },
       ],
-      infrastructure: {
-        gcp: {
-          version: this.config.infrastructure?.gcp?.version ?? "v1.10.0",
-        },
-        k0smotron: {
-          version: this.config.infrastructure?.k0smotron?.version ?? "v1.7.0",
-          fetchConfig: {
-            url: K0SMOTRON_FETCH_URLS.infrastructure,
-          },
-        },
-      },
+      infrastructure: infrastructureProviders,
       core: {
         "cluster-api": {
           version: this.config.core?.["cluster-api"]?.version ?? "v1.9.5",
@@ -169,9 +225,8 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       this.credentialsSecretName = credentialsSecretName;
 
       // Add configSecret to GCP infrastructure provider
-      (defaultValues.infrastructure as Record<string, unknown>).gcp = {
-        ...((defaultValues.infrastructure as Record<string, unknown>)
-          .gcp as Record<string, unknown>),
+      infrastructureProviders.gcp = {
+        ...(infrastructureProviders.gcp as Record<string, unknown>),
         configSecret: {
           name: credentialsSecretName,
           namespace: capgNamespace,
