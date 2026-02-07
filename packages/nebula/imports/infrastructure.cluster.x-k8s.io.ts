@@ -5577,6 +5577,2650 @@ export enum GcpManagedMachinePoolSpecScalingLocationPolicy {
 
 
 /**
+ * HCloudMachine is the Schema for the hcloudmachines API.
+ *
+ * @schema HCloudMachine
+ */
+export class HCloudMachine extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HCloudMachine"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HCloudMachine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HCloudMachine".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HCloudMachineProps = {}): any {
+    return {
+      ...HCloudMachine.GVK,
+      ...toJson_HCloudMachineProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HCloudMachine" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HCloudMachineProps = {}) {
+    super(scope, id, {
+      ...HCloudMachine.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HCloudMachine.GVK,
+      ...toJson_HCloudMachineProps(resolved),
+    };
+  }
+}
+
+/**
+ * HCloudMachine is the Schema for the hcloudmachines API.
+ *
+ * @schema HCloudMachine
+ */
+export interface HCloudMachineProps {
+  /**
+   * @schema HCloudMachine#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HCloudMachineSpec defines the desired state of HCloudMachine.
+   *
+   * @schema HCloudMachine#spec
+   */
+  readonly spec?: HCloudMachineSpec;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineProps(obj: HCloudMachineProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HCloudMachineSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudMachineSpec defines the desired state of HCloudMachine.
+ *
+ * @schema HCloudMachineSpec
+ */
+export interface HCloudMachineSpec {
+  /**
+   * ImageName is the reference to the Machine Image from which to create the machine instance.
+   * It can reference an image uploaded to Hetzner API in two ways: either directly as the name of an image or as the label of an image.
+   *
+   * @schema HCloudMachineSpec#imageName
+   */
+  readonly imageName: string;
+
+  /**
+   * PlacementGroupName defines the placement group of the machine in HCloud API that must reference an existing placement group.
+   *
+   * @schema HCloudMachineSpec#placementGroupName
+   */
+  readonly placementGroupName?: string;
+
+  /**
+   * ProviderID is the unique identifier as specified by the cloud provider.
+   *
+   * @schema HCloudMachineSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * PublicNetwork specifies information for public networks. It defines the specs about
+   * the primary IP address of the server. If both IPv4 and IPv6 are disabled, then the private network has to be enabled.
+   *
+   * @schema HCloudMachineSpec#publicNetwork
+   */
+  readonly publicNetwork?: HCloudMachineSpecPublicNetwork;
+
+  /**
+   * SSHKeys define machine-specific SSH keys and override cluster-wide SSH keys.
+   *
+   * @schema HCloudMachineSpec#sshKeys
+   */
+  readonly sshKeys?: HCloudMachineSpecSshKeys[];
+
+  /**
+   * Type is the HCloud Machine Type for this machine. It defines the desired server type of
+   * server in Hetzner's Cloud API. You can use the hcloud CLI to get server names (`hcloud
+   * server-type list`) or on https://www.hetzner.com/cloud
+   *
+   *
+   * The types follow this pattern: cxNV (shared, cheap), cpxNV (shared, performance), ccxNV
+   * (dedicated), caxNV (ARM)
+   *
+   *
+   * N is a number, and V is the version of this machine type. Example: cpx32.
+   *
+   *
+   * The list of valid machine types gets changed by Hetzner from time to time. CAPH no longer
+   * validates this string. It is up to you to use a valid type. Not all types are available in all
+   * locations.
+   *
+   * @schema HCloudMachineSpec#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineSpec(obj: HCloudMachineSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'imageName': obj.imageName,
+    'placementGroupName': obj.placementGroupName,
+    'providerID': obj.providerId,
+    'publicNetwork': toJson_HCloudMachineSpecPublicNetwork(obj.publicNetwork),
+    'sshKeys': obj.sshKeys?.map(y => toJson_HCloudMachineSpecSshKeys(y)),
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PublicNetwork specifies information for public networks. It defines the specs about
+ * the primary IP address of the server. If both IPv4 and IPv6 are disabled, then the private network has to be enabled.
+ *
+ * @schema HCloudMachineSpecPublicNetwork
+ */
+export interface HCloudMachineSpecPublicNetwork {
+  /**
+   * EnableIPv4 defines whether server has IPv4 address enabled.
+   * As Hetzner load balancers require an IPv4 address, this setting will be ignored and set to true if there is no private net.
+   *
+   * @schema HCloudMachineSpecPublicNetwork#enableIPv4
+   */
+  readonly enableIPv4?: boolean;
+
+  /**
+   * EnableIPv6 defines whether server has IPv6 addresses enabled.
+   *
+   * @schema HCloudMachineSpecPublicNetwork#enableIPv6
+   */
+  readonly enableIPv6?: boolean;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineSpecPublicNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineSpecPublicNetwork(obj: HCloudMachineSpecPublicNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableIPv4': obj.enableIPv4,
+    'enableIPv6': obj.enableIPv6,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKey defines the SSHKey for HCloud.
+ *
+ * @schema HCloudMachineSpecSshKeys
+ */
+export interface HCloudMachineSpecSshKeys {
+  /**
+   * Fingerprint defines the fingerprint of the SSH key - added by the controller.
+   *
+   * @schema HCloudMachineSpecSshKeys#fingerprint
+   */
+  readonly fingerprint?: string;
+
+  /**
+   * Name defines the name of the SSH key.
+   *
+   * @schema HCloudMachineSpecSshKeys#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineSpecSshKeys' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineSpecSshKeys(obj: HCloudMachineSpecSshKeys | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fingerprint': obj.fingerprint,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HCloudMachineTemplate is the Schema for the hcloudmachinetemplates API.
+ *
+ * @schema HCloudMachineTemplate
+ */
+export class HCloudMachineTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HCloudMachineTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HCloudMachineTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HCloudMachineTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HCloudMachineTemplateProps = {}): any {
+    return {
+      ...HCloudMachineTemplate.GVK,
+      ...toJson_HCloudMachineTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HCloudMachineTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HCloudMachineTemplateProps = {}) {
+    super(scope, id, {
+      ...HCloudMachineTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HCloudMachineTemplate.GVK,
+      ...toJson_HCloudMachineTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * HCloudMachineTemplate is the Schema for the hcloudmachinetemplates API.
+ *
+ * @schema HCloudMachineTemplate
+ */
+export interface HCloudMachineTemplateProps {
+  /**
+   * @schema HCloudMachineTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HCloudMachineTemplateSpec defines the desired state of HCloudMachineTemplate.
+   *
+   * @schema HCloudMachineTemplate#spec
+   */
+  readonly spec?: HCloudMachineTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateProps(obj: HCloudMachineTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HCloudMachineTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudMachineTemplateSpec defines the desired state of HCloudMachineTemplate.
+ *
+ * @schema HCloudMachineTemplateSpec
+ */
+export interface HCloudMachineTemplateSpec {
+  /**
+   * HCloudMachineTemplateResource describes the data needed to create am HCloudMachine from a template.
+   *
+   * @schema HCloudMachineTemplateSpec#template
+   */
+  readonly template: HCloudMachineTemplateSpecTemplate;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateSpec(obj: HCloudMachineTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_HCloudMachineTemplateSpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudMachineTemplateResource describes the data needed to create am HCloudMachine from a template.
+ *
+ * @schema HCloudMachineTemplateSpecTemplate
+ */
+export interface HCloudMachineTemplateSpecTemplate {
+  /**
+   * Standard object's metadata.
+   *
+   * @schema HCloudMachineTemplateSpecTemplate#metadata
+   */
+  readonly metadata?: HCloudMachineTemplateSpecTemplateMetadata;
+
+  /**
+   * Spec is the specification of the desired behavior of the machine.
+   *
+   * @schema HCloudMachineTemplateSpecTemplate#spec
+   */
+  readonly spec: HCloudMachineTemplateSpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateSpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateSpecTemplate(obj: HCloudMachineTemplateSpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_HCloudMachineTemplateSpecTemplateMetadata(obj.metadata),
+    'spec': toJson_HCloudMachineTemplateSpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Standard object's metadata.
+ *
+ * @schema HCloudMachineTemplateSpecTemplateMetadata
+ */
+export interface HCloudMachineTemplateSpecTemplateMetadata {
+  /**
+   * Annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema HCloudMachineTemplateSpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema HCloudMachineTemplateSpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateSpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateSpecTemplateMetadata(obj: HCloudMachineTemplateSpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec is the specification of the desired behavior of the machine.
+ *
+ * @schema HCloudMachineTemplateSpecTemplateSpec
+ */
+export interface HCloudMachineTemplateSpecTemplateSpec {
+  /**
+   * ImageName is the reference to the Machine Image from which to create the machine instance.
+   * It can reference an image uploaded to Hetzner API in two ways: either directly as the name of an image or as the label of an image.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpec#imageName
+   */
+  readonly imageName: string;
+
+  /**
+   * PlacementGroupName defines the placement group of the machine in HCloud API that must reference an existing placement group.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpec#placementGroupName
+   */
+  readonly placementGroupName?: string;
+
+  /**
+   * ProviderID is the unique identifier as specified by the cloud provider.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * PublicNetwork specifies information for public networks. It defines the specs about
+   * the primary IP address of the server. If both IPv4 and IPv6 are disabled, then the private network has to be enabled.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpec#publicNetwork
+   */
+  readonly publicNetwork?: HCloudMachineTemplateSpecTemplateSpecPublicNetwork;
+
+  /**
+   * SSHKeys define machine-specific SSH keys and override cluster-wide SSH keys.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpec#sshKeys
+   */
+  readonly sshKeys?: HCloudMachineTemplateSpecTemplateSpecSshKeys[];
+
+  /**
+   * Type is the HCloud Machine Type for this machine. It defines the desired server type of
+   * server in Hetzner's Cloud API. You can use the hcloud CLI to get server names (`hcloud
+   * server-type list`) or on https://www.hetzner.com/cloud
+   *
+   *
+   * The types follow this pattern: cxNV (shared, cheap), cpxNV (shared, performance), ccxNV
+   * (dedicated), caxNV (ARM)
+   *
+   *
+   * N is a number, and V is the version of this machine type. Example: cpx32.
+   *
+   *
+   * The list of valid machine types gets changed by Hetzner from time to time. CAPH no longer
+   * validates this string. It is up to you to use a valid type. Not all types are available in all
+   * locations.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpec#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateSpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateSpecTemplateSpec(obj: HCloudMachineTemplateSpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'imageName': obj.imageName,
+    'placementGroupName': obj.placementGroupName,
+    'providerID': obj.providerId,
+    'publicNetwork': toJson_HCloudMachineTemplateSpecTemplateSpecPublicNetwork(obj.publicNetwork),
+    'sshKeys': obj.sshKeys?.map(y => toJson_HCloudMachineTemplateSpecTemplateSpecSshKeys(y)),
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PublicNetwork specifies information for public networks. It defines the specs about
+ * the primary IP address of the server. If both IPv4 and IPv6 are disabled, then the private network has to be enabled.
+ *
+ * @schema HCloudMachineTemplateSpecTemplateSpecPublicNetwork
+ */
+export interface HCloudMachineTemplateSpecTemplateSpecPublicNetwork {
+  /**
+   * EnableIPv4 defines whether server has IPv4 address enabled.
+   * As Hetzner load balancers require an IPv4 address, this setting will be ignored and set to true if there is no private net.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpecPublicNetwork#enableIPv4
+   */
+  readonly enableIPv4?: boolean;
+
+  /**
+   * EnableIPv6 defines whether server has IPv6 addresses enabled.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpecPublicNetwork#enableIPv6
+   */
+  readonly enableIPv6?: boolean;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateSpecTemplateSpecPublicNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateSpecTemplateSpecPublicNetwork(obj: HCloudMachineTemplateSpecTemplateSpecPublicNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableIPv4': obj.enableIPv4,
+    'enableIPv6': obj.enableIPv6,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKey defines the SSHKey for HCloud.
+ *
+ * @schema HCloudMachineTemplateSpecTemplateSpecSshKeys
+ */
+export interface HCloudMachineTemplateSpecTemplateSpecSshKeys {
+  /**
+   * Fingerprint defines the fingerprint of the SSH key - added by the controller.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpecSshKeys#fingerprint
+   */
+  readonly fingerprint?: string;
+
+  /**
+   * Name defines the name of the SSH key.
+   *
+   * @schema HCloudMachineTemplateSpecTemplateSpecSshKeys#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HCloudMachineTemplateSpecTemplateSpecSshKeys' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudMachineTemplateSpecTemplateSpecSshKeys(obj: HCloudMachineTemplateSpecTemplateSpecSshKeys | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fingerprint': obj.fingerprint,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HCloudRemediation is the Schema for the hcloudremediations API.
+ *
+ * @schema HCloudRemediation
+ */
+export class HCloudRemediation extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HCloudRemediation"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HCloudRemediation',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HCloudRemediation".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HCloudRemediationProps = {}): any {
+    return {
+      ...HCloudRemediation.GVK,
+      ...toJson_HCloudRemediationProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HCloudRemediation" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HCloudRemediationProps = {}) {
+    super(scope, id, {
+      ...HCloudRemediation.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HCloudRemediation.GVK,
+      ...toJson_HCloudRemediationProps(resolved),
+    };
+  }
+}
+
+/**
+ * HCloudRemediation is the Schema for the hcloudremediations API.
+ *
+ * @schema HCloudRemediation
+ */
+export interface HCloudRemediationProps {
+  /**
+   * @schema HCloudRemediation#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HCloudRemediationSpec defines the desired state of HCloudRemediation.
+   *
+   * @schema HCloudRemediation#spec
+   */
+  readonly spec?: HCloudRemediationSpec;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationProps(obj: HCloudRemediationProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HCloudRemediationSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudRemediationSpec defines the desired state of HCloudRemediation.
+ *
+ * @schema HCloudRemediationSpec
+ */
+export interface HCloudRemediationSpec {
+  /**
+   * Strategy field defines remediation strategy.
+   *
+   * @schema HCloudRemediationSpec#strategy
+   */
+  readonly strategy?: HCloudRemediationSpecStrategy;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationSpec(obj: HCloudRemediationSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'strategy': toJson_HCloudRemediationSpecStrategy(obj.strategy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Strategy field defines remediation strategy.
+ *
+ * @schema HCloudRemediationSpecStrategy
+ */
+export interface HCloudRemediationSpecStrategy {
+  /**
+   * RetryLimit sets the maximum number of remediation retries. Zero retries if not set.
+   *
+   * @schema HCloudRemediationSpecStrategy#retryLimit
+   */
+  readonly retryLimit?: number;
+
+  /**
+   * Timeout sets the timeout between remediation retries. It should be of the form "10m", or "40s".
+   *
+   * @schema HCloudRemediationSpecStrategy#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * Type represents the type of the remediation strategy. At the moment, only "Reboot" is supported.
+   *
+   * @schema HCloudRemediationSpecStrategy#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationSpecStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationSpecStrategy(obj: HCloudRemediationSpecStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'retryLimit': obj.retryLimit,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HCloudRemediationTemplate is the Schema for the hcloudremediationtemplates API.
+ *
+ * @schema HCloudRemediationTemplate
+ */
+export class HCloudRemediationTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HCloudRemediationTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HCloudRemediationTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HCloudRemediationTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HCloudRemediationTemplateProps = {}): any {
+    return {
+      ...HCloudRemediationTemplate.GVK,
+      ...toJson_HCloudRemediationTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HCloudRemediationTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HCloudRemediationTemplateProps = {}) {
+    super(scope, id, {
+      ...HCloudRemediationTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HCloudRemediationTemplate.GVK,
+      ...toJson_HCloudRemediationTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * HCloudRemediationTemplate is the Schema for the hcloudremediationtemplates API.
+ *
+ * @schema HCloudRemediationTemplate
+ */
+export interface HCloudRemediationTemplateProps {
+  /**
+   * @schema HCloudRemediationTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HCloudRemediationTemplateSpec defines the desired state of HCloudRemediationTemplate.
+   *
+   * @schema HCloudRemediationTemplate#spec
+   */
+  readonly spec?: HCloudRemediationTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationTemplateProps(obj: HCloudRemediationTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HCloudRemediationTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudRemediationTemplateSpec defines the desired state of HCloudRemediationTemplate.
+ *
+ * @schema HCloudRemediationTemplateSpec
+ */
+export interface HCloudRemediationTemplateSpec {
+  /**
+   * HCloudRemediationTemplateResource describes the data needed to create a HCloudRemediation from a template.
+   *
+   * @schema HCloudRemediationTemplateSpec#template
+   */
+  readonly template: HCloudRemediationTemplateSpecTemplate;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationTemplateSpec(obj: HCloudRemediationTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_HCloudRemediationTemplateSpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudRemediationTemplateResource describes the data needed to create a HCloudRemediation from a template.
+ *
+ * @schema HCloudRemediationTemplateSpecTemplate
+ */
+export interface HCloudRemediationTemplateSpecTemplate {
+  /**
+   * Spec is the specification of the desired behavior of the HCloudRemediation.
+   *
+   * @schema HCloudRemediationTemplateSpecTemplate#spec
+   */
+  readonly spec: HCloudRemediationTemplateSpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationTemplateSpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationTemplateSpecTemplate(obj: HCloudRemediationTemplateSpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'spec': toJson_HCloudRemediationTemplateSpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec is the specification of the desired behavior of the HCloudRemediation.
+ *
+ * @schema HCloudRemediationTemplateSpecTemplateSpec
+ */
+export interface HCloudRemediationTemplateSpecTemplateSpec {
+  /**
+   * Strategy field defines remediation strategy.
+   *
+   * @schema HCloudRemediationTemplateSpecTemplateSpec#strategy
+   */
+  readonly strategy?: HCloudRemediationTemplateSpecTemplateSpecStrategy;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationTemplateSpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationTemplateSpecTemplateSpec(obj: HCloudRemediationTemplateSpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'strategy': toJson_HCloudRemediationTemplateSpecTemplateSpecStrategy(obj.strategy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Strategy field defines remediation strategy.
+ *
+ * @schema HCloudRemediationTemplateSpecTemplateSpecStrategy
+ */
+export interface HCloudRemediationTemplateSpecTemplateSpecStrategy {
+  /**
+   * RetryLimit sets the maximum number of remediation retries. Zero retries if not set.
+   *
+   * @schema HCloudRemediationTemplateSpecTemplateSpecStrategy#retryLimit
+   */
+  readonly retryLimit?: number;
+
+  /**
+   * Timeout sets the timeout between remediation retries. It should be of the form "10m", or "40s".
+   *
+   * @schema HCloudRemediationTemplateSpecTemplateSpecStrategy#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * Type represents the type of the remediation strategy. At the moment, only "Reboot" is supported.
+   *
+   * @schema HCloudRemediationTemplateSpecTemplateSpecStrategy#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'HCloudRemediationTemplateSpecTemplateSpecStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HCloudRemediationTemplateSpecTemplateSpecStrategy(obj: HCloudRemediationTemplateSpecTemplateSpecStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'retryLimit': obj.retryLimit,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HetznerCluster is the Schema for the hetznercluster API.
+ *
+ * @schema HetznerCluster
+ */
+export class HetznerCluster extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerCluster"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerCluster',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerCluster".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerClusterProps = {}): any {
+    return {
+      ...HetznerCluster.GVK,
+      ...toJson_HetznerClusterProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerCluster" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerClusterProps = {}) {
+    super(scope, id, {
+      ...HetznerCluster.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerCluster.GVK,
+      ...toJson_HetznerClusterProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerCluster is the Schema for the hetznercluster API.
+ *
+ * @schema HetznerCluster
+ */
+export interface HetznerClusterProps {
+  /**
+   * @schema HetznerCluster#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerClusterSpec defines the desired state of HetznerCluster.
+   *
+   * @schema HetznerCluster#spec
+   */
+  readonly spec?: HetznerClusterSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterProps(obj: HetznerClusterProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerClusterSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerClusterSpec defines the desired state of HetznerCluster.
+ *
+ * @schema HetznerClusterSpec
+ */
+export interface HetznerClusterSpec {
+  /**
+   * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+   *
+   * @schema HetznerClusterSpec#controlPlaneEndpoint
+   */
+  readonly controlPlaneEndpoint?: HetznerClusterSpecControlPlaneEndpoint;
+
+  /**
+   * ControlPlaneLoadBalancer is an optional configuration for customizing control plane behavior.
+   *
+   * @schema HetznerClusterSpec#controlPlaneLoadBalancer
+   */
+  readonly controlPlaneLoadBalancer?: HetznerClusterSpecControlPlaneLoadBalancer;
+
+  /**
+   * ControlPlaneRegion consists of a list of HCloud Regions (fsn, nbg, hel). Because HCloud Networks
+   * have a very low latency we could assume in some use cases that a region is behaving like a zone.
+   * https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
+   *
+   * @schema HetznerClusterSpec#controlPlaneRegions
+   */
+  readonly controlPlaneRegions: HetznerClusterSpecControlPlaneRegions[];
+
+  /**
+   * HCloudNetwork defines details about the private Network for Hetzner Cloud. If left empty, no private Network is configured.
+   *
+   * @schema HetznerClusterSpec#hcloudNetwork
+   */
+  readonly hcloudNetwork?: HetznerClusterSpecHcloudNetwork;
+
+  /**
+   * @schema HetznerClusterSpec#hcloudPlacementGroups
+   */
+  readonly hcloudPlacementGroups?: HetznerClusterSpecHcloudPlacementGroups[];
+
+  /**
+   * HetznerSecretRef is a reference to a token to be used when reconciling this cluster.
+   * This is generated in the security section under API TOKENS. Read & write is necessary.
+   *
+   * @schema HetznerClusterSpec#hetznerSecretRef
+   */
+  readonly hetznerSecretRef: HetznerClusterSpecHetznerSecretRef;
+
+  /**
+   * SkipCreatingHetznerSecretInWorkloadCluster indicates whether the Hetzner secret should be
+   * created in the workload cluster. By default the secret gets created, so that the ccm (running
+   * in the wl-cluster) can use that secret. If you prefer to not reveal the secret in the
+   * wl-cluster, you can set this to value to false, so that the secret is not created. Be sure to
+   * run the ccm outside of the wl-cluster in that case, e.g. in the management cluster.
+   *
+   * @schema HetznerClusterSpec#skipCreatingHetznerSecretInWorkloadCluster
+   */
+  readonly skipCreatingHetznerSecretInWorkloadCluster?: boolean;
+
+  /**
+   * SSHKeys are cluster wide. Valid values are a valid SSH key name.
+   *
+   * @schema HetznerClusterSpec#sshKeys
+   */
+  readonly sshKeys: HetznerClusterSpecSshKeys;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpec(obj: HetznerClusterSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'controlPlaneEndpoint': toJson_HetznerClusterSpecControlPlaneEndpoint(obj.controlPlaneEndpoint),
+    'controlPlaneLoadBalancer': toJson_HetznerClusterSpecControlPlaneLoadBalancer(obj.controlPlaneLoadBalancer),
+    'controlPlaneRegions': obj.controlPlaneRegions?.map(y => y),
+    'hcloudNetwork': toJson_HetznerClusterSpecHcloudNetwork(obj.hcloudNetwork),
+    'hcloudPlacementGroups': obj.hcloudPlacementGroups?.map(y => toJson_HetznerClusterSpecHcloudPlacementGroups(y)),
+    'hetznerSecretRef': toJson_HetznerClusterSpecHetznerSecretRef(obj.hetznerSecretRef),
+    'skipCreatingHetznerSecretInWorkloadCluster': obj.skipCreatingHetznerSecretInWorkloadCluster,
+    'sshKeys': toJson_HetznerClusterSpecSshKeys(obj.sshKeys),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+ *
+ * @schema HetznerClusterSpecControlPlaneEndpoint
+ */
+export interface HetznerClusterSpecControlPlaneEndpoint {
+  /**
+   * The hostname on which the API server is serving.
+   *
+   * @schema HetznerClusterSpecControlPlaneEndpoint#host
+   */
+  readonly host: string;
+
+  /**
+   * The port on which the API server is serving.
+   *
+   * @schema HetznerClusterSpecControlPlaneEndpoint#port
+   */
+  readonly port: number;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecControlPlaneEndpoint' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecControlPlaneEndpoint(obj: HetznerClusterSpecControlPlaneEndpoint | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'host': obj.host,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneLoadBalancer is an optional configuration for customizing control plane behavior.
+ *
+ * @schema HetznerClusterSpecControlPlaneLoadBalancer
+ */
+export interface HetznerClusterSpecControlPlaneLoadBalancer {
+  /**
+   * Algorithm defines the type of load balancer algorithm. It could be round_robin or least_connection. The default value is "round_robin".
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#algorithm
+   */
+  readonly algorithm?: string;
+
+  /**
+   * Enabled specifies if a load balancer should be created.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * ExtraServices defines how traffic will be routed from the load balancer to your target server.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#extraServices
+   */
+  readonly extraServices?: HetznerClusterSpecControlPlaneLoadBalancerExtraServices[];
+
+  /**
+   * Name defines the name of the load balancer. It can be specified in order to use an existing load balancer.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#name
+   */
+  readonly name?: string;
+
+  /**
+   * Port defines the API Server port. It must be a valid port range (1-65535). If omitted, the default value is 6443.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#port
+   */
+  readonly port?: number;
+
+  /**
+   * Region contains the name of the HCloud location where the load balancer is running.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#region
+   */
+  readonly region?: HetznerClusterSpecControlPlaneLoadBalancerRegion;
+
+  /**
+   * Type defines the type of load balancer. It could be one of lb11, lb21, or lb31.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancer#type
+   */
+  readonly type?: HetznerClusterSpecControlPlaneLoadBalancerType;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecControlPlaneLoadBalancer' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecControlPlaneLoadBalancer(obj: HetznerClusterSpecControlPlaneLoadBalancer | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'algorithm': obj.algorithm,
+    'enabled': obj.enabled,
+    'extraServices': obj.extraServices?.map(y => toJson_HetznerClusterSpecControlPlaneLoadBalancerExtraServices(y)),
+    'name': obj.name,
+    'port': obj.port,
+    'region': obj.region,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Region is a Hetzner Location.
+ *
+ * @schema HetznerClusterSpecControlPlaneRegions
+ */
+export enum HetznerClusterSpecControlPlaneRegions {
+  /** fsn1 */
+  FSN1 = "fsn1",
+  /** hel1 */
+  HEL1 = "hel1",
+  /** nbg1 */
+  NBG1 = "nbg1",
+  /** ash */
+  ASH = "ash",
+  /** hil */
+  HIL = "hil",
+  /** sin */
+  SIN = "sin",
+}
+
+/**
+ * HCloudNetwork defines details about the private Network for Hetzner Cloud. If left empty, no private Network is configured.
+ *
+ * @schema HetznerClusterSpecHcloudNetwork
+ */
+export interface HetznerClusterSpecHcloudNetwork {
+  /**
+   * CIDRBlock defines the cidrBlock of the HCloud Network. If omitted, default "10.0.0.0/16" will be used.
+   *
+   * @schema HetznerClusterSpecHcloudNetwork#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * Enabled defines whether the network should be enabled or not.
+   *
+   * @schema HetznerClusterSpecHcloudNetwork#enabled
+   */
+  readonly enabled: boolean;
+
+  /**
+   * NetworkZone specifies the HCloud network zone of the private network.
+   * The zones must be one of eu-central, us-east, or us-west. The default is eu-central.
+   *
+   * @schema HetznerClusterSpecHcloudNetwork#networkZone
+   */
+  readonly networkZone?: HetznerClusterSpecHcloudNetworkNetworkZone;
+
+  /**
+   * SubnetCIDRBlock defines the cidrBlock for the subnet of the HCloud Network.
+   * Note: A subnet is required.
+   *
+   * @schema HetznerClusterSpecHcloudNetwork#subnetCidrBlock
+   */
+  readonly subnetCidrBlock?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecHcloudNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecHcloudNetwork(obj: HetznerClusterSpecHcloudNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlock': obj.cidrBlock,
+    'enabled': obj.enabled,
+    'networkZone': obj.networkZone,
+    'subnetCidrBlock': obj.subnetCidrBlock,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudPlacementGroupSpec defines a PlacementGroup.
+ *
+ * @schema HetznerClusterSpecHcloudPlacementGroups
+ */
+export interface HetznerClusterSpecHcloudPlacementGroups {
+  /**
+   * @schema HetznerClusterSpecHcloudPlacementGroups#name
+   */
+  readonly name: string;
+
+  /**
+   * @schema HetznerClusterSpecHcloudPlacementGroups#type
+   */
+  readonly type?: HetznerClusterSpecHcloudPlacementGroupsType;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecHcloudPlacementGroups' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecHcloudPlacementGroups(obj: HetznerClusterSpecHcloudPlacementGroups | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerSecretRef is a reference to a token to be used when reconciling this cluster.
+ * This is generated in the security section under API TOKENS. Read & write is necessary.
+ *
+ * @schema HetznerClusterSpecHetznerSecretRef
+ */
+export interface HetznerClusterSpecHetznerSecretRef {
+  /**
+   * Key defines the keys that are used in the secret.
+   * Need to specify either HCloudToken or both HetznerRobotUser and HetznerRobotPassword.
+   *
+   * @schema HetznerClusterSpecHetznerSecretRef#key
+   */
+  readonly key: HetznerClusterSpecHetznerSecretRefKey;
+
+  /**
+   * Name defines the name of the secret.
+   *
+   * @schema HetznerClusterSpecHetznerSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecHetznerSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecHetznerSecretRef(obj: HetznerClusterSpecHetznerSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerClusterSpecHetznerSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKeys are cluster wide. Valid values are a valid SSH key name.
+ *
+ * @schema HetznerClusterSpecSshKeys
+ */
+export interface HetznerClusterSpecSshKeys {
+  /**
+   * Hcloud defines the SSH keys used for hcloud.
+   *
+   * @schema HetznerClusterSpecSshKeys#hcloud
+   */
+  readonly hcloud?: HetznerClusterSpecSshKeysHcloud[];
+
+  /**
+   * RobotRescueSecretRef defines the reference to the secret where the SSH key for the rescue system is stored.
+   *
+   * @schema HetznerClusterSpecSshKeys#robotRescueSecretRef
+   */
+  readonly robotRescueSecretRef?: HetznerClusterSpecSshKeysRobotRescueSecretRef;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecSshKeys' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecSshKeys(obj: HetznerClusterSpecSshKeys | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hcloud': obj.hcloud?.map(y => toJson_HetznerClusterSpecSshKeysHcloud(y)),
+    'robotRescueSecretRef': toJson_HetznerClusterSpecSshKeysRobotRescueSecretRef(obj.robotRescueSecretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LoadBalancerServiceSpec defines a load balancer Target.
+ *
+ * @schema HetznerClusterSpecControlPlaneLoadBalancerExtraServices
+ */
+export interface HetznerClusterSpecControlPlaneLoadBalancerExtraServices {
+  /**
+   * DestinationPort defines the port on the server. It must be a valid port range (1-65535).
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancerExtraServices#destinationPort
+   */
+  readonly destinationPort?: number;
+
+  /**
+   * ListenPort, i.e. source port, defines the incoming port open on the load balancer. It must be a valid port range (1-65535).
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancerExtraServices#listenPort
+   */
+  readonly listenPort?: number;
+
+  /**
+   * Protocol specifies the supported load balancer Protocol. It could be one of the https, http, or tcp.
+   *
+   * @schema HetznerClusterSpecControlPlaneLoadBalancerExtraServices#protocol
+   */
+  readonly protocol?: HetznerClusterSpecControlPlaneLoadBalancerExtraServicesProtocol;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecControlPlaneLoadBalancerExtraServices' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecControlPlaneLoadBalancerExtraServices(obj: HetznerClusterSpecControlPlaneLoadBalancerExtraServices | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'destinationPort': obj.destinationPort,
+    'listenPort': obj.listenPort,
+    'protocol': obj.protocol,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Region contains the name of the HCloud location where the load balancer is running.
+ *
+ * @schema HetznerClusterSpecControlPlaneLoadBalancerRegion
+ */
+export enum HetznerClusterSpecControlPlaneLoadBalancerRegion {
+  /** fsn1 */
+  FSN1 = "fsn1",
+  /** hel1 */
+  HEL1 = "hel1",
+  /** nbg1 */
+  NBG1 = "nbg1",
+  /** ash */
+  ASH = "ash",
+  /** hil */
+  HIL = "hil",
+  /** sin */
+  SIN = "sin",
+}
+
+/**
+ * Type defines the type of load balancer. It could be one of lb11, lb21, or lb31.
+ *
+ * @schema HetznerClusterSpecControlPlaneLoadBalancerType
+ */
+export enum HetznerClusterSpecControlPlaneLoadBalancerType {
+  /** lb11 */
+  LB11 = "lb11",
+  /** lb21 */
+  LB21 = "lb21",
+  /** lb31 */
+  LB31 = "lb31",
+}
+
+/**
+ * NetworkZone specifies the HCloud network zone of the private network.
+ * The zones must be one of eu-central, us-east, or us-west. The default is eu-central.
+ *
+ * @schema HetznerClusterSpecHcloudNetworkNetworkZone
+ */
+export enum HetznerClusterSpecHcloudNetworkNetworkZone {
+  /** eu-central */
+  EU_HYPHEN_CENTRAL = "eu-central",
+  /** us-east */
+  US_HYPHEN_EAST = "us-east",
+  /** us-west */
+  US_HYPHEN_WEST = "us-west",
+  /** ap-southeast */
+  AP_HYPHEN_SOUTHEAST = "ap-southeast",
+}
+
+/**
+ * @schema HetznerClusterSpecHcloudPlacementGroupsType
+ */
+export enum HetznerClusterSpecHcloudPlacementGroupsType {
+  /** spread */
+  SPREAD = "spread",
+}
+
+/**
+ * Key defines the keys that are used in the secret.
+ * Need to specify either HCloudToken or both HetznerRobotUser and HetznerRobotPassword.
+ *
+ * @schema HetznerClusterSpecHetznerSecretRefKey
+ */
+export interface HetznerClusterSpecHetznerSecretRefKey {
+  /**
+   * HCloudToken defines the name of the key where the token for the Hetzner Cloud API is stored.
+   *
+   * @schema HetznerClusterSpecHetznerSecretRefKey#hcloudToken
+   */
+  readonly hcloudToken?: string;
+
+  /**
+   * HetznerRobotPassword defines the name of the key where the password for the Hetzner Robot API is stored.
+   *
+   * @schema HetznerClusterSpecHetznerSecretRefKey#hetznerRobotPassword
+   */
+  readonly hetznerRobotPassword?: string;
+
+  /**
+   * HetznerRobotUser defines the name of the key where the username for the Hetzner Robot API is stored.
+   *
+   * @schema HetznerClusterSpecHetznerSecretRefKey#hetznerRobotUser
+   */
+  readonly hetznerRobotUser?: string;
+
+  /**
+   * SSHKey defines the name of the ssh key.
+   *
+   * @schema HetznerClusterSpecHetznerSecretRefKey#sshKey
+   */
+  readonly sshKey?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecHetznerSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecHetznerSecretRefKey(obj: HetznerClusterSpecHetznerSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hcloudToken': obj.hcloudToken,
+    'hetznerRobotPassword': obj.hetznerRobotPassword,
+    'hetznerRobotUser': obj.hetznerRobotUser,
+    'sshKey': obj.sshKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKey defines the SSHKey for HCloud.
+ *
+ * @schema HetznerClusterSpecSshKeysHcloud
+ */
+export interface HetznerClusterSpecSshKeysHcloud {
+  /**
+   * Fingerprint defines the fingerprint of the SSH key - added by the controller.
+   *
+   * @schema HetznerClusterSpecSshKeysHcloud#fingerprint
+   */
+  readonly fingerprint?: string;
+
+  /**
+   * Name defines the name of the SSH key.
+   *
+   * @schema HetznerClusterSpecSshKeysHcloud#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecSshKeysHcloud' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecSshKeysHcloud(obj: HetznerClusterSpecSshKeysHcloud | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fingerprint': obj.fingerprint,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RobotRescueSecretRef defines the reference to the secret where the SSH key for the rescue system is stored.
+ *
+ * @schema HetznerClusterSpecSshKeysRobotRescueSecretRef
+ */
+export interface HetznerClusterSpecSshKeysRobotRescueSecretRef {
+  /**
+   * Key contains details about the keys used in the data of the secret.
+   *
+   * @schema HetznerClusterSpecSshKeysRobotRescueSecretRef#key
+   */
+  readonly key: HetznerClusterSpecSshKeysRobotRescueSecretRefKey;
+
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema HetznerClusterSpecSshKeysRobotRescueSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecSshKeysRobotRescueSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecSshKeysRobotRescueSecretRef(obj: HetznerClusterSpecSshKeysRobotRescueSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerClusterSpecSshKeysRobotRescueSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Protocol specifies the supported load balancer Protocol. It could be one of the https, http, or tcp.
+ *
+ * @schema HetznerClusterSpecControlPlaneLoadBalancerExtraServicesProtocol
+ */
+export enum HetznerClusterSpecControlPlaneLoadBalancerExtraServicesProtocol {
+  /** http */
+  HTTP = "http",
+  /** https */
+  HTTPS = "https",
+  /** tcp */
+  TCP = "tcp",
+}
+
+/**
+ * Key contains details about the keys used in the data of the secret.
+ *
+ * @schema HetznerClusterSpecSshKeysRobotRescueSecretRefKey
+ */
+export interface HetznerClusterSpecSshKeysRobotRescueSecretRefKey {
+  /**
+   * Name is the key in the secret's data where the SSH key's name is stored.
+   *
+   * @schema HetznerClusterSpecSshKeysRobotRescueSecretRefKey#name
+   */
+  readonly name: string;
+
+  /**
+   * PrivateKey is the key in the secret's data where the SSH key's private key is stored.
+   *
+   * @schema HetznerClusterSpecSshKeysRobotRescueSecretRefKey#privateKey
+   */
+  readonly privateKey: string;
+
+  /**
+   * PublicKey is the key in the secret's data where the SSH key's public key is stored.
+   *
+   * @schema HetznerClusterSpecSshKeysRobotRescueSecretRefKey#publicKey
+   */
+  readonly publicKey: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterSpecSshKeysRobotRescueSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterSpecSshKeysRobotRescueSecretRefKey(obj: HetznerClusterSpecSshKeysRobotRescueSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'privateKey': obj.privateKey,
+    'publicKey': obj.publicKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HetznerClusterTemplate is the Schema for the hetznerclustertemplates API.
+ *
+ * @schema HetznerClusterTemplate
+ */
+export class HetznerClusterTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerClusterTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerClusterTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerClusterTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerClusterTemplateProps = {}): any {
+    return {
+      ...HetznerClusterTemplate.GVK,
+      ...toJson_HetznerClusterTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerClusterTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerClusterTemplateProps = {}) {
+    super(scope, id, {
+      ...HetznerClusterTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerClusterTemplate.GVK,
+      ...toJson_HetznerClusterTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerClusterTemplate is the Schema for the hetznerclustertemplates API.
+ *
+ * @schema HetznerClusterTemplate
+ */
+export interface HetznerClusterTemplateProps {
+  /**
+   * @schema HetznerClusterTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerClusterTemplateSpec defines the desired state of HetznerClusterTemplate.
+   *
+   * @schema HetznerClusterTemplate#spec
+   */
+  readonly spec?: HetznerClusterTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateProps(obj: HetznerClusterTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerClusterTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerClusterTemplateSpec defines the desired state of HetznerClusterTemplate.
+ *
+ * @schema HetznerClusterTemplateSpec
+ */
+export interface HetznerClusterTemplateSpec {
+  /**
+   * HetznerClusterTemplateResource contains spec for HetznerClusterSpec.
+   *
+   * @schema HetznerClusterTemplateSpec#template
+   */
+  readonly template: HetznerClusterTemplateSpecTemplate;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpec(obj: HetznerClusterTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_HetznerClusterTemplateSpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerClusterTemplateResource contains spec for HetznerClusterSpec.
+ *
+ * @schema HetznerClusterTemplateSpecTemplate
+ */
+export interface HetznerClusterTemplateSpecTemplate {
+  /**
+   * ObjectMeta is metadata that all persisted resources must have, which includes all objects
+   * users must create. This is a copy of customizable fields from metav1.ObjectMeta.
+   *
+   *
+   * ObjectMeta is embedded in `Machine.Spec`, `MachineDeployment.Template` and `MachineSet.Template`,
+   * which are not top-level Kubernetes objects. Given that metav1.ObjectMeta has lots of special cases
+   * and read-only fields which end up in the generated CRD validation, having it as a subset simplifies
+   * the API and some issues that can impact user experience.
+   *
+   *
+   * During the [upgrade to controller-tools@v2](https://github.com/kubernetes-sigs/cluster-api/pull/1054)
+   * for v1alpha2, we noticed a failure would occur running Cluster API test suite against the new CRDs,
+   * specifically `spec.metadata.creationTimestamp in body must be of type string: "null"`.
+   * The investigation showed that `controller-tools@v2` behaves differently than its previous version
+   * when handling types from [metav1](k8s.io/apimachinery/pkg/apis/meta/v1) package.
+   *
+   *
+   * In more details, we found that embedded (non-top level) types that embedded `metav1.ObjectMeta`
+   * had validation properties, including for `creationTimestamp` (metav1.Time).
+   * The `metav1.Time` type specifies a custom json marshaller that, when IsZero() is true, returns `null`
+   * which breaks validation because the field isn't marked as nullable.
+   *
+   *
+   * In future versions, controller-tools@v2 might allow overriding the type and validation for embedded
+   * types. When that happens, this hack should be revisited.
+   *
+   * @schema HetznerClusterTemplateSpecTemplate#metadata
+   */
+  readonly metadata?: HetznerClusterTemplateSpecTemplateMetadata;
+
+  /**
+   * HetznerClusterSpec defines the desired state of HetznerCluster.
+   *
+   * @schema HetznerClusterTemplateSpecTemplate#spec
+   */
+  readonly spec: HetznerClusterTemplateSpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplate(obj: HetznerClusterTemplateSpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_HetznerClusterTemplateSpecTemplateMetadata(obj.metadata),
+    'spec': toJson_HetznerClusterTemplateSpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ObjectMeta is metadata that all persisted resources must have, which includes all objects
+ * users must create. This is a copy of customizable fields from metav1.ObjectMeta.
+ *
+ *
+ * ObjectMeta is embedded in `Machine.Spec`, `MachineDeployment.Template` and `MachineSet.Template`,
+ * which are not top-level Kubernetes objects. Given that metav1.ObjectMeta has lots of special cases
+ * and read-only fields which end up in the generated CRD validation, having it as a subset simplifies
+ * the API and some issues that can impact user experience.
+ *
+ *
+ * During the [upgrade to controller-tools@v2](https://github.com/kubernetes-sigs/cluster-api/pull/1054)
+ * for v1alpha2, we noticed a failure would occur running Cluster API test suite against the new CRDs,
+ * specifically `spec.metadata.creationTimestamp in body must be of type string: "null"`.
+ * The investigation showed that `controller-tools@v2` behaves differently than its previous version
+ * when handling types from [metav1](k8s.io/apimachinery/pkg/apis/meta/v1) package.
+ *
+ *
+ * In more details, we found that embedded (non-top level) types that embedded `metav1.ObjectMeta`
+ * had validation properties, including for `creationTimestamp` (metav1.Time).
+ * The `metav1.Time` type specifies a custom json marshaller that, when IsZero() is true, returns `null`
+ * which breaks validation because the field isn't marked as nullable.
+ *
+ *
+ * In future versions, controller-tools@v2 might allow overriding the type and validation for embedded
+ * types. When that happens, this hack should be revisited.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateMetadata
+ */
+export interface HetznerClusterTemplateSpecTemplateMetadata {
+  /**
+   * Annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema HetznerClusterTemplateSpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema HetznerClusterTemplateSpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateMetadata(obj: HetznerClusterTemplateSpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerClusterSpec defines the desired state of HetznerCluster.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpec
+ */
+export interface HetznerClusterTemplateSpecTemplateSpec {
+  /**
+   * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#controlPlaneEndpoint
+   */
+  readonly controlPlaneEndpoint?: HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint;
+
+  /**
+   * ControlPlaneLoadBalancer is an optional configuration for customizing control plane behavior.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#controlPlaneLoadBalancer
+   */
+  readonly controlPlaneLoadBalancer?: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer;
+
+  /**
+   * ControlPlaneRegion consists of a list of HCloud Regions (fsn, nbg, hel). Because HCloud Networks
+   * have a very low latency we could assume in some use cases that a region is behaving like a zone.
+   * https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#controlPlaneRegions
+   */
+  readonly controlPlaneRegions: HetznerClusterTemplateSpecTemplateSpecControlPlaneRegions[];
+
+  /**
+   * HCloudNetwork defines details about the private Network for Hetzner Cloud. If left empty, no private Network is configured.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#hcloudNetwork
+   */
+  readonly hcloudNetwork?: HetznerClusterTemplateSpecTemplateSpecHcloudNetwork;
+
+  /**
+   * @schema HetznerClusterTemplateSpecTemplateSpec#hcloudPlacementGroups
+   */
+  readonly hcloudPlacementGroups?: HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups[];
+
+  /**
+   * HetznerSecretRef is a reference to a token to be used when reconciling this cluster.
+   * This is generated in the security section under API TOKENS. Read & write is necessary.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#hetznerSecretRef
+   */
+  readonly hetznerSecretRef: HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef;
+
+  /**
+   * SkipCreatingHetznerSecretInWorkloadCluster indicates whether the Hetzner secret should be
+   * created in the workload cluster. By default the secret gets created, so that the ccm (running
+   * in the wl-cluster) can use that secret. If you prefer to not reveal the secret in the
+   * wl-cluster, you can set this to value to false, so that the secret is not created. Be sure to
+   * run the ccm outside of the wl-cluster in that case, e.g. in the management cluster.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#skipCreatingHetznerSecretInWorkloadCluster
+   */
+  readonly skipCreatingHetznerSecretInWorkloadCluster?: boolean;
+
+  /**
+   * SSHKeys are cluster wide. Valid values are a valid SSH key name.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpec#sshKeys
+   */
+  readonly sshKeys: HetznerClusterTemplateSpecTemplateSpecSshKeys;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpec(obj: HetznerClusterTemplateSpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'controlPlaneEndpoint': toJson_HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint(obj.controlPlaneEndpoint),
+    'controlPlaneLoadBalancer': toJson_HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer(obj.controlPlaneLoadBalancer),
+    'controlPlaneRegions': obj.controlPlaneRegions?.map(y => y),
+    'hcloudNetwork': toJson_HetznerClusterTemplateSpecTemplateSpecHcloudNetwork(obj.hcloudNetwork),
+    'hcloudPlacementGroups': obj.hcloudPlacementGroups?.map(y => toJson_HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups(y)),
+    'hetznerSecretRef': toJson_HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef(obj.hetznerSecretRef),
+    'skipCreatingHetznerSecretInWorkloadCluster': obj.skipCreatingHetznerSecretInWorkloadCluster,
+    'sshKeys': toJson_HetznerClusterTemplateSpecTemplateSpecSshKeys(obj.sshKeys),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint {
+  /**
+   * The hostname on which the API server is serving.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint#host
+   */
+  readonly host: string;
+
+  /**
+   * The port on which the API server is serving.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint#port
+   */
+  readonly port: number;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint(obj: HetznerClusterTemplateSpecTemplateSpecControlPlaneEndpoint | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'host': obj.host,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneLoadBalancer is an optional configuration for customizing control plane behavior.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer {
+  /**
+   * Algorithm defines the type of load balancer algorithm. It could be round_robin or least_connection. The default value is "round_robin".
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#algorithm
+   */
+  readonly algorithm?: string;
+
+  /**
+   * Enabled specifies if a load balancer should be created.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * ExtraServices defines how traffic will be routed from the load balancer to your target server.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#extraServices
+   */
+  readonly extraServices?: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices[];
+
+  /**
+   * Name defines the name of the load balancer. It can be specified in order to use an existing load balancer.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#name
+   */
+  readonly name?: string;
+
+  /**
+   * Port defines the API Server port. It must be a valid port range (1-65535). If omitted, the default value is 6443.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#port
+   */
+  readonly port?: number;
+
+  /**
+   * Region contains the name of the HCloud location where the load balancer is running.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#region
+   */
+  readonly region?: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerRegion;
+
+  /**
+   * Type defines the type of load balancer. It could be one of lb11, lb21, or lb31.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer#type
+   */
+  readonly type?: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerType;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer(obj: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancer | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'algorithm': obj.algorithm,
+    'enabled': obj.enabled,
+    'extraServices': obj.extraServices?.map(y => toJson_HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices(y)),
+    'name': obj.name,
+    'port': obj.port,
+    'region': obj.region,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Region is a Hetzner Location.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneRegions
+ */
+export enum HetznerClusterTemplateSpecTemplateSpecControlPlaneRegions {
+  /** fsn1 */
+  FSN1 = "fsn1",
+  /** hel1 */
+  HEL1 = "hel1",
+  /** nbg1 */
+  NBG1 = "nbg1",
+  /** ash */
+  ASH = "ash",
+  /** hil */
+  HIL = "hil",
+  /** sin */
+  SIN = "sin",
+}
+
+/**
+ * HCloudNetwork defines details about the private Network for Hetzner Cloud. If left empty, no private Network is configured.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecHcloudNetwork
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecHcloudNetwork {
+  /**
+   * CIDRBlock defines the cidrBlock of the HCloud Network. If omitted, default "10.0.0.0/16" will be used.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHcloudNetwork#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * Enabled defines whether the network should be enabled or not.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHcloudNetwork#enabled
+   */
+  readonly enabled: boolean;
+
+  /**
+   * NetworkZone specifies the HCloud network zone of the private network.
+   * The zones must be one of eu-central, us-east, or us-west. The default is eu-central.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHcloudNetwork#networkZone
+   */
+  readonly networkZone?: HetznerClusterTemplateSpecTemplateSpecHcloudNetworkNetworkZone;
+
+  /**
+   * SubnetCIDRBlock defines the cidrBlock for the subnet of the HCloud Network.
+   * Note: A subnet is required.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHcloudNetwork#subnetCidrBlock
+   */
+  readonly subnetCidrBlock?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecHcloudNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecHcloudNetwork(obj: HetznerClusterTemplateSpecTemplateSpecHcloudNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlock': obj.cidrBlock,
+    'enabled': obj.enabled,
+    'networkZone': obj.networkZone,
+    'subnetCidrBlock': obj.subnetCidrBlock,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HCloudPlacementGroupSpec defines a PlacementGroup.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups {
+  /**
+   * @schema HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups#name
+   */
+  readonly name: string;
+
+  /**
+   * @schema HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups#type
+   */
+  readonly type?: HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroupsType;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups(obj: HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroups | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerSecretRef is a reference to a token to be used when reconciling this cluster.
+ * This is generated in the security section under API TOKENS. Read & write is necessary.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef {
+  /**
+   * Key defines the keys that are used in the secret.
+   * Need to specify either HCloudToken or both HetznerRobotUser and HetznerRobotPassword.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef#key
+   */
+  readonly key: HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey;
+
+  /**
+   * Name defines the name of the secret.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef(obj: HetznerClusterTemplateSpecTemplateSpecHetznerSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKeys are cluster wide. Valid values are a valid SSH key name.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecSshKeys
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecSshKeys {
+  /**
+   * Hcloud defines the SSH keys used for hcloud.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeys#hcloud
+   */
+  readonly hcloud?: HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud[];
+
+  /**
+   * RobotRescueSecretRef defines the reference to the secret where the SSH key for the rescue system is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeys#robotRescueSecretRef
+   */
+  readonly robotRescueSecretRef?: HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecSshKeys' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecSshKeys(obj: HetznerClusterTemplateSpecTemplateSpecSshKeys | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hcloud': obj.hcloud?.map(y => toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud(y)),
+    'robotRescueSecretRef': toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef(obj.robotRescueSecretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LoadBalancerServiceSpec defines a load balancer Target.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices {
+  /**
+   * DestinationPort defines the port on the server. It must be a valid port range (1-65535).
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices#destinationPort
+   */
+  readonly destinationPort?: number;
+
+  /**
+   * ListenPort, i.e. source port, defines the incoming port open on the load balancer. It must be a valid port range (1-65535).
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices#listenPort
+   */
+  readonly listenPort?: number;
+
+  /**
+   * Protocol specifies the supported load balancer Protocol. It could be one of the https, http, or tcp.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices#protocol
+   */
+  readonly protocol?: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServicesProtocol;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices(obj: HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServices | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'destinationPort': obj.destinationPort,
+    'listenPort': obj.listenPort,
+    'protocol': obj.protocol,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Region contains the name of the HCloud location where the load balancer is running.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerRegion
+ */
+export enum HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerRegion {
+  /** fsn1 */
+  FSN1 = "fsn1",
+  /** hel1 */
+  HEL1 = "hel1",
+  /** nbg1 */
+  NBG1 = "nbg1",
+  /** ash */
+  ASH = "ash",
+  /** hil */
+  HIL = "hil",
+  /** sin */
+  SIN = "sin",
+}
+
+/**
+ * Type defines the type of load balancer. It could be one of lb11, lb21, or lb31.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerType
+ */
+export enum HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerType {
+  /** lb11 */
+  LB11 = "lb11",
+  /** lb21 */
+  LB21 = "lb21",
+  /** lb31 */
+  LB31 = "lb31",
+}
+
+/**
+ * NetworkZone specifies the HCloud network zone of the private network.
+ * The zones must be one of eu-central, us-east, or us-west. The default is eu-central.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecHcloudNetworkNetworkZone
+ */
+export enum HetznerClusterTemplateSpecTemplateSpecHcloudNetworkNetworkZone {
+  /** eu-central */
+  EU_HYPHEN_CENTRAL = "eu-central",
+  /** us-east */
+  US_HYPHEN_EAST = "us-east",
+  /** us-west */
+  US_HYPHEN_WEST = "us-west",
+  /** ap-southeast */
+  AP_HYPHEN_SOUTHEAST = "ap-southeast",
+}
+
+/**
+ * @schema HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroupsType
+ */
+export enum HetznerClusterTemplateSpecTemplateSpecHcloudPlacementGroupsType {
+  /** spread */
+  SPREAD = "spread",
+}
+
+/**
+ * Key defines the keys that are used in the secret.
+ * Need to specify either HCloudToken or both HetznerRobotUser and HetznerRobotPassword.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey {
+  /**
+   * HCloudToken defines the name of the key where the token for the Hetzner Cloud API is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey#hcloudToken
+   */
+  readonly hcloudToken?: string;
+
+  /**
+   * HetznerRobotPassword defines the name of the key where the password for the Hetzner Robot API is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey#hetznerRobotPassword
+   */
+  readonly hetznerRobotPassword?: string;
+
+  /**
+   * HetznerRobotUser defines the name of the key where the username for the Hetzner Robot API is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey#hetznerRobotUser
+   */
+  readonly hetznerRobotUser?: string;
+
+  /**
+   * SSHKey defines the name of the ssh key.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey#sshKey
+   */
+  readonly sshKey?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey(obj: HetznerClusterTemplateSpecTemplateSpecHetznerSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hcloudToken': obj.hcloudToken,
+    'hetznerRobotPassword': obj.hetznerRobotPassword,
+    'hetznerRobotUser': obj.hetznerRobotUser,
+    'sshKey': obj.sshKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKey defines the SSHKey for HCloud.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud {
+  /**
+   * Fingerprint defines the fingerprint of the SSH key - added by the controller.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud#fingerprint
+   */
+  readonly fingerprint?: string;
+
+  /**
+   * Name defines the name of the SSH key.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud(obj: HetznerClusterTemplateSpecTemplateSpecSshKeysHcloud | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fingerprint': obj.fingerprint,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RobotRescueSecretRef defines the reference to the secret where the SSH key for the rescue system is stored.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef {
+  /**
+   * Key contains details about the keys used in the data of the secret.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef#key
+   */
+  readonly key: HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey;
+
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef(obj: HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Protocol specifies the supported load balancer Protocol. It could be one of the https, http, or tcp.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServicesProtocol
+ */
+export enum HetznerClusterTemplateSpecTemplateSpecControlPlaneLoadBalancerExtraServicesProtocol {
+  /** http */
+  HTTP = "http",
+  /** https */
+  HTTPS = "https",
+  /** tcp */
+  TCP = "tcp",
+}
+
+/**
+ * Key contains details about the keys used in the data of the secret.
+ *
+ * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey
+ */
+export interface HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey {
+  /**
+   * Name is the key in the secret's data where the SSH key's name is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey#name
+   */
+  readonly name: string;
+
+  /**
+   * PrivateKey is the key in the secret's data where the SSH key's private key is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey#privateKey
+   */
+  readonly privateKey: string;
+
+  /**
+   * PublicKey is the key in the secret's data where the SSH key's public key is stored.
+   *
+   * @schema HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey#publicKey
+   */
+  readonly publicKey: string;
+}
+
+/**
+ * Converts an object of type 'HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey(obj: HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'privateKey': obj.privateKey,
+    'publicKey': obj.publicKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
  *
  *
  * @schema RemoteCluster
