@@ -102,14 +102,14 @@ export class KarmadaControlPlane extends Construct {
         obj.addJsonPatch(JsonPatch.add("/metadata/annotations", {}));
 
         // The static-resource job applies CRDs and static resources to the Karmada
-        // API server. Run it as a PostSync hook so it executes after the main
-        // resources (including the karmada-apiserver deployment) are synced.
-        // Also add hook-delete-policy to clean up old job runs.
+        // API server, including the karmada-version ConfigMap that init containers
+        // wait for. Use Sync hook (not PostSync) so it runs during the sync phase,
+        // before ArgoCD waits for all resources to be healthy.
         if (obj.name === "karmada-static-resource") {
           obj.addJsonPatch(
             JsonPatch.add(
               "/metadata/annotations/argocd.argoproj.io~1hook",
-              "PostSync",
+              "Sync",
             ),
           );
           obj.addJsonPatch(
