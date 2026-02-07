@@ -80,3 +80,14 @@ export type {
 
 export { Descheduler } from "./descheduler";
 export type { DeschedulerConfig, DeschedulerKind } from "./descheduler";
+
+export {
+  ConfidentialContainers,
+  RuntimeClasses,
+} from "./confidential-containers";
+export type {
+  ConfidentialContainersConfig,
+  K8sDistribution,
+  TeeShimConfig,
+  CustomContainerdConfig,
+} from "./confidential-containers";
