@@ -61,6 +61,8 @@ export class KarmadaControlPlane extends Construct {
       version: config.version ?? KARMADA_VERSION,
       namespace: namespaceName,
       values: deepmerge(operatorValues, config.values ?? {}),
+      // Include CRDs so the Karmada CRD is installed
+      helmFlags: ["--include-crds"],
     });
 
     // Build Karmada CR spec
