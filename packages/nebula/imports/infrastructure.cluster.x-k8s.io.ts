@@ -6555,6 +6555,3318 @@ export function toJson_HCloudRemediationTemplateSpecTemplateSpecStrategy(obj: HC
 
 
 /**
+ * HetznerBareMetalHost is the Schema for the hetznerbaremetalhosts API.
+ *
+ * @schema HetznerBareMetalHost
+ */
+export class HetznerBareMetalHost extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerBareMetalHost"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerBareMetalHost',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerBareMetalHost".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerBareMetalHostProps = {}): any {
+    return {
+      ...HetznerBareMetalHost.GVK,
+      ...toJson_HetznerBareMetalHostProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerBareMetalHost" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerBareMetalHostProps = {}) {
+    super(scope, id, {
+      ...HetznerBareMetalHost.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerBareMetalHost.GVK,
+      ...toJson_HetznerBareMetalHostProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerBareMetalHost is the Schema for the hetznerbaremetalhosts API.
+ *
+ * @schema HetznerBareMetalHost
+ */
+export interface HetznerBareMetalHostProps {
+  /**
+   * @schema HetznerBareMetalHost#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerBareMetalHostSpec defines the desired state of HetznerBareMetalHost.
+   *
+   * @schema HetznerBareMetalHost#spec
+   */
+  readonly spec?: HetznerBareMetalHostSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostProps(obj: HetznerBareMetalHostProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerBareMetalHostSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalHostSpec defines the desired state of HetznerBareMetalHost.
+ *
+ * @schema HetznerBareMetalHostSpec
+ */
+export interface HetznerBareMetalHostSpec {
+  /**
+   * ConsumerRef is a reference to the HetznerBareMetalMachine
+   * that is using this host. When it is not empty, the host is considered "in use".
+   *
+   * @schema HetznerBareMetalHostSpec#consumerRef
+   */
+  readonly consumerRef?: HetznerBareMetalHostSpecConsumerRef;
+
+  /**
+   * Description is a human-entered text used to help identify the host.
+   * It can be used to store some valuable information about the host.
+   *
+   * @schema HetznerBareMetalHostSpec#description
+   */
+  readonly description?: string;
+
+  /**
+   * MaintenanceMode indicates that a machine is supposed to be deprovisioned
+   * and won't be selected by any Hetzner bare metal machine.
+   *
+   * @schema HetznerBareMetalHostSpec#maintenanceMode
+   */
+  readonly maintenanceMode?: boolean;
+
+  /**
+   * RootDeviceHints provides guidance about how to choose the device for the image
+   * being provisioned. They need to be specified to provision the host.
+   *
+   * @schema HetznerBareMetalHostSpec#rootDeviceHints
+   */
+  readonly rootDeviceHints?: HetznerBareMetalHostSpecRootDeviceHints;
+
+  /**
+   * ServerID defines the ID of the server provided by Hetzner.
+   * Find it on your Hetzner robot dashboard.
+   *
+   * @schema HetznerBareMetalHostSpec#serverID
+   */
+  readonly serverId: number;
+
+  /**
+   * Status contains all status information. The controller writes this status.
+   * As some cannot be regenerated during any reconcilement, the status
+   * is in the specs of the object - not the actual status. DO NOT EDIT!!!
+   *
+   * @schema HetznerBareMetalHostSpec#status
+   */
+  readonly status?: HetznerBareMetalHostSpecStatus;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpec(obj: HetznerBareMetalHostSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'consumerRef': toJson_HetznerBareMetalHostSpecConsumerRef(obj.consumerRef),
+    'description': obj.description,
+    'maintenanceMode': obj.maintenanceMode,
+    'rootDeviceHints': toJson_HetznerBareMetalHostSpecRootDeviceHints(obj.rootDeviceHints),
+    'serverID': obj.serverId,
+    'status': toJson_HetznerBareMetalHostSpecStatus(obj.status),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ConsumerRef is a reference to the HetznerBareMetalMachine
+ * that is using this host. When it is not empty, the host is considered "in use".
+ *
+ * @schema HetznerBareMetalHostSpecConsumerRef
+ */
+export interface HetznerBareMetalHostSpecConsumerRef {
+  /**
+   * API version of the referent.
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * If referring to a piece of an object instead of an entire object, this string
+   * should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+   * For example, if the object reference is to a container within a pod, this would take on a value like:
+   * "spec.containers{name}" (where "name" refers to the name of the container that triggered
+   * the event) or if no container name is specified "spec.containers[2]" (container with
+   * index 2 in this pod). This syntax is chosen only to have some well-defined way of
+   * referencing a part of an object.
+   * TODO: this design is not final and this field is subject to change in the future.
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#fieldPath
+   */
+  readonly fieldPath?: string;
+
+  /**
+   * Kind of the referent.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * Name of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#name
+   */
+  readonly name?: string;
+
+  /**
+   * Namespace of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#namespace
+   */
+  readonly namespace?: string;
+
+  /**
+   * Specific resourceVersion to which this reference is made, if any.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#resourceVersion
+   */
+  readonly resourceVersion?: string;
+
+  /**
+   * UID of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+   *
+   * @schema HetznerBareMetalHostSpecConsumerRef#uid
+   */
+  readonly uid?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecConsumerRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecConsumerRef(obj: HetznerBareMetalHostSpecConsumerRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+    'resourceVersion': obj.resourceVersion,
+    'uid': obj.uid,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RootDeviceHints provides guidance about how to choose the device for the image
+ * being provisioned. They need to be specified to provision the host.
+ *
+ * @schema HetznerBareMetalHostSpecRootDeviceHints
+ */
+export interface HetznerBareMetalHostSpecRootDeviceHints {
+  /**
+   * Raid is used to specify multiple storage devices. It provides the controller with information
+   * on which disks a raid can be established.
+   *
+   * @schema HetznerBareMetalHostSpecRootDeviceHints#raid
+   */
+  readonly raid?: HetznerBareMetalHostSpecRootDeviceHintsRaid;
+
+  /**
+   * WWN is a unique storage identifier used for non-raid setups. The hint
+   * must match the actual value exactly.
+   *
+   * @schema HetznerBareMetalHostSpecRootDeviceHints#wwn
+   */
+  readonly wwn?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecRootDeviceHints' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecRootDeviceHints(obj: HetznerBareMetalHostSpecRootDeviceHints | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'raid': toJson_HetznerBareMetalHostSpecRootDeviceHintsRaid(obj.raid),
+    'wwn': obj.wwn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Status contains all status information. The controller writes this status.
+ * As some cannot be regenerated during any reconcilement, the status
+ * is in the specs of the object - not the actual status. DO NOT EDIT!!!
+ *
+ * @schema HetznerBareMetalHostSpecStatus
+ */
+export interface HetznerBareMetalHostSpecStatus {
+  /**
+   * Conditions define the current service state of the HetznerBareMetalHost.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#conditions
+   */
+  readonly conditions?: HetznerBareMetalHostSpecStatusConditions[];
+
+  /**
+   * ErrorCount records how many times the host has encountered an error since the last successful operation.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#errorCount
+   */
+  readonly errorCount: number;
+
+  /**
+   * the last error message reported by the provisioning subsystem.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#errorMessage
+   */
+  readonly errorMessage?: string;
+
+  /**
+   * ErrorType indicates the type of failure encountered when the
+   * OperationalStatus is OperationalStatusError.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#errorType
+   */
+  readonly errorType?: string;
+
+  /**
+   * StatusHardwareDetails are automatically gathered and should not be modified by the user.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#hardwareDetails
+   */
+  readonly hardwareDetails?: HetznerBareMetalHostSpecStatusHardwareDetails;
+
+  /**
+   * HetznerClusterRef is the name of the HetznerCluster object which is
+   * needed as some necessary information is stored there, e.g. the hrobot password.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#hetznerClusterRef
+   */
+  readonly hetznerClusterRef: string;
+
+  /**
+   * InstallImage is the configuration that is used for the autosetup configuration for installing an OS via InstallImage.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#installImage
+   */
+  readonly installImage?: HetznerBareMetalHostSpecStatusInstallImage;
+
+  /**
+   * IPv4 address of server.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#ipv4
+   */
+  readonly ipv4?: string;
+
+  /**
+   * IPv6 address of server.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#ipv6
+   */
+  readonly ipv6?: string;
+
+  /**
+   * the last error message reported by the provisioning subsystem.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#lastUpdated
+   */
+  readonly lastUpdated?: Date;
+
+  /**
+   * Information tracked by the provisioner.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#provisioningState
+   */
+  readonly provisioningState?: string;
+
+  /**
+   * RebootTypes is a list of all available reboot types for API reboots.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#rebootTypes
+   */
+  readonly rebootTypes?: string[];
+
+  /**
+   * Rebooted shows whether the server is currently being rebooted.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#rebooted
+   */
+  readonly rebooted?: boolean;
+
+  /**
+   * SSHSpec defines specs for SSH.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#sshSpec
+   */
+  readonly sshSpec?: HetznerBareMetalHostSpecStatusSshSpec;
+
+  /**
+   * HetznerRobotSSHKey contains the name and fingerprint of the HetznerCluster spec specified SSH key.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#sshStatus
+   */
+  readonly sshStatus?: HetznerBareMetalHostSpecStatusSshStatus;
+
+  /**
+   * UserData holds the reference to the Secret containing the user
+   * data to be passed to the host before it boots.
+   *
+   * @schema HetznerBareMetalHostSpecStatus#userData
+   */
+  readonly userData?: HetznerBareMetalHostSpecStatusUserData;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatus' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatus(obj: HetznerBareMetalHostSpecStatus | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditions': obj.conditions?.map(y => toJson_HetznerBareMetalHostSpecStatusConditions(y)),
+    'errorCount': obj.errorCount,
+    'errorMessage': obj.errorMessage,
+    'errorType': obj.errorType,
+    'hardwareDetails': toJson_HetznerBareMetalHostSpecStatusHardwareDetails(obj.hardwareDetails),
+    'hetznerClusterRef': obj.hetznerClusterRef,
+    'installImage': toJson_HetznerBareMetalHostSpecStatusInstallImage(obj.installImage),
+    'ipv4': obj.ipv4,
+    'ipv6': obj.ipv6,
+    'lastUpdated': obj.lastUpdated?.toISOString(),
+    'provisioningState': obj.provisioningState,
+    'rebootTypes': obj.rebootTypes?.map(y => y),
+    'rebooted': obj.rebooted,
+    'sshSpec': toJson_HetznerBareMetalHostSpecStatusSshSpec(obj.sshSpec),
+    'sshStatus': toJson_HetznerBareMetalHostSpecStatusSshStatus(obj.sshStatus),
+    'userData': toJson_HetznerBareMetalHostSpecStatusUserData(obj.userData),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Raid is used to specify multiple storage devices. It provides the controller with information
+ * on which disks a raid can be established.
+ *
+ * @schema HetznerBareMetalHostSpecRootDeviceHintsRaid
+ */
+export interface HetznerBareMetalHostSpecRootDeviceHintsRaid {
+  /**
+   * WWN defines a list of unique storage identifiers used for raid setups.
+   *
+   * @schema HetznerBareMetalHostSpecRootDeviceHintsRaid#wwn
+   */
+  readonly wwn?: string[];
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecRootDeviceHintsRaid' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecRootDeviceHintsRaid(obj: HetznerBareMetalHostSpecRootDeviceHintsRaid | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'wwn': obj.wwn?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Condition defines an observation of a Cluster API resource operational state.
+ *
+ * @schema HetznerBareMetalHostSpecStatusConditions
+ */
+export interface HetznerBareMetalHostSpecStatusConditions {
+  /**
+   * Last time the condition transitioned from one status to another.
+   * This should be when the underlying condition changed. If that is not known, then using the time when
+   * the API field changed is acceptable.
+   *
+   * @schema HetznerBareMetalHostSpecStatusConditions#lastTransitionTime
+   */
+  readonly lastTransitionTime: Date;
+
+  /**
+   * A human readable message indicating details about the transition.
+   * This field may be empty.
+   *
+   * @schema HetznerBareMetalHostSpecStatusConditions#message
+   */
+  readonly message?: string;
+
+  /**
+   * The reason for the condition's last transition in CamelCase.
+   * The specific API may choose whether or not this field is considered a guaranteed API.
+   * This field may not be empty.
+   *
+   * @schema HetznerBareMetalHostSpecStatusConditions#reason
+   */
+  readonly reason?: string;
+
+  /**
+   * Severity provides an explicit classification of Reason code, so the users or machines can immediately
+   * understand the current situation and act accordingly.
+   * The Severity field MUST be set only when Status=False.
+   *
+   * @schema HetznerBareMetalHostSpecStatusConditions#severity
+   */
+  readonly severity?: string;
+
+  /**
+   * Status of the condition, one of True, False, Unknown.
+   *
+   * @schema HetznerBareMetalHostSpecStatusConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * Type of condition in CamelCase or in foo.example.com/CamelCase.
+   * Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
+   * can be useful (see .node.status.conditions), the ability to deconflict is important.
+   *
+   * @schema HetznerBareMetalHostSpecStatusConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusConditions(obj: HetznerBareMetalHostSpecStatusConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'lastTransitionTime': obj.lastTransitionTime?.toISOString(),
+    'message': obj.message,
+    'reason': obj.reason,
+    'severity': obj.severity,
+    'status': obj.status,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * StatusHardwareDetails are automatically gathered and should not be modified by the user.
+ *
+ * @schema HetznerBareMetalHostSpecStatusHardwareDetails
+ */
+export interface HetznerBareMetalHostSpecStatusHardwareDetails {
+  /**
+   * CPU describes one processor on the host.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetails#cpu
+   */
+  readonly cpu?: HetznerBareMetalHostSpecStatusHardwareDetailsCpu;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetails#nics
+   */
+  readonly nics?: HetznerBareMetalHostSpecStatusHardwareDetailsNics[];
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetails#ramGB
+   */
+  readonly ramGb?: number;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetails#storage
+   */
+  readonly storage?: HetznerBareMetalHostSpecStatusHardwareDetailsStorage[];
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusHardwareDetails' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusHardwareDetails(obj: HetznerBareMetalHostSpecStatusHardwareDetails | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cpu': toJson_HetznerBareMetalHostSpecStatusHardwareDetailsCpu(obj.cpu),
+    'nics': obj.nics?.map(y => toJson_HetznerBareMetalHostSpecStatusHardwareDetailsNics(y)),
+    'ramGB': obj.ramGb,
+    'storage': obj.storage?.map(y => toJson_HetznerBareMetalHostSpecStatusHardwareDetailsStorage(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * InstallImage is the configuration that is used for the autosetup configuration for installing an OS via InstallImage.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImage
+ */
+export interface HetznerBareMetalHostSpecStatusInstallImage {
+  /**
+   * BTRFSDefinitions define the btrfs subvolume definitions to be created.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#btrfsDefinitions
+   */
+  readonly btrfsDefinitions?: HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions[];
+
+  /**
+   * Image is the image to be provisioned. It defines the image for baremetal machine.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#image
+   */
+  readonly image: HetznerBareMetalHostSpecStatusInstallImageImage;
+
+  /**
+   * LVMDefinitions defines the logical volume definitions to be created.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#logicalVolumeDefinitions
+   */
+  readonly logicalVolumeDefinitions?: HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions[];
+
+  /**
+   * Partitions define the additional Partitions to be created in installimage.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#partitions
+   */
+  readonly partitions: HetznerBareMetalHostSpecStatusInstallImagePartitions[];
+
+  /**
+   * PostInstallScript (Bash) is used for configuring commands that should be executed after installimage.
+   * It is passed along with the installimage command.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#postInstallScript
+   */
+  readonly postInstallScript?: string;
+
+  /**
+   * Swraid defines the SWRAID in InstallImage. It enables or disables raids. Set 1 to enable.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#swraid
+   */
+  readonly swraid?: HetznerBareMetalHostSpecStatusInstallImageSwraid;
+
+  /**
+   * SwraidLevel defines the SWRAIDLEVEL in InstallImage. Only relevant if the raid is enabled.
+   * Pick one of 0,1,5,6,10. Ignored if Swraid=0.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImage#swraidLevel
+   */
+  readonly swraidLevel?: HetznerBareMetalHostSpecStatusInstallImageSwraidLevel;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusInstallImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusInstallImage(obj: HetznerBareMetalHostSpecStatusInstallImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'btrfsDefinitions': obj.btrfsDefinitions?.map(y => toJson_HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions(y)),
+    'image': toJson_HetznerBareMetalHostSpecStatusInstallImageImage(obj.image),
+    'logicalVolumeDefinitions': obj.logicalVolumeDefinitions?.map(y => toJson_HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions(y)),
+    'partitions': obj.partitions?.map(y => toJson_HetznerBareMetalHostSpecStatusInstallImagePartitions(y)),
+    'postInstallScript': obj.postInstallScript,
+    'swraid': obj.swraid,
+    'swraidLevel': obj.swraidLevel,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHSpec defines specs for SSH.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshSpec
+ */
+export interface HetznerBareMetalHostSpecStatusSshSpec {
+  /**
+   * PortAfterCloudInit specifies the port that has to be used to connect to the machine
+   * by reaching the server via SSH after the successful completion of cloud init.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpec#portAfterCloudInit
+   */
+  readonly portAfterCloudInit?: number;
+
+  /**
+   * PortAfterInstallImage specifies the port that has to be used to connect to the machine
+   * by reaching the server via SSH after installing the image successfully.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpec#portAfterInstallImage
+   */
+  readonly portAfterInstallImage?: number;
+
+  /**
+   * SecretRef gives reference to the secret where the SSH key is stored.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpec#secretRef
+   */
+  readonly secretRef: HetznerBareMetalHostSpecStatusSshSpecSecretRef;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshSpec(obj: HetznerBareMetalHostSpecStatusSshSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'portAfterCloudInit': obj.portAfterCloudInit,
+    'portAfterInstallImage': obj.portAfterInstallImage,
+    'secretRef': toJson_HetznerBareMetalHostSpecStatusSshSpecSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerRobotSSHKey contains the name and fingerprint of the HetznerCluster spec specified SSH key.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatus
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatus {
+  /**
+   * CurrentOS gives information about the secret where the os ssh key is stored.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatus#currentOS
+   */
+  readonly currentOs?: HetznerBareMetalHostSpecStatusSshStatusCurrentOs;
+
+  /**
+   * CurrentRescue gives information about the secret where the rescue ssh key is stored.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatus#currentRescue
+   */
+  readonly currentRescue?: HetznerBareMetalHostSpecStatusSshStatusCurrentRescue;
+
+  /**
+   * OSKey contains name and fingerprint of the in HetznerBareMetalMachine spec specified SSH key.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatus#osKey
+   */
+  readonly osKey?: HetznerBareMetalHostSpecStatusSshStatusOsKey;
+
+  /**
+   * RescueKey contains name and fingerprint of the in HetznerCluster spec specified SSH key.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatus#rescueKey
+   */
+  readonly rescueKey?: HetznerBareMetalHostSpecStatusSshStatusRescueKey;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatus' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatus(obj: HetznerBareMetalHostSpecStatusSshStatus | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'currentOS': toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentOs(obj.currentOs),
+    'currentRescue': toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentRescue(obj.currentRescue),
+    'osKey': toJson_HetznerBareMetalHostSpecStatusSshStatusOsKey(obj.osKey),
+    'rescueKey': toJson_HetznerBareMetalHostSpecStatusSshStatusRescueKey(obj.rescueKey),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UserData holds the reference to the Secret containing the user
+ * data to be passed to the host before it boots.
+ *
+ * @schema HetznerBareMetalHostSpecStatusUserData
+ */
+export interface HetznerBareMetalHostSpecStatusUserData {
+  /**
+   * name is unique within a namespace to reference a secret resource.
+   *
+   * @schema HetznerBareMetalHostSpecStatusUserData#name
+   */
+  readonly name?: string;
+
+  /**
+   * namespace defines the space within which the secret name must be unique.
+   *
+   * @schema HetznerBareMetalHostSpecStatusUserData#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusUserData' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusUserData(obj: HetznerBareMetalHostSpecStatusUserData | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CPU describes one processor on the host.
+ *
+ * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu
+ */
+export interface HetznerBareMetalHostSpecStatusHardwareDetailsCpu {
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu#arch
+   */
+  readonly arch?: string;
+
+  /**
+   * ClockSpeed is a clock speed in MHz
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu#clockGigahertz
+   */
+  readonly clockGigahertz?: string;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu#cores
+   */
+  readonly cores?: number;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu#flags
+   */
+  readonly flags?: string[];
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu#model
+   */
+  readonly model?: string;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsCpu#threads
+   */
+  readonly threads?: number;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusHardwareDetailsCpu' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusHardwareDetailsCpu(obj: HetznerBareMetalHostSpecStatusHardwareDetailsCpu | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arch': obj.arch,
+    'clockGigahertz': obj.clockGigahertz,
+    'cores': obj.cores,
+    'flags': obj.flags?.map(y => y),
+    'model': obj.model,
+    'threads': obj.threads,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * NIC describes one network interface on the host.
+ *
+ * @schema HetznerBareMetalHostSpecStatusHardwareDetailsNics
+ */
+export interface HetznerBareMetalHostSpecStatusHardwareDetailsNics {
+  /**
+   * The IP address of the interface. This will be an IPv4 or IPv6 address
+   * if one is present.  If both IPv4 and IPv6 addresses are present in a
+   * dual-stack environment, two nics will be output, one with each IP.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsNics#ip
+   */
+  readonly ip?: string;
+
+  /**
+   * The device MAC address
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsNics#mac
+   */
+  readonly mac?: string;
+
+  /**
+   * The vendor and product IDs of the NIC, e.g. "0x8086 0x1572"
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsNics#model
+   */
+  readonly model?: string;
+
+  /**
+   * The name of the network interface, e.g. "en0"
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsNics#name
+   */
+  readonly name?: string;
+
+  /**
+   * The speed of the device in Gigabits per second
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsNics#speedMbps
+   */
+  readonly speedMbps?: number;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusHardwareDetailsNics' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusHardwareDetailsNics(obj: HetznerBareMetalHostSpecStatusHardwareDetailsNics | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'ip': obj.ip,
+    'mac': obj.mac,
+    'model': obj.model,
+    'name': obj.name,
+    'speedMbps': obj.speedMbps,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Storage describes one storage device (disk, SSD, etc.) on the host.
+ *
+ * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage
+ */
+export interface HetznerBareMetalHostSpecStatusHardwareDetailsStorage {
+  /**
+   * HCTL defines the SCSI location of the device.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#hctl
+   */
+  readonly hctl?: string;
+
+  /**
+   * Model represents the Hardware model.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#model
+   */
+  readonly model?: string;
+
+  /**
+   * The Linux device name of the disk, e.g. "/dev/sda". Note that this
+   * may not be stable across reboots.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#name
+   */
+  readonly name?: string;
+
+  /**
+   * Rota defines if it's an HDD device or not.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#rota
+   */
+  readonly rota?: boolean;
+
+  /**
+   * SerialNumber denotes the serial number of the device.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#serialNumber
+   */
+  readonly serialNumber?: string;
+
+  /**
+   * SizeBytes is the size of the disk in Bytes.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#sizeBytes
+   */
+  readonly sizeBytes?: number;
+
+  /**
+   * SizeGB is the size of the disk in GB.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#sizeGB
+   */
+  readonly sizeGb?: number;
+
+  /**
+   * Vendor is the name of the vendor of the device.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#vendor
+   */
+  readonly vendor?: string;
+
+  /**
+   * WWN defines the WWN of the device.
+   *
+   * @schema HetznerBareMetalHostSpecStatusHardwareDetailsStorage#wwn
+   */
+  readonly wwn?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusHardwareDetailsStorage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusHardwareDetailsStorage(obj: HetznerBareMetalHostSpecStatusHardwareDetailsStorage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hctl': obj.hctl,
+    'model': obj.model,
+    'name': obj.name,
+    'rota': obj.rota,
+    'serialNumber': obj.serialNumber,
+    'sizeBytes': obj.sizeBytes,
+    'sizeGB': obj.sizeGb,
+    'vendor': obj.vendor,
+    'wwn': obj.wwn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * BTRFSDefinition defines the btrfs subvolume definitions to be created.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions
+ */
+export interface HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions {
+  /**
+   * Mount defines the mountpath.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * SubVolume defines the subvolume name.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions#subvolume
+   */
+  readonly subvolume: string;
+
+  /**
+   * Volume defines the btrfs volume name.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions#volume
+   */
+  readonly volume: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions(obj: HetznerBareMetalHostSpecStatusInstallImageBtrfsDefinitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'mount': obj.mount,
+    'subvolume': obj.subvolume,
+    'volume': obj.volume,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Image is the image to be provisioned. It defines the image for baremetal machine.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImageImage
+ */
+export interface HetznerBareMetalHostSpecStatusInstallImageImage {
+  /**
+   * Name defines the archive name after download. This has to be a valid name for Installimage.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageImage#name
+   */
+  readonly name?: string;
+
+  /**
+   * Path is the local path for a preinstalled image from upstream.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageImage#path
+   */
+  readonly path?: string;
+
+  /**
+   * URL defines the remote URL for downloading a tar, tar.gz, tar.bz, tar.bz2, tar.xz, tgz, tbz, txz image.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageImage#url
+   */
+  readonly url?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusInstallImageImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusInstallImageImage(obj: HetznerBareMetalHostSpecStatusInstallImageImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'path': obj.path,
+    'url': obj.url,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LVMDefinition defines the logical volume definitions to be created.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions
+ */
+export interface HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions {
+  /**
+   * FileSystem defines the filesystem for this logical volume.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions#filesystem
+   */
+  readonly filesystem: string;
+
+  /**
+   * Mount defines the mountpath.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * Name defines the volume name.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions#name
+   */
+  readonly name: string;
+
+  /**
+   * Size defines the size in M/G/T or MiB/GiB/TiB.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions#size
+   */
+  readonly size: string;
+
+  /**
+   * VG defines the vg name.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions#vg
+   */
+  readonly vg: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions(obj: HetznerBareMetalHostSpecStatusInstallImageLogicalVolumeDefinitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filesystem': obj.filesystem,
+    'mount': obj.mount,
+    'name': obj.name,
+    'size': obj.size,
+    'vg': obj.vg,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Partition defines the additional Partitions to be created.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImagePartitions
+ */
+export interface HetznerBareMetalHostSpecStatusInstallImagePartitions {
+  /**
+   * FileSystem can be ext2, ext3, ext4, btrfs, reiserfs, xfs, swap
+   * or name of the LVM volume group (VG), if this PART is a VG.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImagePartitions#fileSystem
+   */
+  readonly fileSystem: string;
+
+  /**
+   * Mount defines the mount path for this filesystem.
+   * Keyword 'lvm' to use this PART as volume group (VG) for LVM.
+   * Identifier 'btrfs.X' to use this PART as volume for
+   * btrfs subvolumes. X can be replaced with a unique
+   * alphanumeric keyword. NOTE: no support for btrfs multi-device volumes.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImagePartitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * Size can use the keyword 'all' to assign all the remaining space of the drive to the last partition.
+   * You can use M/G/T for unit specification in MiB/GiB/TiB.
+   *
+   * @schema HetznerBareMetalHostSpecStatusInstallImagePartitions#size
+   */
+  readonly size: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusInstallImagePartitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusInstallImagePartitions(obj: HetznerBareMetalHostSpecStatusInstallImagePartitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fileSystem': obj.fileSystem,
+    'mount': obj.mount,
+    'size': obj.size,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Swraid defines the SWRAID in InstallImage. It enables or disables raids. Set 1 to enable.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImageSwraid
+ */
+export enum HetznerBareMetalHostSpecStatusInstallImageSwraid {
+  /** 0 */
+  VALUE_0 = 0,
+  /** 1 */
+  VALUE_1 = 1,
+}
+
+/**
+ * SwraidLevel defines the SWRAIDLEVEL in InstallImage. Only relevant if the raid is enabled.
+ * Pick one of 0,1,5,6,10. Ignored if Swraid=0.
+ *
+ * @schema HetznerBareMetalHostSpecStatusInstallImageSwraidLevel
+ */
+export enum HetznerBareMetalHostSpecStatusInstallImageSwraidLevel {
+  /** 0 */
+  VALUE_0 = 0,
+  /** 1 */
+  VALUE_1 = 1,
+  /** 5 */
+  VALUE_5 = 5,
+  /** 6 */
+  VALUE_6 = 6,
+  /** 10 */
+  VALUE_10 = 10,
+}
+
+/**
+ * SecretRef gives reference to the secret where the SSH key is stored.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRef
+ */
+export interface HetznerBareMetalHostSpecStatusSshSpecSecretRef {
+  /**
+   * Key contains details about the keys used in the data of the secret.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRef#key
+   */
+  readonly key: HetznerBareMetalHostSpecStatusSshSpecSecretRefKey;
+
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshSpecSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshSpecSecretRef(obj: HetznerBareMetalHostSpecStatusSshSpecSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerBareMetalHostSpecStatusSshSpecSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CurrentOS gives information about the secret where the os ssh key is stored.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOs
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatusCurrentOs {
+  /**
+   * SecretReference represents a Secret Reference. It has enough information to retrieve secret
+   * in any namespace
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOs#credentials
+   */
+  readonly credentials?: HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOs#credentialsDataHash
+   */
+  readonly credentialsDataHash?: string;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOs#credentialsVersion
+   */
+  readonly credentialsVersion?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatusCurrentOs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentOs(obj: HetznerBareMetalHostSpecStatusSshStatusCurrentOs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'credentials': toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials(obj.credentials),
+    'credentialsDataHash': obj.credentialsDataHash,
+    'credentialsVersion': obj.credentialsVersion,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CurrentRescue gives information about the secret where the rescue ssh key is stored.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescue
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatusCurrentRescue {
+  /**
+   * SecretReference represents a Secret Reference. It has enough information to retrieve secret
+   * in any namespace
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescue#credentials
+   */
+  readonly credentials?: HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescue#credentialsDataHash
+   */
+  readonly credentialsDataHash?: string;
+
+  /**
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescue#credentialsVersion
+   */
+  readonly credentialsVersion?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatusCurrentRescue' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentRescue(obj: HetznerBareMetalHostSpecStatusSshStatusCurrentRescue | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'credentials': toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials(obj.credentials),
+    'credentialsDataHash': obj.credentialsDataHash,
+    'credentialsVersion': obj.credentialsVersion,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * OSKey contains name and fingerprint of the in HetznerBareMetalMachine spec specified SSH key.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatusOsKey
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatusOsKey {
+  /**
+   * Fingerprint defines the fingerprint of the SSH key - added by the controller.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusOsKey#fingerprint
+   */
+  readonly fingerprint?: string;
+
+  /**
+   * Name defines the name of the SSH key.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusOsKey#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatusOsKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatusOsKey(obj: HetznerBareMetalHostSpecStatusSshStatusOsKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fingerprint': obj.fingerprint,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RescueKey contains name and fingerprint of the in HetznerCluster spec specified SSH key.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatusRescueKey
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatusRescueKey {
+  /**
+   * Fingerprint defines the fingerprint of the SSH key - added by the controller.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusRescueKey#fingerprint
+   */
+  readonly fingerprint?: string;
+
+  /**
+   * Name defines the name of the SSH key.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusRescueKey#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatusRescueKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatusRescueKey(obj: HetznerBareMetalHostSpecStatusSshStatusRescueKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fingerprint': obj.fingerprint,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Key contains details about the keys used in the data of the secret.
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRefKey
+ */
+export interface HetznerBareMetalHostSpecStatusSshSpecSecretRefKey {
+  /**
+   * Name is the key in the secret's data where the SSH key's name is stored.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRefKey#name
+   */
+  readonly name: string;
+
+  /**
+   * PrivateKey is the key in the secret's data where the SSH key's private key is stored.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRefKey#privateKey
+   */
+  readonly privateKey: string;
+
+  /**
+   * PublicKey is the key in the secret's data where the SSH key's public key is stored.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshSpecSecretRefKey#publicKey
+   */
+  readonly publicKey: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshSpecSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshSpecSecretRefKey(obj: HetznerBareMetalHostSpecStatusSshSpecSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'privateKey': obj.privateKey,
+    'publicKey': obj.publicKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretReference represents a Secret Reference. It has enough information to retrieve secret
+ * in any namespace
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials {
+  /**
+   * name is unique within a namespace to reference a secret resource.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials#name
+   */
+  readonly name?: string;
+
+  /**
+   * namespace defines the space within which the secret name must be unique.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials(obj: HetznerBareMetalHostSpecStatusSshStatusCurrentOsCredentials | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretReference represents a Secret Reference. It has enough information to retrieve secret
+ * in any namespace
+ *
+ * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials
+ */
+export interface HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials {
+  /**
+   * name is unique within a namespace to reference a secret resource.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials#name
+   */
+  readonly name?: string;
+
+  /**
+   * namespace defines the space within which the secret name must be unique.
+   *
+   * @schema HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials(obj: HetznerBareMetalHostSpecStatusSshStatusCurrentRescueCredentials | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HetznerBareMetalMachine is the Schema for the hetznerbaremetalmachines API.
+ *
+ * @schema HetznerBareMetalMachine
+ */
+export class HetznerBareMetalMachine extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerBareMetalMachine"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerBareMetalMachine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerBareMetalMachine".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerBareMetalMachineProps = {}): any {
+    return {
+      ...HetznerBareMetalMachine.GVK,
+      ...toJson_HetznerBareMetalMachineProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerBareMetalMachine" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerBareMetalMachineProps = {}) {
+    super(scope, id, {
+      ...HetznerBareMetalMachine.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerBareMetalMachine.GVK,
+      ...toJson_HetznerBareMetalMachineProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerBareMetalMachine is the Schema for the hetznerbaremetalmachines API.
+ *
+ * @schema HetznerBareMetalMachine
+ */
+export interface HetznerBareMetalMachineProps {
+  /**
+   * @schema HetznerBareMetalMachine#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerBareMetalMachineSpec defines the desired state of HetznerBareMetalMachine.
+   *
+   * @schema HetznerBareMetalMachine#spec
+   */
+  readonly spec?: HetznerBareMetalMachineSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineProps(obj: HetznerBareMetalMachineProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerBareMetalMachineSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalMachineSpec defines the desired state of HetznerBareMetalMachine.
+ *
+ * @schema HetznerBareMetalMachineSpec
+ */
+export interface HetznerBareMetalMachineSpec {
+  /**
+   * HostSelector specifies matching criteria for labels on HetznerBareMetalHosts.
+   * This is used to limit the set of HetznerBareMetalHost objects considered for
+   * claiming for a HetznerBareMetalMachine.
+   *
+   * @schema HetznerBareMetalMachineSpec#hostSelector
+   */
+  readonly hostSelector?: HetznerBareMetalMachineSpecHostSelector;
+
+  /**
+   * InstallImage is the configuration that is used for the autosetup configuration for installing an OS via InstallImage.
+   *
+   * @schema HetznerBareMetalMachineSpec#installImage
+   */
+  readonly installImage: HetznerBareMetalMachineSpecInstallImage;
+
+  /**
+   * ProviderID will be the hetznerbaremetalmachine which is set by the controller
+   * in the `hcloud://bm-<server-id>` format.
+   *
+   * @schema HetznerBareMetalMachineSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * SSHSpec gives a reference on the secret where SSH details are specified as well as ports for SSH.
+   *
+   * @schema HetznerBareMetalMachineSpec#sshSpec
+   */
+  readonly sshSpec?: HetznerBareMetalMachineSpecSshSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpec(obj: HetznerBareMetalMachineSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hostSelector': toJson_HetznerBareMetalMachineSpecHostSelector(obj.hostSelector),
+    'installImage': toJson_HetznerBareMetalMachineSpecInstallImage(obj.installImage),
+    'providerID': obj.providerId,
+    'sshSpec': toJson_HetznerBareMetalMachineSpecSshSpec(obj.sshSpec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HostSelector specifies matching criteria for labels on HetznerBareMetalHosts.
+ * This is used to limit the set of HetznerBareMetalHost objects considered for
+ * claiming for a HetznerBareMetalMachine.
+ *
+ * @schema HetznerBareMetalMachineSpecHostSelector
+ */
+export interface HetznerBareMetalMachineSpecHostSelector {
+  /**
+   * MatchExpressions defines the label match expressions that must be true on a chosen BareMetalHost.
+   *
+   * @schema HetznerBareMetalMachineSpecHostSelector#matchExpressions
+   */
+  readonly matchExpressions?: HetznerBareMetalMachineSpecHostSelectorMatchExpressions[];
+
+  /**
+   * MatchLabels defines the key/value pairs of labels that must exist on a chosen BareMetalHost.
+   *
+   * @schema HetznerBareMetalMachineSpecHostSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecHostSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecHostSelector(obj: HetznerBareMetalMachineSpecHostSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_HetznerBareMetalMachineSpecHostSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * InstallImage is the configuration that is used for the autosetup configuration for installing an OS via InstallImage.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImage
+ */
+export interface HetznerBareMetalMachineSpecInstallImage {
+  /**
+   * BTRFSDefinitions define the btrfs subvolume definitions to be created.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#btrfsDefinitions
+   */
+  readonly btrfsDefinitions?: HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions[];
+
+  /**
+   * Image is the image to be provisioned. It defines the image for baremetal machine.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#image
+   */
+  readonly image: HetznerBareMetalMachineSpecInstallImageImage;
+
+  /**
+   * LVMDefinitions defines the logical volume definitions to be created.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#logicalVolumeDefinitions
+   */
+  readonly logicalVolumeDefinitions?: HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions[];
+
+  /**
+   * Partitions define the additional Partitions to be created in installimage.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#partitions
+   */
+  readonly partitions: HetznerBareMetalMachineSpecInstallImagePartitions[];
+
+  /**
+   * PostInstallScript (Bash) is used for configuring commands that should be executed after installimage.
+   * It is passed along with the installimage command.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#postInstallScript
+   */
+  readonly postInstallScript?: string;
+
+  /**
+   * Swraid defines the SWRAID in InstallImage. It enables or disables raids. Set 1 to enable.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#swraid
+   */
+  readonly swraid?: HetznerBareMetalMachineSpecInstallImageSwraid;
+
+  /**
+   * SwraidLevel defines the SWRAIDLEVEL in InstallImage. Only relevant if the raid is enabled.
+   * Pick one of 0,1,5,6,10. Ignored if Swraid=0.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImage#swraidLevel
+   */
+  readonly swraidLevel?: HetznerBareMetalMachineSpecInstallImageSwraidLevel;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecInstallImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecInstallImage(obj: HetznerBareMetalMachineSpecInstallImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'btrfsDefinitions': obj.btrfsDefinitions?.map(y => toJson_HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions(y)),
+    'image': toJson_HetznerBareMetalMachineSpecInstallImageImage(obj.image),
+    'logicalVolumeDefinitions': obj.logicalVolumeDefinitions?.map(y => toJson_HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions(y)),
+    'partitions': obj.partitions?.map(y => toJson_HetznerBareMetalMachineSpecInstallImagePartitions(y)),
+    'postInstallScript': obj.postInstallScript,
+    'swraid': obj.swraid,
+    'swraidLevel': obj.swraidLevel,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHSpec gives a reference on the secret where SSH details are specified as well as ports for SSH.
+ *
+ * @schema HetznerBareMetalMachineSpecSshSpec
+ */
+export interface HetznerBareMetalMachineSpecSshSpec {
+  /**
+   * PortAfterCloudInit specifies the port that has to be used to connect to the machine
+   * by reaching the server via SSH after the successful completion of cloud init.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpec#portAfterCloudInit
+   */
+  readonly portAfterCloudInit?: number;
+
+  /**
+   * PortAfterInstallImage specifies the port that has to be used to connect to the machine
+   * by reaching the server via SSH after installing the image successfully.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpec#portAfterInstallImage
+   */
+  readonly portAfterInstallImage?: number;
+
+  /**
+   * SecretRef gives reference to the secret where the SSH key is stored.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpec#secretRef
+   */
+  readonly secretRef: HetznerBareMetalMachineSpecSshSpecSecretRef;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecSshSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecSshSpec(obj: HetznerBareMetalMachineSpecSshSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'portAfterCloudInit': obj.portAfterCloudInit,
+    'portAfterInstallImage': obj.portAfterInstallImage,
+    'secretRef': toJson_HetznerBareMetalMachineSpecSshSpecSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HostSelectorRequirement defines a requirement used for MatchExpressions to select host machines.
+ *
+ * @schema HetznerBareMetalMachineSpecHostSelectorMatchExpressions
+ */
+export interface HetznerBareMetalMachineSpecHostSelectorMatchExpressions {
+  /**
+   * Key defines the key of the label that should be matched in the host object.
+   *
+   * @schema HetznerBareMetalMachineSpecHostSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * Operator defines the selection operator.
+   *
+   * @schema HetznerBareMetalMachineSpecHostSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * Values define the values whose relation to the label value in the host machine is defined by the selection operator.
+   *
+   * @schema HetznerBareMetalMachineSpecHostSelectorMatchExpressions#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecHostSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecHostSelectorMatchExpressions(obj: HetznerBareMetalMachineSpecHostSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * BTRFSDefinition defines the btrfs subvolume definitions to be created.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions
+ */
+export interface HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions {
+  /**
+   * Mount defines the mountpath.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * SubVolume defines the subvolume name.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions#subvolume
+   */
+  readonly subvolume: string;
+
+  /**
+   * Volume defines the btrfs volume name.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions#volume
+   */
+  readonly volume: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions(obj: HetznerBareMetalMachineSpecInstallImageBtrfsDefinitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'mount': obj.mount,
+    'subvolume': obj.subvolume,
+    'volume': obj.volume,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Image is the image to be provisioned. It defines the image for baremetal machine.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImageImage
+ */
+export interface HetznerBareMetalMachineSpecInstallImageImage {
+  /**
+   * Name defines the archive name after download. This has to be a valid name for Installimage.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageImage#name
+   */
+  readonly name?: string;
+
+  /**
+   * Path is the local path for a preinstalled image from upstream.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageImage#path
+   */
+  readonly path?: string;
+
+  /**
+   * URL defines the remote URL for downloading a tar, tar.gz, tar.bz, tar.bz2, tar.xz, tgz, tbz, txz image.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageImage#url
+   */
+  readonly url?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecInstallImageImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecInstallImageImage(obj: HetznerBareMetalMachineSpecInstallImageImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'path': obj.path,
+    'url': obj.url,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LVMDefinition defines the logical volume definitions to be created.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions
+ */
+export interface HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions {
+  /**
+   * FileSystem defines the filesystem for this logical volume.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions#filesystem
+   */
+  readonly filesystem: string;
+
+  /**
+   * Mount defines the mountpath.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * Name defines the volume name.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions#name
+   */
+  readonly name: string;
+
+  /**
+   * Size defines the size in M/G/T or MiB/GiB/TiB.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions#size
+   */
+  readonly size: string;
+
+  /**
+   * VG defines the vg name.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions#vg
+   */
+  readonly vg: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions(obj: HetznerBareMetalMachineSpecInstallImageLogicalVolumeDefinitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filesystem': obj.filesystem,
+    'mount': obj.mount,
+    'name': obj.name,
+    'size': obj.size,
+    'vg': obj.vg,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Partition defines the additional Partitions to be created.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImagePartitions
+ */
+export interface HetznerBareMetalMachineSpecInstallImagePartitions {
+  /**
+   * FileSystem can be ext2, ext3, ext4, btrfs, reiserfs, xfs, swap
+   * or name of the LVM volume group (VG), if this PART is a VG.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImagePartitions#fileSystem
+   */
+  readonly fileSystem: string;
+
+  /**
+   * Mount defines the mount path for this filesystem.
+   * Keyword 'lvm' to use this PART as volume group (VG) for LVM.
+   * Identifier 'btrfs.X' to use this PART as volume for
+   * btrfs subvolumes. X can be replaced with a unique
+   * alphanumeric keyword. NOTE: no support for btrfs multi-device volumes.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImagePartitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * Size can use the keyword 'all' to assign all the remaining space of the drive to the last partition.
+   * You can use M/G/T for unit specification in MiB/GiB/TiB.
+   *
+   * @schema HetznerBareMetalMachineSpecInstallImagePartitions#size
+   */
+  readonly size: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecInstallImagePartitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecInstallImagePartitions(obj: HetznerBareMetalMachineSpecInstallImagePartitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fileSystem': obj.fileSystem,
+    'mount': obj.mount,
+    'size': obj.size,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Swraid defines the SWRAID in InstallImage. It enables or disables raids. Set 1 to enable.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImageSwraid
+ */
+export enum HetznerBareMetalMachineSpecInstallImageSwraid {
+  /** 0 */
+  VALUE_0 = 0,
+  /** 1 */
+  VALUE_1 = 1,
+}
+
+/**
+ * SwraidLevel defines the SWRAIDLEVEL in InstallImage. Only relevant if the raid is enabled.
+ * Pick one of 0,1,5,6,10. Ignored if Swraid=0.
+ *
+ * @schema HetznerBareMetalMachineSpecInstallImageSwraidLevel
+ */
+export enum HetznerBareMetalMachineSpecInstallImageSwraidLevel {
+  /** 0 */
+  VALUE_0 = 0,
+  /** 1 */
+  VALUE_1 = 1,
+  /** 5 */
+  VALUE_5 = 5,
+  /** 6 */
+  VALUE_6 = 6,
+  /** 10 */
+  VALUE_10 = 10,
+}
+
+/**
+ * SecretRef gives reference to the secret where the SSH key is stored.
+ *
+ * @schema HetznerBareMetalMachineSpecSshSpecSecretRef
+ */
+export interface HetznerBareMetalMachineSpecSshSpecSecretRef {
+  /**
+   * Key contains details about the keys used in the data of the secret.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpecSecretRef#key
+   */
+  readonly key: HetznerBareMetalMachineSpecSshSpecSecretRefKey;
+
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpecSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecSshSpecSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecSshSpecSecretRef(obj: HetznerBareMetalMachineSpecSshSpecSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerBareMetalMachineSpecSshSpecSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Key contains details about the keys used in the data of the secret.
+ *
+ * @schema HetznerBareMetalMachineSpecSshSpecSecretRefKey
+ */
+export interface HetznerBareMetalMachineSpecSshSpecSecretRefKey {
+  /**
+   * Name is the key in the secret's data where the SSH key's name is stored.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpecSecretRefKey#name
+   */
+  readonly name: string;
+
+  /**
+   * PrivateKey is the key in the secret's data where the SSH key's private key is stored.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpecSecretRefKey#privateKey
+   */
+  readonly privateKey: string;
+
+  /**
+   * PublicKey is the key in the secret's data where the SSH key's public key is stored.
+   *
+   * @schema HetznerBareMetalMachineSpecSshSpecSecretRefKey#publicKey
+   */
+  readonly publicKey: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineSpecSshSpecSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineSpecSshSpecSecretRefKey(obj: HetznerBareMetalMachineSpecSshSpecSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'privateKey': obj.privateKey,
+    'publicKey': obj.publicKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HetznerBareMetalMachineTemplate is the Schema for the hetznerbaremetalmachinetemplates API.
+ *
+ * @schema HetznerBareMetalMachineTemplate
+ */
+export class HetznerBareMetalMachineTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerBareMetalMachineTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerBareMetalMachineTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerBareMetalMachineTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerBareMetalMachineTemplateProps = {}): any {
+    return {
+      ...HetznerBareMetalMachineTemplate.GVK,
+      ...toJson_HetznerBareMetalMachineTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerBareMetalMachineTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerBareMetalMachineTemplateProps = {}) {
+    super(scope, id, {
+      ...HetznerBareMetalMachineTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerBareMetalMachineTemplate.GVK,
+      ...toJson_HetznerBareMetalMachineTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerBareMetalMachineTemplate is the Schema for the hetznerbaremetalmachinetemplates API.
+ *
+ * @schema HetznerBareMetalMachineTemplate
+ */
+export interface HetznerBareMetalMachineTemplateProps {
+  /**
+   * @schema HetznerBareMetalMachineTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerBareMetalMachineTemplateSpec defines the desired state of HetznerBareMetalMachineTemplate.
+   *
+   * @schema HetznerBareMetalMachineTemplate#spec
+   */
+  readonly spec?: HetznerBareMetalMachineTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateProps(obj: HetznerBareMetalMachineTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerBareMetalMachineTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalMachineTemplateSpec defines the desired state of HetznerBareMetalMachineTemplate.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpec
+ */
+export interface HetznerBareMetalMachineTemplateSpec {
+  /**
+   * HetznerBareMetalMachineTemplateResource describes the data needed to create a HetznerBareMetalMachine from a template.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpec#template
+   */
+  readonly template: HetznerBareMetalMachineTemplateSpecTemplate;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpec(obj: HetznerBareMetalMachineTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_HetznerBareMetalMachineTemplateSpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalMachineTemplateResource describes the data needed to create a HetznerBareMetalMachine from a template.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplate
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplate {
+  /**
+   * Spec is the specification of the desired behavior of the machine.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplate#spec
+   */
+  readonly spec: HetznerBareMetalMachineTemplateSpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplate(obj: HetznerBareMetalMachineTemplateSpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'spec': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec is the specification of the desired behavior of the machine.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpec
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpec {
+  /**
+   * HostSelector specifies matching criteria for labels on HetznerBareMetalHosts.
+   * This is used to limit the set of HetznerBareMetalHost objects considered for
+   * claiming for a HetznerBareMetalMachine.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpec#hostSelector
+   */
+  readonly hostSelector?: HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector;
+
+  /**
+   * InstallImage is the configuration that is used for the autosetup configuration for installing an OS via InstallImage.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpec#installImage
+   */
+  readonly installImage: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage;
+
+  /**
+   * ProviderID will be the hetznerbaremetalmachine which is set by the controller
+   * in the `hcloud://bm-<server-id>` format.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * SSHSpec gives a reference on the secret where SSH details are specified as well as ports for SSH.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpec#sshSpec
+   */
+  readonly sshSpec?: HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpec(obj: HetznerBareMetalMachineTemplateSpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'hostSelector': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector(obj.hostSelector),
+    'installImage': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage(obj.installImage),
+    'providerID': obj.providerId,
+    'sshSpec': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec(obj.sshSpec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HostSelector specifies matching criteria for labels on HetznerBareMetalHosts.
+ * This is used to limit the set of HetznerBareMetalHost objects considered for
+ * claiming for a HetznerBareMetalMachine.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector {
+  /**
+   * MatchExpressions defines the label match expressions that must be true on a chosen BareMetalHost.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector#matchExpressions
+   */
+  readonly matchExpressions?: HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions[];
+
+  /**
+   * MatchLabels defines the key/value pairs of labels that must exist on a chosen BareMetalHost.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * InstallImage is the configuration that is used for the autosetup configuration for installing an OS via InstallImage.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage {
+  /**
+   * BTRFSDefinitions define the btrfs subvolume definitions to be created.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#btrfsDefinitions
+   */
+  readonly btrfsDefinitions?: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions[];
+
+  /**
+   * Image is the image to be provisioned. It defines the image for baremetal machine.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#image
+   */
+  readonly image: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage;
+
+  /**
+   * LVMDefinitions defines the logical volume definitions to be created.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#logicalVolumeDefinitions
+   */
+  readonly logicalVolumeDefinitions?: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions[];
+
+  /**
+   * Partitions define the additional Partitions to be created in installimage.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#partitions
+   */
+  readonly partitions: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions[];
+
+  /**
+   * PostInstallScript (Bash) is used for configuring commands that should be executed after installimage.
+   * It is passed along with the installimage command.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#postInstallScript
+   */
+  readonly postInstallScript?: string;
+
+  /**
+   * Swraid defines the SWRAID in InstallImage. It enables or disables raids. Set 1 to enable.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#swraid
+   */
+  readonly swraid?: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageSwraid;
+
+  /**
+   * SwraidLevel defines the SWRAIDLEVEL in InstallImage. Only relevant if the raid is enabled.
+   * Pick one of 0,1,5,6,10. Ignored if Swraid=0.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage#swraidLevel
+   */
+  readonly swraidLevel?: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageSwraidLevel;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'btrfsDefinitions': obj.btrfsDefinitions?.map(y => toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions(y)),
+    'image': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage(obj.image),
+    'logicalVolumeDefinitions': obj.logicalVolumeDefinitions?.map(y => toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions(y)),
+    'partitions': obj.partitions?.map(y => toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions(y)),
+    'postInstallScript': obj.postInstallScript,
+    'swraid': obj.swraid,
+    'swraidLevel': obj.swraidLevel,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHSpec gives a reference on the secret where SSH details are specified as well as ports for SSH.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec {
+  /**
+   * PortAfterCloudInit specifies the port that has to be used to connect to the machine
+   * by reaching the server via SSH after the successful completion of cloud init.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec#portAfterCloudInit
+   */
+  readonly portAfterCloudInit?: number;
+
+  /**
+   * PortAfterInstallImage specifies the port that has to be used to connect to the machine
+   * by reaching the server via SSH after installing the image successfully.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec#portAfterInstallImage
+   */
+  readonly portAfterInstallImage?: number;
+
+  /**
+   * SecretRef gives reference to the secret where the SSH key is stored.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec#secretRef
+   */
+  readonly secretRef: HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'portAfterCloudInit': obj.portAfterCloudInit,
+    'portAfterInstallImage': obj.portAfterInstallImage,
+    'secretRef': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HostSelectorRequirement defines a requirement used for MatchExpressions to select host machines.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions {
+  /**
+   * Key defines the key of the label that should be matched in the host object.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * Operator defines the selection operator.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * Values define the values whose relation to the label value in the host machine is defined by the selection operator.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecHostSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * BTRFSDefinition defines the btrfs subvolume definitions to be created.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions {
+  /**
+   * Mount defines the mountpath.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * SubVolume defines the subvolume name.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions#subvolume
+   */
+  readonly subvolume: string;
+
+  /**
+   * Volume defines the btrfs volume name.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions#volume
+   */
+  readonly volume: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageBtrfsDefinitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'mount': obj.mount,
+    'subvolume': obj.subvolume,
+    'volume': obj.volume,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Image is the image to be provisioned. It defines the image for baremetal machine.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage {
+  /**
+   * Name defines the archive name after download. This has to be a valid name for Installimage.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage#name
+   */
+  readonly name?: string;
+
+  /**
+   * Path is the local path for a preinstalled image from upstream.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage#path
+   */
+  readonly path?: string;
+
+  /**
+   * URL defines the remote URL for downloading a tar, tar.gz, tar.bz, tar.bz2, tar.xz, tgz, tbz, txz image.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage#url
+   */
+  readonly url?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'path': obj.path,
+    'url': obj.url,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LVMDefinition defines the logical volume definitions to be created.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions {
+  /**
+   * FileSystem defines the filesystem for this logical volume.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions#filesystem
+   */
+  readonly filesystem: string;
+
+  /**
+   * Mount defines the mountpath.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * Name defines the volume name.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions#name
+   */
+  readonly name: string;
+
+  /**
+   * Size defines the size in M/G/T or MiB/GiB/TiB.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions#size
+   */
+  readonly size: string;
+
+  /**
+   * VG defines the vg name.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions#vg
+   */
+  readonly vg: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageLogicalVolumeDefinitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filesystem': obj.filesystem,
+    'mount': obj.mount,
+    'name': obj.name,
+    'size': obj.size,
+    'vg': obj.vg,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Partition defines the additional Partitions to be created.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions {
+  /**
+   * FileSystem can be ext2, ext3, ext4, btrfs, reiserfs, xfs, swap
+   * or name of the LVM volume group (VG), if this PART is a VG.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions#fileSystem
+   */
+  readonly fileSystem: string;
+
+  /**
+   * Mount defines the mount path for this filesystem.
+   * Keyword 'lvm' to use this PART as volume group (VG) for LVM.
+   * Identifier 'btrfs.X' to use this PART as volume for
+   * btrfs subvolumes. X can be replaced with a unique
+   * alphanumeric keyword. NOTE: no support for btrfs multi-device volumes.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions#mount
+   */
+  readonly mount: string;
+
+  /**
+   * Size can use the keyword 'all' to assign all the remaining space of the drive to the last partition.
+   * You can use M/G/T for unit specification in MiB/GiB/TiB.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions#size
+   */
+  readonly size: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImagePartitions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fileSystem': obj.fileSystem,
+    'mount': obj.mount,
+    'size': obj.size,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Swraid defines the SWRAID in InstallImage. It enables or disables raids. Set 1 to enable.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageSwraid
+ */
+export enum HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageSwraid {
+  /** 0 */
+  VALUE_0 = 0,
+  /** 1 */
+  VALUE_1 = 1,
+}
+
+/**
+ * SwraidLevel defines the SWRAIDLEVEL in InstallImage. Only relevant if the raid is enabled.
+ * Pick one of 0,1,5,6,10. Ignored if Swraid=0.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageSwraidLevel
+ */
+export enum HetznerBareMetalMachineTemplateSpecTemplateSpecInstallImageSwraidLevel {
+  /** 0 */
+  VALUE_0 = 0,
+  /** 1 */
+  VALUE_1 = 1,
+  /** 5 */
+  VALUE_5 = 5,
+  /** 6 */
+  VALUE_6 = 6,
+  /** 10 */
+  VALUE_10 = 10,
+}
+
+/**
+ * SecretRef gives reference to the secret where the SSH key is stored.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef {
+  /**
+   * Key contains details about the keys used in the data of the secret.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef#key
+   */
+  readonly key: HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey;
+
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey(obj.key),
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Key contains details about the keys used in the data of the secret.
+ *
+ * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey
+ */
+export interface HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey {
+  /**
+   * Name is the key in the secret's data where the SSH key's name is stored.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey#name
+   */
+  readonly name: string;
+
+  /**
+   * PrivateKey is the key in the secret's data where the SSH key's private key is stored.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey#privateKey
+   */
+  readonly privateKey: string;
+
+  /**
+   * PublicKey is the key in the secret's data where the SSH key's public key is stored.
+   *
+   * @schema HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey#publicKey
+   */
+  readonly publicKey: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey(obj: HetznerBareMetalMachineTemplateSpecTemplateSpecSshSpecSecretRefKey | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'privateKey': obj.privateKey,
+    'publicKey': obj.publicKey,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HetznerBareMetalRemediation is the Schema for the hetznerbaremetalremediations API.
+ *
+ * @schema HetznerBareMetalRemediation
+ */
+export class HetznerBareMetalRemediation extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerBareMetalRemediation"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerBareMetalRemediation',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerBareMetalRemediation".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerBareMetalRemediationProps = {}): any {
+    return {
+      ...HetznerBareMetalRemediation.GVK,
+      ...toJson_HetznerBareMetalRemediationProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerBareMetalRemediation" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerBareMetalRemediationProps = {}) {
+    super(scope, id, {
+      ...HetznerBareMetalRemediation.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerBareMetalRemediation.GVK,
+      ...toJson_HetznerBareMetalRemediationProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerBareMetalRemediation is the Schema for the hetznerbaremetalremediations API.
+ *
+ * @schema HetznerBareMetalRemediation
+ */
+export interface HetznerBareMetalRemediationProps {
+  /**
+   * @schema HetznerBareMetalRemediation#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerBareMetalRemediationSpec defines the desired state of HetznerBareMetalRemediation.
+   *
+   * @schema HetznerBareMetalRemediation#spec
+   */
+  readonly spec?: HetznerBareMetalRemediationSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationProps(obj: HetznerBareMetalRemediationProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerBareMetalRemediationSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalRemediationSpec defines the desired state of HetznerBareMetalRemediation.
+ *
+ * @schema HetznerBareMetalRemediationSpec
+ */
+export interface HetznerBareMetalRemediationSpec {
+  /**
+   * Strategy field defines the remediation strategy to be applied.
+   *
+   * @schema HetznerBareMetalRemediationSpec#strategy
+   */
+  readonly strategy?: HetznerBareMetalRemediationSpecStrategy;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationSpec(obj: HetznerBareMetalRemediationSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'strategy': toJson_HetznerBareMetalRemediationSpecStrategy(obj.strategy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Strategy field defines the remediation strategy to be applied.
+ *
+ * @schema HetznerBareMetalRemediationSpecStrategy
+ */
+export interface HetznerBareMetalRemediationSpecStrategy {
+  /**
+   * RetryLimit sets the maximum number of remediation retries. Zero retries if not set.
+   *
+   * @schema HetznerBareMetalRemediationSpecStrategy#retryLimit
+   */
+  readonly retryLimit?: number;
+
+  /**
+   * Timeout sets the timeout between remediation retries. It should be of the form "10m", or "40s".
+   *
+   * @schema HetznerBareMetalRemediationSpecStrategy#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * Type represents the type of the remediation strategy. At the moment, only "Reboot" is supported.
+   *
+   * @schema HetznerBareMetalRemediationSpecStrategy#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationSpecStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationSpecStrategy(obj: HetznerBareMetalRemediationSpecStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'retryLimit': obj.retryLimit,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * HetznerBareMetalRemediationTemplate is the Schema for the hetznerbaremetalremediationtemplates API.
+ *
+ * @schema HetznerBareMetalRemediationTemplate
+ */
+export class HetznerBareMetalRemediationTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "HetznerBareMetalRemediationTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'HetznerBareMetalRemediationTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "HetznerBareMetalRemediationTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: HetznerBareMetalRemediationTemplateProps = {}): any {
+    return {
+      ...HetznerBareMetalRemediationTemplate.GVK,
+      ...toJson_HetznerBareMetalRemediationTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "HetznerBareMetalRemediationTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: HetznerBareMetalRemediationTemplateProps = {}) {
+    super(scope, id, {
+      ...HetznerBareMetalRemediationTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...HetznerBareMetalRemediationTemplate.GVK,
+      ...toJson_HetznerBareMetalRemediationTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * HetznerBareMetalRemediationTemplate is the Schema for the hetznerbaremetalremediationtemplates API.
+ *
+ * @schema HetznerBareMetalRemediationTemplate
+ */
+export interface HetznerBareMetalRemediationTemplateProps {
+  /**
+   * @schema HetznerBareMetalRemediationTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * HetznerBareMetalRemediationTemplateSpec defines the desired state of HetznerBareMetalRemediationTemplate.
+   *
+   * @schema HetznerBareMetalRemediationTemplate#spec
+   */
+  readonly spec?: HetznerBareMetalRemediationTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationTemplateProps(obj: HetznerBareMetalRemediationTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_HetznerBareMetalRemediationTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalRemediationTemplateSpec defines the desired state of HetznerBareMetalRemediationTemplate.
+ *
+ * @schema HetznerBareMetalRemediationTemplateSpec
+ */
+export interface HetznerBareMetalRemediationTemplateSpec {
+  /**
+   * HetznerBareMetalRemediationTemplateResource describes the data needed to create a HetznerBareMetalRemediation from a template.
+   *
+   * @schema HetznerBareMetalRemediationTemplateSpec#template
+   */
+  readonly template: HetznerBareMetalRemediationTemplateSpecTemplate;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationTemplateSpec(obj: HetznerBareMetalRemediationTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_HetznerBareMetalRemediationTemplateSpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HetznerBareMetalRemediationTemplateResource describes the data needed to create a HetznerBareMetalRemediation from a template.
+ *
+ * @schema HetznerBareMetalRemediationTemplateSpecTemplate
+ */
+export interface HetznerBareMetalRemediationTemplateSpecTemplate {
+  /**
+   * Spec is the specification of the desired behavior of the HetznerBareMetalRemediation.
+   *
+   * @schema HetznerBareMetalRemediationTemplateSpecTemplate#spec
+   */
+  readonly spec: HetznerBareMetalRemediationTemplateSpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationTemplateSpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationTemplateSpecTemplate(obj: HetznerBareMetalRemediationTemplateSpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'spec': toJson_HetznerBareMetalRemediationTemplateSpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec is the specification of the desired behavior of the HetznerBareMetalRemediation.
+ *
+ * @schema HetznerBareMetalRemediationTemplateSpecTemplateSpec
+ */
+export interface HetznerBareMetalRemediationTemplateSpecTemplateSpec {
+  /**
+   * Strategy field defines the remediation strategy to be applied.
+   *
+   * @schema HetznerBareMetalRemediationTemplateSpecTemplateSpec#strategy
+   */
+  readonly strategy?: HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationTemplateSpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationTemplateSpecTemplateSpec(obj: HetznerBareMetalRemediationTemplateSpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'strategy': toJson_HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy(obj.strategy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Strategy field defines the remediation strategy to be applied.
+ *
+ * @schema HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy
+ */
+export interface HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy {
+  /**
+   * RetryLimit sets the maximum number of remediation retries. Zero retries if not set.
+   *
+   * @schema HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy#retryLimit
+   */
+  readonly retryLimit?: number;
+
+  /**
+   * Timeout sets the timeout between remediation retries. It should be of the form "10m", or "40s".
+   *
+   * @schema HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * Type represents the type of the remediation strategy. At the moment, only "Reboot" is supported.
+   *
+   * @schema HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy(obj: HetznerBareMetalRemediationTemplateSpecTemplateSpecStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'retryLimit': obj.retryLimit,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
  * HetznerCluster is the Schema for the hetznercluster API.
  *
  * @schema HetznerCluster
