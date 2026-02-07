@@ -184,7 +184,3 @@ export class KarmadaCapiClusterRegistration extends Construct {
     });
   }
 }
-
-// Re-export with old names for backwards compatibility
-/** @deprecated Use KarmadaClusterRegistration instead */
-export const KarmadaCluster = KarmadaClusterRegistration;
