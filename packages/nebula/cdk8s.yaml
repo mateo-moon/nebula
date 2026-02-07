@@ -57,6 +57,13 @@ imports:
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedclusters.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedcontrolplanes.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedmachinepools.yaml
+  # Cluster API Hetzner Infrastructure Provider CRDs (v1.0.7)
+  - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerclusters.yaml
+  - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerclustertemplates.yaml
+  - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hcloudmachines.yaml
+  - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hcloudmachinetemplates.yaml
+  - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hcloudremediations.yaml
+  - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hcloudremediationtemplates.yaml
   # k0smotron Control Plane CRDs (v1.7.0)
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/controlplane/controlplane.cluster.x-k8s.io_k0scontrolplanes.yaml
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/controlplane/controlplane.cluster.x-k8s.io_k0scontrolplanetemplates.yaml
