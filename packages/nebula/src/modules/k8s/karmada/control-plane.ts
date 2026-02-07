@@ -1,8 +1,11 @@
 /**
- * Karmada Control Plane - Helm-based installation of Karmada.
+ * Karmada Control Plane - Operator-based installation of Karmada.
+ *
+ * Uses the Karmada Operator to manage the control plane lifecycle,
+ * including certificate generation and rotation.
  */
 import { Construct } from "constructs";
-import { Helm, JsonPatch } from "cdk8s";
+import { Helm, ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import type { KarmadaConfig } from "./types";
@@ -10,155 +13,115 @@ import type { KarmadaConfig } from "./types";
 /** Default Karmada version */
 export const KARMADA_VERSION = "1.16.0";
 
-/** Karmada Helm repository URL */
-export const KARMADA_HELM_REPO =
+/** Karmada Operator Helm repository URL */
+export const KARMADA_OPERATOR_HELM_REPO =
   "https://raw.githubusercontent.com/karmada-io/karmada/master/charts";
 
 /**
- * KarmadaControlPlane - Installs the Karmada control plane using Helm.
+ * KarmadaControlPlane - Installs the Karmada control plane using the Karmada Operator.
  *
  * This creates:
- * - Karmada API Server
- * - Karmada Controller Manager
- * - Karmada Scheduler
- * - Karmada Webhook
- * - ETCD (embedded or external)
+ * - Karmada Operator (manages the control plane)
+ * - Karmada CR (declares the desired control plane state)
+ *
+ * The operator handles:
+ * - Certificate generation and rotation
+ * - Component deployment (API Server, Controller Manager, Scheduler, etc.)
+ * - ETCD management (embedded or external)
  */
 export class KarmadaControlPlane extends Construct {
-  public readonly helm: Helm;
+  public readonly operatorHelm: Helm;
   public readonly namespace: kplus.Namespace;
+  public readonly karmadaCr: ApiObject;
   public readonly apiServerService: string;
 
   constructor(scope: Construct, id: string, config: KarmadaConfig = {}) {
     super(scope, id);
 
     const namespaceName = config.namespace ?? "karmada-system";
+    const karmadaName = "karmada";
 
     // Create namespace
     this.namespace = new kplus.Namespace(this, "namespace", {
       metadata: { name: namespaceName },
     });
 
-    // Build default values
-    const defaultValues: Record<string, unknown> = {
-      installMode: config.installMode ?? "host",
-      apiServer: {
-        replicaCount: config.apiServerReplicas ?? 1,
-      },
-      controllerManager: {
-        replicaCount: config.controllerManagerReplicas ?? 1,
-      },
-      scheduler: {
-        replicaCount: config.schedulerReplicas ?? 1,
-      },
-      webhook: {
+    // Install Karmada Operator via Helm
+    const operatorValues: Record<string, unknown> = {
+      installCRDs: true,
+      operator: {
         replicaCount: 1,
-      },
-      // Use embedded etcd by default
-      etcd: {
-        mode: config.externalEtcd ? "external" : "internal",
-        ...(config.externalEtcd && {
-          external: {
-            endpoints: config.externalEtcd.endpoints,
-            secretRef: {
-              name: config.externalEtcd.secretName,
-              namespace: config.externalEtcd.secretNamespace ?? namespaceName,
-            },
-          },
-        }),
       },
     };
 
-    const chartValues = deepmerge(defaultValues, config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
-      chart: "karmada",
-      releaseName: "karmada",
-      repo: config.repository ?? KARMADA_HELM_REPO,
+    this.operatorHelm = new Helm(this, "operator", {
+      chart: "karmada-operator",
+      releaseName: "karmada-operator",
+      repo: config.repository ?? KARMADA_OPERATOR_HELM_REPO,
       version: config.version ?? KARMADA_VERSION,
       namespace: namespaceName,
-      values: chartValues,
+      values: deepmerge(operatorValues, config.values ?? {}),
     });
 
-    // Workaround for Karmada Helm chart bug: it sets both priorityClassName and
-    // a hardcoded priority value (2000001000). When priorityClassName is empty
-    // but priority is set, GKE's priority admission controller rejects the pods.
-    // We patch out the priority field from Deployment/StatefulSet pod specs.
-    const priorityPatch = JsonPatch.remove("/spec/template/spec/priority");
-    const preemptionPatch = JsonPatch.remove(
-      "/spec/template/spec/preemptionPolicy",
-    );
+    // Build Karmada CR spec
+    const karmadaSpec: Record<string, unknown> = {
+      components: {
+        etcd: config.externalEtcd
+          ? {
+              external: {
+                endpoints: config.externalEtcd.endpoints,
+                secretRef: {
+                  name: config.externalEtcd.secretName,
+                  namespace:
+                    config.externalEtcd.secretNamespace ?? namespaceName,
+                },
+              },
+            }
+          : {
+              local: {
+                replicas: 1,
+              },
+            },
+        karmadaAPIServer: {
+          replicas: config.apiServerReplicas ?? 1,
+          // Service type - can be changed to LoadBalancer or NodePort if needed
+          serviceType: "ClusterIP",
+        },
+        karmadaControllerManager: {
+          replicas: config.controllerManagerReplicas ?? 1,
+        },
+        karmadaScheduler: {
+          replicas: config.schedulerReplicas ?? 1,
+        },
+        karmadaWebhook: {
+          replicas: 1,
+        },
+        kubeControllerManager: {
+          replicas: 1,
+        },
+        karmadaAggregatedAPIServer: {
+          replicas: 1,
+        },
+      },
+    };
 
-    for (const obj of this.helm.apiObjects) {
-      if (obj.kind === "Deployment" || obj.kind === "StatefulSet") {
-        obj.addJsonPatch(priorityPatch);
-        obj.addJsonPatch(preemptionPatch);
-      }
-
-      // Handle Jobs: Add ArgoCD annotations and convert Helm hooks to ArgoCD hooks
-      // See: https://argo-cd.readthedocs.io/en/stable/user-guide/compare-options/
-      if (obj.kind === "Job") {
-        // First ensure annotations object exists
-        obj.addJsonPatch(JsonPatch.add("/metadata/annotations", {}));
-
-        // The static-resource job applies CRDs and static resources to the Karmada
-        // API server, including the karmada-version ConfigMap that init containers
-        // wait for. Use Sync hook (not PostSync) so it runs during the sync phase,
-        // before ArgoCD waits for all resources to be healthy.
-        if (obj.name === "karmada-static-resource") {
-          obj.addJsonPatch(
-            JsonPatch.add(
-              "/metadata/annotations/argocd.argoproj.io~1hook",
-              "Sync",
-            ),
-          );
-          obj.addJsonPatch(
-            JsonPatch.add(
-              "/metadata/annotations/argocd.argoproj.io~1hook-delete-policy",
-              "BeforeHookCreation",
-            ),
-          );
-          // Remove helm.sh/hook annotation
-          obj.addJsonPatch(
-            JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
-          );
-          continue;
-        }
-
-        obj.addJsonPatch(
-          JsonPatch.add(
-            "/metadata/annotations/argocd.argoproj.io~1compare-options",
-            "IgnoreExtraneous",
-          ),
-        );
-
-        // Convert helm.sh/hook to argocd.argoproj.io/hook
-        // The post-delete job should only run when the app is deleted
-        if (obj.name === "karmada-post-delete") {
-          obj.addJsonPatch(
-            JsonPatch.add(
-              "/metadata/annotations/argocd.argoproj.io~1hook",
-              "PostDelete",
-            ),
-          );
-          obj.addJsonPatch(
-            JsonPatch.add(
-              "/metadata/annotations/argocd.argoproj.io~1hook-delete-policy",
-              "BeforeHookCreation",
-            ),
-          );
-          // Suspend the job so it doesn't run when created by kubectl apply
-          // ArgoCD will handle running it only during PostDelete
-          obj.addJsonPatch(JsonPatch.add("/spec/suspend", true));
-          // Remove helm.sh/hook annotation so ArgoCD doesn't double-process
-          obj.addJsonPatch(
-            JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
-          );
-        }
-      }
-    }
+    // Create Karmada CR
+    this.karmadaCr = new ApiObject(this, "karmada-cr", {
+      apiVersion: "operator.karmada.io/v1alpha1",
+      kind: "Karmada",
+      metadata: {
+        name: karmadaName,
+        namespace: namespaceName,
+        annotations: {
+          // Ensure operator is deployed before CR
+          "argocd.argoproj.io/sync-wave": "1",
+        },
+      },
+      spec: karmadaSpec,
+    });
 
     // API server service name for ArgoCD registration
-    this.apiServerService = `karmada-apiserver.${namespaceName}.svc.cluster.local`;
+    // The operator creates the service with format: <karmada-name>-apiserver
+    this.apiServerService = `${karmadaName}-apiserver.${namespaceName}.svc.cluster.local`;
   }
 }
