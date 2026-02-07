@@ -46,6 +46,31 @@ export class KarmadaControlPlane extends Construct {
       metadata: { name: namespaceName },
     });
 
+    // GKE requires a ResourceQuota to allow pods with system-node-critical priority class
+    // The Karmada operator creates etcd with this priority class
+    new ApiObject(this, "critical-pods-quota", {
+      apiVersion: "v1",
+      kind: "ResourceQuota",
+      metadata: {
+        name: "gcp-critical-pods",
+        namespace: namespaceName,
+      },
+      spec: {
+        hard: {
+          pods: "1000000000",
+        },
+        scopeSelector: {
+          matchExpressions: [
+            {
+              operator: "In",
+              scopeName: "PriorityClass",
+              values: ["system-node-critical", "system-cluster-critical"],
+            },
+          ],
+        },
+      },
+    });
+
     // Install Karmada Operator via Helm
     const operatorValues: Record<string, unknown> = {
       installCRDs: true,
