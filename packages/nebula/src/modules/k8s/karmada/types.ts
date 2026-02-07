@@ -2,9 +2,6 @@
  * Karmada module type definitions.
  */
 
-/** Karmada control plane installation mode */
-export type KarmadaInstallMode = "host" | "agent" | "component";
-
 /** Karmada cluster connection mode */
 export type KarmadaClusterMode = "Push" | "Pull";
 
@@ -18,9 +15,6 @@ export interface KarmadaConfig {
 
   /** Helm repository URL */
   repository?: string;
-
-  /** Installation mode: host (control plane), agent (member cluster), component (selective) */
-  installMode?: KarmadaInstallMode;
 
   /** Number of replicas for Karmada API server (defaults to 1) */
   apiServerReplicas?: number;
