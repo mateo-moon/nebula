@@ -101,17 +101,26 @@ export class KarmadaControlPlane extends Construct {
         // First ensure annotations object exists
         obj.addJsonPatch(JsonPatch.add("/metadata/annotations", {}));
 
-        // The static-resource job contains unprocessed Helm template placeholders
-        // ({{ ca_crt }}, etc.) that cannot be resolved at synth time. The actual
-        // static resources are applied by a post-install hook running inside the
-        // cluster. Mark it as a PreSync hook so ArgoCD manages it as a hook
-        // rather than a regular resource, avoiding OutOfSync status.
+        // The static-resource job applies CRDs and static resources to the Karmada
+        // API server. Run it as a PostSync hook so it executes after the main
+        // resources (including the karmada-apiserver deployment) are synced.
+        // Also add hook-delete-policy to clean up old job runs.
         if (obj.name === "karmada-static-resource") {
           obj.addJsonPatch(
             JsonPatch.add(
               "/metadata/annotations/argocd.argoproj.io~1hook",
-              "Skip",
+              "PostSync",
             ),
+          );
+          obj.addJsonPatch(
+            JsonPatch.add(
+              "/metadata/annotations/argocd.argoproj.io~1hook-delete-policy",
+              "BeforeHookCreation",
+            ),
+          );
+          // Remove helm.sh/hook annotation
+          obj.addJsonPatch(
+            JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
           );
           continue;
         }
