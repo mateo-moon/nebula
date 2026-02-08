@@ -825,12 +825,18 @@ done
       });
     }
 
+    // Add git-bin volume for sharing git binary with CMP sidecar
+    volumes.push({ name: "git-bin", emptyDir: {} });
+
     // Build sidecar container configuration
     const sidecarContainer = {
       name: "nebula-cmp",
       image: pluginImage,
       imagePullPolicy: imagePullPolicy,
-      command: ["/var/run/argocd/argocd-cmp-server"],
+      command: ["/bin/sh", "-c"],
+      args: [
+        'export PATH="/git-bin/usr/bin:/git-bin/usr/libexec/git-core:$PATH" && export GIT_EXEC_PATH="/git-bin/usr/libexec/git-core" && exec /var/run/argocd/argocd-cmp-server',
+      ],
       securityContext: {
         runAsNonRoot: true,
         runAsUser: 999,
@@ -850,12 +856,28 @@ done
         ...volumeMounts,
         { name: "var-files", mountPath: "/var/run/argocd" },
         { name: "plugins", mountPath: "/home/argocd/cmp-server/plugins" },
+        { name: "git-bin", mountPath: "/git-bin", readOnly: true },
       ],
+    };
+
+    // Init container to copy git binary from ArgoCD image into shared volume
+    const gitInitContainer = {
+      name: "copy-git",
+      image: "alpine:3",
+      command: ["/bin/sh", "-c"],
+      args: [
+        "mkdir -p /git-bin/usr/bin /git-bin/usr/libexec /git-bin/usr/lib && apk add --no-cache git openssh-client >/dev/null 2>&1 && cp -a /usr/bin/git* /git-bin/usr/bin/ && cp -a /usr/libexec/git-core /git-bin/usr/libexec/ && cp -a /usr/lib/libpcre2* /git-bin/usr/lib/ 2>/dev/null; echo done",
+      ],
+      volumeMounts: [{ name: "git-bin", mountPath: "/git-bin" }],
     };
 
     // Merge sidecar config into repoServer chart values
     if (!chartValues["repoServer"]) chartValues["repoServer"] = {};
     const repoServer = chartValues["repoServer"] as Record<string, unknown>;
+
+    // Add init container for git
+    if (!repoServer["initContainers"]) repoServer["initContainers"] = [];
+    (repoServer["initContainers"] as unknown[]).push(gitInitContainer);
 
     // Add sidecar container
     if (!repoServer["extraContainers"]) repoServer["extraContainers"] = [];
