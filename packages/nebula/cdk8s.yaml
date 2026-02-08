@@ -10,6 +10,9 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/gcp.upbound.io_providerconfigs.yaml
   # HTTP Provider - ProviderConfig (for Cloudflare API calls)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-http/v1.0.3/package/crds/http.crossplane.io_providerconfigs.yaml
+  # Kubernetes Provider CRDs (for managing arbitrary K8s resources via Crossplane)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-kubernetes/v0.17.0/package/crds/kubernetes.crossplane.io_objects.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-kubernetes/v0.17.0/package/crds/kubernetes.crossplane.io_providerconfigs.yaml
   # TODO: Cloudflare Provider CRDs (uncomment when provider is available)
   # - https://raw.githubusercontent.com/cdloh/provider-cloudflare/main/package/crds/cloudflare.upbound.io_providerconfigs.yaml
   # - https://raw.githubusercontent.com/cdloh/provider-cloudflare/main/package/crds/dns.cloudflare.upbound.io_records.yaml

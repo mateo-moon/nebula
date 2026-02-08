@@ -16,6 +16,10 @@ import {
   ProviderConfig as ArgoCdProviderConfig,
   ProviderConfigSpecCredentialsSource as ArgoCdCredentialsSource,
 } from "#imports/argocd.crossplane.io";
+import {
+  ProviderConfig as KubeProviderConfig,
+  ProviderConfigSpecCredentialsSource as KubeCredentialsSource,
+} from "#imports/kubernetes.crossplane.io";
 import { BaseConstruct } from "../../../core";
 
 export interface ArgoCdProviderOptions {
@@ -35,6 +39,13 @@ export interface ArgoCdProviderOptions {
   plainText?: boolean;
 }
 
+export interface KubernetesProviderOptions {
+  /** provider-kubernetes package version (defaults to v0.17.0) */
+  version?: string;
+  /** ProviderConfig name (defaults to kubernetes-provider-config) */
+  providerConfigName?: string;
+}
+
 export interface CrossplaneConfig {
   /** Namespace for Crossplane (defaults to crossplane-system) */
   namespace?: string;
@@ -46,6 +57,8 @@ export interface CrossplaneConfig {
   values?: Record<string, unknown>;
   /** Install ArgoCD provider - pass false to disable, or options to configure */
   argoCdProvider?: false | ArgoCdProviderOptions;
+  /** Install Kubernetes provider - pass false to disable, or options to configure */
+  kubernetesProvider?: false | KubernetesProviderOptions;
 }
 
 export class Crossplane extends BaseConstruct<CrossplaneConfig> {
@@ -53,6 +66,8 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
   public readonly namespace: kplus.Namespace;
   public readonly argoCdProvider?: Provider;
   public readonly argoCdProviderConfig?: ArgoCdProviderConfig;
+  public readonly kubernetesProvider?: Provider;
+  public readonly kubernetesProviderConfig?: KubeProviderConfig;
   public readonly functionPatchAndTransform: FunctionV1Beta1;
   public readonly functionGoTemplating: FunctionV1Beta1;
 
@@ -150,6 +165,33 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
             serverAddr: serverAddr,
             insecure: opts.insecure ?? true,
             plainText: opts.plainText ?? true,
+          },
+        },
+      );
+    }
+
+    // Install Kubernetes Provider if not explicitly disabled
+    if (this.config.kubernetesProvider !== false) {
+      const kubeOpts = this.config.kubernetesProvider ?? {};
+
+      this.kubernetesProvider = new Provider(this, "provider-kubernetes", {
+        metadata: { name: "provider-kubernetes" },
+        spec: {
+          package: `xpkg.upbound.io/crossplane-contrib/provider-kubernetes:${kubeOpts.version ?? "v0.17.0"}`,
+        },
+      });
+
+      this.kubernetesProviderConfig = new KubeProviderConfig(
+        this,
+        "provider-config-kubernetes",
+        {
+          metadata: {
+            name: kubeOpts.providerConfigName ?? "kubernetes-provider-config",
+          },
+          spec: {
+            credentials: {
+              source: KubeCredentialsSource.INJECTED_IDENTITY,
+            },
           },
         },
       );
