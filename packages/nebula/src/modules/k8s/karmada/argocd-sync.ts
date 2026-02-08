@@ -55,8 +55,7 @@ export class KarmadaArgoCdSync extends Construct {
     const karmadaNamespace = config.karmadaNamespace ?? "karmada-system";
     const kubeconfigSecretName =
       config.kubeconfigSecretName ?? "karmada-admin-config";
-    const kubeconfigSecretKey =
-      config.kubeconfigSecretKey ?? "karmada.config";
+    const kubeconfigSecretKey = config.kubeconfigSecretKey ?? "karmada.config";
     const argoCdNamespace = config.argoCdNamespace ?? "argocd";
     const argoCdSecretName = config.argoCdSecretName ?? "karmada-cluster";
     const kubeProviderConfigName =
@@ -138,8 +137,7 @@ export class KarmadaArgoCdSync extends Construct {
                       },
                       kubeProviderConfigName: {
                         type: "string",
-                        description:
-                          "provider-kubernetes ProviderConfig name",
+                        description: "provider-kubernetes ProviderConfig name",
                       },
                     },
                   },
@@ -178,7 +176,7 @@ type: Opaque
 {{- if and $obj $obj.resource $obj.resource.status $obj.resource.status.atProvider $obj.resource.status.atProvider.manifest }}
 {{- $secretData := $obj.resource.status.atProvider.manifest.data }}
 {{- $kubeconfigB64 := index $secretData "karmada.config" }}
-{{- $kubeconfigYaml := $kubeconfigB64 | base64decode }}
+{{- $kubeconfigYaml := $kubeconfigB64 | b64dec }}
 {{- $kc := $kubeconfigYaml | fromYAML }}
 {{- $cluster := (index $kc.clusters 0).cluster }}
 {{- $user := (index $kc.users 0).user }}
@@ -238,8 +236,7 @@ stringData:
                     {
                       type: "FromCompositeFieldPath",
                       fromFieldPath: "spec.kubeconfigSecretName",
-                      toFieldPath:
-                        "spec.forProvider.manifest.metadata.name",
+                      toFieldPath: "spec.forProvider.manifest.metadata.name",
                     },
                     {
                       type: "FromCompositeFieldPath",
@@ -277,7 +274,13 @@ stringData:
     });
   }
 
-  private createXr(config: Required<Omit<KarmadaArgoCdSyncConfig, "kubeProviderConfigName"> & { kubeProviderConfigName: string }>): ApiObject {
+  private createXr(
+    config: Required<
+      Omit<KarmadaArgoCdSyncConfig, "kubeProviderConfigName"> & {
+        kubeProviderConfigName: string;
+      }
+    >,
+  ): ApiObject {
     return new ApiObject(this, "xr", {
       apiVersion: "nebula.io/v1alpha1",
       kind: "XKarmadaArgoCdSync",
