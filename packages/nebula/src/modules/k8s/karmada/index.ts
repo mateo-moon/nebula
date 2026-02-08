@@ -126,6 +126,7 @@ export class Karmada extends BaseConstruct<KarmadaConfig> {
         sourceSecretKey: "karmada.config",
         argoCdNamespace: this.config.argoCdNamespace,
         argoCdSecretName: "karmada-cluster",
+        syncWave: "10",
       });
     }
   }

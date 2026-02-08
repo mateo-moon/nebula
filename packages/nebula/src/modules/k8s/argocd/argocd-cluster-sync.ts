@@ -56,6 +56,8 @@ export interface ArgoCdClusterSyncConfig {
   kubeProviderConfigName?: string;
   /** Skip server certificate verification (default: false) */
   insecure?: boolean;
+  /** ArgoCD sync wave annotation (default: '-1') */
+  syncWave?: string;
 }
 
 /**
@@ -291,6 +293,7 @@ export class ArgoCdClusterSync extends Construct {
     const kubeProviderConfigName =
       config.kubeProviderConfigName ?? "kubernetes-provider-config";
     const insecure = config.insecure ?? false;
+    const syncWave = config.syncWave ?? "-1";
 
     this.xr = new ApiObject(this, "xr", {
       apiVersion: "nebula.io/v1alpha1",
@@ -298,7 +301,7 @@ export class ArgoCdClusterSync extends Construct {
       metadata: {
         name: `${config.clusterName}-argocd-sync`,
         annotations: {
-          "argocd.argoproj.io/sync-wave": "10",
+          "argocd.argoproj.io/sync-wave": syncWave,
         },
       },
       spec: {
