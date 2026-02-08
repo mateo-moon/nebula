@@ -99,7 +99,7 @@ export interface ArgoCdProjectConfig {
 export interface NebulaPluginConfig {
   /** Enable the Nebula CMP plugin */
   enabled: boolean;
-  /** Sidecar image (default: node:20-alpine) */
+  /** Sidecar image (default: ghcr.io/mateo-moon/nebula-cmp:latest) */
   image?: string;
   /** Image pull policy */
   imagePullPolicy?: "Always" | "IfNotPresent" | "Never";
@@ -539,7 +539,8 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
     namespaceName: string,
   ): void {
     const pluginConfig = this.config.nebulaPlugin!;
-    const pluginImage = pluginConfig.image ?? "jana19/pnpm:24-alpine";
+    const pluginImage =
+      pluginConfig.image ?? "ghcr.io/mateo-moon/nebula-cmp:latest";
     const imagePullPolicy = pluginConfig.imagePullPolicy ?? "IfNotPresent";
     const gcpProject = pluginConfig.gcpProject;
     const providerConfigRef = pluginConfig.providerConfigRef ?? "default";
@@ -673,62 +674,9 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
             init: {
               command: ["/bin/sh", "-c"],
               args: [
-                `
-set -e
-mkdir -p /tmp/bin /tmp/pnpm-store
-export PATH="/tmp/bin:$PATH"
-export PNPM_HOME="/tmp/bin"
-export XDG_DATA_HOME="/tmp"
-export npm_config_store_dir="/tmp/pnpm-store"
-
-# Use a lock to prevent concurrent tool installations from racing
-LOCKFILE="/tmp/bin/.install.lock"
-
-install_tools() {
-  # Use mkdir as an atomic lock (works on all POSIX systems)
-  if mkdir "\${LOCKFILE}" 2>/dev/null; then
-    trap 'rmdir "\${LOCKFILE}" 2>/dev/null' EXIT
-
-    if [ ! -x /tmp/bin/helm ]; then
-      echo "Installing helm..." >&2
-      HELM_VERSION=\${HELM_VERSION:-3.17.0}
-      TMPDIR=$(mktemp -d)
-      if ! wget -O "\$TMPDIR/helm.tar.gz" "https://get.helm.sh/helm-v\${HELM_VERSION}-linux-amd64.tar.gz" 2>&1; then
-        echo "ERROR: Failed to download helm" >&2
-        rm -rf "\$TMPDIR"
-        exit 1
-      fi
-      tar xzf "\$TMPDIR/helm.tar.gz" -C "\$TMPDIR" >&2
-      mv "\$TMPDIR/linux-amd64/helm" /tmp/bin/helm
-      rm -rf "\$TMPDIR"
-    fi
-
-    if [ ! -x /tmp/bin/vals ]; then
-      echo "Installing vals..." >&2
-      VALS_VERSION=\${VALS_VERSION:-0.43.1}
-      TMPDIR=$(mktemp -d)
-      if ! wget -O "\$TMPDIR/vals.tar.gz" "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" 2>&1; then
-        echo "ERROR: Failed to download vals" >&2
-        rm -rf "\$TMPDIR"
-        exit 1
-      fi
-      tar xzf "\$TMPDIR/vals.tar.gz" -C /tmp/bin vals >&2
-      rm -rf "\$TMPDIR"
-    fi
-
-    rmdir "\${LOCKFILE}" 2>/dev/null
-    trap - EXIT
-  else
-    echo "Waiting for tool installation..." >&2
-    while [ -d "\${LOCKFILE}" ]; do sleep 1; done
-  fi
-}
-
-install_tools
-
+                `set -e
 echo "Installing dependencies in $(pwd)..." >&2
-pnpm install --no-lockfile 2>&1 >&2
-`,
+pnpm install --no-lockfile 2>&1 >&2`,
               ],
             },
             generate: {
@@ -736,7 +684,6 @@ pnpm install --no-lockfile 2>&1 >&2
               args: [
                 `
 set -e
-export PATH="/tmp/bin:$PATH"
 ENTRY="\${ARGOCD_ENV_ENTRY_FILE:-}"
 if [ -z "$ENTRY" ]; then
   echo "ERROR: ARGOCD_ENV_ENTRY_FILE not set" >&2
@@ -773,13 +720,7 @@ done
       name: string;
       value?: string;
       valueFrom?: unknown;
-    }> = [
-      { name: "ARGOCD_EXEC_TIMEOUT", value: "5m" },
-      { name: "NPM_CONFIG_CACHE", value: "/tmp/.npm" },
-      { name: "COREPACK_HOME", value: "/tmp/.corepack" },
-      { name: "HOME", value: "/tmp" },
-      { name: "USER", value: "argocd" },
-    ];
+    }> = [{ name: "ARGOCD_EXEC_TIMEOUT", value: "5m" }];
 
     // Add GCP credentials if using secret-based auth (not Workload Identity)
     if (pluginConfig.gcpCredentialsSecret) {
@@ -828,18 +769,12 @@ done
       });
     }
 
-    // Add git-bin volume for sharing git binary with CMP sidecar
-    volumes.push({ name: "git-bin", emptyDir: {} });
-
     // Build sidecar container configuration
     const sidecarContainer = {
       name: "nebula-cmp",
       image: pluginImage,
       imagePullPolicy: imagePullPolicy,
-      command: ["/bin/sh", "-c"],
-      args: [
-        'export PATH="/git-bin/usr/bin:/git-bin/usr/libexec/git-core:$PATH" && export GIT_EXEC_PATH="/git-bin/usr/libexec/git-core" && exec /var/run/argocd/argocd-cmp-server',
-      ],
+      command: ["/var/run/argocd/argocd-cmp-server"],
       securityContext: {
         runAsNonRoot: true,
         runAsUser: 999,
@@ -859,28 +794,12 @@ done
         ...volumeMounts,
         { name: "var-files", mountPath: "/var/run/argocd" },
         { name: "plugins", mountPath: "/home/argocd/cmp-server/plugins" },
-        { name: "git-bin", mountPath: "/git-bin", readOnly: true },
       ],
-    };
-
-    // Init container to copy git binary from ArgoCD image into shared volume
-    const gitInitContainer = {
-      name: "copy-git",
-      image: "alpine:3",
-      command: ["/bin/sh", "-c"],
-      args: [
-        "mkdir -p /git-bin/usr/bin /git-bin/usr/libexec /git-bin/usr/lib && apk add --no-cache git openssh-client >/dev/null 2>&1 && cp -a /usr/bin/git* /git-bin/usr/bin/ && cp -a /usr/libexec/git-core /git-bin/usr/libexec/ && cp -a /usr/lib/libpcre2* /git-bin/usr/lib/ 2>/dev/null; echo done",
-      ],
-      volumeMounts: [{ name: "git-bin", mountPath: "/git-bin" }],
     };
 
     // Merge sidecar config into repoServer chart values
     if (!chartValues["repoServer"]) chartValues["repoServer"] = {};
     const repoServer = chartValues["repoServer"] as Record<string, unknown>;
-
-    // Add init container for git
-    if (!repoServer["initContainers"]) repoServer["initContainers"] = [];
-    (repoServer["initContainers"] as unknown[]).push(gitInitContainer);
 
     // Add sidecar container
     if (!repoServer["extraContainers"]) repoServer["extraContainers"] = [];
