@@ -703,7 +703,7 @@ if [ ! -x /tmp/bin/vals ]; then
 fi
 
 echo "Installing dependencies in $(pwd)..." >&2
-pnpm install --frozen-lockfile 2>&1 >&2 || pnpm install 2>&1 >&2
+pnpm install --no-lockfile 2>&1 >&2
 `,
               ],
             },
