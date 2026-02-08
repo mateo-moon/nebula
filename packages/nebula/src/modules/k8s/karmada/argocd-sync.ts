@@ -177,7 +177,7 @@ type: Opaque
 {{- $secretData := $obj.resource.status.atProvider.manifest.data }}
 {{- $kubeconfigB64 := index $secretData "karmada.config" }}
 {{- $kubeconfigYaml := $kubeconfigB64 | b64dec }}
-{{- $kc := $kubeconfigYaml | fromYAML }}
+{{- $kc := $kubeconfigYaml | fromYaml }}
 {{- $cluster := (index $kc.clusters 0).cluster }}
 {{- $user := (index $kc.users 0).user }}
 stringData:
