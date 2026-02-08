@@ -675,8 +675,11 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
               args: [
                 `
 set -e
-mkdir -p /tmp/bin
+mkdir -p /tmp/bin /tmp/pnpm-store
 export PATH="/tmp/bin:$PATH"
+export PNPM_HOME="/tmp/bin"
+export XDG_DATA_HOME="/tmp"
+export npm_config_store_dir="/tmp/pnpm-store"
 
 # Use a lock to prevent concurrent tool installations from racing
 LOCKFILE="/tmp/bin/.install.lock"
