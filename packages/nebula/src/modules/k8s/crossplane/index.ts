@@ -21,6 +21,7 @@ import {
   ProviderConfigSpecCredentialsSource as KubeCredentialsSource,
 } from "#imports/kubernetes.crossplane.io";
 import { BaseConstruct } from "../../../core";
+import { ArgoCdClusterSyncSetup } from "../argocd/argocd-cluster-sync";
 
 export interface ArgoCdProviderOptions {
   /** ArgoCD provider package version (defaults to v0.13.0) */
@@ -68,6 +69,7 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
   public readonly argoCdProviderConfig?: ArgoCdProviderConfig;
   public readonly kubernetesProvider?: Provider;
   public readonly kubernetesProviderConfig?: KubeProviderConfig;
+  public readonly argoCdClusterSyncSetup?: ArgoCdClusterSyncSetup;
   public readonly functionPatchAndTransform: FunctionV1Beta1;
   public readonly functionGoTemplating: FunctionV1Beta1;
 
@@ -194,6 +196,12 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
             },
           },
         },
+      );
+
+      // Install shared XRD + Composition for ArgoCD cluster credential sync
+      this.argoCdClusterSyncSetup = new ArgoCdClusterSyncSetup(
+        this,
+        "argocd-cluster-sync-setup",
       );
     }
   }

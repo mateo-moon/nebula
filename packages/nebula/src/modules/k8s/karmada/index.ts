@@ -18,7 +18,7 @@ import { Construct } from "constructs";
 import * as kplus from "cdk8s-plus-33";
 import { BaseConstruct } from "../../../core";
 import { KarmadaControlPlane, KARMADA_VERSION } from "./control-plane";
-import { KarmadaArgoCdSync } from "./argocd-sync";
+import { ArgoCdClusterSync } from "../argocd/argocd-cluster-sync";
 import type { KarmadaConfig } from "./types";
 
 // Re-export types
@@ -66,10 +66,6 @@ export {
   KarmadaCapiClusterRegistration,
 } from "./cluster-registration";
 
-// Re-export ArgoCD credential sync
-export { KarmadaArgoCdSync } from "./argocd-sync";
-export type { KarmadaArgoCdSyncConfig } from "./argocd-sync";
-
 // Re-export generated Karmada API types for direct use
 export {
   PropagationPolicy,
@@ -107,7 +103,7 @@ export class Karmada extends BaseConstruct<KarmadaConfig> {
   public readonly namespace: kplus.Namespace;
 
   /** ArgoCD credential sync (if registerWithArgoCD is true) */
-  public readonly argoCdSync?: KarmadaArgoCdSync;
+  public readonly argoCdSync?: ArgoCdClusterSync;
 
   constructor(scope: Construct, id: string, config: KarmadaConfig = {}) {
     super(scope, id, config);
@@ -117,13 +113,19 @@ export class Karmada extends BaseConstruct<KarmadaConfig> {
     this.namespace = this.controlPlane.namespace;
     this.apiServerUrl = `https://${this.controlPlane.apiServerService}:5443`;
 
-    // Register with ArgoCD if requested — uses Crossplane Composition to
-    // continuously sync TLS credentials from the Karmada kubeconfig secret
+    const karmadaNamespace = this.config.namespace ?? "karmada-system";
+
+    // Register with ArgoCD if requested — uses generic Crossplane Composition
+    // to continuously sync TLS credentials from the Karmada kubeconfig secret
     if (this.config.registerWithArgoCD) {
-      this.argoCdSync = new KarmadaArgoCdSync(this, "argocd-sync", {
+      this.argoCdSync = new ArgoCdClusterSync(this, "argocd-sync", {
+        clusterName: "karmada",
         apiServerUrl: this.apiServerUrl,
-        karmadaNamespace: this.config.namespace,
+        sourceSecretNamespace: karmadaNamespace,
+        sourceSecretName: "karmada-admin-config",
+        sourceSecretKey: "karmada.config",
         argoCdNamespace: this.config.argoCdNamespace,
+        argoCdSecretName: "karmada-cluster",
       });
     }
   }
