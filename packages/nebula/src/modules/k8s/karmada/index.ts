@@ -18,6 +18,7 @@ import { Construct } from "constructs";
 import * as kplus from "cdk8s-plus-33";
 import { BaseConstruct } from "../../../core";
 import { KarmadaControlPlane, KARMADA_VERSION } from "./control-plane";
+import { KarmadaArgoCdSync } from "./argocd-sync";
 import type { KarmadaConfig } from "./types";
 
 // Re-export types
@@ -65,6 +66,10 @@ export {
   KarmadaCapiClusterRegistration,
 } from "./cluster-registration";
 
+// Re-export ArgoCD credential sync
+export { KarmadaArgoCdSync } from "./argocd-sync";
+export type { KarmadaArgoCdSyncConfig } from "./argocd-sync";
+
 // Re-export generated Karmada API types for direct use
 export {
   PropagationPolicy,
@@ -101,8 +106,8 @@ export class Karmada extends BaseConstruct<KarmadaConfig> {
   /** Karmada namespace */
   public readonly namespace: kplus.Namespace;
 
-  /** ArgoCD cluster secret (if registerWithArgoCD is true) */
-  public readonly argoCdClusterSecret?: kplus.Secret;
+  /** ArgoCD credential sync (if registerWithArgoCD is true) */
+  public readonly argoCdSync?: KarmadaArgoCdSync;
 
   constructor(scope: Construct, id: string, config: KarmadaConfig = {}) {
     super(scope, id, config);
@@ -112,46 +117,15 @@ export class Karmada extends BaseConstruct<KarmadaConfig> {
     this.namespace = this.controlPlane.namespace;
     this.apiServerUrl = `https://${this.controlPlane.apiServerService}:5443`;
 
-    // Register with ArgoCD if requested
+    // Register with ArgoCD if requested — uses Crossplane Composition to
+    // continuously sync TLS credentials from the Karmada kubeconfig secret
     if (this.config.registerWithArgoCD) {
-      this.argoCdClusterSecret = this.createArgoCdClusterSecret();
+      this.argoCdSync = new KarmadaArgoCdSync(this, "argocd-sync", {
+        apiServerUrl: this.apiServerUrl,
+        karmadaNamespace: this.config.namespace,
+        argoCdNamespace: this.config.argoCdNamespace,
+      });
     }
-  }
-
-  /**
-   * Creates an ArgoCD cluster secret to register Karmada as a destination.
-   *
-   * Note: The Karmada operator creates a kubeconfig secret that contains
-   * the credentials. This secret structure allows ArgoCD to recognize
-   * Karmada as a cluster destination.
-   */
-  private createArgoCdClusterSecret(): kplus.Secret {
-    const argoCdNamespace = this.config.argoCdNamespace ?? "argocd";
-
-    return new kplus.Secret(this, "argocd-cluster-secret", {
-      metadata: {
-        name: "karmada-cluster",
-        namespace: argoCdNamespace,
-        labels: {
-          "argocd.argoproj.io/secret-type": "cluster",
-        },
-        annotations: {
-          // Sync wave to ensure this is created after Karmada
-          "argocd.argoproj.io/sync-wave": "10",
-        },
-      },
-      type: "Opaque",
-      stringData: {
-        name: "karmada",
-        server: this.apiServerUrl,
-        // Config needs to be populated with actual TLS creds from karmada-kubeconfig secret
-        config: JSON.stringify({
-          tlsClientConfig: {
-            insecure: false,
-          },
-        }),
-      },
-    });
   }
 
   /** Get the Karmada version being used */
