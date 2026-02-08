@@ -108,12 +108,27 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       metadata: { name: namespaceName },
     });
 
-    // Build shims configuration
-    const shims: Record<string, unknown> = {};
+    // Build shims configuration — map simple boolean flags to chart's expected structure.
+    // The chart expects shims.<name>.enabled (with full objects), not simple booleans.
+    // We selectively enable/disable the shims the user cares about.
+    const shimsOverrides: Record<string, unknown> = {};
     if (config.shims) {
-      shims.snp = config.shims.snp ?? true;
-      shims.tdx = config.shims.tdx ?? false;
-      shims.cocoDev = config.shims.cocoDev ?? false;
+      const snp = config.shims.snp ?? true;
+      const tdx = config.shims.tdx ?? false;
+      const cocoDev = config.shims.cocoDev ?? false;
+
+      if (!snp) {
+        shimsOverrides["qemu-snp"] = { enabled: false };
+        shimsOverrides["qemu-nvidia-gpu-snp"] = { enabled: false };
+      }
+      if (!tdx) {
+        shimsOverrides["qemu-tdx"] = { enabled: false };
+        shimsOverrides["qemu-nvidia-gpu-tdx"] = { enabled: false };
+      }
+      if (!cocoDev) {
+        shimsOverrides["qemu-coco-dev"] = { enabled: false };
+        shimsOverrides["qemu-coco-dev-runtime-rs"] = { enabled: false };
+      }
     }
 
     // Build subchart values (kata-as-coco-runtime is the subchart alias for kata-deploy)
@@ -131,9 +146,9 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       subchartValues.nodeSelector = config.nodeSelector;
     }
 
-    // Add shims configuration if specified
-    if (Object.keys(shims).length > 0) {
-      subchartValues.shims = shims;
+    // Add shims overrides if specified
+    if (Object.keys(shimsOverrides).length > 0) {
+      subchartValues.shims = shimsOverrides;
     }
 
     // Parent chart values
