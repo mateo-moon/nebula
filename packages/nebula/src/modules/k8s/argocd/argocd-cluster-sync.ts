@@ -1,20 +1,30 @@
 /**
- * Karmada ArgoCD Credential Sync via Crossplane Composition.
+ * Generic ArgoCD Cluster Credential Sync via Crossplane Composition.
  *
- * Uses provider-kubernetes Object (Observe mode) to watch the Karmada admin
- * kubeconfig secret and function-go-templating to extract TLS credentials
- * and compose them into the ArgoCD cluster secret.
+ * Observes a kubeconfig Secret (via provider-kubernetes in Observe mode),
+ * extracts TLS credentials using function-go-templating, and renders an
+ * ArgoCD cluster secret. Works for any cluster that stores its kubeconfig
+ * as a Kubernetes Secret (e.g. CAPI clusters, Karmada).
  *
- * This ensures ArgoCD always has valid credentials to connect to the Karmada
- * API server, even after certificate rotation.
+ * Split into two parts:
+ * - `ArgoCdClusterSyncSetup` — creates the shared XRD + Composition (once)
+ * - `ArgoCdClusterSync` — creates an XR instance (per cluster)
  *
  * Prerequisites:
  * - Crossplane with provider-kubernetes and function-go-templating installed
  *
  * @example
  * ```typescript
- * new KarmadaArgoCdSync(chart, 'argocd-sync', {
- *   apiServerUrl: 'https://karmada-apiserver.karmada-system.svc.cluster.local:5443',
+ * // In crossplane module (once):
+ * new ArgoCdClusterSyncSetup(this, 'argocd-cluster-sync-setup');
+ *
+ * // Per cluster:
+ * new ArgoCdClusterSync(chart, 'dev-cluster-sync', {
+ *   clusterName: 'dev-cluster',
+ *   apiServerUrl: 'https://35.246.136.123:30443',
+ *   sourceSecretNamespace: 'default',
+ *   sourceSecretName: 'dev-cluster-kubeconfig',
+ *   sourceSecretKey: 'value',
  * });
  * ```
  */
@@ -27,57 +37,45 @@ import {
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 
-export interface KarmadaArgoCdSyncConfig {
-  /** Karmada namespace (default: 'karmada-system') */
-  karmadaNamespace?: string;
-  /** Name of the Karmada admin kubeconfig secret (default: 'karmada-admin-config') */
-  kubeconfigSecretName?: string;
-  /** Key in the kubeconfig secret (default: 'karmada.config') */
-  kubeconfigSecretKey?: string;
+export interface ArgoCdClusterSyncConfig {
+  /** Human-readable cluster name (used in ArgoCD UI) */
+  clusterName: string;
+  /** Kubernetes API server URL for the target cluster */
+  apiServerUrl: string;
+  /** Namespace where the kubeconfig secret lives */
+  sourceSecretNamespace: string;
+  /** Name of the kubeconfig secret */
+  sourceSecretName: string;
+  /** Key in the secret containing the kubeconfig YAML (e.g. 'value', 'karmada.config') */
+  sourceSecretKey: string;
   /** ArgoCD namespace (default: 'argocd') */
   argoCdNamespace?: string;
-  /** ArgoCD cluster secret name (default: 'karmada-cluster') */
+  /** ArgoCD cluster secret name (default: clusterName) */
   argoCdSecretName?: string;
-  /** Karmada API server URL */
-  apiServerUrl: string;
   /** provider-kubernetes ProviderConfig name (default: 'kubernetes-provider-config') */
   kubeProviderConfigName?: string;
+  /** Skip server certificate verification (default: false) */
+  insecure?: boolean;
 }
 
-export class KarmadaArgoCdSync extends Construct {
+/**
+ * Creates the shared XRD and Composition for ArgoCD cluster credential sync.
+ * Instantiate this once (typically in the Crossplane module).
+ */
+export class ArgoCdClusterSyncSetup extends Construct {
   public readonly xrd: CompositeResourceDefinition;
   public readonly composition: Composition;
-  public readonly xr: ApiObject;
 
-  constructor(scope: Construct, id: string, config: KarmadaArgoCdSyncConfig) {
+  constructor(scope: Construct, id: string) {
     super(scope, id);
-
-    const karmadaNamespace = config.karmadaNamespace ?? "karmada-system";
-    const kubeconfigSecretName =
-      config.kubeconfigSecretName ?? "karmada-admin-config";
-    const kubeconfigSecretKey = config.kubeconfigSecretKey ?? "karmada.config";
-    const argoCdNamespace = config.argoCdNamespace ?? "argocd";
-    const argoCdSecretName = config.argoCdSecretName ?? "karmada-cluster";
-    const kubeProviderConfigName =
-      config.kubeProviderConfigName ?? "kubernetes-provider-config";
-
     this.xrd = this.createXrd();
     this.composition = this.createComposition();
-    this.xr = this.createXr({
-      karmadaNamespace,
-      kubeconfigSecretName,
-      kubeconfigSecretKey,
-      argoCdNamespace,
-      argoCdSecretName,
-      apiServerUrl: config.apiServerUrl,
-      kubeProviderConfigName,
-    });
   }
 
   private createXrd(): CompositeResourceDefinition {
     return new CompositeResourceDefinition(this, "xrd", {
       metadata: {
-        name: "xkarmadaargocdsyncs.nebula.io",
+        name: "xargocdclustersyncs.nebula.io",
         annotations: {
           "argocd.argoproj.io/sync-wave": "-10",
         },
@@ -85,8 +83,8 @@ export class KarmadaArgoCdSync extends Construct {
       spec: {
         group: "nebula.io",
         names: {
-          kind: "XKarmadaArgoCdSync",
-          plural: "xkarmadaargocdsyncs",
+          kind: "XArgoCdClusterSync",
+          plural: "xargocdclustersyncs",
         },
         scope: CompositeResourceDefinitionSpecScope.CLUSTER,
         versions: [
@@ -101,31 +99,39 @@ export class KarmadaArgoCdSync extends Construct {
                   spec: {
                     type: "object",
                     required: [
+                      "clusterName",
                       "apiServerUrl",
-                      "karmadaNamespace",
-                      "kubeconfigSecretName",
-                      "kubeconfigSecretKey",
+                      "sourceSecretNamespace",
+                      "sourceSecretName",
+                      "sourceSecretKey",
                       "argoCdNamespace",
                       "argoCdSecretName",
                       "kubeProviderConfigName",
                     ],
                     properties: {
-                      apiServerUrl: {
-                        type: "string",
-                        description: "Karmada API server URL",
-                      },
-                      karmadaNamespace: {
-                        type: "string",
-                        description: "Namespace where Karmada is installed",
-                      },
-                      kubeconfigSecretName: {
+                      clusterName: {
                         type: "string",
                         description:
-                          "Name of the Karmada admin kubeconfig secret",
+                          "Human-readable cluster name for ArgoCD UI",
                       },
-                      kubeconfigSecretKey: {
+                      apiServerUrl: {
                         type: "string",
-                        description: "Key in the kubeconfig secret",
+                        description:
+                          "Kubernetes API server URL for the target cluster",
+                      },
+                      sourceSecretNamespace: {
+                        type: "string",
+                        description:
+                          "Namespace where the kubeconfig secret lives",
+                      },
+                      sourceSecretName: {
+                        type: "string",
+                        description: "Name of the kubeconfig secret",
+                      },
+                      sourceSecretKey: {
+                        type: "string",
+                        description:
+                          "Key in the secret containing kubeconfig YAML",
                       },
                       argoCdNamespace: {
                         type: "string",
@@ -139,6 +145,11 @@ export class KarmadaArgoCdSync extends Construct {
                         type: "string",
                         description: "provider-kubernetes ProviderConfig name",
                       },
+                      insecure: {
+                        type: "boolean",
+                        description:
+                          "Skip server certificate verification (default: false)",
+                      },
                     },
                   },
                 },
@@ -151,14 +162,6 @@ export class KarmadaArgoCdSync extends Construct {
   }
 
   private createComposition(): Composition {
-    // Go template that reads the observed Karmada kubeconfig secret,
-    // extracts TLS credentials, and renders the ArgoCD cluster secret.
-    //
-    // The karmada-admin-config secret's .data values are base64-encoded by K8s.
-    // Inside the kubeconfig YAML, TLS fields (certificate-authority-data, etc.)
-    // are already base64-encoded. We decode the outer layer to parse the YAML,
-    // then pass the inner base64 values directly to ArgoCD (which expects them
-    // base64-encoded).
     const secretTemplate = `
 apiVersion: v1
 kind: Secret
@@ -168,30 +171,30 @@ metadata:
   labels:
     argocd.argoproj.io/secret-type: cluster
   annotations:
-    argocd.argoproj.io/sync-wave: "10"
     gotemplating.fn.crossplane.io/composition-resource-name: argocd-cluster-secret
 type: Opaque
 {{- if .observed.resources }}
-{{- $obj := index .observed.resources "karmada-kubeconfig" }}
+{{- $obj := index .observed.resources "kubeconfig-secret" }}
 {{- if and $obj $obj.resource $obj.resource.status $obj.resource.status.atProvider $obj.resource.status.atProvider.manifest }}
 {{- $secretData := $obj.resource.status.atProvider.manifest.data }}
-{{- $kubeconfigB64 := index $secretData "karmada.config" }}
+{{- $kubeconfigB64 := index $secretData (.observed.composite.resource.spec.sourceSecretKey) }}
 {{- $kubeconfigYaml := $kubeconfigB64 | b64dec }}
 {{- $kc := $kubeconfigYaml | fromYaml }}
 {{- $cluster := (index $kc.clusters 0).cluster }}
 {{- $user := (index $kc.users 0).user }}
+{{- $insecure := or .observed.composite.resource.spec.insecure false }}
 stringData:
-  name: karmada
+  name: {{ .observed.composite.resource.spec.clusterName }}
   server: {{ .observed.composite.resource.spec.apiServerUrl }}
   config: |
-    {"tlsClientConfig":{"insecure":false,"caData":"{{ index $cluster "certificate-authority-data" }}","certData":"{{ index $user "client-certificate-data" }}","keyData":"{{ index $user "client-key-data" }}"}}
+    {"tlsClientConfig":{"insecure":{{ $insecure }}{{- if not $insecure }},"caData":"{{ index $cluster "certificate-authority-data" }}"{{- end }},"certData":"{{ index $user "client-certificate-data" }}","keyData":"{{ index $user "client-key-data" }}"}}
 {{- end }}
 {{- end }}
 `.trim();
 
     return new Composition(this, "composition", {
       metadata: {
-        name: "karmada-argocd-sync",
+        name: "argocd-cluster-sync",
         annotations: {
           "argocd.argoproj.io/sync-wave": "-5",
         },
@@ -199,11 +202,10 @@ stringData:
       spec: {
         compositeTypeRef: {
           apiVersion: "nebula.io/v1alpha1",
-          kind: "XKarmadaArgoCdSync",
+          kind: "XArgoCdClusterSync",
         },
         mode: CompositionSpecMode.PIPELINE,
         pipeline: [
-          // Step 1: Observe the Karmada kubeconfig secret via provider-kubernetes
           {
             step: "observe-kubeconfig",
             functionRef: {
@@ -214,7 +216,7 @@ stringData:
               kind: "Resources",
               resources: [
                 {
-                  name: "karmada-kubeconfig",
+                  name: "kubeconfig-secret",
                   base: {
                     apiVersion: "kubernetes.crossplane.io/v1alpha2",
                     kind: "Object",
@@ -235,12 +237,12 @@ stringData:
                   patches: [
                     {
                       type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.kubeconfigSecretName",
+                      fromFieldPath: "spec.sourceSecretName",
                       toFieldPath: "spec.forProvider.manifest.metadata.name",
                     },
                     {
                       type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.karmadaNamespace",
+                      fromFieldPath: "spec.sourceSecretNamespace",
                       toFieldPath:
                         "spec.forProvider.manifest.metadata.namespace",
                     },
@@ -254,7 +256,6 @@ stringData:
               ],
             },
           },
-          // Step 2: Render the ArgoCD cluster secret with extracted TLS creds
           {
             step: "render-argocd-secret",
             functionRef: {
@@ -273,31 +274,43 @@ stringData:
       },
     });
   }
+}
 
-  private createXr(
-    config: Required<
-      Omit<KarmadaArgoCdSyncConfig, "kubeProviderConfigName"> & {
-        kubeProviderConfigName: string;
-      }
-    >,
-  ): ApiObject {
-    return new ApiObject(this, "xr", {
+/**
+ * Creates an XR instance to sync a cluster's kubeconfig into an ArgoCD
+ * cluster secret. Requires `ArgoCdClusterSyncSetup` to be installed.
+ */
+export class ArgoCdClusterSync extends Construct {
+  public readonly xr: ApiObject;
+
+  constructor(scope: Construct, id: string, config: ArgoCdClusterSyncConfig) {
+    super(scope, id);
+
+    const argoCdNamespace = config.argoCdNamespace ?? "argocd";
+    const argoCdSecretName = config.argoCdSecretName ?? config.clusterName;
+    const kubeProviderConfigName =
+      config.kubeProviderConfigName ?? "kubernetes-provider-config";
+    const insecure = config.insecure ?? false;
+
+    this.xr = new ApiObject(this, "xr", {
       apiVersion: "nebula.io/v1alpha1",
-      kind: "XKarmadaArgoCdSync",
+      kind: "XArgoCdClusterSync",
       metadata: {
-        name: "karmada-argocd-sync",
+        name: `${config.clusterName}-argocd-sync`,
         annotations: {
           "argocd.argoproj.io/sync-wave": "10",
         },
       },
       spec: {
-        karmadaNamespace: config.karmadaNamespace,
-        kubeconfigSecretName: config.kubeconfigSecretName,
-        kubeconfigSecretKey: config.kubeconfigSecretKey,
-        argoCdNamespace: config.argoCdNamespace,
-        argoCdSecretName: config.argoCdSecretName,
+        clusterName: config.clusterName,
         apiServerUrl: config.apiServerUrl,
-        kubeProviderConfigName: config.kubeProviderConfigName,
+        sourceSecretNamespace: config.sourceSecretNamespace,
+        sourceSecretName: config.sourceSecretName,
+        sourceSecretKey: config.sourceSecretKey,
+        argoCdNamespace,
+        argoCdSecretName,
+        kubeProviderConfigName,
+        insecure,
       },
     });
   }

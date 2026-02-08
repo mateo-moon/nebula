@@ -1007,3 +1007,10 @@ kubectl create secret generic ${credentialsSecretName} \\
     bootstrapJob.node.addDependency(bootstrapRoleBinding);
   }
 }
+
+// Re-export ArgoCD cluster sync constructs
+export {
+  ArgoCdClusterSyncSetup,
+  ArgoCdClusterSync,
+} from "./argocd-cluster-sync";
+export type { ArgoCdClusterSyncConfig } from "./argocd-cluster-sync";

@@ -32,11 +32,12 @@ export type {
   ThanosConfig,
 } from "./prometheus-operator";
 
-export { ArgoCd } from "./argocd";
+export { ArgoCd, ArgoCdClusterSyncSetup, ArgoCdClusterSync } from "./argocd";
 export type {
   ArgoCdConfig,
   ArgoCdProjectConfig,
   ArgoCdProjectDestination,
+  ArgoCdClusterSyncConfig,
   DexConfig,
   DexConnector,
   DexGithubConfig,
