@@ -116,8 +116,8 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       shims.cocoDev = config.shims.cocoDev ?? false;
     }
 
-    // Default values
-    const defaultValues: Record<string, unknown> = {
+    // Build subchart values (kata-as-coco-runtime is the subchart alias for kata-deploy)
+    const subchartValues: Record<string, unknown> = {
       imagePullPolicy: config.imagePullPolicy ?? "IfNotPresent",
       k8sDistribution: config.k8sDistribution ?? "k0s",
       debug: config.debug ?? false,
@@ -128,15 +128,20 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
 
     // Add node selector if specified
     if (config.nodeSelector) {
-      defaultValues.nodeSelector = config.nodeSelector;
+      subchartValues.nodeSelector = config.nodeSelector;
     }
 
     // Add shims configuration if specified
     if (Object.keys(shims).length > 0) {
-      defaultValues.shims = shims;
+      subchartValues.shims = shims;
     }
 
-    // Add custom containerd if specified
+    // Parent chart values
+    const defaultValues: Record<string, unknown> = {
+      "kata-as-coco-runtime": subchartValues,
+    };
+
+    // Add custom containerd if specified (parent chart level)
     if (config.customContainerd?.enabled) {
       defaultValues.customContainerd = {
         enabled: true,
@@ -150,7 +155,8 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
 
     // Deploy Helm chart
     this.helm = new Helm(this, "helm", {
-      chart: "oci://ghcr.io/confidential-containers/charts/confidential-containers",
+      chart:
+        "oci://ghcr.io/confidential-containers/charts/confidential-containers",
       releaseName: "confidential-containers",
       version: config.version ?? "0.18.0",
       namespace: namespaceName,
