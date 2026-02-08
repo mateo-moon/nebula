@@ -678,29 +678,50 @@ set -e
 mkdir -p /tmp/bin
 export PATH="/tmp/bin:$PATH"
 
-# Skip tool installation if already present
-if [ ! -x /tmp/bin/helm ]; then
-  echo "Installing helm..." >&2
-  HELM_VERSION=\${HELM_VERSION:-3.17.0}
-  if ! wget -O /tmp/helm.tar.gz "https://get.helm.sh/helm-v\${HELM_VERSION}-linux-amd64.tar.gz" 2>&1; then
-    echo "ERROR: Failed to download helm" >&2
-    exit 1
-  fi
-  tar xzf /tmp/helm.tar.gz -C /tmp >&2
-  mv /tmp/linux-amd64/helm /tmp/bin/helm
-  rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
-fi
+# Use a lock to prevent concurrent tool installations from racing
+LOCKFILE="/tmp/bin/.install.lock"
 
-if [ ! -x /tmp/bin/vals ]; then
-  echo "Installing vals..." >&2
-  VALS_VERSION=\${VALS_VERSION:-0.43.1}
-  if ! wget -O /tmp/vals.tar.gz "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" 2>&1; then
-    echo "ERROR: Failed to download vals" >&2
-    exit 1
+install_tools() {
+  # Use mkdir as an atomic lock (works on all POSIX systems)
+  if mkdir "\${LOCKFILE}" 2>/dev/null; then
+    trap 'rmdir "\${LOCKFILE}" 2>/dev/null' EXIT
+
+    if [ ! -x /tmp/bin/helm ]; then
+      echo "Installing helm..." >&2
+      HELM_VERSION=\${HELM_VERSION:-3.17.0}
+      TMPDIR=$(mktemp -d)
+      if ! wget -O "\$TMPDIR/helm.tar.gz" "https://get.helm.sh/helm-v\${HELM_VERSION}-linux-amd64.tar.gz" 2>&1; then
+        echo "ERROR: Failed to download helm" >&2
+        rm -rf "\$TMPDIR"
+        exit 1
+      fi
+      tar xzf "\$TMPDIR/helm.tar.gz" -C "\$TMPDIR" >&2
+      mv "\$TMPDIR/linux-amd64/helm" /tmp/bin/helm
+      rm -rf "\$TMPDIR"
+    fi
+
+    if [ ! -x /tmp/bin/vals ]; then
+      echo "Installing vals..." >&2
+      VALS_VERSION=\${VALS_VERSION:-0.43.1}
+      TMPDIR=$(mktemp -d)
+      if ! wget -O "\$TMPDIR/vals.tar.gz" "https://github.com/helmfile/vals/releases/download/v\${VALS_VERSION}/vals_\${VALS_VERSION}_linux_amd64.tar.gz" 2>&1; then
+        echo "ERROR: Failed to download vals" >&2
+        rm -rf "\$TMPDIR"
+        exit 1
+      fi
+      tar xzf "\$TMPDIR/vals.tar.gz" -C /tmp/bin vals >&2
+      rm -rf "\$TMPDIR"
+    fi
+
+    rmdir "\${LOCKFILE}" 2>/dev/null
+    trap - EXIT
+  else
+    echo "Waiting for tool installation..." >&2
+    while [ -d "\${LOCKFILE}" ]; do sleep 1; done
   fi
-  tar xzf /tmp/vals.tar.gz -C /tmp/bin vals >&2
-  rm -f /tmp/vals.tar.gz
-fi
+}
+
+install_tools
 
 echo "Installing dependencies in $(pwd)..." >&2
 pnpm install --no-lockfile 2>&1 >&2
@@ -816,15 +837,13 @@ done
       },
       resources: {
         requests: {
-          memory: pluginConfig.resources?.requests?.memory ?? "512Mi",
-          cpu: pluginConfig.resources?.requests?.cpu ?? "100m",
+          memory: pluginConfig.resources?.requests?.memory ?? "1Gi",
+          cpu: pluginConfig.resources?.requests?.cpu ?? "250m",
         },
-        ...(pluginConfig.resources?.limits && {
-          limits: {
-            memory: pluginConfig.resources.limits.memory,
-            cpu: pluginConfig.resources.limits.cpu,
-          },
-        }),
+        limits: {
+          memory: pluginConfig.resources?.limits?.memory ?? "2Gi",
+          cpu: pluginConfig.resources?.limits?.cpu ?? "1",
+        },
       },
       env: sidecarEnv,
       volumeMounts: [
