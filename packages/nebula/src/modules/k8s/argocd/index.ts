@@ -40,6 +40,7 @@ import { Helm, ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import * as crypto from "crypto";
+import bcrypt from "bcryptjs";
 import * as yaml from "yaml";
 import { AppProject } from "#imports/argoproj.io";
 import {
@@ -299,17 +300,10 @@ function flattenKeys(
 }
 
 /**
- * Simple bcrypt-like hash for passwords (uses crypto for deterministic output in cdk8s)
- * Note: In production, you'd want to use actual bcrypt. This is a simplified version.
+ * Hash a password using bcrypt (the format ArgoCD expects).
  */
 function hashPassword(password: string): string {
-  // Generate a random salt
-  const salt = crypto.randomBytes(16).toString("base64");
-  // Create hash using pbkdf2 (ArgoCD accepts this format too)
-  const hash = crypto
-    .pbkdf2Sync(password, salt, 10000, 32, "sha256")
-    .toString("base64");
-  return `$2a$10$${salt}${hash}`.substring(0, 60);
+  return bcrypt.hashSync(password, 10);
 }
 
 export class ArgoCd extends BaseConstruct<ArgoCdConfig> {

@@ -16,8 +16,12 @@
   },
   "typesVersions": {
     "*": {
-      "imports/*": ["imports/*"],
-      "*": ["src/*"]
+      "imports/*": [
+        "imports/*"
+      ],
+      "*": [
+        "src/*"
+      ]
     }
   },
   "scripts": {
@@ -30,6 +34,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cdk8s": "^2.69.0",
     "cdk8s-plus-33": "^2.4.23",
     "constructs": "^10.4.2",
@@ -37,6 +42,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.13.9",
     "cdk8s-cli": "github:mateo-moon/cdk8s-cli#combined-fixes",
     "tsx": "^4.21.0",
