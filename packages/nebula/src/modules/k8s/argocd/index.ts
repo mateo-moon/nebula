@@ -338,8 +338,12 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
     // Keep local variable for backward compatibility within this file
     const namespaceName = this.namespaceName;
 
-    // Generate server secret key
-    this.serverSecretKey = crypto.randomBytes(32).toString("base64");
+    // Generate a deterministic server secret key so that repeated synths
+    // produce the same value for the same namespace.
+    this.serverSecretKey = crypto
+      .createHash("sha256")
+      .update(`argocd-server-secretkey:${namespaceName}`)
+      .digest("base64");
 
     // Handle crossplane user password hashing
     if (
