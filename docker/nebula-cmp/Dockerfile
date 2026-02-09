@@ -11,7 +11,7 @@ RUN apk add --no-cache git openssh-client wget \
     && wget -qO /tmp/vals.tar.gz "https://github.com/helmfile/vals/releases/download/v${VALS_VERSION}/vals_${VALS_VERSION}_linux_amd64.tar.gz" \
     && tar xzf /tmp/vals.tar.gz -C /usr/local/bin vals \
     && rm -f /tmp/vals.tar.gz \
-    && npm install -g pnpm
+    && npm install -g pnpm typescript
 
 ENV PNPM_HOME="/tmp/bin" \
     XDG_DATA_HOME="/tmp" \
