@@ -781,12 +781,12 @@ done
       },
       resources: {
         requests: {
-          memory: pluginConfig.resources?.requests?.memory ?? "1Gi",
-          cpu: pluginConfig.resources?.requests?.cpu ?? "250m",
+          memory: pluginConfig.resources?.requests?.memory ?? "2Gi",
+          cpu: pluginConfig.resources?.requests?.cpu ?? "500m",
         },
         limits: {
-          memory: pluginConfig.resources?.limits?.memory ?? "2Gi",
-          cpu: pluginConfig.resources?.limits?.cpu ?? "1",
+          memory: pluginConfig.resources?.limits?.memory ?? "4Gi",
+          cpu: pluginConfig.resources?.limits?.cpu ?? "2",
         },
       },
       env: sidecarEnv,
