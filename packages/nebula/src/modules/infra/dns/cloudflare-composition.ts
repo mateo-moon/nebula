@@ -267,7 +267,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           kind: "XDnsZoneCloudflare",
           plural: "xdnszonecloudflares",
         },
-        scope: CompositeResourceDefinitionV2SpecScope.NAMESPACED,
+        scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
         versions: [
           {
             name: "v1alpha1",
@@ -616,8 +616,6 @@ export interface DnsZoneCloudflareConfig {
   description?: string;
   /** TTL for NS records (default: "3600") */
   ttl?: string;
-  /** Namespace for the XR (default: "crossplane-system") */
-  namespace?: string;
 }
 
 /**
@@ -636,7 +634,6 @@ export class DnsZoneCloudflare extends Construct {
       kind: "XDnsZoneCloudflare",
       metadata: {
         name: id,
-        namespace: config.namespace ?? "crossplane-system",
         annotations: {
           "argocd.argoproj.io/sync-wave": "0",
         },
