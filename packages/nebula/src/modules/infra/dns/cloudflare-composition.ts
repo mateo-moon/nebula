@@ -267,8 +267,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           kind: "XDnsZoneCloudflare",
           plural: "xdnszonecloudflares",
         },
-        // XRs that compose cluster-scoped resources (like ManagedZone) must be cluster-scoped
-        scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
+        scope: CompositeResourceDefinitionV2SpecScope.NAMESPACED,
         versions: [
           {
             name: "v1alpha1",
@@ -617,12 +616,12 @@ export interface DnsZoneCloudflareConfig {
   description?: string;
   /** TTL for NS records (default: "3600") */
   ttl?: string;
+  /** Namespace for the XR (default: "crossplane-system") */
+  namespace?: string;
 }
 
 /**
  * Creates an XR (Composite Resource) for a DNS zone with automatic Cloudflare delegation.
- *
- * In Crossplane v2, Claims are deprecated. This creates the XR directly (cluster-scoped).
  *
  * Prerequisites: DnsCloudflareComposition must be deployed first.
  */
@@ -632,13 +631,12 @@ export class DnsZoneCloudflare extends Construct {
   constructor(scope: Construct, id: string, config: DnsZoneCloudflareConfig) {
     super(scope, id);
 
-    // Create the XR (Composite Resource) directly - Crossplane v2 approach
-    // XRs are cluster-scoped (no namespace)
     this.xr = new ApiObject(this, "xr", {
       apiVersion: "nebula.io/v1alpha1",
       kind: "XDnsZoneCloudflare",
       metadata: {
         name: id,
+        namespace: config.namespace ?? "crossplane-system",
         annotations: {
           "argocd.argoproj.io/sync-wave": "0",
         },
