@@ -301,9 +301,17 @@ function flattenKeys(
 
 /**
  * Hash a password using bcrypt (the format ArgoCD expects).
+ * Uses a deterministic salt derived from the password so that repeated
+ * cdk8s synth runs produce the same hash for the same input.
  */
 function hashPassword(password: string): string {
-  return bcrypt.hashSync(password, 10);
+  // Derive a deterministic 16-byte salt from the password using SHA-256,
+  // then encode it in the bcrypt base64 alphabet (22 chars).
+  const rawSalt = crypto.createHash("sha256").update(password).digest();
+  const salt = bcrypt.encodeBase64(rawSalt, 16);
+  // Build the full bcrypt salt string: $2a$10$ + 22-char encoded salt
+  const bcryptSalt = `$2a$10$${salt}`;
+  return bcrypt.hashSync(password, bcryptSalt);
 }
 
 export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
