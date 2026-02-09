@@ -257,6 +257,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     this.xrd = new CompositeResourceDefinitionV2(this, "xrd", {
       metadata: {
         name: "xdnszonecloudflares.nebula.io",
+        annotations: {
+          "argocd.argoproj.io/sync-wave": "-10",
+        },
       },
       spec: {
         group: "nebula.io",
@@ -331,6 +334,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     this.composition = new Composition(this, "composition", {
       metadata: {
         name: "dnszone-cloudflare",
+        annotations: {
+          "argocd.argoproj.io/sync-wave": "-5",
+        },
         labels: {
           "crossplane.io/xrd": "xdnszonecloudflares.nebula.io",
           "delegation-provider": "cloudflare",
@@ -633,7 +639,9 @@ export class DnsZoneCloudflare extends Construct {
       kind: "XDnsZoneCloudflare",
       metadata: {
         name: id,
-        // No namespace - XRs are cluster-scoped in Crossplane v2
+        annotations: {
+          "argocd.argoproj.io/sync-wave": "0",
+        },
       },
       spec: {
         dnsName: config.dnsName,
