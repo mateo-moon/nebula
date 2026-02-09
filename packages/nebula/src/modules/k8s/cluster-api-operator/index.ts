@@ -14,7 +14,7 @@
  * ```
  */
 import { Construct } from "constructs";
-import { ApiObject, Helm } from "cdk8s";
+import { ApiObject, Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct } from "../../../core";
@@ -246,6 +246,27 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       namespace: namespaceName,
       values: chartValues,
     });
+
+    // The upstream chart annotates provider instances (CoreProvider,
+    // BootstrapProvider, etc.) and their namespaces with helm.sh/hook:
+    // post-install,post-upgrade.  When rendered via cdk8s `helm template`,
+    // ArgoCD interprets these as hooks rather than regular managed resources,
+    // so they are never tracked, re-created on sync, or shown in the UI.
+    // Stripping the hook annotations converts them into normal ArgoCD-managed
+    // resources that survive deletion and get recreated automatically.
+    for (const child of this.helm.apiObjects) {
+      const annotations = child.toJson()?.metadata?.annotations;
+      if (annotations?.["helm.sh/hook"]) {
+        child.addJsonPatch(
+          JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
+        );
+      }
+      if (annotations?.["helm.sh/hook-weight"]) {
+        child.addJsonPatch(
+          JsonPatch.remove("/metadata/annotations/helm.sh~1hook-weight"),
+        );
+      }
+    }
   }
 
   /**
