@@ -18,10 +18,9 @@
  * // In crossplane module (once):
  * new ArgoCdClusterSyncSetup(this, 'argocd-cluster-sync-setup');
  *
- * // Per cluster:
+ * // Per cluster (apiServerUrl auto-extracted from kubeconfig):
  * new ArgoCdClusterSync(chart, 'dev-cluster-sync', {
  *   clusterName: 'dev-cluster',
- *   apiServerUrl: 'https://35.246.136.123:30443',
  *   sourceSecretNamespace: 'default',
  *   sourceSecretName: 'dev-cluster-kubeconfig',
  *   sourceSecretKey: 'value',
@@ -40,8 +39,8 @@ import {
 export interface ArgoCdClusterSyncConfig {
   /** Human-readable cluster name (used in ArgoCD UI) */
   clusterName: string;
-  /** Kubernetes API server URL for the target cluster */
-  apiServerUrl: string;
+  /** Kubernetes API server URL for the target cluster. If omitted, extracted from the kubeconfig secret automatically. */
+  apiServerUrl?: string;
   /** Namespace where the kubeconfig secret lives */
   sourceSecretNamespace: string;
   /** Name of the kubeconfig secret */
@@ -102,7 +101,6 @@ export class ArgoCdClusterSyncSetup extends Construct {
                     type: "object",
                     required: [
                       "clusterName",
-                      "apiServerUrl",
                       "sourceSecretNamespace",
                       "sourceSecretName",
                       "sourceSecretKey",
@@ -185,9 +183,15 @@ type: Opaque
 {{- $cluster := (index $kc.clusters 0).cluster }}
 {{- $user := (index $kc.users 0).user }}
 {{- $insecure := or .observed.composite.resource.spec.insecure false }}
+{{- $serverUrl := "" }}
+{{- if .observed.composite.resource.spec.apiServerUrl }}
+  {{- $serverUrl = .observed.composite.resource.spec.apiServerUrl }}
+{{- else }}
+  {{- $serverUrl = $cluster.server }}
+{{- end }}
 stringData:
   name: {{ .observed.composite.resource.spec.clusterName }}
-  server: {{ .observed.composite.resource.spec.apiServerUrl }}
+  server: {{ $serverUrl }}
   config: |
     {"tlsClientConfig":{"insecure":{{ $insecure }}{{- if not $insecure }},"caData":"{{ index $cluster "certificate-authority-data" }}"{{- end }},"certData":"{{ index $user "client-certificate-data" }}","keyData":"{{ index $user "client-key-data" }}"}}
 {{- end }}
@@ -306,7 +310,7 @@ export class ArgoCdClusterSync extends Construct {
       },
       spec: {
         clusterName: config.clusterName,
-        apiServerUrl: config.apiServerUrl,
+        ...(config.apiServerUrl && { apiServerUrl: config.apiServerUrl }),
         sourceSecretNamespace: config.sourceSecretNamespace,
         sourceSecretName: config.sourceSecretName,
         sourceSecretKey: config.sourceSecretKey,
