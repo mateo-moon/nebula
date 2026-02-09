@@ -475,6 +475,17 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
 
     // Handle Nebula CMP Plugin
     if (this.config.nebulaPlugin?.enabled) {
+      // Limit concurrent manifest generations to prevent OOM from parallel pnpm installs
+      if (!chartValues["configs"]) chartValues["configs"] = {};
+      const pluginConfigs = chartValues["configs"] as Record<string, unknown>;
+      if (!pluginConfigs["params"]) pluginConfigs["params"] = {};
+      const params = pluginConfigs["params"] as Record<string, unknown>;
+      if (!params["reposerver"]) params["reposerver"] = {};
+      const reposerver = params["reposerver"] as Record<string, unknown>;
+      if (!reposerver["parallelism"]) reposerver["parallelism"] = {};
+      const parallelism = reposerver["parallelism"] as Record<string, unknown>;
+      if (!parallelism["limit"]) parallelism["limit"] = 2;
+
       this.setupNebulaPlugin(chartValues, namespaceName);
     }
 
