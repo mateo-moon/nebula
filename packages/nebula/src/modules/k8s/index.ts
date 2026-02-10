@@ -92,3 +92,9 @@ export type {
   TeeShimConfig,
   CustomContainerdConfig,
 } from "./confidential-containers";
+
+export { ArgocdImageUpdater } from "./argocd-image-updater";
+export type {
+  ArgocdImageUpdaterConfig,
+  ArgocdImageUpdaterRegistry,
+} from "./argocd-image-updater";
