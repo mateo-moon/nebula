@@ -105,14 +105,13 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
       return entry;
     });
 
+    // Chart config uses flat keys (rendered as key: "value" in ConfigMap)
     const defaultValues: Record<string, unknown> = {
       config: {
-        argocd: {
-          serverAddress: argocdServer,
-          insecure: true,
-          plaintext: true,
-        },
-        logLevel,
+        "argocd.serverAddress": argocdServer,
+        "argocd.insecure": "true",
+        "argocd.plaintext": "true",
+        "log.level": logLevel,
         ...(registriesConfig.length > 0
           ? { registries: registriesConfig }
           : {}),
