@@ -51,6 +51,8 @@ export interface PiraeusReplicationConfig {
   crossSiteAsync?: boolean;
   /** TCP send buffer size in bytes for async replication (defaults to "1048576") */
   sndBufSize?: string;
+  /** LINSTOR net-interface name for cross-site DRBD paths (requires advertiseIP on satellites) */
+  replicationInterface?: string;
 }
 
 /** Additional satellite configuration for nodes with different storage devices */
@@ -61,6 +63,8 @@ export interface PiraeusSatelliteConfig {
   nodeSelector: Record<string, string>;
   /** Storage pool configuration for these nodes */
   storagePool: PiraeusStoragePoolConfig;
+  /** Shell command that outputs this satellite's replication IP (runs in sidecar with hostNetwork) */
+  advertiseIP?: string;
 }
 
 export interface PiraeusConfig {
@@ -82,6 +86,8 @@ export interface PiraeusConfig {
   replication?: PiraeusReplicationConfig;
   /** Kubelet path override for k0s (defaults to "/var/lib/kubelet", k0s uses "/var/lib/k0s/kubelet") */
   kubeletPath?: string;
+  /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
+  advertiseIP?: string;
   /** Additional Helm values for linstor-cluster chart */
   values?: Record<string, unknown>;
 }
@@ -180,6 +186,8 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
 
     // --- LinstorSatelliteConfiguration ---
 
+    const replicationInterface = this.config.replication?.replicationInterface;
+
     if (this.config.storagePool) {
       const pool = this.config.storagePool;
       const poolSpec = buildStoragePoolSpec(pool, poolName);
@@ -201,17 +209,24 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
         };
       }
 
+      const podSpec: Record<string, unknown> = { hostNetwork: true };
+      if (this.config.advertiseIP && replicationInterface) {
+        podSpec.containers = [
+          buildDrbdIpSidecar(
+            this.config.advertiseIP,
+            replicationInterface,
+            namespaceName,
+          ),
+        ];
+      }
+
       new ApiObject(this, "satellite-config", {
         apiVersion: "piraeus.io/v1",
         kind: "LinstorSatelliteConfiguration",
         metadata: { name: "storage-config" },
         spec: {
           ...(nodeAffinity && { nodeAffinity }),
-          podTemplate: {
-            spec: {
-              hostNetwork: true,
-            },
-          },
+          podTemplate: { spec: podSpec },
           storagePools: [poolSpec],
         },
       });
@@ -234,6 +249,17 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           }),
         );
 
+        const podSpec: Record<string, unknown> = { hostNetwork: true };
+        if (sat.advertiseIP && replicationInterface) {
+          podSpec.containers = [
+            buildDrbdIpSidecar(
+              sat.advertiseIP,
+              replicationInterface,
+              namespaceName,
+            ),
+          ];
+        }
+
         new ApiObject(this, `satellite-config-${sat.name}`, {
           apiVersion: "piraeus.io/v1",
           kind: "LinstorSatelliteConfiguration",
@@ -242,11 +268,7 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
             nodeAffinity: {
               nodeSelectorTerms: [{ matchExpressions }],
             },
-            podTemplate: {
-              spec: {
-                hostNetwork: true,
-              },
-            },
+            podTemplate: { spec: podSpec },
             storagePools: [satPoolSpec],
           },
         });
@@ -273,6 +295,9 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
               ],
             },
           ],
+          ...(replicationInterface && {
+            paths: [{ name: "replication", interface: replicationInterface }],
+          }),
           properties: [
             { name: "DrbdOptions/Net/protocol", value: "A" },
             { name: "DrbdOptions/Net/sndbuf-size", value: sndBufSize },
@@ -303,6 +328,38 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
       },
     });
   }
+}
+
+/**
+ * Builds a sidecar container spec that registers a LINSTOR net-interface with
+ * the satellite's replication IP. Waits for the satellite to come online, then
+ * creates/updates the interface via the LINSTOR REST API.
+ */
+function buildDrbdIpSidecar(
+  ipCommand: string,
+  interfaceName: string,
+  namespace: string,
+): Record<string, unknown> {
+  const ctrl = `http://linstor-controller.${namespace}.svc:3370`;
+  const script = [
+    `IFACE="${interfaceName}"`,
+    `CTRL="${ctrl}"`,
+    `until curl -sf "$CTRL/v1/controller/version" >/dev/null 2>&1; do echo "Waiting for LINSTOR controller..."; sleep 5; done`,
+    `NODE=$(cat /etc/hostname)`,
+    `until curl -sf "$CTRL/v1/nodes/$NODE" | grep -q ONLINE; do echo "Waiting for satellite $NODE..."; sleep 5; done`,
+    `IP=$(${ipCommand})`,
+    `echo "Registering LINSTOR net-interface $IFACE=$IP on $NODE"`,
+    `curl -sf -X PUT "$CTRL/v1/nodes/$NODE/net-interfaces/$IFACE" -H "Content-Type: application/json" -d "{\\"address\\": \\"$IP\\"}" || curl -sf -X POST "$CTRL/v1/nodes/$NODE/net-interfaces" -H "Content-Type: application/json" -d "{\\"name\\": \\"$IFACE\\", \\"address\\": \\"$IP\\"}"`,
+    `echo "Done. Sleeping."`,
+    `sleep infinity`,
+  ].join("\n");
+
+  return {
+    name: "register-drbd-ip",
+    image: "curlimages/curl:latest",
+    command: ["/bin/sh", "-c"],
+    args: [script],
+  };
 }
 
 function buildStoragePoolSpec(
