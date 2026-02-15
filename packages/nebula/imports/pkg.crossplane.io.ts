@@ -2,6 +2,9 @@
 import { ApiObject, ApiObjectMetadata, GroupVersionKind } from 'cdk8s';
 import { Construct } from 'constructs';
 
+// Preserve global Function before it is shadowed by the Function class below
+const _Function = globalThis.Function;
+
 // Type alias to avoid collision with the Function class defined below
 type JsonFunction<K extends keyof any, T> = { [P in K]: T };
 

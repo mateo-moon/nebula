@@ -35,7 +35,7 @@ importers:
         version: 22.19.8
       cdk8s-cli:
         specifier: github:mateo-moon/cdk8s-cli#combined-fixes
-        version: https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/511a726ecaeada73f2383551b80a8db4ebfc07a4
+        version: https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/ef8da23a33eecab4fe7cfcbcee911c374e20ca6f
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -274,8 +274,8 @@ packages:
     resolution: {integrity: sha512-mzDSXIPaFwVDvZAHqZ9VlbyF4yyXRuX6IvB06WvPYkqJVO24kX1PPhv9bfpKNFZyxYFmmgo03HUiD8iklmJYRQ==}
     engines: {node: '>= 0.8.0'}
 
-  cdk8s-cli@https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/511a726ecaeada73f2383551b80a8db4ebfc07a4:
-    resolution: {tarball: https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/511a726ecaeada73f2383551b80a8db4ebfc07a4}
+  cdk8s-cli@https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/ef8da23a33eecab4fe7cfcbcee911c374e20ca6f:
+    resolution: {tarball: https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/ef8da23a33eecab4fe7cfcbcee911c374e20ca6f}
     version: 0.0.0
     engines: {node: '>= 16.20.0'}
     hasBin: true
@@ -882,7 +882,7 @@ snapshots:
 
   case@1.6.3: {}
 
-  cdk8s-cli@https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/511a726ecaeada73f2383551b80a8db4ebfc07a4:
+  cdk8s-cli@https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/ef8da23a33eecab4fe7cfcbcee911c374e20ca6f:
     dependencies:
       '@types/node': 16.18.126
       ajv: 8.17.1
