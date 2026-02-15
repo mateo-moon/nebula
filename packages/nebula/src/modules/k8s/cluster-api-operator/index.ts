@@ -293,8 +293,14 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
 
     if (createIamBindings) {
       // Create GCP Service Account for CAPG controller
+      // Wave -3: SA must exist before IAM bindings reference it
       new ServiceAccount(this, "capg-gsa", {
-        metadata: { name: gsaName },
+        metadata: {
+          name: gsaName,
+          annotations: {
+            "argocd.argoproj.io/sync-wave": "-3",
+          },
+        },
         spec: {
           forProvider: {
             displayName: "Cluster API GCP Provider",
@@ -305,8 +311,14 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       });
 
       // IAM Role: Compute Admin - create/manage VMs, networks, load balancers
+      // Wave -1: SA must be provisioned in GCP first (wave -3)
       new ProjectIamMember(this, "capg-compute-admin", {
-        metadata: { name: `${gsaName}-compute-admin` },
+        metadata: {
+          name: `${gsaName}-compute-admin`,
+          annotations: {
+            "argocd.argoproj.io/sync-wave": "-1",
+          },
+        },
         spec: {
           forProvider: {
             project: projectId,
@@ -318,8 +330,14 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       });
 
       // IAM Role: Service Account User - use service accounts on VMs
+      // Wave -1: SA must be provisioned in GCP first (wave -3)
       new ProjectIamMember(this, "capg-sa-user", {
-        metadata: { name: `${gsaName}-sa-user` },
+        metadata: {
+          name: `${gsaName}-sa-user`,
+          annotations: {
+            "argocd.argoproj.io/sync-wave": "-1",
+          },
+        },
         spec: {
           forProvider: {
             project: projectId,
