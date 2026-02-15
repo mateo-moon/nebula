@@ -111,3 +111,11 @@ export type {
   LonghornEncryptionConfig,
   LonghornBackupConfig,
 } from "./longhorn";
+
+export { Piraeus } from "./piraeus";
+export type {
+  PiraeusConfig,
+  PiraeusEncryptionConfig,
+  PiraeusStoragePoolConfig,
+  PiraeusReplicationConfig,
+} from "./piraeus";
