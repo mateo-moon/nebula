@@ -104,3 +104,10 @@ export type {
   CloudNativePgConfig,
   RemoteClusterConfig,
 } from "./cloudnative-pg";
+
+export { Longhorn } from "./longhorn";
+export type {
+  LonghornConfig,
+  LonghornEncryptionConfig,
+  LonghornBackupConfig,
+} from "./longhorn";
