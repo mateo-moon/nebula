@@ -43,3 +43,9 @@ export * as k0smotronBootstrap from "./bootstrap.cluster.x-k8s.io";
 
 // k0smotron Core
 export * as k0smotron from "./k0smotron.io";
+
+// CloudNativePG
+export * as cnpg from "./postgresql.cnpg.io";
+
+// Barman Cloud Plugin
+export * as barmanCloud from "./barmancloud.cnpg.io";
