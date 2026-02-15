@@ -73,7 +73,6 @@ export interface PiraeusConfig {
 }
 
 export class Piraeus extends BaseConstruct<PiraeusConfig> {
-  public readonly namespace: kplus.Namespace;
   public readonly storageClassName: string;
 
   constructor(scope: Construct, id: string, config: PiraeusConfig = {}) {
@@ -85,12 +84,7 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
     const poolName = this.config.storagePool?.name ?? "lvm-thin";
     const placementCount = this.config.replication?.placementCount ?? 1;
 
-    // Namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
-
-    // --- Piraeus Operator ---
+    // --- Piraeus Operator (includes the piraeus-datastore Namespace) ---
 
     new Include(this, "piraeus-operator", {
       url: `https://github.com/piraeusdatastore/piraeus-operator/releases/download/${operatorVersion}/manifest.yaml`,
