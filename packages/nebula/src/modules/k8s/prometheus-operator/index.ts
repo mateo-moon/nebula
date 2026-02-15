@@ -322,18 +322,21 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
           labels: { grafana_datasource: "1" },
         },
         data: {
-          "datasource.yaml": JSON.stringify([
-            {
-              name: "Loki",
-              type: "loki",
-              uid: "loki",
-              url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
-              access: "proxy",
-              isDefault: false,
-              editable: true,
-              jsonData: { maxLines: 1000 },
-            },
-          ]),
+          "datasource.yaml": JSON.stringify({
+            apiVersion: 1,
+            datasources: [
+              {
+                name: "Loki",
+                type: "loki",
+                uid: "loki",
+                url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
+                access: "proxy",
+                isDefault: false,
+                editable: true,
+                jsonData: { maxLines: 1000 },
+              },
+            ],
+          }),
         },
       });
     }
@@ -560,7 +563,11 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
         version: "15.7.25",
         namespace: namespaceName,
         values: {
-          image: { tag: thanosVersion },
+          image: {
+            registry: "quay.io",
+            repository: "thanos/thanos",
+            tag: thanosVersion,
+          },
           existingObjstoreSecret: "thanos-objstore-config",
           query: {
             enabled: true,
