@@ -20,6 +20,7 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_networks.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_subnetworks.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_addresses.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/compute.gcp.upbound.io_firewalls.yaml
   # GCP Provider CRDs - DNS
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/dns.gcp.upbound.io_managedzones.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/dns.gcp.upbound.io_recordsets.yaml

@@ -53,6 +53,16 @@ export interface PiraeusReplicationConfig {
   sndBufSize?: string;
 }
 
+/** Additional satellite configuration for nodes with different storage devices */
+export interface PiraeusSatelliteConfig {
+  /** Unique name for this satellite configuration */
+  name: string;
+  /** Node selector to match specific nodes (used as nodeAffinity) */
+  nodeSelector: Record<string, string>;
+  /** Storage pool configuration for these nodes */
+  storagePool: PiraeusStoragePoolConfig;
+}
+
 export interface PiraeusConfig {
   /** Namespace (defaults to "piraeus-datastore") */
   namespace?: string;
@@ -64,8 +74,10 @@ export interface PiraeusConfig {
   storageClassName?: string;
   /** LUKS encryption configuration */
   encryption?: PiraeusEncryptionConfig;
-  /** Storage pool configuration */
+  /** Storage pool configuration (default, applies to nodes not matched by additionalSatellites) */
   storagePool?: PiraeusStoragePoolConfig;
+  /** Additional satellite configurations for nodes with different device paths */
+  additionalSatellites?: PiraeusSatelliteConfig[];
   /** Replication configuration */
   replication?: PiraeusReplicationConfig;
   /** Kubelet path override for k0s (defaults to "/var/lib/kubelet", k0s uses "/var/lib/k0s/kubelet") */
@@ -185,6 +197,42 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           storagePools: [poolSpec],
         },
       });
+    }
+
+    // --- Additional LinstorSatelliteConfigurations (for nodes with different devices) ---
+
+    if (this.config.additionalSatellites?.length) {
+      for (const sat of this.config.additionalSatellites) {
+        const satPoolSpec = buildStoragePoolSpec(
+          sat.storagePool,
+          sat.storagePool.name ?? poolName,
+        );
+
+        const matchExpressions = Object.entries(sat.nodeSelector).map(
+          ([key, value]) => ({
+            key,
+            operator: "In",
+            values: [value],
+          }),
+        );
+
+        new ApiObject(this, `satellite-config-${sat.name}`, {
+          apiVersion: "piraeus.io/v1",
+          kind: "LinstorSatelliteConfiguration",
+          metadata: { name: `storage-config-${sat.name}` },
+          spec: {
+            nodeAffinity: {
+              nodeSelectorTerms: [{ matchExpressions }],
+            },
+            podTemplate: {
+              spec: {
+                hostNetwork: true,
+              },
+            },
+            storagePools: [satPoolSpec],
+          },
+        });
+      }
     }
 
     // --- LinstorNodeConnection (cross-zone async) ---

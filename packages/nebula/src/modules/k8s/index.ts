@@ -118,4 +118,5 @@ export type {
   PiraeusEncryptionConfig,
   PiraeusStoragePoolConfig,
   PiraeusReplicationConfig,
+  PiraeusSatelliteConfig,
 } from "./piraeus";
