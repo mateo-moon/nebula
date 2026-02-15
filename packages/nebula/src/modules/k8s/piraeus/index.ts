@@ -347,7 +347,7 @@ function buildDrbdIpSidecar(
     `IFACE="${interfaceName}"`,
     `CTRL="${ctrl}"`,
     `until curl -sf "$CTRL/v1/controller/version" >/dev/null 2>&1; do echo "Waiting for LINSTOR controller..."; sleep 5; done`,
-    `NODE=$(cat /etc/hostname)`,
+    `NODE="$NODE_NAME"`,
     `until curl -sf "$CTRL/v1/nodes/$NODE" | grep -q ONLINE; do echo "Waiting for satellite $NODE..."; sleep 5; done`,
     `IP=$(${ipCommand})`,
     `echo "Registering LINSTOR net-interface $IFACE=$IP on $NODE"`,
@@ -361,6 +361,12 @@ function buildDrbdIpSidecar(
     image: "curlimages/curl:latest",
     command: ["/bin/sh", "-c"],
     args: [script],
+    env: [
+      {
+        name: "NODE_NAME",
+        valueFrom: { fieldRef: { fieldPath: "spec.nodeName" } },
+      },
+    ],
   };
 }
 
