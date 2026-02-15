@@ -450,11 +450,11 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
               location: "EU",
               storageClass: "STANDARD",
               uniformBucketLevelAccess: true,
-              versioning: [{ enabled: false }],
+              versioning: { enabled: false },
               lifecycleRule: [
                 {
-                  action: [{ type: "Delete" }],
-                  condition: [{ age: 365 }], // Delete data older than 1 year
+                  action: { type: "Delete" },
+                  condition: { age: 365 }, // Delete data older than 1 year
                 },
               ],
             },
