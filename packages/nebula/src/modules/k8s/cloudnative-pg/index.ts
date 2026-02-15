@@ -139,11 +139,11 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
             location: "EU",
             storageClass: "STANDARD",
             uniformBucketLevelAccess: true,
-            versioning: [{ enabled: false }],
+            versioning: { enabled: false },
             lifecycleRule: [
               {
-                action: [{ type: "Delete" }],
-                condition: [{ age: this.config.bucketRetentionDays ?? 90 }],
+                action: { type: "Delete" },
+                condition: { age: this.config.bucketRetentionDays ?? 90 },
               },
             ],
           },
