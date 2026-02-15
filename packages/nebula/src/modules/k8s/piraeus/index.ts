@@ -68,6 +68,8 @@ export interface PiraeusConfig {
   storagePool?: PiraeusStoragePoolConfig;
   /** Replication configuration */
   replication?: PiraeusReplicationConfig;
+  /** Kubelet path override for k0s (defaults to "/var/lib/kubelet", k0s uses "/var/lib/k0s/kubelet") */
+  kubeletPath?: string;
   /** Additional Helm values for linstor-cluster chart */
   values?: Record<string, unknown>;
 }
@@ -103,15 +105,65 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
 
     // --- LinstorCluster ---
 
+    const kubeletPath = this.config.kubeletPath;
+    const clusterSpec: Record<string, unknown> = {
+      ...(this.config.encryption
+        ? { linstorPassphraseSecret: "linstor-passphrase" }
+        : {}),
+    };
+
+    // k0s (and similar distros) use a non-standard kubelet path
+    if (kubeletPath) {
+      const pluginPath = `${kubeletPath}/plugins/linstor.csi.linbit.com`;
+      clusterSpec.csiNode = {
+        enabled: true,
+        podTemplate: {
+          spec: {
+            containers: [
+              {
+                name: "linstor-csi",
+                volumeMounts: [
+                  {
+                    mountPath: kubeletPath,
+                    name: "publish-dir",
+                    mountPropagation: "Bidirectional",
+                  },
+                ],
+              },
+              {
+                name: "csi-node-driver-registrar",
+                args: [
+                  "--v=5",
+                  "--csi-address=/csi/csi.sock",
+                  `--kubelet-registration-path=${pluginPath}/csi.sock`,
+                  "--health-port=9809",
+                ],
+              },
+            ],
+            volumes: [
+              {
+                name: "publish-dir",
+                hostPath: { path: kubeletPath },
+              },
+              {
+                name: "registration-dir",
+                hostPath: { path: `${kubeletPath}/plugins_registry` },
+              },
+              {
+                name: "plugin-dir",
+                hostPath: { path: pluginPath },
+              },
+            ],
+          },
+        },
+      };
+    }
+
     new ApiObject(this, "linstor-cluster", {
       apiVersion: "piraeus.io/v1",
       kind: "LinstorCluster",
       metadata: { name: "linstorcluster" },
-      spec: {
-        ...(this.config.encryption
-          ? { linstorPassphraseSecret: "linstor-passphrase" }
-          : {}),
-      },
+      spec: clusterSpec,
     });
 
     // --- LinstorSatelliteConfiguration ---
