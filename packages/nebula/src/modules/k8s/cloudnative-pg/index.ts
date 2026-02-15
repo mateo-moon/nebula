@@ -180,6 +180,19 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
         },
       });
 
+      // Barman-cloud requires storage.buckets.get to verify bucket existence
+      new BucketIamMember(this, "backup-bucket-reader-iam", {
+        metadata: { name: `${id}-cnpg-backup-bucket-reader` },
+        spec: {
+          forProvider: {
+            bucket: this.config.bucketName,
+            role: "roles/storage.legacyBucketReader",
+            member: `serviceAccount:${this.serviceAccountEmail}`,
+          },
+          providerConfigRef: { name: providerConfigRef },
+        },
+      });
+
       // SA key — Crossplane writes the JSON key to a K8s Secret
       new CpServiceAccountKey(this, "backup-gsa-key", {
         metadata: { name: `${id}-cnpg-backup-gsa-key` },
@@ -241,7 +254,7 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
                   namespace: namespaceName,
                   fieldPath: "data.private_key",
                 },
-                toFieldPath: "spec.forProvider.manifest.data.gcsCredentials",
+                toFieldPath: "data.gcsCredentials",
               },
             ],
           },
