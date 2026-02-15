@@ -239,7 +239,7 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
                   kind: "Secret",
                   name: connectionSecretName,
                   namespace: namespaceName,
-                  fieldPath: "data.attribute.private_key",
+                  fieldPath: "data.private_key",
                 },
                 toFieldPath: "spec.forProvider.manifest.data.gcsCredentials",
               },
