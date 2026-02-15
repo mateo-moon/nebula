@@ -2,6 +2,9 @@
 import { ApiObject, ApiObjectMetadata, GroupVersionKind } from 'cdk8s';
 import { Construct } from 'constructs';
 
+// Preserve global Object before it is shadowed by the Object class below
+const _Object = globalThis.Object;
+
 // Type alias to avoid collision with the Object class defined below
 type JsonObject<K extends keyof any, T> = { [P in K]: T };
 
@@ -93,7 +96,7 @@ export function toJson_ObjectProps(obj: ObjectProps | undefined): Record<string,
     'spec': toJson_ObjectSpec(obj.spec),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -226,7 +229,7 @@ export function toJson_ObjectSpec(obj: ObjectSpec | undefined): Record<string, a
     'writeConnectionSecretToRef': toJson_ObjectSpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -320,7 +323,7 @@ export function toJson_ObjectSpecConnectionDetails(obj: ObjectSpecConnectionDeta
     'uid': obj.uid,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -366,7 +369,7 @@ export function toJson_ObjectSpecForProvider(obj: ObjectSpecForProvider | undefi
     'manifest': obj.manifest,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -421,7 +424,7 @@ export function toJson_ObjectSpecProviderConfigRef(obj: ObjectSpecProviderConfig
     'policy': toJson_ObjectSpecProviderConfigRefPolicy(obj.policy),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -459,7 +462,7 @@ export function toJson_ObjectSpecProviderRef(obj: ObjectSpecProviderRef | undefi
     'policy': toJson_ObjectSpecProviderRefPolicy(obj.policy),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -508,7 +511,7 @@ export function toJson_ObjectSpecPublishConnectionDetailsTo(obj: ObjectSpecPubli
     'name': obj.name,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -538,7 +541,7 @@ export function toJson_ObjectSpecReadiness(obj: ObjectSpecReadiness | undefined)
     'policy': obj.policy,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -587,7 +590,7 @@ export function toJson_ObjectSpecReferences(obj: ObjectSpecReferences | undefine
     'toFieldPath': obj.toFieldPath,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -630,7 +633,7 @@ export function toJson_ObjectSpecWriteConnectionSecretToRef(obj: ObjectSpecWrite
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -672,7 +675,7 @@ export function toJson_ObjectSpecProviderConfigRefPolicy(obj: ObjectSpecProvider
     'resolve': obj.resolve,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -714,7 +717,7 @@ export function toJson_ObjectSpecProviderRefPolicy(obj: ObjectSpecProviderRefPol
     'resolve': obj.resolve,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -751,7 +754,7 @@ export function toJson_ObjectSpecPublishConnectionDetailsToConfigRef(obj: Object
     'policy': toJson_ObjectSpecPublishConnectionDetailsToConfigRefPolicy(obj.policy),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -795,12 +798,12 @@ export interface ObjectSpecPublishConnectionDetailsToMetadata {
 export function toJson_ObjectSpecPublishConnectionDetailsToMetadata(obj: ObjectSpecPublishConnectionDetailsToMetadata | undefined): Record<string, any> | undefined {
   if (obj === undefined) { return undefined; }
   const result = {
-    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
-    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'annotations': ((obj.annotations) === undefined) ? undefined : (_Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (_Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
     'type': obj.type,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -867,7 +870,7 @@ export function toJson_ObjectSpecReferencesDependsOn(obj: ObjectSpecReferencesDe
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -929,7 +932,7 @@ export function toJson_ObjectSpecReferencesPatchesFrom(obj: ObjectSpecReferences
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1031,7 +1034,7 @@ export function toJson_ObjectSpecPublishConnectionDetailsToConfigRefPolicy(obj: 
     'resolve': obj.resolve,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1150,7 +1153,7 @@ export function toJson_ObjectV1Alpha2Props(obj: ObjectV1Alpha2Props | undefined)
     'spec': toJson_ObjectV1Alpha2Spec(obj.spec),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1281,7 +1284,7 @@ export function toJson_ObjectV1Alpha2Spec(obj: ObjectV1Alpha2Spec | undefined): 
     'writeConnectionSecretToRef': toJson_ObjectV1Alpha2SpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1375,7 +1378,7 @@ export function toJson_ObjectV1Alpha2SpecConnectionDetails(obj: ObjectV1Alpha2Sp
     'uid': obj.uid,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1421,7 +1424,7 @@ export function toJson_ObjectV1Alpha2SpecForProvider(obj: ObjectV1Alpha2SpecForP
     'manifest': obj.manifest,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1480,7 +1483,7 @@ export function toJson_ObjectV1Alpha2SpecProviderConfigRef(obj: ObjectV1Alpha2Sp
     'policy': toJson_ObjectV1Alpha2SpecProviderConfigRefPolicy(obj.policy),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1529,7 +1532,7 @@ export function toJson_ObjectV1Alpha2SpecPublishConnectionDetailsTo(obj: ObjectV
     'name': obj.name,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1574,7 +1577,7 @@ export function toJson_ObjectV1Alpha2SpecReadiness(obj: ObjectV1Alpha2SpecReadin
     'policy': obj.policy,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1623,7 +1626,7 @@ export function toJson_ObjectV1Alpha2SpecReferences(obj: ObjectV1Alpha2SpecRefer
     'toFieldPath': obj.toFieldPath,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1666,7 +1669,7 @@ export function toJson_ObjectV1Alpha2SpecWriteConnectionSecretToRef(obj: ObjectV
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1708,7 +1711,7 @@ export function toJson_ObjectV1Alpha2SpecProviderConfigRefPolicy(obj: ObjectV1Al
     'resolve': obj.resolve,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1745,7 +1748,7 @@ export function toJson_ObjectV1Alpha2SpecPublishConnectionDetailsToConfigRef(obj
     'policy': toJson_ObjectV1Alpha2SpecPublishConnectionDetailsToConfigRefPolicy(obj.policy),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1789,12 +1792,12 @@ export interface ObjectV1Alpha2SpecPublishConnectionDetailsToMetadata {
 export function toJson_ObjectV1Alpha2SpecPublishConnectionDetailsToMetadata(obj: ObjectV1Alpha2SpecPublishConnectionDetailsToMetadata | undefined): Record<string, any> | undefined {
   if (obj === undefined) { return undefined; }
   const result = {
-    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
-    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'annotations': ((obj.annotations) === undefined) ? undefined : (_Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (_Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
     'type': obj.type,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1863,7 +1866,7 @@ export function toJson_ObjectV1Alpha2SpecReferencesDependsOn(obj: ObjectV1Alpha2
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1925,7 +1928,7 @@ export function toJson_ObjectV1Alpha2SpecReferencesPatchesFrom(obj: ObjectV1Alph
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -1997,7 +2000,7 @@ export function toJson_ObjectV1Alpha2SpecPublishConnectionDetailsToConfigRefPoli
     'resolve': obj.resolve,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2116,7 +2119,7 @@ export function toJson_ProviderConfigProps(obj: ProviderConfigProps | undefined)
     'spec': toJson_ProviderConfigSpec(obj.spec),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2155,7 +2158,7 @@ export function toJson_ProviderConfigSpec(obj: ProviderConfigSpec | undefined): 
     'identity': toJson_ProviderConfigSpecIdentity(obj.identity),
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2211,7 +2214,7 @@ export function toJson_ProviderConfigSpecCredentials(obj: ProviderConfigSpecCred
     'source': obj.source,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2276,7 +2279,7 @@ export function toJson_ProviderConfigSpecIdentity(obj: ProviderConfigSpecIdentit
     'type': obj.type,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2305,7 +2308,7 @@ export function toJson_ProviderConfigSpecCredentialsEnv(obj: ProviderConfigSpecC
     'name': obj.name,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2334,7 +2337,7 @@ export function toJson_ProviderConfigSpecCredentialsFs(obj: ProviderConfigSpecCr
     'path': obj.path,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2379,7 +2382,7 @@ export function toJson_ProviderConfigSpecCredentialsSecretRef(obj: ProviderConfi
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2426,7 +2429,7 @@ export function toJson_ProviderConfigSpecIdentityEnv(obj: ProviderConfigSpecIden
     'name': obj.name,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2455,7 +2458,7 @@ export function toJson_ProviderConfigSpecIdentityFs(obj: ProviderConfigSpecIdent
     'path': obj.path,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
@@ -2500,7 +2503,7 @@ export function toJson_ProviderConfigSpecIdentitySecretRef(obj: ProviderConfigSp
     'namespace': obj.namespace,
   };
   // filter undefined values
-  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+  return _Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
