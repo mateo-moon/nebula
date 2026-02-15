@@ -211,6 +211,7 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
 
       const podSpec: Record<string, unknown> = { hostNetwork: true };
       if (this.config.advertiseIP && replicationInterface) {
+        podSpec.dnsPolicy = "ClusterFirstWithHostNet";
         podSpec.containers = [
           buildDrbdIpSidecar(
             this.config.advertiseIP,
@@ -251,6 +252,7 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
 
         const podSpec: Record<string, unknown> = { hostNetwork: true };
         if (sat.advertiseIP && replicationInterface) {
+          podSpec.dnsPolicy = "ClusterFirstWithHostNet";
           podSpec.containers = [
             buildDrbdIpSidecar(
               sat.advertiseIP,
