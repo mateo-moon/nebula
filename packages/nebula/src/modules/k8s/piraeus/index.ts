@@ -184,11 +184,29 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
       const pool = this.config.storagePool;
       const poolSpec = buildStoragePoolSpec(pool, poolName);
 
+      // When additionalSatellites exist, restrict default config to nodes NOT
+      // matched by any additional satellite (they have different device paths)
+      let nodeAffinity: Record<string, unknown> | undefined;
+      if (this.config.additionalSatellites?.length) {
+        const excludeExpressions = this.config.additionalSatellites.flatMap(
+          (sat) =>
+            Object.entries(sat.nodeSelector).map(([key, value]) => ({
+              key,
+              operator: "NotIn",
+              values: [value],
+            })),
+        );
+        nodeAffinity = {
+          nodeSelectorTerms: [{ matchExpressions: excludeExpressions }],
+        };
+      }
+
       new ApiObject(this, "satellite-config", {
         apiVersion: "piraeus.io/v1",
         kind: "LinstorSatelliteConfiguration",
         metadata: { name: "storage-config" },
         spec: {
+          ...(nodeAffinity && { nodeAffinity }),
           podTemplate: {
             spec: {
               hostNetwork: true,
