@@ -94,6 +94,12 @@ imports:
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_clusterpropagationpolicies.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_overridepolicies.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_clusteroverridepolicies.yaml
+  # CloudNativePG CRDs (v1.28.1)
+  - https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/v1.28.1/config/crd/bases/postgresql.cnpg.io_clusters.yaml
+  - https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/v1.28.1/config/crd/bases/postgresql.cnpg.io_backups.yaml
+  - https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/v1.28.1/config/crd/bases/postgresql.cnpg.io_scheduledbackups.yaml
+  # Barman Cloud Plugin CRDs (v0.11.0)
+  - https://raw.githubusercontent.com/cloudnative-pg/plugin-barman-cloud/v0.11.0/config/crd/bases/barmancloud.cnpg.io_objectstores.yaml
   # Karmada CRDs (v1.16.0) - Work APIs
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_resourcebindings.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_clusterresourcebindings.yaml
