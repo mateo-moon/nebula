@@ -98,3 +98,9 @@ export type {
   ArgocdImageUpdaterConfig,
   ArgocdImageUpdaterRegistry,
 } from "./argocd-image-updater";
+
+export { CloudNativePg } from "./cloudnative-pg";
+export type {
+  CloudNativePgConfig,
+  RemoteClusterConfig,
+} from "./cloudnative-pg";
