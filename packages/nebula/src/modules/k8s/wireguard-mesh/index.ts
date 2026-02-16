@@ -151,14 +151,19 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
       })),
     }));
 
-    // Build the peer-name lookup: NODE_LABEL_VALUE → peer name
-    // The init script uses NODE_NAME to find the matching peer config
+    // Build the peer-name lookup table. Each line has patterns (pipe-separated)
+    // that are matched as substrings against NODE_NAME. Patterns include:
+    // the peer name itself and all nodeSelector values.
     const peerLookup = peers
       .map((p) => {
-        const selectorEntries = Object.entries(p.nodeSelector);
-        // Use the first selector value as the match key
-        const [, value] = selectorEntries[0];
-        return `${value}|${p.name}`;
+        const patterns = [
+          p.name,
+          ...Object.values(p.nodeSelector),
+          ...Object.keys(p.nodeSelector)
+            .filter((k) => k.includes("/"))
+            .map((k) => k.split("/").pop()),
+        ];
+        return `${patterns.join(",")}|${p.name}`;
       })
       .join("\n");
 
@@ -175,13 +180,15 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
       "# Clean up stale interface from previous run (wg-quick fails if it exists)",
       `ip link del ${ifName} 2>/dev/null || true`,
       "",
-      "# Match NODE_NAME to a peer config using the lookup table",
+      "# Match NODE_NAME to a peer config. Try peer name and nodeSelector values as substrings.",
       `PEER_LOOKUP="${peerLookup}"`,
       'PEER_NAME=""',
-      'echo "$PEER_LOOKUP" | while IFS="|" read -r pattern name; do',
-      '  case "$NODE_NAME" in',
-      '    *"$pattern"*) echo "$name" > /tmp/peer_match; break ;;',
-      "  esac",
+      'echo "$PEER_LOOKUP" | while IFS="|" read -r patterns name; do',
+      '  echo "$patterns" | tr "," "\\n" | while read -r pat; do',
+      '    case "$NODE_NAME" in',
+      '      *"$pat"*) echo "$name" > /tmp/peer_match; break 2 ;;',
+      "    esac",
+      "  done",
       "done",
       "[ -f /tmp/peer_match ] && PEER_NAME=$(cat /tmp/peer_match)",
       "",
