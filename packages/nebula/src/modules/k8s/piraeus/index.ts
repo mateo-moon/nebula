@@ -342,16 +342,25 @@ function buildDrbdIpSidecar(
   interfaceName: string,
   namespace: string,
 ): Record<string, unknown> {
-  const ctrl = `http://linstor-controller.${namespace}.svc:3370`;
+  // curl in the Alpine-based curlimages/curl image can't resolve cluster DNS
+  // from hostNetwork pods (musl libc getaddrinfo issue with kube-dns ClusterIP).
+  // Resolve the controller IP via nslookup first, then use curl with the IP.
+  const svcHost = `linstor-controller.${namespace}.svc.cluster.local`;
   const script = [
     `IFACE="${interfaceName}"`,
-    `CTRL="${ctrl}"`,
+    `SVC="${svcHost}"`,
+    // Resolve controller ClusterIP via nslookup (works even when curl DNS fails)
+    `echo "Resolving LINSTOR controller service..."`,
+    `until CTRL_IP=$(nslookup "$SVC" 2>/dev/null | awk '/^Address:/{ip=$2} END{print ip}'); [ -n "$CTRL_IP" ]; do echo "Waiting for DNS..."; sleep 5; done`,
+    `CTRL="http://$CTRL_IP:3370"`,
+    `echo "Controller at $CTRL"`,
     `until curl -sf "$CTRL/v1/controller/version" >/dev/null 2>&1; do echo "Waiting for LINSTOR controller..."; sleep 5; done`,
     `NODE="$NODE_NAME"`,
     `until curl -sf "$CTRL/v1/nodes/$NODE" | grep -q ONLINE; do echo "Waiting for satellite $NODE..."; sleep 5; done`,
     `IP=$(${ipCommand})`,
     `echo "Registering LINSTOR net-interface $IFACE=$IP on $NODE"`,
-    `curl -sf -X PUT "$CTRL/v1/nodes/$NODE/net-interfaces/$IFACE" -H "Content-Type: application/json" -d "{\\"address\\": \\"$IP\\"}" || curl -sf -X POST "$CTRL/v1/nodes/$NODE/net-interfaces" -H "Content-Type: application/json" -d "{\\"name\\": \\"$IFACE\\", \\"address\\": \\"$IP\\"}"`,
+    `curl -sf -X PUT "$CTRL/v1/nodes/$NODE/net-interfaces/$IFACE" -H "Content-Type: application/json" -d "{\\"address\\": \\"$IP\\"}" || \\`,
+    `curl -sf -X POST "$CTRL/v1/nodes/$NODE/net-interfaces" -H "Content-Type: application/json" -d "{\\"name\\": \\"$IFACE\\", \\"address\\": \\"$IP\\"}"`,
     `echo "Done. Sleeping."`,
     `sleep infinity`,
   ].join("\n");
