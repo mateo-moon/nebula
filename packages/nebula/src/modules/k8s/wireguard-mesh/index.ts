@@ -261,6 +261,11 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
                     mountPath: "/etc/wireguard-keys",
                     readOnly: true,
                   },
+                  {
+                    name: "host-modules",
+                    mountPath: "/lib/modules",
+                    readOnly: true,
+                  },
                 ],
               },
             ],
@@ -297,6 +302,10 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
               {
                 name: "wireguard-keys",
                 secret: { secretName },
+              },
+              {
+                name: "host-modules",
+                hostPath: { path: "/lib/modules", type: "Directory" },
               },
             ],
           },
