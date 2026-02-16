@@ -120,3 +120,6 @@ export type {
   PiraeusReplicationConfig,
   PiraeusSatelliteConfig,
 } from "./piraeus";
+
+export { WireGuardMesh } from "./wireguard-mesh";
+export type { WireGuardMeshConfig, WireGuardPeer } from "./wireguard-mesh";
