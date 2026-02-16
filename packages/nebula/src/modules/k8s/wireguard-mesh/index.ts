@@ -123,26 +123,11 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
         })
         .join("\n\n");
 
-      // Collect all endpoint IPs from other peers (for overlap detection)
-      const otherEndpointIPs = otherPeers
-        .filter((p) => p.endpoint)
-        .map((p) => p.endpoint!.replace(/:.*$/, ""));
-
-      // Check if any peer's allowedIPs overlap with an endpoint IP.
-      // If so, use Table = off to prevent wg-quick from adding routes
-      // (we handle routing manually in the init script).
-      const hasEndpointOverlap = otherPeers.some((p) =>
-        p.allowedIPs.some((aip) =>
-          otherEndpointIPs.some((ep) => aip.startsWith(`${ep}/`)),
-        ),
-      );
-
       configData[`${self.name}.conf`] = [
         "[Interface]",
         `Address = ${self.address}`,
         `ListenPort = ${listenPort}`,
         `MTU = ${mtu}`,
-        ...(hasEndpointOverlap ? ["Table = off"] : []),
         `PrivateKey = __PRIVATE_KEY__`,
         "",
         peerSections,
@@ -224,37 +209,6 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
       "# Bring up the interface",
       `wg-quick up /etc/wireguard/${ifName}.conf`,
       `echo "WireGuard interface ${ifName} is up"`,
-      "",
-      "# If Table = off, wg-quick skips route management. Add routes manually.",
-      "# For endpoint IPs that overlap with allowedIPs, use fwmark-based policy",
-      "# routing: all traffic to the endpoint goes through the tunnel, but WireGuard's",
-      "# own UDP packets are marked and exempted via a separate routing table.",
-      `if grep -q 'Table = off' "/etc/wireguard/${ifName}.conf"; then`,
-      `  DEFAULT_GW=$(ip -4 route show default | awk '{print $3; exit}')`,
-      `  DEFAULT_DEV=$(ip -4 route show default | awk '{print $5; exit}')`,
-      `  FWMARK=51820`,
-      `  RT_TABLE=51820`,
-      "",
-      "  # Set fwmark on the WireGuard interface so its own packets are marked",
-      `  wg set ${ifName} fwmark $FWMARK`,
-      "",
-      "  # Create a routing table that routes via the default gateway (for WireGuard UDP)",
-      `  ip route add default via "$DEFAULT_GW" dev "$DEFAULT_DEV" table $RT_TABLE`,
-      "",
-      "  # Packets with fwmark use the bypass table (WireGuard's own UDP to endpoint)",
-      `  ip rule add fwmark $FWMARK table $RT_TABLE`,
-      "",
-      "  # Suppress routing lookup for the wg interface's own subnet",
-      `  ip rule add table main suppress_prefixlength 0`,
-      "",
-      "  # Add routes for all AllowedIPs through the tunnel",
-      `  for cidr in $(grep '^AllowedIPs' "/etc/wireguard/${ifName}.conf" | sed 's/.*= *//' | tr ',' '\\n' | tr -d ' '); do`,
-      `    echo "Route $cidr dev ${ifName}"`,
-      `    ip route add "$cidr" dev ${ifName} 2>/dev/null || true`,
-      "  done",
-      "",
-      `  echo "fwmark policy routing configured (mark=$FWMARK table=$RT_TABLE)"`,
-      "fi",
       "wg show",
     ].join("\n");
 
