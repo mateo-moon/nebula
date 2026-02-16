@@ -123,11 +123,26 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
         })
         .join("\n\n");
 
+      // Collect all endpoint IPs from other peers (for overlap detection)
+      const otherEndpointIPs = otherPeers
+        .filter((p) => p.endpoint)
+        .map((p) => p.endpoint!.replace(/:.*$/, ""));
+
+      // Check if any peer's allowedIPs overlap with an endpoint IP.
+      // If so, use Table = off to prevent wg-quick from adding routes
+      // (we handle routing manually in the init script).
+      const hasEndpointOverlap = otherPeers.some((p) =>
+        p.allowedIPs.some((aip) =>
+          otherEndpointIPs.some((ep) => aip.startsWith(`${ep}/`)),
+        ),
+      );
+
       configData[`${self.name}.conf`] = [
         "[Interface]",
         `Address = ${self.address}`,
         `ListenPort = ${listenPort}`,
         `MTU = ${mtu}`,
+        ...(hasEndpointOverlap ? ["Table = off"] : []),
         `PrivateKey = __PRIVATE_KEY__`,
         "",
         peerSections,
@@ -206,20 +221,34 @@ export class WireGuardMesh extends BaseConstruct<WireGuardMeshConfig> {
       `cp "/etc/wireguard-peers/\${PEER_NAME}.conf" "/etc/wireguard/${ifName}.conf"`,
       `sed -i "s|__PRIVATE_KEY__|$PRIVATE_KEY|" "/etc/wireguard/${ifName}.conf"`,
       "",
-      "# Add host routes for peer endpoints that overlap with allowedIPs.",
-      "# Without this, wg-quick routes endpoint traffic into the tunnel itself (routing loop).",
-      `DEFAULT_GW=$(ip -4 route show default | awk '{print $3; exit}')`,
-      `DEFAULT_DEV=$(ip -4 route show default | awk '{print $5; exit}')`,
-      `for ep in $(grep '^Endpoint' "/etc/wireguard/${ifName}.conf" | sed 's/.*= *//;s/:.*//'); do`,
-      `  if grep -q "AllowedIPs.*$ep" "/etc/wireguard/${ifName}.conf"; then`,
-      `    echo "Adding host route for endpoint $ep via $DEFAULT_GW dev $DEFAULT_DEV"`,
-      `    ip route add "$ep/32" via "$DEFAULT_GW" dev "$DEFAULT_DEV" 2>/dev/null || true`,
-      "  fi",
-      "done",
-      "",
       "# Bring up the interface",
       `wg-quick up /etc/wireguard/${ifName}.conf`,
       `echo "WireGuard interface ${ifName} is up"`,
+      "",
+      "# If Table = off, wg-quick skips route management. Add routes manually.",
+      `if grep -q 'Table = off' "/etc/wireguard/${ifName}.conf"; then`,
+      `  DEFAULT_GW=$(ip -4 route show default | awk '{print $3; exit}')`,
+      `  DEFAULT_DEV=$(ip -4 route show default | awk '{print $5; exit}')`,
+      "",
+      "  # Collect endpoint IPs (need host routes via default gateway, not tunnel)",
+      `  ENDPOINTS=$(grep '^Endpoint' "/etc/wireguard/${ifName}.conf" | sed 's/.*= *//;s/:.*//')`,
+      "",
+      "  # Add routes for all AllowedIPs",
+      `  for cidr in $(grep '^AllowedIPs' "/etc/wireguard/${ifName}.conf" | sed 's/.*= *//' | tr ',' '\\n' | tr -d ' '); do`,
+      `    ip_part=$(echo "$cidr" | sed 's|/.*||')`,
+      "    IS_ENDPOINT=false",
+      `    for ep in $ENDPOINTS; do`,
+      `      [ "$ip_part" = "$ep" ] && IS_ENDPOINT=true && break`,
+      "    done",
+      `    if [ "$IS_ENDPOINT" = true ]; then`,
+      `      echo "Route $cidr via $DEFAULT_GW dev $DEFAULT_DEV (endpoint bypass)"`,
+      `      ip route add "$cidr" via "$DEFAULT_GW" dev "$DEFAULT_DEV" 2>/dev/null || true`,
+      "    else",
+      `      echo "Route $cidr dev ${ifName}"`,
+      `      ip route add "$cidr" dev ${ifName} 2>/dev/null || true`,
+      "    fi",
+      "  done",
+      "fi",
       "wg show",
     ].join("\n");
 
