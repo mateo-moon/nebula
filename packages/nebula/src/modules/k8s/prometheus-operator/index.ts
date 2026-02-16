@@ -50,6 +50,8 @@ export interface ThanosConfig {
    * Set to false to skip creating the IAM bindings (e.g., if managing them externally).
    */
   createWorkloadIdentityBindings?: boolean;
+  /** Additional Thanos Helm values to merge into the Bitnami chart */
+  thanosValues?: Record<string, unknown>;
 }
 
 export interface PrometheusOperatorConfig {
@@ -556,74 +558,76 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       });
 
       // Deploy Thanos using Bitnami Helm chart
+      const defaultThanosValues: Record<string, unknown> = {
+        image: {
+          registry: "quay.io",
+          repository: "thanos/thanos",
+          tag: thanosVersion,
+        },
+        existingObjstoreSecret: "thanos-objstore-config",
+        query: {
+          enabled: true,
+          tolerations: defaultTolerations,
+          stores: this.config.thanos.externalStores ?? [],
+          serviceAccount: {
+            create: true,
+            name: "thanos-query",
+            annotations: {
+              "iam.gke.io/gcp-service-account": this.thanosServiceAccountEmail,
+            },
+          },
+        },
+        queryFrontend: {
+          enabled: true,
+          tolerations: defaultTolerations,
+        },
+        storegateway: {
+          enabled: true,
+          tolerations: defaultTolerations,
+          persistence: {
+            enabled: true,
+            storageClass: storageClassName,
+            size: "10Gi",
+          },
+          serviceAccount: {
+            create: true,
+            name: "thanos-storegateway",
+            annotations: {
+              "iam.gke.io/gcp-service-account": this.thanosServiceAccountEmail,
+            },
+          },
+        },
+        compactor: {
+          enabled: true,
+          tolerations: defaultTolerations,
+          persistence: {
+            enabled: true,
+            storageClass: storageClassName,
+            size: "10Gi",
+          },
+          serviceAccount: {
+            create: true,
+            name: "thanos-compactor",
+            annotations: {
+              "iam.gke.io/gcp-service-account": this.thanosServiceAccountEmail,
+            },
+          },
+        },
+        ruler: { enabled: false },
+        receive: { enabled: false },
+        metrics: { enabled: true },
+      };
+
       this.thanosHelm = new Helm(this, "thanos", {
         chart: "thanos",
         releaseName: "thanos",
         repo: "https://charts.bitnami.com/bitnami",
         version: "15.7.25",
         namespace: namespaceName,
-        values: {
-          image: {
-            registry: "quay.io",
-            repository: "thanos/thanos",
-            tag: thanosVersion,
-          },
-          existingObjstoreSecret: "thanos-objstore-config",
-          query: {
-            enabled: true,
-            tolerations: defaultTolerations,
-            stores: this.config.thanos.externalStores ?? [],
-            serviceAccount: {
-              create: true,
-              name: "thanos-query",
-              annotations: {
-                "iam.gke.io/gcp-service-account":
-                  this.thanosServiceAccountEmail,
-              },
-            },
-          },
-          queryFrontend: {
-            enabled: true,
-            tolerations: defaultTolerations,
-          },
-          storegateway: {
-            enabled: true,
-            tolerations: defaultTolerations,
-            persistence: {
-              enabled: true,
-              storageClass: storageClassName,
-              size: "10Gi",
-            },
-            serviceAccount: {
-              create: true,
-              name: "thanos-storegateway",
-              annotations: {
-                "iam.gke.io/gcp-service-account":
-                  this.thanosServiceAccountEmail,
-              },
-            },
-          },
-          compactor: {
-            enabled: true,
-            tolerations: defaultTolerations,
-            persistence: {
-              enabled: true,
-              storageClass: storageClassName,
-              size: "10Gi",
-            },
-            serviceAccount: {
-              create: true,
-              name: "thanos-compactor",
-              annotations: {
-                "iam.gke.io/gcp-service-account":
-                  this.thanosServiceAccountEmail,
-              },
-            },
-          },
-          ruler: { enabled: false },
-          receive: { enabled: false },
-          metrics: { enabled: true },
-        },
+        values: deepmerge(
+          defaultThanosValues,
+          this.config.thanos.thanosValues ?? {},
+        ),
       });
 
       // Update Prometheus Helm values to enable Thanos sidecar
