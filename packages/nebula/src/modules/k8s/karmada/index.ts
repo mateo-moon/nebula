@@ -66,6 +66,13 @@ export {
   KarmadaCapiClusterRegistration,
 } from "./cluster-registration";
 
+// Re-export credential sync helpers
+export {
+  KarmadaCredentialSyncSetup,
+  KarmadaCredentialSync,
+} from "./credential-sync";
+export type { KarmadaCredentialSyncConfig } from "./credential-sync";
+
 // Re-export generated Karmada API types for direct use
 export {
   PropagationPolicy,
