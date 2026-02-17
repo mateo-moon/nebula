@@ -22,6 +22,7 @@ import {
 } from "#imports/kubernetes.crossplane.io";
 import { BaseConstruct } from "../../../core";
 import { ArgoCdClusterSyncSetup } from "../argocd/argocd-cluster-sync";
+import { KarmadaCredentialSyncSetup } from "../karmada/credential-sync";
 
 export interface ArgoCdProviderOptions {
   /** ArgoCD provider package version (defaults to v0.13.0) */
@@ -70,6 +71,7 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
   public readonly kubernetesProvider?: Provider;
   public readonly kubernetesProviderConfig?: KubeProviderConfig;
   public readonly argoCdClusterSyncSetup?: ArgoCdClusterSyncSetup;
+  public readonly karmadaCredentialSyncSetup?: KarmadaCredentialSyncSetup;
   public readonly functionPatchAndTransform: FunctionV1Beta1;
   public readonly functionGoTemplating: FunctionV1Beta1;
 
@@ -202,6 +204,12 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
       this.argoCdClusterSyncSetup = new ArgoCdClusterSyncSetup(
         this,
         "argocd-cluster-sync-setup",
+      );
+
+      // Install shared XRD + Composition for Karmada cluster credential sync
+      this.karmadaCredentialSyncSetup = new KarmadaCredentialSyncSetup(
+        this,
+        "karmada-credential-sync-setup",
       );
     }
   }
