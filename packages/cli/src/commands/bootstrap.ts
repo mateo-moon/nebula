@@ -414,6 +414,12 @@ async function deployToGke(): Promise<void> {
   log("🔄 Step 7: Syncing ArgoCD apps");
   log("─".repeat(50));
   await syncCriticalApps();
+
+  // Step 8: Post-deployment health checks and cleanup
+  log("");
+  log("🔧 Step 8: Post-deployment validation");
+  log("─".repeat(50));
+  await postDeploymentValidation();
 }
 
 /**
@@ -558,6 +564,125 @@ async function syncAppWithRetry(
   }
 
   log(`   ⚠️  ${appName} did not reach Synced within ${timeoutSeconds}s`);
+}
+
+/**
+ * Post-deployment health checks and automatic cleanup.
+ *
+ * Handles known failure modes observed during bootstrap:
+ * 1. Failed Jobs in argocd namespace (e.g. token bootstrap hitting backoff limit
+ *    because ArgoCD wasn't ready). Deleting them lets ArgoCD auto-sync recreate them.
+ * 2. Crossplane CRDs stuck in Terminating state because managed resources have
+ *    finalizers that can't be processed (provider deployment missing). Removing
+ *    the finalizers unblocks CRD deletion and provider re-creation.
+ * 3. Crossplane provider revisions that can't take ownership of CRDs left by a
+ *    previous revision (stale ownerReferences with old UIDs). Clearing the stale
+ *    refs lets the new revision reconcile successfully.
+ */
+async function postDeploymentValidation(): Promise<void> {
+  // --- 1. Delete failed Jobs in argocd namespace ---
+  try {
+    const jobsJson = exec(
+      'kubectl get jobs -n argocd -o json 2>/dev/null || echo \'{"items":[]}\'',
+      { silent: true },
+    );
+    const jobs = JSON.parse(jobsJson);
+    for (const job of jobs.items) {
+      const failed = job.status?.conditions?.find(
+        (c: { type: string; status: string }) =>
+          c.type === "Failed" && c.status === "True",
+      );
+      if (failed) {
+        const name = job.metadata.name;
+        log(`   Deleting failed job ${name} (ArgoCD will recreate it)...`);
+        exec(`kubectl delete job ${name} -n argocd`, {
+          silent: true,
+          ignoreErrors: true,
+        });
+      }
+    }
+  } catch {
+    // Non-critical, continue
+  }
+
+  // --- 2. Clean up stuck Crossplane managed resources blocking CRD deletion ---
+  try {
+    const crdsJson = exec(
+      'kubectl get crds -o json 2>/dev/null || echo \'{"items":[]}\'',
+      { silent: true },
+    );
+    const crds = JSON.parse(crdsJson);
+    for (const crd of crds.items) {
+      if (!crd.metadata.deletionTimestamp) continue;
+      const crdName = crd.metadata.name as string;
+      if (!crdName.includes("crossplane.io")) continue;
+
+      log(`   Found terminating Crossplane CRD: ${crdName}`);
+      // List all instances and remove their finalizers so the CRD can be deleted
+      const instancesJson = exec(
+        `kubectl get ${crdName} -A -o json 2>/dev/null || echo '{"items":[]}'`,
+        { silent: true },
+      );
+      const instances = JSON.parse(instancesJson);
+      for (const inst of instances.items) {
+        const ns = inst.metadata.namespace;
+        const name = inst.metadata.name;
+        const finalizers = inst.metadata.finalizers || [];
+        if (finalizers.length > 0) {
+          log(`   Removing finalizers from ${crdName}/${name}...`);
+          const nsFlag = ns ? `-n ${ns}` : "";
+          exec(
+            `kubectl patch ${crdName} ${name} ${nsFlag} --type merge -p '{"metadata":{"finalizers":[]}}'`,
+            { silent: true, ignoreErrors: true },
+          );
+        }
+      }
+    }
+  } catch {
+    // Non-critical, continue
+  }
+
+  // --- 3. Fix unhealthy provider revisions with stale CRD owner references ---
+  try {
+    const revsJson = exec(
+      'kubectl get providerrevisions.pkg.crossplane.io -o json 2>/dev/null || echo \'{"items":[]}\'',
+      { silent: true },
+    );
+    const revs = JSON.parse(revsJson);
+    for (const rev of revs.items) {
+      const healthy = rev.status?.conditions?.find(
+        (c: { type: string }) => c.type === "RevisionHealthy",
+      );
+      if (healthy?.status === "True") continue;
+
+      const msg = healthy?.message || "";
+      // "cannot establish control of object: <crd> is already controlled by ProviderRevision <name> (UID <old-uid>)"
+      const match = msg.match(
+        /cannot establish control of object: (\S+) is already controlled by/,
+      );
+      if (!match) continue;
+
+      const staleCrd = match[1];
+      log(
+        `   Clearing stale owner reference on CRD ${staleCrd} for provider revision ${rev.metadata.name}...`,
+      );
+      exec(
+        `kubectl patch crd ${staleCrd} --type merge -p '{"metadata":{"ownerReferences":[]}}'`,
+        { silent: true, ignoreErrors: true },
+      );
+    }
+  } catch {
+    // Non-critical, continue
+  }
+
+  // Wait a moment for reconciliation to pick up the changes
+  await sleep(10000);
+
+  // Verify providers are healthy after cleanup
+  log("   Verifying Crossplane providers...");
+  await waitForProviders(60);
+
+  log("   ✅ Post-deployment validation complete");
 }
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
