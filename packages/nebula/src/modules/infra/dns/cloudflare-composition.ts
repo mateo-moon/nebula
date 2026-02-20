@@ -593,14 +593,20 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
    *   - Each mapping can have its own headers that override/extend global headers
    *
    * OBSERVE Strategy:
-   * - Use Cloudflare's filter API to query by name, type, and content
-   * - Parse name/content from payload.body using JQ's fromjson
-   * - This handles the case where CREATE fails with "record already exists"
-   * - Query URL: baseUrl?name={name}&type=NS&content={content}
-   * - Response is an array: { result: [{id, ...}] }, use result[0].id
+   * - Query Cloudflare by name and type only (NOT content), sorted by content
+   * - Use positional indexing (result[{index}]) to match each composition resource
+   *   to a specific NS record in the result set
+   * - This ensures that when nameservers change (e.g., zone recreation), the
+   *   existing records are found and can be updated via UPDATE, rather than
+   *   creating duplicates and orphaning old records
+   *
+   * UPDATE Strategy:
+   * - When OBSERVE finds an existing record but content differs (nameserver changed),
+   *   use PUT to update the record in place using the observed record ID
+   * - This prevents duplicate NS records when GCP assigns new nameservers
    *
    * REMOVE Strategy:
-   * - After successful OBSERVE, use result[0].id from the response
+   * - After successful OBSERVE, use the positional record ID for deletion
    */
   private createCloudflareNsResource(
     index: number,
@@ -625,13 +631,12 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           // Global headers - provider-http resolves secret injection at runtime
           headers: cfAuthHeaders,
           // payload contains only baseUrl and body (schema is fixed)
-          // We use JQ's fromjson in mappings to parse name/content from body
           payload: {
             baseUrl:
               "https://api.cloudflare.com/client/v4/zones/ZONE_ID/dns_records",
             body: "{}",
           },
-          // mappings define how to CREATE/OBSERVE/REMOVE using JQ expressions
+          // mappings define how to CREATE/OBSERVE/UPDATE/REMOVE using JQ expressions
           // Each mapping has explicit headers to ensure authentication works for all actions
           mappings: [
             {
@@ -639,26 +644,34 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
               method: "POST",
               url: ".payload.baseUrl",
               body: ".payload.body",
-              // Explicit headers for CREATE
               headers: cfAuthHeaders,
             },
             {
               action: "OBSERVE",
               method: "GET",
-              // Query Cloudflare API by name, type, and content to find existing records
-              // Access name and content directly from payload.body (already an object internally)
-              // This handles the "record already exists" case where CREATE failed
-              // Response: { result: [{ id: "...", ... }] } (array)
-              url: '.payload.baseUrl + "?name=" + .payload.body.name + "&type=NS&content=" + .payload.body.content',
-              // Explicit headers for OBSERVE
+              // Query by name and type only — NOT by content.
+              // Sort by content to ensure stable positional indexing across reconcile loops.
+              // Each composition resource (index 0-3) maps to result[index] in the sorted set.
+              // This way, when nameservers change, OBSERVE still finds the old records
+              // and their IDs, enabling UPDATE to replace them in-place.
+              url: `.payload.baseUrl + "?name=" + .payload.body.name + "&type=NS&order=content&direction=asc&per_page=10"`,
+              headers: cfAuthHeaders,
+            },
+            {
+              action: "UPDATE",
+              method: "PUT",
+              // Use the record ID from the positional OBSERVE result to update in place.
+              // This fires when OBSERVE found an existing record but its content differs
+              // from the desired state (e.g., nameservers changed after zone recreation).
+              url: `.payload.baseUrl + "/" + .response.body.result[${index}].id`,
+              body: ".payload.body",
               headers: cfAuthHeaders,
             },
             {
               action: "REMOVE",
               method: "DELETE",
-              // Use record ID from OBSERVE response (result is an array from the query)
-              url: '.payload.baseUrl + "/" + .response.body.result[0].id',
-              // Explicit headers for REMOVE
+              // Use the positional record ID from OBSERVE response for deletion
+              url: `.payload.baseUrl + "/" + .response.body.result[${index}].id`,
               headers: cfAuthHeaders,
             },
           ],

@@ -54,6 +54,25 @@ let valsAvailable: boolean | null = null;
 let cachedRepoRoot: string | null = null;
 
 /**
+ * Controls whether unresolved secrets throw (strict) or warn (lenient).
+ *
+ * - 'strict' (default): throw on any resolution failure — prevents deploying
+ *   manifests with raw ref+ strings.
+ * - 'warn': log a warning and return the original ref+ string — useful for
+ *   contexts where some secrets are intentionally unresolvable (e.g., dry-run).
+ */
+let strictMode = true;
+
+/**
+ * Set the secret resolution mode.
+ *
+ * @param mode - 'strict' to throw on failure, 'warn' to log and continue
+ */
+export function setSecretResolutionMode(mode: "strict" | "warn"): void {
+  strictMode = mode === "strict";
+}
+
+/**
  * Find the git repository root by walking up from cwd.
  * Returns null if not in a git repository.
  */
@@ -119,10 +138,13 @@ function normalizeRef(ref: string): string {
   // Path is repo-root relative - convert to absolute
   const repoRoot = findRepoRoot();
   if (!repoRoot) {
-    console.warn(
-      `[Secrets] Cannot find git repository root. ` +
-        `Repo-root relative path "${filePath}" will be resolved from cwd.`,
-    );
+    const msg =
+      `Cannot find git repository root. ` +
+      `Repo-root relative path "${filePath}" cannot be resolved.`;
+    if (strictMode) {
+      throw new Error(msg);
+    }
+    console.warn(`[Secrets] ${msg} Will be resolved from cwd.`);
     return ref;
   }
 
@@ -140,10 +162,13 @@ function resolveVals(ref: string): string {
   }
 
   if (!valsAvailable) {
-    console.warn(
-      `[Secrets] vals CLI not available. Cannot resolve: ${ref}\n` +
-        `Install vals: https://github.com/helmfile/vals`,
-    );
+    const msg =
+      `vals CLI not available. Cannot resolve: ${ref}\n` +
+      `Install vals: https://github.com/helmfile/vals`;
+    if (strictMode) {
+      throw new Error(msg);
+    }
+    console.warn(`[Secrets] ${msg}`);
     return ref;
   }
 
@@ -172,17 +197,23 @@ function resolveVals(ref: string): string {
 
     // Check if secret was actually retrieved
     if (!resolvedValue || resolvedValue === ref || resolvedValue === "null") {
-      console.warn(
-        `[Secrets] Secret not retrieved for "${ref}". ` +
-          `The resolved value is empty or unchanged. ` +
-          `Check that the key exists in the secret file.`,
-      );
+      const msg =
+        `Secret not retrieved for "${ref}". ` +
+        `The resolved value is empty or unchanged. ` +
+        `Check that the key exists in the secret file.`;
+      if (strictMode) {
+        throw new Error(msg);
+      }
+      console.warn(`[Secrets] ${msg}`);
       return ref;
     }
 
     return resolvedValue;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "vals evaluation failed";
+    if (strictMode) {
+      throw new Error(`Failed to resolve secret "${ref}": ${msg}`);
+    }
     console.warn(`[Secrets] Failed to resolve "${ref}": ${msg}`);
     return ref;
   }
