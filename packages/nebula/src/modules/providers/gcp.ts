@@ -139,6 +139,9 @@ export class GcpProvider extends Construct {
             kind: "DeploymentRuntimeConfig",
             metadata: {
               name: runtimeConfigName,
+              annotations: {
+                "argocd.argoproj.io/sync-options": "Delete=false",
+              },
             },
             spec: {
               serviceAccountTemplate: {
@@ -161,6 +164,9 @@ export class GcpProvider extends Construct {
       const provider = new CpProvider(this, `provider-${family}`, {
         metadata: {
           name: providerName,
+          annotations: {
+            "argocd.argoproj.io/sync-options": "Delete=false",
+          },
         },
         spec: {
           package: `${providerPackage}:${providerVersion}`,
@@ -192,6 +198,9 @@ export class GcpProvider extends Construct {
     this.providerConfig = new CpProviderConfig(this, "provider-config", {
       metadata: {
         name: providerConfigName,
+        annotations: {
+          "argocd.argoproj.io/sync-options": "Delete=false",
+        },
       },
       spec: {
         projectId: config.projectId,
