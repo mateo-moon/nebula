@@ -185,8 +185,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
         },
       });
 
-      // Create HTTP ProviderConfig that references the credentials secret
-      // This provides default credentials, but Request-level headers take precedence
+      // Create HTTP ProviderConfig with no credentials.
+      // Auth is handled via {{ secret:namespace:key }} injection in Request headers.
+      // Using credentials: Secret would inject the raw credential string as an
+      // Authorization header, which breaks Cloudflare's /zones endpoint (error 6111).
       this.httpProviderConfig = new HttpProviderConfig(
         this,
         "http-provider-config",
@@ -196,12 +198,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
           },
           spec: {
             credentials: {
-              source: HttpCredentialsSource.SECRET,
-              secretRef: {
-                name: cfSecretName,
-                namespace: cfSecretNamespace,
-                key: "credentials",
-              },
+              source: HttpCredentialsSource.NONE,
             },
           },
         },
@@ -491,12 +488,26 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             },
           ],
         },
-        // Extract zone ID from response and write to XR status
+        // Extract zone ID from response body string using regex.
+        // status.response.body is a JSON string (not parsed object) in provider-http v1alpha2.
+        // Cloudflare response: {"result":[{"id":"<32-char-hex>","name":"..."},...]}
         {
           type: "ToCompositeFieldPath",
-          fromFieldPath: "status.response.body.result[0].id",
+          fromFieldPath: "status.response.body",
           toFieldPath: "status.cloudflareZoneId",
           policy: { fromFieldPath: "Required" },
+          transforms: [
+            {
+              type: "string",
+              string: {
+                type: "Regexp",
+                regexp: {
+                  match: '"result":\\[\\{"id":"([a-f0-9]{32})"',
+                  group: 1,
+                },
+              },
+            },
+          ],
         },
       ],
     };
