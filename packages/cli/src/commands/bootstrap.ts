@@ -359,6 +359,31 @@ async function deployToGke(): Promise<void> {
     }
   }
 
+  // Validate no unresolved secret references in synthesized output.
+  // If resolveSecrets() missed something (e.g. vals not installed, missing SOPS keys),
+  // fail fast here instead of applying broken manifests to the cluster.
+  log("   Validating secrets resolution...");
+  for (const moduleName of gkeModuleNames) {
+    const outputDir = `dist/${moduleName}`;
+    if (!fs.existsSync(outputDir)) continue;
+
+    const yamlFiles = fs
+      .readdirSync(outputDir)
+      .filter((f) => f.endsWith(".yaml"));
+    for (const file of yamlFiles) {
+      const content = fs.readFileSync(path.join(outputDir, file), "utf-8");
+      const match = content.match(/ref\+\S+/);
+      if (match) {
+        throw new Error(
+          `Unresolved secret reference in ${moduleName}/${file}: ${match[0]}\n` +
+            `Ensure 'vals' CLI is installed and SOPS decryption keys are accessible.\n` +
+            `Test manually: vals get "${match[0]}"`,
+        );
+      }
+    }
+  }
+  log("   ✅ All secrets resolved");
+
   // Phase 1: Crossplane providers + functions (CRDs needed by argocd-apps)
   log("   Phase 1: Applying Crossplane infrastructure...");
   for (const mod of ["infra/providers", "infra/crossplane"]) {
