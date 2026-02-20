@@ -446,16 +446,15 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
               {
                 // CREATE uses GET (read-only lookup, idempotent)
                 // provider-http requires a CREATE mapping to trigger initial reconciliation
+                // No per-mapping headers — global headers with secret injection are used
                 action: "CREATE",
                 method: "GET",
                 url: '.payload.baseUrl + "?name=" + .payload.body.name',
-                headers: cfAuthHeaders,
               },
               {
                 action: "OBSERVE",
                 method: "GET",
                 url: '.payload.baseUrl + "?name=" + .payload.body.name',
-                headers: cfAuthHeaders,
               },
             ],
           },
