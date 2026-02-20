@@ -329,16 +329,16 @@ async function deployToGke(): Promise<void> {
   // Workload Identity credentials lack project IAM permissions.
   // Support both flat structure (module.ts) and directory structure (module/dev.ts)
   const gkeModuleNames = [
-    "providers",
-    "crossplane",
-    "dns",
-    "cert-manager",
-    "cluster-api",
-    "ingress-nginx",
-    "external-dns",
-    "monitoring",
-    "argocd",
-    "argocd-apps",
+    "managed/providers",
+    "managed/crossplane",
+    "managed/dns",
+    "managed/cert-manager",
+    "managed/cluster-api",
+    "managed/ingress-nginx",
+    "managed/external-dns",
+    "managed/monitoring",
+    "managed/argocd",
+    "managed/argocd-apps",
   ];
 
   // Clear previous dist to avoid mixing bootstrap and GKE manifests
