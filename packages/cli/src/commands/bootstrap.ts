@@ -394,6 +394,12 @@ async function deployToGke(): Promise<void> {
   }
 
   log(`   ✅ Workloads deployed to GKE`);
+
+  // Step 7: Sync critical ArgoCD apps
+  log("");
+  log("🔄 Step 7: Syncing critical ArgoCD apps");
+  log("─".repeat(50));
+  await syncCriticalApps();
 }
 
 /**
@@ -450,6 +456,57 @@ async function waitForCrossplaneFunctions(
   }
 
   log("   ⚠️  Timeout waiting for functions, continuing anyway...");
+}
+
+/**
+ * Sync critical ArgoCD apps after bootstrap deployment.
+ * ArgoCD apps use manual sync by default, so we trigger the initial sync
+ * for core infrastructure apps to get the cluster fully operational.
+ */
+async function syncCriticalApps(): Promise<void> {
+  // Wait for ArgoCD server to be ready
+  log("   Waiting for ArgoCD to be ready...");
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    const ready = exec(
+      'kubectl get deployment argocd-server -n argocd -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0"',
+      { silent: true },
+    ).trim();
+    if (ready && parseInt(ready) > 0) break;
+    await sleep(5000);
+  }
+
+  // Sync apps in dependency order using kubectl
+  // ArgoCD apps have a sync operation that can be triggered via the Application resource
+  const syncOrder = [
+    "argocd-apps", // Creates all other Application resources
+    "providers", // Crossplane GCP providers (needed by dns, infra)
+    "crossplane", // Crossplane functions and compositions
+    "dns", // Cloud DNS zones (needed by external-dns)
+    "cert-manager",
+    "ingress-nginx",
+    "external-dns",
+    "argocd", // Re-sync to pick up ingress/cert
+    "cluster-api",
+    "clusters",
+  ];
+
+  for (const appName of syncOrder) {
+    log(`   Syncing ${appName}...`);
+    // Set the operation field to trigger a sync
+    exec(
+      `kubectl patch app ${appName} -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{"syncStrategy":{"apply":{"force":false}}}}}'`,
+      { silent: true, ignoreErrors: true },
+    );
+    // Small delay between syncs to avoid overwhelming the cluster
+    await sleep(3000);
+  }
+
+  // Wait for providers to be healthy before continuing
+  log("   Waiting for Crossplane providers to install...");
+  await waitForProviders(300);
+
+  log("   ✅ Critical apps synced");
 }
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
