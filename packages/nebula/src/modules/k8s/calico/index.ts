@@ -98,6 +98,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
       repo:
         this.config.repository ?? "https://docs.tigera.io/calico/charts",
       version: this.config.version ?? "v3.29.3",
+      helmFlags: ["--include-crds"],
       namespace: namespaceName,
       values: chartValues,
     });
