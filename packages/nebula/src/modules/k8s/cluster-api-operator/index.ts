@@ -23,8 +23,8 @@ import {
   ProjectIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
 import {
-  CompositeResourceDefinition,
-  CompositeResourceDefinitionSpecScope,
+  CompositeResourceDefinitionV2,
+  CompositeResourceDefinitionV2SpecScope,
   Composition,
 } from "#imports/apiextensions.crossplane.io";
 
@@ -373,12 +373,12 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
   }
 
   /**
-   * Create XRD (CompositeResourceDefinition) for CAPG credentials
+   * Create XRD (CompositeResourceDefinitionV2) for CAPG credentials
    * Crossplane v2: uses scope instead of claimNames
    * Uses Cluster scope and composes Secret via function-go-templating (no connectionSecretKeys)
    */
   private createCapgCredentialsXrd(): void {
-    new CompositeResourceDefinition(this, "capg-credentials-xrd", {
+    new CompositeResourceDefinitionV2(this, "capg-credentials-xrd", {
       metadata: {
         name: "xcapgcredentials.nebula.io",
         annotations: {
@@ -393,7 +393,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         },
         // Cluster scope - we compose our own Secret using function-go-templating
         // (connectionSecretKeys not supported in non-LegacyCluster scopes)
-        scope: CompositeResourceDefinitionSpecScope.CLUSTER,
+        scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
         versions: [
           {
             name: "v1alpha1",

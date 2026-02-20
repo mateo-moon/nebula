@@ -39,8 +39,8 @@
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import {
-  CompositeResourceDefinition,
-  CompositeResourceDefinitionSpecScope,
+  CompositeResourceDefinitionV2,
+  CompositeResourceDefinitionV2SpecScope,
   Composition,
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
@@ -69,7 +69,7 @@ export interface KarmadaCredentialSyncConfig {
  * Instantiate this once (typically in the Crossplane module).
  */
 export class KarmadaCredentialSyncSetup extends Construct {
-  public readonly xrd: CompositeResourceDefinition;
+  public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
 
   constructor(scope: Construct, id: string) {
@@ -78,8 +78,8 @@ export class KarmadaCredentialSyncSetup extends Construct {
     this.composition = this.createComposition();
   }
 
-  private createXrd(): CompositeResourceDefinition {
-    return new CompositeResourceDefinition(this, "xrd", {
+  private createXrd(): CompositeResourceDefinitionV2 {
+    return new CompositeResourceDefinitionV2(this, "xrd", {
       metadata: {
         name: "xkarmadacredentialsyncs.nebula.io",
         annotations: {
@@ -92,7 +92,7 @@ export class KarmadaCredentialSyncSetup extends Construct {
           kind: "XKarmadaCredentialSync",
           plural: "xkarmadacredentialsyncs",
         },
-        scope: CompositeResourceDefinitionSpecScope.CLUSTER,
+        scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
         versions: [
           {
             name: "v1alpha1",
