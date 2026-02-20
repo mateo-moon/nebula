@@ -27,10 +27,11 @@
  * });
  *
  * // Then, create zones using XR (Composite Resource)
+ * // The zone ID is resolved automatically from the parent domain
  * new DnsZoneCloudflare(chart, 'my-zone', {
  *   dnsName: 'sub.example.com',
  *   project: 'my-gcp-project',
- *   cloudflareZoneId: 'abc123',
+ *   cloudflareDomain: 'example.com',
  * });
  * ```
  */
@@ -279,7 +280,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                 properties: {
                   spec: {
                     type: "object",
-                    required: ["dnsName", "project", "cloudflareZoneId"],
+                    required: ["dnsName", "project", "cloudflareDomain"],
                     properties: {
                       dnsName: {
                         type: "string",
@@ -290,10 +291,10 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                         type: "string",
                         description: "GCP project ID",
                       },
-                      cloudflareZoneId: {
+                      cloudflareDomain: {
                         type: "string",
                         description:
-                          "Cloudflare zone ID where NS records will be created",
+                          "Parent domain in Cloudflare (e.g., example.com). Zone ID is resolved automatically.",
                       },
                       description: {
                         type: "string",
@@ -317,6 +318,11 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
                       zoneName: {
                         type: "string",
                         description: "Name of the created ManagedZone",
+                      },
+                      cloudflareZoneId: {
+                        type: "string",
+                        description:
+                          "Resolved Cloudflare zone ID",
                       },
                     },
                   },
@@ -348,8 +354,9 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
         },
         mode: CompositionSpecMode.PIPELINE,
         pipeline: [
+          // Step 1: Resolve Cloudflare zone ID from domain + create GCP ManagedZone
           {
-            step: "patch-and-transform",
+            step: "zone-lookup-and-managed-zone",
             functionRef: {
               name: "function-patch-and-transform",
             },
@@ -357,9 +364,25 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
               apiVersion: "pt.fn.crossplane.io/v1beta1",
               kind: "Resources",
               resources: [
-                // Resource 0: GCP ManagedZone
+                this.createCloudflareZoneLookupResource(
+                  httpProviderConfigName,
+                  cfSecretName,
+                  cfSecretNamespace,
+                ),
                 this.createManagedZoneResource(gcpProviderConfig),
-                // Resources 1-4: HTTP Requests for Cloudflare NS records
+              ],
+            },
+          },
+          // Step 2: Create Cloudflare NS records (depends on zone ID + nameservers from step 1)
+          {
+            step: "cloudflare-ns-records",
+            functionRef: {
+              name: "function-patch-and-transform",
+            },
+            input: {
+              apiVersion: "pt.fn.crossplane.io/v1beta1",
+              kind: "Resources",
+              resources: [
                 this.createCloudflareNsResource(
                   0,
                   httpProviderConfigName,
@@ -390,6 +413,86 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
         ],
       },
     });
+  }
+
+  /**
+   * Creates an HTTP Request that looks up the Cloudflare zone ID from the domain name.
+   * Uses GET /zones?name={domain} and writes the zone ID to XR status.
+   */
+  private createCloudflareZoneLookupResource(
+    httpProviderConfigName: string,
+    cfSecretName: string,
+    cfSecretNamespace: string,
+  ): object {
+    const cfAuthHeaders = {
+      "Content-Type": ["application/json"],
+      "X-Auth-Email": [`{{ ${cfSecretName}:${cfSecretNamespace}:email }}`],
+      "X-Auth-Key": [`{{ ${cfSecretName}:${cfSecretNamespace}:api_key }}`],
+    };
+
+    return {
+      name: "cloudflare-zone-lookup",
+      base: {
+        apiVersion: "http.crossplane.io/v1alpha2",
+        kind: "Request",
+        spec: {
+          forProvider: {
+            headers: cfAuthHeaders,
+            payload: {
+              baseUrl: "https://api.cloudflare.com/client/v4/zones",
+              body: "{}",
+            },
+            mappings: [
+              {
+                action: "OBSERVE",
+                method: "GET",
+                url: '.payload.baseUrl + "?name=" + .payload.body.name',
+                headers: cfAuthHeaders,
+              },
+            ],
+          },
+          providerConfigRef: {
+            name: httpProviderConfigName,
+          },
+        },
+      },
+      patches: [
+        // Metadata name
+        {
+          type: "FromCompositeFieldPath",
+          fromFieldPath: "metadata.name",
+          toFieldPath: "metadata.name",
+          transforms: [
+            {
+              type: "string",
+              string: { type: "Format", fmt: "%s-cf-zone-lookup" },
+            },
+          ],
+        },
+        // Set the domain to look up in the body
+        {
+          type: "FromCompositeFieldPath",
+          fromFieldPath: "spec.cloudflareDomain",
+          toFieldPath: "spec.forProvider.payload.body",
+          transforms: [
+            {
+              type: "string",
+              string: {
+                type: "Format",
+                fmt: '{"name":"%s"}',
+              },
+            },
+          ],
+        },
+        // Extract zone ID from response and write to XR status
+        {
+          type: "ToCompositeFieldPath",
+          fromFieldPath: "status.response.body.result[0].id",
+          toFieldPath: "status.cloudflareZoneId",
+          policy: { fromFieldPath: "Required" },
+        },
+      ],
+    };
   }
 
   /**
@@ -564,11 +667,12 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
             },
           ],
         },
-        // Patch baseUrl with Cloudflare zone ID
+        // Patch baseUrl with resolved Cloudflare zone ID from status
         {
           type: "FromCompositeFieldPath",
-          fromFieldPath: "spec.cloudflareZoneId",
+          fromFieldPath: "status.cloudflareZoneId",
           toFieldPath: "spec.forProvider.payload.baseUrl",
+          policy: { fromFieldPath: "Required" },
           transforms: [
             {
               type: "string",
@@ -610,8 +714,8 @@ export interface DnsZoneCloudflareConfig {
   dnsName: string;
   /** GCP project ID */
   project: string;
-  /** Cloudflare zone ID where NS records will be created */
-  cloudflareZoneId: string;
+  /** Parent domain in Cloudflare (e.g., example.com). Zone ID is resolved automatically via API. */
+  cloudflareDomain: string;
   /** Description for the DNS zone */
   description?: string;
   /** TTL for NS records (default: "3600") */
@@ -641,7 +745,7 @@ export class DnsZoneCloudflare extends Construct {
       spec: {
         dnsName: config.dnsName,
         project: config.project,
-        cloudflareZoneId: config.cloudflareZoneId,
+        cloudflareDomain: config.cloudflareDomain,
         description: config.description ?? `DNS zone for ${config.dnsName}`,
         ttl: config.ttl ?? "3600",
       },
