@@ -379,7 +379,10 @@ async function deployToGke(): Promise<void> {
     }
   }
 
-  // Wait for Crossplane functions to be healthy (required for Compositions)
+  // Wait for Crossplane providers and functions to be healthy
+  // Providers must install their CRDs before phase 2 modules (dns, argocd, etc.) can work
+  log("   Waiting for Crossplane providers to be healthy...");
+  await waitForProviders(300);
   log("   Waiting for Crossplane functions to be healthy...");
   await waitForCrossplaneFunctions(120);
 
@@ -460,29 +463,27 @@ async function waitForCrossplaneFunctions(
 
 /**
  * Sync critical ArgoCD apps after bootstrap deployment.
- * ArgoCD apps use manual sync by default, so we trigger the initial sync
- * for core infrastructure apps to get the cluster fully operational.
+ * Triggers sync and retries until each app reaches Synced status.
  */
 async function syncCriticalApps(): Promise<void> {
-  // Wait for ArgoCD server to be ready
+  // Wait for ArgoCD application controller to be ready
   log("   Waiting for ArgoCD to be ready...");
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     const ready = exec(
-      'kubectl get deployment argocd-server -n argocd -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0"',
+      'kubectl get statefulset argocd-application-controller -n argocd -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0"',
       { silent: true },
     ).trim();
     if (ready && parseInt(ready) > 0) break;
     await sleep(5000);
   }
 
-  // Sync apps in dependency order using kubectl
-  // ArgoCD apps have a sync operation that can be triggered via the Application resource
+  // Sync apps in dependency order with retries
   const syncOrder = [
     "argocd-apps", // Creates all other Application resources
-    "providers", // Crossplane GCP providers (needed by dns, infra)
+    "providers", // Crossplane GCP providers
     "crossplane", // Crossplane functions and compositions
-    "dns", // Cloud DNS zones (needed by external-dns)
+    "dns", // Cloud DNS zones
     "cert-manager",
     "ingress-nginx",
     "external-dns",
@@ -492,21 +493,67 @@ async function syncCriticalApps(): Promise<void> {
   ];
 
   for (const appName of syncOrder) {
-    log(`   Syncing ${appName}...`);
-    // Set the operation field to trigger a sync
-    exec(
-      `kubectl patch app ${appName} -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{"syncStrategy":{"apply":{"force":false}}}}}'`,
-      { silent: true, ignoreErrors: true },
-    );
-    // Small delay between syncs to avoid overwhelming the cluster
-    await sleep(3000);
+    await syncAppWithRetry(appName, 180);
   }
 
-  // Wait for providers to be healthy before continuing
-  log("   Waiting for Crossplane providers to install...");
-  await waitForProviders(300);
-
   log("   ✅ Critical apps synced");
+}
+
+/**
+ * Trigger ArgoCD sync on an app and retry until it reaches Synced or timeout.
+ */
+async function syncAppWithRetry(
+  appName: string,
+  timeoutSeconds: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutSeconds * 1000;
+
+  // Check if app exists
+  const exists = exec(
+    `kubectl get app ${appName} -n argocd -o name 2>/dev/null || echo ""`,
+    { silent: true },
+  ).trim();
+  if (!exists) {
+    log(`   ⚠️  App ${appName} not found, skipping`);
+    return;
+  }
+
+  log(`   Syncing ${appName}...`);
+
+  while (Date.now() < deadline) {
+    // Check current sync status
+    const syncStatus = exec(
+      `kubectl get app ${appName} -n argocd -o jsonpath="{.status.sync.status}" 2>/dev/null || echo ""`,
+      { silent: true },
+    ).trim();
+
+    if (syncStatus === "Synced") {
+      log(`   ✅ ${appName} synced`);
+      return;
+    }
+
+    // Check if there's no operation running — trigger sync
+    const opPhase = exec(
+      `kubectl get app ${appName} -n argocd -o jsonpath="{.status.operationState.phase}" 2>/dev/null || echo ""`,
+      { silent: true },
+    ).trim();
+
+    if (opPhase !== "Running") {
+      // Clear any failed operation first, then trigger new sync
+      exec(
+        `kubectl patch app ${appName} -n argocd --type=json -p='[{"op":"remove","path":"/status/operationState"}]' 2>/dev/null`,
+        { silent: true, ignoreErrors: true },
+      );
+      exec(
+        `kubectl patch app ${appName} -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{"syncStrategy":{"apply":{"force":false}},"retry":{"limit":3,"backoff":{"duration":"5s","factor":2}}}}}'`,
+        { silent: true, ignoreErrors: true },
+      );
+    }
+
+    await sleep(10000);
+  }
+
+  log(`   ⚠️  ${appName} did not reach Synced within ${timeoutSeconds}s`);
 }
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
