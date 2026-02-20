@@ -126,3 +126,6 @@ export type {
 
 export { WireGuardMesh } from "./wireguard-mesh";
 export type { WireGuardMeshConfig, WireGuardPeer } from "./wireguard-mesh";
+
+export { Calico } from "./calico";
+export type { CalicoConfig } from "./calico";
