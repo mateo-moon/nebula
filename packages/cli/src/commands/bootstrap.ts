@@ -323,22 +323,14 @@ async function deployToGke(): Promise<void> {
   log("📦 Step 6: Deploying workloads to GKE");
   log("─".repeat(50));
 
-  // List of GKE workload modules (everything except bootstrap and infra)
-  // Note: 'infra' is excluded because it creates GKE infrastructure and IAM grants
-  // that are already applied to Kind. Re-applying to GKE would fail because
-  // Workload Identity credentials lack project IAM permissions.
-  // Support both flat structure (module.ts) and directory structure (module/dev.ts)
+  // Minimum modules needed to bootstrap ArgoCD on GKE.
+  // Once ArgoCD + argocd-apps are running, ArgoCD auto-syncs everything else
+  // from git (clusters/managed/*, clusters/dev/*, applications/*).
   const gkeModuleNames = [
-    "managed/providers",
-    "managed/crossplane",
-    "managed/dns",
-    "managed/cert-manager",
-    "managed/cluster-api",
-    "managed/ingress-nginx",
-    "managed/external-dns",
-    "managed/monitoring",
-    "managed/argocd",
-    "managed/argocd-apps",
+    "infra/providers",   // Phase 1: Crossplane provider CRDs
+    "infra/crossplane",  // Phase 1: Crossplane functions/compositions
+    "meta/argocd",       // Phase 2: ArgoCD itself
+    "meta/argocd-apps",  // Phase 2: App-of-apps (drives all other apps)
   ];
 
   // Clear previous dist to avoid mixing bootstrap and GKE manifests
@@ -347,60 +339,54 @@ async function deployToGke(): Promise<void> {
   }
   fs.mkdirSync("dist", { recursive: true });
 
-  // Synth each module to its own subdirectory (cdk8s clears output dir by default)
-  log("   Synthesizing GKE workloads...");
+  // Synth each module
+  log("   Synthesizing GKE modules...");
   for (const moduleName of gkeModuleNames) {
-    // Try directory structure first (module/dev.ts), then flat (module.ts)
+    const indexPath = `${moduleName}/index.ts`;
     const dirPath = `${moduleName}/dev.ts`;
-    const flatPath = `${moduleName}.ts`;
     const outputDir = `dist/${moduleName}`;
 
-    if (fs.existsSync(dirPath)) {
-      log(`   - ${dirPath}`);
-      exec(`npx cdk8s synth -o "${outputDir}" --app "npx tsx ${dirPath}"`, {
+    if (fs.existsSync(indexPath)) {
+      log(`   - ${indexPath}`);
+      exec(`npx cdk8s synth -o "${outputDir}" --app "npx tsx ${indexPath}"`, {
         silent: true,
       });
-    } else if (fs.existsSync(flatPath)) {
-      log(`   - ${flatPath}`);
-      exec(`npx cdk8s synth -o "${outputDir}" --app "npx tsx ${flatPath}"`, {
+    } else if (fs.existsSync(dirPath)) {
+      log(`   - ${dirPath}`);
+      exec(`npx cdk8s synth -o "${outputDir}" --app "npx tsx ${dirPath}"`, {
         silent: true,
       });
     }
   }
 
-  // Apply in phases to ensure dependencies are ready
-  // Phase 1: Core infrastructure (providers, crossplane)
-  log("   Phase 1: Applying core infrastructure...");
-  const phase1 = ["providers", "crossplane"];
-  for (const mod of phase1) {
+  // Phase 1: Crossplane providers + functions (CRDs needed by argocd-apps)
+  log("   Phase 1: Applying Crossplane infrastructure...");
+  for (const mod of ["infra/providers", "infra/crossplane"]) {
     const modDir = `dist/${mod}`;
     if (fs.existsSync(modDir)) {
       exec(`npx nebula apply --file "${modDir}/*.k8s.yaml"`, { silent: true });
     }
   }
 
-  // Wait for Crossplane providers and functions to be healthy
-  // Providers must install their CRDs before phase 2 modules (dns, argocd, etc.) can work
   log("   Waiting for Crossplane providers to be healthy...");
   await waitForProviders(300);
   log("   Waiting for Crossplane functions to be healthy...");
   await waitForCrossplaneFunctions(120);
 
-  // Phase 2: Everything else
-  log("   Phase 2: Applying workloads...");
-  const phase2 = gkeModuleNames.filter((m) => !phase1.includes(m));
-  for (const mod of phase2) {
+  // Phase 2: ArgoCD + argocd-apps
+  log("   Phase 2: Applying ArgoCD...");
+  for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
     const modDir = `dist/${mod}`;
     if (fs.existsSync(modDir)) {
       exec(`npx nebula apply --file "${modDir}/*.k8s.yaml"`, { silent: true });
     }
   }
 
-  log(`   ✅ Workloads deployed to GKE`);
+  log(`   ✅ Bootstrap modules deployed to GKE`);
 
-  // Step 7: Sync critical ArgoCD apps
+  // Step 7: Sync ArgoCD apps — triggers ArgoCD to pick up everything from git
   log("");
-  log("🔄 Step 7: Syncing critical ArgoCD apps");
+  log("🔄 Step 7: Syncing ArgoCD apps");
   log("─".repeat(50));
   await syncCriticalApps();
 }
@@ -478,39 +464,11 @@ async function syncCriticalApps(): Promise<void> {
     await sleep(5000);
   }
 
-  // Phase 1: Sync argocd-apps first — it creates all other Application resources
+  // Sync argocd-apps — this creates all ApplicationSets and Applications.
+  // ArgoCD auto-syncs everything else from git (platform + workload tiers).
   await syncAppWithRetry("argocd-apps", 180);
 
-  // Phase 2: Sync providers, then wait for CRDs to be registered
-  // Providers install CRDs that dns, infra, and other apps depend on.
-  // ArgoCD caches API discovery, so syncing dependent apps before CRDs exist
-  // causes persistent failures even after CRDs appear.
-  await syncAppWithRetry("providers", 180);
-  log("   Waiting for provider CRDs to be registered...");
-  await waitForProviders(300);
-
-  // Phase 3: Sync crossplane (functions/compositions), wait for readiness
-  await syncAppWithRetry("crossplane", 180);
-  await waitForCrossplaneFunctions(120);
-
-  // Phase 4: Sync remaining apps — CRDs are now available
-  const remainingApps = [
-    "dns",
-    "cert-manager",
-    "ingress-nginx",
-    "external-dns",
-    "argocd",
-    "cluster-api",
-    "clusters",
-    "infra",
-    "monitoring",
-  ];
-
-  for (const appName of remainingApps) {
-    await syncAppWithRetry(appName, 180);
-  }
-
-  log("   ✅ Critical apps synced");
+  log("   ✅ ArgoCD apps synced — auto-sync will handle the rest");
 }
 
 /**
