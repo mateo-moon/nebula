@@ -220,12 +220,12 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       version: this.config.version ?? "81.4.3",
       namespace: namespaceName,
       values: chartValues,
-      // Include CRDs unless explicitly disabled via values.crds.enabled
-      helmFlags:
-        (this.config.values as { crds?: { enabled?: boolean } })?.crds
-          ?.enabled === false
-          ? []
-          : ["--include-crds"],
+      // kube-prometheus-stack CRDs exceed the 262144-byte annotation limit
+      // for kubectl client-side apply. They must be pre-installed via
+      // `kubectl apply --server-side` or by ArgoCD with ServerSideApply=true.
+      // Never use --include-crds here; it renders CRDs inline and ArgoCD
+      // cannot apply them without hitting the annotation size limit.
+      helmFlags: [],
     });
 
     // Deploy Loki
