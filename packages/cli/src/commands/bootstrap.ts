@@ -478,21 +478,35 @@ async function syncCriticalApps(): Promise<void> {
     await sleep(5000);
   }
 
-  // Sync apps in dependency order with retries
-  const syncOrder = [
-    "argocd-apps", // Creates all other Application resources
-    "providers", // Crossplane GCP providers
-    "crossplane", // Crossplane functions and compositions
-    "dns", // Cloud DNS zones
+  // Phase 1: Sync argocd-apps first — it creates all other Application resources
+  await syncAppWithRetry("argocd-apps", 180);
+
+  // Phase 2: Sync providers, then wait for CRDs to be registered
+  // Providers install CRDs that dns, infra, and other apps depend on.
+  // ArgoCD caches API discovery, so syncing dependent apps before CRDs exist
+  // causes persistent failures even after CRDs appear.
+  await syncAppWithRetry("providers", 180);
+  log("   Waiting for provider CRDs to be registered...");
+  await waitForProviders(300);
+
+  // Phase 3: Sync crossplane (functions/compositions), wait for readiness
+  await syncAppWithRetry("crossplane", 180);
+  await waitForCrossplaneFunctions(120);
+
+  // Phase 4: Sync remaining apps — CRDs are now available
+  const remainingApps = [
+    "dns",
     "cert-manager",
     "ingress-nginx",
     "external-dns",
-    "argocd", // Re-sync to pick up ingress/cert
+    "argocd",
     "cluster-api",
     "clusters",
+    "infra",
+    "monitoring",
   ];
 
-  for (const appName of syncOrder) {
+  for (const appName of remainingApps) {
     await syncAppWithRetry(appName, 180);
   }
 
@@ -539,13 +553,20 @@ async function syncAppWithRetry(
     ).trim();
 
     if (opPhase !== "Running") {
-      // Clear any failed operation first, then trigger new sync
+      // Clear any failed operation first
       exec(
         `kubectl patch app ${appName} -n argocd --type=json -p='[{"op":"remove","path":"/status/operationState"}]' 2>/dev/null`,
         { silent: true, ignoreErrors: true },
       );
+      // Force ArgoCD to rediscover API resources (picks up newly installed CRDs)
       exec(
-        `kubectl patch app ${appName} -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{"syncStrategy":{"apply":{"force":false}},"retry":{"limit":3,"backoff":{"duration":"5s","factor":2}}}}}'`,
+        `kubectl patch app ${appName} -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'`,
+        { silent: true, ignoreErrors: true },
+      );
+      await sleep(3000);
+      // Trigger sync with syncOptions from the app spec
+      exec(
+        `kubectl patch app ${appName} -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{"syncOptions":["CreateNamespace=true","ServerSideApply=true","SkipDryRunOnMissingResource=true","RespectIgnoreDifferences=true"]}}}'`,
         { silent: true, ignoreErrors: true },
       );
     }

@@ -34,6 +34,13 @@ export interface NodePoolConfig {
   }>;
 }
 
+export interface MasterAuthorizedNetwork {
+  /** CIDR block (e.g., "203.0.113.0/24") */
+  cidrBlock: string;
+  /** Display name for identification */
+  displayName?: string;
+}
+
 export interface GkeConfig {
   /** Cluster name */
   name: string;
@@ -57,6 +64,8 @@ export interface GkeConfig {
   providerConfigRef?: string;
   /** Deletion policy */
   deletionPolicy?: ClusterSpecDeletionPolicy;
+  /** Master authorized networks — CIDRs allowed to reach the API server */
+  masterAuthorizedNetworks?: MasterAuthorizedNetwork[];
 }
 
 export class Gke extends Construct {
@@ -116,6 +125,19 @@ export class Gke extends Construct {
               workloadPool: `${config.project}.svc.id.goog`,
             },
           ],
+          ...(config.masterAuthorizedNetworks &&
+          config.masterAuthorizedNetworks.length > 0
+            ? {
+                masterAuthorizedNetworksConfig: [
+                  {
+                    cidrBlocks: config.masterAuthorizedNetworks.map((n) => ({
+                      cidrBlock: n.cidrBlock,
+                      displayName: n.displayName,
+                    })),
+                  },
+                ],
+              }
+            : {}),
           enableShieldedNodes: true,
           verticalPodAutoscaling: [
             {

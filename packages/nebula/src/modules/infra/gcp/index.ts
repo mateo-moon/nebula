@@ -10,7 +10,7 @@ import { BaseConstruct } from "../../../core";
 export { Network } from "./network";
 export type { NetworkConfig } from "./network";
 export { Gke } from "./gke";
-export type { GkeConfig, NodePoolConfig } from "./gke";
+export type { GkeConfig, NodePoolConfig, MasterAuthorizedNetwork } from "./gke";
 export { Iam } from "./iam";
 export type { IamConfig, WorkloadIdentityConfig } from "./iam";
 export { NetworkSpecDeletionPolicy } from "#imports/compute.gcp.upbound.io";
@@ -86,6 +86,7 @@ export class Gcp extends BaseConstruct<GcpConfig> {
       nodePools: this.config.gke.nodePools,
       createSystemNodePool: this.config.gke.createSystemNodePool,
       systemNodePoolConfig: this.config.gke.systemNodePoolConfig,
+      masterAuthorizedNetworks: this.config.gke.masterAuthorizedNetworks,
       providerConfigRef,
       deletionPolicy: clusterDeletionPolicy,
     });
