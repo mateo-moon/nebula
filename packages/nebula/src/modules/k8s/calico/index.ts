@@ -90,10 +90,10 @@ export class Calico extends BaseConstruct<CalicoConfig> {
         ],
       },
     };
-    if (kubeletPath) {
-      installation.kubeletVolumePluginPath = kubeletPath;
-    }
-    const defaultValues: Record<string, unknown> = { installation };
+    const defaultValues: Record<string, unknown> = {
+      installation,
+      ...(kubeletPath && { kubeletVolumePluginPath: kubeletPath }),
+    };
 
     const chartValues = deepmerge(defaultValues, this.config.values ?? {});
 
