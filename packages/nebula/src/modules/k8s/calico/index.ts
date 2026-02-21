@@ -33,7 +33,7 @@ export interface CalicoConfig {
   podCidr?: string;
   /** Block size for per-node IP allocations (defaults to 24) */
   blockSize?: number;
-  /** Encapsulation mode for cross-subnet traffic (defaults to VXLANCrossSubnet) */
+  /** Encapsulation mode (defaults to VXLAN — best for hybrid/multi-site clusters) */
   encapsulation?:
     | "VXLAN"
     | "VXLANCrossSubnet"
@@ -44,7 +44,7 @@ export interface CalicoConfig {
   wireguard?: boolean;
   /** WireGuard interface MTU (defaults to 1420) */
   wireguardMTU?: number;
-  /** Enable BGP for route distribution (defaults to true) */
+  /** Enable BGP for route distribution (defaults to false — VXLAN overlay doesn't need BGP) */
   bgp?: boolean;
   /** Additional Helm values for tigera-operator */
   values?: Record<string, unknown>;
@@ -60,10 +60,10 @@ export class Calico extends BaseConstruct<CalicoConfig> {
     const namespaceName = this.config.namespace ?? "tigera-operator";
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const blockSize = this.config.blockSize ?? 24;
-    const encapsulation = this.config.encapsulation ?? "VXLANCrossSubnet";
+    const encapsulation = this.config.encapsulation ?? "VXLAN";
     const wireguard = this.config.wireguard ?? true;
     const wireguardMTU = this.config.wireguardMTU ?? 1420;
-    const bgp = this.config.bgp ?? true;
+    const bgp = this.config.bgp ?? false;
 
     // --- Namespace ---
 
