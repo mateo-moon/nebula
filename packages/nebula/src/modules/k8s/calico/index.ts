@@ -17,7 +17,7 @@
  * ```
  */
 import { Construct } from "constructs";
-import { ApiObject, Helm } from "cdk8s";
+import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct } from "../../../core";
@@ -109,6 +109,12 @@ export class Calico extends BaseConstruct<CalicoConfig> {
     const installation: Record<string, unknown> = {
       cni: { type: "Calico" },
       calicoNetwork,
+      ...(wireguard && {
+        felixConfiguration: {
+          wireguardEnabled: true,
+          wireguardMTU,
+        },
+      }),
     };
     const defaultValues: Record<string, unknown> = {
       installation,
@@ -127,25 +133,5 @@ export class Calico extends BaseConstruct<CalicoConfig> {
       namespace: namespaceName,
       values: chartValues,
     });
-
-    // --- FelixConfiguration for WireGuard ---
-
-    if (wireguard) {
-      new ApiObject(this, "felix-config", {
-        apiVersion: "crd.projectcalico.org/v1",
-        kind: "FelixConfiguration",
-        metadata: {
-          name: "default",
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "5",
-          },
-        },
-        spec: {
-          wireguardEnabled: true,
-          wireguardEnabledV6: false,
-          wireguardMTU,
-        },
-      });
-    }
   }
 }
