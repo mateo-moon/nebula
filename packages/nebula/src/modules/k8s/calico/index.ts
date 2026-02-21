@@ -48,6 +48,15 @@ export interface CalicoConfig {
   bgp?: boolean;
   /** Kubelet root path (defaults to /var/lib/kubelet; k0s uses /var/lib/k0s/kubelet) */
   kubeletPath?: string;
+  /** Node address autodetection — controls which IP is used for VXLAN tunnel endpoints */
+  nodeAddressAutodetection?: {
+    /** Regex to match interface name (e.g., "eth0", "wg0") */
+    interface?: string;
+    /** IP/domain — Calico picks the local IP that routes to this target (e.g., "8.8.8.8" for public IP) */
+    canReach?: string;
+    /** CIDR list to match node IPs against */
+    cidrs?: string[];
+  };
   /** Additional Helm values for tigera-operator */
   values?: Record<string, unknown>;
 }
@@ -76,19 +85,30 @@ export class Calico extends BaseConstruct<CalicoConfig> {
 
     // --- Helm (tigera-operator) ---
 
+    const calicoNetwork: Record<string, unknown> = {
+      bgp: bgp ? "Enabled" : "Disabled",
+      ipPools: [
+        {
+          cidr: podCidr,
+          blockSize,
+          encapsulation,
+          natOutgoing: "Enabled",
+        },
+      ],
+    };
+    if (this.config.nodeAddressAutodetection) {
+      const auto: Record<string, unknown> = {};
+      if (this.config.nodeAddressAutodetection.interface)
+        auto.interface = this.config.nodeAddressAutodetection.interface;
+      if (this.config.nodeAddressAutodetection.canReach)
+        auto.canReach = this.config.nodeAddressAutodetection.canReach;
+      if (this.config.nodeAddressAutodetection.cidrs)
+        auto.cidrs = this.config.nodeAddressAutodetection.cidrs;
+      calicoNetwork.nodeAddressAutodetectionV4 = auto;
+    }
     const installation: Record<string, unknown> = {
       cni: { type: "Calico" },
-      calicoNetwork: {
-        bgp: bgp ? "Enabled" : "Disabled",
-        ipPools: [
-          {
-            cidr: podCidr,
-            blockSize,
-            encapsulation,
-            natOutgoing: "Enabled",
-          },
-        ],
-      },
+      calicoNetwork,
     };
     const defaultValues: Record<string, unknown> = {
       installation,
