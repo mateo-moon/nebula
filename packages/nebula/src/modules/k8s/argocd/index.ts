@@ -692,7 +692,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
               args: [
                 `set -e
 echo "Installing dependencies in $(pwd)..." >&2
-pnpm install --no-lockfile 2>&1 >&2`,
+pnpm install --frozen-lockfile 2>&1 >&2`,
               ],
             },
             generate: {
