@@ -86,6 +86,8 @@ export interface PiraeusConfig {
   replication?: PiraeusReplicationConfig;
   /** Kubelet path override for k0s (defaults to "/var/lib/kubelet", k0s uses "/var/lib/k0s/kubelet") */
   kubeletPath?: string;
+  /** Use host networking for LINSTOR satellites (defaults to true; set false when CNI provides cross-node routing) */
+  hostNetwork?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
   advertiseIP?: string;
   /** Additional Helm values for linstor-cluster chart */
@@ -124,6 +126,7 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
     // --- LinstorCluster ---
 
     const kubeletPath = this.config.kubeletPath;
+    const useHostNetwork = this.config.hostNetwork ?? true;
     const clusterSpec: Record<string, unknown> = {
       ...(this.config.encryption
         ? { linstorPassphraseSecret: "linstor-passphrase" }
@@ -209,9 +212,9 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
         };
       }
 
-      const podSpec: Record<string, unknown> = { hostNetwork: true };
+      const podSpec: Record<string, unknown> = { hostNetwork: useHostNetwork };
       if (this.config.advertiseIP && replicationInterface) {
-        podSpec.dnsPolicy = "ClusterFirstWithHostNet";
+        if (useHostNetwork) podSpec.dnsPolicy = "ClusterFirstWithHostNet";
         podSpec.containers = [
           buildDrbdIpSidecar(
             this.config.advertiseIP,
@@ -250,9 +253,9 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           }),
         );
 
-        const podSpec: Record<string, unknown> = { hostNetwork: true };
+        const podSpec: Record<string, unknown> = { hostNetwork: useHostNetwork };
         if (sat.advertiseIP && replicationInterface) {
-          podSpec.dnsPolicy = "ClusterFirstWithHostNet";
+          if (useHostNetwork) podSpec.dnsPolicy = "ClusterFirstWithHostNet";
           podSpec.containers = [
             buildDrbdIpSidecar(
               sat.advertiseIP,
