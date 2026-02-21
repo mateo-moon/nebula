@@ -91,7 +91,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
       },
     };
     if (kubeletPath) {
-      installation.kubeletVolumePluginPath = `${kubeletPath}/plugins`;
+      installation.kubeletVolumePluginPath = kubeletPath;
     }
     const defaultValues: Record<string, unknown> = { installation };
 
