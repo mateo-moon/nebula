@@ -97,7 +97,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
       ],
     };
     if (this.config.nodeAddressAutodetection) {
-      const auto: Record<string, unknown> = {};
+      const auto: Record<string, unknown> = { firstFound: false };
       if (this.config.nodeAddressAutodetection.interface)
         auto.interface = this.config.nodeAddressAutodetection.interface;
       if (this.config.nodeAddressAutodetection.canReach)
