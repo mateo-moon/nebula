@@ -92,25 +92,6 @@ export class Calico extends BaseConstruct<CalicoConfig> {
     };
     if (kubeletPath) {
       installation.kubeletVolumePluginPath = `${kubeletPath}/plugins`;
-      installation.calicoNodeDaemonSet = {
-        spec: {
-          template: {
-            spec: {
-              initContainers: [
-                {
-                  name: "install-cni",
-                  env: [
-                    {
-                      name: "CNI_NET_DIR",
-                      value: "/etc/cni/net.d",
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        },
-      };
     }
     const defaultValues: Record<string, unknown> = { installation };
 
