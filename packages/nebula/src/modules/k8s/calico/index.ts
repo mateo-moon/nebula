@@ -93,6 +93,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
           blockSize,
           encapsulation,
           natOutgoing: "Enabled",
+          name: "default-ipv4-ippool",
           allowedUses: ["Workload", "Tunnel"],
           disableBGPExport: false,
           disableNewAllocations: false,
