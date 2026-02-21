@@ -46,6 +46,8 @@ export interface CalicoConfig {
   wireguardMTU?: number;
   /** Enable BGP for route distribution (defaults to false — VXLAN overlay doesn't need BGP) */
   bgp?: boolean;
+  /** Kubelet root path (defaults to /var/lib/kubelet; k0s uses /var/lib/k0s/kubelet) */
+  kubeletPath?: string;
   /** Additional Helm values for tigera-operator */
   values?: Record<string, unknown>;
 }
@@ -64,6 +66,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
     const wireguard = this.config.wireguard ?? true;
     const wireguardMTU = this.config.wireguardMTU ?? 1420;
     const bgp = this.config.bgp ?? false;
+    const kubeletPath = this.config.kubeletPath;
 
     // --- Namespace ---
 
@@ -73,22 +76,43 @@ export class Calico extends BaseConstruct<CalicoConfig> {
 
     // --- Helm (tigera-operator) ---
 
-    const defaultValues: Record<string, unknown> = {
-      installation: {
-        cni: { type: "Calico" },
-        calicoNetwork: {
-          bgp: bgp ? "Enabled" : "Disabled",
-          ipPools: [
-            {
-              cidr: podCidr,
-              blockSize,
-              encapsulation,
-              natOutgoing: "Enabled",
-            },
-          ],
-        },
+    const installation: Record<string, unknown> = {
+      cni: { type: "Calico" },
+      calicoNetwork: {
+        bgp: bgp ? "Enabled" : "Disabled",
+        ipPools: [
+          {
+            cidr: podCidr,
+            blockSize,
+            encapsulation,
+            natOutgoing: "Enabled",
+          },
+        ],
       },
     };
+    if (kubeletPath) {
+      installation.kubeletVolumePluginPath = `${kubeletPath}/plugins`;
+      installation.calicoNodeDaemonSet = {
+        spec: {
+          template: {
+            spec: {
+              initContainers: [
+                {
+                  name: "install-cni",
+                  env: [
+                    {
+                      name: "CNI_NET_DIR",
+                      value: "/etc/cni/net.d",
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      };
+    }
+    const defaultValues: Record<string, unknown> = { installation };
 
     const chartValues = deepmerge(defaultValues, this.config.values ?? {});
 
