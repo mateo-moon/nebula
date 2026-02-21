@@ -93,6 +93,10 @@ export class Calico extends BaseConstruct<CalicoConfig> {
           blockSize,
           encapsulation,
           natOutgoing: "Enabled",
+          allowedUses: ["Workload", "Tunnel"],
+          disableBGPExport: false,
+          disableNewAllocations: false,
+          nodeSelector: "all()",
         },
       ],
     };
@@ -141,6 +145,11 @@ export class Calico extends BaseConstruct<CalicoConfig> {
           wireguardEnabled: true,
           wireguardEnabledV6: false,
           wireguardMTU,
+          bpfEnabled: false,
+          bpfLogLevel: "",
+          healthPort: 9099,
+          nftablesMode: "Disabled",
+          vxlanVNI: 4096,
         },
       });
     }
