@@ -139,6 +139,7 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
             location: "EU",
             storageClass: "STANDARD",
             uniformBucketLevelAccess: true,
+            forceDestroy: true,
             versioning: { enabled: false },
             lifecycleRule: [
               {
