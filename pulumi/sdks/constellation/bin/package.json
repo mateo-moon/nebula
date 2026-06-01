@@ -1,0 +1,30 @@
+{
+    "name": "@pulumi/constellation",
+    "version": "2.24.0",
+    "description": "A Pulumi provider dynamically bridged from constellation.",
+    "repository": "https://github.com/edgelesssys/terraform-provider-constellation",
+    "main": "bin/index.js",
+    "scripts": {
+        "build": "tsc",
+        "postinstall": "node ./scripts/postinstall.js"
+    },
+    "peerDependencies": {
+        "@pulumi/pulumi": ">=3.198.0"
+    },
+    "devDependencies": {
+        "@pulumi/pulumi": "^3.198.0",
+        "@types/node": "^18",
+        "async-mutex": "^0.5.0",
+        "typescript": "^4.3.5"
+    },
+    "pulumi": {
+        "resource": true,
+        "name": "terraform-provider",
+        "version": "0.10.0",
+        "parameterization": {
+            "name": "constellation",
+            "version": "2.24.0",
+            "value": "eyJyZW1vdGUiOnsidXJsIjoicmVnaXN0cnkudGVycmFmb3JtLmlvL2VkZ2VsZXNzc3lzL2NvbnN0ZWxsYXRpb24iLCJ2ZXJzaW9uIjoiMi4yNC4wIn19"
+        }
+    }
+}
