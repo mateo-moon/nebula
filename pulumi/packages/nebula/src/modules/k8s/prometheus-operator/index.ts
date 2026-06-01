@@ -672,20 +672,26 @@ export class PrometheusOperator extends BaseModule {
           }
         },
         data: {
-          "datasource.yaml": JSON.stringify([
-            {
-              name: "Loki",
-              type: "loki",
-              uid: "loki",
-              url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
-              access: "proxy",
-              isDefault: false,
-              editable: true,
-              jsonData: {
-                maxLines: 1000
+          // Grafana datasource provisioning files must be an object { apiVersion, datasources },
+          // NOT a bare array. A bare array fails with "cannot unmarshal !!seq into
+          // datasources.configVersion" and crashes Grafana on startup provisioning.
+          "datasource.yaml": JSON.stringify({
+            apiVersion: 1,
+            datasources: [
+              {
+                name: "Loki",
+                type: "loki",
+                uid: "loki",
+                url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
+                access: "proxy",
+                isDefault: false,
+                editable: true,
+                jsonData: {
+                  maxLines: 1000
+                }
               }
-            }
-          ])
+            ]
+          })
         }
       },
       { parent: this, dependsOn: [this.chart, lokiChart] }
@@ -942,21 +948,26 @@ config:
             }
           },
           data: {
-            "datasource.yaml": JSON.stringify([
-              {
-                name: "Thanos",
-                type: "prometheus",
-                uid: "thanos",
-                url: `http://${name}-thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
-                access: "proxy",
-                isDefault: false,
-                editable: true,
-                jsonData: {
-                  httpMethod: "POST",
-                  timeInterval: "30s"
+            // Grafana datasource provisioning files must be an object { apiVersion, datasources },
+            // NOT a bare array, else Grafana crashes on startup provisioning.
+            "datasource.yaml": JSON.stringify({
+              apiVersion: 1,
+              datasources: [
+                {
+                  name: "Thanos",
+                  type: "prometheus",
+                  uid: "thanos",
+                  url: `http://${name}-thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
+                  access: "proxy",
+                  isDefault: false,
+                  editable: true,
+                  jsonData: {
+                    httpMethod: "POST",
+                    timeInterval: "30s"
+                  }
                 }
-              }
-            ])
+              ]
+            })
           }
         },
         { parent: this, dependsOn: [this.chart] }

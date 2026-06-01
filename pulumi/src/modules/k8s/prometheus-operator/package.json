@@ -1,0 +1,11 @@
+{
+  "name": "@nebula/k8s-prometheus-operator",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "@pulumi/kubernetes": "^4.23.0",
+    "@pulumi/pulumi": "^3.198.0",
+    "deepmerge-ts": "^7.1.5"
+  }
+}

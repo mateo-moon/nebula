@@ -685,12 +685,29 @@ async function postDeploymentValidation(): Promise<void> {
   log("   ✅ Post-deployment validation complete");
 }
 
+/**
+ * Try to read GCP project ID from config.ts in cwd.
+ */
+function readProjectFromConfig(): string | null {
+  const configPath = path.join(process.cwd(), "config.ts");
+  if (!fs.existsSync(configPath)) return null;
+  try {
+    const content = fs.readFileSync(configPath, "utf-8");
+    const match = content.match(/project:\s*["']([^"']+)["']/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
   const clusterName = options.name || "nebula";
-  const project = options.project;
+  const project = options.project || readProjectFromConfig();
 
   if (!project) {
-    throw new Error("GCP project ID is required. Use --project <id>");
+    throw new Error(
+      "GCP project ID is required. Use --project <id> or run 'nebula init' first.",
+    );
   }
 
   log("");

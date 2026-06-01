@@ -1,359 +1,299 @@
-# Nebula Pulumi Infrastructure
+# Nebula Pulumi
 
-This directory contains the Pulumi infrastructure-as-code implementation for Nebula.
+TypeScript-first infrastructure and addons orchestrator built on the Pulumi Automation API.
 
-## Directory Structure
+Nebula gives you:
+- Componentized stacks per environment: `Infra`, `K8s`, `Secrets`
+- Automatic backend selection and bootstrap (S3/GCS/local)
+- GCP GKE and AWS EKS reference infra
+- Kubernetes addons as classes, deployed per-chart as isolated Pulumi stacks
+- Non-interactive-friendly CLI with optional interactive selection; selecting "all" skips per-stack prompts
 
-```
-pulumi/
-├── src/
-│   ├── cli.ts              # Nebula CLI implementation
-│   ├── index.ts            # Main exports
-│   ├── core/               # Core framework
-│   │   ├── automation.ts   # Pulumi automation API wrapper
-│   │   └── component.ts    # Component class with provider management
-│   ├── modules/            # Infrastructure modules
-│   │   ├── infra/          # Cloud infrastructure modules
-│   │   │   ├── dns/        # DNS management
-│   │   │   └── gcp/        # GCP resources (Network, GKE, IAM)
-│   │   └── k8s/            # Kubernetes modules
-│   │       ├── argocd/
-│   │       ├── cert-manager/
-│   │       ├── crossplane/
-│   │       ├── external-dns/
-│   │       └── ingress-nginx/
-│   └── utils/              # Utility functions
-│       ├── auth.ts         # Authentication utilities
-│       ├── helpers.ts      # Helper functions
-│       ├── kubeconfig.ts   # Kubeconfig management
-│       └── index.ts
-├── tests/                  # Test scenarios
-└── package.json
-```
+---
 
-## Component Pattern
+## Prerequisites
+- Node.js >= 20
+- Pulumi CLI v3 installed and on PATH (`pulumi version`)
+- For GCP/GKE:
+  - Google Cloud SDK (`gcloud`), ADC set up: `gcloud auth application-default login`
+  - Project and region configured (`gcloud config set project <id>`)
+- For AWS/EKS:
+  - AWS CLI v2 (`aws`)
+  - If using SSO, the repo will generate `.config/aws_config`. Run `aws sso login` when prompted
+- Optional (for values like `ref+sops://...` in Helm): `vals`, `sops`
 
-Nebula uses a `Component` class as the main entry point for infrastructure definitions. Components manage providers and modules with automatic provider inheritance.
+## Install
+Inside this `pulumi` directory:
 
-### Basic Usage
-
-```typescript
-import { Component } from 'nebula';
-import * as gcp from '@pulumi/gcp';
-import * as k8s from '@pulumi/kubernetes';
-import Gcp from 'nebula/modules/infra/gcp';
-import CertManager from 'nebula/modules/k8s/cert-manager';
-
-new Component('my-app', {
-  backendUrl: 'gs://my-state-bucket',
-  providers: [
-    new gcp.Provider('gcp', { project: 'my-project', region: 'us-central1' }),
-    new k8s.Provider('k8s', { kubeconfig: myKubeconfig }),
-  ],
-  modules: [
-    Gcp({ network: { name: 'main' }, gke: { name: 'cluster' } }),
-    CertManager({ acmeEmail: 'admin@example.com' }),
-  ],
-});
+```bash
+pnpm install
+# or: npm install
 ```
 
-### Creating Custom Modules
+You can run the CLI directly without building via tsx (preferred during development):
 
-Modules are factory functions that return a function creating resources:
+```bash
+pnpm run cli -- --help
+```
 
-```typescript
-import * as pulumi from '@pulumi/pulumi';
-import { getCurrentComponent } from 'nebula';
+Or use the bundled executable:
 
-export interface MyModuleConfig {
-  name: string;
+```bash
+node ./bin/nebula.js --help
+```
+
+---
+
+## How it works (high level)
+- You author a small config module (TS or JS) that exports a `createProject()` function returning a `Project`.
+- A `Project` contains named `environments`.
+- Each `Environment` can enable components:
+  - `Infra` (AWS: VPC/EKS, Route53, IAM; GCP: VPC/GKE, Cloud DNS)
+  - `K8s` (connects via kubeconfig, deploys addons)
+  - `Secrets` (provisions SOPS keys and manages `.sops.yaml`)
+- The CLI expands `K8s` into per-chart ephemeral component stacks at runtime, so each chart previews/applies in isolation.
+- Backends are resolved automatically (S3 for AWS, GCS for GCP, local otherwise) and created on first run if needed.
+
+---
+
+## Full example: GKE + addons
+Create `nebula.config.ts` at the repo root (or another path and pass via `--config`).
+
+```ts
+// nebula.config.ts
+import { Project } from './pulumi/src';
+import type { EnvironmentConfig } from './pulumi/src/core/environment';
+import { Infra } from './pulumi/src/components/infra';
+import { K8s } from './pulumi/src/components/k8s';
+import { HelmChartAddon, HelmFolderAddon } from './pulumi/src/components/k8s/addon';
+
+export async function createProject() {
+  // Project-wide config
+  const project = new Project('acme', {
+    id: 'acme',
+    gcp: {
+      projectId: 'my-gcp-project-id',
+      region: 'us-central1',
+    },
+    environments: {
+      dev: devEnv(),
+    },
+  });
+  return project;
 }
 
-export class MyModule extends pulumi.ComponentResource {
-  constructor(name: string, args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
-    super('my-module', name, args, opts);
-    
-    // Access inherited providers via Pulumi's public API
-    const gcpProvider = this.getProvider('gcp:project:Project');
-    
-    // Create resources...
-  }
-}
+function devEnv(): EnvironmentConfig {
+  return {
+    // Optional explicit backend (otherwise auto-resolves to gs://pulumi-acme-dev-state)
+    // backend: 'gs://pulumi-acme-dev-state',
+    gcpConfig: {
+      projectId: 'my-gcp-project-id',
+      region: 'us-central1',
+    },
+    components: {
+      Infra: (env) => new Infra(env, 'infra', {
+        gcp: {
+          enabled: true,
+          domainName: 'dev.acme.example', // optional Cloud DNS zone
+          network: {
+            cidr: '10.10.0.0/16',
+            podsSecondaryCidr: '10.20.0.0/16',
+            servicesSecondaryCidr: '10.30.0.0/16',
+          },
+          gke: {
+            name: 'acme-gke',
+            releaseChannel: 'REGULAR',
+            deletionProtection: false,
+            systemNodepool: {
+              name: 'system',
+              machineType: 'e2-standard-4',
+              min: 2,
+              max: 5,
+              diskGb: 50,
+            },
+          },
+        },
+      }),
 
-export default function(args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
-  return () => {
-    const parent = opts?.parent ?? getCurrentComponent();
-    return new MyModule('my-module', args, parent ? { ...opts, parent } : opts);
+      K8s: (env) => new K8s(env, 'k8s', {
+        // Use the kubeconfig emitted by Infra → GKE
+        kubeconfig: env.infra!.gcpResources!.gke!.kubeconfig,
+        charts: [
+          new HelmChartAddon({
+            name: 'ingress-nginx',
+            namespace: 'ingress-nginx',
+            repo: { name: 'ingress-nginx', url: 'https://kubernetes.github.io/ingress-nginx' },
+            chart: 'ingress-nginx',
+            version: '4.11.3',
+            values: {
+              controller: {
+                service: { annotations: { 'cloud.google.com/load-balancer-type': 'External' } },
+              },
+            },
+            deploy: true,
+          }),
+          // Deploy a folder of manifests or a Helm chart with values files
+          new HelmFolderAddon(
+            'platform',
+            'k8s/platform',
+            {
+              namespace: 'platform',
+              valuesFiles: ['values.yaml', 'values-dev.yaml'], // merged if present in the folder
+              values: {
+                // Example: resolve a vals ref if you use sops + vals
+                // mySecret: 'ref+sops://secrets/dev.yaml#mySecret'
+              },
+              deploy: true,
+            }
+          ),
+        ],
+      }),
+
+      // Optional: provision SOPS KMS keys and write .sops.yaml rules
+      // Secrets: (env) => new Secrets(env, 'secrets', {
+      //   gcp: { enabled: true, location: 'global' },
+      // }),
+    },
   };
 }
 ```
 
-## Kubeconfig Management
+Run it:
 
-The kubeconfig utility (`src/utils/kubeconfig.ts`) provides automated kubeconfig file management with intelligent naming and organization.
+```bash
+# Preview every component (Infra, K8s, and each K8s chart) in the project
+pnpm -C pulumi run cli -- --config nebula.config.ts --op preview --all
 
-### Features
+# Apply only dev:k8s (interactively pick charts if multiple)
+pnpm -C pulumi run cli -- --config nebula.config.ts --op up --select dev:k8s
 
-- **Standardized Naming**: Generates consistent kubeconfig filenames
-- **Automatic Validation**: Validates kubeconfig content before writing
-- **Project-Based Organization**: Uses Pulumi project name for clear identification
-- **Deduplication**: Prevents redundant naming patterns
-- **Centralized Storage**: Stores all kubeconfigs in `.config/` directory
-
-### Naming Convention
-
+# Destroy a specific component
+pnpm -C pulumi run cli -- --config nebula.config.ts --op destroy --select dev:infra
 ```
-kube-config-{project}-{environment}-{provider}
+
+Selection behavior:
+- If you select `--all` (or choose "all" interactively), sub-stack prompts are skipped and all stacks run for each component.
+- If a component has a single stack, the sub-stack prompt is skipped.
+- For components with multiple stacks when partially selected, you'll be prompted to pick specific stacks (empty/Enter means all).
+
+Kubeconfig gets written to `.config/kube_config`.
+
+---
+
+## Alternative: minimal EKS example
+```ts
+// nebula.config.ts (excerpt)
+import { Project } from './pulumi/src';
+import type { EnvironmentConfig } from './pulumi/src/core/environment';
+import { Infra } from './pulumi/src/components/infra';
+import { K8s } from './pulumi/src/components/k8s';
+
+export async function createProject() {
+  return new Project('acme', {
+    id: 'acme',
+    aws: {
+      sso_config: {
+        sso_region: 'eu-west-1',
+        sso_url: 'https://my-sso-portal.awsapps.com/start',
+        sso_role_name: 'AdministratorAccess',
+      },
+    },
+    environments: {
+      dev: {
+        backend: 's3://acme-dev-tfstate',
+        awsConfig: { accountId: '123456789012', region: 'eu-west-1', profile: 'acme-dev' },
+        components: {
+          Infra: (env) => new Infra(env, 'infra', { aws: { enabled: true, domainName: 'dev.acme.example' } }),
+          K8s: (env) => new K8s(env, 'k8s', { kubeconfig: env.infra!.eks!.kubeconfig }),
+        },
+      } satisfies EnvironmentConfig,
+    },
+  });
+}
 ```
+
+Notes:
+- The repo will generate `.config/aws_config` with SSO profiles. If SSO session is stale, it will prompt to run `aws sso login`.
+- EKS kubeconfig is written to `.config/kube_config` (using `aws eks update-kubeconfig`).
+
+---
+
+## CLI reference
+Flags:
+- `--config <path>`: defaults to `nebula.config.js` in CWD
+- `--op <preview|up|destroy|refresh>`: operation to execute (defaults to `preview` if omitted)
+- `--select env:component[,env:component...]`: select specific targets (e.g. `dev:k8s,dev:infra`)
+- `--all`: select all components; runs all stacks for each component without further prompts
 
 Examples:
-- `kube-config-kurtosis-dev-gke`
-- `kube-config-myapp-prod-eks`
-- `kube-config-tool-staging-constellation`
-
-## Module Usage
-
-### Infrastructure Modules
-
-#### GCP Infrastructure
-
-The GCP module creates network and GKE cluster resources:
-
-```typescript
-import Gcp from 'nebula/modules/infra/gcp';
-
-// Use within a Component's modules array:
-modules: [
-  Gcp({
-    network: {
-      name: 'main',
-      region: 'europe-west3',
-      subnetCidr: '10.0.0.0/20',
-      podsSecondaryCidr: '10.4.0.0/14',
-      servicesSecondaryCidr: '10.8.0.0/20',
-    },
-    gke: {
-      name: 'cluster',
-      location: 'europe-west3-a',
-      releaseChannel: 'REGULAR',
-    },
-  }),
-]
-```
-
-The GCP module automatically:
-- Creates VPC network and subnetwork with secondary ranges
-- Creates GKE cluster with workload identity enabled
-- Extracts project ID from the GCP provider (no need to pass explicitly)
-- Generates kubeconfig for cluster access
-
-#### DNS Management
-
-```typescript
-import Dns from 'nebula/modules/infra/dns';
-
-modules: [
-  Dns({
-    zoneName: 'my-zone',
-    dnsName: 'example.com.',
-    delegation: {
-      provider: 'cloudflare',
-      zoneId: 'your-zone-id',
-    },
-  }),
-]
-```
-
-### Kubernetes Modules
-
-#### Cert-Manager
-
-```typescript
-import CertManager from 'nebula/modules/k8s/cert-manager';
-
-modules: [
-  CertManager({
-    version: 'v1.17.2',
-    acmeEmail: 'admin@example.com',
-    createClusterIssuer: true,
-  }),
-]
-```
-
-#### External DNS
-
-```typescript
-import ExternalDns from 'nebula/modules/k8s/external-dns';
-
-modules: [
-  ExternalDns({
-    provider: 'google',
-    domainFilters: ['example.com'],
-    // GCP project is automatically extracted from inherited provider
-  }),
-]
-```
-
-#### Ingress NGINX
-
-```typescript
-import IngressNginx from 'nebula/modules/k8s/ingress-nginx';
-
-modules: [
-  IngressNginx({
-    createStaticIp: true,
-    controller: {
-      replicaCount: 2,
-      service: { type: 'LoadBalancer' },
-    },
-  }),
-]
-```
-
-#### ArgoCD
-
-```typescript
-import ArgoCd from 'nebula/modules/k8s/argocd';
-
-modules: [
-  ArgoCd({
-    hostname: 'argocd.example.com',
-    oidc: {
-      issuer: 'https://accounts.google.com',
-      clientId: 'your-client-id',
-      clientSecret: 'your-client-secret',
-    },
-  }),
-]
-```
-
-#### Crossplane
-
-```typescript
-import Crossplane from 'nebula/modules/k8s/crossplane';
-
-modules: [
-  Crossplane({
-    version: '1.18.2',
-  }),
-]
-```
-
-## Testing
-
-Run tests using the test scenarios in the `tests/` directory:
-
 ```bash
-# Run all tests
-pnpm test
+# interactive selection
+pnpm -C pulumi run cli
 
-# Run specific test scenario
-npx tsx tests/scenarios/basic-secret-resolution.ts
+# specific config file and operation
+pnpm -C pulumi run cli -- --config nebula.config.ts --op preview --all
+
+# run the bin directly
+node pulumi/bin/nebula.js --op up --all
 ```
 
-### Local Orbstack kubeconfig
+---
 
-Several scenarios (provider propagation, cert-manager, karpenter) deploy real Kubernetes resources into the local Orbstack cluster. Ensure Orbstack is running and that a kubeconfig exists at `~/.orbstack/k8s/config.yml`. If your kubeconfig lives elsewhere, export `NEBULA_TEST_KUBECONFIG` (or `ORBSTACK_KUBECONFIG`) before running tests so the suite can locate it:
+## Backends and state
+Backends are chosen per-environment and exported via `PULUMI_BACKEND_URL` automatically.
 
-```bash
-export NEBULA_TEST_KUBECONFIG=/path/to/orbstack/kubeconfig
-pnpm test provider
+You can:
+- Omit `backend` to auto-select (S3 if `awsConfig`, GCS if `gcpConfig`, local otherwise)
+- Provide a string URL: `s3://mybucket`, `gs://mybucket`, `file:///abs/path`
+- Provide an object:
+
+```ts
+backend: { type: 's3', bucket: 'acme-dev-tfstate', region: 'eu-west-1' }
+backend: { type: 'gcs', bucket: 'pulumi-acme-dev-state', location: 'europe-west1' }
+backend: { type: 'file', path: '.pulumi-state' }
 ```
 
-## CLI Commands
+Buckets are created on-demand (S3 via SDK, GCS via `gcloud` if available). The Pulumi passphrase is generated and stored at `.config/pulumi_passphrase` for non-interactive operation.
 
-The Nebula CLI is implemented in `src/cli.ts` and provides:
+---
 
-```bash
-nebula bootstrap    # Setup authentication
-nebula up <stack>   # Deploy a stack
-nebula destroy <stack>  # Destroy a stack
-nebula preview <stack>  # Preview changes
-nebula kubeconfig   # List kubeconfig files
-nebula test        # Run tests
+## Secrets integration (optional)
+Enable the `Secrets` component to provision SOPS keys and write `.sops.yaml` rules:
+
+```ts
+Secrets: (env) => new Secrets(env, 'secrets', {
+  // For AWS (requires aws account + region on env)
+  aws: { enabled: true, createRole: true, roleName: 'sops-role-dev', allowAssumeRoleArns: ['arn:aws:iam::123456789012:role/*'] },
+  // For GCP (requires gcp project on env)
+  gcp: { enabled: true, location: 'global', members: ['serviceAccount:ci@my-gcp-project.iam.gserviceaccount.com'] },
+})
 ```
 
-## Development
+This updates/creates `.sops.yaml` at the repo root with creation rules matching typical secret files.
 
-### Adding a New Module
-
-1. Create module directory in appropriate location:
-   - Infrastructure: `src/modules/infra/{provider}/`
-   - Kubernetes: `src/modules/k8s/{module-name}/`
-
-2. Create `index.ts` with the module class and default export:
-   ```typescript
-   import * as pulumi from '@pulumi/pulumi';
-   import { getCurrentComponent } from '../../../core/component';
-
-   export interface MyModuleConfig {
-     // Module configuration options
-   }
-
-   export class MyModule extends pulumi.ComponentResource {
-     constructor(name: string, args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
-       super('my-module', name, args, opts);
-       
-       // Use this.getProvider() to access inherited providers
-       // Create resources with { parent: this }
-       
-       this.registerOutputs({});
-     }
-   }
-
-   export default function(args: MyModuleConfig, opts?: pulumi.ComponentResourceOptions) {
-     return () => {
-       const parent = opts?.parent ?? getCurrentComponent();
-       return new MyModule('my-module', args, parent ? { ...opts, parent } : opts);
-     };
-   }
-   ```
-
-3. The default export pattern ensures:
-   - Module inherits providers from parent Component
-   - Resources are properly parented for Pulumi's resource graph
-   - Provider configuration can be accessed via `this.getProvider()`
-
-### Testing Changes
-
-1. Write test scenario in `tests/scenarios/`
-2. Run tests: `pnpm test`
-3. Check linting: `pnpm lint`
-
-## Best Practices
-
-1. **Always use typed configurations** - Define interfaces for all component configs
-2. **Handle errors gracefully** - Use try-catch blocks and provide meaningful error messages
-3. **Document public APIs** - Add JSDoc comments to exported functions and classes
-4. **Follow naming conventions** - Use consistent naming for files, functions, and variables
-5. **Test thoroughly** - Write tests for new components and utilities
+---
 
 ## Troubleshooting
+- Pulumi CLI not found: install from https://www.pulumi.com
+- GCP auth issues: run `gcloud auth application-default login` and ensure the correct project is active
+- AWS SSO expired: run `aws sso login` (the repo generates `.config/aws_config` with the session)
+- Helm `ref+sops://` not resolving: install `vals` and ensure files pointed to by refs exist
+- Chart folder not found: `HelmFolderAddon` tries `k8s/<name>` and `charts/<name>` if a bare name is used
 
-### Kubeconfig Issues
+---
 
-If kubeconfig is not being generated:
-1. Check that the cluster deployment succeeded
-2. Verify write permissions to `.config/` directory
-3. Check logs for validation errors
+## FAQ
+- Where is kubeconfig written? → `.config/kube_config` under the repo root
+- Can I run non-interactively? → Yes. Use `--op` and `--select`/`--all`. K8s chart selection is interactive if not preset; you can set `deploy: true/false` on addons to avoid prompts
+- Can I use JS config? → Yes. Use `nebula.config.js` and import from `./pulumi/dist/...` or ensure tsx can load TS imports
 
-### Authentication Issues
+---
 
-If experiencing authentication problems:
-1. Run `nebula bootstrap` to refresh credentials
-2. Check cloud provider CLI is configured
-3. Verify service account permissions
+## Project layout (this folder)
+- `src/` TypeScript sources (CLI, components, core, utils)
+- `bin/nebula.js` CLI launcher (tsx runtime)
+- `dist/` Built JS output (if you `pnpm build`)
 
-## Contributing
+---
 
-Please follow these guidelines when contributing:
-
-1. Create feature branch from `main`
-2. Write tests for new functionality
-3. Update documentation
-4. Run linting and tests before submitting PR
-5. Keep commits atomic and well-described
-
-## License
-
-MIT License - See [LICENSE](../LICENSE) for details.
+Happy shipping!

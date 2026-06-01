@@ -1,0 +1,7 @@
+onlyBuiltDependencies:
+  - '@pulumi/constellation'
+  - '@pulumi/docker'
+  - '@pulumi/docker-build'
+  - '@pulumi/kubernetes'
+  - esbuild
+  - protobufjs
