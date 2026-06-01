@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Nebula CLI - Bootstrap tool for Crossplane/cdk8s projects
- * 
+ *
  * Commands:
+ *   init        - Initialize a new Nebula project
  *   bootstrap   - Create Kind cluster and setup GCP credentials
  *   synth       - Synthesize cdk8s manifests
  *   apply       - Apply synthesized manifests to cluster
@@ -10,6 +11,7 @@
  *   init-sops   - Initialize SOPS configuration for secret management
  */
 import { Command } from 'commander';
+import { init, InitOptions } from './commands/init';
 import { bootstrap, BootstrapOptions } from './commands/bootstrap';
 import { synth } from './commands/synth';
 import { apply } from './commands/apply';
@@ -22,6 +24,27 @@ program
   .name('nebula')
   .description('Nebula CLI - Bootstrap Crossplane/cdk8s projects')
   .version('1.0.0');
+
+program
+  .command('init')
+  .description('Initialize a new Nebula project with centralized config and modules')
+  .option('-p, --project <project>', 'GCP project ID')
+  .option('-r, --region <region>', 'GCP region')
+  .option('-d, --domain <domain>', 'Domain (e.g. dev.example.com)')
+  .option('--acme-email <email>', 'ACME email for Let\'s Encrypt')
+  .option('--gke-name <name>', 'GKE cluster name')
+  .option('--gke-zone <zone>', 'GKE zone')
+  .option('--git-repo <url>', 'Git repo URL (SSH)')
+  .option('--addons <addons>', 'Comma-separated optional addons')
+  .option('-o, --output-dir <dir>', 'Output directory (default: current directory)')
+  .action(async (opts: InitOptions) => {
+    try {
+      await init(opts);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
 
 program
   .command('bootstrap')
