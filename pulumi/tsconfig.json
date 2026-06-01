@@ -3,10 +3,10 @@
     "types": ["node"],
     "module": "es2022",
     "moduleResolution": "bundler",
-    "rootDir": ".",
     "outDir": "dist",
     "noEmitOnError": true,
     "target": "es2022",
+    "baseUrl": ".",
     "alwaysStrict": true,
     "declaration": true,
     "noImplicitAny": true,
@@ -26,10 +26,9 @@
     "useUnknownInCatchVariables": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
-    "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "tests/**/*"],
+  "include": ["src/**/*"],
   "exclude": [
     "node_modules",
     "dist"
