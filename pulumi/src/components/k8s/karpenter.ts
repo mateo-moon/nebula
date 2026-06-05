@@ -257,7 +257,13 @@ export class Karpenter extends pulumi.ComponentResource {
               clusterName: args.clusterName,
               clusterEndpoint: args.clusterEndpoint,
             },
-            ...(addBootstrap ? { 
+            // The published controller image behind the floating :v0.0.1 tag is karpenter v1.7.0,
+            // which requires the CLUSTER_LOCATION env var (the chart only renders LOCATION). Without
+            // it the controller panics on startup ("missing required ... CLUSTER_LOCATION").
+            env: [
+              { name: "CLUSTER_LOCATION", value: args.location },
+            ],
+            ...(addBootstrap ? {
               tolerations: [
                 { key: "components.gke.io/gke-managed-components", operator: "Exists", effect: "NoSchedule" },
                 { key: "node.kubernetes.io/not-ready", operator: "Exists", effect: "NoExecute", tolerationSeconds: 300 },
