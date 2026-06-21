@@ -57,18 +57,11 @@ program
   .option('-p, --project <project>', 'GCP project ID (gcp)')
   .option('-c, --credentials <path>', 'Path to GCP credentials JSON file (gcp)')
   .option('--region <region>', 'AWS region, e.g. eu-central-1 (aws)')
-  .option('--aws-profile <profile>', 'AWS named profile to resolve credentials from (aws)')
-  .option('--cluster-name <name>', 'Management cluster name (aws)', 'mgmt')
-  .option('--cluster-namespace <ns>', 'Management cluster namespace (aws)', 'default')
+  .option('--aws-profile <profile>', 'AWS named profile for credentials (aws)')
   .option('--ami-id <ami>', 'AMI for the management cluster nodes (aws; recommend Ubuntu 22.04)')
-  .option('--cp-replicas <n>', 'HA control-plane node count (aws)', (v) => parseInt(v, 10))
-  .option('--cp-instance-type <type>', 'Management cluster instance type (aws)')
-  .option('--vpc-cidr <cidr>', 'VPC CIDR CAPA creates for the management cluster (aws)')
-  .option('--k8s-version <version>', 'Kubernetes version (aws), e.g. v1.31.8')
   .option('--skip-kind', 'Skip Kind cluster creation')
   .option('--skip-credentials', 'Skip credentials setup')
   .option('--skip-gke', 'Skip GKE deployment (gcp, Kind only)')
-  .option('--skip-mgmt-platform', 'Skip installing the platform on the management cluster (aws)')
   .action(async (opts: BootstrapOptions) => {
     try {
       await bootstrap(opts);
