@@ -8,8 +8,16 @@ export type { CrossplaneConfig, ArgoCdProviderOptions } from "./crossplane";
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
 
+export { Kagent } from "./kagent";
+export type { KagentConfig, KagentProvider } from "./kagent";
+
 export { ClusterApiOperator } from "./cluster-api-operator";
-export type { ClusterApiOperatorConfig } from "./cluster-api-operator";
+export type {
+  ClusterApiOperatorConfig,
+  ClusterApiOperatorAwsConfig,
+  ClusterApiOperatorGcpConfig,
+  ClusterApiOperatorHetznerConfig,
+} from "./cluster-api-operator";
 
 export { IngressNginx } from "./ingress-nginx";
 export type {
@@ -129,3 +137,6 @@ export type { WireGuardMeshConfig, WireGuardPeer } from "./wireguard-mesh";
 
 export { Calico } from "./calico";
 export type { CalicoConfig } from "./calico";
+
+export { Platform } from "./platform";
+export type { PlatformConfig } from "./platform";

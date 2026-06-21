@@ -126,13 +126,9 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       metadata: { name: namespaceName },
     });
 
-    const defaultTolerations = this.config.tolerations ?? [
-      {
-        key: "components.gke.io/gke-managed-components",
-        operator: "Exists",
-        effect: "NoSchedule",
-      },
-    ];
+    // Portable by default; set config.tolerations to add cloud-specific ones
+    // (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations = this.config.tolerations ?? [];
 
     const defaultValues: Record<string, unknown> = {
       crds: { install: true },

@@ -233,13 +233,9 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         ];
     }
 
-    const defaultTolerations = [
-      {
-        key: "components.gke.io/gke-managed-components",
-        operator: "Exists",
-        effect: "NoSchedule",
-      },
-    ];
+    // Portable by default (no vendor-specific tolerations). Add via config/values
+    // where needed (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations: Array<Record<string, unknown>> = [];
 
     const values: Record<string, unknown> = {
       kind,

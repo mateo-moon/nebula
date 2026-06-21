@@ -12,7 +12,10 @@
     "@inquirer/prompts": "^7.0.0",
     "commander": "^13.0.0",
     "yaml": "^2.8.2",
-    "chalk": "^5.4.1"
+    "chalk": "^5.4.1",
+    "nebula-cdk8s": "file:../nebula",
+    "cdk8s": "^2.69.0",
+    "constructs": "^10.4.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.9",

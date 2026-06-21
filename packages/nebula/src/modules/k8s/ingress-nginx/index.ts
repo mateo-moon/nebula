@@ -127,9 +127,9 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
       this.staticIpAddress = staticIpAddress;
     }
 
-    const defaultTolerations = [
-      { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
-    ];
+    // Portable by default; set controller.tolerations to add cloud-specific ones
+    // (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations: Array<Record<string, unknown>> = [];
 
     const controllerTolerations = this.config.controller?.tolerations ?? defaultTolerations;
 

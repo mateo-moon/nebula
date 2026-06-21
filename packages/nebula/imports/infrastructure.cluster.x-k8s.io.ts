@@ -4,6 +4,9693 @@ import { Construct } from 'constructs';
 
 
 /**
+ * AWSCluster is the schema for Amazon EC2 based Kubernetes Cluster API.
+ *
+ * @schema AWSCluster
+ */
+export class AwsCluster extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSCluster"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'AWSCluster',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSCluster".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterProps = {}): any {
+    return {
+      ...AwsCluster.GVK,
+      ...toJson_AwsClusterProps(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSCluster" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterProps = {}) {
+    super(scope, id, {
+      ...AwsCluster.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsCluster.GVK,
+      ...toJson_AwsClusterProps(resolved),
+    };
+  }
+}
+
+/**
+ * AWSCluster is the schema for Amazon EC2 based Kubernetes Cluster API.
+ *
+ * @schema AWSCluster
+ */
+export interface AwsClusterProps {
+  /**
+   * @schema AWSCluster#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * AWSClusterSpec defines the desired state of an EC2-based Kubernetes cluster.
+   *
+   * @schema AWSCluster#spec
+   */
+  readonly spec?: AwsClusterSpec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterProps(obj: AwsClusterProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSClusterSpec defines the desired state of an EC2-based Kubernetes cluster.
+ *
+ * @schema AwsClusterSpec
+ */
+export interface AwsClusterSpec {
+  /**
+   * AdditionalTags is an optional set of tags to add to AWS resources managed by the AWS provider, in addition to the
+   * ones added by default.
+   *
+   * @schema AwsClusterSpec#additionalTags
+   */
+  readonly additionalTags?: { [key: string]: string };
+
+  /**
+   * Bastion contains options to configure the bastion host.
+   *
+   * @schema AwsClusterSpec#bastion
+   */
+  readonly bastion?: AwsClusterSpecBastion;
+
+  /**
+   * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+   *
+   * @schema AwsClusterSpec#controlPlaneEndpoint
+   */
+  readonly controlPlaneEndpoint?: AwsClusterSpecControlPlaneEndpoint;
+
+  /**
+   * ControlPlaneLoadBalancer is optional configuration for customizing control plane behavior.
+   *
+   * @schema AwsClusterSpec#controlPlaneLoadBalancer
+   */
+  readonly controlPlaneLoadBalancer?: AwsClusterSpecControlPlaneLoadBalancer;
+
+  /**
+   * IdentityRef is a reference to an identity to be used when reconciling the managed control plane.
+   * If no identity is specified, the default identity for this controller will be used.
+   *
+   * @schema AwsClusterSpec#identityRef
+   */
+  readonly identityRef?: AwsClusterSpecIdentityRef;
+
+  /**
+   * ImageLookupBaseOS is the name of the base operating system used to look
+   * up machine images when a machine does not specify an AMI. When set, this
+   * will be used for all cluster machines unless a machine specifies a
+   * different ImageLookupBaseOS.
+   *
+   * @schema AwsClusterSpec#imageLookupBaseOS
+   */
+  readonly imageLookupBaseOs?: string;
+
+  /**
+   * ImageLookupFormat is the AMI naming format to look up machine images when
+   * a machine does not specify an AMI. When set, this will be used for all
+   * cluster machines unless a machine specifies a different ImageLookupOrg.
+   * Supports substitutions for {{.BaseOS}} and {{.K8sVersion}} with the base
+   * OS and kubernetes version, respectively. The BaseOS will be the value in
+   * ImageLookupBaseOS or ubuntu (the default), and the kubernetes version as
+   * defined by the packages produced by kubernetes/release without v as a
+   * prefix: 1.13.0, 1.12.5-mybuild.1, or 1.17.3. For example, the default
+   * image format of capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-* will end up
+   * searching for AMIs that match the pattern capa-ami-ubuntu-?1.18.0-* for a
+   * Machine that is targeting kubernetes v1.18.0 and the ubuntu base OS. See
+   * also: https://golang.org/pkg/text/template/
+   *
+   * @schema AwsClusterSpec#imageLookupFormat
+   */
+  readonly imageLookupFormat?: string;
+
+  /**
+   * ImageLookupOrg is the AWS Organization ID to look up machine images when a
+   * machine does not specify an AMI. When set, this will be used for all
+   * cluster machines unless a machine specifies a different ImageLookupOrg.
+   *
+   * @schema AwsClusterSpec#imageLookupOrg
+   */
+  readonly imageLookupOrg?: string;
+
+  /**
+   * NetworkSpec encapsulates all things related to AWS network.
+   *
+   * @schema AwsClusterSpec#network
+   */
+  readonly network?: AwsClusterSpecNetwork;
+
+  /**
+   * The AWS Region the cluster lives in.
+   *
+   * @schema AwsClusterSpec#region
+   */
+  readonly region?: string;
+
+  /**
+   * S3Bucket contains options to configure a supporting S3 bucket for this
+   * cluster - currently used for nodes requiring Ignition
+   * (https://coreos.github.io/ignition/) for bootstrapping (requires
+   * BootstrapFormatIgnition feature flag to be enabled).
+   *
+   * @schema AwsClusterSpec#s3Bucket
+   */
+  readonly s3Bucket?: AwsClusterSpecS3Bucket;
+
+  /**
+   * SSHKeyName is the name of the ssh key to attach to the bastion host. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+   *
+   * @schema AwsClusterSpec#sshKeyName
+   */
+  readonly sshKeyName?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpec(obj: AwsClusterSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalTags': ((obj.additionalTags) === undefined) ? undefined : (Object.entries(obj.additionalTags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'bastion': toJson_AwsClusterSpecBastion(obj.bastion),
+    'controlPlaneEndpoint': toJson_AwsClusterSpecControlPlaneEndpoint(obj.controlPlaneEndpoint),
+    'controlPlaneLoadBalancer': toJson_AwsClusterSpecControlPlaneLoadBalancer(obj.controlPlaneLoadBalancer),
+    'identityRef': toJson_AwsClusterSpecIdentityRef(obj.identityRef),
+    'imageLookupBaseOS': obj.imageLookupBaseOs,
+    'imageLookupFormat': obj.imageLookupFormat,
+    'imageLookupOrg': obj.imageLookupOrg,
+    'network': toJson_AwsClusterSpecNetwork(obj.network),
+    'region': obj.region,
+    's3Bucket': toJson_AwsClusterSpecS3Bucket(obj.s3Bucket),
+    'sshKeyName': obj.sshKeyName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Bastion contains options to configure the bastion host.
+ *
+ * @schema AwsClusterSpecBastion
+ */
+export interface AwsClusterSpecBastion {
+  /**
+   * AllowedCIDRBlocks is a list of CIDR blocks allowed to access the bastion host.
+   * They are set as ingress rules for the Bastion host's Security Group (defaults to 0.0.0.0/0).
+   *
+   * @schema AwsClusterSpecBastion#allowedCIDRBlocks
+   */
+  readonly allowedCidrBlocks?: string[];
+
+  /**
+   * AMI will use the specified AMI to boot the bastion. If not specified,
+   * the AMI will default to one picked out in public space.
+   *
+   * @schema AwsClusterSpecBastion#ami
+   */
+  readonly ami?: string;
+
+  /**
+   * DisableIngressRules will ensure there are no Ingress rules in the bastion host's security group.
+   * Requires AllowedCIDRBlocks to be empty.
+   *
+   * @schema AwsClusterSpecBastion#disableIngressRules
+   */
+  readonly disableIngressRules?: boolean;
+
+  /**
+   * Enabled allows this provider to create a bastion host instance
+   * with a public ip to access the VPC private network.
+   *
+   * @schema AwsClusterSpecBastion#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * InstanceType will use the specified instance type for the bastion. If not specified,
+   * Cluster API Provider AWS will use t3.micro for all regions except us-east-1, where t2.micro
+   * will be the default.
+   *
+   * @schema AwsClusterSpecBastion#instanceType
+   */
+  readonly instanceType?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecBastion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecBastion(obj: AwsClusterSpecBastion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedCIDRBlocks': obj.allowedCidrBlocks?.map(y => y),
+    'ami': obj.ami,
+    'disableIngressRules': obj.disableIngressRules,
+    'enabled': obj.enabled,
+    'instanceType': obj.instanceType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+ *
+ * @schema AwsClusterSpecControlPlaneEndpoint
+ */
+export interface AwsClusterSpecControlPlaneEndpoint {
+  /**
+   * The hostname on which the API server is serving.
+   *
+   * @schema AwsClusterSpecControlPlaneEndpoint#host
+   */
+  readonly host: string;
+
+  /**
+   * The port on which the API server is serving.
+   *
+   * @schema AwsClusterSpecControlPlaneEndpoint#port
+   */
+  readonly port: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecControlPlaneEndpoint' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecControlPlaneEndpoint(obj: AwsClusterSpecControlPlaneEndpoint | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'host': obj.host,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneLoadBalancer is optional configuration for customizing control plane behavior.
+ *
+ * @schema AwsClusterSpecControlPlaneLoadBalancer
+ */
+export interface AwsClusterSpecControlPlaneLoadBalancer {
+  /**
+   * AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs
+   * This is optional - if not provided new security groups will be created for the load balancer
+   *
+   * @schema AwsClusterSpecControlPlaneLoadBalancer#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: string[];
+
+  /**
+   * CrossZoneLoadBalancing enables the classic ELB cross availability zone balancing.
+   *
+   *
+   * With cross-zone load balancing, each load balancer node for your Classic Load Balancer
+   * distributes requests evenly across the registered instances in all enabled Availability Zones.
+   * If cross-zone load balancing is disabled, each load balancer node distributes requests evenly across
+   * the registered instances in its Availability Zone only.
+   *
+   *
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema AwsClusterSpecControlPlaneLoadBalancer#crossZoneLoadBalancing
+   */
+  readonly crossZoneLoadBalancing?: boolean;
+
+  /**
+   * HealthCheckProtocol sets the protocol type for classic ELB health check target
+   * default value is ClassicELBProtocolSSL
+   *
+   * @schema AwsClusterSpecControlPlaneLoadBalancer#healthCheckProtocol
+   */
+  readonly healthCheckProtocol?: string;
+
+  /**
+   * Name sets the name of the classic ELB load balancer. As per AWS, the name must be unique
+   * within your set of load balancers for the region, must have a maximum of 32 characters, must
+   * contain only alphanumeric characters or hyphens, and cannot begin or end with a hyphen. Once
+   * set, the value cannot be changed.
+   *
+   * @schema AwsClusterSpecControlPlaneLoadBalancer#name
+   */
+  readonly name?: string;
+
+  /**
+   * Scheme sets the scheme of the load balancer (defaults to internet-facing)
+   *
+   * @schema AwsClusterSpecControlPlaneLoadBalancer#scheme
+   */
+  readonly scheme?: AwsClusterSpecControlPlaneLoadBalancerScheme;
+
+  /**
+   * Subnets sets the subnets that should be applied to the control plane load balancer (defaults to discovered subnets for managed VPCs or an empty set for unmanaged VPCs)
+   *
+   * @schema AwsClusterSpecControlPlaneLoadBalancer#subnets
+   */
+  readonly subnets?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecControlPlaneLoadBalancer' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecControlPlaneLoadBalancer(obj: AwsClusterSpecControlPlaneLoadBalancer | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => y),
+    'crossZoneLoadBalancing': obj.crossZoneLoadBalancing,
+    'healthCheckProtocol': obj.healthCheckProtocol,
+    'name': obj.name,
+    'scheme': obj.scheme,
+    'subnets': obj.subnets?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * IdentityRef is a reference to an identity to be used when reconciling the managed control plane.
+ * If no identity is specified, the default identity for this controller will be used.
+ *
+ * @schema AwsClusterSpecIdentityRef
+ */
+export interface AwsClusterSpecIdentityRef {
+  /**
+   * Kind of the identity.
+   *
+   * @schema AwsClusterSpecIdentityRef#kind
+   */
+  readonly kind: AwsClusterSpecIdentityRefKind;
+
+  /**
+   * Name of the identity.
+   *
+   * @schema AwsClusterSpecIdentityRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecIdentityRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecIdentityRef(obj: AwsClusterSpecIdentityRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * NetworkSpec encapsulates all things related to AWS network.
+ *
+ * @schema AwsClusterSpecNetwork
+ */
+export interface AwsClusterSpecNetwork {
+  /**
+   * CNI configuration
+   *
+   * @schema AwsClusterSpecNetwork#cni
+   */
+  readonly cni?: AwsClusterSpecNetworkCni;
+
+  /**
+   * SecurityGroupOverrides is an optional set of security groups to use for cluster instances
+   * This is optional - if not provided new security groups will be created for the cluster
+   *
+   * @schema AwsClusterSpecNetwork#securityGroupOverrides
+   */
+  readonly securityGroupOverrides?: { [key: string]: string };
+
+  /**
+   * Subnets configuration.
+   *
+   * @schema AwsClusterSpecNetwork#subnets
+   */
+  readonly subnets?: AwsClusterSpecNetworkSubnets[];
+
+  /**
+   * VPC configuration.
+   *
+   * @schema AwsClusterSpecNetwork#vpc
+   */
+  readonly vpc?: AwsClusterSpecNetworkVpc;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecNetwork(obj: AwsClusterSpecNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cni': toJson_AwsClusterSpecNetworkCni(obj.cni),
+    'securityGroupOverrides': ((obj.securityGroupOverrides) === undefined) ? undefined : (Object.entries(obj.securityGroupOverrides).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'subnets': obj.subnets?.map(y => toJson_AwsClusterSpecNetworkSubnets(y)),
+    'vpc': toJson_AwsClusterSpecNetworkVpc(obj.vpc),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * S3Bucket contains options to configure a supporting S3 bucket for this
+ * cluster - currently used for nodes requiring Ignition
+ * (https://coreos.github.io/ignition/) for bootstrapping (requires
+ * BootstrapFormatIgnition feature flag to be enabled).
+ *
+ * @schema AwsClusterSpecS3Bucket
+ */
+export interface AwsClusterSpecS3Bucket {
+  /**
+   * ControlPlaneIAMInstanceProfile is a name of the IAMInstanceProfile, which will be allowed
+   * to read control-plane node bootstrap data from S3 Bucket.
+   *
+   * @schema AwsClusterSpecS3Bucket#controlPlaneIAMInstanceProfile
+   */
+  readonly controlPlaneIamInstanceProfile: string;
+
+  /**
+   * Name defines name of S3 Bucket to be created.
+   *
+   * @schema AwsClusterSpecS3Bucket#name
+   */
+  readonly name: string;
+
+  /**
+   * NodesIAMInstanceProfiles is a list of IAM instance profiles, which will be allowed to read
+   * worker nodes bootstrap data from S3 Bucket.
+   *
+   * @schema AwsClusterSpecS3Bucket#nodesIAMInstanceProfiles
+   */
+  readonly nodesIamInstanceProfiles: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecS3Bucket' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecS3Bucket(obj: AwsClusterSpecS3Bucket | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'controlPlaneIAMInstanceProfile': obj.controlPlaneIamInstanceProfile,
+    'name': obj.name,
+    'nodesIAMInstanceProfiles': obj.nodesIamInstanceProfiles?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Scheme sets the scheme of the load balancer (defaults to internet-facing)
+ *
+ * @schema AwsClusterSpecControlPlaneLoadBalancerScheme
+ */
+export enum AwsClusterSpecControlPlaneLoadBalancerScheme {
+  /** internet-facing */
+  INTERNET_HYPHEN_FACING = "internet-facing",
+  /** internal */
+  INTERNAL = "internal",
+}
+
+/**
+ * Kind of the identity.
+ *
+ * @schema AwsClusterSpecIdentityRefKind
+ */
+export enum AwsClusterSpecIdentityRefKind {
+  /** AWSClusterControllerIdentity */
+  AWS_CLUSTER_CONTROLLER_IDENTITY = "AWSClusterControllerIdentity",
+  /** AWSClusterRoleIdentity */
+  AWS_CLUSTER_ROLE_IDENTITY = "AWSClusterRoleIdentity",
+  /** AWSClusterStaticIdentity */
+  AWS_CLUSTER_STATIC_IDENTITY = "AWSClusterStaticIdentity",
+}
+
+/**
+ * CNI configuration
+ *
+ * @schema AwsClusterSpecNetworkCni
+ */
+export interface AwsClusterSpecNetworkCni {
+  /**
+   * CNIIngressRules specify rules to apply to control plane and worker node security groups.
+   * The source for the rule will be set to control plane and worker security group IDs.
+   *
+   * @schema AwsClusterSpecNetworkCni#cniIngressRules
+   */
+  readonly cniIngressRules?: AwsClusterSpecNetworkCniCniIngressRules[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecNetworkCni' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecNetworkCni(obj: AwsClusterSpecNetworkCni | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cniIngressRules': obj.cniIngressRules?.map(y => toJson_AwsClusterSpecNetworkCniCniIngressRules(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SubnetSpec configures an AWS Subnet.
+ *
+ * @schema AwsClusterSpecNetworkSubnets
+ */
+export interface AwsClusterSpecNetworkSubnets {
+  /**
+   * AvailabilityZone defines the availability zone to use for this subnet in the cluster's region.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#availabilityZone
+   */
+  readonly availabilityZone?: string;
+
+  /**
+   * CidrBlock is the CIDR block to be used when the provider creates a managed VPC.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * ID defines a unique identifier to reference this resource.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#id
+   */
+  readonly id?: string;
+
+  /**
+   * IPv6CidrBlock is the IPv6 CIDR block to be used when the provider creates a managed VPC.
+   * A subnet can have an IPv4 and an IPv6 address.
+   * IPv6 is only supported in managed clusters, this field cannot be set on AWSCluster object.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#ipv6CidrBlock
+   */
+  readonly ipv6CidrBlock?: string;
+
+  /**
+   * IsIPv6 defines the subnet as an IPv6 subnet. A subnet is IPv6 when it is associated with a VPC that has IPv6 enabled.
+   * IPv6 is only supported in managed clusters, this field cannot be set on AWSCluster object.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#isIpv6
+   */
+  readonly isIpv6?: boolean;
+
+  /**
+   * IsPublic defines the subnet as a public subnet. A subnet is public when it is associated with a route table that has a route to an internet gateway.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#isPublic
+   */
+  readonly isPublic?: boolean;
+
+  /**
+   * NatGatewayID is the NAT gateway id associated with the subnet.
+   * Ignored unless the subnet is managed by the provider, in which case this is set on the public subnet where the NAT gateway resides. It is then used to determine routes for private subnets in the same AZ as the public subnet.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#natGatewayId
+   */
+  readonly natGatewayId?: string;
+
+  /**
+   * RouteTableID is the routing table id associated with the subnet.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#routeTableId
+   */
+  readonly routeTableId?: string;
+
+  /**
+   * Tags is a collection of tags describing the resource.
+   *
+   * @schema AwsClusterSpecNetworkSubnets#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecNetworkSubnets' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecNetworkSubnets(obj: AwsClusterSpecNetworkSubnets | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'availabilityZone': obj.availabilityZone,
+    'cidrBlock': obj.cidrBlock,
+    'id': obj.id,
+    'ipv6CidrBlock': obj.ipv6CidrBlock,
+    'isIpv6': obj.isIpv6,
+    'isPublic': obj.isPublic,
+    'natGatewayId': obj.natGatewayId,
+    'routeTableId': obj.routeTableId,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * VPC configuration.
+ *
+ * @schema AwsClusterSpecNetworkVpc
+ */
+export interface AwsClusterSpecNetworkVpc {
+  /**
+   * AvailabilityZoneSelection specifies how AZs should be selected if there are more AZs
+   * in a region than specified by AvailabilityZoneUsageLimit. There are 2 selection schemes:
+   * Ordered - selects based on alphabetical order
+   * Random - selects AZs randomly in a region
+   * Defaults to Ordered
+   *
+   * @default Ordered
+   * @schema AwsClusterSpecNetworkVpc#availabilityZoneSelection
+   */
+  readonly availabilityZoneSelection?: AwsClusterSpecNetworkVpcAvailabilityZoneSelection;
+
+  /**
+   * AvailabilityZoneUsageLimit specifies the maximum number of availability zones (AZ) that
+   * should be used in a region when automatically creating subnets. If a region has more
+   * than this number of AZs then this number of AZs will be picked randomly when creating
+   * default subnets. Defaults to 3
+   *
+   * @default 3
+   * @schema AwsClusterSpecNetworkVpc#availabilityZoneUsageLimit
+   */
+  readonly availabilityZoneUsageLimit?: number;
+
+  /**
+   * CidrBlock is the CIDR block to be used when the provider creates a managed VPC.
+   * Defaults to 10.0.0.0/16.
+   *
+   * @default 10.0.0.0/16.
+   * @schema AwsClusterSpecNetworkVpc#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * ID is the vpc-id of the VPC this provider should use to create resources.
+   *
+   * @schema AwsClusterSpecNetworkVpc#id
+   */
+  readonly id?: string;
+
+  /**
+   * InternetGatewayID is the id of the internet gateway associated with the VPC.
+   *
+   * @schema AwsClusterSpecNetworkVpc#internetGatewayId
+   */
+  readonly internetGatewayId?: string;
+
+  /**
+   * IPv6 contains ipv6 specific settings for the network. Supported only in managed clusters.
+   * This field cannot be set on AWSCluster object.
+   *
+   * @schema AwsClusterSpecNetworkVpc#ipv6
+   */
+  readonly ipv6?: AwsClusterSpecNetworkVpcIpv6;
+
+  /**
+   * Tags is a collection of tags describing the resource.
+   *
+   * @schema AwsClusterSpecNetworkVpc#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecNetworkVpc' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecNetworkVpc(obj: AwsClusterSpecNetworkVpc | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'availabilityZoneSelection': obj.availabilityZoneSelection,
+    'availabilityZoneUsageLimit': obj.availabilityZoneUsageLimit,
+    'cidrBlock': obj.cidrBlock,
+    'id': obj.id,
+    'internetGatewayId': obj.internetGatewayId,
+    'ipv6': toJson_AwsClusterSpecNetworkVpcIpv6(obj.ipv6),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CNIIngressRule defines an AWS ingress rule for CNI requirements.
+ *
+ * @schema AwsClusterSpecNetworkCniCniIngressRules
+ */
+export interface AwsClusterSpecNetworkCniCniIngressRules {
+  /**
+   * @schema AwsClusterSpecNetworkCniCniIngressRules#description
+   */
+  readonly description: string;
+
+  /**
+   * @schema AwsClusterSpecNetworkCniCniIngressRules#fromPort
+   */
+  readonly fromPort: number;
+
+  /**
+   * SecurityGroupProtocol defines the protocol type for a security group rule.
+   *
+   * @schema AwsClusterSpecNetworkCniCniIngressRules#protocol
+   */
+  readonly protocol: string;
+
+  /**
+   * @schema AwsClusterSpecNetworkCniCniIngressRules#toPort
+   */
+  readonly toPort: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecNetworkCniCniIngressRules' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecNetworkCniCniIngressRules(obj: AwsClusterSpecNetworkCniCniIngressRules | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'description': obj.description,
+    'fromPort': obj.fromPort,
+    'protocol': obj.protocol,
+    'toPort': obj.toPort,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AvailabilityZoneSelection specifies how AZs should be selected if there are more AZs
+ * in a region than specified by AvailabilityZoneUsageLimit. There are 2 selection schemes:
+ * Ordered - selects based on alphabetical order
+ * Random - selects AZs randomly in a region
+ * Defaults to Ordered
+ *
+ * @default Ordered
+ * @schema AwsClusterSpecNetworkVpcAvailabilityZoneSelection
+ */
+export enum AwsClusterSpecNetworkVpcAvailabilityZoneSelection {
+  /** Ordered */
+  ORDERED = "Ordered",
+  /** Random */
+  RANDOM = "Random",
+}
+
+/**
+ * IPv6 contains ipv6 specific settings for the network. Supported only in managed clusters.
+ * This field cannot be set on AWSCluster object.
+ *
+ * @schema AwsClusterSpecNetworkVpcIpv6
+ */
+export interface AwsClusterSpecNetworkVpcIpv6 {
+  /**
+   * CidrBlock is the CIDR block provided by Amazon when VPC has enabled IPv6.
+   *
+   * @schema AwsClusterSpecNetworkVpcIpv6#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * EgressOnlyInternetGatewayID is the id of the egress only internet gateway associated with an IPv6 enabled VPC.
+   *
+   * @schema AwsClusterSpecNetworkVpcIpv6#egressOnlyInternetGatewayId
+   */
+  readonly egressOnlyInternetGatewayId?: string;
+
+  /**
+   * PoolID is the IP pool which must be defined in case of BYO IP is defined.
+   *
+   * @schema AwsClusterSpecNetworkVpcIpv6#poolId
+   */
+  readonly poolId?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterSpecNetworkVpcIpv6' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterSpecNetworkVpcIpv6(obj: AwsClusterSpecNetworkVpcIpv6 | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlock': obj.cidrBlock,
+    'egressOnlyInternetGatewayId': obj.egressOnlyInternetGatewayId,
+    'poolId': obj.poolId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSCluster is the schema for Amazon EC2 based Kubernetes Cluster API.
+ *
+ * @schema AWSClusterV1Beta2
+ */
+export class AwsClusterV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'AWSCluster',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterV1Beta2Props = {}): any {
+    return {
+      ...AwsClusterV1Beta2.GVK,
+      ...toJson_AwsClusterV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterV1Beta2Props = {}) {
+    super(scope, id, {
+      ...AwsClusterV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterV1Beta2.GVK,
+      ...toJson_AwsClusterV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * AWSCluster is the schema for Amazon EC2 based Kubernetes Cluster API.
+ *
+ * @schema AWSClusterV1Beta2
+ */
+export interface AwsClusterV1Beta2Props {
+  /**
+   * @schema AWSClusterV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * AWSClusterSpec defines the desired state of an EC2-based Kubernetes cluster.
+   *
+   * @schema AWSClusterV1Beta2#spec
+   */
+  readonly spec?: AwsClusterV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2Props(obj: AwsClusterV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSClusterSpec defines the desired state of an EC2-based Kubernetes cluster.
+ *
+ * @schema AwsClusterV1Beta2Spec
+ */
+export interface AwsClusterV1Beta2Spec {
+  /**
+   * AdditionalTags is an optional set of tags to add to AWS resources managed by the AWS provider, in addition to the
+   * ones added by default.
+   *
+   * @schema AwsClusterV1Beta2Spec#additionalTags
+   */
+  readonly additionalTags?: { [key: string]: string };
+
+  /**
+   * Bastion contains options to configure the bastion host.
+   *
+   * @schema AwsClusterV1Beta2Spec#bastion
+   */
+  readonly bastion?: AwsClusterV1Beta2SpecBastion;
+
+  /**
+   * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+   *
+   * @schema AwsClusterV1Beta2Spec#controlPlaneEndpoint
+   */
+  readonly controlPlaneEndpoint?: AwsClusterV1Beta2SpecControlPlaneEndpoint;
+
+  /**
+   * ControlPlaneLoadBalancer is optional configuration for customizing control plane behavior.
+   *
+   * @schema AwsClusterV1Beta2Spec#controlPlaneLoadBalancer
+   */
+  readonly controlPlaneLoadBalancer?: AwsClusterV1Beta2SpecControlPlaneLoadBalancer;
+
+  /**
+   * IdentityRef is a reference to an identity to be used when reconciling the managed control plane.
+   * If no identity is specified, the default identity for this controller will be used.
+   *
+   * @schema AwsClusterV1Beta2Spec#identityRef
+   */
+  readonly identityRef?: AwsClusterV1Beta2SpecIdentityRef;
+
+  /**
+   * ImageLookupBaseOS is the name of the base operating system used to look
+   * up machine images when a machine does not specify an AMI. When set, this
+   * will be used for all cluster machines unless a machine specifies a
+   * different ImageLookupBaseOS.
+   *
+   * @schema AwsClusterV1Beta2Spec#imageLookupBaseOS
+   */
+  readonly imageLookupBaseOs?: string;
+
+  /**
+   * ImageLookupFormat is the AMI naming format to look up machine images when
+   * a machine does not specify an AMI. When set, this will be used for all
+   * cluster machines unless a machine specifies a different ImageLookupOrg.
+   * Supports substitutions for {{.BaseOS}} and {{.K8sVersion}} with the base
+   * OS and kubernetes version, respectively. The BaseOS will be the value in
+   * ImageLookupBaseOS or ubuntu (the default), and the kubernetes version as
+   * defined by the packages produced by kubernetes/release without v as a
+   * prefix: 1.13.0, 1.12.5-mybuild.1, or 1.17.3. For example, the default
+   * image format of capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-* will end up
+   * searching for AMIs that match the pattern capa-ami-ubuntu-?1.18.0-* for a
+   * Machine that is targeting kubernetes v1.18.0 and the ubuntu base OS. See
+   * also: https://golang.org/pkg/text/template/
+   *
+   * @schema AwsClusterV1Beta2Spec#imageLookupFormat
+   */
+  readonly imageLookupFormat?: string;
+
+  /**
+   * ImageLookupOrg is the AWS Organization ID to look up machine images when a
+   * machine does not specify an AMI. When set, this will be used for all
+   * cluster machines unless a machine specifies a different ImageLookupOrg.
+   *
+   * @schema AwsClusterV1Beta2Spec#imageLookupOrg
+   */
+  readonly imageLookupOrg?: string;
+
+  /**
+   * NetworkSpec encapsulates all things related to AWS network.
+   *
+   * @schema AwsClusterV1Beta2Spec#network
+   */
+  readonly network?: AwsClusterV1Beta2SpecNetwork;
+
+  /**
+   * Partition is the AWS security partition being used. Defaults to "aws"
+   *
+   * @default aws"
+   * @schema AwsClusterV1Beta2Spec#partition
+   */
+  readonly partition?: string;
+
+  /**
+   * The AWS Region the cluster lives in.
+   *
+   * @schema AwsClusterV1Beta2Spec#region
+   */
+  readonly region?: string;
+
+  /**
+   * S3Bucket contains options to configure a supporting S3 bucket for this
+   * cluster - currently used for nodes requiring Ignition
+   * (https://coreos.github.io/ignition/) for bootstrapping (requires
+   * BootstrapFormatIgnition feature flag to be enabled).
+   *
+   * @schema AwsClusterV1Beta2Spec#s3Bucket
+   */
+  readonly s3Bucket?: AwsClusterV1Beta2SpecS3Bucket;
+
+  /**
+   * SecondaryControlPlaneLoadBalancer is an additional load balancer that can be used for the control plane.
+   *
+   *
+   * An example use case is to have a separate internal load balancer for internal traffic,
+   * and a separate external load balancer for external traffic.
+   *
+   * @schema AwsClusterV1Beta2Spec#secondaryControlPlaneLoadBalancer
+   */
+  readonly secondaryControlPlaneLoadBalancer?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer;
+
+  /**
+   * SSHKeyName is the name of the ssh key to attach to the bastion host. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+   *
+   * @schema AwsClusterV1Beta2Spec#sshKeyName
+   */
+  readonly sshKeyName?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2Spec(obj: AwsClusterV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalTags': ((obj.additionalTags) === undefined) ? undefined : (Object.entries(obj.additionalTags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'bastion': toJson_AwsClusterV1Beta2SpecBastion(obj.bastion),
+    'controlPlaneEndpoint': toJson_AwsClusterV1Beta2SpecControlPlaneEndpoint(obj.controlPlaneEndpoint),
+    'controlPlaneLoadBalancer': toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancer(obj.controlPlaneLoadBalancer),
+    'identityRef': toJson_AwsClusterV1Beta2SpecIdentityRef(obj.identityRef),
+    'imageLookupBaseOS': obj.imageLookupBaseOs,
+    'imageLookupFormat': obj.imageLookupFormat,
+    'imageLookupOrg': obj.imageLookupOrg,
+    'network': toJson_AwsClusterV1Beta2SpecNetwork(obj.network),
+    'partition': obj.partition,
+    'region': obj.region,
+    's3Bucket': toJson_AwsClusterV1Beta2SpecS3Bucket(obj.s3Bucket),
+    'secondaryControlPlaneLoadBalancer': toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer(obj.secondaryControlPlaneLoadBalancer),
+    'sshKeyName': obj.sshKeyName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Bastion contains options to configure the bastion host.
+ *
+ * @schema AwsClusterV1Beta2SpecBastion
+ */
+export interface AwsClusterV1Beta2SpecBastion {
+  /**
+   * AllowedCIDRBlocks is a list of CIDR blocks allowed to access the bastion host.
+   * They are set as ingress rules for the Bastion host's Security Group (defaults to 0.0.0.0/0).
+   *
+   * @schema AwsClusterV1Beta2SpecBastion#allowedCIDRBlocks
+   */
+  readonly allowedCidrBlocks?: string[];
+
+  /**
+   * AMI will use the specified AMI to boot the bastion. If not specified,
+   * the AMI will default to one picked out in public space.
+   *
+   * @schema AwsClusterV1Beta2SpecBastion#ami
+   */
+  readonly ami?: string;
+
+  /**
+   * DisableIngressRules will ensure there are no Ingress rules in the bastion host's security group.
+   * Requires AllowedCIDRBlocks to be empty.
+   *
+   * @schema AwsClusterV1Beta2SpecBastion#disableIngressRules
+   */
+  readonly disableIngressRules?: boolean;
+
+  /**
+   * Enabled allows this provider to create a bastion host instance
+   * with a public ip to access the VPC private network.
+   *
+   * @schema AwsClusterV1Beta2SpecBastion#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * InstanceType will use the specified instance type for the bastion. If not specified,
+   * Cluster API Provider AWS will use t3.micro for all regions except us-east-1, where t2.micro
+   * will be the default.
+   *
+   * @schema AwsClusterV1Beta2SpecBastion#instanceType
+   */
+  readonly instanceType?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecBastion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecBastion(obj: AwsClusterV1Beta2SpecBastion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedCIDRBlocks': obj.allowedCidrBlocks?.map(y => y),
+    'ami': obj.ami,
+    'disableIngressRules': obj.disableIngressRules,
+    'enabled': obj.enabled,
+    'instanceType': obj.instanceType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneEndpoint
+ */
+export interface AwsClusterV1Beta2SpecControlPlaneEndpoint {
+  /**
+   * The hostname on which the API server is serving.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneEndpoint#host
+   */
+  readonly host: string;
+
+  /**
+   * The port on which the API server is serving.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneEndpoint#port
+   */
+  readonly port: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecControlPlaneEndpoint' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecControlPlaneEndpoint(obj: AwsClusterV1Beta2SpecControlPlaneEndpoint | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'host': obj.host,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ControlPlaneLoadBalancer is optional configuration for customizing control plane behavior.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer
+ */
+export interface AwsClusterV1Beta2SpecControlPlaneLoadBalancer {
+  /**
+   * AdditionalListeners sets the additional listeners for the control plane load balancer.
+   * This is only applicable to Network Load Balancer (NLB) types for the time being.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#additionalListeners
+   */
+  readonly additionalListeners?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners[];
+
+  /**
+   * AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs
+   * This is optional - if not provided new security groups will be created for the load balancer
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: string[];
+
+  /**
+   * CrossZoneLoadBalancing enables the classic ELB cross availability zone balancing.
+   *
+   *
+   * With cross-zone load balancing, each load balancer node for your Classic Load Balancer
+   * distributes requests evenly across the registered instances in all enabled Availability Zones.
+   * If cross-zone load balancing is disabled, each load balancer node distributes requests evenly across
+   * the registered instances in its Availability Zone only.
+   *
+   *
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#crossZoneLoadBalancing
+   */
+  readonly crossZoneLoadBalancing?: boolean;
+
+  /**
+   * DisableHostsRewrite disabled the hair pinning issue solution that adds the NLB's address as 127.0.0.1 to the hosts
+   * file of each instance. This is by default, false.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#disableHostsRewrite
+   */
+  readonly disableHostsRewrite?: boolean;
+
+  /**
+   * HealthCheck sets custom health check configuration to the API target group.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#healthCheck
+   */
+  readonly healthCheck?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck;
+
+  /**
+   * HealthCheckProtocol sets the protocol type for ELB health check target
+   * default value is ELBProtocolSSL
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#healthCheckProtocol
+   */
+  readonly healthCheckProtocol?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheckProtocol;
+
+  /**
+   * IngressRules sets the ingress rules for the control plane load balancer.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#ingressRules
+   */
+  readonly ingressRules?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules[];
+
+  /**
+   * LoadBalancerType sets the type for a load balancer. The default type is classic.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#loadBalancerType
+   */
+  readonly loadBalancerType?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType;
+
+  /**
+   * Name sets the name of the classic ELB load balancer. As per AWS, the name must be unique
+   * within your set of load balancers for the region, must have a maximum of 32 characters, must
+   * contain only alphanumeric characters or hyphens, and cannot begin or end with a hyphen. Once
+   * set, the value cannot be changed.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#name
+   */
+  readonly name?: string;
+
+  /**
+   * PreserveClientIP lets the user control if preservation of client ips must be retained or not.
+   * If this is enabled 6443 will be opened to 0.0.0.0/0.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#preserveClientIP
+   */
+  readonly preserveClientIp?: boolean;
+
+  /**
+   * Scheme sets the scheme of the load balancer (defaults to internet-facing)
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#scheme
+   */
+  readonly scheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
+
+  /**
+   * Subnets sets the subnets that should be applied to the control plane load balancer (defaults to discovered subnets for managed VPCs or an empty set for unmanaged VPCs)
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancer#subnets
+   */
+  readonly subnets?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecControlPlaneLoadBalancer' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancer(obj: AwsClusterV1Beta2SpecControlPlaneLoadBalancer | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalListeners': obj.additionalListeners?.map(y => toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners(y)),
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => y),
+    'crossZoneLoadBalancing': obj.crossZoneLoadBalancing,
+    'disableHostsRewrite': obj.disableHostsRewrite,
+    'healthCheck': toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck(obj.healthCheck),
+    'healthCheckProtocol': obj.healthCheckProtocol,
+    'ingressRules': obj.ingressRules?.map(y => toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules(y)),
+    'loadBalancerType': obj.loadBalancerType,
+    'name': obj.name,
+    'preserveClientIP': obj.preserveClientIp,
+    'scheme': obj.scheme,
+    'subnets': obj.subnets?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * IdentityRef is a reference to an identity to be used when reconciling the managed control plane.
+ * If no identity is specified, the default identity for this controller will be used.
+ *
+ * @schema AwsClusterV1Beta2SpecIdentityRef
+ */
+export interface AwsClusterV1Beta2SpecIdentityRef {
+  /**
+   * Kind of the identity.
+   *
+   * @schema AwsClusterV1Beta2SpecIdentityRef#kind
+   */
+  readonly kind: AwsClusterV1Beta2SpecIdentityRefKind;
+
+  /**
+   * Name of the identity.
+   *
+   * @schema AwsClusterV1Beta2SpecIdentityRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecIdentityRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecIdentityRef(obj: AwsClusterV1Beta2SpecIdentityRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * NetworkSpec encapsulates all things related to AWS network.
+ *
+ * @schema AwsClusterV1Beta2SpecNetwork
+ */
+export interface AwsClusterV1Beta2SpecNetwork {
+  /**
+   * AdditionalControlPlaneIngressRules is an optional set of ingress rules to add to the control plane
+   *
+   * @schema AwsClusterV1Beta2SpecNetwork#additionalControlPlaneIngressRules
+   */
+  readonly additionalControlPlaneIngressRules?: AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules[];
+
+  /**
+   * CNI configuration
+   *
+   * @schema AwsClusterV1Beta2SpecNetwork#cni
+   */
+  readonly cni?: AwsClusterV1Beta2SpecNetworkCni;
+
+  /**
+   * NodePortIngressRuleCidrBlocks is an optional set of CIDR blocks to allow traffic to nodes' NodePort services.
+   * If none are specified here, all IPs are allowed to connect.
+   *
+   * @schema AwsClusterV1Beta2SpecNetwork#nodePortIngressRuleCidrBlocks
+   */
+  readonly nodePortIngressRuleCidrBlocks?: string[];
+
+  /**
+   * SecurityGroupOverrides is an optional set of security groups to use for cluster instances
+   * This is optional - if not provided new security groups will be created for the cluster
+   *
+   * @schema AwsClusterV1Beta2SpecNetwork#securityGroupOverrides
+   */
+  readonly securityGroupOverrides?: { [key: string]: string };
+
+  /**
+   * Subnets configuration.
+   *
+   * @schema AwsClusterV1Beta2SpecNetwork#subnets
+   */
+  readonly subnets?: AwsClusterV1Beta2SpecNetworkSubnets[];
+
+  /**
+   * VPC configuration.
+   *
+   * @schema AwsClusterV1Beta2SpecNetwork#vpc
+   */
+  readonly vpc?: AwsClusterV1Beta2SpecNetworkVpc;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetwork(obj: AwsClusterV1Beta2SpecNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalControlPlaneIngressRules': obj.additionalControlPlaneIngressRules?.map(y => toJson_AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules(y)),
+    'cni': toJson_AwsClusterV1Beta2SpecNetworkCni(obj.cni),
+    'nodePortIngressRuleCidrBlocks': obj.nodePortIngressRuleCidrBlocks?.map(y => y),
+    'securityGroupOverrides': ((obj.securityGroupOverrides) === undefined) ? undefined : (Object.entries(obj.securityGroupOverrides).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'subnets': obj.subnets?.map(y => toJson_AwsClusterV1Beta2SpecNetworkSubnets(y)),
+    'vpc': toJson_AwsClusterV1Beta2SpecNetworkVpc(obj.vpc),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * S3Bucket contains options to configure a supporting S3 bucket for this
+ * cluster - currently used for nodes requiring Ignition
+ * (https://coreos.github.io/ignition/) for bootstrapping (requires
+ * BootstrapFormatIgnition feature flag to be enabled).
+ *
+ * @schema AwsClusterV1Beta2SpecS3Bucket
+ */
+export interface AwsClusterV1Beta2SpecS3Bucket {
+  /**
+   * BestEffortDeleteObjects defines whether access/permission errors during object deletion should be ignored.
+   *
+   * @schema AwsClusterV1Beta2SpecS3Bucket#bestEffortDeleteObjects
+   */
+  readonly bestEffortDeleteObjects?: boolean;
+
+  /**
+   * ControlPlaneIAMInstanceProfile is a name of the IAMInstanceProfile, which will be allowed
+   * to read control-plane node bootstrap data from S3 Bucket.
+   *
+   * @schema AwsClusterV1Beta2SpecS3Bucket#controlPlaneIAMInstanceProfile
+   */
+  readonly controlPlaneIamInstanceProfile?: string;
+
+  /**
+   * Name defines name of S3 Bucket to be created.
+   *
+   * @schema AwsClusterV1Beta2SpecS3Bucket#name
+   */
+  readonly name: string;
+
+  /**
+   * NodesIAMInstanceProfiles is a list of IAM instance profiles, which will be allowed to read
+   * worker nodes bootstrap data from S3 Bucket.
+   *
+   * @schema AwsClusterV1Beta2SpecS3Bucket#nodesIAMInstanceProfiles
+   */
+  readonly nodesIamInstanceProfiles?: string[];
+
+  /**
+   * PresignedURLDuration defines the duration for which presigned URLs are valid.
+   *
+   *
+   * This is used to generate presigned URLs for S3 Bucket objects, which are used by
+   * control-plane and worker nodes to fetch bootstrap data.
+   *
+   *
+   * When enabled, the IAM instance profiles specified are not used.
+   *
+   * @schema AwsClusterV1Beta2SpecS3Bucket#presignedURLDuration
+   */
+  readonly presignedUrlDuration?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecS3Bucket' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecS3Bucket(obj: AwsClusterV1Beta2SpecS3Bucket | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bestEffortDeleteObjects': obj.bestEffortDeleteObjects,
+    'controlPlaneIAMInstanceProfile': obj.controlPlaneIamInstanceProfile,
+    'name': obj.name,
+    'nodesIAMInstanceProfiles': obj.nodesIamInstanceProfiles?.map(y => y),
+    'presignedURLDuration': obj.presignedUrlDuration,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecondaryControlPlaneLoadBalancer is an additional load balancer that can be used for the control plane.
+ *
+ *
+ * An example use case is to have a separate internal load balancer for internal traffic,
+ * and a separate external load balancer for external traffic.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer
+ */
+export interface AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer {
+  /**
+   * AdditionalListeners sets the additional listeners for the control plane load balancer.
+   * This is only applicable to Network Load Balancer (NLB) types for the time being.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#additionalListeners
+   */
+  readonly additionalListeners?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners[];
+
+  /**
+   * AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs
+   * This is optional - if not provided new security groups will be created for the load balancer
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: string[];
+
+  /**
+   * CrossZoneLoadBalancing enables the classic ELB cross availability zone balancing.
+   *
+   *
+   * With cross-zone load balancing, each load balancer node for your Classic Load Balancer
+   * distributes requests evenly across the registered instances in all enabled Availability Zones.
+   * If cross-zone load balancing is disabled, each load balancer node distributes requests evenly across
+   * the registered instances in its Availability Zone only.
+   *
+   *
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#crossZoneLoadBalancing
+   */
+  readonly crossZoneLoadBalancing?: boolean;
+
+  /**
+   * DisableHostsRewrite disabled the hair pinning issue solution that adds the NLB's address as 127.0.0.1 to the hosts
+   * file of each instance. This is by default, false.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#disableHostsRewrite
+   */
+  readonly disableHostsRewrite?: boolean;
+
+  /**
+   * HealthCheck sets custom health check configuration to the API target group.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#healthCheck
+   */
+  readonly healthCheck?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck;
+
+  /**
+   * HealthCheckProtocol sets the protocol type for ELB health check target
+   * default value is ELBProtocolSSL
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#healthCheckProtocol
+   */
+  readonly healthCheckProtocol?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheckProtocol;
+
+  /**
+   * IngressRules sets the ingress rules for the control plane load balancer.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#ingressRules
+   */
+  readonly ingressRules?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules[];
+
+  /**
+   * LoadBalancerType sets the type for a load balancer. The default type is classic.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#loadBalancerType
+   */
+  readonly loadBalancerType?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerLoadBalancerType;
+
+  /**
+   * Name sets the name of the classic ELB load balancer. As per AWS, the name must be unique
+   * within your set of load balancers for the region, must have a maximum of 32 characters, must
+   * contain only alphanumeric characters or hyphens, and cannot begin or end with a hyphen. Once
+   * set, the value cannot be changed.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#name
+   */
+  readonly name?: string;
+
+  /**
+   * PreserveClientIP lets the user control if preservation of client ips must be retained or not.
+   * If this is enabled 6443 will be opened to 0.0.0.0/0.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#preserveClientIP
+   */
+  readonly preserveClientIp?: boolean;
+
+  /**
+   * Scheme sets the scheme of the load balancer (defaults to internet-facing)
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#scheme
+   */
+  readonly scheme?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerScheme;
+
+  /**
+   * Subnets sets the subnets that should be applied to the control plane load balancer (defaults to discovered subnets for managed VPCs or an empty set for unmanaged VPCs)
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer#subnets
+   */
+  readonly subnets?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer(obj: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancer | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalListeners': obj.additionalListeners?.map(y => toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners(y)),
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => y),
+    'crossZoneLoadBalancing': obj.crossZoneLoadBalancing,
+    'disableHostsRewrite': obj.disableHostsRewrite,
+    'healthCheck': toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck(obj.healthCheck),
+    'healthCheckProtocol': obj.healthCheckProtocol,
+    'ingressRules': obj.ingressRules?.map(y => toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules(y)),
+    'loadBalancerType': obj.loadBalancerType,
+    'name': obj.name,
+    'preserveClientIP': obj.preserveClientIp,
+    'scheme': obj.scheme,
+    'subnets': obj.subnets?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AdditionalListenerSpec defines the desired state of an
+ * additional listener on an AWS load balancer.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners
+ */
+export interface AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners {
+  /**
+   * HealthCheck sets the optional custom health check configuration to the API target group.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners#healthCheck
+   */
+  readonly healthCheck?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck;
+
+  /**
+   * Port sets the port for the additional listener.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners#port
+   */
+  readonly port: number;
+
+  /**
+   * Protocol sets the protocol for the additional listener.
+   * Currently only TCP is supported.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners#protocol
+   */
+  readonly protocol?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners(obj: AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListeners | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'healthCheck': toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck(obj.healthCheck),
+    'port': obj.port,
+    'protocol': obj.protocol,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HealthCheck sets custom health check configuration to the API target group.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck
+ */
+export interface AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck {
+  /**
+   * The approximate amount of time, in seconds, between health checks of an individual
+   * target.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck#intervalSeconds
+   */
+  readonly intervalSeconds?: number;
+
+  /**
+   * The number of consecutive health check successes required before considering
+   * a target healthy.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck#thresholdCount
+   */
+  readonly thresholdCount?: number;
+
+  /**
+   * The amount of time, in seconds, during which no response from a target means
+   * a failed health check.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck#timeoutSeconds
+   */
+  readonly timeoutSeconds?: number;
+
+  /**
+   * The number of consecutive health check failures required before considering
+   * a target unhealthy.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck#unhealthyThresholdCount
+   */
+  readonly unhealthyThresholdCount?: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck(obj: AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheck | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'intervalSeconds': obj.intervalSeconds,
+    'thresholdCount': obj.thresholdCount,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'unhealthyThresholdCount': obj.unhealthyThresholdCount,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HealthCheckProtocol sets the protocol type for ELB health check target
+ * default value is ELBProtocolSSL
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheckProtocol
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerHealthCheckProtocol {
+  /** TCP */
+  TCP = "TCP",
+  /** SSL */
+  SSL = "SSL",
+  /** HTTP */
+  HTTP = "HTTP",
+  /** HTTPS */
+  HTTPS = "HTTPS",
+  /** TLS */
+  TLS = "TLS",
+  /** UDP */
+  UDP = "UDP",
+}
+
+/**
+ * IngressRule defines an AWS ingress rule for security groups.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules
+ */
+export interface AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules {
+  /**
+   * List of CIDR blocks to allow access from. Cannot be specified with SourceSecurityGroupID.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#cidrBlocks
+   */
+  readonly cidrBlocks?: string[];
+
+  /**
+   * Description provides extended information about the ingress rule.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#description
+   */
+  readonly description: string;
+
+  /**
+   * FromPort is the start of port range.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#fromPort
+   */
+  readonly fromPort: number;
+
+  /**
+   * List of IPv6 CIDR blocks to allow access from. Cannot be specified with SourceSecurityGroupID.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#ipv6CidrBlocks
+   */
+  readonly ipv6CidrBlocks?: string[];
+
+  /**
+   * NatGatewaysIPsSource use the NAT gateways IPs as the source for the ingress rule.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#natGatewaysIPsSource
+   */
+  readonly natGatewaysIPsSource?: boolean;
+
+  /**
+   * Protocol is the protocol for the ingress rule. Accepted values are "-1" (all), "4" (IP in IP),"tcp", "udp", "icmp", and "58" (ICMPv6), "50" (ESP).
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#protocol
+   */
+  readonly protocol: AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol;
+
+  /**
+   * The security group id to allow access from. Cannot be specified with CidrBlocks.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#sourceSecurityGroupIds
+   */
+  readonly sourceSecurityGroupIds?: string[];
+
+  /**
+   * The security group role to allow access from. Cannot be specified with CidrBlocks.
+   * The field will be combined with source security group IDs if specified.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#sourceSecurityGroupRoles
+   */
+  readonly sourceSecurityGroupRoles?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesSourceSecurityGroupRoles[];
+
+  /**
+   * ToPort is the end of port range.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules#toPort
+   */
+  readonly toPort: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules(obj: AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRules | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlocks': obj.cidrBlocks?.map(y => y),
+    'description': obj.description,
+    'fromPort': obj.fromPort,
+    'ipv6CidrBlocks': obj.ipv6CidrBlocks?.map(y => y),
+    'natGatewaysIPsSource': obj.natGatewaysIPsSource,
+    'protocol': obj.protocol,
+    'sourceSecurityGroupIds': obj.sourceSecurityGroupIds?.map(y => y),
+    'sourceSecurityGroupRoles': obj.sourceSecurityGroupRoles?.map(y => y),
+    'toPort': obj.toPort,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LoadBalancerType sets the type for a load balancer. The default type is classic.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType {
+  /** classic */
+  CLASSIC = "classic",
+  /** elb */
+  ELB = "elb",
+  /** alb */
+  ALB = "alb",
+  /** nlb */
+  NLB = "nlb",
+  /** disabled */
+  DISABLED = "disabled",
+}
+
+/**
+ * Scheme sets the scheme of the load balancer (defaults to internet-facing)
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme {
+  /** internet-facing */
+  INTERNET_HYPHEN_FACING = "internet-facing",
+  /** internal */
+  INTERNAL = "internal",
+}
+
+/**
+ * Kind of the identity.
+ *
+ * @schema AwsClusterV1Beta2SpecIdentityRefKind
+ */
+export enum AwsClusterV1Beta2SpecIdentityRefKind {
+  /** AWSClusterControllerIdentity */
+  AWS_CLUSTER_CONTROLLER_IDENTITY = "AWSClusterControllerIdentity",
+  /** AWSClusterRoleIdentity */
+  AWS_CLUSTER_ROLE_IDENTITY = "AWSClusterRoleIdentity",
+  /** AWSClusterStaticIdentity */
+  AWS_CLUSTER_STATIC_IDENTITY = "AWSClusterStaticIdentity",
+}
+
+/**
+ * IngressRule defines an AWS ingress rule for security groups.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules
+ */
+export interface AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules {
+  /**
+   * List of CIDR blocks to allow access from. Cannot be specified with SourceSecurityGroupID.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#cidrBlocks
+   */
+  readonly cidrBlocks?: string[];
+
+  /**
+   * Description provides extended information about the ingress rule.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#description
+   */
+  readonly description: string;
+
+  /**
+   * FromPort is the start of port range.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#fromPort
+   */
+  readonly fromPort: number;
+
+  /**
+   * List of IPv6 CIDR blocks to allow access from. Cannot be specified with SourceSecurityGroupID.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#ipv6CidrBlocks
+   */
+  readonly ipv6CidrBlocks?: string[];
+
+  /**
+   * NatGatewaysIPsSource use the NAT gateways IPs as the source for the ingress rule.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#natGatewaysIPsSource
+   */
+  readonly natGatewaysIPsSource?: boolean;
+
+  /**
+   * Protocol is the protocol for the ingress rule. Accepted values are "-1" (all), "4" (IP in IP),"tcp", "udp", "icmp", and "58" (ICMPv6), "50" (ESP).
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#protocol
+   */
+  readonly protocol: AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol;
+
+  /**
+   * The security group id to allow access from. Cannot be specified with CidrBlocks.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#sourceSecurityGroupIds
+   */
+  readonly sourceSecurityGroupIds?: string[];
+
+  /**
+   * The security group role to allow access from. Cannot be specified with CidrBlocks.
+   * The field will be combined with source security group IDs if specified.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#sourceSecurityGroupRoles
+   */
+  readonly sourceSecurityGroupRoles?: AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesSourceSecurityGroupRoles[];
+
+  /**
+   * ToPort is the end of port range.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules#toPort
+   */
+  readonly toPort: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules(obj: AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRules | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlocks': obj.cidrBlocks?.map(y => y),
+    'description': obj.description,
+    'fromPort': obj.fromPort,
+    'ipv6CidrBlocks': obj.ipv6CidrBlocks?.map(y => y),
+    'natGatewaysIPsSource': obj.natGatewaysIPsSource,
+    'protocol': obj.protocol,
+    'sourceSecurityGroupIds': obj.sourceSecurityGroupIds?.map(y => y),
+    'sourceSecurityGroupRoles': obj.sourceSecurityGroupRoles?.map(y => y),
+    'toPort': obj.toPort,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CNI configuration
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkCni
+ */
+export interface AwsClusterV1Beta2SpecNetworkCni {
+  /**
+   * CNIIngressRules specify rules to apply to control plane and worker node security groups.
+   * The source for the rule will be set to control plane and worker security group IDs.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkCni#cniIngressRules
+   */
+  readonly cniIngressRules?: AwsClusterV1Beta2SpecNetworkCniCniIngressRules[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkCni' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkCni(obj: AwsClusterV1Beta2SpecNetworkCni | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cniIngressRules': obj.cniIngressRules?.map(y => toJson_AwsClusterV1Beta2SpecNetworkCniCniIngressRules(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SubnetSpec configures an AWS Subnet.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkSubnets
+ */
+export interface AwsClusterV1Beta2SpecNetworkSubnets {
+  /**
+   * AvailabilityZone defines the availability zone to use for this subnet in the cluster's region.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#availabilityZone
+   */
+  readonly availabilityZone?: string;
+
+  /**
+   * CidrBlock is the CIDR block to be used when the provider creates a managed VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * ID defines a unique identifier to reference this resource.
+   * If you're bringing your subnet, set the AWS subnet-id here, it must start with `subnet-`.
+   *
+   *
+   * When the VPC is managed by CAPA, and you'd like the provider to create a subnet for you,
+   * the id can be set to any placeholder value that does not start with `subnet-`;
+   * upon creation, the subnet AWS identifier will be populated in the `ResourceID` field and
+   * the `id` field is going to be used as the subnet name. If you specify a tag
+   * called `Name`, it takes precedence.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#id
+   */
+  readonly id: string;
+
+  /**
+   * IPv6CidrBlock is the IPv6 CIDR block to be used when the provider creates a managed VPC.
+   * A subnet can have an IPv4 and an IPv6 address.
+   * IPv6 is only supported in managed clusters, this field cannot be set on AWSCluster object.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#ipv6CidrBlock
+   */
+  readonly ipv6CidrBlock?: string;
+
+  /**
+   * IsIPv6 defines the subnet as an IPv6 subnet. A subnet is IPv6 when it is associated with a VPC that has IPv6 enabled.
+   * IPv6 is only supported in managed clusters, this field cannot be set on AWSCluster object.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#isIpv6
+   */
+  readonly isIpv6?: boolean;
+
+  /**
+   * IsPublic defines the subnet as a public subnet. A subnet is public when it is associated with a route table that has a route to an internet gateway.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#isPublic
+   */
+  readonly isPublic?: boolean;
+
+  /**
+   * NatGatewayID is the NAT gateway id associated with the subnet.
+   * Ignored unless the subnet is managed by the provider, in which case this is set on the public subnet where the NAT gateway resides. It is then used to determine routes for private subnets in the same AZ as the public subnet.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#natGatewayId
+   */
+  readonly natGatewayId?: string;
+
+  /**
+   * ParentZoneName is the zone name where the current subnet's zone is tied when
+   * the zone is a Local Zone.
+   *
+   *
+   * The subnets in Local Zone or Wavelength Zone locations consume the ParentZoneName
+   * to select the correct private route table to egress traffic to the internet.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#parentZoneName
+   */
+  readonly parentZoneName?: string;
+
+  /**
+   * ResourceID is the subnet identifier from AWS, READ ONLY.
+   * This field is populated when the provider manages the subnet.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#resourceID
+   */
+  readonly resourceId?: string;
+
+  /**
+   * RouteTableID is the routing table id associated with the subnet.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#routeTableId
+   */
+  readonly routeTableId?: string;
+
+  /**
+   * Tags is a collection of tags describing the resource.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * ZoneType defines the type of the zone where the subnet is created.
+   *
+   *
+   * The valid values are availability-zone, local-zone, and wavelength-zone.
+   *
+   *
+   * Subnet with zone type availability-zone (regular) is always selected to create cluster
+   * resources, like Load Balancers, NAT Gateways, Contol Plane nodes, etc.
+   *
+   *
+   * Subnet with zone type local-zone or wavelength-zone is not eligible to automatically create
+   * regular cluster resources.
+   *
+   *
+   * The public subnet in availability-zone or local-zone is associated with regular public
+   * route table with default route entry to a Internet Gateway.
+   *
+   *
+   * The public subnet in wavelength-zone is associated with a carrier public
+   * route table with default route entry to a Carrier Gateway.
+   *
+   *
+   * The private subnet in the availability-zone is associated with a private route table with
+   * the default route entry to a NAT Gateway created in that zone.
+   *
+   *
+   * The private subnet in the local-zone or wavelength-zone is associated with a private route table with
+   * the default route entry re-using the NAT Gateway in the Region (preferred from the
+   * parent zone, the zone type availability-zone in the region, or first table available).
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkSubnets#zoneType
+   */
+  readonly zoneType?: AwsClusterV1Beta2SpecNetworkSubnetsZoneType;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkSubnets' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkSubnets(obj: AwsClusterV1Beta2SpecNetworkSubnets | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'availabilityZone': obj.availabilityZone,
+    'cidrBlock': obj.cidrBlock,
+    'id': obj.id,
+    'ipv6CidrBlock': obj.ipv6CidrBlock,
+    'isIpv6': obj.isIpv6,
+    'isPublic': obj.isPublic,
+    'natGatewayId': obj.natGatewayId,
+    'parentZoneName': obj.parentZoneName,
+    'resourceID': obj.resourceId,
+    'routeTableId': obj.routeTableId,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'zoneType': obj.zoneType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * VPC configuration.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpc
+ */
+export interface AwsClusterV1Beta2SpecNetworkVpc {
+  /**
+   * AvailabilityZoneSelection specifies how AZs should be selected if there are more AZs
+   * in a region than specified by AvailabilityZoneUsageLimit. There are 2 selection schemes:
+   * Ordered - selects based on alphabetical order
+   * Random - selects AZs randomly in a region
+   * Defaults to Ordered
+   *
+   * @default Ordered
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#availabilityZoneSelection
+   */
+  readonly availabilityZoneSelection?: AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection;
+
+  /**
+   * AvailabilityZoneUsageLimit specifies the maximum number of availability zones (AZ) that
+   * should be used in a region when automatically creating subnets. If a region has more
+   * than this number of AZs then this number of AZs will be picked randomly when creating
+   * default subnets. Defaults to 3
+   *
+   * @default 3
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#availabilityZoneUsageLimit
+   */
+  readonly availabilityZoneUsageLimit?: number;
+
+  /**
+   * CarrierGatewayID is the id of the internet gateway associated with the VPC,
+   * for carrier network (Wavelength Zones).
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#carrierGatewayId
+   */
+  readonly carrierGatewayId?: string;
+
+  /**
+   * CidrBlock is the CIDR block to be used when the provider creates a managed VPC.
+   * Defaults to 10.0.0.0/16.
+   * Mutually exclusive with IPAMPool.
+   *
+   * @default 10.0.0.0/16.
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * ElasticIPPool contains specific configuration to allocate Public IPv4 address (Elastic IP) from user-defined pool
+   * brought to AWS for core infrastructure resources, like NAT Gateways and Public Network Load Balancers for
+   * the API Server.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#elasticIpPool
+   */
+  readonly elasticIpPool?: AwsClusterV1Beta2SpecNetworkVpcElasticIpPool;
+
+  /**
+   * EmptyRoutesDefaultVPCSecurityGroup specifies whether the default VPC security group ingress
+   * and egress rules should be removed.
+   *
+   *
+   * By default, when creating a VPC, AWS creates a security group called `default` with ingress and egress
+   * rules that allow traffic from anywhere. The group could be used as a potential surface attack and
+   * it's generally suggested that the group rules are removed or modified appropriately.
+   *
+   *
+   * NOTE: This only applies when the VPC is managed by the Cluster API AWS controller.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#emptyRoutesDefaultVPCSecurityGroup
+   */
+  readonly emptyRoutesDefaultVpcSecurityGroup?: boolean;
+
+  /**
+   * ID is the vpc-id of the VPC this provider should use to create resources.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#id
+   */
+  readonly id?: string;
+
+  /**
+   * InternetGatewayID is the id of the internet gateway associated with the VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#internetGatewayId
+   */
+  readonly internetGatewayId?: string;
+
+  /**
+   * IPAMPool defines the IPAMv4 pool to be used for VPC.
+   * Mutually exclusive with CidrBlock.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#ipamPool
+   */
+  readonly ipamPool?: AwsClusterV1Beta2SpecNetworkVpcIpamPool;
+
+  /**
+   * IPv6 contains ipv6 specific settings for the network. Supported only in managed clusters.
+   * This field cannot be set on AWSCluster object.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#ipv6
+   */
+  readonly ipv6?: AwsClusterV1Beta2SpecNetworkVpcIpv6;
+
+  /**
+   * PrivateDNSHostnameTypeOnLaunch is the type of hostname to assign to instances in the subnet at launch.
+   * For IPv4-only and dual-stack (IPv4 and IPv6) subnets, an instance DNS name can be based on the instance IPv4 address (ip-name)
+   * or the instance ID (resource-name). For IPv6 only subnets, an instance DNS name must be based on the instance ID (resource-name).
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#privateDnsHostnameTypeOnLaunch
+   */
+  readonly privateDnsHostnameTypeOnLaunch?: AwsClusterV1Beta2SpecNetworkVpcPrivateDnsHostnameTypeOnLaunch;
+
+  /**
+   * SecondaryCidrBlocks are additional CIDR blocks to be associated when the provider creates a managed VPC.
+   * Defaults to none. Mutually exclusive with IPAMPool. This makes sense to use if, for example, you want to use
+   * a separate IP range for pods (e.g. Cilium ENI mode).
+   *
+   * @default none. Mutually exclusive with IPAMPool. This makes sense to use if, for example, you want to use
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#secondaryCidrBlocks
+   */
+  readonly secondaryCidrBlocks?: AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks[];
+
+  /**
+   * SubnetSchema specifies how CidrBlock should be divided on subnets in the VPC depending on the number of AZs.
+   * PreferPrivate - one private subnet for each AZ plus one other subnet that will be further sub-divided for the public subnets.
+   * PreferPublic - have the reverse logic of PreferPrivate, one public subnet for each AZ plus one other subnet
+   * that will be further sub-divided for the private subnets.
+   * Defaults to PreferPrivate
+   *
+   * @default PreferPrivate
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#subnetSchema
+   */
+  readonly subnetSchema?: AwsClusterV1Beta2SpecNetworkVpcSubnetSchema;
+
+  /**
+   * Tags is a collection of tags describing the resource.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpc#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkVpc' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkVpc(obj: AwsClusterV1Beta2SpecNetworkVpc | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'availabilityZoneSelection': obj.availabilityZoneSelection,
+    'availabilityZoneUsageLimit': obj.availabilityZoneUsageLimit,
+    'carrierGatewayId': obj.carrierGatewayId,
+    'cidrBlock': obj.cidrBlock,
+    'elasticIpPool': toJson_AwsClusterV1Beta2SpecNetworkVpcElasticIpPool(obj.elasticIpPool),
+    'emptyRoutesDefaultVPCSecurityGroup': obj.emptyRoutesDefaultVpcSecurityGroup,
+    'id': obj.id,
+    'internetGatewayId': obj.internetGatewayId,
+    'ipamPool': toJson_AwsClusterV1Beta2SpecNetworkVpcIpamPool(obj.ipamPool),
+    'ipv6': toJson_AwsClusterV1Beta2SpecNetworkVpcIpv6(obj.ipv6),
+    'privateDnsHostnameTypeOnLaunch': obj.privateDnsHostnameTypeOnLaunch,
+    'secondaryCidrBlocks': obj.secondaryCidrBlocks?.map(y => toJson_AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks(y)),
+    'subnetSchema': obj.subnetSchema,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AdditionalListenerSpec defines the desired state of an
+ * additional listener on an AWS load balancer.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners
+ */
+export interface AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners {
+  /**
+   * HealthCheck sets the optional custom health check configuration to the API target group.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners#healthCheck
+   */
+  readonly healthCheck?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck;
+
+  /**
+   * Port sets the port for the additional listener.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners#port
+   */
+  readonly port: number;
+
+  /**
+   * Protocol sets the protocol for the additional listener.
+   * Currently only TCP is supported.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners#protocol
+   */
+  readonly protocol?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersProtocol;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners(obj: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListeners | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'healthCheck': toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck(obj.healthCheck),
+    'port': obj.port,
+    'protocol': obj.protocol,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HealthCheck sets custom health check configuration to the API target group.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck
+ */
+export interface AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck {
+  /**
+   * The approximate amount of time, in seconds, between health checks of an individual
+   * target.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck#intervalSeconds
+   */
+  readonly intervalSeconds?: number;
+
+  /**
+   * The number of consecutive health check successes required before considering
+   * a target healthy.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck#thresholdCount
+   */
+  readonly thresholdCount?: number;
+
+  /**
+   * The amount of time, in seconds, during which no response from a target means
+   * a failed health check.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck#timeoutSeconds
+   */
+  readonly timeoutSeconds?: number;
+
+  /**
+   * The number of consecutive health check failures required before considering
+   * a target unhealthy.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck#unhealthyThresholdCount
+   */
+  readonly unhealthyThresholdCount?: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck(obj: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheck | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'intervalSeconds': obj.intervalSeconds,
+    'thresholdCount': obj.thresholdCount,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'unhealthyThresholdCount': obj.unhealthyThresholdCount,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * HealthCheckProtocol sets the protocol type for ELB health check target
+ * default value is ELBProtocolSSL
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheckProtocol
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerHealthCheckProtocol {
+  /** TCP */
+  TCP = "TCP",
+  /** SSL */
+  SSL = "SSL",
+  /** HTTP */
+  HTTP = "HTTP",
+  /** HTTPS */
+  HTTPS = "HTTPS",
+  /** TLS */
+  TLS = "TLS",
+  /** UDP */
+  UDP = "UDP",
+}
+
+/**
+ * IngressRule defines an AWS ingress rule for security groups.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules
+ */
+export interface AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules {
+  /**
+   * List of CIDR blocks to allow access from. Cannot be specified with SourceSecurityGroupID.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#cidrBlocks
+   */
+  readonly cidrBlocks?: string[];
+
+  /**
+   * Description provides extended information about the ingress rule.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#description
+   */
+  readonly description: string;
+
+  /**
+   * FromPort is the start of port range.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#fromPort
+   */
+  readonly fromPort: number;
+
+  /**
+   * List of IPv6 CIDR blocks to allow access from. Cannot be specified with SourceSecurityGroupID.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#ipv6CidrBlocks
+   */
+  readonly ipv6CidrBlocks?: string[];
+
+  /**
+   * NatGatewaysIPsSource use the NAT gateways IPs as the source for the ingress rule.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#natGatewaysIPsSource
+   */
+  readonly natGatewaysIPsSource?: boolean;
+
+  /**
+   * Protocol is the protocol for the ingress rule. Accepted values are "-1" (all), "4" (IP in IP),"tcp", "udp", "icmp", and "58" (ICMPv6), "50" (ESP).
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#protocol
+   */
+  readonly protocol: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRulesProtocol;
+
+  /**
+   * The security group id to allow access from. Cannot be specified with CidrBlocks.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#sourceSecurityGroupIds
+   */
+  readonly sourceSecurityGroupIds?: string[];
+
+  /**
+   * The security group role to allow access from. Cannot be specified with CidrBlocks.
+   * The field will be combined with source security group IDs if specified.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#sourceSecurityGroupRoles
+   */
+  readonly sourceSecurityGroupRoles?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRulesSourceSecurityGroupRoles[];
+
+  /**
+   * ToPort is the end of port range.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules#toPort
+   */
+  readonly toPort: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules(obj: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRules | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlocks': obj.cidrBlocks?.map(y => y),
+    'description': obj.description,
+    'fromPort': obj.fromPort,
+    'ipv6CidrBlocks': obj.ipv6CidrBlocks?.map(y => y),
+    'natGatewaysIPsSource': obj.natGatewaysIPsSource,
+    'protocol': obj.protocol,
+    'sourceSecurityGroupIds': obj.sourceSecurityGroupIds?.map(y => y),
+    'sourceSecurityGroupRoles': obj.sourceSecurityGroupRoles?.map(y => y),
+    'toPort': obj.toPort,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LoadBalancerType sets the type for a load balancer. The default type is classic.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerLoadBalancerType
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerLoadBalancerType {
+  /** classic */
+  CLASSIC = "classic",
+  /** elb */
+  ELB = "elb",
+  /** alb */
+  ALB = "alb",
+  /** nlb */
+  NLB = "nlb",
+  /** disabled */
+  DISABLED = "disabled",
+}
+
+/**
+ * Scheme sets the scheme of the load balancer (defaults to internet-facing)
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerScheme
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerScheme {
+  /** internet-facing */
+  INTERNET_HYPHEN_FACING = "internet-facing",
+  /** internal */
+  INTERNAL = "internal",
+}
+
+/**
+ * HealthCheck sets the optional custom health check configuration to the API target group.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck
+ */
+export interface AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck {
+  /**
+   * The approximate amount of time, in seconds, between health checks of an individual
+   * target.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#intervalSeconds
+   */
+  readonly intervalSeconds?: number;
+
+  /**
+   * The destination for health checks on the targets when using the protocol HTTP or HTTPS,
+   * otherwise the path will be ignored.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#path
+   */
+  readonly path?: string;
+
+  /**
+   * The port the load balancer uses when performing health checks for additional target groups. When
+   * not specified this value will be set for the same of listener port.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#port
+   */
+  readonly port?: string;
+
+  /**
+   * The protocol to use to health check connect with the target. When not specified the Protocol
+   * will be the same of the listener.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#protocol
+   */
+  readonly protocol?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheckProtocol;
+
+  /**
+   * The number of consecutive health check successes required before considering
+   * a target healthy.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#thresholdCount
+   */
+  readonly thresholdCount?: number;
+
+  /**
+   * The amount of time, in seconds, during which no response from a target means
+   * a failed health check.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#timeoutSeconds
+   */
+  readonly timeoutSeconds?: number;
+
+  /**
+   * The number of consecutive health check failures required before considering
+   * a target unhealthy.
+   *
+   * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck#unhealthyThresholdCount
+   */
+  readonly unhealthyThresholdCount?: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck(obj: AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheck | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'intervalSeconds': obj.intervalSeconds,
+    'path': obj.path,
+    'port': obj.port,
+    'protocol': obj.protocol,
+    'thresholdCount': obj.thresholdCount,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'unhealthyThresholdCount': obj.unhealthyThresholdCount,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Protocol sets the protocol for the additional listener.
+ * Currently only TCP is supported.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol {
+  /** TCP */
+  TCP = "TCP",
+}
+
+/**
+ * Protocol is the protocol for the ingress rule. Accepted values are "-1" (all), "4" (IP in IP),"tcp", "udp", "icmp", and "58" (ICMPv6), "50" (ESP).
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol {
+  /** -1 */
+  VALUE_HYPHEN_1 = "-1",
+  /** 4 */
+  VALUE_4 = "4",
+  /** tcp */
+  TCP = "tcp",
+  /** udp */
+  UDP = "udp",
+  /** icmp */
+  ICMP = "icmp",
+  /** 58 */
+  VALUE_58 = "58",
+  /** 50 */
+  VALUE_50 = "50",
+}
+
+/**
+ * SecurityGroupRole defines the unique role of a security group.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesSourceSecurityGroupRoles
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesSourceSecurityGroupRoles {
+  /** bastion */
+  BASTION = "bastion",
+  /** node */
+  NODE = "node",
+  /** controlplane */
+  CONTROLPLANE = "controlplane",
+  /** apiserver-lb */
+  APISERVER_HYPHEN_LB = "apiserver-lb",
+  /** lb */
+  LB = "lb",
+  /** node-eks-additional */
+  NODE_HYPHEN_EKS_HYPHEN_ADDITIONAL = "node-eks-additional",
+}
+
+/**
+ * Protocol is the protocol for the ingress rule. Accepted values are "-1" (all), "4" (IP in IP),"tcp", "udp", "icmp", and "58" (ICMPv6), "50" (ESP).
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol
+ */
+export enum AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol {
+  /** -1 */
+  VALUE_HYPHEN_1 = "-1",
+  /** 4 */
+  VALUE_4 = "4",
+  /** tcp */
+  TCP = "tcp",
+  /** udp */
+  UDP = "udp",
+  /** icmp */
+  ICMP = "icmp",
+  /** 58 */
+  VALUE_58 = "58",
+  /** 50 */
+  VALUE_50 = "50",
+}
+
+/**
+ * SecurityGroupRole defines the unique role of a security group.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesSourceSecurityGroupRoles
+ */
+export enum AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesSourceSecurityGroupRoles {
+  /** bastion */
+  BASTION = "bastion",
+  /** node */
+  NODE = "node",
+  /** controlplane */
+  CONTROLPLANE = "controlplane",
+  /** apiserver-lb */
+  APISERVER_HYPHEN_LB = "apiserver-lb",
+  /** lb */
+  LB = "lb",
+  /** node-eks-additional */
+  NODE_HYPHEN_EKS_HYPHEN_ADDITIONAL = "node-eks-additional",
+}
+
+/**
+ * CNIIngressRule defines an AWS ingress rule for CNI requirements.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkCniCniIngressRules
+ */
+export interface AwsClusterV1Beta2SpecNetworkCniCniIngressRules {
+  /**
+   * @schema AwsClusterV1Beta2SpecNetworkCniCniIngressRules#description
+   */
+  readonly description: string;
+
+  /**
+   * @schema AwsClusterV1Beta2SpecNetworkCniCniIngressRules#fromPort
+   */
+  readonly fromPort: number;
+
+  /**
+   * SecurityGroupProtocol defines the protocol type for a security group rule.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkCniCniIngressRules#protocol
+   */
+  readonly protocol: string;
+
+  /**
+   * @schema AwsClusterV1Beta2SpecNetworkCniCniIngressRules#toPort
+   */
+  readonly toPort: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkCniCniIngressRules' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkCniCniIngressRules(obj: AwsClusterV1Beta2SpecNetworkCniCniIngressRules | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'description': obj.description,
+    'fromPort': obj.fromPort,
+    'protocol': obj.protocol,
+    'toPort': obj.toPort,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ZoneType defines the type of the zone where the subnet is created.
+ *
+ *
+ * The valid values are availability-zone, local-zone, and wavelength-zone.
+ *
+ *
+ * Subnet with zone type availability-zone (regular) is always selected to create cluster
+ * resources, like Load Balancers, NAT Gateways, Contol Plane nodes, etc.
+ *
+ *
+ * Subnet with zone type local-zone or wavelength-zone is not eligible to automatically create
+ * regular cluster resources.
+ *
+ *
+ * The public subnet in availability-zone or local-zone is associated with regular public
+ * route table with default route entry to a Internet Gateway.
+ *
+ *
+ * The public subnet in wavelength-zone is associated with a carrier public
+ * route table with default route entry to a Carrier Gateway.
+ *
+ *
+ * The private subnet in the availability-zone is associated with a private route table with
+ * the default route entry to a NAT Gateway created in that zone.
+ *
+ *
+ * The private subnet in the local-zone or wavelength-zone is associated with a private route table with
+ * the default route entry re-using the NAT Gateway in the Region (preferred from the
+ * parent zone, the zone type availability-zone in the region, or first table available).
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkSubnetsZoneType
+ */
+export enum AwsClusterV1Beta2SpecNetworkSubnetsZoneType {
+  /** availability-zone */
+  AVAILABILITY_HYPHEN_ZONE = "availability-zone",
+  /** local-zone */
+  LOCAL_HYPHEN_ZONE = "local-zone",
+  /** wavelength-zone */
+  WAVELENGTH_HYPHEN_ZONE = "wavelength-zone",
+}
+
+/**
+ * AvailabilityZoneSelection specifies how AZs should be selected if there are more AZs
+ * in a region than specified by AvailabilityZoneUsageLimit. There are 2 selection schemes:
+ * Ordered - selects based on alphabetical order
+ * Random - selects AZs randomly in a region
+ * Defaults to Ordered
+ *
+ * @default Ordered
+ * @schema AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection
+ */
+export enum AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection {
+  /** Ordered */
+  ORDERED = "Ordered",
+  /** Random */
+  RANDOM = "Random",
+}
+
+/**
+ * ElasticIPPool contains specific configuration to allocate Public IPv4 address (Elastic IP) from user-defined pool
+ * brought to AWS for core infrastructure resources, like NAT Gateways and Public Network Load Balancers for
+ * the API Server.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcElasticIpPool
+ */
+export interface AwsClusterV1Beta2SpecNetworkVpcElasticIpPool {
+  /**
+   * PublicIpv4Pool sets a custom Public IPv4 Pool used to create Elastic IP address for resources
+   * created in public IPv4 subnets. Every IPv4 address, Elastic IP, will be allocated from the custom
+   * Public IPv4 pool that you brought to AWS, instead of Amazon-provided pool. The public IPv4 pool
+   * resource ID starts with 'ipv4pool-ec2'.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcElasticIpPool#publicIpv4Pool
+   */
+  readonly publicIpv4Pool?: string;
+
+  /**
+   * PublicIpv4PoolFallBackOrder defines the fallback action when the Public IPv4 Pool has been exhausted,
+   * no more IPv4 address available in the pool.
+   *
+   *
+   * When set to 'amazon-pool', the controller check if the pool has available IPv4 address, when pool has reached the
+   * IPv4 limit, the address will be claimed from Amazon-pool (default).
+   *
+   *
+   * When set to 'none', the controller will fail the Elastic IP allocation when the publicIpv4Pool is exhausted.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcElasticIpPool#publicIpv4PoolFallbackOrder
+   */
+  readonly publicIpv4PoolFallbackOrder?: AwsClusterV1Beta2SpecNetworkVpcElasticIpPoolPublicIpv4PoolFallbackOrder;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkVpcElasticIpPool' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkVpcElasticIpPool(obj: AwsClusterV1Beta2SpecNetworkVpcElasticIpPool | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'publicIpv4Pool': obj.publicIpv4Pool,
+    'publicIpv4PoolFallbackOrder': obj.publicIpv4PoolFallbackOrder,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * IPAMPool defines the IPAMv4 pool to be used for VPC.
+ * Mutually exclusive with CidrBlock.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcIpamPool
+ */
+export interface AwsClusterV1Beta2SpecNetworkVpcIpamPool {
+  /**
+   * ID is the ID of the IPAM pool this provider should use to create VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpamPool#id
+   */
+  readonly id?: string;
+
+  /**
+   * Name is the name of the IPAM pool this provider should use to create VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpamPool#name
+   */
+  readonly name?: string;
+
+  /**
+   * The netmask length of the IPv4 CIDR you want to allocate to VPC from
+   * an Amazon VPC IP Address Manager (IPAM) pool.
+   * Defaults to /16 for IPv4 if not specified.
+   *
+   * @default 16 for IPv4 if not specified.
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpamPool#netmaskLength
+   */
+  readonly netmaskLength?: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkVpcIpamPool' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkVpcIpamPool(obj: AwsClusterV1Beta2SpecNetworkVpcIpamPool | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'id': obj.id,
+    'name': obj.name,
+    'netmaskLength': obj.netmaskLength,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * IPv6 contains ipv6 specific settings for the network. Supported only in managed clusters.
+ * This field cannot be set on AWSCluster object.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6
+ */
+export interface AwsClusterV1Beta2SpecNetworkVpcIpv6 {
+  /**
+   * CidrBlock is the CIDR block provided by Amazon when VPC has enabled IPv6.
+   * Mutually exclusive with IPAMPool.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6#cidrBlock
+   */
+  readonly cidrBlock?: string;
+
+  /**
+   * EgressOnlyInternetGatewayID is the id of the egress only internet gateway associated with an IPv6 enabled VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6#egressOnlyInternetGatewayId
+   */
+  readonly egressOnlyInternetGatewayId?: string;
+
+  /**
+   * IPAMPool defines the IPAMv6 pool to be used for VPC.
+   * Mutually exclusive with CidrBlock.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6#ipamPool
+   */
+  readonly ipamPool?: AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool;
+
+  /**
+   * PoolID is the IP pool which must be defined in case of BYO IP is defined.
+   * Must be specified if CidrBlock is set.
+   * Mutually exclusive with IPAMPool.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6#poolId
+   */
+  readonly poolId?: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkVpcIpv6' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkVpcIpv6(obj: AwsClusterV1Beta2SpecNetworkVpcIpv6 | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlock': obj.cidrBlock,
+    'egressOnlyInternetGatewayId': obj.egressOnlyInternetGatewayId,
+    'ipamPool': toJson_AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool(obj.ipamPool),
+    'poolId': obj.poolId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PrivateDNSHostnameTypeOnLaunch is the type of hostname to assign to instances in the subnet at launch.
+ * For IPv4-only and dual-stack (IPv4 and IPv6) subnets, an instance DNS name can be based on the instance IPv4 address (ip-name)
+ * or the instance ID (resource-name). For IPv6 only subnets, an instance DNS name must be based on the instance ID (resource-name).
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcPrivateDnsHostnameTypeOnLaunch
+ */
+export enum AwsClusterV1Beta2SpecNetworkVpcPrivateDnsHostnameTypeOnLaunch {
+  /** ip-name */
+  IP_HYPHEN_NAME = "ip-name",
+  /** resource-name */
+  RESOURCE_HYPHEN_NAME = "resource-name",
+}
+
+/**
+ * VpcCidrBlock defines the CIDR block and settings to associate with the managed VPC. Currently, only IPv4 is supported.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks
+ */
+export interface AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks {
+  /**
+   * IPv4CidrBlock is the IPv4 CIDR block to associate with the managed VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks#ipv4CidrBlock
+   */
+  readonly ipv4CidrBlock: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks(obj: AwsClusterV1Beta2SpecNetworkVpcSecondaryCidrBlocks | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'ipv4CidrBlock': obj.ipv4CidrBlock,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SubnetSchema specifies how CidrBlock should be divided on subnets in the VPC depending on the number of AZs.
+ * PreferPrivate - one private subnet for each AZ plus one other subnet that will be further sub-divided for the public subnets.
+ * PreferPublic - have the reverse logic of PreferPrivate, one public subnet for each AZ plus one other subnet
+ * that will be further sub-divided for the private subnets.
+ * Defaults to PreferPrivate
+ *
+ * @default PreferPrivate
+ * @schema AwsClusterV1Beta2SpecNetworkVpcSubnetSchema
+ */
+export enum AwsClusterV1Beta2SpecNetworkVpcSubnetSchema {
+  /** PreferPrivate */
+  PREFER_PRIVATE = "PreferPrivate",
+  /** PreferPublic */
+  PREFER_PUBLIC = "PreferPublic",
+}
+
+/**
+ * HealthCheck sets the optional custom health check configuration to the API target group.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck
+ */
+export interface AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck {
+  /**
+   * The approximate amount of time, in seconds, between health checks of an individual
+   * target.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#intervalSeconds
+   */
+  readonly intervalSeconds?: number;
+
+  /**
+   * The destination for health checks on the targets when using the protocol HTTP or HTTPS,
+   * otherwise the path will be ignored.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#path
+   */
+  readonly path?: string;
+
+  /**
+   * The port the load balancer uses when performing health checks for additional target groups. When
+   * not specified this value will be set for the same of listener port.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#port
+   */
+  readonly port?: string;
+
+  /**
+   * The protocol to use to health check connect with the target. When not specified the Protocol
+   * will be the same of the listener.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#protocol
+   */
+  readonly protocol?: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheckProtocol;
+
+  /**
+   * The number of consecutive health check successes required before considering
+   * a target healthy.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#thresholdCount
+   */
+  readonly thresholdCount?: number;
+
+  /**
+   * The amount of time, in seconds, during which no response from a target means
+   * a failed health check.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#timeoutSeconds
+   */
+  readonly timeoutSeconds?: number;
+
+  /**
+   * The number of consecutive health check failures required before considering
+   * a target unhealthy.
+   *
+   * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck#unhealthyThresholdCount
+   */
+  readonly unhealthyThresholdCount?: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck(obj: AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheck | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'intervalSeconds': obj.intervalSeconds,
+    'path': obj.path,
+    'port': obj.port,
+    'protocol': obj.protocol,
+    'thresholdCount': obj.thresholdCount,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'unhealthyThresholdCount': obj.unhealthyThresholdCount,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Protocol sets the protocol for the additional listener.
+ * Currently only TCP is supported.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersProtocol
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersProtocol {
+  /** TCP */
+  TCP = "TCP",
+}
+
+/**
+ * Protocol is the protocol for the ingress rule. Accepted values are "-1" (all), "4" (IP in IP),"tcp", "udp", "icmp", and "58" (ICMPv6), "50" (ESP).
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRulesProtocol
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRulesProtocol {
+  /** -1 */
+  VALUE_HYPHEN_1 = "-1",
+  /** 4 */
+  VALUE_4 = "4",
+  /** tcp */
+  TCP = "tcp",
+  /** udp */
+  UDP = "udp",
+  /** icmp */
+  ICMP = "icmp",
+  /** 58 */
+  VALUE_58 = "58",
+  /** 50 */
+  VALUE_50 = "50",
+}
+
+/**
+ * SecurityGroupRole defines the unique role of a security group.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRulesSourceSecurityGroupRoles
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerIngressRulesSourceSecurityGroupRoles {
+  /** bastion */
+  BASTION = "bastion",
+  /** node */
+  NODE = "node",
+  /** controlplane */
+  CONTROLPLANE = "controlplane",
+  /** apiserver-lb */
+  APISERVER_HYPHEN_LB = "apiserver-lb",
+  /** lb */
+  LB = "lb",
+  /** node-eks-additional */
+  NODE_HYPHEN_EKS_HYPHEN_ADDITIONAL = "node-eks-additional",
+}
+
+/**
+ * The protocol to use to health check connect with the target. When not specified the Protocol
+ * will be the same of the listener.
+ *
+ * @schema AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheckProtocol
+ */
+export enum AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersHealthCheckProtocol {
+  /** TCP */
+  TCP = "TCP",
+  /** HTTP */
+  HTTP = "HTTP",
+  /** HTTPS */
+  HTTPS = "HTTPS",
+}
+
+/**
+ * PublicIpv4PoolFallBackOrder defines the fallback action when the Public IPv4 Pool has been exhausted,
+ * no more IPv4 address available in the pool.
+ *
+ *
+ * When set to 'amazon-pool', the controller check if the pool has available IPv4 address, when pool has reached the
+ * IPv4 limit, the address will be claimed from Amazon-pool (default).
+ *
+ *
+ * When set to 'none', the controller will fail the Elastic IP allocation when the publicIpv4Pool is exhausted.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcElasticIpPoolPublicIpv4PoolFallbackOrder
+ */
+export enum AwsClusterV1Beta2SpecNetworkVpcElasticIpPoolPublicIpv4PoolFallbackOrder {
+  /** amazon-pool */
+  AMAZON_HYPHEN_POOL = "amazon-pool",
+  /** none */
+  NONE = "none",
+}
+
+/**
+ * IPAMPool defines the IPAMv6 pool to be used for VPC.
+ * Mutually exclusive with CidrBlock.
+ *
+ * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool
+ */
+export interface AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool {
+  /**
+   * ID is the ID of the IPAM pool this provider should use to create VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool#id
+   */
+  readonly id?: string;
+
+  /**
+   * Name is the name of the IPAM pool this provider should use to create VPC.
+   *
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool#name
+   */
+  readonly name?: string;
+
+  /**
+   * The netmask length of the IPv4 CIDR you want to allocate to VPC from
+   * an Amazon VPC IP Address Manager (IPAM) pool.
+   * Defaults to /16 for IPv4 if not specified.
+   *
+   * @default 16 for IPv4 if not specified.
+   * @schema AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool#netmaskLength
+   */
+  readonly netmaskLength?: number;
+}
+
+/**
+ * Converts an object of type 'AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool(obj: AwsClusterV1Beta2SpecNetworkVpcIpv6IpamPool | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'id': obj.id,
+    'name': obj.name,
+    'netmaskLength': obj.netmaskLength,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The protocol to use to health check connect with the target. When not specified the Protocol
+ * will be the same of the listener.
+ *
+ * @schema AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheckProtocol
+ */
+export enum AwsClusterV1Beta2SpecSecondaryControlPlaneLoadBalancerAdditionalListenersHealthCheckProtocol {
+  /** TCP */
+  TCP = "TCP",
+  /** HTTP */
+  HTTP = "HTTP",
+  /** HTTPS */
+  HTTPS = "HTTPS",
+}
+
+
+/**
+ * AWSClusterControllerIdentity is the Schema for the awsclustercontrolleridentities API
+It is used to grant access to use Cluster API Provider AWS Controller credentials.
+ *
+ * @schema AWSClusterControllerIdentity
+ */
+export class AwsClusterControllerIdentity extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterControllerIdentity"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'AWSClusterControllerIdentity',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterControllerIdentity".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterControllerIdentityProps = {}): any {
+    return {
+      ...AwsClusterControllerIdentity.GVK,
+      ...toJson_AwsClusterControllerIdentityProps(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterControllerIdentity" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterControllerIdentityProps = {}) {
+    super(scope, id, {
+      ...AwsClusterControllerIdentity.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterControllerIdentity.GVK,
+      ...toJson_AwsClusterControllerIdentityProps(resolved),
+    };
+  }
+}
+
+/**
+ * AWSClusterControllerIdentity is the Schema for the awsclustercontrolleridentities API
+ * It is used to grant access to use Cluster API Provider AWS Controller credentials.
+ *
+ * @schema AWSClusterControllerIdentity
+ */
+export interface AwsClusterControllerIdentityProps {
+  /**
+   * @schema AWSClusterControllerIdentity#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * Spec for this AWSClusterControllerIdentity.
+   *
+   * @schema AWSClusterControllerIdentity#spec
+   */
+  readonly spec?: AwsClusterControllerIdentitySpec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentityProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentityProps(obj: AwsClusterControllerIdentityProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterControllerIdentitySpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec for this AWSClusterControllerIdentity.
+ *
+ * @schema AwsClusterControllerIdentitySpec
+ */
+export interface AwsClusterControllerIdentitySpec {
+  /**
+   * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+   * Namespaces can be selected either using an array of namespaces or with label selector.
+   * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+   * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+   * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+   *
+   * @schema AwsClusterControllerIdentitySpec#allowedNamespaces
+   */
+  readonly allowedNamespaces?: AwsClusterControllerIdentitySpecAllowedNamespaces;
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentitySpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentitySpec(obj: AwsClusterControllerIdentitySpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedNamespaces': toJson_AwsClusterControllerIdentitySpecAllowedNamespaces(obj.allowedNamespaces),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+ * Namespaces can be selected either using an array of namespaces or with label selector.
+ * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+ * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+ * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+ *
+ * @schema AwsClusterControllerIdentitySpecAllowedNamespaces
+ */
+export interface AwsClusterControllerIdentitySpecAllowedNamespaces {
+  /**
+   * An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespaces#list
+   */
+  readonly list?: string[];
+
+  /**
+   * An empty selector indicates that AWSClusters cannot use this
+   * AWSClusterIdentity from any namespace.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespaces#selector
+   */
+  readonly selector?: AwsClusterControllerIdentitySpecAllowedNamespacesSelector;
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentitySpecAllowedNamespaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentitySpecAllowedNamespaces(obj: AwsClusterControllerIdentitySpecAllowedNamespaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'list': obj.list?.map(y => y),
+    'selector': toJson_AwsClusterControllerIdentitySpecAllowedNamespacesSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * An empty selector indicates that AWSClusters cannot use this
+ * AWSClusterIdentity from any namespace.
+ *
+ * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelector
+ */
+export interface AwsClusterControllerIdentitySpecAllowedNamespacesSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelector#matchExpressions
+   */
+  readonly matchExpressions?: AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentitySpecAllowedNamespacesSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentitySpecAllowedNamespacesSelector(obj: AwsClusterControllerIdentitySpecAllowedNamespacesSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions
+ */
+export interface AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions(obj: AwsClusterControllerIdentitySpecAllowedNamespacesSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSClusterControllerIdentity is the Schema for the awsclustercontrolleridentities API
+It is used to grant access to use Cluster API Provider AWS Controller credentials.
+ *
+ * @schema AWSClusterControllerIdentityV1Beta2
+ */
+export class AwsClusterControllerIdentityV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterControllerIdentityV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'AWSClusterControllerIdentity',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterControllerIdentityV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterControllerIdentityV1Beta2Props = {}): any {
+    return {
+      ...AwsClusterControllerIdentityV1Beta2.GVK,
+      ...toJson_AwsClusterControllerIdentityV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterControllerIdentityV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterControllerIdentityV1Beta2Props = {}) {
+    super(scope, id, {
+      ...AwsClusterControllerIdentityV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterControllerIdentityV1Beta2.GVK,
+      ...toJson_AwsClusterControllerIdentityV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * AWSClusterControllerIdentity is the Schema for the awsclustercontrolleridentities API
+ * It is used to grant access to use Cluster API Provider AWS Controller credentials.
+ *
+ * @schema AWSClusterControllerIdentityV1Beta2
+ */
+export interface AwsClusterControllerIdentityV1Beta2Props {
+  /**
+   * @schema AWSClusterControllerIdentityV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * Spec for this AWSClusterControllerIdentity.
+   *
+   * @schema AWSClusterControllerIdentityV1Beta2#spec
+   */
+  readonly spec?: AwsClusterControllerIdentityV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentityV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentityV1Beta2Props(obj: AwsClusterControllerIdentityV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterControllerIdentityV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec for this AWSClusterControllerIdentity.
+ *
+ * @schema AwsClusterControllerIdentityV1Beta2Spec
+ */
+export interface AwsClusterControllerIdentityV1Beta2Spec {
+  /**
+   * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+   * Namespaces can be selected either using an array of namespaces or with label selector.
+   * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+   * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+   * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2Spec#allowedNamespaces
+   */
+  readonly allowedNamespaces?: AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces;
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentityV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentityV1Beta2Spec(obj: AwsClusterControllerIdentityV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedNamespaces': toJson_AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces(obj.allowedNamespaces),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+ * Namespaces can be selected either using an array of namespaces or with label selector.
+ * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+ * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+ * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+ *
+ * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces
+ */
+export interface AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces {
+  /**
+   * An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces#list
+   */
+  readonly list?: string[];
+
+  /**
+   * An empty selector indicates that AWSClusters cannot use this
+   * AWSClusterIdentity from any namespace.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces#selector
+   */
+  readonly selector?: AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector;
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces(obj: AwsClusterControllerIdentityV1Beta2SpecAllowedNamespaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'list': obj.list?.map(y => y),
+    'selector': toJson_AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * An empty selector indicates that AWSClusters cannot use this
+ * AWSClusterIdentity from any namespace.
+ *
+ * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector
+ */
+export interface AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector#matchExpressions
+   */
+  readonly matchExpressions?: AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector(obj: AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions
+ */
+export interface AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions(obj: AwsClusterControllerIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSClusterRoleIdentity is the Schema for the awsclusterroleidentities API
+It is used to assume a role using the provided sourceRef.
+ *
+ * @schema AWSClusterRoleIdentity
+ */
+export class AwsClusterRoleIdentity extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterRoleIdentity"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'AWSClusterRoleIdentity',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterRoleIdentity".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterRoleIdentityProps = {}): any {
+    return {
+      ...AwsClusterRoleIdentity.GVK,
+      ...toJson_AwsClusterRoleIdentityProps(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterRoleIdentity" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterRoleIdentityProps = {}) {
+    super(scope, id, {
+      ...AwsClusterRoleIdentity.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterRoleIdentity.GVK,
+      ...toJson_AwsClusterRoleIdentityProps(resolved),
+    };
+  }
+}
+
+/**
+ * AWSClusterRoleIdentity is the Schema for the awsclusterroleidentities API
+ * It is used to assume a role using the provided sourceRef.
+ *
+ * @schema AWSClusterRoleIdentity
+ */
+export interface AwsClusterRoleIdentityProps {
+  /**
+   * @schema AWSClusterRoleIdentity#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * Spec for this AWSClusterRoleIdentity.
+   *
+   * @schema AWSClusterRoleIdentity#spec
+   */
+  readonly spec?: AwsClusterRoleIdentitySpec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityProps(obj: AwsClusterRoleIdentityProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterRoleIdentitySpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec for this AWSClusterRoleIdentity.
+ *
+ * @schema AwsClusterRoleIdentitySpec
+ */
+export interface AwsClusterRoleIdentitySpec {
+  /**
+   * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+   * Namespaces can be selected either using an array of namespaces or with label selector.
+   * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+   * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+   * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+   *
+   * @schema AwsClusterRoleIdentitySpec#allowedNamespaces
+   */
+  readonly allowedNamespaces?: AwsClusterRoleIdentitySpecAllowedNamespaces;
+
+  /**
+   * The duration, in seconds, of the role session before it is renewed.
+   *
+   * @schema AwsClusterRoleIdentitySpec#durationSeconds
+   */
+  readonly durationSeconds?: number;
+
+  /**
+   * A unique identifier that might be required when you assume a role in another account.
+   * If the administrator of the account to which the role belongs provided you with an
+   * external ID, then provide that value in the ExternalId parameter. This value can be
+   * any string, such as a passphrase or account number. A cross-account role is usually
+   * set up to trust everyone in an account. Therefore, the administrator of the trusting
+   * account might send an external ID to the administrator of the trusted account. That
+   * way, only someone with the ID can assume the role, rather than everyone in the
+   * account. For more information about the external ID, see How to Use an External ID
+   * When Granting Access to Your AWS Resources to a Third Party in the IAM User Guide.
+   *
+   * @schema AwsClusterRoleIdentitySpec#externalID
+   */
+  readonly externalId?: string;
+
+  /**
+   * An IAM policy as a JSON-encoded string that you want to use as an inline session policy.
+   *
+   * @schema AwsClusterRoleIdentitySpec#inlinePolicy
+   */
+  readonly inlinePolicy?: string;
+
+  /**
+   * The Amazon Resource Names (ARNs) of the IAM managed policies that you want
+   * to use as managed session policies.
+   * The policies must exist in the same account as the role.
+   *
+   * @schema AwsClusterRoleIdentitySpec#policyARNs
+   */
+  readonly policyArNs?: string[];
+
+  /**
+   * The Amazon Resource Name (ARN) of the role to assume.
+   *
+   * @schema AwsClusterRoleIdentitySpec#roleARN
+   */
+  readonly roleArn: string;
+
+  /**
+   * An identifier for the assumed role session
+   *
+   * @schema AwsClusterRoleIdentitySpec#sessionName
+   */
+  readonly sessionName?: string;
+
+  /**
+   * SourceIdentityRef is a reference to another identity which will be chained to do
+   * role assumption. All identity types are accepted.
+   *
+   * @schema AwsClusterRoleIdentitySpec#sourceIdentityRef
+   */
+  readonly sourceIdentityRef?: AwsClusterRoleIdentitySpecSourceIdentityRef;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentitySpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentitySpec(obj: AwsClusterRoleIdentitySpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedNamespaces': toJson_AwsClusterRoleIdentitySpecAllowedNamespaces(obj.allowedNamespaces),
+    'durationSeconds': obj.durationSeconds,
+    'externalID': obj.externalId,
+    'inlinePolicy': obj.inlinePolicy,
+    'policyARNs': obj.policyArNs?.map(y => y),
+    'roleARN': obj.roleArn,
+    'sessionName': obj.sessionName,
+    'sourceIdentityRef': toJson_AwsClusterRoleIdentitySpecSourceIdentityRef(obj.sourceIdentityRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+ * Namespaces can be selected either using an array of namespaces or with label selector.
+ * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+ * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+ * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+ *
+ * @schema AwsClusterRoleIdentitySpecAllowedNamespaces
+ */
+export interface AwsClusterRoleIdentitySpecAllowedNamespaces {
+  /**
+   * An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespaces#list
+   */
+  readonly list?: string[];
+
+  /**
+   * An empty selector indicates that AWSClusters cannot use this
+   * AWSClusterIdentity from any namespace.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespaces#selector
+   */
+  readonly selector?: AwsClusterRoleIdentitySpecAllowedNamespacesSelector;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentitySpecAllowedNamespaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentitySpecAllowedNamespaces(obj: AwsClusterRoleIdentitySpecAllowedNamespaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'list': obj.list?.map(y => y),
+    'selector': toJson_AwsClusterRoleIdentitySpecAllowedNamespacesSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SourceIdentityRef is a reference to another identity which will be chained to do
+ * role assumption. All identity types are accepted.
+ *
+ * @schema AwsClusterRoleIdentitySpecSourceIdentityRef
+ */
+export interface AwsClusterRoleIdentitySpecSourceIdentityRef {
+  /**
+   * Kind of the identity.
+   *
+   * @schema AwsClusterRoleIdentitySpecSourceIdentityRef#kind
+   */
+  readonly kind: AwsClusterRoleIdentitySpecSourceIdentityRefKind;
+
+  /**
+   * Name of the identity.
+   *
+   * @schema AwsClusterRoleIdentitySpecSourceIdentityRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentitySpecSourceIdentityRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentitySpecSourceIdentityRef(obj: AwsClusterRoleIdentitySpecSourceIdentityRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * An empty selector indicates that AWSClusters cannot use this
+ * AWSClusterIdentity from any namespace.
+ *
+ * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelector
+ */
+export interface AwsClusterRoleIdentitySpecAllowedNamespacesSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelector#matchExpressions
+   */
+  readonly matchExpressions?: AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentitySpecAllowedNamespacesSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentitySpecAllowedNamespacesSelector(obj: AwsClusterRoleIdentitySpecAllowedNamespacesSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Kind of the identity.
+ *
+ * @schema AwsClusterRoleIdentitySpecSourceIdentityRefKind
+ */
+export enum AwsClusterRoleIdentitySpecSourceIdentityRefKind {
+  /** AWSClusterControllerIdentity */
+  AWS_CLUSTER_CONTROLLER_IDENTITY = "AWSClusterControllerIdentity",
+  /** AWSClusterRoleIdentity */
+  AWS_CLUSTER_ROLE_IDENTITY = "AWSClusterRoleIdentity",
+  /** AWSClusterStaticIdentity */
+  AWS_CLUSTER_STATIC_IDENTITY = "AWSClusterStaticIdentity",
+}
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions
+ */
+export interface AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions(obj: AwsClusterRoleIdentitySpecAllowedNamespacesSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSClusterRoleIdentity is the Schema for the awsclusterroleidentities API
+It is used to assume a role using the provided sourceRef.
+ *
+ * @schema AWSClusterRoleIdentityV1Beta2
+ */
+export class AwsClusterRoleIdentityV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterRoleIdentityV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'AWSClusterRoleIdentity',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterRoleIdentityV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterRoleIdentityV1Beta2Props = {}): any {
+    return {
+      ...AwsClusterRoleIdentityV1Beta2.GVK,
+      ...toJson_AwsClusterRoleIdentityV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterRoleIdentityV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterRoleIdentityV1Beta2Props = {}) {
+    super(scope, id, {
+      ...AwsClusterRoleIdentityV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterRoleIdentityV1Beta2.GVK,
+      ...toJson_AwsClusterRoleIdentityV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * AWSClusterRoleIdentity is the Schema for the awsclusterroleidentities API
+ * It is used to assume a role using the provided sourceRef.
+ *
+ * @schema AWSClusterRoleIdentityV1Beta2
+ */
+export interface AwsClusterRoleIdentityV1Beta2Props {
+  /**
+   * @schema AWSClusterRoleIdentityV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * Spec for this AWSClusterRoleIdentity.
+   *
+   * @schema AWSClusterRoleIdentityV1Beta2#spec
+   */
+  readonly spec?: AwsClusterRoleIdentityV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityV1Beta2Props(obj: AwsClusterRoleIdentityV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterRoleIdentityV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec for this AWSClusterRoleIdentity.
+ *
+ * @schema AwsClusterRoleIdentityV1Beta2Spec
+ */
+export interface AwsClusterRoleIdentityV1Beta2Spec {
+  /**
+   * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+   * Namespaces can be selected either using an array of namespaces or with label selector.
+   * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+   * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+   * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#allowedNamespaces
+   */
+  readonly allowedNamespaces?: AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces;
+
+  /**
+   * The duration, in seconds, of the role session before it is renewed.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#durationSeconds
+   */
+  readonly durationSeconds?: number;
+
+  /**
+   * A unique identifier that might be required when you assume a role in another account.
+   * If the administrator of the account to which the role belongs provided you with an
+   * external ID, then provide that value in the ExternalId parameter. This value can be
+   * any string, such as a passphrase or account number. A cross-account role is usually
+   * set up to trust everyone in an account. Therefore, the administrator of the trusting
+   * account might send an external ID to the administrator of the trusted account. That
+   * way, only someone with the ID can assume the role, rather than everyone in the
+   * account. For more information about the external ID, see How to Use an External ID
+   * When Granting Access to Your AWS Resources to a Third Party in the IAM User Guide.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#externalID
+   */
+  readonly externalId?: string;
+
+  /**
+   * An IAM policy as a JSON-encoded string that you want to use as an inline session policy.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#inlinePolicy
+   */
+  readonly inlinePolicy?: string;
+
+  /**
+   * The Amazon Resource Names (ARNs) of the IAM managed policies that you want
+   * to use as managed session policies.
+   * The policies must exist in the same account as the role.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#policyARNs
+   */
+  readonly policyArNs?: string[];
+
+  /**
+   * The Amazon Resource Name (ARN) of the role to assume.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#roleARN
+   */
+  readonly roleArn: string;
+
+  /**
+   * An identifier for the assumed role session
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#sessionName
+   */
+  readonly sessionName?: string;
+
+  /**
+   * SourceIdentityRef is a reference to another identity which will be chained to do
+   * role assumption. All identity types are accepted.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2Spec#sourceIdentityRef
+   */
+  readonly sourceIdentityRef?: AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityV1Beta2Spec(obj: AwsClusterRoleIdentityV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedNamespaces': toJson_AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces(obj.allowedNamespaces),
+    'durationSeconds': obj.durationSeconds,
+    'externalID': obj.externalId,
+    'inlinePolicy': obj.inlinePolicy,
+    'policyARNs': obj.policyArNs?.map(y => y),
+    'roleARN': obj.roleArn,
+    'sessionName': obj.sessionName,
+    'sourceIdentityRef': toJson_AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef(obj.sourceIdentityRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+ * Namespaces can be selected either using an array of namespaces or with label selector.
+ * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+ * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+ * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+ *
+ * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces
+ */
+export interface AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces {
+  /**
+   * An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces#list
+   */
+  readonly list?: string[];
+
+  /**
+   * An empty selector indicates that AWSClusters cannot use this
+   * AWSClusterIdentity from any namespace.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces#selector
+   */
+  readonly selector?: AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces(obj: AwsClusterRoleIdentityV1Beta2SpecAllowedNamespaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'list': obj.list?.map(y => y),
+    'selector': toJson_AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SourceIdentityRef is a reference to another identity which will be chained to do
+ * role assumption. All identity types are accepted.
+ *
+ * @schema AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef
+ */
+export interface AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef {
+  /**
+   * Kind of the identity.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef#kind
+   */
+  readonly kind: AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRefKind;
+
+  /**
+   * Name of the identity.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef(obj: AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * An empty selector indicates that AWSClusters cannot use this
+ * AWSClusterIdentity from any namespace.
+ *
+ * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector
+ */
+export interface AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector#matchExpressions
+   */
+  readonly matchExpressions?: AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector(obj: AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Kind of the identity.
+ *
+ * @schema AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRefKind
+ */
+export enum AwsClusterRoleIdentityV1Beta2SpecSourceIdentityRefKind {
+  /** AWSClusterControllerIdentity */
+  AWS_CLUSTER_CONTROLLER_IDENTITY = "AWSClusterControllerIdentity",
+  /** AWSClusterRoleIdentity */
+  AWS_CLUSTER_ROLE_IDENTITY = "AWSClusterRoleIdentity",
+  /** AWSClusterStaticIdentity */
+  AWS_CLUSTER_STATIC_IDENTITY = "AWSClusterStaticIdentity",
+}
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions
+ */
+export interface AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions(obj: AwsClusterRoleIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSClusterStaticIdentity is the Schema for the awsclusterstaticidentities API
+It represents a reference to an AWS access key ID and secret access key, stored in a secret.
+ *
+ * @schema AWSClusterStaticIdentity
+ */
+export class AwsClusterStaticIdentity extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterStaticIdentity"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'AWSClusterStaticIdentity',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterStaticIdentity".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterStaticIdentityProps = {}): any {
+    return {
+      ...AwsClusterStaticIdentity.GVK,
+      ...toJson_AwsClusterStaticIdentityProps(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterStaticIdentity" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterStaticIdentityProps = {}) {
+    super(scope, id, {
+      ...AwsClusterStaticIdentity.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterStaticIdentity.GVK,
+      ...toJson_AwsClusterStaticIdentityProps(resolved),
+    };
+  }
+}
+
+/**
+ * AWSClusterStaticIdentity is the Schema for the awsclusterstaticidentities API
+ * It represents a reference to an AWS access key ID and secret access key, stored in a secret.
+ *
+ * @schema AWSClusterStaticIdentity
+ */
+export interface AwsClusterStaticIdentityProps {
+  /**
+   * @schema AWSClusterStaticIdentity#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * Spec for this AWSClusterStaticIdentity
+   *
+   * @schema AWSClusterStaticIdentity#spec
+   */
+  readonly spec?: AwsClusterStaticIdentitySpec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentityProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentityProps(obj: AwsClusterStaticIdentityProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterStaticIdentitySpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec for this AWSClusterStaticIdentity
+ *
+ * @schema AwsClusterStaticIdentitySpec
+ */
+export interface AwsClusterStaticIdentitySpec {
+  /**
+   * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+   * Namespaces can be selected either using an array of namespaces or with label selector.
+   * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+   * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+   * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+   *
+   * @schema AwsClusterStaticIdentitySpec#allowedNamespaces
+   */
+  readonly allowedNamespaces?: AwsClusterStaticIdentitySpecAllowedNamespaces;
+
+  /**
+   * Reference to a secret containing the credentials. The secret should
+   * contain the following data keys:
+   * AccessKeyID: AKIAIOSFODNN7EXAMPLE
+   * SecretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+   * SessionToken: Optional
+   *
+   * @schema AwsClusterStaticIdentitySpec#secretRef
+   */
+  readonly secretRef: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentitySpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentitySpec(obj: AwsClusterStaticIdentitySpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedNamespaces': toJson_AwsClusterStaticIdentitySpecAllowedNamespaces(obj.allowedNamespaces),
+    'secretRef': obj.secretRef,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+ * Namespaces can be selected either using an array of namespaces or with label selector.
+ * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+ * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+ * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+ *
+ * @schema AwsClusterStaticIdentitySpecAllowedNamespaces
+ */
+export interface AwsClusterStaticIdentitySpecAllowedNamespaces {
+  /**
+   * An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespaces#list
+   */
+  readonly list?: string[];
+
+  /**
+   * An empty selector indicates that AWSClusters cannot use this
+   * AWSClusterIdentity from any namespace.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespaces#selector
+   */
+  readonly selector?: AwsClusterStaticIdentitySpecAllowedNamespacesSelector;
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentitySpecAllowedNamespaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentitySpecAllowedNamespaces(obj: AwsClusterStaticIdentitySpecAllowedNamespaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'list': obj.list?.map(y => y),
+    'selector': toJson_AwsClusterStaticIdentitySpecAllowedNamespacesSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * An empty selector indicates that AWSClusters cannot use this
+ * AWSClusterIdentity from any namespace.
+ *
+ * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelector
+ */
+export interface AwsClusterStaticIdentitySpecAllowedNamespacesSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelector#matchExpressions
+   */
+  readonly matchExpressions?: AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentitySpecAllowedNamespacesSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentitySpecAllowedNamespacesSelector(obj: AwsClusterStaticIdentitySpecAllowedNamespacesSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions
+ */
+export interface AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions(obj: AwsClusterStaticIdentitySpecAllowedNamespacesSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSClusterStaticIdentity is the Schema for the awsclusterstaticidentities API
+It represents a reference to an AWS access key ID and secret access key, stored in a secret.
+ *
+ * @schema AWSClusterStaticIdentityV1Beta2
+ */
+export class AwsClusterStaticIdentityV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSClusterStaticIdentityV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'AWSClusterStaticIdentity',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSClusterStaticIdentityV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsClusterStaticIdentityV1Beta2Props = {}): any {
+    return {
+      ...AwsClusterStaticIdentityV1Beta2.GVK,
+      ...toJson_AwsClusterStaticIdentityV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSClusterStaticIdentityV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsClusterStaticIdentityV1Beta2Props = {}) {
+    super(scope, id, {
+      ...AwsClusterStaticIdentityV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsClusterStaticIdentityV1Beta2.GVK,
+      ...toJson_AwsClusterStaticIdentityV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * AWSClusterStaticIdentity is the Schema for the awsclusterstaticidentities API
+ * It represents a reference to an AWS access key ID and secret access key, stored in a secret.
+ *
+ * @schema AWSClusterStaticIdentityV1Beta2
+ */
+export interface AwsClusterStaticIdentityV1Beta2Props {
+  /**
+   * @schema AWSClusterStaticIdentityV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * Spec for this AWSClusterStaticIdentity
+   *
+   * @schema AWSClusterStaticIdentityV1Beta2#spec
+   */
+  readonly spec?: AwsClusterStaticIdentityV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentityV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentityV1Beta2Props(obj: AwsClusterStaticIdentityV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsClusterStaticIdentityV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec for this AWSClusterStaticIdentity
+ *
+ * @schema AwsClusterStaticIdentityV1Beta2Spec
+ */
+export interface AwsClusterStaticIdentityV1Beta2Spec {
+  /**
+   * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+   * Namespaces can be selected either using an array of namespaces or with label selector.
+   * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+   * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+   * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2Spec#allowedNamespaces
+   */
+  readonly allowedNamespaces?: AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces;
+
+  /**
+   * Reference to a secret containing the credentials. The secret should
+   * contain the following data keys:
+   * AccessKeyID: AKIAIOSFODNN7EXAMPLE
+   * SecretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+   * SessionToken: Optional
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2Spec#secretRef
+   */
+  readonly secretRef: string;
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentityV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentityV1Beta2Spec(obj: AwsClusterStaticIdentityV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'allowedNamespaces': toJson_AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces(obj.allowedNamespaces),
+    'secretRef': obj.secretRef,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+ * Namespaces can be selected either using an array of namespaces or with label selector.
+ * An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+ * If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+ * A namespace should be either in the NamespaceList or match with Selector to use the identity.
+ *
+ * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces
+ */
+export interface AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces {
+  /**
+   * An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces#list
+   */
+  readonly list?: string[];
+
+  /**
+   * An empty selector indicates that AWSClusters cannot use this
+   * AWSClusterIdentity from any namespace.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces#selector
+   */
+  readonly selector?: AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector;
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces(obj: AwsClusterStaticIdentityV1Beta2SpecAllowedNamespaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'list': obj.list?.map(y => y),
+    'selector': toJson_AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * An empty selector indicates that AWSClusters cannot use this
+ * AWSClusterIdentity from any namespace.
+ *
+ * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector
+ */
+export interface AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector#matchExpressions
+   */
+  readonly matchExpressions?: AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector(obj: AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions
+ */
+export interface AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions(obj: AwsClusterStaticIdentityV1Beta2SpecAllowedNamespacesSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSMachine is the schema for Amazon EC2 machines.
+ *
+ * @schema AWSMachine
+ */
+export class AwsMachine extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSMachine"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'AWSMachine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSMachine".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsMachineProps = {}): any {
+    return {
+      ...AwsMachine.GVK,
+      ...toJson_AwsMachineProps(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSMachine" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsMachineProps = {}) {
+    super(scope, id, {
+      ...AwsMachine.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsMachine.GVK,
+      ...toJson_AwsMachineProps(resolved),
+    };
+  }
+}
+
+/**
+ * AWSMachine is the schema for Amazon EC2 machines.
+ *
+ * @schema AWSMachine
+ */
+export interface AwsMachineProps {
+  /**
+   * @schema AWSMachine#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * AWSMachineSpec defines the desired state of an Amazon EC2 instance.
+   *
+   * @schema AWSMachine#spec
+   */
+  readonly spec?: AwsMachineSpec;
+}
+
+/**
+ * Converts an object of type 'AwsMachineProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineProps(obj: AwsMachineProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsMachineSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSMachineSpec defines the desired state of an Amazon EC2 instance.
+ *
+ * @schema AwsMachineSpec
+ */
+export interface AwsMachineSpec {
+  /**
+   * AdditionalSecurityGroups is an array of references to security groups that should be applied to the
+   * instance. These security groups would be set in addition to any security groups defined
+   * at the cluster level or in the actuator. It is possible to specify either IDs of Filters. Using Filters
+   * will cause additional requests to AWS API and if tags change the attached security groups might change too.
+   *
+   * @schema AwsMachineSpec#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: AwsMachineSpecAdditionalSecurityGroups[];
+
+  /**
+   * AdditionalTags is an optional set of tags to add to an instance, in addition to the ones added by default by the
+   * AWS provider. If both the AWSCluster and the AWSMachine specify the same tag name with different values, the
+   * AWSMachine's value takes precedence.
+   *
+   * @schema AwsMachineSpec#additionalTags
+   */
+  readonly additionalTags?: { [key: string]: string };
+
+  /**
+   * AMI is the reference to the AMI from which to create the machine instance.
+   *
+   * @schema AwsMachineSpec#ami
+   */
+  readonly ami?: AwsMachineSpecAmi;
+
+  /**
+   * CloudInit defines options related to the bootstrapping systems where
+   * CloudInit is used.
+   *
+   * @schema AwsMachineSpec#cloudInit
+   */
+  readonly cloudInit?: AwsMachineSpecCloudInit;
+
+  /**
+   * FailureDomain is the failure domain unique identifier this Machine should be attached to, as defined in Cluster API.
+   * For this infrastructure provider, the ID is equivalent to an AWS Availability Zone.
+   * If multiple subnets are matched for the availability zone, the first one returned is picked.
+   *
+   * @schema AwsMachineSpec#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * IAMInstanceProfile is a name of an IAM instance profile to assign to the instance
+   *
+   * @schema AwsMachineSpec#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: string;
+
+  /**
+   * Ignition defined options related to the bootstrapping systems where Ignition is used.
+   *
+   * @schema AwsMachineSpec#ignition
+   */
+  readonly ignition?: AwsMachineSpecIgnition;
+
+  /**
+   * ImageLookupBaseOS is the name of the base operating system to use for
+   * image lookup the AMI is not set.
+   *
+   * @schema AwsMachineSpec#imageLookupBaseOS
+   */
+  readonly imageLookupBaseOs?: string;
+
+  /**
+   * ImageLookupFormat is the AMI naming format to look up the image for this
+   * machine It will be ignored if an explicit AMI is set. Supports
+   * substitutions for {{.BaseOS}} and {{.K8sVersion}} with the base OS and
+   * kubernetes version, respectively. The BaseOS will be the value in
+   * ImageLookupBaseOS or ubuntu (the default), and the kubernetes version as
+   * defined by the packages produced by kubernetes/release without v as a
+   * prefix: 1.13.0, 1.12.5-mybuild.1, or 1.17.3. For example, the default
+   * image format of capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-* will end up
+   * searching for AMIs that match the pattern capa-ami-ubuntu-?1.18.0-* for a
+   * Machine that is targeting kubernetes v1.18.0 and the ubuntu base OS. See
+   * also: https://golang.org/pkg/text/template/
+   *
+   * @schema AwsMachineSpec#imageLookupFormat
+   */
+  readonly imageLookupFormat?: string;
+
+  /**
+   * ImageLookupOrg is the AWS Organization ID to use for image lookup if AMI is not set.
+   *
+   * @schema AwsMachineSpec#imageLookupOrg
+   */
+  readonly imageLookupOrg?: string;
+
+  /**
+   * InstanceID is the EC2 instance ID for this machine.
+   *
+   * @schema AwsMachineSpec#instanceID
+   */
+  readonly instanceId?: string;
+
+  /**
+   * InstanceType is the type of instance to create. Example: m4.xlarge
+   *
+   * @schema AwsMachineSpec#instanceType
+   */
+  readonly instanceType: string;
+
+  /**
+   * NetworkInterfaces is a list of ENIs to associate with the instance.
+   * A maximum of 2 may be specified.
+   *
+   * @schema AwsMachineSpec#networkInterfaces
+   */
+  readonly networkInterfaces?: string[];
+
+  /**
+   * Configuration options for the non root storage volumes.
+   *
+   * @schema AwsMachineSpec#nonRootVolumes
+   */
+  readonly nonRootVolumes?: AwsMachineSpecNonRootVolumes[];
+
+  /**
+   * ProviderID is the unique identifier as specified by the cloud provider.
+   *
+   * @schema AwsMachineSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * PublicIP specifies whether the instance should get a public IP.
+   * Precedence for this setting is as follows:
+   * 1. This field if set
+   * 2. Cluster/flavor setting
+   * 3. Subnet default
+   *
+   * @schema AwsMachineSpec#publicIP
+   */
+  readonly publicIp?: boolean;
+
+  /**
+   * RootVolume encapsulates the configuration options for the root volume
+   *
+   * @schema AwsMachineSpec#rootVolume
+   */
+  readonly rootVolume?: AwsMachineSpecRootVolume;
+
+  /**
+   * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+   *
+   * @schema AwsMachineSpec#spotMarketOptions
+   */
+  readonly spotMarketOptions?: AwsMachineSpecSpotMarketOptions;
+
+  /**
+   * SSHKeyName is the name of the ssh key to attach to the instance. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+   *
+   * @schema AwsMachineSpec#sshKeyName
+   */
+  readonly sshKeyName?: string;
+
+  /**
+   * Subnet is a reference to the subnet to use for this instance. If not specified,
+   * the cluster subnet will be used.
+   *
+   * @schema AwsMachineSpec#subnet
+   */
+  readonly subnet?: AwsMachineSpecSubnet;
+
+  /**
+   * Tenancy indicates if instance should run on shared or single-tenant hardware.
+   *
+   * @schema AwsMachineSpec#tenancy
+   */
+  readonly tenancy?: AwsMachineSpecTenancy;
+
+  /**
+   * UncompressedUserData specify whether the user data is gzip-compressed before it is sent to ec2 instance.
+   * cloud-init has built-in support for gzip-compressed user data
+   * user data stored in aws secret manager is always gzip-compressed.
+   *
+   * @schema AwsMachineSpec#uncompressedUserData
+   */
+  readonly uncompressedUserData?: boolean;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpec(obj: AwsMachineSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => toJson_AwsMachineSpecAdditionalSecurityGroups(y)),
+    'additionalTags': ((obj.additionalTags) === undefined) ? undefined : (Object.entries(obj.additionalTags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'ami': toJson_AwsMachineSpecAmi(obj.ami),
+    'cloudInit': toJson_AwsMachineSpecCloudInit(obj.cloudInit),
+    'failureDomain': obj.failureDomain,
+    'iamInstanceProfile': obj.iamInstanceProfile,
+    'ignition': toJson_AwsMachineSpecIgnition(obj.ignition),
+    'imageLookupBaseOS': obj.imageLookupBaseOs,
+    'imageLookupFormat': obj.imageLookupFormat,
+    'imageLookupOrg': obj.imageLookupOrg,
+    'instanceID': obj.instanceId,
+    'instanceType': obj.instanceType,
+    'networkInterfaces': obj.networkInterfaces?.map(y => y),
+    'nonRootVolumes': obj.nonRootVolumes?.map(y => toJson_AwsMachineSpecNonRootVolumes(y)),
+    'providerID': obj.providerId,
+    'publicIP': obj.publicIp,
+    'rootVolume': toJson_AwsMachineSpecRootVolume(obj.rootVolume),
+    'spotMarketOptions': toJson_AwsMachineSpecSpotMarketOptions(obj.spotMarketOptions),
+    'sshKeyName': obj.sshKeyName,
+    'subnet': toJson_AwsMachineSpecSubnet(obj.subnet),
+    'tenancy': obj.tenancy,
+    'uncompressedUserData': obj.uncompressedUserData,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSResourceReference is a reference to a specific AWS resource by ID or filters.
+ * Only one of ID or Filters may be specified. Specifying more than one will result in
+ * a validation error.
+ *
+ * @schema AwsMachineSpecAdditionalSecurityGroups
+ */
+export interface AwsMachineSpecAdditionalSecurityGroups {
+  /**
+   * ARN of resource.
+   * Deprecated: This field has no function and is going to be removed in the next release.
+   *
+   * @schema AwsMachineSpecAdditionalSecurityGroups#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineSpecAdditionalSecurityGroups#filters
+   */
+  readonly filters?: AwsMachineSpecAdditionalSecurityGroupsFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineSpecAdditionalSecurityGroups#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecAdditionalSecurityGroups' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecAdditionalSecurityGroups(obj: AwsMachineSpecAdditionalSecurityGroups | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'filters': obj.filters?.map(y => toJson_AwsMachineSpecAdditionalSecurityGroupsFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AMI is the reference to the AMI from which to create the machine instance.
+ *
+ * @schema AwsMachineSpecAmi
+ */
+export interface AwsMachineSpecAmi {
+  /**
+   * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+   *
+   * @schema AwsMachineSpecAmi#eksLookupType
+   */
+  readonly eksLookupType?: AwsMachineSpecAmiEksLookupType;
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineSpecAmi#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecAmi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecAmi(obj: AwsMachineSpecAmi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'eksLookupType': obj.eksLookupType,
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CloudInit defines options related to the bootstrapping systems where
+ * CloudInit is used.
+ *
+ * @schema AwsMachineSpecCloudInit
+ */
+export interface AwsMachineSpecCloudInit {
+  /**
+   * InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager
+   * or AWS Systems Manager Parameter Store to ensure privacy of userdata.
+   * By default, a cloud-init boothook shell script is prepended to download
+   * the userdata from Secrets Manager and additionally delete the secret.
+   *
+   * @schema AwsMachineSpecCloudInit#insecureSkipSecretsManager
+   */
+  readonly insecureSkipSecretsManager?: boolean;
+
+  /**
+   * SecretCount is the number of secrets used to form the complete secret
+   *
+   * @schema AwsMachineSpecCloudInit#secretCount
+   */
+  readonly secretCount?: number;
+
+  /**
+   * SecretPrefix is the prefix for the secret name. This is stored
+   * temporarily, and deleted when the machine registers as a node against
+   * the workload cluster.
+   *
+   * @schema AwsMachineSpecCloudInit#secretPrefix
+   */
+  readonly secretPrefix?: string;
+
+  /**
+   * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+   * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+   * will use AWS Secrets Manager instead.
+   *
+   * @schema AwsMachineSpecCloudInit#secureSecretsBackend
+   */
+  readonly secureSecretsBackend?: AwsMachineSpecCloudInitSecureSecretsBackend;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecCloudInit' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecCloudInit(obj: AwsMachineSpecCloudInit | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'insecureSkipSecretsManager': obj.insecureSkipSecretsManager,
+    'secretCount': obj.secretCount,
+    'secretPrefix': obj.secretPrefix,
+    'secureSecretsBackend': obj.secureSecretsBackend,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defined options related to the bootstrapping systems where Ignition is used.
+ *
+ * @schema AwsMachineSpecIgnition
+ */
+export interface AwsMachineSpecIgnition {
+  /**
+   * Version defines which version of Ignition will be used to generate bootstrap data.
+   *
+   * @schema AwsMachineSpecIgnition#version
+   */
+  readonly version?: AwsMachineSpecIgnitionVersion;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecIgnition(obj: AwsMachineSpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Volume encapsulates the configuration options for the storage device.
+ *
+ * @schema AwsMachineSpecNonRootVolumes
+ */
+export interface AwsMachineSpecNonRootVolumes {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineSpecNonRootVolumes#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineSpecNonRootVolumes#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineSpecNonRootVolumes#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineSpecNonRootVolumes#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineSpecNonRootVolumes#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineSpecNonRootVolumes#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineSpecNonRootVolumes#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecNonRootVolumes' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecNonRootVolumes(obj: AwsMachineSpecNonRootVolumes | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RootVolume encapsulates the configuration options for the root volume
+ *
+ * @schema AwsMachineSpecRootVolume
+ */
+export interface AwsMachineSpecRootVolume {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineSpecRootVolume#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineSpecRootVolume#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineSpecRootVolume#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineSpecRootVolume#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineSpecRootVolume#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineSpecRootVolume#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineSpecRootVolume#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecRootVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecRootVolume(obj: AwsMachineSpecRootVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+ *
+ * @schema AwsMachineSpecSpotMarketOptions
+ */
+export interface AwsMachineSpecSpotMarketOptions {
+  /**
+   * MaxPrice defines the maximum price the user is willing to pay for Spot VM instances
+   *
+   * @schema AwsMachineSpecSpotMarketOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecSpotMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecSpotMarketOptions(obj: AwsMachineSpecSpotMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxPrice': obj.maxPrice,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Subnet is a reference to the subnet to use for this instance. If not specified,
+ * the cluster subnet will be used.
+ *
+ * @schema AwsMachineSpecSubnet
+ */
+export interface AwsMachineSpecSubnet {
+  /**
+   * ARN of resource.
+   * Deprecated: This field has no function and is going to be removed in the next release.
+   *
+   * @schema AwsMachineSpecSubnet#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineSpecSubnet#filters
+   */
+  readonly filters?: AwsMachineSpecSubnetFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineSpecSubnet#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecSubnet' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecSubnet(obj: AwsMachineSpecSubnet | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'filters': obj.filters?.map(y => toJson_AwsMachineSpecSubnetFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Tenancy indicates if instance should run on shared or single-tenant hardware.
+ *
+ * @schema AwsMachineSpecTenancy
+ */
+export enum AwsMachineSpecTenancy {
+  /** default */
+  DEFAULT = "default",
+  /** dedicated */
+  DEDICATED = "dedicated",
+  /** host */
+  HOST = "host",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineSpecAdditionalSecurityGroupsFilters
+ */
+export interface AwsMachineSpecAdditionalSecurityGroupsFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineSpecAdditionalSecurityGroupsFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineSpecAdditionalSecurityGroupsFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecAdditionalSecurityGroupsFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecAdditionalSecurityGroupsFilters(obj: AwsMachineSpecAdditionalSecurityGroupsFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+ *
+ * @schema AwsMachineSpecAmiEksLookupType
+ */
+export enum AwsMachineSpecAmiEksLookupType {
+  /** AmazonLinux */
+  AMAZON_LINUX = "AmazonLinux",
+  /** AmazonLinuxGPU */
+  AMAZON_LINUX_GPU = "AmazonLinuxGPU",
+}
+
+/**
+ * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+ * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+ * will use AWS Secrets Manager instead.
+ *
+ * @schema AwsMachineSpecCloudInitSecureSecretsBackend
+ */
+export enum AwsMachineSpecCloudInitSecureSecretsBackend {
+  /** secrets-manager */
+  SECRETS_HYPHEN_MANAGER = "secrets-manager",
+  /** ssm-parameter-store */
+  SSM_HYPHEN_PARAMETER_HYPHEN_STORE = "ssm-parameter-store",
+}
+
+/**
+ * Version defines which version of Ignition will be used to generate bootstrap data.
+ *
+ * @schema AwsMachineSpecIgnitionVersion
+ */
+export enum AwsMachineSpecIgnitionVersion {
+  /** 2.3 */
+  VALUE_2_3 = "2.3",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineSpecSubnetFilters
+ */
+export interface AwsMachineSpecSubnetFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineSpecSubnetFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineSpecSubnetFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineSpecSubnetFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineSpecSubnetFilters(obj: AwsMachineSpecSubnetFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSMachine is the schema for Amazon EC2 machines.
+ *
+ * @schema AWSMachineV1Beta2
+ */
+export class AwsMachineV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSMachineV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'AWSMachine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSMachineV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsMachineV1Beta2Props = {}): any {
+    return {
+      ...AwsMachineV1Beta2.GVK,
+      ...toJson_AwsMachineV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSMachineV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsMachineV1Beta2Props = {}) {
+    super(scope, id, {
+      ...AwsMachineV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsMachineV1Beta2.GVK,
+      ...toJson_AwsMachineV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * AWSMachine is the schema for Amazon EC2 machines.
+ *
+ * @schema AWSMachineV1Beta2
+ */
+export interface AwsMachineV1Beta2Props {
+  /**
+   * @schema AWSMachineV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * AWSMachineSpec defines the desired state of an Amazon EC2 instance.
+   *
+   * @schema AWSMachineV1Beta2#spec
+   */
+  readonly spec?: AwsMachineV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2Props(obj: AwsMachineV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsMachineV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSMachineSpec defines the desired state of an Amazon EC2 instance.
+ *
+ * @schema AwsMachineV1Beta2Spec
+ */
+export interface AwsMachineV1Beta2Spec {
+  /**
+   * AdditionalSecurityGroups is an array of references to security groups that should be applied to the
+   * instance. These security groups would be set in addition to any security groups defined
+   * at the cluster level or in the actuator. It is possible to specify either IDs of Filters. Using Filters
+   * will cause additional requests to AWS API and if tags change the attached security groups might change too.
+   *
+   * @schema AwsMachineV1Beta2Spec#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: AwsMachineV1Beta2SpecAdditionalSecurityGroups[];
+
+  /**
+   * AdditionalTags is an optional set of tags to add to an instance, in addition to the ones added by default by the
+   * AWS provider. If both the AWSCluster and the AWSMachine specify the same tag name with different values, the
+   * AWSMachine's value takes precedence.
+   *
+   * @schema AwsMachineV1Beta2Spec#additionalTags
+   */
+  readonly additionalTags?: { [key: string]: string };
+
+  /**
+   * AMI is the reference to the AMI from which to create the machine instance.
+   *
+   * @schema AwsMachineV1Beta2Spec#ami
+   */
+  readonly ami?: AwsMachineV1Beta2SpecAmi;
+
+  /**
+   * CapacityReservationID specifies the target Capacity Reservation into which the instance should be launched.
+   *
+   * @schema AwsMachineV1Beta2Spec#capacityReservationId
+   */
+  readonly capacityReservationId?: string;
+
+  /**
+   * CloudInit defines options related to the bootstrapping systems where
+   * CloudInit is used.
+   *
+   * @schema AwsMachineV1Beta2Spec#cloudInit
+   */
+  readonly cloudInit?: AwsMachineV1Beta2SpecCloudInit;
+
+  /**
+   * ElasticIPPool is the configuration to allocate Public IPv4 address (Elastic IP/EIP) from user-defined pool.
+   *
+   * @schema AwsMachineV1Beta2Spec#elasticIpPool
+   */
+  readonly elasticIpPool?: AwsMachineV1Beta2SpecElasticIpPool;
+
+  /**
+   * IAMInstanceProfile is a name of an IAM instance profile to assign to the instance
+   *
+   * @schema AwsMachineV1Beta2Spec#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: string;
+
+  /**
+   * Ignition defined options related to the bootstrapping systems where Ignition is used.
+   *
+   * @schema AwsMachineV1Beta2Spec#ignition
+   */
+  readonly ignition?: AwsMachineV1Beta2SpecIgnition;
+
+  /**
+   * ImageLookupBaseOS is the name of the base operating system to use for
+   * image lookup the AMI is not set.
+   *
+   * @schema AwsMachineV1Beta2Spec#imageLookupBaseOS
+   */
+  readonly imageLookupBaseOs?: string;
+
+  /**
+   * ImageLookupFormat is the AMI naming format to look up the image for this
+   * machine It will be ignored if an explicit AMI is set. Supports
+   * substitutions for {{.BaseOS}} and {{.K8sVersion}} with the base OS and
+   * kubernetes version, respectively. The BaseOS will be the value in
+   * ImageLookupBaseOS or ubuntu (the default), and the kubernetes version as
+   * defined by the packages produced by kubernetes/release without v as a
+   * prefix: 1.13.0, 1.12.5-mybuild.1, or 1.17.3. For example, the default
+   * image format of capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-* will end up
+   * searching for AMIs that match the pattern capa-ami-ubuntu-?1.18.0-* for a
+   * Machine that is targeting kubernetes v1.18.0 and the ubuntu base OS. See
+   * also: https://golang.org/pkg/text/template/
+   *
+   * @schema AwsMachineV1Beta2Spec#imageLookupFormat
+   */
+  readonly imageLookupFormat?: string;
+
+  /**
+   * ImageLookupOrg is the AWS Organization ID to use for image lookup if AMI is not set.
+   *
+   * @schema AwsMachineV1Beta2Spec#imageLookupOrg
+   */
+  readonly imageLookupOrg?: string;
+
+  /**
+   * InstanceID is the EC2 instance ID for this machine.
+   *
+   * @schema AwsMachineV1Beta2Spec#instanceID
+   */
+  readonly instanceId?: string;
+
+  /**
+   * InstanceMetadataOptions is the metadata options for the EC2 instance.
+   *
+   * @schema AwsMachineV1Beta2Spec#instanceMetadataOptions
+   */
+  readonly instanceMetadataOptions?: AwsMachineV1Beta2SpecInstanceMetadataOptions;
+
+  /**
+   * InstanceType is the type of instance to create. Example: m4.xlarge
+   *
+   * @schema AwsMachineV1Beta2Spec#instanceType
+   */
+  readonly instanceType: string;
+
+  /**
+   * NetworkInterfaces is a list of ENIs to associate with the instance.
+   * A maximum of 2 may be specified.
+   *
+   * @schema AwsMachineV1Beta2Spec#networkInterfaces
+   */
+  readonly networkInterfaces?: string[];
+
+  /**
+   * Configuration options for the non root storage volumes.
+   *
+   * @schema AwsMachineV1Beta2Spec#nonRootVolumes
+   */
+  readonly nonRootVolumes?: AwsMachineV1Beta2SpecNonRootVolumes[];
+
+  /**
+   * PlacementGroupName specifies the name of the placement group in which to launch the instance.
+   *
+   * @schema AwsMachineV1Beta2Spec#placementGroupName
+   */
+  readonly placementGroupName?: string;
+
+  /**
+   * PlacementGroupPartition is the partition number within the placement group in which to launch the instance.
+   * This value is only valid if the placement group, referred in `PlacementGroupName`, was created with
+   * strategy set to partition.
+   *
+   * @schema AwsMachineV1Beta2Spec#placementGroupPartition
+   */
+  readonly placementGroupPartition?: number;
+
+  /**
+   * PrivateDNSName is the options for the instance hostname.
+   *
+   * @schema AwsMachineV1Beta2Spec#privateDnsName
+   */
+  readonly privateDnsName?: AwsMachineV1Beta2SpecPrivateDnsName;
+
+  /**
+   * ProviderID is the unique identifier as specified by the cloud provider.
+   *
+   * @schema AwsMachineV1Beta2Spec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * PublicIP specifies whether the instance should get a public IP.
+   * Precedence for this setting is as follows:
+   * 1. This field if set
+   * 2. Cluster/flavor setting
+   * 3. Subnet default
+   *
+   * @schema AwsMachineV1Beta2Spec#publicIP
+   */
+  readonly publicIp?: boolean;
+
+  /**
+   * RootVolume encapsulates the configuration options for the root volume
+   *
+   * @schema AwsMachineV1Beta2Spec#rootVolume
+   */
+  readonly rootVolume?: AwsMachineV1Beta2SpecRootVolume;
+
+  /**
+   * SecurityGroupOverrides is an optional set of security groups to use for the node.
+   * This is optional - if not provided security groups from the cluster will be used.
+   *
+   * @schema AwsMachineV1Beta2Spec#securityGroupOverrides
+   */
+  readonly securityGroupOverrides?: { [key: string]: string };
+
+  /**
+   * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+   *
+   * @schema AwsMachineV1Beta2Spec#spotMarketOptions
+   */
+  readonly spotMarketOptions?: AwsMachineV1Beta2SpecSpotMarketOptions;
+
+  /**
+   * SSHKeyName is the name of the ssh key to attach to the instance. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+   *
+   * @schema AwsMachineV1Beta2Spec#sshKeyName
+   */
+  readonly sshKeyName?: string;
+
+  /**
+   * Subnet is a reference to the subnet to use for this instance. If not specified,
+   * the cluster subnet will be used.
+   *
+   * @schema AwsMachineV1Beta2Spec#subnet
+   */
+  readonly subnet?: AwsMachineV1Beta2SpecSubnet;
+
+  /**
+   * Tenancy indicates if instance should run on shared or single-tenant hardware.
+   *
+   * @schema AwsMachineV1Beta2Spec#tenancy
+   */
+  readonly tenancy?: AwsMachineV1Beta2SpecTenancy;
+
+  /**
+   * UncompressedUserData specify whether the user data is gzip-compressed before it is sent to ec2 instance.
+   * cloud-init has built-in support for gzip-compressed user data
+   * user data stored in aws secret manager is always gzip-compressed.
+   *
+   * @schema AwsMachineV1Beta2Spec#uncompressedUserData
+   */
+  readonly uncompressedUserData?: boolean;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2Spec(obj: AwsMachineV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => toJson_AwsMachineV1Beta2SpecAdditionalSecurityGroups(y)),
+    'additionalTags': ((obj.additionalTags) === undefined) ? undefined : (Object.entries(obj.additionalTags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'ami': toJson_AwsMachineV1Beta2SpecAmi(obj.ami),
+    'capacityReservationId': obj.capacityReservationId,
+    'cloudInit': toJson_AwsMachineV1Beta2SpecCloudInit(obj.cloudInit),
+    'elasticIpPool': toJson_AwsMachineV1Beta2SpecElasticIpPool(obj.elasticIpPool),
+    'iamInstanceProfile': obj.iamInstanceProfile,
+    'ignition': toJson_AwsMachineV1Beta2SpecIgnition(obj.ignition),
+    'imageLookupBaseOS': obj.imageLookupBaseOs,
+    'imageLookupFormat': obj.imageLookupFormat,
+    'imageLookupOrg': obj.imageLookupOrg,
+    'instanceID': obj.instanceId,
+    'instanceMetadataOptions': toJson_AwsMachineV1Beta2SpecInstanceMetadataOptions(obj.instanceMetadataOptions),
+    'instanceType': obj.instanceType,
+    'networkInterfaces': obj.networkInterfaces?.map(y => y),
+    'nonRootVolumes': obj.nonRootVolumes?.map(y => toJson_AwsMachineV1Beta2SpecNonRootVolumes(y)),
+    'placementGroupName': obj.placementGroupName,
+    'placementGroupPartition': obj.placementGroupPartition,
+    'privateDnsName': toJson_AwsMachineV1Beta2SpecPrivateDnsName(obj.privateDnsName),
+    'providerID': obj.providerId,
+    'publicIP': obj.publicIp,
+    'rootVolume': toJson_AwsMachineV1Beta2SpecRootVolume(obj.rootVolume),
+    'securityGroupOverrides': ((obj.securityGroupOverrides) === undefined) ? undefined : (Object.entries(obj.securityGroupOverrides).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'spotMarketOptions': toJson_AwsMachineV1Beta2SpecSpotMarketOptions(obj.spotMarketOptions),
+    'sshKeyName': obj.sshKeyName,
+    'subnet': toJson_AwsMachineV1Beta2SpecSubnet(obj.subnet),
+    'tenancy': obj.tenancy,
+    'uncompressedUserData': obj.uncompressedUserData,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSResourceReference is a reference to a specific AWS resource by ID or filters.
+ * Only one of ID or Filters may be specified. Specifying more than one will result in
+ * a validation error.
+ *
+ * @schema AwsMachineV1Beta2SpecAdditionalSecurityGroups
+ */
+export interface AwsMachineV1Beta2SpecAdditionalSecurityGroups {
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineV1Beta2SpecAdditionalSecurityGroups#filters
+   */
+  readonly filters?: AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineV1Beta2SpecAdditionalSecurityGroups#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecAdditionalSecurityGroups' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecAdditionalSecurityGroups(obj: AwsMachineV1Beta2SpecAdditionalSecurityGroups | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filters': obj.filters?.map(y => toJson_AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AMI is the reference to the AMI from which to create the machine instance.
+ *
+ * @schema AwsMachineV1Beta2SpecAmi
+ */
+export interface AwsMachineV1Beta2SpecAmi {
+  /**
+   * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+   *
+   * @schema AwsMachineV1Beta2SpecAmi#eksLookupType
+   */
+  readonly eksLookupType?: AwsMachineV1Beta2SpecAmiEksLookupType;
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineV1Beta2SpecAmi#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecAmi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecAmi(obj: AwsMachineV1Beta2SpecAmi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'eksLookupType': obj.eksLookupType,
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CloudInit defines options related to the bootstrapping systems where
+ * CloudInit is used.
+ *
+ * @schema AwsMachineV1Beta2SpecCloudInit
+ */
+export interface AwsMachineV1Beta2SpecCloudInit {
+  /**
+   * InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager
+   * or AWS Systems Manager Parameter Store to ensure privacy of userdata.
+   * By default, a cloud-init boothook shell script is prepended to download
+   * the userdata from Secrets Manager and additionally delete the secret.
+   *
+   * @schema AwsMachineV1Beta2SpecCloudInit#insecureSkipSecretsManager
+   */
+  readonly insecureSkipSecretsManager?: boolean;
+
+  /**
+   * SecretCount is the number of secrets used to form the complete secret
+   *
+   * @schema AwsMachineV1Beta2SpecCloudInit#secretCount
+   */
+  readonly secretCount?: number;
+
+  /**
+   * SecretPrefix is the prefix for the secret name. This is stored
+   * temporarily, and deleted when the machine registers as a node against
+   * the workload cluster.
+   *
+   * @schema AwsMachineV1Beta2SpecCloudInit#secretPrefix
+   */
+  readonly secretPrefix?: string;
+
+  /**
+   * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+   * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+   * will use AWS Secrets Manager instead.
+   *
+   * @schema AwsMachineV1Beta2SpecCloudInit#secureSecretsBackend
+   */
+  readonly secureSecretsBackend?: AwsMachineV1Beta2SpecCloudInitSecureSecretsBackend;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecCloudInit' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecCloudInit(obj: AwsMachineV1Beta2SpecCloudInit | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'insecureSkipSecretsManager': obj.insecureSkipSecretsManager,
+    'secretCount': obj.secretCount,
+    'secretPrefix': obj.secretPrefix,
+    'secureSecretsBackend': obj.secureSecretsBackend,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ElasticIPPool is the configuration to allocate Public IPv4 address (Elastic IP/EIP) from user-defined pool.
+ *
+ * @schema AwsMachineV1Beta2SpecElasticIpPool
+ */
+export interface AwsMachineV1Beta2SpecElasticIpPool {
+  /**
+   * PublicIpv4Pool sets a custom Public IPv4 Pool used to create Elastic IP address for resources
+   * created in public IPv4 subnets. Every IPv4 address, Elastic IP, will be allocated from the custom
+   * Public IPv4 pool that you brought to AWS, instead of Amazon-provided pool. The public IPv4 pool
+   * resource ID starts with 'ipv4pool-ec2'.
+   *
+   * @schema AwsMachineV1Beta2SpecElasticIpPool#publicIpv4Pool
+   */
+  readonly publicIpv4Pool?: string;
+
+  /**
+   * PublicIpv4PoolFallBackOrder defines the fallback action when the Public IPv4 Pool has been exhausted,
+   * no more IPv4 address available in the pool.
+   *
+   *
+   * When set to 'amazon-pool', the controller check if the pool has available IPv4 address, when pool has reached the
+   * IPv4 limit, the address will be claimed from Amazon-pool (default).
+   *
+   *
+   * When set to 'none', the controller will fail the Elastic IP allocation when the publicIpv4Pool is exhausted.
+   *
+   * @schema AwsMachineV1Beta2SpecElasticIpPool#publicIpv4PoolFallbackOrder
+   */
+  readonly publicIpv4PoolFallbackOrder?: AwsMachineV1Beta2SpecElasticIpPoolPublicIpv4PoolFallbackOrder;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecElasticIpPool' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecElasticIpPool(obj: AwsMachineV1Beta2SpecElasticIpPool | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'publicIpv4Pool': obj.publicIpv4Pool,
+    'publicIpv4PoolFallbackOrder': obj.publicIpv4PoolFallbackOrder,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defined options related to the bootstrapping systems where Ignition is used.
+ *
+ * @schema AwsMachineV1Beta2SpecIgnition
+ */
+export interface AwsMachineV1Beta2SpecIgnition {
+  /**
+   * Proxy defines proxy settings for Ignition.
+   * Only valid for Ignition versions 3.1 and above.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnition#proxy
+   */
+  readonly proxy?: AwsMachineV1Beta2SpecIgnitionProxy;
+
+  /**
+   * StorageType defines how to store the boostrap user data for Ignition.
+   * This can be used to instruct Ignition from where to fetch the user data to bootstrap an instance.
+   *
+   *
+   * When omitted, the storage option will default to ClusterObjectStore.
+   *
+   *
+   * When set to "ClusterObjectStore", if the capability is available and a Cluster ObjectStore configuration
+   * is correctly provided in the Cluster object (under .spec.s3Bucket),
+   * an object store will be used to store bootstrap user data.
+   *
+   *
+   * When set to "UnencryptedUserData", EC2 Instance User Data will be used to store the machine bootstrap user data, unencrypted.
+   * This option is considered less secure than others as user data may contain sensitive informations (keys, certificates, etc.)
+   * and users with ec2:DescribeInstances permission or users running pods
+   * that can access the ec2 metadata service have access to this sensitive information.
+   * So this is only to be used at ones own risk, and only when other more secure options are not viable.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnition#storageType
+   */
+  readonly storageType?: AwsMachineV1Beta2SpecIgnitionStorageType;
+
+  /**
+   * TLS defines TLS settings for Ignition.
+   * Only valid for Ignition versions 3.1 and above.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnition#tls
+   */
+  readonly tls?: AwsMachineV1Beta2SpecIgnitionTls;
+
+  /**
+   * Version defines which version of Ignition will be used to generate bootstrap data.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnition#version
+   */
+  readonly version?: AwsMachineV1Beta2SpecIgnitionVersion;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecIgnition(obj: AwsMachineV1Beta2SpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'proxy': toJson_AwsMachineV1Beta2SpecIgnitionProxy(obj.proxy),
+    'storageType': obj.storageType,
+    'tls': toJson_AwsMachineV1Beta2SpecIgnitionTls(obj.tls),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * InstanceMetadataOptions is the metadata options for the EC2 instance.
+ *
+ * @schema AwsMachineV1Beta2SpecInstanceMetadataOptions
+ */
+export interface AwsMachineV1Beta2SpecInstanceMetadataOptions {
+  /**
+   * Enables or disables the HTTP metadata endpoint on your instances.
+   *
+   *
+   * If you specify a value of disabled, you cannot access your instance metadata.
+   *
+   *
+   * Default: enabled
+   *
+   * @schema AwsMachineV1Beta2SpecInstanceMetadataOptions#httpEndpoint
+   */
+  readonly httpEndpoint?: AwsMachineV1Beta2SpecInstanceMetadataOptionsHttpEndpoint;
+
+  /**
+   * The desired HTTP PUT response hop limit for instance metadata requests. The
+   * larger the number, the further instance metadata requests can travel.
+   *
+   *
+   * Default: 1
+   *
+   * @schema AwsMachineV1Beta2SpecInstanceMetadataOptions#httpPutResponseHopLimit
+   */
+  readonly httpPutResponseHopLimit?: number;
+
+  /**
+   * The state of token usage for your instance metadata requests.
+   *
+   *
+   * If the state is optional, you can choose to retrieve instance metadata with
+   * or without a session token on your request. If you retrieve the IAM role
+   * credentials without a token, the version 1.0 role credentials are returned.
+   * If you retrieve the IAM role credentials using a valid session token, the
+   * version 2.0 role credentials are returned.
+   *
+   *
+   * If the state is required, you must send a session token with any instance
+   * metadata retrieval requests. In this state, retrieving the IAM role credentials
+   * always returns the version 2.0 credentials; the version 1.0 credentials are
+   * not available.
+   *
+   *
+   * Default: optional
+   *
+   * @schema AwsMachineV1Beta2SpecInstanceMetadataOptions#httpTokens
+   */
+  readonly httpTokens?: AwsMachineV1Beta2SpecInstanceMetadataOptionsHttpTokens;
+
+  /**
+   * Set to enabled to allow access to instance tags from the instance metadata.
+   * Set to disabled to turn off access to instance tags from the instance metadata.
+   * For more information, see Work with instance tags using the instance metadata
+   * (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS).
+   *
+   *
+   * Default: disabled
+   *
+   * @schema AwsMachineV1Beta2SpecInstanceMetadataOptions#instanceMetadataTags
+   */
+  readonly instanceMetadataTags?: AwsMachineV1Beta2SpecInstanceMetadataOptionsInstanceMetadataTags;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecInstanceMetadataOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecInstanceMetadataOptions(obj: AwsMachineV1Beta2SpecInstanceMetadataOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpEndpoint': obj.httpEndpoint,
+    'httpPutResponseHopLimit': obj.httpPutResponseHopLimit,
+    'httpTokens': obj.httpTokens,
+    'instanceMetadataTags': obj.instanceMetadataTags,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Volume encapsulates the configuration options for the storage device.
+ *
+ * @schema AwsMachineV1Beta2SpecNonRootVolumes
+ */
+export interface AwsMachineV1Beta2SpecNonRootVolumes {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineV1Beta2SpecNonRootVolumes#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecNonRootVolumes' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecNonRootVolumes(obj: AwsMachineV1Beta2SpecNonRootVolumes | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PrivateDNSName is the options for the instance hostname.
+ *
+ * @schema AwsMachineV1Beta2SpecPrivateDnsName
+ */
+export interface AwsMachineV1Beta2SpecPrivateDnsName {
+  /**
+   * EnableResourceNameDNSAAAARecord indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+   *
+   * @schema AwsMachineV1Beta2SpecPrivateDnsName#enableResourceNameDnsAAAARecord
+   */
+  readonly enableResourceNameDnsAaaaRecord?: boolean;
+
+  /**
+   * EnableResourceNameDNSARecord indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+   *
+   * @schema AwsMachineV1Beta2SpecPrivateDnsName#enableResourceNameDnsARecord
+   */
+  readonly enableResourceNameDnsARecord?: boolean;
+
+  /**
+   * The type of hostname to assign to an instance.
+   *
+   * @schema AwsMachineV1Beta2SpecPrivateDnsName#hostnameType
+   */
+  readonly hostnameType?: AwsMachineV1Beta2SpecPrivateDnsNameHostnameType;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecPrivateDnsName' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecPrivateDnsName(obj: AwsMachineV1Beta2SpecPrivateDnsName | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableResourceNameDnsAAAARecord': obj.enableResourceNameDnsAaaaRecord,
+    'enableResourceNameDnsARecord': obj.enableResourceNameDnsARecord,
+    'hostnameType': obj.hostnameType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RootVolume encapsulates the configuration options for the root volume
+ *
+ * @schema AwsMachineV1Beta2SpecRootVolume
+ */
+export interface AwsMachineV1Beta2SpecRootVolume {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineV1Beta2SpecRootVolume#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecRootVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecRootVolume(obj: AwsMachineV1Beta2SpecRootVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+ *
+ * @schema AwsMachineV1Beta2SpecSpotMarketOptions
+ */
+export interface AwsMachineV1Beta2SpecSpotMarketOptions {
+  /**
+   * MaxPrice defines the maximum price the user is willing to pay for Spot VM instances
+   *
+   * @schema AwsMachineV1Beta2SpecSpotMarketOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecSpotMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecSpotMarketOptions(obj: AwsMachineV1Beta2SpecSpotMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxPrice': obj.maxPrice,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Subnet is a reference to the subnet to use for this instance. If not specified,
+ * the cluster subnet will be used.
+ *
+ * @schema AwsMachineV1Beta2SpecSubnet
+ */
+export interface AwsMachineV1Beta2SpecSubnet {
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineV1Beta2SpecSubnet#filters
+   */
+  readonly filters?: AwsMachineV1Beta2SpecSubnetFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineV1Beta2SpecSubnet#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecSubnet' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecSubnet(obj: AwsMachineV1Beta2SpecSubnet | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filters': obj.filters?.map(y => toJson_AwsMachineV1Beta2SpecSubnetFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Tenancy indicates if instance should run on shared or single-tenant hardware.
+ *
+ * @schema AwsMachineV1Beta2SpecTenancy
+ */
+export enum AwsMachineV1Beta2SpecTenancy {
+  /** default */
+  DEFAULT = "default",
+  /** dedicated */
+  DEDICATED = "dedicated",
+  /** host */
+  HOST = "host",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters
+ */
+export interface AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters(obj: AwsMachineV1Beta2SpecAdditionalSecurityGroupsFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+ *
+ * @schema AwsMachineV1Beta2SpecAmiEksLookupType
+ */
+export enum AwsMachineV1Beta2SpecAmiEksLookupType {
+  /** AmazonLinux */
+  AMAZON_LINUX = "AmazonLinux",
+  /** AmazonLinuxGPU */
+  AMAZON_LINUX_GPU = "AmazonLinuxGPU",
+}
+
+/**
+ * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+ * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+ * will use AWS Secrets Manager instead.
+ *
+ * @schema AwsMachineV1Beta2SpecCloudInitSecureSecretsBackend
+ */
+export enum AwsMachineV1Beta2SpecCloudInitSecureSecretsBackend {
+  /** secrets-manager */
+  SECRETS_HYPHEN_MANAGER = "secrets-manager",
+  /** ssm-parameter-store */
+  SSM_HYPHEN_PARAMETER_HYPHEN_STORE = "ssm-parameter-store",
+}
+
+/**
+ * PublicIpv4PoolFallBackOrder defines the fallback action when the Public IPv4 Pool has been exhausted,
+ * no more IPv4 address available in the pool.
+ *
+ *
+ * When set to 'amazon-pool', the controller check if the pool has available IPv4 address, when pool has reached the
+ * IPv4 limit, the address will be claimed from Amazon-pool (default).
+ *
+ *
+ * When set to 'none', the controller will fail the Elastic IP allocation when the publicIpv4Pool is exhausted.
+ *
+ * @schema AwsMachineV1Beta2SpecElasticIpPoolPublicIpv4PoolFallbackOrder
+ */
+export enum AwsMachineV1Beta2SpecElasticIpPoolPublicIpv4PoolFallbackOrder {
+  /** amazon-pool */
+  AMAZON_HYPHEN_POOL = "amazon-pool",
+  /** none */
+  NONE = "none",
+}
+
+/**
+ * Proxy defines proxy settings for Ignition.
+ * Only valid for Ignition versions 3.1 and above.
+ *
+ * @schema AwsMachineV1Beta2SpecIgnitionProxy
+ */
+export interface AwsMachineV1Beta2SpecIgnitionProxy {
+  /**
+   * HTTPProxy is the HTTP proxy to use for Ignition.
+   * A single URL that specifies the proxy server to use for HTTP and HTTPS requests,
+   * unless overridden by the HTTPSProxy or NoProxy options.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnitionProxy#httpProxy
+   */
+  readonly httpProxy?: string;
+
+  /**
+   * HTTPSProxy is the HTTPS proxy to use for Ignition.
+   * A single URL that specifies the proxy server to use for HTTPS requests,
+   * unless overridden by the NoProxy option.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnitionProxy#httpsProxy
+   */
+  readonly httpsProxy?: string;
+
+  /**
+   * NoProxy is the list of domains to not proxy for Ignition.
+   * Specifies a list of strings to hosts that should be excluded from proxying.
+   *
+   *
+   * Each value is represented by:
+   * - An IP address prefix (1.2.3.4)
+   * - An IP address prefix in CIDR notation (1.2.3.4/8)
+   * - A domain name
+   * - A domain name matches that name and all subdomains
+   * - A domain name with a leading . matches subdomains only
+   * - A special DNS label (*), indicates that no proxying should be done
+   *
+   *
+   * An IP address prefix and domain name can also include a literal port number (1.2.3.4:80).
+   *
+   * @schema AwsMachineV1Beta2SpecIgnitionProxy#noProxy
+   */
+  readonly noProxy?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecIgnitionProxy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecIgnitionProxy(obj: AwsMachineV1Beta2SpecIgnitionProxy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpProxy': obj.httpProxy,
+    'httpsProxy': obj.httpsProxy,
+    'noProxy': obj.noProxy?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * StorageType defines how to store the boostrap user data for Ignition.
+ * This can be used to instruct Ignition from where to fetch the user data to bootstrap an instance.
+ *
+ *
+ * When omitted, the storage option will default to ClusterObjectStore.
+ *
+ *
+ * When set to "ClusterObjectStore", if the capability is available and a Cluster ObjectStore configuration
+ * is correctly provided in the Cluster object (under .spec.s3Bucket),
+ * an object store will be used to store bootstrap user data.
+ *
+ *
+ * When set to "UnencryptedUserData", EC2 Instance User Data will be used to store the machine bootstrap user data, unencrypted.
+ * This option is considered less secure than others as user data may contain sensitive informations (keys, certificates, etc.)
+ * and users with ec2:DescribeInstances permission or users running pods
+ * that can access the ec2 metadata service have access to this sensitive information.
+ * So this is only to be used at ones own risk, and only when other more secure options are not viable.
+ *
+ * @schema AwsMachineV1Beta2SpecIgnitionStorageType
+ */
+export enum AwsMachineV1Beta2SpecIgnitionStorageType {
+  /** ClusterObjectStore */
+  CLUSTER_OBJECT_STORE = "ClusterObjectStore",
+  /** UnencryptedUserData */
+  UNENCRYPTED_USER_DATA = "UnencryptedUserData",
+}
+
+/**
+ * TLS defines TLS settings for Ignition.
+ * Only valid for Ignition versions 3.1 and above.
+ *
+ * @schema AwsMachineV1Beta2SpecIgnitionTls
+ */
+export interface AwsMachineV1Beta2SpecIgnitionTls {
+  /**
+   * CASources defines the list of certificate authorities to use for Ignition.
+   * The value is the certificate bundle (in PEM format). The bundle can contain multiple concatenated certificates.
+   * Supported schemes are http, https, tftp, s3, arn, gs, and `data` (RFC 2397) URL scheme.
+   *
+   * @schema AwsMachineV1Beta2SpecIgnitionTls#certificateAuthorities
+   */
+  readonly certificateAuthorities?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecIgnitionTls' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecIgnitionTls(obj: AwsMachineV1Beta2SpecIgnitionTls | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateAuthorities': obj.certificateAuthorities?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Version defines which version of Ignition will be used to generate bootstrap data.
+ *
+ * @schema AwsMachineV1Beta2SpecIgnitionVersion
+ */
+export enum AwsMachineV1Beta2SpecIgnitionVersion {
+  /** 2.3 */
+  VALUE_2_3 = "2.3",
+  /** 3.0 */
+  VALUE_3_0 = "3.0",
+  /** 3.1 */
+  VALUE_3_1 = "3.1",
+  /** 3.2 */
+  VALUE_3_2 = "3.2",
+  /** 3.3 */
+  VALUE_3_3 = "3.3",
+  /** 3.4 */
+  VALUE_3_4 = "3.4",
+}
+
+/**
+ * Enables or disables the HTTP metadata endpoint on your instances.
+ *
+ *
+ * If you specify a value of disabled, you cannot access your instance metadata.
+ *
+ *
+ * Default: enabled
+ *
+ * @schema AwsMachineV1Beta2SpecInstanceMetadataOptionsHttpEndpoint
+ */
+export enum AwsMachineV1Beta2SpecInstanceMetadataOptionsHttpEndpoint {
+  /** enabled */
+  ENABLED = "enabled",
+  /** disabled */
+  DISABLED = "disabled",
+}
+
+/**
+ * The state of token usage for your instance metadata requests.
+ *
+ *
+ * If the state is optional, you can choose to retrieve instance metadata with
+ * or without a session token on your request. If you retrieve the IAM role
+ * credentials without a token, the version 1.0 role credentials are returned.
+ * If you retrieve the IAM role credentials using a valid session token, the
+ * version 2.0 role credentials are returned.
+ *
+ *
+ * If the state is required, you must send a session token with any instance
+ * metadata retrieval requests. In this state, retrieving the IAM role credentials
+ * always returns the version 2.0 credentials; the version 1.0 credentials are
+ * not available.
+ *
+ *
+ * Default: optional
+ *
+ * @schema AwsMachineV1Beta2SpecInstanceMetadataOptionsHttpTokens
+ */
+export enum AwsMachineV1Beta2SpecInstanceMetadataOptionsHttpTokens {
+  /** optional */
+  OPTIONAL = "optional",
+  /** required */
+  REQUIRED = "required",
+}
+
+/**
+ * Set to enabled to allow access to instance tags from the instance metadata.
+ * Set to disabled to turn off access to instance tags from the instance metadata.
+ * For more information, see Work with instance tags using the instance metadata
+ * (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS).
+ *
+ *
+ * Default: disabled
+ *
+ * @schema AwsMachineV1Beta2SpecInstanceMetadataOptionsInstanceMetadataTags
+ */
+export enum AwsMachineV1Beta2SpecInstanceMetadataOptionsInstanceMetadataTags {
+  /** enabled */
+  ENABLED = "enabled",
+  /** disabled */
+  DISABLED = "disabled",
+}
+
+/**
+ * The type of hostname to assign to an instance.
+ *
+ * @schema AwsMachineV1Beta2SpecPrivateDnsNameHostnameType
+ */
+export enum AwsMachineV1Beta2SpecPrivateDnsNameHostnameType {
+  /** ip-name */
+  IP_HYPHEN_NAME = "ip-name",
+  /** resource-name */
+  RESOURCE_HYPHEN_NAME = "resource-name",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineV1Beta2SpecSubnetFilters
+ */
+export interface AwsMachineV1Beta2SpecSubnetFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineV1Beta2SpecSubnetFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineV1Beta2SpecSubnetFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineV1Beta2SpecSubnetFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineV1Beta2SpecSubnetFilters(obj: AwsMachineV1Beta2SpecSubnetFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSMachineTemplate is the schema for the Amazon EC2 Machine Templates API.
+ *
+ * @schema AWSMachineTemplate
+ */
+export class AwsMachineTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSMachineTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'AWSMachineTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSMachineTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsMachineTemplateProps = {}): any {
+    return {
+      ...AwsMachineTemplate.GVK,
+      ...toJson_AwsMachineTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSMachineTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsMachineTemplateProps = {}) {
+    super(scope, id, {
+      ...AwsMachineTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsMachineTemplate.GVK,
+      ...toJson_AwsMachineTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * AWSMachineTemplate is the schema for the Amazon EC2 Machine Templates API.
+ *
+ * @schema AWSMachineTemplate
+ */
+export interface AwsMachineTemplateProps {
+  /**
+   * @schema AWSMachineTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * AWSMachineTemplateSpec defines the desired state of AWSMachineTemplate.
+   *
+   * @schema AWSMachineTemplate#spec
+   */
+  readonly spec?: AwsMachineTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateProps(obj: AwsMachineTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsMachineTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSMachineTemplateSpec defines the desired state of AWSMachineTemplate.
+ *
+ * @schema AwsMachineTemplateSpec
+ */
+export interface AwsMachineTemplateSpec {
+  /**
+   * AWSMachineTemplateResource describes the data needed to create am AWSMachine from a template.
+   *
+   * @schema AwsMachineTemplateSpec#template
+   */
+  readonly template: AwsMachineTemplateSpecTemplate;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpec(obj: AwsMachineTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_AwsMachineTemplateSpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSMachineTemplateResource describes the data needed to create am AWSMachine from a template.
+ *
+ * @schema AwsMachineTemplateSpecTemplate
+ */
+export interface AwsMachineTemplateSpecTemplate {
+  /**
+   * Standard object's metadata.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+   *
+   * @schema AwsMachineTemplateSpecTemplate#metadata
+   */
+  readonly metadata?: AwsMachineTemplateSpecTemplateMetadata;
+
+  /**
+   * Spec is the specification of the desired behavior of the machine.
+   *
+   * @schema AwsMachineTemplateSpecTemplate#spec
+   */
+  readonly spec: AwsMachineTemplateSpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplate(obj: AwsMachineTemplateSpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_AwsMachineTemplateSpecTemplateMetadata(obj.metadata),
+    'spec': toJson_AwsMachineTemplateSpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Standard object's metadata.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+ *
+ * @schema AwsMachineTemplateSpecTemplateMetadata
+ */
+export interface AwsMachineTemplateSpecTemplateMetadata {
+  /**
+   * Annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema AwsMachineTemplateSpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema AwsMachineTemplateSpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateMetadata(obj: AwsMachineTemplateSpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec is the specification of the desired behavior of the machine.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpec
+ */
+export interface AwsMachineTemplateSpecTemplateSpec {
+  /**
+   * AdditionalSecurityGroups is an array of references to security groups that should be applied to the
+   * instance. These security groups would be set in addition to any security groups defined
+   * at the cluster level or in the actuator. It is possible to specify either IDs of Filters. Using Filters
+   * will cause additional requests to AWS API and if tags change the attached security groups might change too.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups[];
+
+  /**
+   * AdditionalTags is an optional set of tags to add to an instance, in addition to the ones added by default by the
+   * AWS provider. If both the AWSCluster and the AWSMachine specify the same tag name with different values, the
+   * AWSMachine's value takes precedence.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#additionalTags
+   */
+  readonly additionalTags?: { [key: string]: string };
+
+  /**
+   * AMI is the reference to the AMI from which to create the machine instance.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#ami
+   */
+  readonly ami?: AwsMachineTemplateSpecTemplateSpecAmi;
+
+  /**
+   * CloudInit defines options related to the bootstrapping systems where
+   * CloudInit is used.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#cloudInit
+   */
+  readonly cloudInit?: AwsMachineTemplateSpecTemplateSpecCloudInit;
+
+  /**
+   * FailureDomain is the failure domain unique identifier this Machine should be attached to, as defined in Cluster API.
+   * For this infrastructure provider, the ID is equivalent to an AWS Availability Zone.
+   * If multiple subnets are matched for the availability zone, the first one returned is picked.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * IAMInstanceProfile is a name of an IAM instance profile to assign to the instance
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: string;
+
+  /**
+   * Ignition defined options related to the bootstrapping systems where Ignition is used.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#ignition
+   */
+  readonly ignition?: AwsMachineTemplateSpecTemplateSpecIgnition;
+
+  /**
+   * ImageLookupBaseOS is the name of the base operating system to use for
+   * image lookup the AMI is not set.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#imageLookupBaseOS
+   */
+  readonly imageLookupBaseOs?: string;
+
+  /**
+   * ImageLookupFormat is the AMI naming format to look up the image for this
+   * machine It will be ignored if an explicit AMI is set. Supports
+   * substitutions for {{.BaseOS}} and {{.K8sVersion}} with the base OS and
+   * kubernetes version, respectively. The BaseOS will be the value in
+   * ImageLookupBaseOS or ubuntu (the default), and the kubernetes version as
+   * defined by the packages produced by kubernetes/release without v as a
+   * prefix: 1.13.0, 1.12.5-mybuild.1, or 1.17.3. For example, the default
+   * image format of capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-* will end up
+   * searching for AMIs that match the pattern capa-ami-ubuntu-?1.18.0-* for a
+   * Machine that is targeting kubernetes v1.18.0 and the ubuntu base OS. See
+   * also: https://golang.org/pkg/text/template/
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#imageLookupFormat
+   */
+  readonly imageLookupFormat?: string;
+
+  /**
+   * ImageLookupOrg is the AWS Organization ID to use for image lookup if AMI is not set.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#imageLookupOrg
+   */
+  readonly imageLookupOrg?: string;
+
+  /**
+   * InstanceID is the EC2 instance ID for this machine.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#instanceID
+   */
+  readonly instanceId?: string;
+
+  /**
+   * InstanceType is the type of instance to create. Example: m4.xlarge
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#instanceType
+   */
+  readonly instanceType: string;
+
+  /**
+   * NetworkInterfaces is a list of ENIs to associate with the instance.
+   * A maximum of 2 may be specified.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#networkInterfaces
+   */
+  readonly networkInterfaces?: string[];
+
+  /**
+   * Configuration options for the non root storage volumes.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#nonRootVolumes
+   */
+  readonly nonRootVolumes?: AwsMachineTemplateSpecTemplateSpecNonRootVolumes[];
+
+  /**
+   * ProviderID is the unique identifier as specified by the cloud provider.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * PublicIP specifies whether the instance should get a public IP.
+   * Precedence for this setting is as follows:
+   * 1. This field if set
+   * 2. Cluster/flavor setting
+   * 3. Subnet default
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#publicIP
+   */
+  readonly publicIp?: boolean;
+
+  /**
+   * RootVolume encapsulates the configuration options for the root volume
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#rootVolume
+   */
+  readonly rootVolume?: AwsMachineTemplateSpecTemplateSpecRootVolume;
+
+  /**
+   * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#spotMarketOptions
+   */
+  readonly spotMarketOptions?: AwsMachineTemplateSpecTemplateSpecSpotMarketOptions;
+
+  /**
+   * SSHKeyName is the name of the ssh key to attach to the instance. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#sshKeyName
+   */
+  readonly sshKeyName?: string;
+
+  /**
+   * Subnet is a reference to the subnet to use for this instance. If not specified,
+   * the cluster subnet will be used.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#subnet
+   */
+  readonly subnet?: AwsMachineTemplateSpecTemplateSpecSubnet;
+
+  /**
+   * Tenancy indicates if instance should run on shared or single-tenant hardware.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#tenancy
+   */
+  readonly tenancy?: AwsMachineTemplateSpecTemplateSpecTenancy;
+
+  /**
+   * UncompressedUserData specify whether the user data is gzip-compressed before it is sent to ec2 instance.
+   * cloud-init has built-in support for gzip-compressed user data
+   * user data stored in aws secret manager is always gzip-compressed.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpec#uncompressedUserData
+   */
+  readonly uncompressedUserData?: boolean;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpec(obj: AwsMachineTemplateSpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => toJson_AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups(y)),
+    'additionalTags': ((obj.additionalTags) === undefined) ? undefined : (Object.entries(obj.additionalTags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'ami': toJson_AwsMachineTemplateSpecTemplateSpecAmi(obj.ami),
+    'cloudInit': toJson_AwsMachineTemplateSpecTemplateSpecCloudInit(obj.cloudInit),
+    'failureDomain': obj.failureDomain,
+    'iamInstanceProfile': obj.iamInstanceProfile,
+    'ignition': toJson_AwsMachineTemplateSpecTemplateSpecIgnition(obj.ignition),
+    'imageLookupBaseOS': obj.imageLookupBaseOs,
+    'imageLookupFormat': obj.imageLookupFormat,
+    'imageLookupOrg': obj.imageLookupOrg,
+    'instanceID': obj.instanceId,
+    'instanceType': obj.instanceType,
+    'networkInterfaces': obj.networkInterfaces?.map(y => y),
+    'nonRootVolumes': obj.nonRootVolumes?.map(y => toJson_AwsMachineTemplateSpecTemplateSpecNonRootVolumes(y)),
+    'providerID': obj.providerId,
+    'publicIP': obj.publicIp,
+    'rootVolume': toJson_AwsMachineTemplateSpecTemplateSpecRootVolume(obj.rootVolume),
+    'spotMarketOptions': toJson_AwsMachineTemplateSpecTemplateSpecSpotMarketOptions(obj.spotMarketOptions),
+    'sshKeyName': obj.sshKeyName,
+    'subnet': toJson_AwsMachineTemplateSpecTemplateSpecSubnet(obj.subnet),
+    'tenancy': obj.tenancy,
+    'uncompressedUserData': obj.uncompressedUserData,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSResourceReference is a reference to a specific AWS resource by ID or filters.
+ * Only one of ID or Filters may be specified. Specifying more than one will result in
+ * a validation error.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups
+ */
+export interface AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups {
+  /**
+   * ARN of resource.
+   * Deprecated: This field has no function and is going to be removed in the next release.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups#filters
+   */
+  readonly filters?: AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups(obj: AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroups | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'filters': obj.filters?.map(y => toJson_AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AMI is the reference to the AMI from which to create the machine instance.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecAmi
+ */
+export interface AwsMachineTemplateSpecTemplateSpecAmi {
+  /**
+   * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAmi#eksLookupType
+   */
+  readonly eksLookupType?: AwsMachineTemplateSpecTemplateSpecAmiEksLookupType;
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAmi#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecAmi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecAmi(obj: AwsMachineTemplateSpecTemplateSpecAmi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'eksLookupType': obj.eksLookupType,
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CloudInit defines options related to the bootstrapping systems where
+ * CloudInit is used.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecCloudInit
+ */
+export interface AwsMachineTemplateSpecTemplateSpecCloudInit {
+  /**
+   * InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager
+   * or AWS Systems Manager Parameter Store to ensure privacy of userdata.
+   * By default, a cloud-init boothook shell script is prepended to download
+   * the userdata from Secrets Manager and additionally delete the secret.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecCloudInit#insecureSkipSecretsManager
+   */
+  readonly insecureSkipSecretsManager?: boolean;
+
+  /**
+   * SecretCount is the number of secrets used to form the complete secret
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecCloudInit#secretCount
+   */
+  readonly secretCount?: number;
+
+  /**
+   * SecretPrefix is the prefix for the secret name. This is stored
+   * temporarily, and deleted when the machine registers as a node against
+   * the workload cluster.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecCloudInit#secretPrefix
+   */
+  readonly secretPrefix?: string;
+
+  /**
+   * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+   * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+   * will use AWS Secrets Manager instead.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecCloudInit#secureSecretsBackend
+   */
+  readonly secureSecretsBackend?: AwsMachineTemplateSpecTemplateSpecCloudInitSecureSecretsBackend;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecCloudInit' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecCloudInit(obj: AwsMachineTemplateSpecTemplateSpecCloudInit | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'insecureSkipSecretsManager': obj.insecureSkipSecretsManager,
+    'secretCount': obj.secretCount,
+    'secretPrefix': obj.secretPrefix,
+    'secureSecretsBackend': obj.secureSecretsBackend,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defined options related to the bootstrapping systems where Ignition is used.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecIgnition
+ */
+export interface AwsMachineTemplateSpecTemplateSpecIgnition {
+  /**
+   * Version defines which version of Ignition will be used to generate bootstrap data.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecIgnition#version
+   */
+  readonly version?: AwsMachineTemplateSpecTemplateSpecIgnitionVersion;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecIgnition(obj: AwsMachineTemplateSpecTemplateSpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Volume encapsulates the configuration options for the storage device.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes
+ */
+export interface AwsMachineTemplateSpecTemplateSpecNonRootVolumes {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecNonRootVolumes#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecNonRootVolumes' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecNonRootVolumes(obj: AwsMachineTemplateSpecTemplateSpecNonRootVolumes | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RootVolume encapsulates the configuration options for the root volume
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecRootVolume
+ */
+export interface AwsMachineTemplateSpecTemplateSpecRootVolume {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecRootVolume#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecRootVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecRootVolume(obj: AwsMachineTemplateSpecTemplateSpecRootVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecSpotMarketOptions
+ */
+export interface AwsMachineTemplateSpecTemplateSpecSpotMarketOptions {
+  /**
+   * MaxPrice defines the maximum price the user is willing to pay for Spot VM instances
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecSpotMarketOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecSpotMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecSpotMarketOptions(obj: AwsMachineTemplateSpecTemplateSpecSpotMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxPrice': obj.maxPrice,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Subnet is a reference to the subnet to use for this instance. If not specified,
+ * the cluster subnet will be used.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecSubnet
+ */
+export interface AwsMachineTemplateSpecTemplateSpecSubnet {
+  /**
+   * ARN of resource.
+   * Deprecated: This field has no function and is going to be removed in the next release.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecSubnet#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecSubnet#filters
+   */
+  readonly filters?: AwsMachineTemplateSpecTemplateSpecSubnetFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecSubnet#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecSubnet' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecSubnet(obj: AwsMachineTemplateSpecTemplateSpecSubnet | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'filters': obj.filters?.map(y => toJson_AwsMachineTemplateSpecTemplateSpecSubnetFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Tenancy indicates if instance should run on shared or single-tenant hardware.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecTenancy
+ */
+export enum AwsMachineTemplateSpecTemplateSpecTenancy {
+  /** default */
+  DEFAULT = "default",
+  /** dedicated */
+  DEDICATED = "dedicated",
+  /** host */
+  HOST = "host",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters
+ */
+export interface AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters(obj: AwsMachineTemplateSpecTemplateSpecAdditionalSecurityGroupsFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecAmiEksLookupType
+ */
+export enum AwsMachineTemplateSpecTemplateSpecAmiEksLookupType {
+  /** AmazonLinux */
+  AMAZON_LINUX = "AmazonLinux",
+  /** AmazonLinuxGPU */
+  AMAZON_LINUX_GPU = "AmazonLinuxGPU",
+}
+
+/**
+ * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+ * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+ * will use AWS Secrets Manager instead.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecCloudInitSecureSecretsBackend
+ */
+export enum AwsMachineTemplateSpecTemplateSpecCloudInitSecureSecretsBackend {
+  /** secrets-manager */
+  SECRETS_HYPHEN_MANAGER = "secrets-manager",
+  /** ssm-parameter-store */
+  SSM_HYPHEN_PARAMETER_HYPHEN_STORE = "ssm-parameter-store",
+}
+
+/**
+ * Version defines which version of Ignition will be used to generate bootstrap data.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecIgnitionVersion
+ */
+export enum AwsMachineTemplateSpecTemplateSpecIgnitionVersion {
+  /** 2.3 */
+  VALUE_2_3 = "2.3",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineTemplateSpecTemplateSpecSubnetFilters
+ */
+export interface AwsMachineTemplateSpecTemplateSpecSubnetFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecSubnetFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineTemplateSpecTemplateSpecSubnetFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateSpecTemplateSpecSubnetFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateSpecTemplateSpecSubnetFilters(obj: AwsMachineTemplateSpecTemplateSpecSubnetFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * AWSMachineTemplate is the schema for the Amazon EC2 Machine Templates API.
+ *
+ * @schema AWSMachineTemplateV1Beta2
+ */
+export class AwsMachineTemplateV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "AWSMachineTemplateV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'AWSMachineTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "AWSMachineTemplateV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: AwsMachineTemplateV1Beta2Props = {}): any {
+    return {
+      ...AwsMachineTemplateV1Beta2.GVK,
+      ...toJson_AwsMachineTemplateV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "AWSMachineTemplateV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: AwsMachineTemplateV1Beta2Props = {}) {
+    super(scope, id, {
+      ...AwsMachineTemplateV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...AwsMachineTemplateV1Beta2.GVK,
+      ...toJson_AwsMachineTemplateV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * AWSMachineTemplate is the schema for the Amazon EC2 Machine Templates API.
+ *
+ * @schema AWSMachineTemplateV1Beta2
+ */
+export interface AwsMachineTemplateV1Beta2Props {
+  /**
+   * @schema AWSMachineTemplateV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * AWSMachineTemplateSpec defines the desired state of AWSMachineTemplate.
+   *
+   * @schema AWSMachineTemplateV1Beta2#spec
+   */
+  readonly spec?: AwsMachineTemplateV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2Props(obj: AwsMachineTemplateV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_AwsMachineTemplateV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSMachineTemplateSpec defines the desired state of AWSMachineTemplate.
+ *
+ * @schema AwsMachineTemplateV1Beta2Spec
+ */
+export interface AwsMachineTemplateV1Beta2Spec {
+  /**
+   * AWSMachineTemplateResource describes the data needed to create am AWSMachine from a template.
+   *
+   * @schema AwsMachineTemplateV1Beta2Spec#template
+   */
+  readonly template: AwsMachineTemplateV1Beta2SpecTemplate;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2Spec(obj: AwsMachineTemplateV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_AwsMachineTemplateV1Beta2SpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSMachineTemplateResource describes the data needed to create am AWSMachine from a template.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplate
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplate {
+  /**
+   * Standard object's metadata.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplate#metadata
+   */
+  readonly metadata?: AwsMachineTemplateV1Beta2SpecTemplateMetadata;
+
+  /**
+   * Spec is the specification of the desired behavior of the machine.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplate#spec
+   */
+  readonly spec: AwsMachineTemplateV1Beta2SpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplate(obj: AwsMachineTemplateV1Beta2SpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_AwsMachineTemplateV1Beta2SpecTemplateMetadata(obj.metadata),
+    'spec': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Standard object's metadata.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateMetadata
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateMetadata {
+  /**
+   * Annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateMetadata(obj: AwsMachineTemplateV1Beta2SpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Spec is the specification of the desired behavior of the machine.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpec {
+  /**
+   * AdditionalSecurityGroups is an array of references to security groups that should be applied to the
+   * instance. These security groups would be set in addition to any security groups defined
+   * at the cluster level or in the actuator. It is possible to specify either IDs of Filters. Using Filters
+   * will cause additional requests to AWS API and if tags change the attached security groups might change too.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#additionalSecurityGroups
+   */
+  readonly additionalSecurityGroups?: AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups[];
+
+  /**
+   * AdditionalTags is an optional set of tags to add to an instance, in addition to the ones added by default by the
+   * AWS provider. If both the AWSCluster and the AWSMachine specify the same tag name with different values, the
+   * AWSMachine's value takes precedence.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#additionalTags
+   */
+  readonly additionalTags?: { [key: string]: string };
+
+  /**
+   * AMI is the reference to the AMI from which to create the machine instance.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#ami
+   */
+  readonly ami?: AwsMachineTemplateV1Beta2SpecTemplateSpecAmi;
+
+  /**
+   * CapacityReservationID specifies the target Capacity Reservation into which the instance should be launched.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#capacityReservationId
+   */
+  readonly capacityReservationId?: string;
+
+  /**
+   * CloudInit defines options related to the bootstrapping systems where
+   * CloudInit is used.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#cloudInit
+   */
+  readonly cloudInit?: AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit;
+
+  /**
+   * ElasticIPPool is the configuration to allocate Public IPv4 address (Elastic IP/EIP) from user-defined pool.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#elasticIpPool
+   */
+  readonly elasticIpPool?: AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool;
+
+  /**
+   * IAMInstanceProfile is a name of an IAM instance profile to assign to the instance
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: string;
+
+  /**
+   * Ignition defined options related to the bootstrapping systems where Ignition is used.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#ignition
+   */
+  readonly ignition?: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition;
+
+  /**
+   * ImageLookupBaseOS is the name of the base operating system to use for
+   * image lookup the AMI is not set.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#imageLookupBaseOS
+   */
+  readonly imageLookupBaseOs?: string;
+
+  /**
+   * ImageLookupFormat is the AMI naming format to look up the image for this
+   * machine It will be ignored if an explicit AMI is set. Supports
+   * substitutions for {{.BaseOS}} and {{.K8sVersion}} with the base OS and
+   * kubernetes version, respectively. The BaseOS will be the value in
+   * ImageLookupBaseOS or ubuntu (the default), and the kubernetes version as
+   * defined by the packages produced by kubernetes/release without v as a
+   * prefix: 1.13.0, 1.12.5-mybuild.1, or 1.17.3. For example, the default
+   * image format of capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-* will end up
+   * searching for AMIs that match the pattern capa-ami-ubuntu-?1.18.0-* for a
+   * Machine that is targeting kubernetes v1.18.0 and the ubuntu base OS. See
+   * also: https://golang.org/pkg/text/template/
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#imageLookupFormat
+   */
+  readonly imageLookupFormat?: string;
+
+  /**
+   * ImageLookupOrg is the AWS Organization ID to use for image lookup if AMI is not set.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#imageLookupOrg
+   */
+  readonly imageLookupOrg?: string;
+
+  /**
+   * InstanceID is the EC2 instance ID for this machine.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#instanceID
+   */
+  readonly instanceId?: string;
+
+  /**
+   * InstanceMetadataOptions is the metadata options for the EC2 instance.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#instanceMetadataOptions
+   */
+  readonly instanceMetadataOptions?: AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions;
+
+  /**
+   * InstanceType is the type of instance to create. Example: m4.xlarge
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#instanceType
+   */
+  readonly instanceType: string;
+
+  /**
+   * NetworkInterfaces is a list of ENIs to associate with the instance.
+   * A maximum of 2 may be specified.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#networkInterfaces
+   */
+  readonly networkInterfaces?: string[];
+
+  /**
+   * Configuration options for the non root storage volumes.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#nonRootVolumes
+   */
+  readonly nonRootVolumes?: AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes[];
+
+  /**
+   * PlacementGroupName specifies the name of the placement group in which to launch the instance.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#placementGroupName
+   */
+  readonly placementGroupName?: string;
+
+  /**
+   * PlacementGroupPartition is the partition number within the placement group in which to launch the instance.
+   * This value is only valid if the placement group, referred in `PlacementGroupName`, was created with
+   * strategy set to partition.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#placementGroupPartition
+   */
+  readonly placementGroupPartition?: number;
+
+  /**
+   * PrivateDNSName is the options for the instance hostname.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#privateDnsName
+   */
+  readonly privateDnsName?: AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName;
+
+  /**
+   * ProviderID is the unique identifier as specified by the cloud provider.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * PublicIP specifies whether the instance should get a public IP.
+   * Precedence for this setting is as follows:
+   * 1. This field if set
+   * 2. Cluster/flavor setting
+   * 3. Subnet default
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#publicIP
+   */
+  readonly publicIp?: boolean;
+
+  /**
+   * RootVolume encapsulates the configuration options for the root volume
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#rootVolume
+   */
+  readonly rootVolume?: AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume;
+
+  /**
+   * SecurityGroupOverrides is an optional set of security groups to use for the node.
+   * This is optional - if not provided security groups from the cluster will be used.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#securityGroupOverrides
+   */
+  readonly securityGroupOverrides?: { [key: string]: string };
+
+  /**
+   * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#spotMarketOptions
+   */
+  readonly spotMarketOptions?: AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions;
+
+  /**
+   * SSHKeyName is the name of the ssh key to attach to the instance. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#sshKeyName
+   */
+  readonly sshKeyName?: string;
+
+  /**
+   * Subnet is a reference to the subnet to use for this instance. If not specified,
+   * the cluster subnet will be used.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#subnet
+   */
+  readonly subnet?: AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet;
+
+  /**
+   * Tenancy indicates if instance should run on shared or single-tenant hardware.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#tenancy
+   */
+  readonly tenancy?: AwsMachineTemplateV1Beta2SpecTemplateSpecTenancy;
+
+  /**
+   * UncompressedUserData specify whether the user data is gzip-compressed before it is sent to ec2 instance.
+   * cloud-init has built-in support for gzip-compressed user data
+   * user data stored in aws secret manager is always gzip-compressed.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpec#uncompressedUserData
+   */
+  readonly uncompressedUserData?: boolean;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpec(obj: AwsMachineTemplateV1Beta2SpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalSecurityGroups': obj.additionalSecurityGroups?.map(y => toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups(y)),
+    'additionalTags': ((obj.additionalTags) === undefined) ? undefined : (Object.entries(obj.additionalTags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'ami': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecAmi(obj.ami),
+    'capacityReservationId': obj.capacityReservationId,
+    'cloudInit': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit(obj.cloudInit),
+    'elasticIpPool': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool(obj.elasticIpPool),
+    'iamInstanceProfile': obj.iamInstanceProfile,
+    'ignition': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition(obj.ignition),
+    'imageLookupBaseOS': obj.imageLookupBaseOs,
+    'imageLookupFormat': obj.imageLookupFormat,
+    'imageLookupOrg': obj.imageLookupOrg,
+    'instanceID': obj.instanceId,
+    'instanceMetadataOptions': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions(obj.instanceMetadataOptions),
+    'instanceType': obj.instanceType,
+    'networkInterfaces': obj.networkInterfaces?.map(y => y),
+    'nonRootVolumes': obj.nonRootVolumes?.map(y => toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes(y)),
+    'placementGroupName': obj.placementGroupName,
+    'placementGroupPartition': obj.placementGroupPartition,
+    'privateDnsName': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName(obj.privateDnsName),
+    'providerID': obj.providerId,
+    'publicIP': obj.publicIp,
+    'rootVolume': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume(obj.rootVolume),
+    'securityGroupOverrides': ((obj.securityGroupOverrides) === undefined) ? undefined : (Object.entries(obj.securityGroupOverrides).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'spotMarketOptions': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions(obj.spotMarketOptions),
+    'sshKeyName': obj.sshKeyName,
+    'subnet': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet(obj.subnet),
+    'tenancy': obj.tenancy,
+    'uncompressedUserData': obj.uncompressedUserData,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AWSResourceReference is a reference to a specific AWS resource by ID or filters.
+ * Only one of ID or Filters may be specified. Specifying more than one will result in
+ * a validation error.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups {
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups#filters
+   */
+  readonly filters?: AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroups | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filters': obj.filters?.map(y => toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * AMI is the reference to the AMI from which to create the machine instance.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAmi
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecAmi {
+  /**
+   * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAmi#eksLookupType
+   */
+  readonly eksLookupType?: AwsMachineTemplateV1Beta2SpecTemplateSpecAmiEksLookupType;
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAmi#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecAmi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecAmi(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecAmi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'eksLookupType': obj.eksLookupType,
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CloudInit defines options related to the bootstrapping systems where
+ * CloudInit is used.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit {
+  /**
+   * InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager
+   * or AWS Systems Manager Parameter Store to ensure privacy of userdata.
+   * By default, a cloud-init boothook shell script is prepended to download
+   * the userdata from Secrets Manager and additionally delete the secret.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit#insecureSkipSecretsManager
+   */
+  readonly insecureSkipSecretsManager?: boolean;
+
+  /**
+   * SecretCount is the number of secrets used to form the complete secret
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit#secretCount
+   */
+  readonly secretCount?: number;
+
+  /**
+   * SecretPrefix is the prefix for the secret name. This is stored
+   * temporarily, and deleted when the machine registers as a node against
+   * the workload cluster.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit#secretPrefix
+   */
+  readonly secretPrefix?: string;
+
+  /**
+   * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+   * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+   * will use AWS Secrets Manager instead.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit#secureSecretsBackend
+   */
+  readonly secureSecretsBackend?: AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInitSecureSecretsBackend;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInit | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'insecureSkipSecretsManager': obj.insecureSkipSecretsManager,
+    'secretCount': obj.secretCount,
+    'secretPrefix': obj.secretPrefix,
+    'secureSecretsBackend': obj.secureSecretsBackend,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ElasticIPPool is the configuration to allocate Public IPv4 address (Elastic IP/EIP) from user-defined pool.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool {
+  /**
+   * PublicIpv4Pool sets a custom Public IPv4 Pool used to create Elastic IP address for resources
+   * created in public IPv4 subnets. Every IPv4 address, Elastic IP, will be allocated from the custom
+   * Public IPv4 pool that you brought to AWS, instead of Amazon-provided pool. The public IPv4 pool
+   * resource ID starts with 'ipv4pool-ec2'.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool#publicIpv4Pool
+   */
+  readonly publicIpv4Pool?: string;
+
+  /**
+   * PublicIpv4PoolFallBackOrder defines the fallback action when the Public IPv4 Pool has been exhausted,
+   * no more IPv4 address available in the pool.
+   *
+   *
+   * When set to 'amazon-pool', the controller check if the pool has available IPv4 address, when pool has reached the
+   * IPv4 limit, the address will be claimed from Amazon-pool (default).
+   *
+   *
+   * When set to 'none', the controller will fail the Elastic IP allocation when the publicIpv4Pool is exhausted.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool#publicIpv4PoolFallbackOrder
+   */
+  readonly publicIpv4PoolFallbackOrder?: AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPoolPublicIpv4PoolFallbackOrder;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPool | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'publicIpv4Pool': obj.publicIpv4Pool,
+    'publicIpv4PoolFallbackOrder': obj.publicIpv4PoolFallbackOrder,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defined options related to the bootstrapping systems where Ignition is used.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition {
+  /**
+   * Proxy defines proxy settings for Ignition.
+   * Only valid for Ignition versions 3.1 and above.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition#proxy
+   */
+  readonly proxy?: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy;
+
+  /**
+   * StorageType defines how to store the boostrap user data for Ignition.
+   * This can be used to instruct Ignition from where to fetch the user data to bootstrap an instance.
+   *
+   *
+   * When omitted, the storage option will default to ClusterObjectStore.
+   *
+   *
+   * When set to "ClusterObjectStore", if the capability is available and a Cluster ObjectStore configuration
+   * is correctly provided in the Cluster object (under .spec.s3Bucket),
+   * an object store will be used to store bootstrap user data.
+   *
+   *
+   * When set to "UnencryptedUserData", EC2 Instance User Data will be used to store the machine bootstrap user data, unencrypted.
+   * This option is considered less secure than others as user data may contain sensitive informations (keys, certificates, etc.)
+   * and users with ec2:DescribeInstances permission or users running pods
+   * that can access the ec2 metadata service have access to this sensitive information.
+   * So this is only to be used at ones own risk, and only when other more secure options are not viable.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition#storageType
+   */
+  readonly storageType?: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionStorageType;
+
+  /**
+   * TLS defines TLS settings for Ignition.
+   * Only valid for Ignition versions 3.1 and above.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition#tls
+   */
+  readonly tls?: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls;
+
+  /**
+   * Version defines which version of Ignition will be used to generate bootstrap data.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition#version
+   */
+  readonly version?: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionVersion;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'proxy': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy(obj.proxy),
+    'storageType': obj.storageType,
+    'tls': toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls(obj.tls),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * InstanceMetadataOptions is the metadata options for the EC2 instance.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions {
+  /**
+   * Enables or disables the HTTP metadata endpoint on your instances.
+   *
+   *
+   * If you specify a value of disabled, you cannot access your instance metadata.
+   *
+   *
+   * Default: enabled
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions#httpEndpoint
+   */
+  readonly httpEndpoint?: AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpEndpoint;
+
+  /**
+   * The desired HTTP PUT response hop limit for instance metadata requests. The
+   * larger the number, the further instance metadata requests can travel.
+   *
+   *
+   * Default: 1
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions#httpPutResponseHopLimit
+   */
+  readonly httpPutResponseHopLimit?: number;
+
+  /**
+   * The state of token usage for your instance metadata requests.
+   *
+   *
+   * If the state is optional, you can choose to retrieve instance metadata with
+   * or without a session token on your request. If you retrieve the IAM role
+   * credentials without a token, the version 1.0 role credentials are returned.
+   * If you retrieve the IAM role credentials using a valid session token, the
+   * version 2.0 role credentials are returned.
+   *
+   *
+   * If the state is required, you must send a session token with any instance
+   * metadata retrieval requests. In this state, retrieving the IAM role credentials
+   * always returns the version 2.0 credentials; the version 1.0 credentials are
+   * not available.
+   *
+   *
+   * Default: optional
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions#httpTokens
+   */
+  readonly httpTokens?: AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpTokens;
+
+  /**
+   * Set to enabled to allow access to instance tags from the instance metadata.
+   * Set to disabled to turn off access to instance tags from the instance metadata.
+   * For more information, see Work with instance tags using the instance metadata
+   * (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS).
+   *
+   *
+   * Default: disabled
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions#instanceMetadataTags
+   */
+  readonly instanceMetadataTags?: AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsInstanceMetadataTags;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpEndpoint': obj.httpEndpoint,
+    'httpPutResponseHopLimit': obj.httpPutResponseHopLimit,
+    'httpTokens': obj.httpTokens,
+    'instanceMetadataTags': obj.instanceMetadataTags,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Volume encapsulates the configuration options for the storage device.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PrivateDNSName is the options for the instance hostname.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName {
+  /**
+   * EnableResourceNameDNSAAAARecord indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName#enableResourceNameDnsAAAARecord
+   */
+  readonly enableResourceNameDnsAaaaRecord?: boolean;
+
+  /**
+   * EnableResourceNameDNSARecord indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName#enableResourceNameDnsARecord
+   */
+  readonly enableResourceNameDnsARecord?: boolean;
+
+  /**
+   * The type of hostname to assign to an instance.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName#hostnameType
+   */
+  readonly hostnameType?: AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsNameHostnameType;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsName | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableResourceNameDnsAAAARecord': obj.enableResourceNameDnsAaaaRecord,
+    'enableResourceNameDnsARecord': obj.enableResourceNameDnsARecord,
+    'hostnameType': obj.hostnameType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RootVolume encapsulates the configuration options for the root volume
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume {
+  /**
+   * Device name
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Encrypted is whether the volume should be encrypted or not.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#encrypted
+   */
+  readonly encrypted?: boolean;
+
+  /**
+   * EncryptionKey is the KMS key to use to encrypt the volume. Can be either a KMS key ID or ARN.
+   * If Encrypted is set and this is omitted, the default AWS key will be used.
+   * The key must already exist and be accessible by the controller.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#encryptionKey
+   */
+  readonly encryptionKey?: string;
+
+  /**
+   * IOPS is the number of IOPS requested for the disk. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Size specifies size (in Gi) of the storage device.
+   * Must be greater than the image snapshot size or 8 (whichever is greater).
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#size
+   */
+  readonly size: number;
+
+  /**
+   * Throughput to provision in MiB/s supported for the volume type. Not applicable to all types.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * Type is the type of the volume (e.g. gp2, io1, etc...).
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecRootVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'encrypted': obj.encrypted,
+    'encryptionKey': obj.encryptionKey,
+    'iops': obj.iops,
+    'size': obj.size,
+    'throughput': obj.throughput,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions {
+  /**
+   * MaxPrice defines the maximum price the user is willing to pay for Spot VM instances
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecSpotMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxPrice': obj.maxPrice,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Subnet is a reference to the subnet to use for this instance. If not specified,
+ * the cluster subnet will be used.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet {
+  /**
+   * Filters is a set of key/value pairs used to identify a resource
+   * They are applied according to the rules defined by the AWS API:
+   * https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet#filters
+   */
+  readonly filters?: AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters[];
+
+  /**
+   * ID of resource
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet#id
+   */
+  readonly id?: string;
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecSubnet | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'filters': obj.filters?.map(y => toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters(y)),
+    'id': obj.id,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Tenancy indicates if instance should run on shared or single-tenant hardware.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecTenancy
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecTenancy {
+  /** default */
+  DEFAULT = "default",
+  /** dedicated */
+  DEDICATED = "dedicated",
+  /** host */
+  HOST = "host",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecAdditionalSecurityGroupsFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * EKSOptimizedLookupType If specified, will look up an EKS Optimized image in SSM Parameter store
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecAmiEksLookupType
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecAmiEksLookupType {
+  /** AmazonLinux */
+  AMAZON_LINUX = "AmazonLinux",
+  /** AmazonLinuxGPU */
+  AMAZON_LINUX_GPU = "AmazonLinuxGPU",
+}
+
+/**
+ * SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+ * Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+ * will use AWS Secrets Manager instead.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInitSecureSecretsBackend
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecCloudInitSecureSecretsBackend {
+  /** secrets-manager */
+  SECRETS_HYPHEN_MANAGER = "secrets-manager",
+  /** ssm-parameter-store */
+  SSM_HYPHEN_PARAMETER_HYPHEN_STORE = "ssm-parameter-store",
+}
+
+/**
+ * PublicIpv4PoolFallBackOrder defines the fallback action when the Public IPv4 Pool has been exhausted,
+ * no more IPv4 address available in the pool.
+ *
+ *
+ * When set to 'amazon-pool', the controller check if the pool has available IPv4 address, when pool has reached the
+ * IPv4 limit, the address will be claimed from Amazon-pool (default).
+ *
+ *
+ * When set to 'none', the controller will fail the Elastic IP allocation when the publicIpv4Pool is exhausted.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPoolPublicIpv4PoolFallbackOrder
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecElasticIpPoolPublicIpv4PoolFallbackOrder {
+  /** amazon-pool */
+  AMAZON_HYPHEN_POOL = "amazon-pool",
+  /** none */
+  NONE = "none",
+}
+
+/**
+ * Proxy defines proxy settings for Ignition.
+ * Only valid for Ignition versions 3.1 and above.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy {
+  /**
+   * HTTPProxy is the HTTP proxy to use for Ignition.
+   * A single URL that specifies the proxy server to use for HTTP and HTTPS requests,
+   * unless overridden by the HTTPSProxy or NoProxy options.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy#httpProxy
+   */
+  readonly httpProxy?: string;
+
+  /**
+   * HTTPSProxy is the HTTPS proxy to use for Ignition.
+   * A single URL that specifies the proxy server to use for HTTPS requests,
+   * unless overridden by the NoProxy option.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy#httpsProxy
+   */
+  readonly httpsProxy?: string;
+
+  /**
+   * NoProxy is the list of domains to not proxy for Ignition.
+   * Specifies a list of strings to hosts that should be excluded from proxying.
+   *
+   *
+   * Each value is represented by:
+   * - An IP address prefix (1.2.3.4)
+   * - An IP address prefix in CIDR notation (1.2.3.4/8)
+   * - A domain name
+   * - A domain name matches that name and all subdomains
+   * - A domain name with a leading . matches subdomains only
+   * - A special DNS label (*), indicates that no proxying should be done
+   *
+   *
+   * An IP address prefix and domain name can also include a literal port number (1.2.3.4:80).
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy#noProxy
+   */
+  readonly noProxy?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionProxy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpProxy': obj.httpProxy,
+    'httpsProxy': obj.httpsProxy,
+    'noProxy': obj.noProxy?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * StorageType defines how to store the boostrap user data for Ignition.
+ * This can be used to instruct Ignition from where to fetch the user data to bootstrap an instance.
+ *
+ *
+ * When omitted, the storage option will default to ClusterObjectStore.
+ *
+ *
+ * When set to "ClusterObjectStore", if the capability is available and a Cluster ObjectStore configuration
+ * is correctly provided in the Cluster object (under .spec.s3Bucket),
+ * an object store will be used to store bootstrap user data.
+ *
+ *
+ * When set to "UnencryptedUserData", EC2 Instance User Data will be used to store the machine bootstrap user data, unencrypted.
+ * This option is considered less secure than others as user data may contain sensitive informations (keys, certificates, etc.)
+ * and users with ec2:DescribeInstances permission or users running pods
+ * that can access the ec2 metadata service have access to this sensitive information.
+ * So this is only to be used at ones own risk, and only when other more secure options are not viable.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionStorageType
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionStorageType {
+  /** ClusterObjectStore */
+  CLUSTER_OBJECT_STORE = "ClusterObjectStore",
+  /** UnencryptedUserData */
+  UNENCRYPTED_USER_DATA = "UnencryptedUserData",
+}
+
+/**
+ * TLS defines TLS settings for Ignition.
+ * Only valid for Ignition versions 3.1 and above.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls {
+  /**
+   * CASources defines the list of certificate authorities to use for Ignition.
+   * The value is the certificate bundle (in PEM format). The bundle can contain multiple concatenated certificates.
+   * Supported schemes are http, https, tftp, s3, arn, gs, and `data` (RFC 2397) URL scheme.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls#certificateAuthorities
+   */
+  readonly certificateAuthorities?: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionTls | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateAuthorities': obj.certificateAuthorities?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Version defines which version of Ignition will be used to generate bootstrap data.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionVersion
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecIgnitionVersion {
+  /** 2.3 */
+  VALUE_2_3 = "2.3",
+  /** 3.0 */
+  VALUE_3_0 = "3.0",
+  /** 3.1 */
+  VALUE_3_1 = "3.1",
+  /** 3.2 */
+  VALUE_3_2 = "3.2",
+  /** 3.3 */
+  VALUE_3_3 = "3.3",
+  /** 3.4 */
+  VALUE_3_4 = "3.4",
+}
+
+/**
+ * Enables or disables the HTTP metadata endpoint on your instances.
+ *
+ *
+ * If you specify a value of disabled, you cannot access your instance metadata.
+ *
+ *
+ * Default: enabled
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpEndpoint
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpEndpoint {
+  /** enabled */
+  ENABLED = "enabled",
+  /** disabled */
+  DISABLED = "disabled",
+}
+
+/**
+ * The state of token usage for your instance metadata requests.
+ *
+ *
+ * If the state is optional, you can choose to retrieve instance metadata with
+ * or without a session token on your request. If you retrieve the IAM role
+ * credentials without a token, the version 1.0 role credentials are returned.
+ * If you retrieve the IAM role credentials using a valid session token, the
+ * version 2.0 role credentials are returned.
+ *
+ *
+ * If the state is required, you must send a session token with any instance
+ * metadata retrieval requests. In this state, retrieving the IAM role credentials
+ * always returns the version 2.0 credentials; the version 1.0 credentials are
+ * not available.
+ *
+ *
+ * Default: optional
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpTokens
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpTokens {
+  /** optional */
+  OPTIONAL = "optional",
+  /** required */
+  REQUIRED = "required",
+}
+
+/**
+ * Set to enabled to allow access to instance tags from the instance metadata.
+ * Set to disabled to turn off access to instance tags from the instance metadata.
+ * For more information, see Work with instance tags using the instance metadata
+ * (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS).
+ *
+ *
+ * Default: disabled
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsInstanceMetadataTags
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsInstanceMetadataTags {
+  /** enabled */
+  ENABLED = "enabled",
+  /** disabled */
+  DISABLED = "disabled",
+}
+
+/**
+ * The type of hostname to assign to an instance.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsNameHostnameType
+ */
+export enum AwsMachineTemplateV1Beta2SpecTemplateSpecPrivateDnsNameHostnameType {
+  /** ip-name */
+  IP_HYPHEN_NAME = "ip-name",
+  /** resource-name */
+  RESOURCE_HYPHEN_NAME = "resource-name",
+}
+
+/**
+ * Filter is a filter used to identify an AWS resource.
+ *
+ * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters
+ */
+export interface AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters {
+  /**
+   * Name of the filter. Filter names are case-sensitive.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters#name
+   */
+  readonly name: string;
+
+  /**
+   * Values includes one or more filter values. Filter values are case-sensitive.
+   *
+   * @schema AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters#values
+   */
+  readonly values: string[];
+}
+
+/**
+ * Converts an object of type 'AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters(obj: AwsMachineTemplateV1Beta2SpecTemplateSpecSubnetFilters | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
  * GCPCluster is the Schema for the gcpclusters API.
  *
  * @schema GCPCluster

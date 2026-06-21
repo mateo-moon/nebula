@@ -393,13 +393,9 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       stringData: argocdSecretData,
     });
 
-    const defaultTolerations = this.config.tolerations ?? [
-      {
-        key: "components.gke.io/gke-managed-components",
-        operator: "Exists",
-        effect: "NoSchedule",
-      },
-    ];
+    // Portable by default; set config.tolerations to add cloud-specific ones
+    // (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations = this.config.tolerations ?? [];
 
     // Build default values
     const defaultValues: Record<string, unknown> = {

@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.nebula-aws-*
+.kube-*.config
