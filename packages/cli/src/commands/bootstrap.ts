@@ -11,7 +11,7 @@ import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { apply } from "./apply";
-import { synthAwsBootstrap, synthAwsMgmt } from "./aws-apps";
+import { synthAwsPlatform, synthAwsCluster } from "./aws-apps";
 
 export interface BootstrapOptions {
   name?: string;
@@ -26,22 +26,8 @@ export interface BootstrapOptions {
   region?: string;
   /** AWS named profile to resolve credentials from (aws provider) */
   awsProfile?: string;
-  /** Name of the CAPI management cluster CR (aws provider, default 'mgmt') */
-  clusterName?: string;
-  /** Namespace of the CAPI management cluster CR (aws provider, default 'default') */
-  clusterNamespace?: string;
   /** AMI id for the management cluster nodes (aws; recommend Ubuntu 22.04) */
   amiId?: string;
-  /** Number of control-plane nodes for the HA k0s management cluster (aws, default 3) */
-  cpReplicas?: number;
-  /** EC2 instance type for the management cluster nodes (aws, default m6i.large) */
-  cpInstanceType?: string;
-  /** VPC CIDR CAPA creates for the management cluster (aws, default 10.0.0.0/16) */
-  vpcCidr?: string;
-  /** Kubernetes version (aws, default v1.31.8) */
-  k8sVersion?: string;
-  /** Skip installing the control-plane stack on the management cluster (aws) */
-  skipMgmtPlatform?: boolean;
 }
 
 interface GkeClusterInfo {
@@ -997,83 +983,96 @@ async function synthAndApply(
   }
 }
 
-/**
- * Step 3 (Kind): synth + apply the bootstrap topology (Crossplane + provider-aws
- * + CAPA/k0s + node IAM + the AwsK0sCluster management cluster). Built in-process
- * from CLI flags — no scaffold files required.
- */
-async function deployAwsBootstrapToKind(appOpts: AppOpts): Promise<void> {
-  log("");
-  log("📦 Step 3: Deploying the bootstrap topology to Kind");
-  log("─".repeat(50));
-  const outdir = path.join(process.cwd(), ".nebula-aws-bootstrap");
-  await synthAndApply(outdir, () => synthAwsBootstrap(outdir, appOpts));
-  log("   Waiting for Crossplane providers...");
-  await waitForProviders(300);
-  log("   ✅ Bootstrap topology applied to Kind");
+/** Wait until the given CRDs exist (the cluster-api-operator installs them at runtime). */
+async function waitForCrds(
+  crds: string[],
+  timeoutSeconds: number,
+  kubeconfig?: string,
+): Promise<void> {
+  const kc = kubeconfig ? `KUBECONFIG="${kubeconfig}" ` : "";
+  const start = Date.now();
+  while (Date.now() - start < timeoutSeconds * 1000) {
+    const missing = crds.filter(
+      (c) =>
+        !exec(`${kc}kubectl get crd ${c} -o name 2>/dev/null || echo ""`, {
+          silent: true,
+        }).trim(),
+    );
+    if (missing.length === 0) {
+      log("   ✅ Required CRDs installed");
+      return;
+    }
+    log(`   Waiting for CRDs (${missing.length} missing)...`);
+    await sleep(10000);
+  }
+  throw new Error(`CRDs not installed within ${timeoutSeconds}s: ${crds.join(", ")}`);
 }
 
+/** CRDs the cluster-api-operator installs that the management cluster CRs depend on. */
+const CAPI_CLUSTER_CRDS = [
+  "clusters.cluster.x-k8s.io",
+  "awsclusters.infrastructure.cluster.x-k8s.io",
+  "awsmachinetemplates.infrastructure.cluster.x-k8s.io",
+  "k0scontrolplanes.controlplane.cluster.x-k8s.io",
+];
+
 /**
- * Step 6 (management cluster): install the platform (Crossplane + CAPA, no
- * cluster CR) so the management cluster is self-managing and can provision
- * workload clusters. No clusterctl pivot — the standalone k0s control plane is
- * self-contained, and Crossplane re-adopts the IAM profile via external-name.
+ * Apply the platform stage: Crossplane + cert-manager + provider-aws + node IAM +
+ * cluster-api-operator. cert-manager must be up before the operator's webhook
+ * cert is issued, so we apply, wait for cert-manager, then re-apply (idempotent)
+ * so the operator's Certificate/Issuer land. Used for both Kind and the mgmt cluster.
  */
-async function deployMgmtPlatform(
-  mgmtKubeconfig: string,
+async function deployAwsPlatform(
   appOpts: AppOpts,
-  profile?: string,
+  kubeconfig?: string,
 ): Promise<void> {
-  log("");
-  log("📦 Step 6: Installing the platform on the management cluster");
-  log("─".repeat(50));
+  const kc = kubeconfig ? `KUBECONFIG="${kubeconfig}" ` : "";
+  const outdir = path.join(process.cwd(), ".nebula-aws-platform");
 
-  // The management cluster needs the AWS credential secrets too.
-  await setupAwsCredentials(appOpts.region, profile, mgmtKubeconfig);
+  await synthAndApply(outdir, () => synthAwsPlatform(outdir, appOpts), kubeconfig);
 
-  const outdir = path.join(process.cwd(), ".nebula-aws-mgmt");
-  await synthAndApply(outdir, () => synthAwsMgmt(outdir, appOpts), mgmtKubeconfig);
-  log("   ✅ Platform installed on the management cluster");
+  log("   Waiting for cert-manager webhook...");
+  exec(
+    `${kc}kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=240s`,
+    { ignoreErrors: true },
+  );
+  // Re-apply so the operator's cert-manager Certificate/Issuer (which need the
+  // webhook up) and any first-pass-skipped resources are created.
+  await synthAndApply(outdir, () => synthAwsPlatform(outdir, appOpts), kubeconfig);
+
+  log("   Waiting for Crossplane providers...");
+  await waitForProviders(300);
+}
+
+/** Apply the management cluster CRs (after the operator installs the CAPA/k0s CRDs). */
+async function deployAwsCluster(appOpts: AppOpts): Promise<void> {
+  const outdir = path.join(process.cwd(), ".nebula-aws-cluster");
+  await synthAndApply(outdir, () => synthAwsCluster(outdir, appOpts));
 }
 
 interface AppOpts {
   region: string;
   clusterName: string;
-  k8sVersion?: string;
   amiId?: string;
-  cpReplicas?: number;
-  cpInstanceType?: string;
-  vpcCidr?: string;
 }
 
 async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const kindName = options.name || "nebula";
   const region = options.region;
   if (!region) {
-    throw new Error(
-      "AWS provider requires --region (e.g. --region eu-central-1)",
-    );
+    throw new Error("AWS provider requires --region (e.g. --region eu-central-1)");
   }
-  const clusterName = options.clusterName || "mgmt";
-  const clusterNamespace = options.clusterNamespace || "default";
-  const appOpts: AppOpts = {
-    region,
-    clusterName,
-    k8sVersion: options.k8sVersion,
-    amiId: options.amiId,
-    cpReplicas: options.cpReplicas,
-    cpInstanceType: options.cpInstanceType,
-    vpcCidr: options.vpcCidr,
-  };
+  const clusterName = "mgmt";
+  const clusterNamespace = "default";
+  const appOpts: AppOpts = { region, clusterName, amiId: options.amiId };
 
   log("");
   log("🚀 Nebula AWS Bootstrap (vendor-free, self-managed k0s management cluster)");
   log("═".repeat(50));
-  log(`   Kind cluster:    ${kindName}`);
-  log(`   Region:          ${region}`);
-  log(`   Mgmt cluster:    ${clusterName} (ns ${clusterNamespace})`);
-  log(`   CP nodes:        ${appOpts.cpReplicas ?? 3} × ${appOpts.cpInstanceType ?? "m6i.large"}`);
-  log(`   AMI:             ${appOpts.amiId ?? "(CAPA image lookup — set --ami-id)"}`);
+  log(`   Kind cluster: ${kindName}`);
+  log(`   Region:       ${region}`);
+  log(`   Mgmt cluster: ${clusterName}`);
+  log(`   AMI:          ${appOpts.amiId ?? "(CAPA image lookup — pass --ami-id)"}`);
 
   if (!commandExists("kubectl")) throw new Error("kubectl is not installed");
   if (!commandExists("aws")) throw new Error("aws CLI is not installed");
@@ -1087,10 +1086,19 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
     await setupAwsCredentials(region, options.awsProfile);
   }
 
-  // Step 3: Synth + apply the bootstrap topology to Kind (in-process).
-  await deployAwsBootstrapToKind(appOpts);
+  // Step 3: Platform on Kind, then wait for the operator to install CAPA/k0s CRDs.
+  log("");
+  log("📦 Step 3: Deploying the platform to Kind (Crossplane + cert-manager + CAPA)");
+  log("─".repeat(50));
+  await deployAwsPlatform(appOpts);
+  log("   Waiting for the cluster-api-operator to install CAPA/k0s CRDs...");
+  await waitForCrds(CAPI_CLUSTER_CRDS, 600);
 
-  // Step 4: Wait for the management cluster control plane.
+  // Step 4: Create the management cluster, then wait for its control plane.
+  log("");
+  log("📦 Step 4: Creating the management cluster (CAPA + k0s)");
+  log("─".repeat(50));
+  await deployAwsCluster(appOpts);
   await waitForCapiClusterReady(clusterName, clusterNamespace, 1800);
 
   // Step 5: Fetch the management cluster kubeconfig.
@@ -1100,23 +1108,23 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const mgmtKubeconfig = fetchCapiKubeconfig(clusterName, clusterNamespace);
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
 
-  // Step 6: Install the platform on the management cluster (no clusterctl pivot).
-  if (!options.skipMgmtPlatform) {
-    await deployMgmtPlatform(mgmtKubeconfig, appOpts, options.awsProfile);
-  }
+  // Step 6: Install the platform on the management cluster (no clusterctl pivot —
+  // the standalone k0s control plane is self-contained; Kind can be discarded).
+  log("");
+  log("📦 Step 6: Installing the platform on the management cluster");
+  log("─".repeat(50));
+  await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
+  await deployAwsPlatform(appOpts, mgmtKubeconfig);
 
   log("");
   log("═".repeat(50));
   log("✨ AWS bootstrap complete!");
   log("");
-  log("📋 Clusters:");
   log(`   Kind (bootstrap):  kind-${kindName}  (ephemeral — safe to delete)`);
   log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
-  log("📋 Next:");
   log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
-  log("   kubectl get nodes                 # self-managed k0s management cluster");
-  log(`   kind delete cluster --name ${kindName}   # discard the bootstrapper`);
-  log("   # provision workload clusters from the mgmt cluster with AwsWorkloadCluster");
+  log("   kubectl get nodes");
+  log(`   kind delete cluster --name ${kindName}`);
   log("");
 }
