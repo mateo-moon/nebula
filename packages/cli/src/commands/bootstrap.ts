@@ -10,6 +10,8 @@
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { apply } from "./apply";
+import { synthAwsBootstrap, synthAwsMgmt } from "./aws-apps";
 
 export interface BootstrapOptions {
   name?: string;
@@ -18,6 +20,28 @@ export interface BootstrapOptions {
   skipKind?: boolean;
   skipCredentials?: boolean;
   skipGke?: boolean;
+  /** Cloud provider for the management cluster ('gcp' | 'aws', default 'gcp') */
+  provider?: string;
+  /** AWS region (aws provider) */
+  region?: string;
+  /** AWS named profile to resolve credentials from (aws provider) */
+  awsProfile?: string;
+  /** Name of the CAPI management cluster CR (aws provider, default 'mgmt') */
+  clusterName?: string;
+  /** Namespace of the CAPI management cluster CR (aws provider, default 'default') */
+  clusterNamespace?: string;
+  /** AMI id for the management cluster nodes (aws; recommend Ubuntu 22.04) */
+  amiId?: string;
+  /** Number of control-plane nodes for the HA k0s management cluster (aws, default 3) */
+  cpReplicas?: number;
+  /** EC2 instance type for the management cluster nodes (aws, default m6i.large) */
+  cpInstanceType?: string;
+  /** VPC CIDR CAPA creates for the management cluster (aws, default 10.0.0.0/16) */
+  vpcCidr?: string;
+  /** Kubernetes version (aws, default v1.31.8) */
+  k8sVersion?: string;
+  /** Skip installing the control-plane stack on the management cluster (aws) */
+  skipMgmtPlatform?: boolean;
 }
 
 interface GkeClusterInfo {
@@ -701,6 +725,14 @@ function readProjectFromConfig(): string | null {
 }
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
+  const provider = (options.provider || "gcp").toLowerCase();
+  if (provider === "aws") {
+    return bootstrapAws(options);
+  }
+  if (provider !== "gcp") {
+    throw new Error(`Unsupported --provider '${provider}' (expected 'gcp' or 'aws')`);
+  }
+
   const clusterName = options.name || "nebula";
   const project = options.project || readProjectFromConfig();
 
@@ -780,5 +812,311 @@ export async function bootstrap(options: BootstrapOptions): Promise<void> {
       `   GKE:  gcloud container clusters get-credentials ${gkeCluster.name} --zone ${gkeCluster.location} --project ${gkeCluster.project || project}`,
     );
   }
+  log("");
+}
+
+// ===========================================================================
+// AWS bootstrap — vendor-free: a self-managed HA k0s management cluster on EC2
+// via Cluster API (CAPA). Mirrors the GCP Kind→cloud→pivot flow, but the
+// management cluster is self-managed k0s (no EKS), reachable via a CAPA NLB.
+// ===========================================================================
+
+interface AwsCreds {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+}
+
+/** Resolve AWS credentials from a named profile (handles static keys and SSO). */
+function awsExportCredentials(profile?: string): AwsCreds {
+  const p = profile ? `--profile ${profile}` : "";
+  let out = "";
+  try {
+    out = exec(`aws configure export-credentials ${p} --format env-no-export`, {
+      silent: true,
+    });
+  } catch {
+    throw new Error(
+      `Failed to resolve AWS credentials${profile ? ` for profile '${profile}'` : ""}. ` +
+        `Run: aws configure --profile <name>`,
+    );
+  }
+  const get = (k: string): string => {
+    const m = out.match(new RegExp(`^${k}=(.*)$`, "m"));
+    return m ? m[1].trim() : "";
+  };
+  const accessKeyId = get("AWS_ACCESS_KEY_ID");
+  const secretAccessKey = get("AWS_SECRET_ACCESS_KEY");
+  const sessionToken = get("AWS_SESSION_TOKEN") || undefined;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error("Could not resolve AWS credentials (empty access key).");
+  }
+  return { accessKeyId, secretAccessKey, sessionToken };
+}
+
+async function setupAwsCredentials(
+  region: string,
+  profile?: string,
+  kubeconfig?: string,
+): Promise<void> {
+  if (!kubeconfig) {
+    log("");
+    log("🔐 Step 2: Setting up AWS credentials");
+    log("─".repeat(50));
+  }
+
+  const kc = kubeconfig ? `KUBECONFIG="${kubeconfig}" ` : "";
+  const { accessKeyId, secretAccessKey, sessionToken } =
+    awsExportCredentials(profile);
+  if (sessionToken && !kubeconfig) {
+    log(
+      "   ⚠️  Using temporary credentials (session token); they expire — prefer a static IAM user key for long bootstraps.",
+    );
+  }
+
+  const ini =
+    `[default]\n` +
+    `aws_access_key_id = ${accessKeyId}\n` +
+    `aws_secret_access_key = ${secretAccessKey}\n` +
+    (sessionToken ? `aws_session_token = ${sessionToken}\n` : "") +
+    `region = ${region}\n`;
+  const iniPath = `/tmp/nebula-aws-creds-${Date.now()}.ini`;
+  fs.writeFileSync(iniPath, ini, { mode: 0o600 });
+
+  try {
+    // Crossplane provider-aws credentials (secretRef key 'creds')
+    exec(
+      `${kc}kubectl create namespace crossplane-system --dry-run=client -o yaml | ${kc}kubectl apply -f -`,
+      { silent: true },
+    );
+    exec(
+      `${kc}kubectl delete secret aws-creds -n crossplane-system --ignore-not-found`,
+      { silent: true },
+    );
+    exec(
+      `${kc}kubectl create secret generic aws-creds --from-file=creds=${iniPath} -n crossplane-system`,
+    );
+
+    // CAPA credentials (AWS_B64ENCODED_CREDENTIALS + AWS_REGION)
+    const b64 = Buffer.from(ini, "utf-8").toString("base64");
+    exec(
+      `${kc}kubectl create namespace capa-system --dry-run=client -o yaml | ${kc}kubectl apply -f -`,
+      { silent: true },
+    );
+    exec(
+      `${kc}kubectl delete secret aws-capa-credentials -n capa-system --ignore-not-found`,
+      { silent: true },
+    );
+    exec(
+      `${kc}kubectl create secret generic aws-capa-credentials ` +
+        `--from-literal=AWS_B64ENCODED_CREDENTIALS=${b64} ` +
+        `--from-literal=AWS_REGION=${region} -n capa-system`,
+    );
+  } finally {
+    fs.unlinkSync(iniPath);
+  }
+
+  log(
+    `   ✅ Created secrets: aws-creds (crossplane-system), aws-capa-credentials (capa-system)${kubeconfig ? " on the management cluster" : ""}`,
+  );
+}
+
+async function waitForCapiClusterReady(
+  name: string,
+  namespace: string,
+  timeoutSeconds: number,
+): Promise<void> {
+  log("");
+  log("⏳ Step 4: Waiting for the management cluster (CAPI)");
+  log("─".repeat(50));
+  log(`   Cluster: ${name} (ns ${namespace})`);
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutSeconds * 1000) {
+    const phase = exec(
+      `kubectl get cluster ${name} -n ${namespace} -o jsonpath="{.status.phase}" 2>/dev/null || echo ""`,
+      { silent: true },
+    ).trim();
+    const cpReady = exec(
+      `kubectl get cluster ${name} -n ${namespace} -o jsonpath="{.status.controlPlaneReady}" 2>/dev/null || echo ""`,
+      { silent: true },
+    ).trim();
+    const kubeconfigExists = exec(
+      `kubectl get secret ${name}-kubeconfig -n ${namespace} -o name 2>/dev/null || echo ""`,
+      { silent: true },
+    ).trim();
+
+    if (cpReady === "true" && kubeconfigExists) {
+      log("   ✅ Management cluster control plane is ready");
+      return;
+    }
+
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    log(
+      `   Waiting... (${elapsed}s, phase: ${phase || "Pending"}, controlPlaneReady: ${cpReady || "false"})`,
+    );
+    await sleep(30000);
+  }
+  throw new Error(
+    `Management cluster ${name} did not become ready within ${timeoutSeconds}s`,
+  );
+}
+
+/** Write the CAPI-generated kubeconfig for a cluster to a local file. */
+function fetchCapiKubeconfig(name: string, namespace: string): string {
+  const b64 = exec(
+    `kubectl get secret ${name}-kubeconfig -n ${namespace} -o jsonpath="{.data.value}" 2>/dev/null`,
+    { silent: true },
+  ).trim();
+  if (!b64) {
+    throw new Error(`kubeconfig secret ${name}-kubeconfig not found in ${namespace}`);
+  }
+  const kubeconfig = Buffer.from(b64, "base64").toString("utf-8");
+  const kPath = path.join(process.cwd(), `.kube-${name}.config`);
+  fs.writeFileSync(kPath, kubeconfig, { mode: 0o600 });
+  return kPath;
+}
+
+/** Synth (in-process) + apply a set of cdk8s manifests, optionally to another cluster. */
+async function synthAndApply(
+  outdir: string,
+  synthFn: () => void,
+  kubeconfig?: string,
+): Promise<void> {
+  fs.rmSync(outdir, { recursive: true, force: true });
+  synthFn();
+  const prev = process.env.KUBECONFIG;
+  if (kubeconfig) process.env.KUBECONFIG = kubeconfig;
+  try {
+    await apply({ file: `${outdir}/*.k8s.yaml` });
+  } finally {
+    if (kubeconfig) {
+      if (prev === undefined) delete process.env.KUBECONFIG;
+      else process.env.KUBECONFIG = prev;
+    }
+  }
+}
+
+/**
+ * Step 3 (Kind): synth + apply the bootstrap topology (Crossplane + provider-aws
+ * + CAPA/k0s + node IAM + the AwsK0sCluster management cluster). Built in-process
+ * from CLI flags — no scaffold files required.
+ */
+async function deployAwsBootstrapToKind(appOpts: AppOpts): Promise<void> {
+  log("");
+  log("📦 Step 3: Deploying the bootstrap topology to Kind");
+  log("─".repeat(50));
+  const outdir = path.join(process.cwd(), ".nebula-aws-bootstrap");
+  await synthAndApply(outdir, () => synthAwsBootstrap(outdir, appOpts));
+  log("   Waiting for Crossplane providers...");
+  await waitForProviders(300);
+  log("   ✅ Bootstrap topology applied to Kind");
+}
+
+/**
+ * Step 6 (management cluster): install the platform (Crossplane + CAPA, no
+ * cluster CR) so the management cluster is self-managing and can provision
+ * workload clusters. No clusterctl pivot — the standalone k0s control plane is
+ * self-contained, and Crossplane re-adopts the IAM profile via external-name.
+ */
+async function deployMgmtPlatform(
+  mgmtKubeconfig: string,
+  appOpts: AppOpts,
+  profile?: string,
+): Promise<void> {
+  log("");
+  log("📦 Step 6: Installing the platform on the management cluster");
+  log("─".repeat(50));
+
+  // The management cluster needs the AWS credential secrets too.
+  await setupAwsCredentials(appOpts.region, profile, mgmtKubeconfig);
+
+  const outdir = path.join(process.cwd(), ".nebula-aws-mgmt");
+  await synthAndApply(outdir, () => synthAwsMgmt(outdir, appOpts), mgmtKubeconfig);
+  log("   ✅ Platform installed on the management cluster");
+}
+
+interface AppOpts {
+  region: string;
+  clusterName: string;
+  k8sVersion?: string;
+  amiId?: string;
+  cpReplicas?: number;
+  cpInstanceType?: string;
+  vpcCidr?: string;
+}
+
+async function bootstrapAws(options: BootstrapOptions): Promise<void> {
+  const kindName = options.name || "nebula";
+  const region = options.region;
+  if (!region) {
+    throw new Error(
+      "AWS provider requires --region (e.g. --region eu-central-1)",
+    );
+  }
+  const clusterName = options.clusterName || "mgmt";
+  const clusterNamespace = options.clusterNamespace || "default";
+  const appOpts: AppOpts = {
+    region,
+    clusterName,
+    k8sVersion: options.k8sVersion,
+    amiId: options.amiId,
+    cpReplicas: options.cpReplicas,
+    cpInstanceType: options.cpInstanceType,
+    vpcCidr: options.vpcCidr,
+  };
+
+  log("");
+  log("🚀 Nebula AWS Bootstrap (vendor-free, self-managed k0s management cluster)");
+  log("═".repeat(50));
+  log(`   Kind cluster:    ${kindName}`);
+  log(`   Region:          ${region}`);
+  log(`   Mgmt cluster:    ${clusterName} (ns ${clusterNamespace})`);
+  log(`   CP nodes:        ${appOpts.cpReplicas ?? 3} × ${appOpts.cpInstanceType ?? "m6i.large"}`);
+  log(`   AMI:             ${appOpts.amiId ?? "(CAPA image lookup — set --ami-id)"}`);
+
+  if (!commandExists("kubectl")) throw new Error("kubectl is not installed");
+  if (!commandExists("aws")) throw new Error("aws CLI is not installed");
+  if (!commandExists("kind")) throw new Error("kind is not installed");
+
+  // Step 1: Kind bootstrap cluster (ephemeral).
+  if (!options.skipKind) await createKindCluster(kindName);
+
+  // Step 2: AWS credentials (Crossplane + CAPA secrets).
+  if (!options.skipCredentials) {
+    await setupAwsCredentials(region, options.awsProfile);
+  }
+
+  // Step 3: Synth + apply the bootstrap topology to Kind (in-process).
+  await deployAwsBootstrapToKind(appOpts);
+
+  // Step 4: Wait for the management cluster control plane.
+  await waitForCapiClusterReady(clusterName, clusterNamespace, 1800);
+
+  // Step 5: Fetch the management cluster kubeconfig.
+  log("");
+  log("🔄 Step 5: Fetching the management cluster kubeconfig");
+  log("─".repeat(50));
+  const mgmtKubeconfig = fetchCapiKubeconfig(clusterName, clusterNamespace);
+  log(`   ✅ Wrote ${mgmtKubeconfig}`);
+
+  // Step 6: Install the platform on the management cluster (no clusterctl pivot).
+  if (!options.skipMgmtPlatform) {
+    await deployMgmtPlatform(mgmtKubeconfig, appOpts, options.awsProfile);
+  }
+
+  log("");
+  log("═".repeat(50));
+  log("✨ AWS bootstrap complete!");
+  log("");
+  log("📋 Clusters:");
+  log(`   Kind (bootstrap):  kind-${kindName}  (ephemeral — safe to delete)`);
+  log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
+  log("");
+  log("📋 Next:");
+  log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
+  log("   kubectl get nodes                 # self-managed k0s management cluster");
+  log(`   kind delete cluster --name ${kindName}   # discard the bootstrapper`);
+  log("   # provision workload clusters from the mgmt cluster with AwsWorkloadCluster");
   log("");
 }

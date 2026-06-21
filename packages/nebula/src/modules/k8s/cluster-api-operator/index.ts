@@ -79,6 +79,30 @@ export interface ClusterApiOperatorHetznerConfig {
   version?: string;
 }
 
+/** AWS configuration for CAPA (Cluster API Provider AWS) */
+export interface ClusterApiOperatorAwsConfig {
+  /** Default AWS region for the CAPA controller */
+  region: string;
+  /**
+   * Name of the Kubernetes secret CAPA reads credentials from.
+   * @default 'aws-capa-credentials'
+   */
+  secretName?: string;
+  /**
+   * Namespace for the credentials secret.
+   * @default 'capa-system'
+   */
+  secretNamespace?: string;
+  /**
+   * AWS access key id. Supports `ref+sops://...` (resolved at synth). When both
+   * `accessKeyId` and `secretAccessKey` are set, the credentials secret is
+   * created for you; otherwise an existing `secretName` is referenced.
+   */
+  accessKeyId?: string;
+  /** AWS secret access key. Supports `ref+sops://...`. */
+  secretAccessKey?: string;
+}
+
 export interface ClusterApiOperatorConfig {
   /** Namespace for the operator (defaults to capi-operator-system) */
   namespace?: string;
@@ -91,6 +115,7 @@ export interface ClusterApiOperatorConfig {
   /** Infrastructure providers configuration */
   infrastructure?: {
     gcp?: { version?: string };
+    aws?: { version?: string };
     hetzner?: { version?: string };
     k0smotron?: { version?: string };
   };
@@ -108,6 +133,8 @@ export interface ClusterApiOperatorConfig {
   };
   /** GCP configuration for CAPG IAM setup */
   gcp?: ClusterApiOperatorGcpConfig;
+  /** AWS configuration for CAPA credentials setup */
+  aws?: ClusterApiOperatorAwsConfig;
   /** Hetzner configuration for CAPH setup */
   hetzner?: ClusterApiOperatorHetznerConfig;
 }
@@ -129,6 +156,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
 
     const namespaceName = this.config.namespace ?? "capi-operator-system";
     const capgNamespace = "capg-system";
+    const capaNamespace = "capa-system";
     const caphNamespace = "caph-system";
 
     // Create namespace
@@ -140,6 +168,13 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     if (this.config.gcp) {
       new kplus.Namespace(this, "capg-namespace", {
         metadata: { name: capgNamespace },
+      });
+    }
+
+    // Create CAPA namespace for credentials secret (if AWS is configured)
+    if (this.config.aws) {
+      new kplus.Namespace(this, "capa-namespace", {
+        metadata: { name: capaNamespace },
       });
     }
 
@@ -182,14 +217,24 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       };
     }
 
-    const defaultValues: Record<string, unknown> = {
-      tolerations: [
-        {
-          key: "components.gke.io/gke-managed-components",
-          operator: "Exists",
-          effect: "NoSchedule",
+    // Add AWS provider (CAPA) if configured
+    if (this.config.aws) {
+      const { name: awsSecretName, namespace: awsSecretNamespace } =
+        this.setupAwsCredentials(capaNamespace);
+
+      infrastructureProviders.aws = {
+        version: this.config.infrastructure?.aws?.version ?? "v2.7.1",
+        configSecret: {
+          name: awsSecretName,
+          namespace: awsSecretNamespace,
         },
-      ],
+      };
+    }
+
+    const defaultValues: Record<string, unknown> = {
+      // Portable by default; add cloud-specific tolerations via `values` if needed
+      // (e.g. GKE: components.gke.io/gke-managed-components).
+      tolerations: [],
       infrastructure: infrastructureProviders,
       core: {
         "cluster-api": {
@@ -267,6 +312,45 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         );
       }
     }
+  }
+
+  /**
+   * Create the credentials secret CAPA (Cluster API Provider AWS) reads.
+   *
+   * Mirrors the Hetzner pattern (a static secret) rather than the GCP
+   * XRD/Composition flow: the management cluster is cross-cloud (GKE / BYO k8s
+   * provisioning AWS), so IRSA is unavailable and Crossplane-minting a key would
+   * still require a bootstrap key. CAPA expects `AWS_B64ENCODED_CREDENTIALS` =
+   * base64 of an INI credentials file.
+   */
+  private setupAwsCredentials(capaNamespace: string): {
+    name: string;
+    namespace: string;
+  } {
+    const aws = this.config.aws!;
+    const secretName = aws.secretName ?? "aws-capa-credentials";
+    const secretNamespace = aws.secretNamespace ?? capaNamespace;
+
+    // Only create the secret when explicit credentials are supplied; otherwise
+    // assume the named secret already exists in the cluster.
+    if (aws.accessKeyId && aws.secretAccessKey) {
+      const ini =
+        `[default]\n` +
+        `aws_access_key_id = ${aws.accessKeyId}\n` +
+        `aws_secret_access_key = ${aws.secretAccessKey}\n` +
+        `region = ${aws.region}\n`;
+      const b64 = Buffer.from(ini, "utf-8").toString("base64");
+
+      new kplus.Secret(this, "capa-credentials", {
+        metadata: { name: secretName, namespace: secretNamespace },
+        stringData: {
+          AWS_B64ENCODED_CREDENTIALS: b64,
+          AWS_REGION: aws.region,
+        },
+      });
+    }
+
+    return { name: secretName, namespace: secretNamespace };
   }
 
   /**

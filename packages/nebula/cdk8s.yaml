@@ -35,6 +35,30 @@ imports:
   # GCP Provider CRDs - Storage (GCS)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/storage.gcp.upbound.io_buckets.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-gcp/v2.4.0/package/crds/storage.gcp.upbound.io_bucketiammembers.yaml
+  # AWS Provider (provider-upjet-aws v2.6.0) - ProviderConfig
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/aws.upbound.io_providerconfigs.yaml
+  # AWS Provider CRDs - EC2 (VPC / networking)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_vpcs.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_subnets.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_internetgateways.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_natgateways.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_eips.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_routetables.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_routes.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_routetableassociations.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_securitygroups.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_securitygrouprules.yaml
+  # AWS Provider CRDs - IAM (CAPA node instance profile)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_roles.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_rolepolicyattachments.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_instanceprofiles.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_policies.yaml
+  # AWS Provider CRDs - Route53 (DNS zone only; the `Record` kind is omitted as
+  # external-dns manages records, and its generated class collides with TS's Record<>)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/route53.aws.upbound.io_zones.yaml
+  # AWS Provider CRDs - KMS (SOPS key, optional)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/kms.aws.upbound.io_keys.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/kms.aws.upbound.io_aliases.yaml
   # cert-manager CRDs (using v1.18.0 - CRDs are backward compatible)
   - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-clusterissuers.yaml
   - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-issuers.yaml
@@ -61,6 +85,14 @@ imports:
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedclusters.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedcontrolplanes.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedmachinepools.yaml
+  # Cluster API AWS Infrastructure Provider CRDs (CAPA v2.7.1, contract v1beta1, AWSCluster storage v1beta2)
+  # EC2/self-managed-k0s path only - EKS (awsmanaged*) and awsmachinepools deliberately excluded (static MachineDeployment, no Karpenter)
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusters.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsmachines.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsmachinetemplates.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclustercontrolleridentities.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusterroleidentities.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusterstaticidentities.yaml
   # Cluster API Hetzner Infrastructure Provider CRDs (v1.0.7) - HCloud (VMs)
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerclusters.yaml
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerclustertemplates.yaml
