@@ -276,7 +276,7 @@ export class GcpProvider extends Construct {
         };
       case "impersonate":
         return {
-          source: ProviderConfigSpecCredentialsSource.INJECTED_IDENTITY,
+          source: ProviderConfigSpecCredentialsSource.IMPERSONATE_SERVICE_ACCOUNT,
           impersonateServiceAccount: {
             name: source.serviceAccount,
           },

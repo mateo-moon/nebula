@@ -84,6 +84,22 @@ export class Gke extends Construct {
         : NodePoolSpecDeletionPolicy.DELETE
       : NodePoolSpecDeletionPolicy.DELETE;
 
+    // The cluster is always VPC_NATIVE and references the pod/service secondary
+    // ranges by name. Those ranges only exist on the subnetwork when the network
+    // was given podsSecondaryCidr/servicesSecondaryCidr — otherwise GKE rejects
+    // the cluster ("secondary range not found") and it never reconciles. Fail
+    // fast at synth time instead.
+    if (
+      !config.network.hasPodsSecondaryRange ||
+      !config.network.hasServicesSecondaryRange
+    ) {
+      throw new Error(
+        `Gke '${config.name}': VPC-native cluster requires pod and service secondary ranges, ` +
+          `but the subnetwork was created without them. Set network.podsSecondaryCidr and ` +
+          `network.servicesSecondaryCidr.`,
+      );
+    }
+
     // Create GKE Cluster
     this.cluster = new CpCluster(this, "cluster", {
       metadata: {

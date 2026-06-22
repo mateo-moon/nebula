@@ -16,6 +16,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
+import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct } from "../../../core";
 
 export type DeschedulerKind = "Deployment" | "CronJob";
@@ -137,13 +138,27 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       deschedulePlugins.push("RemovePodsHavingTooManyRestarts");
     }
 
+    // Namespace exclusion in descheduler v1alpha2 is applied per-plugin via the
+    // plugin args, not globally and not via DefaultEvictor (which has no
+    // namespace field). Most plugins read `namespaces.exclude`; the node-level
+    // utilization plugins read `evictableNamespaces.exclude` (only `exclude` is
+    // honored there).
+    const namespaceArgs =
+      excludeNamespaces.length > 0
+        ? { namespaces: { exclude: excludeNamespaces } }
+        : {};
+    const evictableNamespaceArgs =
+      excludeNamespaces.length > 0
+        ? { evictableNamespaces: { exclude: excludeNamespaces } }
+        : {};
+
     // Build plugin configurations - every enabled plugin needs a config entry
     const pluginConfig: Record<string, unknown>[] = [];
 
     if (this.config.enableRemoveDuplicates !== false) {
       pluginConfig.push({
         name: "RemoveDuplicates",
-        args: {},
+        args: { ...namespaceArgs },
       });
     }
 
@@ -161,6 +176,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
             memory: targetThresholds.memory,
             pods: targetThresholds.pods,
           },
+          ...evictableNamespaceArgs,
         },
       });
     }
@@ -171,6 +187,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         args: {
           podRestartThreshold: this.config.podRestartThreshold ?? 100,
           includingInitContainers: true,
+          ...namespaceArgs,
         },
       });
     }
@@ -180,6 +197,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         name: "RemovePodsViolatingNodeAffinity",
         args: {
           nodeAffinityType: ["requiredDuringSchedulingIgnoredDuringExecution"],
+          ...namespaceArgs,
         },
       });
     }
@@ -187,14 +205,14 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
     if (this.config.enableRemovePodsViolatingNodeTaints !== false) {
       pluginConfig.push({
         name: "RemovePodsViolatingNodeTaints",
-        args: {},
+        args: { ...namespaceArgs },
       });
     }
 
     if (this.config.enableRemovePodsViolatingInterPodAntiAffinity !== false) {
       pluginConfig.push({
         name: "RemovePodsViolatingInterPodAntiAffinity",
-        args: {},
+        args: { ...namespaceArgs },
       });
     }
 
@@ -216,7 +234,8 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       ],
     };
 
-    // Add namespace filter if excludeNamespaces specified
+    // Prepend a DefaultEvictor (eviction policy). Namespace exclusion itself is
+    // applied per-plugin via the args above, not here.
     if (excludeNamespaces.length > 0) {
       (deschedulerPolicy.profiles[0] as Record<string, unknown>).pluginConfig =
         [
@@ -237,7 +256,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
     // where needed (e.g. GKE: components.gke.io/gke-managed-components).
     const defaultTolerations: Array<Record<string, unknown>> = [];
 
-    const values: Record<string, unknown> = {
+    const defaultValues: Record<string, unknown> = {
       kind,
       ...(kind === "Deployment"
         ? { deschedulingInterval }
@@ -249,16 +268,15 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       leaderElection: {
         enabled: replicas > 1,
       },
-      ...(this.config.values ?? {}),
     };
 
     this.helm = new Helm(this, "helm", {
       chart: "descheduler",
       releaseName: "descheduler",
       repo: "https://kubernetes-sigs.github.io/descheduler/",
-      ...(this.config.version ? { version: this.config.version } : {}),
+      version: this.config.version ?? "0.33.0",
       namespace: namespaceName,
-      values,
+      values: deepmerge(defaultValues, this.config.values ?? {}),
     });
   }
 }

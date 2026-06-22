@@ -105,10 +105,11 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
       return entry;
     });
 
-    // Chart config uses flat keys (rendered as key: "value" in ConfigMap)
+    // Chart config uses flat keys (rendered as key: "value" in ConfigMap).
+    // The binary reads the ArgoCD endpoint from `argocd.server_addr`.
     const defaultValues: Record<string, unknown> = {
       config: {
-        "argocd.serverAddress": argocdServer,
+        "argocd.server_addr": argocdServer,
         "argocd.insecure": "true",
         "argocd.plaintext": "true",
         "log.level": logLevel,
@@ -128,7 +129,7 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
       chart: "argocd-image-updater",
       releaseName: "argocd-image-updater",
       repo: repoUrl,
-      ...(this.config.version ? { version: this.config.version } : {}),
+      version: this.config.version ?? "1.2.2",
       namespace: namespaceName,
       values: chartValues,
     });

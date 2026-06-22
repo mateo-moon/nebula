@@ -37,6 +37,14 @@ export interface KarmadaConfig {
   /** Default labels to apply to all registered clusters */
   clusterLabels?: Record<string, string>;
 
+  /**
+   * Create a ResourceQuota allowing system-node-critical / system-cluster-critical
+   * pods (the Karmada operator schedules etcd with that priority class).
+   * This is a GKE requirement; set to false on clusters that don't need it.
+   * @default true
+   */
+  criticalPodsQuota?: boolean;
+
   /** Register Karmada API server with ArgoCD as a cluster destination */
   registerWithArgoCD?: boolean;
 
@@ -342,6 +350,22 @@ export interface ClusterRegistrationConfig {
 export interface CapiClusterRegistrationConfig {
   /** Name of the CAPI Cluster resource */
   clusterName: string;
+
+  /**
+   * API server endpoint of the member cluster (e.g. https://host:6443).
+   * Required: Karmada's Push mode connects out to this endpoint.
+   */
+  apiEndpoint: string;
+
+  /**
+   * Name of the secret (in the Karmada namespace) holding the member cluster
+   * credentials as `token` + `caBundle` keys. Defaults to
+   * `<clusterName>-kubeconfig`, which matches the secret produced by
+   * `KarmadaCredentialSync`. NOTE: this must NOT be the raw CAPI
+   * `<clusterName>-kubeconfig` secret (single `value` key holding a full
+   * kubeconfig) — Karmada cannot read that format.
+   */
+  credentialSecretName?: string;
 
   /** Namespace where the CAPI Cluster is located (default: default) */
   clusterNamespace?: string;

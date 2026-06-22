@@ -1,5 +1,6 @@
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
+import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
 import { ClusterV1Beta1 } from "#imports/cluster.x-k8s.io";
 import { K0sControlPlane } from "#imports/controlplane.cluster.x-k8s.io";
 import {
@@ -97,8 +98,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const vpcCidr = this.config.vpcCidr ?? "10.0.0.0/16";
     const cp = this.config.controlPlane ?? {};
     const iamInstanceProfile =
-      this.config.iamInstanceProfile ??
-      "nodes.cluster-api-provider-aws.sigs.k8s.io";
+      this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
 
     const clusterName = name;
     const controlPlaneName = `${name}-control-plane`;
@@ -195,6 +195,21 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
         version: k0sVersion,
         k0SConfigSpec: {
           ...(args.length ? { args } : {}),
+          // Propagate the pod/service CIDRs into the embedded k0s ClusterConfig
+          // so the real control plane matches the CAPI clusterNetwork above.
+          // Without this, k0s falls back to its own defaults whenever a caller
+          // overrides podCidr/serviceCidr. CNI is left at the k0s default
+          // (kube-router) for the standalone management cluster.
+          k0S: {
+            apiVersion: "k0s.k0sproject.io/v1beta1",
+            kind: "ClusterConfig",
+            spec: {
+              network: {
+                podCIDR: podCidr,
+                serviceCIDR: serviceCidr,
+              },
+            },
+          },
           preStartCommands: [
             ...defaultPreStart,
             ...(cp.extraPreStartCommands ?? []),

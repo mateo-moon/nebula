@@ -102,13 +102,22 @@ export class Platform extends BaseConstruct<PlatformConfig> {
 
     // --- ingress-nginx (on by default, NodePort) ---
     if (c.ingress !== false) {
-      const ingCfg = typeof c.ingress === "object" ? c.ingress : {};
+      const ingCfg: IngressNginxConfig =
+        typeof c.ingress === "object" ? c.ingress : {};
+      // Merge the controller deeply so a partial override (e.g. just
+      // controller.tolerations) doesn't clobber the NodePort default and let
+      // IngressNginx silently fall back to a cloud LoadBalancer Service. An
+      // explicit ingress.controller.service.type still wins.
       new IngressNginx(this, "ingress-nginx", {
         useCertManager: certManagerEnabled,
-        controller: {
-          service: { type: c.ingressServiceType ?? "NodePort" },
-        },
         ...ingCfg,
+        controller: {
+          ...ingCfg.controller,
+          service: {
+            type: c.ingressServiceType ?? "NodePort",
+            ...ingCfg.controller?.service,
+          },
+        },
       });
     }
 

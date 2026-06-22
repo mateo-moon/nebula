@@ -1,7 +1,10 @@
 /**
  * ExternalDns - Automatic DNS record management for Kubernetes.
  *
- * Creates GCP Service Account with Workload Identity for DNS management.
+ * For the `google` provider this also creates a GCP Service Account with
+ * Workload Identity for DNS management. The `aws`, `azure` and `cloudflare`
+ * providers are passed through to the external-dns chart but do NOT get any
+ * IAM/credential wiring here - supply credentials via `values`.
  *
  * @example
  * ```typescript
@@ -17,6 +20,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
+import { deepmerge } from "deepmerge-ts";
 import {
   ServiceAccount as CpServiceAccount,
   ProjectIamMember,
@@ -60,7 +64,7 @@ export interface ExternalDnsConfig {
   repository?: string;
   /** ProviderConfig name to use for Crossplane GCP resources */
   providerConfigRef?: string;
-  /** Create GCP Service Account for Workload Identity */
+  /** Create GCP Service Account for Workload Identity (defaults to true only for the google provider) */
   createGcpServiceAccount?: boolean;
   /** Existing GCP Service Account email (if not creating) */
   gcpServiceAccountEmail?: string;
@@ -101,7 +105,8 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
     const interval = this.config.interval ?? "1m";
     const logLevel = this.config.logLevel ?? "info";
     const providerConfigRef = this.config.providerConfigRef ?? "default";
-    const createGcpServiceAccount = this.config.createGcpServiceAccount ?? true;
+    const createGcpServiceAccount =
+      this.config.createGcpServiceAccount ?? provider === "google";
 
     if (provider === "google" && !this.config.project) {
       throw new Error('GCP project is required when provider is "google".');
@@ -207,7 +212,7 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       }
     }
 
-    const values: Record<string, unknown> = {
+    const defaultValues: Record<string, unknown> = {
       provider: { name: provider },
       sources,
       policy,
@@ -239,7 +244,6 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
         : this.config.extraArgs
           ? { extraArgs: this.config.extraArgs }
           : {}),
-      ...(this.config.values ?? {}),
     };
 
     this.helm = new Helm(this, "helm", {
@@ -248,9 +252,9 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       repo:
         this.config.repository ??
         "https://kubernetes-sigs.github.io/external-dns/",
-      ...(this.config.version ? { version: this.config.version } : {}),
+      version: this.config.version ?? "1.19.0",
       namespace: namespaceName,
-      values,
+      values: deepmerge(defaultValues, this.config.values ?? {}),
     });
   }
 }

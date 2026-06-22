@@ -20,7 +20,7 @@ import { BaseConstruct } from "../../../core";
 export interface CertManagerConfig {
   /** Namespace for cert-manager (defaults to cert-manager) */
   namespace?: string;
-  /** Helm chart version (defaults to v1.15.2) */
+  /** Helm chart version (defaults to v1.19.3) */
   version?: string;
   /** Helm repository URL */
   repository?: string;
@@ -37,6 +37,11 @@ export interface CertManagerConfig {
    * @default true
    */
   useExternalDnsForAcme?: boolean;
+  /**
+   * IngressClassName used by the Let's Encrypt HTTP-01 solvers.
+   * @default "nginx"
+   */
+  acmeIngressClassName?: string;
 }
 
 export class CertManager extends BaseConstruct<CertManagerConfig> {
@@ -59,6 +64,7 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
     // Use external DNS servers for ACME HTTP-01 challenge self-checks by default.
     // GKE's internal DNS (via metadata server) can return SERVFAIL for newly created domains.
     const useExternalDns = this.config.useExternalDnsForAcme !== false;
+    const acmeIngressClassName = this.config.acmeIngressClassName ?? "nginx";
 
     const defaultValues: Record<string, unknown> = {
       installCRDs: true,
@@ -101,7 +107,9 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
               email: this.config.acmeEmail,
               server: "https://acme-staging-v02.api.letsencrypt.org/directory",
               privateKeySecretRef: { name: "letsencrypt-stage-private-key" },
-              solvers: [{ http01: { ingress: { ingressClassName: "nginx" } } }],
+              solvers: [
+                { http01: { ingress: { ingressClassName: acmeIngressClassName } } },
+              ],
             },
           },
         },
@@ -115,7 +123,9 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
             email: this.config.acmeEmail,
             server: "https://acme-v02.api.letsencrypt.org/directory",
             privateKeySecretRef: { name: "letsencrypt-prod-private-key" },
-            solvers: [{ http01: { ingress: { ingressClassName: "nginx" } } }],
+            solvers: [
+              { http01: { ingress: { ingressClassName: acmeIngressClassName } } },
+            ],
           },
         },
       });

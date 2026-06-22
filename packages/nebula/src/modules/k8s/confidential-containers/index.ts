@@ -101,7 +101,7 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
   ) {
     super(scope, id, config);
 
-    const namespaceName = config.namespace ?? "coco-system";
+    const namespaceName = this.config.namespace ?? "coco-system";
 
     // Create namespace
     this.namespace = new kplus.Namespace(this, "namespace", {
@@ -112,10 +112,10 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
     // The chart expects shims.<name>.enabled (with full objects), not simple booleans.
     // We selectively enable/disable the shims the user cares about.
     const shimsOverrides: Record<string, unknown> = {};
-    if (config.shims) {
-      const snp = config.shims.snp ?? true;
-      const tdx = config.shims.tdx ?? false;
-      const cocoDev = config.shims.cocoDev ?? false;
+    if (this.config.shims) {
+      const snp = this.config.shims.snp ?? true;
+      const tdx = this.config.shims.tdx ?? true;
+      const cocoDev = this.config.shims.cocoDev ?? false;
 
       if (!snp) {
         shimsOverrides["qemu-snp"] = { enabled: false };
@@ -133,17 +133,17 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
 
     // Build subchart values (kata-as-coco-runtime is the subchart alias for kata-deploy)
     const subchartValues: Record<string, unknown> = {
-      imagePullPolicy: config.imagePullPolicy ?? "IfNotPresent",
-      k8sDistribution: config.k8sDistribution ?? "k0s",
-      debug: config.debug ?? false,
+      imagePullPolicy: this.config.imagePullPolicy ?? "IfNotPresent",
+      k8sDistribution: this.config.k8sDistribution ?? "k0s",
+      debug: this.config.debug ?? false,
       runtimeClasses: {
-        enabled: config.createRuntimeClasses !== false,
+        enabled: this.config.createRuntimeClasses !== false,
       },
     };
 
     // Add node selector if specified
-    if (config.nodeSelector) {
-      subchartValues.nodeSelector = config.nodeSelector;
+    if (this.config.nodeSelector) {
+      subchartValues.nodeSelector = this.config.nodeSelector;
     }
 
     // Add shims overrides if specified
@@ -157,23 +157,23 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
     };
 
     // Add custom containerd if specified (parent chart level)
-    if (config.customContainerd?.enabled) {
+    if (this.config.customContainerd?.enabled) {
       defaultValues.customContainerd = {
         enabled: true,
-        tarballUrl: config.customContainerd.tarballUrl,
-        tarballUrls: config.customContainerd.tarballUrls,
-        installPath: config.customContainerd.installPath ?? "/usr/local",
+        tarballUrl: this.config.customContainerd.tarballUrl,
+        tarballUrls: this.config.customContainerd.tarballUrls,
+        installPath: this.config.customContainerd.installPath ?? "/usr/local",
       };
     }
 
-    const chartValues = deepmerge(defaultValues, config.values ?? {});
+    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
 
     // Deploy Helm chart
     this.helm = new Helm(this, "helm", {
       chart:
         "oci://ghcr.io/confidential-containers/charts/confidential-containers",
       releaseName: "confidential-containers",
-      version: config.version ?? "0.18.0",
+      version: this.config.version ?? "0.18.0",
       namespace: namespaceName,
       values: chartValues,
     });

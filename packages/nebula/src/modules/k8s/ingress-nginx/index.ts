@@ -95,6 +95,9 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
 
     // Create GCP static IP if requested
     let staticIpAddress = this.config.staticIpAddress;
+    if (this.config.createStaticIp && !this.config.staticIpName) {
+      throw new Error('staticIpName is required when createStaticIp is true');
+    }
     if (this.config.createStaticIp && this.config.staticIpName) {
       if (!this.config.gcpProjectId || !this.config.gcpRegion) {
         throw new Error('gcpProjectId and gcpRegion are required when createStaticIp is true');

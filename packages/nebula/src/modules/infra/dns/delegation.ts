@@ -28,6 +28,17 @@ export interface GcpDelegationConfig {
   parentZoneName: string;
   /** GCP project ID for the parent zone */
   project: string;
+  /**
+   * Nameservers of the child zone to point the NS record at.
+   *
+   * GCP assigns these dynamically at zone-creation time, so they are NOT known
+   * at synthesis time. Obtain them after the child zone is created:
+   *   kubectl get managedzone.dns.gcp.upbound.io <zone> \
+   *     -o jsonpath='{.status.atProvider.nameServers}'
+   * then supply them here and re-apply. If omitted, no NS record is created and
+   * a warning is emitted (the delegation is a no-op until they are provided).
+   */
+  nameservers?: string[];
   /** TTL for NS records (default: 3600) */
   ttl?: number;
   /** ProviderConfig name for GCP */
