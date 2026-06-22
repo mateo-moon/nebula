@@ -126,12 +126,16 @@ export class Dns extends BaseConstruct<DnsConfig> {
       this.zones[zoneConfig.name] = zone;
 
       // Handle delegation
-      // Note: GCP assigns nameservers dynamically when zones are created.
-      // For GCP-to-GCP delegation, use managedZoneRef which resolves this automatically.
-      // For external providers (Cloudflare, Hetzner), manual setup is required after zone creation.
+      // Note: GCP assigns nameservers dynamically when zones are created, so they
+      // are NOT known at synthesis time. The child zone's nameservers must be
+      // supplied explicitly (delegation.nameservers) after the zone is created;
+      // there is no managedZoneRef that auto-populates an NS record's rrdatas.
+      // For external providers (Cloudflare, Hetzner), manual setup is required.
       if (zoneConfig.delegation) {
         if (zoneConfig.delegation.provider === 'gcp') {
-          // GCP delegation uses managedZoneRef - no explicit nameservers needed
+          // GCP delegation emits an NS RecordSet in the parent zone. The child
+          // zone's nameservers must be provided via delegation.nameservers; if
+          // omitted, DnsDelegation logs a warning and creates nothing.
           this.delegations[zoneConfig.name] = new DnsDelegation(
             this,
             `delegation-${zoneConfig.name}`,
@@ -139,7 +143,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
             {
               id: zoneName,
               dnsName: dnsName,
-              nameservers: [], // Not used for GCP - managedZoneRef handles this
+              nameservers: zoneConfig.delegation.nameservers ?? [],
               deletionPolicy: deletionPolicy === ManagedZoneSpecDeletionPolicy.ORPHAN ? 'Orphan' : 'Delete',
             },
           );
@@ -178,11 +182,23 @@ export class Dns extends BaseConstruct<DnsConfig> {
         const zoneDnsName = zoneConfig.dnsName.endsWith('.') 
           ? zoneConfig.dnsName 
           : `${zoneConfig.dnsName}.`;
-        const recordName = recordConfig.name === '@' 
-          ? zoneDnsName 
+        const recordName = recordConfig.name === '@'
+          ? zoneDnsName
           : `${recordConfig.name}.${zoneDnsName}`;
 
-        const recordId = `${recordConfig.zoneName}-${recordConfig.name}-${recordConfig.type}`.toLowerCase();
+        // metadata.name must be a valid RFC-1123 subdomain. The raw record name
+        // can be '@' (apex) or contain '_' (e.g. _dmarc, _acme-challenge, DKIM
+        // selectors, SRV _sip._tcp), all of which are illegal in metadata.name
+        // and would make kubectl apply hard-fail. Slugify it (the DNS name on
+        // spec.forProvider.name above is computed separately and stays correct).
+        const safeRecordName =
+          recordConfig.name === '@'
+            ? 'apex'
+            : recordConfig.name
+                .toLowerCase()
+                .replace(/[^a-z0-9-]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'record';
+        const recordId = `${recordConfig.zoneName}-${safeRecordName}-${recordConfig.type}`.toLowerCase();
 
         this.records[recordId] = new CpRecordSet(this, `record-${recordId}`, {
           metadata: {

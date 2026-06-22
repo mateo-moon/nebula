@@ -1,5 +1,6 @@
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
+import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
 import {
   ClusterV1Beta1,
   MachineDeploymentV1Beta1,
@@ -8,6 +9,7 @@ import {
   K0smotronControlPlane,
   K0SmotronControlPlaneSpecServiceType,
   K0SmotronControlPlaneSpecPersistence,
+  K0SmotronControlPlaneSpecPersistencePersistentVolumeClaimSpecResourcesRequests,
 } from "#imports/controlplane.cluster.x-k8s.io";
 import { K0sWorkerConfigTemplate } from "#imports/bootstrap.cluster.x-k8s.io";
 import {
@@ -119,8 +121,7 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
     const vpcCidr = this.config.vpcCidr ?? "10.0.0.0/16";
     const workers = this.config.workers ?? {};
     const iamInstanceProfile =
-      this.config.iamInstanceProfile ??
-      "nodes.cluster-api-provider-aws.sigs.k8s.io";
+      this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
 
     const clusterName = name;
     const controlPlaneName = `${name}-control-plane`;
@@ -170,9 +171,7 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
     const cpPersistence = this.config.controlPlanePersistence;
     const persistence: K0SmotronControlPlaneSpecPersistence =
       cpPersistence?.type === "pvc"
-        ? // cdk8s types the PVC `requests` value as a generated Quantity class;
-          // this is a plain passthrough so we build the object and cast.
-          ({
+        ? {
             type: "pvc",
             persistentVolumeClaim: {
               spec: {
@@ -181,11 +180,20 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
                   ? { storageClassName: cpPersistence.storageClass }
                   : {}),
                 resources: {
-                  requests: { storage: cpPersistence.size ?? "5Gi" },
+                  // The generated `requests` map values are a Quantity wrapper
+                  // class whose serializer reads `.value`; a bare string renders
+                  // `storage: null`. Wrap with the Quantity type so the size is
+                  // emitted correctly.
+                  requests: {
+                    storage:
+                      K0SmotronControlPlaneSpecPersistencePersistentVolumeClaimSpecResourcesRequests.fromString(
+                        cpPersistence.size ?? "5Gi",
+                      ),
+                  },
                 },
               },
             },
-          } as unknown as K0SmotronControlPlaneSpecPersistence)
+          }
         : { type: "emptyDir" };
     new K0smotronControlPlane(this, "control-plane", {
       metadata: { name: controlPlaneName, namespace },

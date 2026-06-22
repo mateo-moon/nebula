@@ -13,10 +13,9 @@
  * ```
  */
 import { Construct } from "constructs";
-import { Helm, ApiObject } from "cdk8s";
+import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
-import { ServiceMonitor } from "#imports/monitoring.coreos.com";
 import {
   ServiceAccount as CpServiceAccount,
   ServiceAccountIamMember,
@@ -104,8 +103,6 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
   public readonly promtailHelm?: Helm;
   public readonly thanosHelm?: Helm;
   public readonly namespace: kplus.Namespace;
-  public readonly kubeletServiceMonitor: ServiceMonitor;
-  public readonly kubeProxyServiceMonitor: ServiceMonitor;
   // Thanos GCP resources
   public readonly thanosBucket?: GcsBucket;
   public readonly thanosServiceAccount?: CpServiceAccount;
@@ -231,7 +228,11 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
 
       const lokiValues: Record<string, unknown> = {
         loki: {
-          auth_enabled: this.config.loki?.authHtpasswd ? true : false,
+          // Loki multi-tenancy (`auth_enabled`) is a separate concern from the
+          // gateway basic-auth enabled by `authHtpasswd`. Enabling multi-tenancy
+          // would require an X-Scope-OrgID header on every Promtail push and
+          // Grafana query, which is not configured here, so keep it single-tenant.
+          auth_enabled: false,
           limits_config: {
             reject_old_samples: true,
             reject_old_samples_max_age: "168h",
@@ -351,7 +352,10 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
           config: {
             clients: [
               {
-                url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`,
+                // Push straight to the Loki service (same target as the Grafana
+                // datasource) so ingestion is unaffected by the optional gateway
+                // basic-auth enabled via loki.authHtpasswd.
+                url: `http://loki.${namespaceName}.svc.cluster.local:3100/loki/api/v1/push`,
               },
             ],
           },
@@ -369,48 +373,10 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       });
     }
 
-    // Create ServiceMonitors using imported CRD
-    this.kubeletServiceMonitor = new ServiceMonitor(
-      this,
-      "kubelet-servicemonitor",
-      {
-        metadata: {
-          name: "kubelet",
-          namespace: namespaceName,
-          labels: {
-            "app.kubernetes.io/name": "kubelet",
-            "app.kubernetes.io/part-of": "kube-prometheus",
-          },
-        },
-        spec: {
-          jobLabel: "k8s-app",
-          endpoints: [{ port: "metrics", interval: "30s", path: "/metrics" }],
-          selector: { matchLabels: { "k8s-app": "kubelet" } },
-          namespaceSelector: { matchNames: ["kube-system"] },
-        },
-      },
-    );
-
-    this.kubeProxyServiceMonitor = new ServiceMonitor(
-      this,
-      "kube-proxy-servicemonitor",
-      {
-        metadata: {
-          name: "kube-proxy",
-          namespace: namespaceName,
-          labels: {
-            "app.kubernetes.io/name": "kube-proxy",
-            "app.kubernetes.io/part-of": "kube-prometheus",
-          },
-        },
-        spec: {
-          jobLabel: "k8s-app",
-          endpoints: [{ port: "metrics", interval: "30s", path: "/metrics" }],
-          selector: { matchLabels: { "k8s-app": "kube-proxy" } },
-          namespaceSelector: { matchNames: ["kube-system"] },
-        },
-      },
-    );
+    // Note: kubelet and kube-proxy ServiceMonitors are created by the
+    // kube-prometheus-stack chart itself (kubelet.enabled / kubeProxy.enabled
+    // above), using the correct service port names. We do not hand-roll them
+    // here to avoid duplicate, non-functional monitors.
 
     // Deploy Thanos for long-term metrics storage
     if (this.config.thanos?.enabled) {
@@ -496,7 +462,10 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       // Workload Identity bindings - enabled by default
       // Requires Crossplane GSA to have roles/iam.serviceAccountAdmin
       if (this.config.thanos.createWorkloadIdentityBindings !== false) {
-        // Workload Identity binding for Prometheus sidecar
+        // Workload Identity binding for Prometheus sidecar.
+        // The kube-prometheus-stack chart (releaseName "prometheus") names the
+        // Prometheus ServiceAccount "prometheus-kube-prometheus-stack-prometheus".
+        const prometheusKsa = "prometheus-kube-prometheus-stack-prometheus";
         new ServiceAccountIamMember(this, "thanos-wi-prometheus", {
           metadata: {
             name: `${id}-thanos-wi-prometheus`,
@@ -505,7 +474,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
             forProvider: {
               serviceAccountId: `projects/${gcpProject}/serviceAccounts/${this.thanosServiceAccountEmail}`,
               role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/${id}-kube-prometheus-prometheus]`,
+              member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/${prometheusKsa}]`,
             },
             providerConfigRef: { name: providerConfigRef },
           },
@@ -626,9 +595,31 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
         ),
       });
 
-      // Update Prometheus Helm values to enable Thanos sidecar
-      // Note: This needs to be done by the user via the values parameter
-      // as the Helm chart is already created above
+      // IMPORTANT: the Prometheus -> Thanos sidecar is NOT wired up automatically.
+      // The kube-prometheus-stack Helm release is created above with its values
+      // already frozen, so the store gateway/query have nothing to read until you
+      // enable the sidecar yourself. Pass these via the top-level `values` option:
+      //
+      //   values: {
+      //     prometheus: {
+      //       serviceAccount: {
+      //         annotations: {
+      //           "iam.gke.io/gcp-service-account": "<this.thanosServiceAccountEmail>",
+      //         },
+      //       },
+      //       prometheusSpec: {
+      //         thanos: {
+      //           objectStorageConfig: {
+      //             existingSecret: { name: "thanos-objstore-config", key: "objstore.yml" },
+      //           },
+      //         },
+      //       },
+      //     },
+      //   }
+      //
+      // The "thanos-objstore-config" secret and the WI binding for the Prometheus
+      // ServiceAccount (prometheus-kube-prometheus-stack-prometheus) are created
+      // above, so once the sidecar is enabled it can upload blocks to GCS.
     }
   }
 }

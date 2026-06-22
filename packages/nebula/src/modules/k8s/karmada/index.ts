@@ -115,8 +115,14 @@ export class Karmada extends BaseConstruct<KarmadaConfig> {
   constructor(scope: Construct, id: string, config: KarmadaConfig = {}) {
     super(scope, id, config);
 
-    // Install Karmada control plane via operator
-    this.controlPlane = new KarmadaControlPlane(this, "control-plane", config);
+    // Install Karmada control plane via operator.
+    // Pass the resolved `this.config` (not the raw constructor arg) so any
+    // ref+sops/ref+vault values are resolved before reaching the control plane.
+    this.controlPlane = new KarmadaControlPlane(
+      this,
+      "control-plane",
+      this.config,
+    );
     this.namespace = this.controlPlane.namespace;
     this.apiServerUrl = `https://${this.controlPlane.apiServerService}:5443`;
 

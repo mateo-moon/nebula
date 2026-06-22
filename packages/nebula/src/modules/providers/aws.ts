@@ -43,8 +43,8 @@ export interface AwsProviderConfig {
   /** Credential source configuration */
   credentials: AwsCredentialSource;
   /**
-   * Provider families to install (default: ['ec2', 'cloudplatform']-equivalent
-   * for AWS = ['ec2', 'iam']). Add 'route53'/'kms' when DNS / SOPS-KMS are used.
+   * Provider families to install (default: ['ec2', 'iam']). Add 'route53' for
+   * DNS and 'kms' for SOPS-KMS.
    */
   families?: AwsProviderFamily[];
 }
