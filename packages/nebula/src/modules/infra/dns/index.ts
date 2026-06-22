@@ -14,6 +14,7 @@ import {
   ManualDelegationConfig,
 } from './delegation';
 import { BaseConstruct } from '../../../core';
+import { mapDeletionPolicy } from '../_shared';
 
 // Re-export delegation types
 export { DnsDelegation } from './delegation';
@@ -144,7 +145,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
               id: zoneName,
               dnsName: dnsName,
               nameservers: zoneConfig.delegation.nameservers ?? [],
-              deletionPolicy: deletionPolicy === ManagedZoneSpecDeletionPolicy.ORPHAN ? 'Orphan' : 'Delete',
+              deletionPolicy: mapDeletionPolicy<'Orphan' | 'Delete'>(deletionPolicy) ?? 'Delete',
             },
           );
         } else if (zoneConfig.delegation.provider !== 'manual') {
@@ -162,7 +163,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
               id: zoneName,
               dnsName: dnsName,
               nameservers: [], // Must be configured after zone creation
-              deletionPolicy: deletionPolicy === ManagedZoneSpecDeletionPolicy.ORPHAN ? 'Orphan' : 'Delete',
+              deletionPolicy: mapDeletionPolicy<'Orphan' | 'Delete'>(deletionPolicy) ?? 'Delete',
             },
           );
         }
@@ -218,9 +219,9 @@ export class Dns extends BaseConstruct<DnsConfig> {
             providerConfigRef: {
               name: providerConfigRef,
             },
-            deletionPolicy: deletionPolicy === ManagedZoneSpecDeletionPolicy.ORPHAN
-              ? RecordSetSpecDeletionPolicy.ORPHAN
-              : RecordSetSpecDeletionPolicy.DELETE,
+            deletionPolicy:
+              mapDeletionPolicy<RecordSetSpecDeletionPolicy>(deletionPolicy) ??
+              RecordSetSpecDeletionPolicy.DELETE,
           },
         });
       }

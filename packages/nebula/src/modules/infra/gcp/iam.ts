@@ -4,9 +4,10 @@ import {
   ServiceAccountSpecDeletionPolicy,
   ProjectIamMember as CpProjectIamMember,
   ProjectIamMemberSpecDeletionPolicy,
-  ServiceAccountIamMember as CpServiceAccountIamMember,
   ServiceAccountIamMemberSpecDeletionPolicy,
 } from "#imports/cloudplatform.gcp.upbound.io";
+import { mapDeletionPolicy } from "../_shared";
+import { bindWorkloadIdentityUser } from "./workload-identity";
 
 export interface WorkloadIdentityConfig {
   /** Enable this service account */
@@ -125,9 +126,9 @@ export class Iam extends Construct {
               name: providerConfigRef,
             },
             deletionPolicy:
-              deletionPolicy === ServiceAccountSpecDeletionPolicy.ORPHAN
-                ? ProjectIamMemberSpecDeletionPolicy.ORPHAN
-                : ProjectIamMemberSpecDeletionPolicy.DELETE,
+              mapDeletionPolicy<ProjectIamMemberSpecDeletionPolicy>(
+                deletionPolicy,
+              ) ?? ProjectIamMemberSpecDeletionPolicy.DELETE,
           },
         });
       });
@@ -138,25 +139,19 @@ export class Iam extends Construct {
       const enableWorkloadIdentity = spec.workloadIdentity !== false;
       const createIamBinding = spec.createIamBinding !== false;
       if (enableWorkloadIdentity && createIamBinding) {
-        const wiMember = `serviceAccount:${config.project}.svc.id.goog[${ns}/${ksa}]`;
-        new CpServiceAccountIamMember(this, `${kind}-wi`, {
-          metadata: {
-            name: `${id}-${kind}-wi`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${config.project}/serviceAccounts/${accountId}@${config.project}.iam.gserviceaccount.com`,
-              role: "roles/iam.workloadIdentityUser",
-              member: wiMember,
-            },
-            providerConfigRef: {
-              name: providerConfigRef,
-            },
-            deletionPolicy:
-              deletionPolicy === ServiceAccountSpecDeletionPolicy.ORPHAN
-                ? ServiceAccountIamMemberSpecDeletionPolicy.ORPHAN
-                : ServiceAccountIamMemberSpecDeletionPolicy.DELETE,
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: `${kind}-wi`,
+          name: `${id}-${kind}-wi`,
+          project: config.project,
+          namespace: ns,
+          ksa,
+          gsaEmail: `${accountId}@${config.project}.iam.gserviceaccount.com`,
+          providerConfigRef,
+          deletionPolicy:
+            mapDeletionPolicy<ServiceAccountIamMemberSpecDeletionPolicy>(
+              deletionPolicy,
+            ) ?? ServiceAccountIamMemberSpecDeletionPolicy.DELETE,
         });
       }
 

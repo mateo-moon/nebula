@@ -44,6 +44,7 @@ import {
   Composition,
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
+import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
 
 export interface KarmadaCredentialSyncConfig {
   /** Human-readable cluster name */
@@ -83,7 +84,7 @@ export class KarmadaCredentialSyncSetup extends Construct {
       metadata: {
         name: "xkarmadacredentialsyncs.nebula.io",
         annotations: {
-          "argocd.argoproj.io/sync-wave": "-10",
+          [ARGOCD_SYNC_WAVE_ANNOTATION]: "-10",
         },
       },
       spec: {
@@ -196,7 +197,7 @@ spec:
       metadata: {
         name: "karmada-credential-sync",
         annotations: {
-          "argocd.argoproj.io/sync-wave": "-5",
+          [ARGOCD_SYNC_WAVE_ANNOTATION]: "-5",
         },
       },
       spec: {
@@ -300,7 +301,7 @@ export class KarmadaCredentialSync extends Construct {
       metadata: {
         name: `${config.clusterName}-karmada-cred-sync`,
         annotations: {
-          "argocd.argoproj.io/sync-wave": syncWave,
+          [ARGOCD_SYNC_WAVE_ANNOTATION]: syncWave,
         },
       },
       spec: {

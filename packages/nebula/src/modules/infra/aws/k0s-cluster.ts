@@ -1,13 +1,14 @@
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
-import { ClusterV1Beta1 } from "#imports/cluster.x-k8s.io";
-import { K0sControlPlane } from "#imports/controlplane.cluster.x-k8s.io";
 import {
-  AwsClusterV1Beta2,
-  AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
-  AwsMachineTemplateV1Beta2,
-} from "#imports/infrastructure.cluster.x-k8s.io";
+  DEFAULT_PRESTART_COMMANDS,
+  emitClusterCr,
+  emitAwsClusterCr,
+  emitAwsMachineTemplate,
+} from "./_shared";
+import { K0sControlPlane } from "#imports/controlplane.cluster.x-k8s.io";
+import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType } from "#imports/infrastructure.cluster.x-k8s.io";
 
 export interface AwsK0sControlPlaneOptions {
   /** Number of control-plane nodes (default 3 for HA) */
@@ -105,76 +106,38 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const cpMachineTemplateName = `${name}-control-plane`;
 
     // 1. Cluster-API Cluster
-    new ClusterV1Beta1(this, "cluster", {
-      metadata: { name: clusterName, namespace },
-      spec: {
-        clusterNetwork: {
-          pods: { cidrBlocks: [podCidr] },
-          services: { cidrBlocks: [serviceCidr] },
-        },
-        controlPlaneRef: {
-          apiVersion: "controlplane.cluster.x-k8s.io/v1beta1",
-          kind: "K0sControlPlane",
-          name: controlPlaneName,
-        },
-        infrastructureRef: {
-          apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
-          kind: "AWSCluster",
-          name: clusterName,
-        },
-      },
+    emitClusterCr(this, {
+      clusterName,
+      namespace,
+      podCidr,
+      serviceCidr,
+      controlPlaneKind: "K0sControlPlane",
+      controlPlaneName,
     });
 
     // 2. AWSCluster - CAPA owns the VPC/subnets/SGs. The control-plane LB is
     //    ENABLED (internet-facing NLB) so the k0s API has a stable public endpoint.
-    new AwsClusterV1Beta2(this, "aws-cluster", {
-      metadata: { name: clusterName, namespace },
-      spec: {
-        region: this.config.region,
-        ...(this.config.sshKeyName ? { sshKeyName: this.config.sshKeyName } : {}),
-        controlPlaneLoadBalancer: {
-          loadBalancerType:
-            AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.NLB,
-        },
-        network: {
-          vpc: { cidrBlock: vpcCidr },
-        },
-      },
+    emitAwsClusterCr(this, {
+      clusterName,
+      namespace,
+      region: this.config.region,
+      sshKeyName: this.config.sshKeyName,
+      loadBalancerType:
+        AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.NLB,
+      vpcCidr,
     });
 
     // 3. AWSMachineTemplate for the control-plane nodes
-    const ami = cp.ami ?? {};
-    new AwsMachineTemplateV1Beta2(this, "control-plane-template", {
-      metadata: { name: cpMachineTemplateName, namespace },
-      spec: {
-        template: {
-          spec: {
-            instanceType: cp.instanceType ?? "m6i.large",
-            iamInstanceProfile,
-            publicIp: false,
-            ...(this.config.sshKeyName
-              ? { sshKeyName: this.config.sshKeyName }
-              : {}),
-            rootVolume: {
-              size: cp.rootVolumeSizeGiB ?? 80,
-              type: cp.rootVolumeType ?? "gp3",
-            },
-            ...(ami.id
-              ? { ami: { id: ami.id } }
-              : ami.lookupOrg || ami.lookupBaseOs || ami.lookupFormat
-                ? {
-                    ...(ami.lookupOrg ? { imageLookupOrg: ami.lookupOrg } : {}),
-                    ...(ami.lookupBaseOs
-                      ? { imageLookupBaseOs: ami.lookupBaseOs }
-                      : {}),
-                    ...(ami.lookupFormat
-                      ? { imageLookupFormat: ami.lookupFormat }
-                      : {}),
-                  }
-                : {}),
-          },
-        },
-      },
+    emitAwsMachineTemplate(this, "control-plane-template", {
+      name: cpMachineTemplateName,
+      namespace,
+      instanceType: cp.instanceType ?? "m6i.large",
+      iamInstanceProfile,
+      publicIp: false,
+      sshKeyName: this.config.sshKeyName,
+      rootVolumeSizeGiB: cp.rootVolumeSizeGiB ?? 80,
+      rootVolumeType: cp.rootVolumeType ?? "gp3",
+      ami: cp.ami,
     });
 
     // 4. K0sControlPlane - standalone HA control plane on the EC2 nodes.
@@ -182,11 +145,6 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const args = [
       ...(enableWorker ? ["--enable-worker", "--no-taints"] : []),
       ...(cp.extraArgs ?? []),
-    ];
-    const defaultPreStart = [
-      "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
-      "apt-get update -qq && apt-get install -y -qq linux-headers-$(uname -r) lvm2 thin-provisioning-tools open-iscsi cryptsetup",
-      "systemctl enable --now iscsid || true",
     ];
     new K0sControlPlane(this, "control-plane", {
       metadata: { name: controlPlaneName, namespace },
@@ -211,7 +169,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
             },
           },
           preStartCommands: [
-            ...defaultPreStart,
+            ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
           ],
         },

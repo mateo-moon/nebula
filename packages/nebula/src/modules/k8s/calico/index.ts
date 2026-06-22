@@ -20,7 +20,7 @@ import { Construct } from "constructs";
 import { ApiObject, Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { BaseConstruct, syncWave } from "../../../core";
 
 export interface CalicoConfig {
   /** Namespace for tigera-operator (defaults to tigera-operator) */
@@ -140,7 +140,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
         kind: "FelixConfiguration",
         metadata: {
           name: "default",
-          annotations: { "argocd.argoproj.io/sync-wave": "5" },
+          annotations: syncWave(5),
         },
         spec: {
           wireguardEnabled: true,

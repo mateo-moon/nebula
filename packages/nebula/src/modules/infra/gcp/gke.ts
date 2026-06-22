@@ -6,6 +6,7 @@ import {
   NodePoolSpecDeletionPolicy,
 } from "#imports/container.gcp.upbound.io";
 import { Network } from "./network";
+import { mapDeletionPolicy } from "../_shared";
 
 export interface NodePoolConfig {
   /** Minimum number of nodes */
@@ -78,11 +79,9 @@ export class Gke extends Construct {
     const providerConfigRef = config.providerConfigRef ?? "default";
     const clusterDeletionPolicy =
       config.deletionPolicy ?? ClusterSpecDeletionPolicy.DELETE;
-    const nodePoolDeletionPolicy = config.deletionPolicy
-      ? config.deletionPolicy === ClusterSpecDeletionPolicy.ORPHAN
-        ? NodePoolSpecDeletionPolicy.ORPHAN
-        : NodePoolSpecDeletionPolicy.DELETE
-      : NodePoolSpecDeletionPolicy.DELETE;
+    const nodePoolDeletionPolicy =
+      mapDeletionPolicy<NodePoolSpecDeletionPolicy>(config.deletionPolicy) ??
+      NodePoolSpecDeletionPolicy.DELETE;
 
     // The cluster is always VPC_NATIVE and references the pod/service secondary
     // ranges by name. Those ranges only exist on the subnetwork when the network

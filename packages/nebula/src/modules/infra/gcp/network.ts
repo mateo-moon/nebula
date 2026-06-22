@@ -5,6 +5,7 @@ import {
   Subnetwork as CpSubnetwork,
   SubnetworkSpecDeletionPolicy,
 } from '#imports/compute.gcp.upbound.io';
+import { mapDeletionPolicy } from '../_shared';
 
 export interface NetworkConfig {
   /** Network name */
@@ -44,11 +45,9 @@ export class Network extends Construct {
 
     const providerConfigRef = config.providerConfigRef ?? 'default';
     const networkDeletionPolicy = config.deletionPolicy ?? NetworkSpecDeletionPolicy.DELETE;
-    const subnetworkDeletionPolicy = config.deletionPolicy 
-      ? (config.deletionPolicy === NetworkSpecDeletionPolicy.ORPHAN 
-          ? SubnetworkSpecDeletionPolicy.ORPHAN 
-          : SubnetworkSpecDeletionPolicy.DELETE)
-      : SubnetworkSpecDeletionPolicy.DELETE;
+    const subnetworkDeletionPolicy =
+      mapDeletionPolicy<SubnetworkSpecDeletionPolicy>(config.deletionPolicy) ??
+      SubnetworkSpecDeletionPolicy.DELETE;
 
     // Create VPC Network
     this.network = new CpNetwork(this, 'network', {
