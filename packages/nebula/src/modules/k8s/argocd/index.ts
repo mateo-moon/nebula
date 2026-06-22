@@ -47,7 +47,7 @@ import {
   ServiceAccount as GcpServiceAccount,
   ProjectIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
 
 // Dex configuration types
@@ -314,7 +314,7 @@ function hashPassword(password: string): string {
   return bcrypt.hashSync(password, bcryptSalt);
 }
 
-export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
+export class ArgoCd extends HelmModule<ArgoCdConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly serverSecret: kplus.Secret;
@@ -356,9 +356,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
     }
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Note: Redis secret is managed by the Helm chart's redis-secret-init job
     // to ensure password stability across synths

@@ -13,10 +13,9 @@
 import { Construct } from 'constructs';
 import { Helm } from 'cdk8s';
 import * as kplus from 'cdk8s-plus-33';
-import { deepmerge } from 'deepmerge-ts';
 import { Issuer } from '#imports/cert-manager.io';
 import { Address } from '#imports/compute.gcp.upbound.io';
-import { BaseConstruct } from '../../../core';
+import { HelmModule } from '../../../core';
 
 export type ServiceType = 'LoadBalancer' | 'NodePort' | 'ClusterIP';
 export type ExternalTrafficPolicy = 'Local' | 'Cluster';
@@ -55,7 +54,7 @@ export interface IngressNginxConfig {
   /** Name for the static IP address (required if createStaticIp is true) */
   staticIpName?: string;
   /** GCP project ID (required if createStaticIp is true) */
-  gcpProjectId?: string;
+  gcpProject?: string;
   /** GCP region for the static IP (required if createStaticIp is true) */
   gcpRegion?: string;
   /** ProviderConfig name for Crossplane GCP resources */
@@ -64,7 +63,7 @@ export interface IngressNginxConfig {
   useCertManager?: boolean;
 }
 
-export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
+export class IngressNginx extends HelmModule<IngressNginxConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly selfsignedIssuer?: Issuer;
@@ -78,9 +77,7 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
     const providerConfigRef = this.config.providerConfigRef ?? 'default';
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, 'namespace', {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Self-signed Issuer for admission webhook certificate (if cert-manager is used)
     if (this.config.useCertManager !== false) {
@@ -99,8 +96,8 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
       throw new Error('staticIpName is required when createStaticIp is true');
     }
     if (this.config.createStaticIp && this.config.staticIpName) {
-      if (!this.config.gcpProjectId || !this.config.gcpRegion) {
-        throw new Error('gcpProjectId and gcpRegion are required when createStaticIp is true');
+      if (!this.config.gcpProject || !this.config.gcpRegion) {
+        throw new Error('gcpProject and gcpRegion are required when createStaticIp is true');
       }
 
       // Create static IP via Crossplane GCP provider
@@ -113,7 +110,7 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
         },
         spec: {
           forProvider: {
-            project: this.config.gcpProjectId,
+            project: this.config.gcpProject,
             region: this.config.gcpRegion,
             addressType: 'EXTERNAL',
             description: `Static IP for ${id} ingress-nginx`,
@@ -174,15 +171,14 @@ export class IngressNginx extends BaseConstruct<IngressNginxConfig> {
       },
     };
 
-    const chartValues = deepmerge(baseValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, 'helm', {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: 'ingress-nginx',
       releaseName: 'ingress-nginx',
       repo: this.config.repository ?? 'https://kubernetes.github.io/ingress-nginx',
       version: this.config.version ?? '4.14.3',
-      namespace: namespaceName,
-      values: chartValues,
+      defaultValues: baseValues,
+      values: this.config.values,
     });
   }
 }

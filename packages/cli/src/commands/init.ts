@@ -856,7 +856,7 @@ const chart = new Chart(app, "cluster-api");
 
 new ClusterApiOperator(chart, "capi", {
   gcp: {
-    projectId: config.project,
+    gcpProject: config.project,
   },
 });
 
@@ -907,7 +907,7 @@ const app = new App();
 const chart = new Chart(app, "external-dns");
 
 new ExternalDns(chart, "external-dns", {
-  project: config.project,
+  gcpProject: config.project,
   domainFilters: [config.domain],
   policy: "sync",
   txtOwnerId: config.domain.replace(/\\./g, "-"),
@@ -1020,7 +1020,7 @@ const chart = new Chart(app, "cnpg");
 
 new CloudNativePg(chart, "cnpg", {
   mode: "backup-infra",
-  gcpProjectId: config.project,
+  gcpProject: config.project,
   bucketName: \`\${config.project}-cnpg-backups\`,
 });
 

@@ -20,7 +20,7 @@ import {
   ProviderConfig as KubeProviderConfig,
   ProviderConfigSpecCredentialsSource as KubeCredentialsSource,
 } from "#imports/kubernetes.crossplane.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 import { ArgoCdClusterSyncSetup } from "../argocd/argocd-cluster-sync";
 import { KarmadaCredentialSyncSetup } from "../karmada/credential-sync";
 
@@ -63,7 +63,7 @@ export interface CrossplaneConfig {
   kubernetesProvider?: false | KubernetesProviderOptions;
 }
 
-export class Crossplane extends BaseConstruct<CrossplaneConfig> {
+export class Crossplane extends HelmModule<CrossplaneConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly argoCdProvider?: Provider;
@@ -96,20 +96,16 @@ export class Crossplane extends BaseConstruct<CrossplaneConfig> {
     this.credentialsSecretKey = argoCdOpts?.credentialsSecretKey ?? "authToken";
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: this.namespaceName },
-    });
+    this.namespace = this.createNamespace(this.namespaceName);
 
-    const defaultValues: Record<string, unknown> = {};
-    const chartValues = { ...defaultValues, ...this.config.values };
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: this.namespaceName,
       chart: "crossplane",
       releaseName: "crossplane",
       repo: this.config.repository ?? "https://charts.crossplane.io/stable",
       version: this.config.version ?? "2.1.3",
-      namespace: this.namespaceName,
-      values: chartValues,
+      values: this.config.values,
+      merge: "spread",
     });
 
     // Install Crossplane Functions required for Compositions

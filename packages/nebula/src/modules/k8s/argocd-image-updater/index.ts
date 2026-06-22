@@ -23,8 +23,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 
 export interface ArgocdImageUpdaterRegistry {
   /** Registry display name */
@@ -67,7 +66,7 @@ export interface ArgocdImageUpdaterConfig {
   }>;
 }
 
-export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> {
+export class ArgocdImageUpdater extends HelmModule<ArgocdImageUpdaterConfig> {
   public readonly helm: Helm;
   public readonly namespace?: kplus.Namespace;
 
@@ -86,9 +85,7 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
 
     // Create namespace if not argocd (argocd namespace is managed by ArgoCD itself)
     if (namespaceName !== "argocd") {
-      this.namespace = new kplus.Namespace(this, "namespace", {
-        metadata: { name: namespaceName },
-      });
+      this.namespace = this.createNamespace(namespaceName);
     }
 
     // Build registries config for Helm values
@@ -123,15 +120,14 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
       defaultValues.tolerations = this.config.tolerations;
     }
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "argocd-image-updater",
       releaseName: "argocd-image-updater",
       repo: repoUrl,
       version: this.config.version ?? "1.2.2",
-      namespace: namespaceName,
-      values: chartValues,
+      defaultValues,
+      values: this.config.values,
     });
   }
 }
