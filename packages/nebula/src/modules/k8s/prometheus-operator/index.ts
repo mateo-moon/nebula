@@ -16,15 +16,13 @@ import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
-import {
-  ServiceAccount as CpServiceAccount,
-  ServiceAccountIamMember,
-} from "#imports/cloudplatform.gcp.upbound.io";
+import { ServiceAccount as CpServiceAccount } from "#imports/cloudplatform.gcp.upbound.io";
 import {
   BucketV1Beta2 as GcsBucket,
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
 import { BaseConstruct } from "../../../core";
+import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
 
 /** Thanos configuration for multi-cluster metrics aggregation */
 export interface ThanosConfig {
@@ -466,18 +464,15 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
         // The kube-prometheus-stack chart (releaseName "prometheus") names the
         // Prometheus ServiceAccount "prometheus-kube-prometheus-stack-prometheus".
         const prometheusKsa = "prometheus-kube-prometheus-stack-prometheus";
-        new ServiceAccountIamMember(this, "thanos-wi-prometheus", {
-          metadata: {
-            name: `${id}-thanos-wi-prometheus`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${gcpProject}/serviceAccounts/${this.thanosServiceAccountEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/${prometheusKsa}]`,
-            },
-            providerConfigRef: { name: providerConfigRef },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: "thanos-wi-prometheus",
+          name: `${id}-thanos-wi-prometheus`,
+          project: gcpProject,
+          namespace: namespaceName,
+          ksa: prometheusKsa,
+          gsaEmail: this.thanosServiceAccountEmail!,
+          providerConfigRef,
         });
 
         // Workload Identity bindings for Thanos components
@@ -487,18 +482,15 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
           "thanos-query",
         ];
         thanosComponents.forEach((component, idx) => {
-          new ServiceAccountIamMember(this, `thanos-wi-${idx}`, {
-            metadata: {
-              name: `${id}-thanos-wi-${component}`,
-            },
-            spec: {
-              forProvider: {
-                serviceAccountId: `projects/${gcpProject}/serviceAccounts/${this.thanosServiceAccountEmail}`,
-                role: "roles/iam.workloadIdentityUser",
-                member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/${component}]`,
-              },
-              providerConfigRef: { name: providerConfigRef },
-            },
+          bindWorkloadIdentityUser({
+            scope: this,
+            id: `thanos-wi-${idx}`,
+            name: `${id}-thanos-wi-${component}`,
+            project: gcpProject,
+            namespace: namespaceName,
+            ksa: component,
+            gsaEmail: this.thanosServiceAccountEmail!,
+            providerConfigRef,
           });
         });
       }

@@ -2,9 +2,12 @@ import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
 import {
-  ClusterV1Beta1,
-  MachineDeploymentV1Beta1,
-} from "#imports/cluster.x-k8s.io";
+  DEFAULT_PRESTART_COMMANDS,
+  emitClusterCr,
+  emitAwsClusterCr,
+  emitAwsMachineTemplate,
+} from "./_shared";
+import { MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
 import {
   K0smotronControlPlane,
   K0SmotronControlPlaneSpecServiceType,
@@ -12,11 +15,7 @@ import {
   K0SmotronControlPlaneSpecPersistencePersistentVolumeClaimSpecResourcesRequests,
 } from "#imports/controlplane.cluster.x-k8s.io";
 import { K0sWorkerConfigTemplate } from "#imports/bootstrap.cluster.x-k8s.io";
-import {
-  AwsClusterV1Beta2,
-  AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
-  AwsMachineTemplateV1Beta2,
-} from "#imports/infrastructure.cluster.x-k8s.io";
+import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType } from "#imports/infrastructure.cluster.x-k8s.io";
 
 export interface AwsWorkloadClusterWorkers {
   /** Number of worker nodes (static — no autoscaler) */
@@ -129,42 +128,26 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
     const workerConfigName = `${name}-worker-config`;
 
     // 1. Cluster-API Cluster
-    new ClusterV1Beta1(this, "cluster", {
-      metadata: { name: clusterName, namespace },
-      spec: {
-        clusterNetwork: {
-          pods: { cidrBlocks: [podCidr] },
-          services: { cidrBlocks: [serviceCidr] },
-        },
-        controlPlaneRef: {
-          apiVersion: "controlplane.cluster.x-k8s.io/v1beta1",
-          kind: "K0smotronControlPlane",
-          name: controlPlaneName,
-        },
-        infrastructureRef: {
-          apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
-          kind: "AWSCluster",
-          name: clusterName,
-        },
-      },
+    emitClusterCr(this, {
+      clusterName,
+      namespace,
+      podCidr,
+      serviceCidr,
+      controlPlaneKind: "K0smotronControlPlane",
+      controlPlaneName,
     });
 
     // 2. AWSCluster - CAPA owns the VPC/subnets/SGs. Control-plane LB is DISABLED
     //    because k0smotron exposes the API; controlPlaneEndpoint is populated by
     //    k0smotron at runtime.
-    new AwsClusterV1Beta2(this, "aws-cluster", {
-      metadata: { name: clusterName, namespace },
-      spec: {
-        region: this.config.region,
-        ...(this.config.sshKeyName ? { sshKeyName: this.config.sshKeyName } : {}),
-        controlPlaneLoadBalancer: {
-          loadBalancerType:
-            AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.DISABLED,
-        },
-        network: {
-          vpc: { cidrBlock: vpcCidr },
-        },
-      },
+    emitAwsClusterCr(this, {
+      clusterName,
+      namespace,
+      region: this.config.region,
+      sshKeyName: this.config.sshKeyName,
+      loadBalancerType:
+        AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.DISABLED,
+      vpcCidr,
     });
 
     // 3. K0smotronControlPlane (hosted in the management cluster)
@@ -224,46 +207,19 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
 
     // 4. AWSMachineTemplate - CAPA places nodes in the subnets it created (no
     //    subnet/SG filters needed since CAPA owns networking).
-    const ami = workers.ami ?? {};
-    new AwsMachineTemplateV1Beta2(this, "worker-template", {
-      metadata: { name: machineTemplateName, namespace },
-      spec: {
-        template: {
-          spec: {
-            instanceType: workers.instanceType ?? "m6i.large",
-            iamInstanceProfile,
-            publicIp: workers.publicIp ?? false,
-            ...(this.config.sshKeyName
-              ? { sshKeyName: this.config.sshKeyName }
-              : {}),
-            rootVolume: {
-              size: workers.rootVolumeSizeGiB ?? 80,
-              type: workers.rootVolumeType ?? "gp3",
-            },
-            ...(ami.id
-              ? { ami: { id: ami.id } }
-              : ami.lookupOrg || ami.lookupBaseOs || ami.lookupFormat
-                ? {
-                    ...(ami.lookupOrg ? { imageLookupOrg: ami.lookupOrg } : {}),
-                    ...(ami.lookupBaseOs
-                      ? { imageLookupBaseOs: ami.lookupBaseOs }
-                      : {}),
-                    ...(ami.lookupFormat
-                      ? { imageLookupFormat: ami.lookupFormat }
-                      : {}),
-                  }
-                : {}),
-          },
-        },
-      },
+    emitAwsMachineTemplate(this, "worker-template", {
+      name: machineTemplateName,
+      namespace,
+      instanceType: workers.instanceType ?? "m6i.large",
+      iamInstanceProfile,
+      publicIp: workers.publicIp ?? false,
+      sshKeyName: this.config.sshKeyName,
+      rootVolumeSizeGiB: workers.rootVolumeSizeGiB ?? 80,
+      rootVolumeType: workers.rootVolumeType ?? "gp3",
+      ami: workers.ami,
     });
 
     // 5. K0sWorkerConfigTemplate - cloud-init for storage deps (Piraeus/LINSTOR)
-    const defaultPreStart = [
-      "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
-      "apt-get update -qq && apt-get install -y -qq linux-headers-$(uname -r) lvm2 thin-provisioning-tools open-iscsi cryptsetup",
-      "systemctl enable --now iscsid || true",
-    ];
     new K0sWorkerConfigTemplate(this, "worker-config", {
       metadata: { name: workerConfigName, namespace },
       spec: {
@@ -271,7 +227,7 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
           spec: {
             version: k0sWorkerVersion,
             preStartCommands: [
-              ...defaultPreStart,
+              ...DEFAULT_PRESTART_COMMANDS,
               ...(workers.extraPreStartCommands ?? []),
             ],
           },

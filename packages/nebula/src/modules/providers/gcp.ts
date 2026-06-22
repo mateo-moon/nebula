@@ -6,7 +6,8 @@ import {
   ProviderConfigSpecCredentials,
   ProviderConfigSpecCredentialsSource,
 } from "#imports/gcp.upbound.io";
-import { ServiceAccountIamMember } from "#imports/cloudplatform.gcp.upbound.io";
+import { bindWorkloadIdentityUser } from "../infra/gcp/workload-identity";
+import { ARGOCD_KEEP_ON_DELETE } from "../../core";
 
 /** Credential source for GCP provider */
 export type GcpCredentialSource =
@@ -139,9 +140,7 @@ export class GcpProvider extends Construct {
             kind: "DeploymentRuntimeConfig",
             metadata: {
               name: runtimeConfigName,
-              annotations: {
-                "argocd.argoproj.io/sync-options": "Delete=false",
-              },
+              annotations: ARGOCD_KEEP_ON_DELETE,
             },
             spec: {
               serviceAccountTemplate: {
@@ -164,9 +163,7 @@ export class GcpProvider extends Construct {
       const provider = new CpProvider(this, `provider-${family}`, {
         metadata: {
           name: providerName,
-          annotations: {
-            "argocd.argoproj.io/sync-options": "Delete=false",
-          },
+          annotations: ARGOCD_KEEP_ON_DELETE,
         },
         spec: {
           package: `${providerPackage}:${providerVersion}`,
@@ -198,9 +195,7 @@ export class GcpProvider extends Construct {
     this.providerConfig = new CpProviderConfig(this, "provider-config", {
       metadata: {
         name: providerConfigName,
-        annotations: {
-          "argocd.argoproj.io/sync-options": "Delete=false",
-        },
+        annotations: ARGOCD_KEEP_ON_DELETE,
       },
       spec: {
         projectId: config.projectId,
@@ -224,20 +219,15 @@ export class GcpProvider extends Construct {
           providerNamePrefix,
         );
 
-        new ServiceAccountIamMember(this, `wi-binding-${family}`, {
-          metadata: {
-            name: `crossplane-provider-wi-${family}`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${config.projectId}/serviceAccounts/${gsaEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${config.projectId}.svc.id.goog[${providerNamespace}/${ksaName}]`,
-            },
-            providerConfigRef: {
-              name: providerConfigName,
-            },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: `wi-binding-${family}`,
+          name: `crossplane-provider-wi-${family}`,
+          project: config.projectId,
+          namespace: providerNamespace,
+          ksa: ksaName,
+          gsaEmail,
+          providerConfigRef: providerConfigName,
         });
       }
     }

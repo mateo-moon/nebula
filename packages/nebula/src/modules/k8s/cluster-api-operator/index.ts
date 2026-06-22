@@ -17,7 +17,7 @@ import { Construct } from "constructs";
 import { ApiObject, Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { BaseConstruct, syncWave } from "../../../core";
 import {
   ServiceAccount,
   ProjectIamMember,
@@ -386,9 +386,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       new ServiceAccount(this, "capg-gsa", {
         metadata: {
           name: gsaName,
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "-3",
-          },
+          annotations: syncWave(-3),
         },
         spec: {
           forProvider: {
@@ -404,9 +402,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       new ProjectIamMember(this, "capg-compute-admin", {
         metadata: {
           name: `${gsaName}-compute-admin`,
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "-1",
-          },
+          annotations: syncWave(-1),
         },
         spec: {
           forProvider: {
@@ -423,9 +419,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       new ProjectIamMember(this, "capg-sa-user", {
         metadata: {
           name: `${gsaName}-sa-user`,
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "-1",
-          },
+          annotations: syncWave(-1),
         },
         spec: {
           forProvider: {
@@ -445,9 +439,8 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       kind: "XCapgCredentials",
       metadata: {
         name: "capg-credentials",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "0", // Create XR after XRD and Composition
-        },
+        // Create XR after XRD and Composition
+        annotations: syncWave(0),
       },
       spec: {
         serviceAccountEmail: gsaEmail,
@@ -470,9 +463,8 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     new CompositeResourceDefinitionV2(this, "capg-credentials-xrd", {
       metadata: {
         name: "xcapgcredentials.nebula.io",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "-10", // Create XRD first
-        },
+        // Create XRD first
+        annotations: syncWave(-10),
       },
       spec: {
         group: "nebula.io",
@@ -548,9 +540,8 @@ data:
     new Composition(this, "capg-credentials-composition", {
       metadata: {
         name: "capg-credentials",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "-5", // Create Composition after XRD
-        },
+        // Create Composition after XRD
+        annotations: syncWave(-5),
       },
       spec: {
         compositeTypeRef: {

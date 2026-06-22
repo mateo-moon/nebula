@@ -9,6 +9,7 @@ import {
   ServiceAccountSpecDeletionPolicy,
 } from "#imports/cloudplatform.gcp.upbound.io";
 import { BaseConstruct } from "../../../core";
+import { mapDeletionPolicy } from "../_shared";
 
 export { Network } from "./network";
 export type { NetworkConfig } from "./network";
@@ -58,15 +59,13 @@ export class Gcp extends BaseConstruct<GcpConfig> {
     const providerConfigRef = this.config.providerConfigRef ?? "default";
     const networkDeletionPolicy =
       this.config.deletionPolicy ?? NetworkSpecDeletionPolicy.DELETE;
-    const clusterDeletionPolicy = this.config.deletionPolicy
-      ? this.config.deletionPolicy === NetworkSpecDeletionPolicy.ORPHAN
-        ? ClusterSpecDeletionPolicy.ORPHAN
-        : ClusterSpecDeletionPolicy.DELETE
-      : ClusterSpecDeletionPolicy.DELETE;
+    const clusterDeletionPolicy =
+      mapDeletionPolicy<ClusterSpecDeletionPolicy>(this.config.deletionPolicy) ??
+      ClusterSpecDeletionPolicy.DELETE;
     const iamDeletionPolicy =
-      this.config.deletionPolicy === NetworkSpecDeletionPolicy.ORPHAN
-        ? ServiceAccountSpecDeletionPolicy.ORPHAN
-        : ServiceAccountSpecDeletionPolicy.DELETE;
+      mapDeletionPolicy<ServiceAccountSpecDeletionPolicy>(
+        this.config.deletionPolicy,
+      ) ?? ServiceAccountSpecDeletionPolicy.DELETE;
 
     // Create Network
     this.network = new Network(this, "network", {

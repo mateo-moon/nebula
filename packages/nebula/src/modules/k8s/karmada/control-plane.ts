@@ -9,6 +9,7 @@ import { Helm, ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import type { KarmadaConfig } from "./types";
+import { syncWave } from "../../../core";
 
 /** Default Karmada version */
 export const KARMADA_VERSION = "1.16.0";
@@ -142,10 +143,8 @@ export class KarmadaControlPlane extends Construct {
       metadata: {
         name: karmadaName,
         namespace: namespaceName,
-        annotations: {
-          // Ensure operator is deployed before CR
-          "argocd.argoproj.io/sync-wave": "1",
-        },
+        // Ensure operator is deployed before CR
+        annotations: syncWave(1),
       },
       spec: karmadaSpec,
     });

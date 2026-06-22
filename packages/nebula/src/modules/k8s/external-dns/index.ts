@@ -24,9 +24,9 @@ import { deepmerge } from "deepmerge-ts";
 import {
   ServiceAccount as CpServiceAccount,
   ProjectIamMember,
-  ServiceAccountIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
 import { BaseConstruct } from "../../../core";
+import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
 
 export type ExternalDnsProvider = "google" | "aws" | "azure" | "cloudflare";
 export type ExternalDnsPolicy = "sync" | "upsert-only";
@@ -173,20 +173,15 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       // Grant Workload Identity User role (on the service account itself)
       // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
       if (this.config.createWorkloadIdentityBinding !== false) {
-        new ServiceAccountIamMember(this, "workload-identity-role", {
-          metadata: {
-            name: `${id}-external-dns-wi`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${this.config.project}/serviceAccounts/${gcpServiceAccountEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${this.config.project}.svc.id.goog[${namespaceName}/external-dns]`,
-            },
-            providerConfigRef: {
-              name: providerConfigRef,
-            },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: "workload-identity-role",
+          name: `${id}-external-dns-wi`,
+          project: this.config.project,
+          namespace: namespaceName,
+          ksa: "external-dns",
+          gsaEmail: gcpServiceAccountEmail,
+          providerConfigRef,
         });
       }
 

@@ -5,6 +5,7 @@ import {
   ProviderConfigSpecCredentials,
   ProviderConfigSpecCredentialsSource,
 } from "#imports/aws.upbound.io";
+import { ARGOCD_KEEP_ON_DELETE } from "../../core";
 
 /**
  * Credential source for the AWS Crossplane provider.
@@ -91,9 +92,7 @@ export class AwsProvider extends Construct {
       this.providers[family] = new CpProvider(this, `provider-${family}`, {
         metadata: {
           name: providerName,
-          annotations: {
-            "argocd.argoproj.io/sync-options": "Delete=false",
-          },
+          annotations: ARGOCD_KEEP_ON_DELETE,
         },
         spec: {
           package: `${providerPackage}:${providerVersion}`,
@@ -108,9 +107,7 @@ export class AwsProvider extends Construct {
     this.providerConfig = new CpProviderConfig(this, "provider-config", {
       metadata: {
         name: providerConfigName,
-        annotations: {
-          "argocd.argoproj.io/sync-options": "Delete=false",
-        },
+        annotations: ARGOCD_KEEP_ON_DELETE,
       },
       spec: {
         credentials: credentialsSpec,

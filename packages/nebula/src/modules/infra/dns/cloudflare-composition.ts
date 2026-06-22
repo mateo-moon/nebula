@@ -48,12 +48,12 @@ import {
   ManagedZone,
   ManagedZoneSpecDeletionPolicy,
 } from "#imports/dns.gcp.upbound.io";
-import { ServiceAccountIamMember } from "#imports/cloudplatform.gcp.upbound.io";
+import { bindWorkloadIdentityUser } from "../gcp/workload-identity";
 import {
   ProviderConfig as HttpProviderConfig,
   ProviderConfigSpecCredentialsSource as HttpCredentialsSource,
 } from "#imports/http.crossplane.io";
-import { BaseConstruct } from "../../../core";
+import { BaseConstruct, syncWave } from "../../../core";
 
 /**
  * Workload Identity configuration for GKE clusters.
@@ -221,20 +221,15 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
       // Create IAM binding - enabled by default
       // Requires Crossplane GSA to have roles/iam.serviceAccountAdmin
       if (wi.createIamBinding !== false) {
-        new ServiceAccountIamMember(this, "dns-provider-wi", {
-          metadata: {
-            name: "crossplane-dns-provider-wi",
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${wi.project}/serviceAccounts/${gcpServiceAccount}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${wi.project}.svc.id.goog[${providerNamespace}/${providerKsaName}]`,
-            },
-            providerConfigRef: {
-              name: gcpProviderConfig,
-            },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: "dns-provider-wi",
+          name: "crossplane-dns-provider-wi",
+          project: wi.project,
+          namespace: providerNamespace,
+          ksa: providerKsaName,
+          gsaEmail: gcpServiceAccount,
+          providerConfigRef: gcpProviderConfig,
         });
       }
 
@@ -255,9 +250,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     this.xrd = new CompositeResourceDefinitionV2(this, "xrd", {
       metadata: {
         name: "xdnszonecloudflares.nebula.io",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "-10",
-        },
+        annotations: syncWave(-10),
       },
       spec: {
         group: "nebula.io",
@@ -336,9 +329,7 @@ export class DnsCloudflareComposition extends BaseConstruct<DnsCloudflareComposi
     this.composition = new Composition(this, "composition", {
       metadata: {
         name: "dnszone-cloudflare",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "-5",
-        },
+        annotations: syncWave(-5),
         labels: {
           "crossplane.io/xrd": "xdnszonecloudflares.nebula.io",
           "delegation-provider": "cloudflare",
@@ -769,9 +760,7 @@ export class DnsZoneCloudflare extends Construct {
       kind: "XDnsZoneCloudflare",
       metadata: {
         name: id,
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "0",
-        },
+        annotations: syncWave(0),
       },
       spec: {
         dnsName: config.dnsName,

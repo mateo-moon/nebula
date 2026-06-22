@@ -46,9 +46,9 @@ import { AppProject } from "#imports/argoproj.io";
 import {
   ServiceAccount as GcpServiceAccount,
   ProjectIamMember,
-  ServiceAccountIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
 import { BaseConstruct } from "../../../core";
+import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
 
 // Dex configuration types
 export interface DexGithubConfig {
@@ -606,16 +606,15 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       // Workload Identity binding - allow repo-server SA to impersonate GCP SA
       // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
       if (pluginConfig.createWorkloadIdentityBinding !== false) {
-        new ServiceAccountIamMember(this, "nebula-wi", {
-          metadata: { name: `${gsaName}-wi` },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${gcpProject}/serviceAccounts/${gcpServiceAccountEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/argocd-repo-server]`,
-            },
-            providerConfigRef: { name: providerConfigRef },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: "nebula-wi",
+          name: `${gsaName}-wi`,
+          project: gcpProject,
+          namespace: namespaceName,
+          ksa: "argocd-repo-server",
+          gsaEmail: gcpServiceAccountEmail,
+          providerConfigRef,
         });
       }
     }
