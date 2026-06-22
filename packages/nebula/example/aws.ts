@@ -1,7 +1,7 @@
 /**
  * AWS example — a self-managed k0s cluster on EC2 via Cluster API (CAPA).
  *
- * Two tiers, mirroring the Kalatori reference:
+ * Two tiers:
  *
  *  - "aws-management": runs on the management cluster (GKE / BYO). Installs the
  *    Crossplane AWS provider, the AWS primitives that sit beside the cluster

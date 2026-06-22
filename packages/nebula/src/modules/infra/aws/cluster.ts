@@ -97,7 +97,6 @@ export interface AwsWorkloadClusterConfig {
 /**
  * AwsWorkloadCluster - a self-managed k0s cluster on AWS EC2 via Cluster API.
  *
- * Mirrors the Kalatori reference (`clusters/dev/cluster`) but for AWS:
  * - k0smotron hosts the control plane as pods in the management cluster.
  * - CAPA owns the AWS networking (VPC/subnets/SGs); the control-plane LB is
  *   DISABLED on the AWSCluster because k0smotron exposes the API itself.
