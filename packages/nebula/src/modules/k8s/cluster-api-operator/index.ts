@@ -8,7 +8,7 @@
  * new ClusterApiOperator(chart, 'capi', {
  *   version: '0.24.1',
  *   gcp: {
- *     projectId: 'my-project',
+ *     gcpProject: 'my-project',
  *   },
  * });
  * ```
@@ -16,8 +16,7 @@
 import { Construct } from "constructs";
 import { ApiObject, Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct, syncWave } from "../../../core";
+import { HelmModule, syncWave } from "../../../core";
 import {
   ServiceAccount,
   ProjectIamMember,
@@ -42,12 +41,12 @@ const K0SMOTRON_FETCH_URLS = {
 /** GCP IAM configuration for CAPG */
 export interface ClusterApiOperatorGcpConfig {
   /** GCP project ID */
-  projectId: string;
+  gcpProject: string;
   /** ProviderConfig name to use for creating IAM resources (default: 'default') */
   providerConfigRef?: string;
   /**
    * GCP Service Account name for CAPG controller (default: 'capg-controller')
-   * Full email will be: {gsaName}@{projectId}.iam.gserviceaccount.com
+   * Full email will be: {gsaName}@{gcpProject}.iam.gserviceaccount.com
    */
   gsaName?: string;
   /**
@@ -139,7 +138,7 @@ export interface ClusterApiOperatorConfig {
   hetzner?: ClusterApiOperatorHetznerConfig;
 }
 
-export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> {
+export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   /** GCP Service Account email for CAPG controller (if gcp config provided) */
@@ -160,9 +159,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     const caphNamespace = "caph-system";
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Create CAPG namespace for credentials secret (if GCP is configured)
     if (this.config.gcp) {
@@ -284,17 +281,16 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       };
     }
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "cluster-api-operator",
       releaseName: "capi-operator",
       repo:
         this.config.repository ??
         "https://kubernetes-sigs.github.io/cluster-api-operator",
       version: this.config.version ?? "0.25.0",
-      namespace: namespaceName,
-      values: chartValues,
+      defaultValues,
+      values: this.config.values,
     });
 
     // The upstream chart annotates provider instances (CoreProvider,
@@ -367,7 +363,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     credentialsSecretName: string;
   } {
     const gcp = this.config.gcp!;
-    const projectId = gcp.projectId;
+    const projectId = gcp.gcpProject;
     const providerConfigRef = gcp.providerConfigRef ?? "default";
     const gsaName = gcp.gsaName ?? "capg-controller";
     const gsaEmail = `${gsaName}@${projectId}.iam.gserviceaccount.com`;

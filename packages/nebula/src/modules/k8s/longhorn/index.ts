@@ -25,7 +25,7 @@ import { Construct } from "constructs";
 import { Helm, ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { KubeStorageClass } from "cdk8s-plus-33/lib/imports/k8s";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 
 /** LUKS encryption configuration */
 export interface LonghornEncryptionConfig {
@@ -88,7 +88,7 @@ export interface LonghornConfig {
   dataLocality?: string;
 }
 
-export class Longhorn extends BaseConstruct<LonghornConfig> {
+export class Longhorn extends HelmModule<LonghornConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly storageClassName: string;
@@ -99,9 +99,7 @@ export class Longhorn extends BaseConstruct<LonghornConfig> {
     const namespaceName = this.config.namespace ?? "longhorn-system";
     this.storageClassName = this.config.storageClassName ?? "longhorn-encrypted";
 
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // --- Encryption secret ---
 
@@ -144,7 +142,7 @@ export class Longhorn extends BaseConstruct<LonghornConfig> {
       this.config.instanceManagerTag ??
       (version === "1.11.0" ? "v1.11.0-hotfix-1" : undefined);
 
-    const helmValues: Record<string, unknown> = {
+    const defaultValues: Record<string, unknown> = {
       ...(instanceManagerTag
         ? {
             image: {
@@ -166,16 +164,19 @@ export class Longhorn extends BaseConstruct<LonghornConfig> {
             }
           : {}),
       },
-      ...this.config.values,
     };
 
-    this.helm = new Helm(this, "helm", {
+    // Longhorn historically shallow-merges user values over the defaults, so
+    // use the "spread" strategy to keep the rendered values byte-identical.
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "longhorn",
       releaseName: "longhorn",
       repo: "https://charts.longhorn.io",
       version,
-      namespace: namespaceName,
-      values: helmValues,
+      defaultValues,
+      values: this.config.values,
+      merge: "spread",
     });
 
     // --- Encrypted StorageClass ---

@@ -6,6 +6,10 @@ import {
   RecordSetSpecDeletionPolicy,
 } from '#imports/dns.gcp.upbound.io';
 import {
+  Zone as CpRoute53Zone,
+  ZoneSpecDeletionPolicy,
+} from '#imports/route53.aws.upbound.io';
+import {
   DnsDelegation,
   DnsDelegationConfig,
   GcpDelegationConfig,
@@ -66,12 +70,21 @@ export interface DnsRecordConfig {
   rrdatas: string[];
 }
 
+/** DNS backend that owns the hosted zones. */
+export type DnsProvider = 'gcp' | 'aws';
+
 export interface DnsConfig {
-  /** GCP project ID */
-  project: string;
+  /**
+   * DNS backend (defaults to `'gcp'`). `'gcp'` provisions Cloud DNS managed
+   * zones (and optionally record sets + delegation); `'aws'` provisions
+   * Route53 hosted zones (records are left to external-dns).
+   */
+  provider?: DnsProvider;
+  /** GCP project ID (required when `provider` is `'gcp'`). */
+  project?: string;
   /** DNS zones to create */
   zones: DnsZoneConfig[];
-  /** DNS records to create (optional) */
+  /** DNS records to create (optional; GCP provider only) */
   records?: Array<DnsRecordConfig & { zoneName: string }>;
   /** ProviderConfig name to use */
   providerConfigRef?: string;
@@ -80,15 +93,32 @@ export interface DnsConfig {
 }
 
 export class Dns extends BaseConstruct<DnsConfig> {
+  /** GCP Cloud DNS managed zones (populated for the `gcp` provider). */
   public readonly zones: Record<string, CpManagedZone> = {};
+  /** AWS Route53 hosted zones (populated for the `aws` provider). */
+  public readonly awsZones: Record<string, CpRoute53Zone> = {};
   public readonly records: Record<string, CpRecordSet> = {};
   public readonly delegations: Record<string, DnsDelegation> = {};
 
   constructor(scope: Construct, id: string, config: DnsConfig) {
     super(scope, id, config);
 
+    const provider: DnsProvider = this.config.provider ?? 'gcp';
     const providerConfigRef = this.config.providerConfigRef ?? 'default';
     const deletionPolicy = this.config.deletionPolicy ?? ManagedZoneSpecDeletionPolicy.DELETE;
+
+    // AWS Route53 path: basic hosted zones, mirroring the GCP zone shape.
+    // Records and delegation stay GCP-only (external-dns manages Route53 records).
+    if (provider === 'aws') {
+      this.createRoute53Zones(providerConfigRef, deletionPolicy);
+      return;
+    }
+
+    // GCP Cloud DNS path (default; unchanged behavior).
+    const project = this.config.project;
+    if (!project) {
+      throw new Error("Dns: `project` is required when provider is 'gcp'.");
+    }
 
     // Create DNS zones
     for (const zoneConfig of this.config.zones) {
@@ -108,7 +138,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
           forProvider: {
             dnsName: dnsName,
             description: zoneConfig.description ?? `Managed by Crossplane`,
-            project: this.config.project,
+            project: project,
             labels: zoneConfig.labels,
             forceDestroy: zoneConfig.forceDestroy ?? true,
             ...(zoneConfig.dnssec ? {
@@ -214,7 +244,7 @@ export class Dns extends BaseConstruct<DnsConfig> {
               type: recordConfig.type,
               ttl: recordConfig.ttl ?? 300,
               rrdatas: recordConfig.rrdatas,
-              project: this.config.project,
+              project: project,
             },
             providerConfigRef: {
               name: providerConfigRef,
@@ -227,6 +257,63 @@ export class Dns extends BaseConstruct<DnsConfig> {
       }
     }
   }
+
+  /**
+   * Provision AWS Route53 hosted zones, mirroring the GCP zone shape.
+   *
+   * This is intentionally a basic hosted-zone path: record sets and NS
+   * delegation are not emitted here (external-dns manages Route53 records, and
+   * the GCP-specific delegation flow does not apply). `dnssec` is also a no-op
+   * for Route53 (it requires a separate KeySigningKey resource).
+   */
+  private createRoute53Zones(
+    providerConfigRef: string,
+    deletionPolicy: ManagedZoneSpecDeletionPolicy,
+  ): void {
+    for (const zoneConfig of this.config.zones) {
+      // Route53 zone names are conventionally stored without a trailing dot.
+      const dnsName = zoneConfig.dnsName.replace(/\.$/, '');
+      const zoneName = zoneConfig.name || dnsName.replace(/\./g, '-');
+
+      if (zoneConfig.dnssec) {
+        console.warn(
+          `[DNS] Zone '${zoneConfig.name}': DNSSEC is not configured for the aws provider (requires a separate Route53 KeySigningKey).`,
+        );
+      }
+      if (zoneConfig.delegation) {
+        console.warn(
+          `[DNS] Zone '${zoneConfig.name}': delegation is GCP-only and is ignored for the aws provider.`,
+        );
+      }
+
+      this.awsZones[zoneConfig.name] = new CpRoute53Zone(this, `zone-${zoneConfig.name}`, {
+        metadata: {
+          name: zoneName,
+        },
+        spec: {
+          forProvider: {
+            name: dnsName,
+            comment: zoneConfig.description ?? 'Managed by Crossplane',
+            forceDestroy: zoneConfig.forceDestroy ?? true,
+            ...(zoneConfig.labels ? { tags: zoneConfig.labels } : {}),
+          },
+          providerConfigRef: {
+            name: providerConfigRef,
+          },
+          deletionPolicy:
+            mapDeletionPolicy<ZoneSpecDeletionPolicy>(deletionPolicy) ??
+            ZoneSpecDeletionPolicy.DELETE,
+        },
+      });
+    }
+
+    if (this.config.records && this.config.records.length > 0) {
+      console.warn(
+        '[DNS] DNS records are not provisioned for the aws provider; external-dns manages Route53 records.',
+      );
+    }
+  }
 }
 
 export { ManagedZoneSpecDeletionPolicy } from '#imports/dns.gcp.upbound.io';
+export { ZoneSpecDeletionPolicy as Route53ZoneSpecDeletionPolicy } from '#imports/route53.aws.upbound.io';

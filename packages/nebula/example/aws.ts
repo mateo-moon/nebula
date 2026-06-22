@@ -107,12 +107,16 @@ new IngressNginx(workload, "ingress-nginx", {
 });
 
 // external-dns managing the Route53 zone (vendor-neutral provider switch).
+// AWS credentials are injected as env vars (AWS_ACCESS_KEY_ID /
+// AWS_SECRET_ACCESS_KEY) from a Secret named `route53-credentials` that must
+// exist in the external-dns namespace (e.g. created from a ref+sops value).
 new ExternalDns(workload, "external-dns", {
   provider: "aws",
   domainFilters: [domain],
   policy: "sync",
   txtOwnerId: "nucon-aws",
   createGcpServiceAccount: false,
+  credentialsSecret: { name: "route53-credentials" },
 });
 
 app.synth();

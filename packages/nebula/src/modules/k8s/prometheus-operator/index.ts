@@ -21,7 +21,7 @@ import {
   BucketV1Beta2 as GcsBucket,
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
 
 /** Thanos configuration for multi-cluster metrics aggregation */
@@ -35,7 +35,7 @@ export interface ThanosConfig {
   /** External Prometheus/Thanos endpoints to query (for cross-cluster querying) */
   externalStores?: string[];
   /** GCP project ID (required for GCS bucket creation) */
-  gcpProjectId?: string;
+  gcpProject?: string;
   /** ProviderConfig name for Crossplane GCP resources */
   providerConfigRef?: string;
   /**
@@ -95,7 +95,7 @@ export interface PrometheusOperatorConfig {
   }>;
 }
 
-export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> {
+export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
   public readonly helm: Helm;
   public readonly lokiHelm?: Helm;
   public readonly promtailHelm?: Helm;
@@ -117,9 +117,7 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
     const storageClassName = this.config.storageClassName ?? "standard";
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Portable by default; set config.tolerations to add cloud-specific ones
     // (e.g. GKE: components.gke.io/gke-managed-components).
@@ -200,17 +198,16 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
       kubeletServiceMonitor: { enabled: true },
     };
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "kube-prometheus-stack",
       releaseName: "prometheus",
       repo:
         this.config.repository ??
         "https://prometheus-community.github.io/helm-charts",
       version: this.config.version ?? "81.4.3",
-      namespace: namespaceName,
-      values: chartValues,
+      defaultValues,
+      values: this.config.values,
       // kube-prometheus-stack CRDs exceed the 262144-byte annotation limit
       // for kubectl client-side apply. They must be pre-installed via
       // `kubectl apply --server-side` or by ArgoCD with ServerSideApply=true.
@@ -383,15 +380,15 @@ export class PrometheusOperator extends BaseConstruct<PrometheusOperatorConfig> 
         this.config.thanos.providerConfigRef ?? "default";
 
       if (
-        !this.config.thanos.gcpProjectId &&
+        !this.config.thanos.gcpProject &&
         !this.config.thanos.existingBucket
       ) {
         throw new Error(
-          "gcpProjectId is required for Thanos when not using existingBucket",
+          "gcpProject is required for Thanos when not using existingBucket",
         );
       }
 
-      const gcpProject = this.config.thanos.gcpProjectId!;
+      const gcpProject = this.config.thanos.gcpProject!;
       const bucketName =
         this.config.thanos.existingBucket ?? `${id}-thanos-${gcpProject}`;
       const accountId = normalizeAccountId(`${id}-thanos`);

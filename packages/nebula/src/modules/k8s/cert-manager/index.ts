@@ -13,9 +13,8 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
 import { ClusterIssuer } from "#imports/cert-manager.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 
 export interface CertManagerConfig {
   /** Namespace for cert-manager (defaults to cert-manager) */
@@ -44,7 +43,7 @@ export interface CertManagerConfig {
   acmeIngressClassName?: string;
 }
 
-export class CertManager extends BaseConstruct<CertManagerConfig> {
+export class CertManager extends HelmModule<CertManagerConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly selfsignedIssuer?: ClusterIssuer;
@@ -57,9 +56,7 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
     const namespaceName = this.config.namespace ?? "cert-manager";
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Use external DNS servers for ACME HTTP-01 challenge self-checks by default.
     // GKE's internal DNS (via metadata server) can return SERVFAIL for newly created domains.
@@ -77,15 +74,14 @@ export class CertManager extends BaseConstruct<CertManagerConfig> {
       }),
     };
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "cert-manager",
       releaseName: "cert-manager",
       repo: this.config.repository ?? "https://charts.jetstack.io",
       version: this.config.version ?? "v1.19.3",
-      namespace: namespaceName,
-      values: chartValues,
+      defaultValues,
+      values: this.config.values,
     });
 
     // Create ClusterIssuers

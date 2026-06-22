@@ -16,8 +16,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 
 export type DeschedulerKind = "Deployment" | "CronJob";
 
@@ -75,7 +74,7 @@ export interface DeschedulerConfig {
   }>;
 }
 
-export class Descheduler extends BaseConstruct<DeschedulerConfig> {
+export class Descheduler extends HelmModule<DeschedulerConfig> {
   public readonly helm: Helm;
   public readonly namespace?: kplus.Namespace;
 
@@ -110,9 +109,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
 
     // Create namespace if not kube-system (kube-system already exists)
     if (namespaceName !== "kube-system") {
-      this.namespace = new kplus.Namespace(this, "namespace", {
-        metadata: { name: namespaceName },
-      });
+      this.namespace = this.createNamespace(namespaceName);
     }
 
     // Build enabled plugins list
@@ -270,13 +267,14 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       },
     };
 
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "descheduler",
       releaseName: "descheduler",
       repo: "https://kubernetes-sigs.github.io/descheduler/",
       version: this.config.version ?? "0.33.0",
-      namespace: namespaceName,
-      values: deepmerge(defaultValues, this.config.values ?? {}),
+      defaultValues,
+      values: this.config.values,
     });
   }
 }

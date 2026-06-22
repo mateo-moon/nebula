@@ -32,6 +32,8 @@ export type {
   ExternalDnsConfig,
   ExternalDnsProvider,
   ExternalDnsPolicy,
+  ExternalDnsEnvVar,
+  ExternalDnsCredentialsSecret,
 } from "./external-dns";
 
 export { PrometheusOperator } from "./prometheus-operator";
