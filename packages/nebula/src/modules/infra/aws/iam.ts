@@ -1,6 +1,7 @@
 import { Construct } from "constructs";
 import {
   Role as CpRole,
+  Policy as CpPolicy,
   RolePolicyAttachment as CpRolePolicyAttachment,
   InstanceProfile as CpInstanceProfile,
 } from "#imports/iam.aws.upbound.io";
@@ -13,6 +14,24 @@ const EC2_ASSUME_ROLE_POLICY = JSON.stringify({
       Effect: "Allow",
       Principal: { Service: "ec2.amazonaws.com" },
       Action: "sts:AssumeRole",
+    },
+  ],
+});
+
+/**
+ * CAPA stores each machine's bootstrap user-data in AWS Secrets Manager (the
+ * default secrets backend); the node fetches it at boot and writes
+ * /etc/secret-userdata.txt. Without read+delete on those secrets the fetch
+ * fails, cloud-init aborts, k0s never installs, and the node never joins.
+ * Scoped to the CAPA-owned secret prefix.
+ */
+const CAPA_BOOTSTRAP_SECRETS_POLICY = JSON.stringify({
+  Version: "2012-10-17",
+  Statement: [
+    {
+      Effect: "Allow",
+      Action: ["secretsmanager:GetSecretValue", "secretsmanager:DeleteSecret"],
+      Resource: "arn:*:secretsmanager:*:*:secret:aws.cluster.x-k8s.io/*",
     },
   ],
 });
@@ -97,6 +116,35 @@ export class AwsIam extends Construct {
           providerConfigRef,
         },
       });
+    });
+
+    // CAPA bootstrap-data delivery: nodes must read (and clean up) their
+    // user-data secret in Secrets Manager, else cloud-init aborts and k0s
+    // never installs. Customer-managed policy + attachment.
+    const bootstrapPolicyName = `${config.name}-node-bootstrap-secrets`;
+    new CpPolicy(this, "node-bootstrap-secrets-policy", {
+      metadata: {
+        name: bootstrapPolicyName,
+        annotations: { "crossplane.io/external-name": bootstrapPolicyName },
+      },
+      spec: {
+        forProvider: {
+          policy: CAPA_BOOTSTRAP_SECRETS_POLICY,
+          description: "Allow CAPA nodes to read/delete their bootstrap user-data secret",
+          tags,
+        },
+        providerConfigRef,
+      },
+    });
+    new CpRolePolicyAttachment(this, "node-bootstrap-secrets-attach", {
+      metadata: { name: `${config.name}-node-bootstrap-secrets-attach` },
+      spec: {
+        forProvider: {
+          policyArnRef: { name: bootstrapPolicyName },
+          roleRef: { name: roleName },
+        },
+        providerConfigRef,
+      },
     });
 
     // Instance profile (deterministic AWS name so CAPA can reference it)
