@@ -13,7 +13,13 @@ import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType } from "#
 export interface AwsK0sControlPlaneOptions {
   /** Number of control-plane nodes (default 3 for HA) */
   replicas?: number;
-  /** EC2 instance type for control-plane nodes (default "m6i.large") */
+  /**
+   * EC2 instance type for control-plane nodes (default "t4g.large" — arm64
+   * Graviton2, ~40% cheaper than x86 m6i.large for the same 2 vCPU / 8 GiB).
+   * The whole mgmt stack (k0s, Crossplane, CAPA/k0smotron, cert-manager) ships
+   * arm64 images. Pair with an arm64 AMI (e.g. Ubuntu 22.04 arm64); a t4g/m*g
+   * instance with an x86 AMI will fail to boot.
+   */
   instanceType?: string;
   /** Root volume size in GiB (default 80) */
   rootVolumeSizeGiB?: number;
@@ -131,7 +137,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     emitAwsMachineTemplate(this, "control-plane-template", {
       name: cpMachineTemplateName,
       namespace,
-      instanceType: cp.instanceType ?? "m6i.large",
+      instanceType: cp.instanceType ?? "t4g.large",
       iamInstanceProfile,
       publicIp: false,
       sshKeyName: this.config.sshKeyName,
