@@ -113,7 +113,10 @@ export function emitAwsClusterCr(
     metadata: { name: opts.clusterName, namespace: opts.namespace },
     spec: {
       region: opts.region,
-      ...(opts.sshKeyName ? { sshKeyName: opts.sshKeyName } : {}),
+      // Always emit sshKeyName: "" when unset — omitting it makes CAPA fall back
+      // to a key pair literally named "default" (which won't exist), failing
+      // every instance launch. "" means "no SSH key pair".
+      sshKeyName: opts.sshKeyName ?? "",
       controlPlaneLoadBalancer: {
         loadBalancerType: opts.loadBalancerType,
       },
@@ -151,7 +154,8 @@ export function emitAwsMachineTemplate(
           instanceType: opts.instanceType,
           iamInstanceProfile: opts.iamInstanceProfile,
           publicIp: opts.publicIp,
-          ...(opts.sshKeyName ? { sshKeyName: opts.sshKeyName } : {}),
+          // "" (not omitted) so CAPA does not fall back to the "default" key pair.
+          sshKeyName: opts.sshKeyName ?? "",
           rootVolume: {
             size: opts.rootVolumeSizeGiB,
             type: opts.rootVolumeType,
