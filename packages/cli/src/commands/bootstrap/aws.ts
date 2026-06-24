@@ -453,6 +453,39 @@ async function deployGitopsHandoff(
   log("   ✅ ArgoCD will reconcile the platform from git (self-heal).");
 }
 
+/**
+ * Wait until the management cluster API is STABLY reachable. As HA control-plane
+ * replicas join, the internet-facing NLB adds/removes targets and the kubeconfig
+ * endpoint flaps, so a single probe can spuriously fail mid-apply. Require several
+ * consecutive successful health checks before installing the platform on it.
+ */
+async function waitForMgmtApiStable(
+  kubeconfig: string,
+  timeoutSeconds: number,
+): Promise<void> {
+  log("   Waiting for the management cluster API to stabilize...");
+  const start = Date.now();
+  const need = 3;
+  let consecutive = 0;
+  while (Date.now() - start < timeoutSeconds * 1000) {
+    const ok =
+      kubectl(["get", "--raw=/healthz"], {
+        kubeconfig,
+        silent: true,
+        ignoreErrors: true,
+      }).trim() === "ok";
+    consecutive = ok ? consecutive + 1 : 0;
+    if (consecutive >= need) {
+      log("   ✅ Management cluster API is stable");
+      return;
+    }
+    await sleep(5000);
+  }
+  throw new Error(
+    `Management cluster API did not stabilize within ${timeoutSeconds}s`,
+  );
+}
+
 async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const kindName = options.name || "nebula";
   const clusterName = options.clusterName || DEFAULT_MGMT_CLUSTER;
@@ -524,6 +557,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("");
   log("📦 Step 6: Installing the platform on the management cluster");
   log("─".repeat(50));
+  await waitForMgmtApiStable(mgmtKubeconfig, 300);
   await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
   await deployPlatform(appOpts, mgmtKubeconfig);
 
