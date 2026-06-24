@@ -25,6 +25,14 @@ export interface BootstrapOptions {
   /** AMI id for the management cluster nodes (aws; recommend Ubuntu 22.04) */
   amiId?: string;
   /**
+   * Management cluster name (aws; default 'mgmt'). Drives the CAPI cluster name,
+   * AWS resource tags, and the node IAM names — set a distinct value to run
+   * isolated from another cluster in the same account.
+   */
+  clusterName?: string;
+  /** Number of control-plane nodes (aws; default 3). Use 1 for a quick/test cluster. */
+  cpReplicas?: number;
+  /**
    * Opt-in GitOps handoff (aws): path to a checked-out repo subtree with
    * `meta/argocd` + `meta/argocd-apps` modules (e.g. `.../DevOps/aws`). When set,
    * the bootstrap installs ArgoCD on the management cluster and syncs the
