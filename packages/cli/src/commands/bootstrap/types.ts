@@ -24,6 +24,13 @@ export interface BootstrapOptions {
   awsProfile?: string;
   /** AMI id for the management cluster nodes (aws; recommend Ubuntu 22.04) */
   amiId?: string;
+  /**
+   * Opt-in GitOps handoff (aws): path to a checked-out repo subtree with
+   * `meta/argocd` + `meta/argocd-apps` modules (e.g. `.../DevOps/aws`). When set,
+   * the bootstrap installs ArgoCD on the management cluster and syncs the
+   * app-of-apps so ArgoCD reconciles the platform from git thereafter.
+   */
+  gitopsDir?: string;
 }
 
 /** A cloud provider's bootstrap implementation. */

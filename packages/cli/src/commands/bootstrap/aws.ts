@@ -33,6 +33,7 @@ import {
 } from "./aws-apps";
 import type { BootstrapOptions, BootstrapProvider } from "./types";
 import { buildCapaCredentialsIni, toCapaB64 } from "nebula-cdk8s";
+import { apply } from "../apply";
 
 const MGMT_CLUSTER = "mgmt";
 const MGMT_NAMESPACE = "default";
@@ -343,6 +344,81 @@ function fetchKubeconfig(): string {
   return kPath;
 }
 
+/** Throw if any synthed manifest still contains an unresolved `ref+` secret. */
+function assertNoUnresolvedRefs(dir: string): void {
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".yaml"))) {
+    const m = fs.readFileSync(path.join(dir, f), "utf-8").match(/ref\+[^\s"']+/);
+    if (m) {
+      throw new Error(
+        `Unresolved secret reference in ${f}: ${m[0]} — ensure 'vals' and the ` +
+          `SOPS age key are available where this runs, or set the value directly.`,
+      );
+    }
+  }
+}
+
+/**
+ * GitOps handoff (opt-in via --gitops-dir). Installs ArgoCD + the app-of-apps
+ * from the repo subtree onto the management cluster and syncs the root app, so
+ * ArgoCD reconciles the platform from git thereafter. Mirrors the GCP
+ * deployToGke handoff. `gitopsDir` is a checked-out `aws/`-style layout
+ * (meta/argocd, meta/argocd-apps); deps are installed if missing.
+ */
+async function deployGitopsHandoff(
+  gitopsDir: string,
+  kubeconfig: string,
+): Promise<void> {
+  log("");
+  log("📦 Step 7: GitOps handoff — ArgoCD ← git");
+  log("─".repeat(50));
+
+  if (!fs.existsSync(path.join(gitopsDir, "node_modules"))) {
+    log("   Installing repo dependencies (pnpm install)...");
+    run("pnpm", ["install"], { cwd: gitopsDir });
+  }
+
+  const prev = process.env.KUBECONFIG;
+  process.env.KUBECONFIG = kubeconfig;
+  try {
+    for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
+      log(`   Synthesizing ${mod}...`);
+      const outdir = path.join(gitopsDir, ".nebula-synth", mod);
+      fs.rmSync(outdir, { recursive: true, force: true });
+      fs.mkdirSync(outdir, { recursive: true });
+      run("npx", ["tsx", `${mod}/index.ts`], {
+        cwd: gitopsDir,
+        env: { ...process.env, CDK8S_OUTDIR: outdir },
+      });
+      assertNoUnresolvedRefs(outdir);
+      log(`   Applying ${mod}...`);
+      await apply({ file: `${outdir}/*.k8s.yaml` });
+    }
+  } finally {
+    if (prev === undefined) delete process.env.KUBECONFIG;
+    else process.env.KUBECONFIG = prev;
+  }
+
+  // Wait for the ArgoCD application controller, then sync the root app-of-apps;
+  // ArgoCD self-heals everything else from git.
+  log("   Waiting for the ArgoCD application controller...");
+  kubectl(
+    [
+      "-n", "argocd", "rollout", "status",
+      "statefulset/argocd-application-controller", "--timeout=300s",
+    ],
+    { kubeconfig, ignoreErrors: true },
+  );
+  log("   Triggering the initial sync of argocd-apps...");
+  kubectl(
+    [
+      "-n", "argocd", "patch", "app", "argocd-apps", "--type", "merge", "-p",
+      '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{}}}',
+    ],
+    { kubeconfig, ignoreErrors: true },
+  );
+  log("   ✅ ArgoCD will reconcile the platform from git (self-heal).");
+}
+
 async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const kindName = options.name || "nebula";
   const region = options.region;
@@ -414,6 +490,12 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
   await deployPlatform(appOpts, mgmtKubeconfig);
 
+  // Step 7 (opt-in): hand the platform off to ArgoCD ← git, so the management
+  // cluster self-manages from the repo instead of via in-process applies.
+  if (options.gitopsDir) {
+    await deployGitopsHandoff(options.gitopsDir, mgmtKubeconfig);
+  }
+
   log("");
   log("═".repeat(50));
   log("✨ AWS bootstrap complete!");
@@ -421,14 +503,18 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   Kind (bootstrap):  kind-${kindName}`);
   log(`   k0s (management):  ${MGMT_CLUSTER}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
-  log("   ⚠️  No clusterctl pivot was performed: the Kind cluster still HOLDS the CAPI");
-  log("   lifecycle objects for the management cluster. Deleting Kind orphans lifecycle");
-  log("   management of the management cluster (the cluster itself keeps running). Run");
-  log("   `clusterctl move` to transfer lifecycle ownership before deleting Kind.");
+  if (options.gitopsDir) {
+    log("   ArgoCD now reconciles the platform from git. The CAPI cluster-lifecycle");
+    log("   objects still live on Kind; move them into the repo (infra/cluster-api) or");
+    log("   run `clusterctl move` before deleting Kind to keep lifecycle management.");
+  } else {
+    log("   ⚠️  No GitOps handoff (--gitops-dir not set) and no clusterctl pivot: the Kind");
+    log("   cluster still HOLDS the CAPI lifecycle objects for the management cluster.");
+    log("   Deleting Kind orphans lifecycle management (the cluster keeps running).");
+  }
   log("");
   log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
   log("   kubectl get nodes");
-  log(`   kind delete cluster --name ${kindName}  # only after clusterctl move`);
   log("");
 }
 
