@@ -58,6 +58,18 @@ const NODE_IAM_KINDS = [
   "rolepolicyattachments.iam.aws.upbound.io",
 ];
 
+/**
+ * Per-cluster directory for bootstrap artifacts (the management cluster's
+ * kubeconfig and transient synth output). Lives under the user's home —
+ * `~/.nebula/<cluster>/` — NOT the current working directory, so running the CLI
+ * from anywhere (incl. inside a source tree) never litters it.
+ */
+function stateDir(clusterName: string): string {
+  const dir = path.join(os.homedir(), ".nebula", clusterName);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 interface AwsCreds {
   accessKeyId: string;
   secretAccessKey: string;
@@ -188,7 +200,7 @@ async function deployPlatform(
   appOpts: AwsBootstrapAppOptions,
   kubeconfig?: string,
 ): Promise<void> {
-  const outdir = path.join(process.cwd(), ".nebula-aws-platform");
+  const outdir = path.join(stateDir(appOpts.clusterName), "synth-platform");
 
   await synthAndApply(outdir, () => synthAwsPlatform(outdir, appOpts), kubeconfig);
 
@@ -210,7 +222,7 @@ async function deployPlatform(
 
 /** Apply the management cluster CRs (after the operator installs the CAPA/k0s CRDs). */
 async function deployCluster(appOpts: AwsBootstrapAppOptions): Promise<void> {
-  const outdir = path.join(process.cwd(), ".nebula-aws-cluster");
+  const outdir = path.join(stateDir(appOpts.clusterName), "synth-cluster");
   await synthAndApply(outdir, () => synthAwsCluster(outdir, appOpts));
 }
 
@@ -351,7 +363,7 @@ function fetchKubeconfig(clusterName: string): string {
     );
   }
   const kubeconfig = Buffer.from(b64, "base64").toString("utf-8");
-  const kPath = path.join(process.cwd(), `.kube-${clusterName}.config`);
+  const kPath = path.join(stateDir(clusterName), "kubeconfig");
   fs.writeFileSync(kPath, kubeconfig, { mode: 0o600 });
   return kPath;
 }
@@ -379,6 +391,7 @@ function assertNoUnresolvedRefs(dir: string): void {
 async function deployGitopsHandoff(
   gitopsDir: string,
   kubeconfig: string,
+  clusterName: string,
 ): Promise<void> {
   log("");
   log("📦 Step 7: GitOps handoff — ArgoCD ← git");
@@ -416,7 +429,7 @@ async function deployGitopsHandoff(
   try {
     for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
       log(`   Synthesizing ${mod}...`);
-      const outdir = path.join(gitopsDir, ".nebula-synth", mod);
+      const outdir = path.join(stateDir(clusterName), "synth-gitops", mod);
       fs.rmSync(outdir, { recursive: true, force: true });
       fs.mkdirSync(outdir, { recursive: true });
       run("npx", ["tsx", `${mod}/index.ts`], {
@@ -564,7 +577,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   // Step 7 (opt-in): hand the platform off to ArgoCD ← git, so the management
   // cluster self-manages from the repo instead of via in-process applies.
   if (options.gitopsDir) {
-    await deployGitopsHandoff(options.gitopsDir, mgmtKubeconfig);
+    await deployGitopsHandoff(options.gitopsDir, mgmtKubeconfig, clusterName);
   }
 
   log("");
