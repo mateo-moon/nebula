@@ -4,6 +4,7 @@ import {
   AwsClusterV1Beta2,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
+  AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol as IngressProtocol,
   AwsMachineTemplateV1Beta2,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 
@@ -157,6 +158,20 @@ export function emitAwsClusterCr(
       },
       network: {
         vpc: { cidrBlock: opts.vpcCidr },
+        // CAPA's control-plane security group opens the standard k8s/etcd ports
+        // (6443, 2379-2380) but NOT k0s's controller-join API on 9443. Without
+        // this, a 2nd/3rd K0sControlPlane replica hangs at "Joining existing
+        // cluster via https://<cp>:9443" and never joins (HA stuck at 1 node).
+        // Open 9443 between nodes in the VPC so HA control planes can form.
+        additionalControlPlaneIngressRules: [
+          {
+            description: "k0s controller-join API (HA control plane)",
+            protocol: IngressProtocol.TCP,
+            fromPort: 9443,
+            toPort: 9443,
+            cidrBlocks: [opts.vpcCidr],
+          },
+        ],
       },
     },
   });
