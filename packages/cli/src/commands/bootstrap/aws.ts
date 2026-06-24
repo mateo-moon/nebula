@@ -465,6 +465,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
     clusterName,
     amiId: options.amiId,
     ...(options.cpReplicas ? { cpReplicas: options.cpReplicas } : {}),
+    ...(options.sshKeyName ? { sshKeyName: options.sshKeyName } : {}),
   };
 
   log("");

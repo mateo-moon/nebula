@@ -32,6 +32,8 @@ export interface AwsBootstrapAppOptions {
   cpReplicas?: number;
   cpInstanceType?: string;
   vpcCidr?: string;
+  /** Pre-existing EC2 key pair name for SSH access to the nodes (debugging). */
+  sshKeyName?: string;
 }
 
 /**
@@ -101,6 +103,7 @@ export function synthAwsCluster(outdir: string, o: AwsBootstrapAppOptions): void
       AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING,
     ...(o.k8sVersion ? { k8sVersion: o.k8sVersion } : {}),
     ...(o.vpcCidr ? { vpcCidr: o.vpcCidr } : {}),
+    ...(o.sshKeyName ? { sshKeyName: o.sshKeyName } : {}),
     controlPlane: {
       replicas: o.cpReplicas ?? 3,
       // arm64 Graviton default — pair with an arm64 AMI (--ami-id).

@@ -33,6 +33,12 @@ export interface BootstrapOptions {
   /** Number of control-plane nodes (aws; default 3). Use 1 for a quick/test cluster. */
   cpReplicas?: number;
   /**
+   * Pre-existing EC2 key pair name (aws) for SSH access to the nodes — useful for
+   * debugging k0s on the control-plane/worker machines. The key pair must already
+   * exist in the target region.
+   */
+  sshKeyName?: string;
+  /**
    * Opt-in GitOps handoff (aws): path to a checked-out repo subtree with
    * `meta/argocd` + `meta/argocd-apps` modules (e.g. `.../DevOps/aws`). When set,
    * the bootstrap installs ArgoCD on the management cluster and syncs the
