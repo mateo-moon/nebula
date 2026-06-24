@@ -12,6 +12,7 @@
  * argv only); there is no local exec/execSync helper anymore.
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
 import { run, kubectl, log, sleep } from './bootstrap/exec';
@@ -273,7 +274,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
 
   log(`   Found ${files.length} manifest file(s):`);
   for (const file of files) {
-    log(`   - ${file}`);
+    log(`   - ${path.basename(file)}`);
   }
   log('');
 
@@ -325,7 +326,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
   log(`   Phase 3: ${phase3.length} Custom Resources`);
   log('');
 
-  const tempDir = fs.mkdtempSync('/tmp/nebula-apply-');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nebula-apply-'));
 
   try {
     // Phase 1: CRDs and Namespaces
