@@ -2,7 +2,9 @@
  * AWS provider — vendor-free: a self-managed HA k0s management cluster on EC2 via
  * Cluster API (CAPA), with no EKS. The Kind cluster only bootstraps; the standalone
  * k0s control plane is self-contained, so the platform is redeployed onto the new
- * cluster and Kind is discarded (no clusterctl pivot). Built in-process from flags.
+ * cluster and Kind is discarded. With --gitops-dir, ArgoCD on the management
+ * cluster inherits the platform (incl. infra/cluster-api) from git, so the cluster
+ * owns its own lifecycle and Kind — the bootstrap scaffold — is simply deleted.
  *
  * All shell execution is no-shell (run/kubectl → execFileSync, argv only). AWS
  * credentials are never placed on the process argv: the CAPA base64 blob and the
@@ -482,8 +484,8 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const mgmtKubeconfig = fetchKubeconfig();
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
 
-  // Step 6: Install the platform on the management cluster (no clusterctl pivot —
-  // the standalone k0s control plane is self-contained).
+  // Step 6: Install the platform on the management cluster. The standalone k0s
+  // control plane is self-contained; ArgoCD (Step 7) inherits the rest from git.
   log("");
   log("📦 Step 6: Installing the platform on the management cluster");
   log("─".repeat(50));
@@ -504,13 +506,14 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   k0s (management):  ${MGMT_CLUSTER}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
   if (options.gitopsDir) {
-    log("   ArgoCD now reconciles the platform from git. The CAPI cluster-lifecycle");
-    log("   objects still live on Kind; move them into the repo (infra/cluster-api) or");
-    log("   run `clusterctl move` before deleting Kind to keep lifecycle management.");
+    log("   ArgoCD now reconciles the platform from git — including infra/cluster-api,");
+    log("   so the management cluster inherits ownership of its own CAPI lifecycle.");
+    log("   Kind was only the bootstrap scaffold — delete it freely:");
+    log(`     kind delete cluster --name ${kindName}`);
   } else {
-    log("   ⚠️  No GitOps handoff (--gitops-dir not set) and no clusterctl pivot: the Kind");
-    log("   cluster still HOLDS the CAPI lifecycle objects for the management cluster.");
-    log("   Deleting Kind orphans lifecycle management (the cluster keeps running).");
+    log("   ⚠️  No GitOps handoff (--gitops-dir not set): the management cluster's CAPI");
+    log("   lifecycle objects live on Kind. Re-run with --gitops-dir so ArgoCD inherits");
+    log("   them from git before deleting Kind.");
   }
   log("");
   log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
