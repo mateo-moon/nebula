@@ -151,6 +151,15 @@ export interface ArgoCdConfig {
   version?: string;
   /** Helm repository URL */
   repository?: string;
+  /**
+   * Extra SSH known_hosts entries, appended to ArgoCD's built-in defaults
+   * (github/gitlab/…) in the argocd-ssh-known-hosts-cm ConfigMap. REQUIRED for
+   * repositories on self-hosted SSH git servers (e.g. a private Gitea): without
+   * the server's host key, ArgoCD's repo-server rejects the clone with
+   * "ssh: handshake failed: knownhosts: key is unknown" and nothing syncs.
+   * Provide ssh-keyscan output, e.g. "[gitea.example.com]:2222 ssh-rsa AAAA...".
+   */
+  sshKnownHosts?: string;
   /** Additional Helm values - supports full ArgoCD Helm chart values */
   values?: {
     extraObjects?: Array<{
@@ -473,6 +482,17 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
         // Flatten cm
         configs["cm"] = flattenKeys(cm);
       }
+    }
+
+    // Append extra SSH known_hosts (self-hosted git servers) to ArgoCD's
+    // defaults so the repo-server can clone over SSH (e.g. a private Gitea).
+    if (this.config.sshKnownHosts) {
+      if (!chartValues["configs"]) chartValues["configs"] = {};
+      const configs = chartValues["configs"] as Record<string, unknown>;
+      configs["ssh"] = {
+        ...(configs["ssh"] as Record<string, unknown> | undefined),
+        extraHosts: this.config.sshKnownHosts,
+      };
     }
 
     // Add crossplane user account to cm if enabled
