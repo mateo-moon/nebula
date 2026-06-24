@@ -59,6 +59,7 @@ program
   .option('--region <region>', 'AWS region, e.g. eu-central-1 (aws)')
   .option('--aws-profile <profile>', 'AWS named profile for credentials (aws)')
   .option('--ami-id <ami>', 'AMI for the management cluster nodes (aws; recommend Ubuntu 22.04)')
+  .option('--gitops-dir <path>', 'Repo subtree with meta/argocd + meta/argocd-apps; hands the platform off to ArgoCD ← git (aws)')
   .option('--skip-kind', 'Skip Kind cluster creation')
   .option('--skip-credentials', 'Skip credentials setup')
   .option('--skip-gke', 'Skip GKE deployment (gcp, Kind only)')
