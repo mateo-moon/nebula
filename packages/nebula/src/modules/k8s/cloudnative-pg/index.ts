@@ -42,6 +42,7 @@ import {
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
 import { HelmModule } from "../../../core";
+import { normalizeAccountId } from "../../infra/_shared";
 
 /** Configuration for pushing backup credentials to a remote cluster */
 export interface RemoteClusterConfig {
@@ -263,10 +264,4 @@ export class CloudNativePg extends HelmModule<CloudNativePgConfig> {
   }
 }
 
-function normalizeAccountId(raw: string): string {
-  let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (!/^[a-z]/.test(s)) s = `a-${s}`;
-  if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-  if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-  return s;
-}
+// normalizeAccountId is imported from ../../infra/_shared (DRY).

@@ -46,6 +46,14 @@ import { BaseConstruct } from "./base-construct";
 /** Strategy for combining default chart values with user-supplied overrides. */
 export type HelmValuesMergeStrategy = "deepmerge" | "spread";
 
+/** A Kubernetes toleration (core/v1 Toleration subset used by module configs). */
+export interface Toleration {
+  key: string;
+  operator: string;
+  effect: string;
+  value?: string;
+}
+
 /** Options for {@link HelmModule.createHelmRelease}. */
 export interface HelmReleaseOptions {
   /** Namespace the release is installed into. */

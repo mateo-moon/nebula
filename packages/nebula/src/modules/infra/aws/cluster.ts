@@ -113,7 +113,11 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
     const name = this.config.name;
     const namespace = this.config.namespace ?? "default";
     const k8sVersion = this.config.k8sVersion ?? "v1.31.8";
-    const k0sControlPlaneVersion = `${k8sVersion}-k0s.0`;
+    // k0smotron expects a SemVer in K0smotronControlPlane.spec.version; the
+    // canonical k0s suffix is "+k0s.0" (SemVer build metadata), not "-k0s.0"
+    // (which is a pre-release and appears in k0smotron issue #1027 as a bug).
+    // Keep this consistent with k0sWorkerVersion and AwsK0sCluster below.
+    const k0sControlPlaneVersion = `${k8sVersion}+k0s.0`;
     const k0sWorkerVersion = `${k8sVersion}+k0s.0`;
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";

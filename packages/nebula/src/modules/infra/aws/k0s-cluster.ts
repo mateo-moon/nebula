@@ -8,7 +8,10 @@ import {
   emitAwsMachineTemplate,
 } from "./_shared";
 import { K0sControlPlane } from "#imports/controlplane.cluster.x-k8s.io";
-import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType } from "#imports/infrastructure.cluster.x-k8s.io";
+import {
+  AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
+  AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
+} from "#imports/infrastructure.cluster.x-k8s.io";
 
 export interface AwsK0sControlPlaneOptions {
   /** Number of control-plane nodes (default 3 for HA) */
@@ -71,6 +74,13 @@ export interface AwsK0sClusterConfig {
   iamInstanceProfile?: string;
   /** Control-plane configuration */
   controlPlane?: AwsK0sControlPlaneOptions;
+  /**
+   * Scheme of the control-plane Network Load Balancer. Defaults to INTERNAL so
+   * the k0s API endpoint is not exposed to the internet (mTLS still guards it).
+   * Set to `AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING`
+   * ("internet-facing") to publish the API publicly.
+   */
+  controlPlaneLoadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
 }
 
 /**
@@ -83,8 +93,9 @@ export interface AwsK0sClusterConfig {
  * control plane) in two ways:
  *  - control plane is `K0sControlPlane` (runs on the cluster's nodes), so it is
  *    self-contained and persistent — it can host other clusters' control planes.
- *  - the AWSCluster's control-plane LoadBalancer is **enabled** (an internet-facing
- *    NLB), giving a stable public API endpoint reachable from anywhere.
+ *  - the AWSCluster's control-plane LoadBalancer is **enabled** (an NLB) for a
+ *    stable API endpoint. Defaults to an **internal** scheme; set
+ *    `controlPlaneLoadBalancerScheme` to expose it publicly.
  *
  * By default the control-plane nodes run in combined controller+worker mode so a
  * small (3-node) cluster also hosts Crossplane/CAPI/ArgoCD. Uses k0s's default
@@ -121,8 +132,9 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       controlPlaneName,
     });
 
-    // 2. AWSCluster - CAPA owns the VPC/subnets/SGs. The control-plane LB is
-    //    ENABLED (internet-facing NLB) so the k0s API has a stable public endpoint.
+    // 2. AWSCluster - CAPA owns the VPC/subnets/SGs. The control-plane LB is an
+    //    NLB for a stable API endpoint; default INTERNAL so it is not exposed to
+    //    the internet (override via controlPlaneLoadBalancerScheme).
     emitAwsClusterCr(this, {
       clusterName,
       namespace,
@@ -130,6 +142,9 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       sshKeyName: this.config.sshKeyName,
       loadBalancerType:
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.NLB,
+      loadBalancerScheme:
+        this.config.controlPlaneLoadBalancerScheme ??
+        AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
       vpcCidr,
     });
 

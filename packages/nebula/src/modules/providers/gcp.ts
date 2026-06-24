@@ -8,6 +8,7 @@ import {
 } from "#imports/gcp.upbound.io";
 import { bindWorkloadIdentityUser } from "../infra/gcp/workload-identity";
 import { ARGOCD_KEEP_ON_DELETE } from "../../core";
+import { createProviderFamily } from "./_shared";
 
 /** Credential source for GCP provider */
 export type GcpCredentialSource =
@@ -152,40 +153,29 @@ export class GcpProvider extends Construct {
       }
     }
 
-    // Create Provider for each family
+    // Create Provider for each family (shared loop body — see providers/_shared).
     for (const family of families) {
-      const providerName = `${providerNamePrefix}-${family}`;
-      const providerPackage = `xpkg.upbound.io/upbound/provider-gcp-${family}`;
       const runtimeConfigName = config.enableDeterministicServiceAccounts
         ? `${providerNamePrefix}-${family}-runtime`
         : undefined;
 
-      const provider = new CpProvider(this, `provider-${family}`, {
-        metadata: {
-          name: providerName,
-          annotations: ARGOCD_KEEP_ON_DELETE,
+      this.providers[family] = createProviderFamily(
+        this,
+        family,
+        `provider-${family}`,
+        {
+          namePrefix: providerNamePrefix,
+          version: providerVersion,
+          cloud: "gcp",
+          runtimeConfigRef: runtimeConfigName,
+          // Ensure DeploymentRuntimeConfig is created before the Provider references it.
+          dependsOn:
+            config.enableDeterministicServiceAccounts &&
+            this.runtimeConfigs[family]
+              ? [this.runtimeConfigs[family]]
+              : undefined,
         },
-        spec: {
-          package: `${providerPackage}:${providerVersion}`,
-          ...(runtimeConfigName
-            ? {
-                runtimeConfigRef: {
-                  name: runtimeConfigName,
-                },
-              }
-            : {}),
-        },
-      });
-
-      // Ensure DeploymentRuntimeConfig is created before Provider references it
-      if (
-        config.enableDeterministicServiceAccounts &&
-        this.runtimeConfigs[family]
-      ) {
-        provider.node.addDependency(this.runtimeConfigs[family]);
-      }
-
-      this.providers[family] = provider;
+      );
     }
 
     // Build credentials spec based on source type

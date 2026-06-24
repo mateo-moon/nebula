@@ -42,8 +42,12 @@ import {
   ServiceAccount as CpServiceAccount,
   ProjectIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
-import { HelmModule } from "../../../core";
-import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
+import { HelmModule, type Toleration } from "../../../core";
+import {
+  bindWorkloadIdentityUser,
+  wiKsaAnnotations,
+} from "../../infra/gcp/workload-identity";
+import { normalizeAccountId } from "../../infra/_shared";
 
 export type ExternalDnsProvider = "google" | "aws" | "azure" | "cloudflare";
 export type ExternalDnsPolicy = "sync" | "upsert-only";
@@ -138,6 +142,12 @@ export interface ExternalDnsConfig {
   logLevel?: "info" | "debug" | "error" | string;
   /** GCP project ID (required for google provider) */
   gcpProject?: string;
+  /**
+   * AWS region for the `aws` provider (e.g. "eu-central-1"). Injected as the
+   * `AWS_REGION` env var; required on non-EC2 nodes where the AWS SDK cannot
+   * derive the region from instance metadata.
+   */
+  awsRegion?: string;
   /** Additional extraArgs for external-dns */
   extraArgs?: string[];
   /**
@@ -175,12 +185,7 @@ export interface ExternalDnsConfig {
    */
   createWorkloadIdentityBinding?: boolean;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
 export class ExternalDns extends HelmModule<ExternalDnsConfig> {
@@ -304,7 +309,11 @@ export class ExternalDns extends HelmModule<ExternalDnsConfig> {
     // any arbitrary user env. These keys are only added to the chart values when
     // non-empty, so the google/Workload-Identity path stays byte-identical.
     const { env: credentialEnv, extraVolumes, extraVolumeMounts } =
-      buildProviderCredentialValues(provider, this.config.credentialsSecret);
+      buildProviderCredentialValues(
+        provider,
+        this.config.credentialsSecret,
+        this.config.awsRegion,
+      );
     const containerEnv: ExternalDnsEnvVar[] = [
       ...credentialEnv,
       ...(this.config.env ?? []),
@@ -326,11 +335,9 @@ export class ExternalDns extends HelmModule<ExternalDnsConfig> {
       serviceAccount: {
         create: true,
         name: "external-dns",
-        annotations: {
-          ...(provider === "google" && gcpServiceAccountEmail
-            ? { "iam.gke.io/gcp-service-account": gcpServiceAccountEmail }
-            : {}),
-        },
+        annotations: wiKsaAnnotations(
+          provider === "google" ? gcpServiceAccountEmail : undefined,
+        ),
       },
       ...(provider === "google" && this.config.gcpProject
         ? {
@@ -357,6 +364,10 @@ export class ExternalDns extends HelmModule<ExternalDnsConfig> {
       version: this.config.version ?? "1.19.0",
       defaultValues,
       values: this.config.values,
+      // Restore main's shallow-merge semantics: the HelmModule default
+      // (deepmerge) would concatenate array values (sources/extraArgs/tolerations)
+      // instead of replacing them.
+      merge: "spread",
     });
   }
 }
@@ -372,6 +383,7 @@ export class ExternalDns extends HelmModule<ExternalDnsConfig> {
 function buildProviderCredentialValues(
   provider: ExternalDnsProvider,
   secret?: ExternalDnsCredentialsSecret,
+  awsRegion?: string,
 ): {
   env: ExternalDnsEnvVar[];
   extraVolumes: Array<Record<string, unknown>>;
@@ -380,6 +392,13 @@ function buildProviderCredentialValues(
   const env: ExternalDnsEnvVar[] = [];
   const extraVolumes: Array<Record<string, unknown>> = [];
   const extraVolumeMounts: Array<Record<string, unknown>> = [];
+
+  // The AWS SDK needs AWS_REGION explicitly on non-EC2 nodes (no IMDS). Inject
+  // it before the no-secret early return so it applies to every AWS auth mode
+  // (access-key env, shared-credentials file, and IRSA/pod-identity with no Secret).
+  if (provider === "aws" && awsRegion) {
+    env.push({ name: "AWS_REGION", value: awsRegion });
+  }
 
   // Workload Identity covers google; nothing to inject from a Secret.
   if (!secret || provider === "google") {
@@ -421,10 +440,4 @@ function buildProviderCredentialValues(
   return { env, extraVolumes, extraVolumeMounts };
 }
 
-function normalizeAccountId(raw: string): string {
-  let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (!/^[a-z]/.test(s)) s = `a-${s}`;
-  if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-  if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-  return s;
-}
+// normalizeAccountId is imported from ../../infra/_shared (DRY).

@@ -17,6 +17,7 @@ import { Construct } from "constructs";
 import { ApiObject, Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { HelmModule, syncWave } from "../../../core";
+import { buildCapaCredentialsIni, toCapaB64 } from "../../infra/aws/_shared";
 import {
   ServiceAccount,
   ProjectIamMember,
@@ -335,12 +336,12 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
     // Only create the secret when explicit credentials are supplied; otherwise
     // assume the named secret already exists in the cluster.
     if (aws.accessKeyId && aws.secretAccessKey) {
-      const ini =
-        `[default]\n` +
-        `aws_access_key_id = ${aws.accessKeyId}\n` +
-        `aws_secret_access_key = ${aws.secretAccessKey}\n` +
-        `region = ${aws.region}\n`;
-      const b64 = Buffer.from(ini, "utf-8").toString("base64");
+      const ini = buildCapaCredentialsIni({
+        accessKeyId: aws.accessKeyId,
+        secretAccessKey: aws.secretAccessKey,
+        region: aws.region,
+      });
+      const b64 = toCapaB64(ini);
 
       new kplus.Secret(this, "capa-credentials", {
         metadata: { name: secretName, namespace: secretNamespace },

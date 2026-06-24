@@ -21,6 +21,7 @@ import {
   Crossplane,
   CertManager,
   ClusterApiOperator,
+  AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
 } from "nebula-cdk8s";
 
 export interface AwsBootstrapAppOptions {
@@ -92,11 +93,18 @@ export function synthAwsCluster(outdir: string, o: AwsBootstrapAppOptions): void
   new AwsK0sCluster(chart, "mgmt", {
     name: o.clusterName,
     region: o.region,
+    // The bootstrap drives CAPA/k0s from Kind on the operator's machine, so the
+    // k0s API must be reachable from outside the VPC. Force an internet-facing
+    // NLB (the AwsK0sCluster default is INTERNAL, which Kind cannot reach — the
+    // control plane would never report ready). mTLS still guards the API.
+    controlPlaneLoadBalancerScheme:
+      AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING,
     ...(o.k8sVersion ? { k8sVersion: o.k8sVersion } : {}),
     ...(o.vpcCidr ? { vpcCidr: o.vpcCidr } : {}),
     controlPlane: {
       replicas: o.cpReplicas ?? 3,
-      instanceType: o.cpInstanceType ?? "m6i.large",
+      // arm64 Graviton default — pair with an arm64 AMI (--ami-id).
+      instanceType: o.cpInstanceType ?? "t4g.large",
       ...(o.amiId ? { ami: { id: o.amiId } } : {}),
     },
   });

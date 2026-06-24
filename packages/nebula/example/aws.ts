@@ -110,8 +110,10 @@ new IngressNginx(workload, "ingress-nginx", {
 // AWS credentials are injected as env vars (AWS_ACCESS_KEY_ID /
 // AWS_SECRET_ACCESS_KEY) from a Secret named `route53-credentials` that must
 // exist in the external-dns namespace (e.g. created from a ref+sops value).
+// AWS_REGION is also injected so the AWS SDK resolves the region on non-EC2 nodes.
 new ExternalDns(workload, "external-dns", {
   provider: "aws",
+  awsRegion: region,
   domainFilters: [domain],
   policy: "sync",
   txtOwnerId: "nucon-aws",

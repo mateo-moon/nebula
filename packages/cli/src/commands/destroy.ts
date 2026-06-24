@@ -1,16 +1,12 @@
 /**
  * Destroy command - Delete Kind cluster
  */
-import { execSync } from 'node:child_process';
 import * as readline from 'node:readline';
+import { run, log } from './bootstrap/exec';
 
 export interface DestroyOptions {
   name?: string;
   force?: boolean;
-}
-
-function log(msg: string): void {
-  console.log(msg);
 }
 
 async function confirm(message: string): Promise<boolean> {
@@ -27,12 +23,9 @@ async function confirm(message: string): Promise<boolean> {
 }
 
 function kindClusterExists(name: string): boolean {
-  try {
-    const result = execSync(`kind get clusters`, { encoding: 'utf-8', stdio: 'pipe' });
-    return result.split('\n').includes(name);
-  } catch {
-    return false;
-  }
+  return run('kind', ['get', 'clusters'], { silent: true, ignoreErrors: true })
+    .split('\n')
+    .includes(name);
 }
 
 export async function destroy(options: DestroyOptions): Promise<void> {
@@ -56,9 +49,7 @@ export async function destroy(options: DestroyOptions): Promise<void> {
   }
 
   log(`   Deleting cluster '${clusterName}'...`);
-  execSync(`kind delete cluster --name ${clusterName}`, {
-    stdio: 'inherit',
-  });
+  run('kind', ['delete', 'cluster', '--name', clusterName]);
 
   log('');
   log('✅ Cluster deleted');

@@ -79,3 +79,14 @@ export function bindWorkloadIdentityUser(
     },
   });
 }
+
+/**
+ * The Kubernetes-side workload-identity annotation mapping a KSA to its GCP
+ * service account (`iam.gke.io/gcp-service-account`). Returns `{}` when no GSA
+ * email is supplied, so it can be spread directly into a KSA
+ * `metadata.annotations`. This is the KSA counterpart to
+ * {@link bindWorkloadIdentityUser} (which creates the GCP-side IAM binding).
+ */
+export function wiKsaAnnotations(gsaEmail?: string): Record<string, string> {
+  return gsaEmail ? { "iam.gke.io/gcp-service-account": gsaEmail } : {};
+}

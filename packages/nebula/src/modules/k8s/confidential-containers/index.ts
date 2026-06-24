@@ -31,7 +31,7 @@ export type K8sDistribution = "k8s" | "k3s" | "rke2" | "k0s" | "microk8s";
 export interface TeeShimConfig {
   /** Enable AMD SEV-SNP shim (default: true on AMD systems) */
   snp?: boolean;
-  /** Enable Intel TDX shim (default: true on Intel systems) */
+  /** Enable Intel TDX shim (default: false; opt in on Intel TDX-capable nodes) */
   tdx?: boolean;
   /** Enable development/testing shim (default: false) */
   cocoDev?: boolean;
@@ -114,7 +114,9 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
     const shimsOverrides: Record<string, unknown> = {};
     if (this.config.shims) {
       const snp = this.config.shims.snp ?? true;
-      const tdx = this.config.shims.tdx ?? true;
+      // tdx defaults to false: enabling it pulls the qemu-tdx runtime on every
+      // node even when they lack Intel TDX hardware. Opt in explicitly.
+      const tdx = this.config.shims.tdx ?? false;
       const cocoDev = this.config.shims.cocoDev ?? false;
 
       if (!snp) {
@@ -168,7 +170,11 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
 
     const chartValues = deepmerge(defaultValues, this.config.values ?? {});
 
-    // Deploy Helm chart
+    // Deploy Helm chart. This module extends BaseConstruct (not HelmModule) and
+    // builds the Helm release directly because the chart is an OCI registry
+    // reference (oci://...). HelmModule.createHelmRelease requires a separate,
+    // non-optional `repo` field and always emits `helm template --repo`, which
+    // is incompatible with oci:// charts (kagent is the same — see its docstring).
     this.helm = new Helm(this, "helm", {
       chart:
         "oci://ghcr.io/confidential-containers/charts/confidential-containers",

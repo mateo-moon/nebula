@@ -23,7 +23,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { HelmModule } from "../../../core";
+import { HelmModule, type Toleration } from "../../../core";
 
 export interface ArgocdImageUpdaterRegistry {
   /** Registry display name */
@@ -58,12 +58,7 @@ export interface ArgocdImageUpdaterConfig {
   /** Additional Helm values */
   values?: Record<string, unknown>;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
 export class ArgocdImageUpdater extends HelmModule<ArgocdImageUpdaterConfig> {
