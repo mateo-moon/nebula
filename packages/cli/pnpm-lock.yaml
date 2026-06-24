@@ -13,7 +13,7 @@ importers:
         version: 7.10.1(@types/node@22.20.0)
       cdk8s:
         specifier: ^2.69.0
-        version: 2.70.79(constructs@10.6.0)
+        version: 2.70.80(constructs@10.6.0)
       chalk:
         specifier: ^5.4.1
         version: 5.6.2
@@ -347,8 +347,8 @@ packages:
     resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
     hasBin: true
 
-  cdk8s-plus-33@2.5.30:
-    resolution: {integrity: sha512-JRY1/sLGDh6cYw1R4CFVTcyg1uMLyraot8CbZHmltv+ZPzxJwdBbj+gi5wHKKmxDFb4FjpiYmYmAdr7PuWZ+hg==}
+  cdk8s-plus-33@2.5.31:
+    resolution: {integrity: sha512-+SZvqmw6FRCtA0V1onML+IqerxSle+sWLztAjG933lK8H9i+O1nIbv6IacZVY4U/c1W3+hdk5733gmam5s60og==}
     engines: {node: '>= 16.20.0'}
     peerDependencies:
       cdk8s: ^2.68.11
@@ -356,8 +356,8 @@ packages:
     bundledDependencies:
       - minimatch
 
-  cdk8s@2.70.79:
-    resolution: {integrity: sha512-6iUlnCfPRhs8LSis6eHzhOWZXSk8s61j0r6j+q0Q+yeGixwKMpxnWufpAjGB4AWKETZtiaoT3RwaVYzlfxipzA==}
+  cdk8s@2.70.80:
+    resolution: {integrity: sha512-Z53TlNFkXvxHYa+sDa07YPFtR2XntH+bKwzb+osrZ3Pe6ivxnnle5pYN6Fl7XRu6Kdlt2YAnSxd0MOZf0biTXw==}
     engines: {node: '>= 16.20.0'}
     peerDependencies:
       constructs: ^10
@@ -682,12 +682,12 @@ snapshots:
 
   bcryptjs@3.0.3: {}
 
-  cdk8s-plus-33@2.5.30(cdk8s@2.70.79(constructs@10.6.0))(constructs@10.6.0):
+  cdk8s-plus-33@2.5.31(cdk8s@2.70.80(constructs@10.6.0))(constructs@10.6.0):
     dependencies:
-      cdk8s: 2.70.79(constructs@10.6.0)
+      cdk8s: 2.70.80(constructs@10.6.0)
       constructs: 10.6.0
 
-  cdk8s@2.70.79(constructs@10.6.0):
+  cdk8s@2.70.80(constructs@10.6.0):
     dependencies:
       constructs: 10.6.0
 
@@ -754,8 +754,8 @@ snapshots:
   nebula-cdk8s@file:../nebula:
     dependencies:
       bcryptjs: 3.0.3
-      cdk8s: 2.70.79(constructs@10.6.0)
-      cdk8s-plus-33: 2.5.30(cdk8s@2.70.79(constructs@10.6.0))(constructs@10.6.0)
+      cdk8s: 2.70.80(constructs@10.6.0)
+      cdk8s-plus-33: 2.5.31(cdk8s@2.70.80(constructs@10.6.0))(constructs@10.6.0)
       constructs: 10.6.0
       deepmerge-ts: 7.1.5
       yaml: 2.9.0
