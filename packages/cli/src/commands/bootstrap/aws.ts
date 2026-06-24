@@ -37,7 +37,7 @@ import type { BootstrapOptions, BootstrapProvider } from "./types";
 import { buildCapaCredentialsIni, toCapaB64 } from "nebula-cdk8s";
 import { apply } from "../apply";
 
-const MGMT_CLUSTER = "mgmt";
+const DEFAULT_MGMT_CLUSTER = "mgmt";
 const MGMT_NAMESPACE = "default";
 
 /** CRDs the cluster-api-operator installs at runtime that the cluster CRs depend on. */
@@ -260,20 +260,27 @@ function awsMachineProvisionFailure(): string {
  *     cloud-init/bootstrap failed — surfaced with the instance id so the serial
  *     console can be read), rather than waiting out 30 minutes.
  */
-async function waitForClusterReady(timeoutSeconds: number): Promise<void> {
+async function waitForClusterReady(
+  timeoutSeconds: number,
+  clusterName: string,
+): Promise<void> {
   log("");
   log("⏳ Step 4: Waiting for the management cluster (CAPI)");
   log("─".repeat(50));
-  log(`   Cluster: ${MGMT_CLUSTER} (ns ${MGMT_NAMESPACE})`);
+  log(`   Cluster: ${clusterName} (ns ${MGMT_NAMESPACE})`);
 
   const start = Date.now();
   let firstRunningAt: number | null = null;
+  let everSawMachine = false;
 
   while (Date.now() - start < timeoutSeconds * 1000) {
     const sinceStart = Date.now() - start;
-    const cpReady = kget(["get", "cluster", MGMT_CLUSTER, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.controlPlaneReady}"]);
-    const phase = kget(["get", "cluster", MGMT_CLUSTER, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.phase}"]);
-    const kubeconfigExists = kget(["get", "secret", `${MGMT_CLUSTER}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "name"]);
+    // Fully-qualify: once Crossplane's provider-argocd is installed, a bare
+    // `cluster` is ambiguous (cluster.argocd.crossplane.io / k0smotron.io also
+    // define `clusters`) and resolves to the wrong CRD → empty status forever.
+    const cpReady = kget(["get", "cluster.cluster.x-k8s.io", clusterName, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.controlPlaneReady}"]);
+    const phase = kget(["get", "cluster.cluster.x-k8s.io", clusterName, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.phase}"]);
+    const kubeconfigExists = kget(["get", "secret", `${clusterName}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "name"]);
 
     // Success.
     if (cpReady === "true" && kubeconfigExists) {
@@ -295,9 +302,12 @@ async function waitForClusterReady(timeoutSeconds: number): Promise<void> {
       .filter((m) => m.p !== "Deleting");
     const anyRunning = machines.some((m) => m.p === "Running" || m.p === "Provisioned");
     if (anyRunning && firstRunningAt === null) firstRunningAt = Date.now();
+    if (machines.length > 0) everSawMachine = true;
 
     // (2) No control-plane Machine after the grace period → K0sControlPlane never spawned one.
-    if (machines.length === 0 && sinceStart > NO_MACHINE_GRACE_MS) {
+    // Only a TERMINAL "never created" condition: once any machine has appeared,
+    // a transient 0-count (k0smotron recreating replicas) must not trip this.
+    if (!everSawMachine && machines.length === 0 && sinceStart > NO_MACHINE_GRACE_MS) {
       throw new Error(
         `No control-plane Machine exists after ${Math.round(sinceStart / 1000)}s — the K0sControlPlane did not ` +
           `spawn one (likely the cluster CR was not applied, or the k0smotron control-plane webhook never came up). ` +
@@ -326,22 +336,22 @@ async function waitForClusterReady(timeoutSeconds: number): Promise<void> {
     );
     await sleep(20000);
   }
-  throw new Error(`Timed out after ${timeoutSeconds}s waiting for management cluster ${MGMT_CLUSTER}`);
+  throw new Error(`Timed out after ${timeoutSeconds}s waiting for management cluster ${clusterName}`);
 }
 
 /** Write the CAPI-generated kubeconfig for the management cluster to a local file. */
-function fetchKubeconfig(): string {
+function fetchKubeconfig(clusterName: string): string {
   const b64 = kubectl(
-    ["get", "secret", `${MGMT_CLUSTER}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.data.value}"],
+    ["get", "secret", `${clusterName}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.data.value}"],
     { silent: true, ignoreErrors: true },
   ).trim();
   if (!b64) {
     throw new Error(
-      `kubeconfig secret ${MGMT_CLUSTER}-kubeconfig not found in ${MGMT_NAMESPACE}`,
+      `kubeconfig secret ${clusterName}-kubeconfig not found in ${MGMT_NAMESPACE}`,
     );
   }
   const kubeconfig = Buffer.from(b64, "base64").toString("utf-8");
-  const kPath = path.join(process.cwd(), `.kube-${MGMT_CLUSTER}.config`);
+  const kPath = path.join(process.cwd(), `.kube-${clusterName}.config`);
   fs.writeFileSync(kPath, kubeconfig, { mode: 0o600 });
   return kPath;
 }
@@ -379,6 +389,28 @@ async function deployGitopsHandoff(
     run("pnpm", ["install"], { cwd: gitopsDir });
   }
 
+  // The age key resolves ref+sops:// at synth time (here) and is mounted into the
+  // repo-server CMP sidecar (as the nebula-sops-age Secret) for ArgoCD's own syncs.
+  const ageKeyFile =
+    process.env.SOPS_AGE_KEY_FILE ||
+    path.join(process.env.HOME || "", ".config/sops/age/keys.txt");
+  if (!fs.existsSync(ageKeyFile)) {
+    throw new Error(
+      `SOPS age key not found at ${ageKeyFile}. Set SOPS_AGE_KEY_FILE or place the ` +
+        `key there so the GitOps handoff can resolve ref+sops:// and seed nebula-sops-age.`,
+    );
+  }
+  log("   Creating the nebula-sops-age Secret (CMP SOPS decryption)...");
+  ensureNamespace("argocd", kubeconfig);
+  kubectl(["-n", "argocd", "delete", "secret", "nebula-sops-age", "--ignore-not-found"], {
+    kubeconfig,
+    silent: true,
+  });
+  kubectl(
+    ["-n", "argocd", "create", "secret", "generic", "nebula-sops-age", `--from-file=keys.txt=${ageKeyFile}`],
+    { kubeconfig },
+  );
+
   const prev = process.env.KUBECONFIG;
   process.env.KUBECONFIG = kubeconfig;
   try {
@@ -389,7 +421,7 @@ async function deployGitopsHandoff(
       fs.mkdirSync(outdir, { recursive: true });
       run("npx", ["tsx", `${mod}/index.ts`], {
         cwd: gitopsDir,
-        env: { ...process.env, CDK8S_OUTDIR: outdir },
+        env: { ...process.env, CDK8S_OUTDIR: outdir, SOPS_AGE_KEY_FILE: ageKeyFile },
       });
       assertNoUnresolvedRefs(outdir);
       log(`   Applying ${mod}...`);
@@ -423,14 +455,16 @@ async function deployGitopsHandoff(
 
 async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const kindName = options.name || "nebula";
+  const clusterName = options.clusterName || DEFAULT_MGMT_CLUSTER;
   const region = options.region;
   if (!region) {
     throw new Error("AWS provider requires --region (e.g. --region eu-central-1)");
   }
   const appOpts: AwsBootstrapAppOptions = {
     region,
-    clusterName: MGMT_CLUSTER,
+    clusterName,
     amiId: options.amiId,
+    ...(options.cpReplicas ? { cpReplicas: options.cpReplicas } : {}),
   };
 
   log("");
@@ -438,7 +472,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("═".repeat(50));
   log(`   Kind cluster: ${kindName}`);
   log(`   Region:       ${region}`);
-  log(`   Mgmt cluster: ${MGMT_CLUSTER}`);
+  log(`   Mgmt cluster: ${clusterName}`);
   log(`   AMI:          ${appOpts.amiId ?? "(CAPA image lookup — pass --ami-id)"}`);
 
   for (const tool of ["kubectl", "aws", "kind"]) {
@@ -475,13 +509,13 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("📦 Step 4: Creating the management cluster (CAPA + k0s)");
   log("─".repeat(50));
   await deployCluster(appOpts);
-  await waitForClusterReady(1800);
+  await waitForClusterReady(1800, clusterName);
 
   // Step 5: Fetch the management cluster kubeconfig.
   log("");
   log("🔄 Step 5: Fetching the management cluster kubeconfig");
   log("─".repeat(50));
-  const mgmtKubeconfig = fetchKubeconfig();
+  const mgmtKubeconfig = fetchKubeconfig(clusterName);
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
 
   // Step 6: Install the platform on the management cluster. The standalone k0s
@@ -503,7 +537,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("✨ AWS bootstrap complete!");
   log("");
   log(`   Kind (bootstrap):  kind-${kindName}`);
-  log(`   k0s (management):  ${MGMT_CLUSTER}  →  KUBECONFIG="${mgmtKubeconfig}"`);
+  log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
   if (options.gitopsDir) {
     log("   ArgoCD now reconciles the platform from git — including infra/cluster-api,");

@@ -59,6 +59,8 @@ program
   .option('--region <region>', 'AWS region, e.g. eu-central-1 (aws)')
   .option('--aws-profile <profile>', 'AWS named profile for credentials (aws)')
   .option('--ami-id <ami>', 'AMI for the management cluster nodes (aws; recommend Ubuntu 22.04)')
+  .option('--cluster-name <name>', "Management cluster name (aws; default 'mgmt') — set a distinct value to isolate from another cluster in the same account")
+  .option('--cp-replicas <n>', 'Number of control-plane nodes (aws; default 3)', (v: string) => parseInt(v, 10))
   .option('--gitops-dir <path>', 'Repo subtree with meta/argocd + meta/argocd-apps; hands the platform off to ArgoCD ← git (aws)')
   .option('--skip-kind', 'Skip Kind cluster creation')
   .option('--skip-credentials', 'Skip credentials setup')
