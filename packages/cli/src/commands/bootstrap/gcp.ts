@@ -1,7 +1,7 @@
 /**
- * GCP provider — Kind → Crossplane provisions GKE → pivot the control-plane stack
- * onto GKE (ArgoCD then GitOps-syncs the rest). Consumes a project layout in the
- * cwd (bootstrap.ts + infra/* + meta/argocd*).
+ * GCP provider — Kind → Crossplane provisions GKE → hand the control-plane stack
+ * off to GKE, where ArgoCD inherits and GitOps-syncs the rest from git. Consumes a
+ * project layout in the cwd (bootstrap.ts + infra/* + meta/argocd*).
  *
  * All shell execution is no-shell (run/kubectl → execFileSync, argv only); the
  * project id read from a committed config.ts and every K8s API value is passed

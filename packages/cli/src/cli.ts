@@ -50,7 +50,7 @@ program
   .command('bootstrap')
   .description(
     'Full deployment. gcp: Kind → Crossplane → GKE → Workloads. ' +
-      'aws: Kind → Crossplane + CAPA → self-managed HA k0s management cluster (no clusterctl pivot; Kind holds the CAPI lifecycle objects).',
+      'aws: Kind → Crossplane + CAPA → self-managed HA k0s management cluster; with --gitops-dir, ArgoCD inherits the platform from git and Kind is discarded.',
   )
   .option('-n, --name <name>', 'Kind cluster name', 'nebula')
   .option('--provider <provider>', "Management cluster cloud: 'gcp' or 'aws'", 'gcp')
