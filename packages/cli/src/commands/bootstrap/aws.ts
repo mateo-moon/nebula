@@ -208,8 +208,63 @@ async function deployPlatform(
   await waitForProviders(300, kubeconfig);
 }
 
+/**
+ * Pre-seed the cluster CA secrets BEFORE the K0sControlPlane reconciles, so all
+ * HA control-plane replicas adopt one shared CA instead of each self-signing its
+ * own (k0smotron #467: divergent CAs → the round-robin NLB fails TLS on ~2/3 of
+ * handshakes → "x509: certificate signed by unknown authority"). k0smotron does
+ * lookup-then-generate, so existing secrets are adopted; ORDERING is the gotcha —
+ * these must exist before the cluster CRs are applied.
+ *
+ * Emits the four standard CAPI cert secrets: <cluster>-{ca,etcd,proxy} (CA
+ * cert+key) and <cluster>-sa (SA signing keypair), type cluster.x-k8s.io/secret.
+ */
+function seedClusterCertificates(clusterName: string, namespace: string): void {
+  log("   Pre-seeding shared cluster CA secrets (HA control-plane)...");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-ca-"));
+  try {
+    const genCa = (name: string, cn: string): void => {
+      run("openssl", ["genrsa", "-out", `${dir}/${name}.key`, "2048"], { silent: true });
+      run(
+        "openssl",
+        [
+          "req", "-x509", "-new", "-nodes", "-key", `${dir}/${name}.key`,
+          "-subj", `/CN=${cn}`, "-days", "3650", "-out", `${dir}/${name}.crt`,
+          "-addext", "basicConstraints=critical,CA:TRUE",
+          "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+        ],
+        { silent: true },
+      );
+    };
+    genCa("ca", "kubernetes");
+    genCa("etcd", "etcd-ca");
+    genCa("proxy", "front-proxy-ca");
+    // Service-account signing keypair (tls.key = private, tls.crt = public).
+    run("openssl", ["genrsa", "-out", `${dir}/sa.key`, "2048"], { silent: true });
+    run("openssl", ["rsa", "-in", `${dir}/sa.key`, "-pubout", "-out", `${dir}/sa.pub`], { silent: true });
+
+    const b64 = (f: string): string => fs.readFileSync(path.join(dir, f)).toString("base64");
+    const secret = (suffix: string, crtFile: string, keyFile: string): string =>
+      `apiVersion: v1\nkind: Secret\nmetadata:\n  name: ${clusterName}-${suffix}\n` +
+      `  namespace: ${namespace}\n  labels:\n    cluster.x-k8s.io/cluster-name: ${clusterName}\n` +
+      `type: cluster.x-k8s.io/secret\ndata:\n  tls.crt: ${b64(crtFile)}\n  tls.key: ${b64(keyFile)}\n`;
+    const manifest = [
+      secret("ca", "ca.crt", "ca.key"),
+      secret("etcd", "etcd.crt", "etcd.key"),
+      secret("proxy", "proxy.crt", "proxy.key"),
+      secret("sa", "sa.pub", "sa.key"),
+    ].join("---\n");
+    kubectl(["apply", "-f", "-"], { input: manifest, silent: true });
+    log("   ✅ Seeded <cluster>-{ca,etcd,proxy,sa}");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** Apply the management cluster CRs (after the operator installs the CAPA/k0s CRDs). */
 async function deployCluster(appOpts: AwsBootstrapAppOptions): Promise<void> {
+  // Shared CA must exist before the K0sControlPlane reconciles (HA).
+  seedClusterCertificates(appOpts.clusterName, MGMT_NAMESPACE);
   const outdir = path.join(process.cwd(), ".nebula-aws-cluster");
   await synthAndApply(outdir, () => synthAwsCluster(outdir, appOpts));
 }
