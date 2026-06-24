@@ -78,8 +78,6 @@ export interface PiraeusConfig {
   namespace?: string;
   /** Piraeus Operator version (defaults to "v2.10.4") */
   operatorVersion?: string;
-  /** linstor-cluster Helm chart version (defaults to "1.1.1") */
-  clusterChartVersion?: string;
   /** Encrypted StorageClass name (defaults to "linstor-encrypted") */
   storageClassName?: string;
   /** LUKS encryption configuration */
@@ -96,8 +94,6 @@ export interface PiraeusConfig {
   hostNetwork?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
   advertiseIP?: string;
-  /** Additional Helm values for linstor-cluster chart */
-  values?: Record<string, unknown>;
 }
 
 export class Piraeus extends BaseConstruct<PiraeusConfig> {

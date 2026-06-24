@@ -6,6 +6,7 @@ import {
   ProviderConfigSpecCredentialsSource,
 } from "#imports/aws.upbound.io";
 import { ARGOCD_KEEP_ON_DELETE } from "../../core";
+import { createProviderFamily } from "./_shared";
 
 /**
  * Credential source for the AWS Crossplane provider.
@@ -84,20 +85,18 @@ export class AwsProvider extends Construct {
     // Default families needed for the infra/aws module (networking + IAM)
     const families = config.families ?? ["ec2", "iam"];
 
-    // Create a Provider for each family
+    // Create a Provider for each family (shared loop body — see providers/_shared).
     for (const family of families) {
-      const providerName = `${providerNamePrefix}-${family}`;
-      const providerPackage = `xpkg.upbound.io/upbound/provider-aws-${family}`;
-
-      this.providers[family] = new CpProvider(this, `provider-${family}`, {
-        metadata: {
-          name: providerName,
-          annotations: ARGOCD_KEEP_ON_DELETE,
+      this.providers[family] = createProviderFamily(
+        this,
+        family,
+        `provider-${family}`,
+        {
+          namePrefix: providerNamePrefix,
+          version: providerVersion,
+          cloud: "aws",
         },
-        spec: {
-          package: `${providerPackage}:${providerVersion}`,
-        },
-      });
+      );
     }
 
     // Build credentials spec based on source type

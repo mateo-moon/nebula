@@ -3,19 +3,28 @@
  * Cluster API (CAPA), with no EKS. The Kind cluster only bootstraps; the standalone
  * k0s control plane is self-contained, so the platform is redeployed onto the new
  * cluster and Kind is discarded (no clusterctl pivot). Built in-process from flags.
+ *
+ * All shell execution is no-shell (run/kubectl → execFileSync, argv only). AWS
+ * credentials are never placed on the process argv: the CAPA base64 blob and the
+ * Crossplane INI are both passed to kubectl via `--from-file=<tempfile>` (0600,
+ * created in a private mkdtemp dir, removed in a `finally`).
  */
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import {
-  exec,
+  run,
+  kubectl,
   log,
-  sleep,
   commandExists,
   createKindCluster,
-  kubeconfigPrefix,
   waitForProviders,
   waitForCrds,
+  waitForManagedReady,
   synthAndApply,
+  waitFor,
+  ensureNamespace,
+  sleep,
 } from "./shared";
 import {
   synthAwsPlatform,
@@ -23,6 +32,7 @@ import {
   AwsBootstrapAppOptions,
 } from "./aws-apps";
 import type { BootstrapOptions, BootstrapProvider } from "./types";
+import { buildCapaCredentialsIni, toCapaB64 } from "nebula-cdk8s";
 
 const MGMT_CLUSTER = "mgmt";
 const MGMT_NAMESPACE = "default";
@@ -35,6 +45,16 @@ const CAPI_CLUSTER_CRDS = [
   "k0scontrolplanes.controlplane.cluster.x-k8s.io",
 ];
 
+/**
+ * Node IAM managed resources (created by the `Aws`/`AwsIam` module) that must be
+ * fully Ready before any machine launches — see the gate in {@link bootstrapAws}.
+ */
+const NODE_IAM_KINDS = [
+  "roles.iam.aws.upbound.io",
+  "instanceprofiles.iam.aws.upbound.io",
+  "rolepolicyattachments.iam.aws.upbound.io",
+];
+
 interface AwsCreds {
   accessKeyId: string;
   secretAccessKey: string;
@@ -43,16 +63,24 @@ interface AwsCreds {
 
 /** Resolve AWS credentials from a named profile (handles static keys and SSO). */
 function awsExportCredentials(profile?: string): AwsCreds {
-  const p = profile ? `--profile ${profile}` : "";
-  let out = "";
+  let out: string;
   try {
-    out = exec(`aws configure export-credentials ${p} --format env-no-export`, {
-      silent: true,
-    });
-  } catch {
+    out = run(
+      "aws",
+      [
+        "configure",
+        "export-credentials",
+        ...(profile ? ["--profile", profile] : []),
+        "--format",
+        "env-no-export",
+      ],
+      { silent: true },
+    );
+  } catch (error: any) {
     throw new Error(
-      `Failed to resolve AWS credentials${profile ? ` for profile '${profile}'` : ""}. ` +
-        `Run: aws configure --profile <name>`,
+      `Failed to resolve AWS credentials${profile ? ` for profile '${profile}'` : ""}.\n` +
+        `${error.message}\n` +
+        `Run: aws sso login (SSO) or aws configure (static key). Requires AWS CLI v2.`,
     );
   }
   const get = (k: string): string => {
@@ -80,7 +108,6 @@ async function setupAwsCredentials(
     log("─".repeat(50));
   }
 
-  const kc = kubeconfigPrefix(kubeconfig);
   const { accessKeyId, secretAccessKey, sessionToken } =
     awsExportCredentials(profile);
   if (sessionToken && !kubeconfig) {
@@ -89,46 +116,58 @@ async function setupAwsCredentials(
     );
   }
 
-  const ini =
-    `[default]\n` +
-    `aws_access_key_id = ${accessKeyId}\n` +
-    `aws_secret_access_key = ${secretAccessKey}\n` +
-    (sessionToken ? `aws_session_token = ${sessionToken}\n` : "") +
-    `region = ${region}\n`;
-  const iniPath = `/tmp/nebula-aws-creds-${Date.now()}.ini`;
-  fs.writeFileSync(iniPath, ini, { mode: 0o600 });
+  const ini = buildCapaCredentialsIni({
+    accessKeyId,
+    secretAccessKey,
+    region,
+    sessionToken,
+  });
+  const b64 = toCapaB64(ini);
 
+  // Private temp dir (fresh, so no symlink-planting risk); 0600 files with O_EXCL
+  // (`wx`); removed in a `finally` so creds never persist, even on throw/SIGKILL
+  // of the kubectl calls below.
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-aws-"));
+  const iniPath = path.join(tmpDir, "creds.ini");
+  const b64Path = path.join(tmpDir, "capa-creds.b64");
   try {
-    // Crossplane provider-aws credentials (secretRef key 'creds')
-    exec(
-      `${kc}kubectl create namespace crossplane-system --dry-run=client -o yaml | ${kc}kubectl apply -f -`,
-      { silent: true },
-    );
-    exec(
-      `${kc}kubectl delete secret aws-creds -n crossplane-system --ignore-not-found`,
-      { silent: true },
-    );
-    exec(
-      `${kc}kubectl create secret generic aws-creds --from-file=creds=${iniPath} -n crossplane-system`,
+    fs.writeFileSync(iniPath, ini, { mode: 0o600, flag: "wx" });
+    fs.writeFileSync(b64Path, b64, { mode: 0o600, flag: "wx" });
+
+    // Crossplane provider-aws credentials (secretRef key 'creds') — via file, not argv.
+    ensureNamespace("crossplane-system", kubeconfig);
+    kubectl(["delete", "secret", "aws-creds", "-n", "crossplane-system", "--ignore-not-found"], {
+      kubeconfig,
+      silent: true,
+      ignoreErrors: true,
+    });
+    kubectl(
+      ["create", "secret", "generic", "aws-creds", `--from-file=creds=${iniPath}`, "-n", "crossplane-system"],
+      { kubeconfig },
     );
 
-    // CAPA credentials (AWS_B64ENCODED_CREDENTIALS + AWS_REGION)
-    const b64 = Buffer.from(ini, "utf-8").toString("base64");
-    exec(
-      `${kc}kubectl create namespace capa-system --dry-run=client -o yaml | ${kc}kubectl apply -f -`,
-      { silent: true },
-    );
-    exec(
-      `${kc}kubectl delete secret aws-capa-credentials -n capa-system --ignore-not-found`,
-      { silent: true },
-    );
-    exec(
-      `${kc}kubectl create secret generic aws-capa-credentials ` +
-        `--from-literal=AWS_B64ENCODED_CREDENTIALS=${b64} ` +
-        `--from-literal=AWS_REGION=${region} -n capa-system`,
+    // CAPA credentials — AWS_B64ENCODED_CREDENTIALS via file (never on argv), AWS_REGION via literal.
+    ensureNamespace("capa-system", kubeconfig);
+    kubectl(["delete", "secret", "aws-capa-credentials", "-n", "capa-system", "--ignore-not-found"], {
+      kubeconfig,
+      silent: true,
+      ignoreErrors: true,
+    });
+    kubectl(
+      [
+        "create",
+        "secret",
+        "generic",
+        "aws-capa-credentials",
+        `--from-file=AWS_B64ENCODED_CREDENTIALS=${b64Path}`,
+        `--from-literal=AWS_REGION=${region}`,
+        "-n",
+        "capa-system",
+      ],
+      { kubeconfig },
     );
   } finally {
-    fs.unlinkSync(iniPath);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
   log(
@@ -146,15 +185,17 @@ async function deployPlatform(
   appOpts: AwsBootstrapAppOptions,
   kubeconfig?: string,
 ): Promise<void> {
-  const kc = kubeconfigPrefix(kubeconfig);
   const outdir = path.join(process.cwd(), ".nebula-aws-platform");
 
   await synthAndApply(outdir, () => synthAwsPlatform(outdir, appOpts), kubeconfig);
 
+  // Wait for the cert-manager webhook and FAIL FAST if it doesn't come up — the
+  // whole subsequent flow (cluster-api-operator admission, CRD serving certs)
+  // depends on it. (Previously this was masked by ignoreErrors.)
   log("   Waiting for cert-manager webhook...");
-  exec(
-    `${kc}kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=240s`,
-    { ignoreErrors: true },
+  kubectl(
+    ["-n", "cert-manager", "rollout", "status", "deploy/cert-manager-webhook", "--timeout=240s"],
+    { kubeconfig },
   );
   // Re-apply so the operator's cert-manager Certificate/Issuer (which need the
   // webhook up) and any first-pass-skipped resources are created.
@@ -171,6 +212,51 @@ async function deployCluster(appOpts: AwsBootstrapAppOptions): Promise<void> {
 }
 
 /** Wait until the CAPI cluster's control plane is ready and its kubeconfig secret exists. */
+/**
+ * Grace before "no control-plane Machine exists yet" becomes a failure. The
+ * k0smotron controller churns on the (not-yet-reachable) control-plane NLB for
+ * several minutes — "Error deleting old control nodes" / "Failed to update
+ * status" i/o timeouts — before it creates the first machine (~4-5 min observed
+ * live), so this must comfortably exceed that or it aborts a healthy bootstrap.
+ */
+const NO_MACHINE_GRACE_MS = 480_000; // 8 min
+/** Grace after a node is Running before "k0s never initialized" becomes a failure (cloud-init/bootstrap died). */
+const STUCK_RUNNING_GRACE_MS = 420_000; // 7 min
+
+/** kubectl jsonpath read against the kind (management) cluster, trimmed. */
+function kget(args: string[]): string {
+  return kubectl(args, { silent: true, ignoreErrors: true }).trim();
+}
+
+/**
+ * Scan AWSMachines for a TERMINAL provision failure (e.g. InstanceProvisionFailed:
+ * InvalidKeyPair / UnauthorizedOperation). Returns a human message, or "" if none.
+ * Transient not-ready reasons (InstanceProvisionStarted, …) are ignored.
+ */
+function awsMachineProvisionFailure(): string {
+  const raw = kget([
+    "get", "awsmachine", "-n", MGMT_NAMESPACE,
+    "-o", `jsonpath={range .items[*]}{.metadata.name}|{.status.conditions[?(@.type=='InstanceReady')].status}|{.status.conditions[?(@.type=='InstanceReady')].reason}|{.status.conditions[?(@.type=='InstanceReady')].message}{'\\n'}{end}`,
+  ]);
+  for (const line of raw.split("\n").filter(Boolean)) {
+    const [name, status, reason, message] = line.split("|");
+    if (status === "False" && /fail|invalid|unauthor|denied/i.test(reason || "")) {
+      return `${name}: ${reason}${message ? ` — ${message}` : ""}`;
+    }
+  }
+  return "";
+}
+
+/**
+ * Wait until the CAPI control plane is ready — but FAIL FAST on the failure modes
+ * we've hit live, instead of blindly polling for the full timeout:
+ *  1. an AWSMachine reports a terminal provision failure (seconds);
+ *  2. no control-plane Machine exists after a grace period (the K0sControlPlane CR
+ *     never got applied / never spawned machines — e.g. the webhook race);
+ *  3. a node has been Running for a while but k0s never initialized (the node's
+ *     cloud-init/bootstrap failed — surfaced with the instance id so the serial
+ *     console can be read), rather than waiting out 30 minutes.
+ */
 async function waitForClusterReady(timeoutSeconds: number): Promise<void> {
   log("");
   log("⏳ Step 4: Waiting for the management cluster (CAPI)");
@@ -178,39 +264,73 @@ async function waitForClusterReady(timeoutSeconds: number): Promise<void> {
   log(`   Cluster: ${MGMT_CLUSTER} (ns ${MGMT_NAMESPACE})`);
 
   const start = Date.now();
-  while (Date.now() - start < timeoutSeconds * 1000) {
-    const get = (jsonpath: string): string =>
-      exec(
-        `kubectl get cluster ${MGMT_CLUSTER} -n ${MGMT_NAMESPACE} -o jsonpath="${jsonpath}" 2>/dev/null || echo ""`,
-        { silent: true },
-      ).trim();
-    const phase = get("{.status.phase}");
-    const cpReady = get("{.status.controlPlaneReady}");
-    const kubeconfigExists = exec(
-      `kubectl get secret ${MGMT_CLUSTER}-kubeconfig -n ${MGMT_NAMESPACE} -o name 2>/dev/null || echo ""`,
-      { silent: true },
-    ).trim();
+  let firstRunningAt: number | null = null;
 
+  while (Date.now() - start < timeoutSeconds * 1000) {
+    const sinceStart = Date.now() - start;
+    const cpReady = kget(["get", "cluster", MGMT_CLUSTER, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.controlPlaneReady}"]);
+    const phase = kget(["get", "cluster", MGMT_CLUSTER, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.phase}"]);
+    const kubeconfigExists = kget(["get", "secret", `${MGMT_CLUSTER}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "name"]);
+
+    // Success.
     if (cpReady === "true" && kubeconfigExists) {
       log("   ✅ Management cluster control plane is ready");
       return;
     }
-    const elapsed = Math.round((Date.now() - start) / 1000);
+
+    // (1) Terminal AWSMachine provision failure — abort immediately.
+    const failure = awsMachineProvisionFailure();
+    if (failure) {
+      throw new Error(`Control-plane node failed to provision: ${failure}`);
+    }
+
+    // Track control-plane machines and whether any has reached an EC2-running phase.
+    const machines = kget([
+      "get", "machine", "-n", MGMT_NAMESPACE,
+      "-o", `jsonpath={range .items[*]}{.metadata.name}={.status.phase};{end}`,
+    ]).split(";").filter(Boolean).map((s) => { const [n, p] = s.split("="); return { n, p }; })
+      .filter((m) => m.p !== "Deleting");
+    const anyRunning = machines.some((m) => m.p === "Running" || m.p === "Provisioned");
+    if (anyRunning && firstRunningAt === null) firstRunningAt = Date.now();
+
+    // (2) No control-plane Machine after the grace period → K0sControlPlane never spawned one.
+    if (machines.length === 0 && sinceStart > NO_MACHINE_GRACE_MS) {
+      throw new Error(
+        `No control-plane Machine exists after ${Math.round(sinceStart / 1000)}s — the K0sControlPlane did not ` +
+          `spawn one (likely the cluster CR was not applied, or the k0smotron control-plane webhook never came up). ` +
+          `Check: kubectl get k0scontrolplane,machine -n ${MGMT_NAMESPACE}`,
+      );
+    }
+
+    // (3) Node Running but k0s never initialized → node bootstrap/cloud-init failed.
+    const cpInitialized = kget(["get", "k0scontrolplane", "-n", MGMT_NAMESPACE, "-o", "jsonpath={.items[0].status.initialization.controlPlaneInitialized}"]);
+    if (firstRunningAt !== null && cpInitialized !== "true" && Date.now() - firstRunningAt > STUCK_RUNNING_GRACE_MS) {
+      const instanceId = kget([
+        "get", "awsmachine", "-n", MGMT_NAMESPACE,
+        "-o", "jsonpath={.items[0].spec.providerID}",
+      ]).replace(/^.*\//, "");
+      throw new Error(
+        `Control-plane node has been running for >${Math.round((Date.now() - firstRunningAt) / 1000)}s but k0s never ` +
+          `initialized (controlPlaneInitialized=false). The node's bootstrap (cloud-init) almost certainly failed. ` +
+          `Inspect the serial console: aws ec2 get-console-output --instance-id ${instanceId || "<id>"} --latest. ` +
+          `Aborting early instead of waiting out the full timeout.`,
+      );
+    }
+
     log(
-      `   Waiting... (${elapsed}s, phase: ${phase || "Pending"}, controlPlaneReady: ${cpReady || "false"})`,
+      `   Waiting... (${Math.round(sinceStart / 1000)}s, phase: ${phase || "Pending"}, ` +
+        `cpReady: ${cpReady || "false"}, machines: ${machines.length}${anyRunning ? " running" : ""})`,
     );
-    await sleep(30000);
+    await sleep(20000);
   }
-  throw new Error(
-    `Management cluster ${MGMT_CLUSTER} did not become ready within ${timeoutSeconds}s`,
-  );
+  throw new Error(`Timed out after ${timeoutSeconds}s waiting for management cluster ${MGMT_CLUSTER}`);
 }
 
 /** Write the CAPI-generated kubeconfig for the management cluster to a local file. */
 function fetchKubeconfig(): string {
-  const b64 = exec(
-    `kubectl get secret ${MGMT_CLUSTER}-kubeconfig -n ${MGMT_NAMESPACE} -o jsonpath="{.data.value}" 2>/dev/null`,
-    { silent: true },
+  const b64 = kubectl(
+    ["get", "secret", `${MGMT_CLUSTER}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.data.value}"],
+    { silent: true, ignoreErrors: true },
   ).trim();
   if (!b64) {
     throw new Error(
@@ -261,6 +381,17 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("   Waiting for the cluster-api-operator to install CAPA/k0s CRDs...");
   await waitForCrds(CAPI_CLUSTER_CRDS, 600);
 
+  // Gate cluster creation on the node IAM being fully provisioned. CAPA launches
+  // the EC2 instance as soon as its instance profile exists and won't wait for
+  // Crossplane to finish attaching the role's policies; a node launched before
+  // the Secrets-Manager read policy is attached can't fetch its bootstrap data
+  // and silently fails cloud-init (k0s never installs). Wait for the role +
+  // instance profile + policy attachments to be Ready, then let the IAM change
+  // propagate to EC2's view before any machine launches.
+  log("   Waiting for the node IAM (role + instance profile + policies) to be ready...");
+  await waitForManagedReady(NODE_IAM_KINDS, 600);
+  await sleep(20000); // IAM is eventually consistent — let it propagate to EC2
+
   // Step 4: Create the management cluster, then wait for its control plane.
   log("");
   log("📦 Step 4: Creating the management cluster (CAPA + k0s)");
@@ -276,7 +407,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
 
   // Step 6: Install the platform on the management cluster (no clusterctl pivot —
-  // the standalone k0s control plane is self-contained; Kind can be discarded).
+  // the standalone k0s control plane is self-contained).
   log("");
   log("📦 Step 6: Installing the platform on the management cluster");
   log("─".repeat(50));
@@ -287,12 +418,17 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("═".repeat(50));
   log("✨ AWS bootstrap complete!");
   log("");
-  log(`   Kind (bootstrap):  kind-${kindName}  (ephemeral — safe to delete)`);
+  log(`   Kind (bootstrap):  kind-${kindName}`);
   log(`   k0s (management):  ${MGMT_CLUSTER}  →  KUBECONFIG="${mgmtKubeconfig}"`);
+  log("");
+  log("   ⚠️  No clusterctl pivot was performed: the Kind cluster still HOLDS the CAPI");
+  log("   lifecycle objects for the management cluster. Deleting Kind orphans lifecycle");
+  log("   management of the management cluster (the cluster itself keeps running). Run");
+  log("   `clusterctl move` to transfer lifecycle ownership before deleting Kind.");
   log("");
   log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
   log("   kubectl get nodes");
-  log(`   kind delete cluster --name ${kindName}`);
+  log(`   kind delete cluster --name ${kindName}  # only after clusterctl move`);
   log("");
 }
 

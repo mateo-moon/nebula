@@ -42,6 +42,15 @@ export class KarmadaClusterRegistration extends Construct {
     super(scope, id);
 
     const mode: KarmadaClusterMode = config.mode ?? "Push";
+    // Push mode reaches out to the member API endpoint, so it must be supplied.
+    // The type marks apiEndpoint required, but enforce it at runtime too — a
+    // missing endpoint would otherwise render spec.apiEndpoint as undefined and
+    // the registration would silently fail to connect.
+    if (mode === "Push" && !config.apiEndpoint) {
+      throw new Error(
+        `${id}: apiEndpoint is required for Push-mode Karmada registration`,
+      );
+    }
     const secretNamespace = config.secretNamespace ?? "karmada-system";
 
     // Build cluster labels
@@ -117,6 +126,13 @@ export class KarmadaCapiClusterRegistration extends Construct {
     config: CapiClusterRegistrationConfig,
   ) {
     super(scope, id);
+
+    // Push mode (hardcoded below) requires the member API endpoint.
+    if (!config.apiEndpoint) {
+      throw new Error(
+        `${id}: apiEndpoint is required (KarmadaCapiClusterRegistration is Push-mode)`,
+      );
+    }
 
     const clusterNamespace = config.clusterNamespace ?? "default";
     const karmadaNamespace = config.karmadaNamespace ?? "karmada-system";

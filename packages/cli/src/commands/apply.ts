@@ -1,17 +1,20 @@
 /**
  * Apply command - Apply synthesized manifests to cluster with CRD dependency handling
- * 
+ *
  * Applies resources in phases:
  * 1. CRDs and Namespaces
  * 2. Wait for CRDs to be established
  * 3. Operators/Controllers
  * 4. Wait for operator CRDs
  * 5. Custom Resources
+ *
+ * Shell execution is no-shell (run/kubectl from ./bootstrap/exec → execFileSync,
+ * argv only); there is no local exec/execSync helper anymore.
  */
-import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
+import { run, kubectl, log, sleep } from './bootstrap/exec';
 
 export interface ApplyOptions {
   file?: string;
@@ -27,24 +30,6 @@ interface K8sResource {
   };
 }
 
-function log(msg: string): void {
-  console.log(msg);
-}
-
-function exec(cmd: string, options?: { silent?: boolean; ignoreErrors?: boolean }): string {
-  try {
-    return execSync(cmd, {
-      encoding: 'utf-8',
-      stdio: options?.silent ? ['pipe', 'pipe', 'pipe'] : 'inherit',
-    });
-  } catch (error: any) {
-    if (options?.ignoreErrors) {
-      return error.stdout || '';
-    }
-    throw error;
-  }
-}
-
 function findManifestFiles(pattern: string): string[] {
   // Handle recursive glob patterns like dist/**/*.k8s.yaml
   if (pattern.includes('**')) {
@@ -52,17 +37,17 @@ function findManifestFiles(pattern: string): string[] {
     const filePattern = rest.join('/**/');
     return findFilesRecursively(baseDir, filePattern);
   }
-  
+
   const dir = path.dirname(pattern);
   const filePattern = path.basename(pattern);
-  
+
   if (!fs.existsSync(dir)) {
     return [];
   }
 
   const files = fs.readdirSync(dir);
   const regex = new RegExp('^' + filePattern.replace('*', '.*') + '$');
-  
+
   return files
     .filter(f => regex.test(f))
     .map(f => path.join(dir, f));
@@ -72,10 +57,10 @@ function findFilesRecursively(dir: string, filePattern: string): string[] {
   if (!fs.existsSync(dir)) {
     return [];
   }
-  
+
   const results: string[] = [];
   const regex = new RegExp('^' + filePattern.replace(/\*/g, '.*') + '$');
-  
+
   function walk(currentDir: string) {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -87,7 +72,7 @@ function findFilesRecursively(dir: string, filePattern: string): string[] {
       }
     }
   }
-  
+
   walk(dir);
   return results;
 }
@@ -118,7 +103,7 @@ function isPhase2Resource(resource: K8sResource): boolean {
     'rbac.authorization.k8s.io/v1',
     'networking.k8s.io/v1',
   ];
-  
+
   const operatorKinds = [
     'ServiceAccount',
     'Secret',
@@ -133,7 +118,7 @@ function isPhase2Resource(resource: K8sResource): boolean {
     'Service',
     'Job',
   ];
-  
+
   return coreApiVersions.includes(resource.apiVersion) && operatorKinds.includes(resource.kind);
 }
 
@@ -156,28 +141,42 @@ function isProviderConfig(resource: K8sResource): boolean {
   return resource.kind === 'ProviderConfig';
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/** Build the `kubectl apply --server-side …` argv for a manifest file (no shell). */
+function applyArgs(file: string, dryRun: boolean): string[] {
+  return [
+    'apply',
+    '--server-side',
+    '--force-conflicts',
+    '-f',
+    file,
+    ...(dryRun ? ['--dry-run=client'] : []),
+  ];
 }
 
 async function waitForDeployments(timeout: number = 120): Promise<void> {
   log('   Waiting for deployments to be ready...');
   const start = Date.now();
-  
+
   while ((Date.now() - start) < timeout * 1000) {
     // Get all deployments and check if they're ready
-    const result = exec(
-      `kubectl get deployments -A -o jsonpath='{range .items[*]}{.metadata.name}={.status.readyReplicas}/{.status.replicas} {end}'`,
-      { silent: true, ignoreErrors: true }
+    const result = kubectl(
+      [
+        'get',
+        'deployments',
+        '-A',
+        '-o',
+        'jsonpath={range .items[*]}{.metadata.name}={.status.readyReplicas}/{.status.replicas} {end}',
+      ],
+      { silent: true, ignoreErrors: true },
     );
-    
+
     const deployments = result.trim().split(' ').filter(s => s);
     if (deployments.length === 0) {
       // No deployments yet, wait a bit
       await sleep(3000);
       continue;
     }
-    
+
     // Check if all deployments have ready replicas
     // Deployments with 0 desired replicas are considered ready (intentionally scaled to 0)
     // Empty values from jsonpath mean 0 (e.g., "=/1" means 0/1, "=/" means 0/0)
@@ -190,32 +189,31 @@ async function waitForDeployments(timeout: number = 120): Promise<void> {
       // Ready if: desired is 0 (scaled down) OR ready >= desired
       return desired === 0 || ready >= desired;
     });
-    
+
     if (allReady) {
       log('   ✅ Deployments ready');
       return;
     }
-    
+
     await sleep(5000);
   }
-  
+
   log('   ⚠️  Some deployments may not be fully ready yet, continuing...');
 }
 
 async function waitForCrds(timeout: number = 120): Promise<void> {
   log('   Waiting for CRDs to be established...');
-  
+
   // CRDs typically establish within a few seconds
   // Wait a short time to let the API server register them
   await sleep(3000);
-  
-  // Verify at least one CRD is accessible (sanity check)
-  const crdCount = exec(
-    'kubectl get crd --no-headers 2>/dev/null | wc -l',
-    { silent: true, ignoreErrors: true }
-  );
-  
-  if (parseInt(crdCount.trim() || '0') > 0) {
+
+  // Verify at least one CRD is accessible (sanity check) — count in JS instead
+  // of piping through the shell (`kubectl get crd | wc -l`).
+  const listing = kubectl(['get', 'crd', '--no-headers'], { silent: true, ignoreErrors: true });
+  const crdCount = listing.split('\n').filter(l => l.trim()).length;
+
+  if (crdCount > 0) {
     log('   ✅ CRDs established');
   } else {
     log('   ✅ No CRDs to wait for');
@@ -225,29 +223,29 @@ async function waitForCrds(timeout: number = 120): Promise<void> {
 async function waitForProviders(timeout: number = 300): Promise<void> {
   log('   Waiting for Crossplane providers to be healthy...');
   const start = Date.now();
-  
+
   while ((Date.now() - start) < timeout * 1000) {
-    const result = exec(
-      `kubectl get providers -o jsonpath='{.items[*].status.conditions[?(@.type=="Healthy")].status}'`,
-      { silent: true, ignoreErrors: true }
+    const result = kubectl(
+      ['get', 'providers', '-o', 'jsonpath={.items[*].status.conditions[?(@.type=="Healthy")].status}'],
+      { silent: true, ignoreErrors: true },
     );
-    
+
     const statuses = result.trim().split(' ').filter(s => s);
     if (statuses.length > 0 && statuses.every(s => s === 'True')) {
       log('   ✅ Providers healthy');
       return;
     }
-    
-    // Check if there are providers at all
-    const providerCount = exec('kubectl get providers --no-headers 2>/dev/null | wc -l', { silent: true, ignoreErrors: true });
-    if (parseInt(providerCount.trim() || '0') === 0) {
+
+    // Check if there are providers at all — count in JS instead of `wc -l`.
+    const listing = kubectl(['get', 'providers', '--no-headers'], { silent: true, ignoreErrors: true });
+    if (listing.split('\n').filter(l => l.trim()).length === 0) {
       log('   No providers to wait for');
       return;
     }
-    
+
     await sleep(5000);
   }
-  
+
   log('   ⚠️  Some providers may not be fully healthy yet, continuing...');
 }
 
@@ -281,7 +279,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
 
   // Check cluster connectivity
   try {
-    execSync('kubectl cluster-info', { stdio: 'pipe' });
+    kubectl(['cluster-info'], { silent: true });
   } catch {
     throw new Error('Cannot connect to cluster. Is kubectl configured correctly?');
   }
@@ -291,7 +289,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
   for (const file of files) {
     allResources.push(...parseManifest(file));
   }
-  
+
   log(`   Parsed ${allResources.length} resources total`);
   log('');
 
@@ -327,7 +325,6 @@ export async function apply(options: ApplyOptions): Promise<void> {
   log(`   Phase 3: ${phase3.length} Custom Resources`);
   log('');
 
-  const dryRunFlag = dryRun ? '--dry-run=client' : '';
   const tempDir = fs.mkdtempSync('/tmp/nebula-apply-');
 
   try {
@@ -337,8 +334,8 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Phase 1: Applying CRDs and Namespaces...');
       const phase1File = path.join(tempDir, 'phase1.yaml');
       writeResourcesAsYaml(phase1, phase1File);
-      exec(`kubectl apply --server-side --force-conflicts -f ${phase1File} ${dryRunFlag}`, { ignoreErrors: true });
-      
+      kubectl(applyArgs(phase1File, dryRun), { ignoreErrors: true });
+
       if (!dryRun) {
         await waitForCrds(60);
       }
@@ -351,8 +348,8 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Phase 2: Applying Operators and Services...');
       const phase2File = path.join(tempDir, 'phase2.yaml');
       writeResourcesAsYaml(phase2, phase2File);
-      exec(`kubectl apply --server-side --force-conflicts -f ${phase2File} ${dryRunFlag}`, { ignoreErrors: true });
-      
+      kubectl(applyArgs(phase2File, dryRun), { ignoreErrors: true });
+
       if (!dryRun) {
         // Wait for operators to create their CRDs (Crossplane creates Provider CRD)
         log('   Waiting for operators to initialize...');
@@ -367,7 +364,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Applying DeploymentRuntimeConfigs...');
       const runtimeConfigsFile = path.join(tempDir, 'runtimeconfigs.yaml');
       writeResourcesAsYaml(runtimeConfigs, runtimeConfigsFile);
-      exec(`kubectl apply --server-side --force-conflicts -f ${runtimeConfigsFile} ${dryRunFlag}`);
+      kubectl(applyArgs(runtimeConfigsFile, dryRun));
     }
 
     // Apply Crossplane Providers (after Crossplane controller is running and RuntimeConfigs exist)
@@ -376,8 +373,8 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Applying Crossplane Providers...');
       const providersFile = path.join(tempDir, 'providers.yaml');
       writeResourcesAsYaml(providers, providersFile);
-      exec(`kubectl apply --server-side --force-conflicts -f ${providersFile} ${dryRunFlag}`);
-      
+      kubectl(applyArgs(providersFile, dryRun));
+
       if (!dryRun) {
         await waitForProviders(300);
       }
@@ -389,7 +386,7 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Applying ProviderConfigs...');
       const configsFile = path.join(tempDir, 'providerconfigs.yaml');
       writeResourcesAsYaml(providerConfigs, configsFile);
-      exec(`kubectl apply --server-side --force-conflicts -f ${configsFile} ${dryRunFlag}`, { ignoreErrors: true });
+      kubectl(applyArgs(configsFile, dryRun), { ignoreErrors: true });
     }
 
     // Phase 3: Custom Resources
@@ -398,15 +395,15 @@ export async function apply(options: ApplyOptions): Promise<void> {
       log('📦 Phase 3: Applying Custom Resources...');
       const phase3File = path.join(tempDir, 'phase3.yaml');
       writeResourcesAsYaml(phase3, phase3File);
-      
+
       // Try to apply, may fail for some CRs if CRDs not ready
-      exec(`kubectl apply --server-side --force-conflicts -f ${phase3File} ${dryRunFlag}`, { ignoreErrors: true });
-      
+      kubectl(applyArgs(phase3File, dryRun), { ignoreErrors: true });
+
       if (!dryRun) {
         // Retry after waiting for any remaining CRDs
         log('   Retrying failed resources...');
         await sleep(10000);
-        exec(`kubectl apply --server-side --force-conflicts -f ${phase3File} ${dryRunFlag}`, { ignoreErrors: true });
+        kubectl(applyArgs(phase3File, dryRun), { ignoreErrors: true });
       }
     }
 

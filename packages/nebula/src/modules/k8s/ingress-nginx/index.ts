@@ -15,7 +15,7 @@ import { Helm } from 'cdk8s';
 import * as kplus from 'cdk8s-plus-33';
 import { Issuer } from '#imports/cert-manager.io';
 import { Address } from '#imports/compute.gcp.upbound.io';
-import { HelmModule } from '../../../core';
+import { HelmModule, type Toleration } from '../../../core';
 
 export type ServiceType = 'LoadBalancer' | 'NodePort' | 'ClusterIP';
 export type ExternalTrafficPolicy = 'Local' | 'Cluster';
@@ -33,7 +33,7 @@ export interface IngressNginxControllerConfig {
     requests?: { cpu?: string; memory?: string };
     limits?: { cpu?: string; memory?: string };
   };
-  tolerations?: Array<{ key: string; operator: string; effect: string; value?: string }>;
+  tolerations?: Toleration[];
 }
 
 export interface IngressNginxConfig {

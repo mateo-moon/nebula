@@ -16,7 +16,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { HelmModule } from "../../../core";
+import { HelmModule, type Toleration } from "../../../core";
 
 export type DeschedulerKind = "Deployment" | "CronJob";
 
@@ -66,12 +66,7 @@ export interface DeschedulerConfig {
   /** Helm chart version */
   version?: string;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
 export class Descheduler extends HelmModule<DeschedulerConfig> {
@@ -275,6 +270,10 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
       version: this.config.version ?? "0.33.0",
       defaultValues,
       values: this.config.values,
+      // Restore main's shallow-merge semantics: the HelmModule default
+      // (deepmerge) would concatenate array values such as policy profiles,
+      // which can yield a duplicate "default" profile the controller rejects.
+      merge: "spread",
     });
   }
 }

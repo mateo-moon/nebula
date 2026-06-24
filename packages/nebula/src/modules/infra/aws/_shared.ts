@@ -3,6 +3,7 @@ import { ClusterV1Beta1 } from "#imports/cluster.x-k8s.io";
 import {
   AwsClusterV1Beta2,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
+  AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
   AwsMachineTemplateV1Beta2,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 
@@ -44,6 +45,32 @@ export function buildAmiSpec(ami: AmiSelection = {}): {
     };
   }
   return {};
+}
+
+/**
+ * Build the AWS credentials INI that CAPA consumes (base64-encoded into the
+ * `AWS_B64ENCODED_CREDENTIALS` secret key). Shared by the cluster-api-operator
+ * module (static keys) and the `nebula bootstrap --provider aws` CLI (static or
+ * SSO/session tokens) so the INI format lives in one place.
+ */
+export function buildCapaCredentialsIni(opts: {
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  sessionToken?: string;
+}): string {
+  return (
+    `[default]\n` +
+    `aws_access_key_id = ${opts.accessKeyId}\n` +
+    `aws_secret_access_key = ${opts.secretAccessKey}\n` +
+    (opts.sessionToken ? `aws_session_token = ${opts.sessionToken}\n` : "") +
+    `region = ${opts.region}\n`
+  );
+}
+
+/** Base64-encode the CAPA credentials INI for the `AWS_B64ENCODED_CREDENTIALS` key. */
+export function toCapaB64(ini: string): string {
+  return Buffer.from(ini, "utf-8").toString("base64");
 }
 
 /**
@@ -106,6 +133,11 @@ export function emitAwsClusterCr(
     region: string;
     sshKeyName?: string;
     loadBalancerType: AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType;
+    /**
+     * NLB scheme. CAPA defaults to internet-facing when this is omitted; set it
+     * to INTERNAL to keep the control-plane API off the public internet.
+     */
+    loadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
     vpcCidr: string;
   },
 ): AwsClusterV1Beta2 {
@@ -119,6 +151,9 @@ export function emitAwsClusterCr(
       sshKeyName: opts.sshKeyName ?? "",
       controlPlaneLoadBalancer: {
         loadBalancerType: opts.loadBalancerType,
+        ...(opts.loadBalancerScheme
+          ? { scheme: opts.loadBalancerScheme }
+          : {}),
       },
       network: {
         vpc: { cidrBlock: opts.vpcCidr },
@@ -154,6 +189,13 @@ export function emitAwsMachineTemplate(
           instanceType: opts.instanceType,
           iamInstanceProfile: opts.iamInstanceProfile,
           publicIp: opts.publicIp,
+          // Put bootstrap data directly in EC2 user-data instead of CAPA's default
+          // Secrets Manager backend. That backend's boot script fetches the data
+          // with the `aws` CLI, which a plain Ubuntu cloud image does NOT ship —
+          // so the fetch dies, /etc/secret-userdata.txt is never written, and k0s
+          // never installs. k0s bootstrap data is ~13KB, well under the 16KB
+          // user-data cap. Also removes the node's dependency on secretsmanager IAM.
+          cloudInit: { insecureSkipSecretsManager: true },
           // "" (not omitted) so CAPA does not fall back to the "default" key pair.
           sshKeyName: opts.sshKeyName ?? "",
           rootVolume: {

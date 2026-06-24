@@ -7,6 +7,7 @@ export { HelmModule } from './helm-module';
 export type {
   HelmReleaseOptions,
   HelmValuesMergeStrategy,
+  Toleration,
 } from './helm-module';
 export {
   ARGOCD_SYNC_OPTIONS_ANNOTATION,

@@ -6,7 +6,7 @@ import {
   ProjectIamMemberSpecDeletionPolicy,
   ServiceAccountIamMemberSpecDeletionPolicy,
 } from "#imports/cloudplatform.gcp.upbound.io";
-import { mapDeletionPolicy } from "../_shared";
+import { mapDeletionPolicy, normalizeAccountId } from "../_shared";
 import { bindWorkloadIdentityUser } from "./workload-identity";
 
 export interface WorkloadIdentityConfig {
@@ -68,14 +68,7 @@ export class Iam extends Construct {
       return;
     }
 
-    // Helper to normalize account IDs (GCP requires 6-30 chars, lowercase, start with letter)
-    const normalizeAccountId = (raw: string): string => {
-      let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-      if (!/^[a-z]/.test(s)) s = `a-${s}`;
-      if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-      if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-      return s;
-    };
+    // Account-ID normalization is shared (infra/_shared.ts normalizeAccountId).
 
     // Helper to create a service account with IAM bindings
     const createServiceAccountWithBindings = (

@@ -47,8 +47,11 @@ import {
   ServiceAccount as GcpServiceAccount,
   ProjectIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
-import { HelmModule } from "../../../core";
-import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
+import { HelmModule, type Toleration } from "../../../core";
+import {
+  bindWorkloadIdentityUser,
+  wiKsaAnnotations,
+} from "../../infra/gcp/workload-identity";
 
 // Dex configuration types
 export interface DexGithubConfig {
@@ -259,12 +262,7 @@ export interface ArgoCdConfig {
     port?: number;
   };
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
   /** Extra data to add to the argocd-secret (e.g., OIDC clientID, clientSecret) */
   extraSecretData?: Record<string, string>;
 }
@@ -488,6 +486,10 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
       this.setupNebulaPlugin(chartValues, namespaceName);
     }
 
+    // NOTE: this module extends HelmModule but deliberately builds the Helm
+    // release directly (not via createHelmRelease) because chartValues is
+    // post-mutated above (params flatten, dex stringify, crossplane account
+    // injection, nebula-CMP sidecar) after the values are assembled.
     this.helm = new Helm(this, "helm", {
       chart: "argo-cd",
       releaseName: "argocd",
@@ -623,11 +625,9 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
       metadata: {
         name: nebulaSaName,
         namespace: namespaceName,
-        ...(gcpServiceAccountEmail && {
-          annotations: {
-            "iam.gke.io/gcp-service-account": gcpServiceAccountEmail,
-          },
-        }),
+        ...(gcpServiceAccountEmail
+          ? { annotations: wiKsaAnnotations(gcpServiceAccountEmail) }
+          : {}),
       },
     });
 
@@ -848,9 +848,12 @@ done
     // Create the target namespace only if not skipped
     let crossplaneNs: kplus.Namespace | undefined;
     if (!this.config.crossplaneUser!.skipNamespaceCreation) {
-      crossplaneNs = new kplus.Namespace(this, "crossplane-namespace", {
-        metadata: { name: targetNamespace },
-      });
+      // Reuse the HelmModule namespace helper (same construct id) instead of
+      // hand-rolling a second Namespace here.
+      crossplaneNs = this.createNamespace(
+        targetNamespace,
+        "crossplane-namespace",
+      );
     }
 
     // Create a secret to hold the password for the job

@@ -2,16 +2,23 @@
  * GCP provider — Kind → Crossplane provisions GKE → pivot the control-plane stack
  * onto GKE (ArgoCD then GitOps-syncs the rest). Consumes a project layout in the
  * cwd (bootstrap.ts + infra/* + meta/argocd*).
+ *
+ * All shell execution is no-shell (run/kubectl → execFileSync, argv only); the
+ * project id read from a committed config.ts and every K8s API value is passed
+ * as an argv element, never interpreted by /bin/sh.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
-  exec,
+  run,
+  kubectl,
   log,
   sleep,
   commandExists,
   createKindCluster,
   waitForProviders,
+  waitFor,
+  ensureNamespace,
 } from "./shared";
 import type { BootstrapOptions, BootstrapProvider } from "./types";
 
@@ -21,8 +28,18 @@ interface GkeClusterInfo {
   project: string;
 }
 
+/**
+ * GKE accepts either a zone or a region for `--zone`/`--region`. Zones end in a
+ * letter (e.g. `us-central1-a`); regions end in a digit (e.g. `europe-west3`).
+ * Returns the matching flag pair so regional clusters don't abort bootstrap.
+ */
+function gkeLocationArgs(location: string): string[] {
+  const isZone = /[a-z0-9]-[a-z]$/i.test(location);
+  return [isZone ? "--zone" : "--region", location];
+}
+
 async function setupGcpCredentials(
-  project: string,
+  _project: string,
   credentialsPath?: string,
 ): Promise<void> {
   log("");
@@ -49,15 +66,13 @@ async function setupGcpCredentials(
   }
 
   log("   Creating GCP credentials secret...");
-  exec(
-    "kubectl create namespace crossplane-system --dry-run=client -o yaml | kubectl apply -f -",
-    { silent: true },
-  );
-  exec("kubectl delete secret gcp-creds -n crossplane-system --ignore-not-found", {
+  ensureNamespace("crossplane-system");
+  kubectl(["delete", "secret", "gcp-creds", "-n", "crossplane-system", "--ignore-not-found"], {
     silent: true,
+    ignoreErrors: true,
   });
-  exec(
-    `kubectl create secret generic gcp-creds --from-file=creds=${credsPath} -n crossplane-system`,
+  kubectl(
+    ["create", "secret", "generic", "gcp-creds", `--from-file=creds=${credsPath}`, "-n", "crossplane-system"],
   );
   log(`   ✅ GCP credentials secret created`);
 }
@@ -67,9 +82,9 @@ async function deployToKind(): Promise<void> {
   log("📦 Step 3: Deploying bootstrap to Kind");
   log("─".repeat(50));
   log("   Synthesizing bootstrap.ts...");
-  exec('npx cdk8s synth --app "npx tsx bootstrap.ts"');
+  run("npx", ["cdk8s", "synth", "--app", "npx tsx bootstrap.ts"]);
   log("   Applying manifests...");
-  exec("npx nebula apply");
+  run("npx", ["nebula", "apply"]);
   log("   Waiting for Crossplane providers...");
   await waitForProviders(300);
   log(`   ✅ Bootstrap deployed to Kind`);
@@ -77,181 +92,227 @@ async function deployToKind(): Promise<void> {
 
 /** Discover GKE cluster info from the Crossplane managed resource in the Kind cluster. */
 function discoverGkeCluster(): GkeClusterInfo | null {
-  try {
-    const get = (jsonpath: string): string =>
-      exec(
-        `kubectl get cluster.container.gcp.upbound.io -o jsonpath="${jsonpath}" 2>/dev/null`,
-        { silent: true },
-      ).trim();
-    const name = get("{.items[0].metadata.name}");
-    if (!name) return null;
-    const location = get("{.items[0].spec.forProvider.location}");
-    const project = get("{.items[0].spec.forProvider.project}");
-    return name && location ? { name, location, project } : null;
-  } catch {
-    return null;
-  }
+  const get = (jsonpath: string): string =>
+    kubectl(
+      ["get", "cluster.container.gcp.upbound.io", "-o", `jsonpath=${jsonpath}`],
+      { silent: true, ignoreErrors: true },
+    ).trim();
+  const name = get("{.items[0].metadata.name}");
+  if (!name) return null;
+  const location = get("{.items[0].spec.forProvider.location}");
+  const project = get("{.items[0].spec.forProvider.project}");
+  return name && location ? { name, location, project } : null;
 }
 
-async function waitForGkeClusterResource(
-  timeoutSeconds: number,
-): Promise<GkeClusterInfo> {
+async function waitForGkeClusterResource(timeoutSeconds: number): Promise<GkeClusterInfo> {
   log("");
   log("🔍 Discovering GKE cluster from Crossplane...");
   log("─".repeat(50));
-  const start = Date.now();
-  while (Date.now() - start < timeoutSeconds * 1000) {
-    const cluster = discoverGkeCluster();
-    if (cluster) {
-      log(`   Found cluster: ${cluster.name} in ${cluster.location}`);
-      return cluster;
-    }
-    await sleep(5000);
-  }
-  throw new Error("No GKE cluster resource found in Kind cluster");
+  let found: GkeClusterInfo | null = null;
+  await waitFor(
+    { label: "GKE cluster resource", timeoutMs: timeoutSeconds * 1000, onTimeout: "throw" },
+    () => {
+      found = discoverGkeCluster();
+      if (found) log(`   Found cluster: ${found.name} in ${found.location}`);
+      return found !== null;
+    },
+  );
+  return found!;
 }
 
 async function waitForGke(
   project: string,
   clusterName: string,
-  zone: string,
+  location: string,
   timeoutSeconds: number,
 ): Promise<void> {
   log("");
   log("⏳ Step 4: Waiting for GKE cluster");
   log("─".repeat(50));
-  log(`   Cluster: ${clusterName} in ${zone}`);
+  log(`   Cluster: ${clusterName} in ${location}`);
   const start = Date.now();
-  while (Date.now() - start < timeoutSeconds * 1000) {
-    const status = exec(
-      `kubectl get cluster.container.gcp.upbound.io ${clusterName} -o jsonpath="{.status.conditions[?(@.type=='Ready')].status}" 2>/dev/null || echo ""`,
-      { silent: true },
-    ).trim();
-    if (status === "True") {
-      log(`   ✅ GKE cluster is ready`);
-      return;
-    }
-    const gcloudStatus = exec(
-      `gcloud container clusters describe ${clusterName} --zone ${zone} --project ${project} --format="value(status)" 2>/dev/null || echo ""`,
-      { silent: true },
-    ).trim();
-    if (gcloudStatus === "RUNNING") {
-      log(`   ✅ GKE cluster is running`);
-      return;
-    }
-    const elapsed = Math.round((Date.now() - start) / 1000);
-    log(`   Waiting... (${elapsed}s elapsed, status: ${gcloudStatus || "PROVISIONING"})`);
-    await sleep(30000);
-  }
-  throw new Error(`GKE cluster did not become ready within ${timeoutSeconds} seconds`);
+  await waitFor(
+    { label: "GKE cluster ready", timeoutMs: timeoutSeconds * 1000, onTimeout: "throw", intervalMs: 30000 },
+    () => {
+      const status = kubectl(
+        [
+          "get",
+          "cluster.container.gcp.upbound.io",
+          clusterName,
+          "-o",
+          "jsonpath={.status.conditions[?(@.type=='Ready')].status}",
+        ],
+        { silent: true, ignoreErrors: true },
+      ).trim();
+      if (status === "True") {
+        log(`   ✅ GKE cluster is ready`);
+        return true;
+      }
+      const gcloudStatus = run(
+        "gcloud",
+        [
+          "container",
+          "clusters",
+          "describe",
+          clusterName,
+          ...gkeLocationArgs(location),
+          "--project",
+          project,
+          "--format=value(status)",
+        ],
+        { silent: true, ignoreErrors: true },
+      ).trim();
+      if (gcloudStatus === "RUNNING") {
+        log(`   ✅ GKE cluster is running`);
+        return true;
+      }
+      const elapsed = Math.round((Date.now() - start) / 1000);
+      log(`   Waiting... (${elapsed}s elapsed, status: ${gcloudStatus || "PROVISIONING"})`);
+      return false;
+    },
+  );
 }
 
 async function switchToGke(
   project: string,
   clusterName: string,
-  zone: string,
+  location: string,
 ): Promise<void> {
   log("");
   log("🔄 Step 5: Switching to GKE cluster");
   log("─".repeat(50));
-  exec(
-    `gcloud container clusters get-credentials ${clusterName} --zone ${zone} --project ${project}`,
-  );
+  run("gcloud", [
+    "container",
+    "clusters",
+    "get-credentials",
+    clusterName,
+    ...gkeLocationArgs(location),
+    "--project",
+    project,
+  ]);
   log(`   ✅ Now using GKE cluster: ${clusterName}`);
 }
 
 /** Wait for all Crossplane Functions to become healthy (needed before XRs using Compositions). */
 async function waitForCrossplaneFunctions(timeoutSeconds: number): Promise<void> {
-  const deadline = Date.now() + timeoutSeconds * 1000;
-  while (Date.now() < deadline) {
-    try {
-      const functionsJson = exec(
-        "kubectl get functions.pkg.crossplane.io -o json 2>/dev/null || echo '{\"items\":[]}'",
-        { silent: true },
-      );
-      const functions = JSON.parse(functionsJson);
+  await waitFor(
+    { label: "Crossplane functions", timeoutMs: timeoutSeconds * 1000, onTimeout: "warn" },
+    () => {
+      const functionsJson = kubectl(["get", "functions.pkg.crossplane.io", "-o", "json"], {
+        silent: true,
+        ignoreErrors: true,
+      });
+      const functions = JSON.parse(functionsJson || '{"items":[]}');
       if (functions.items.length === 0) {
         log("   No Crossplane functions found, skipping wait");
-        return;
+        return true;
       }
       const allHealthy = functions.items.every((fn: any) => {
         const cond = (t: string) =>
-          fn.status?.conditions?.find((c: { type: string }) => c.type === t)
-            ?.status === "True";
+          fn.status?.conditions?.find((c: { type: string }) => c.type === t)?.status ===
+          "True";
         return cond("Installed") && cond("Healthy");
       });
       if (allHealthy) {
         log(`   ✅ All ${functions.items.length} Crossplane functions healthy`);
-        return;
+        return true;
       }
-    } catch {
-      // keep waiting
-    }
-    await sleep(5000);
-  }
-  log("   ⚠️  Timeout waiting for functions, continuing anyway...");
+      return false;
+    },
+  );
 }
 
 /** Trigger an ArgoCD sync on an app and retry until it reaches Synced or timeout. */
-async function syncAppWithRetry(
-  appName: string,
-  timeoutSeconds: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutSeconds * 1000;
-  const exists = exec(
-    `kubectl get app ${appName} -n argocd -o name 2>/dev/null || echo ""`,
-    { silent: true },
-  ).trim();
+async function syncAppWithRetry(appName: string, timeoutSeconds: number): Promise<void> {
+  const exists = kubectl(["get", "app", appName, "-n", "argocd", "-o", "name"], {
+    silent: true,
+    ignoreErrors: true,
+  }).trim();
   if (!exists) {
     log(`   ⚠️  App ${appName} not found, skipping`);
     return;
   }
   log(`   Syncing ${appName}...`);
-  while (Date.now() < deadline) {
-    const syncStatus = exec(
-      `kubectl get app ${appName} -n argocd -o jsonpath="{.status.sync.status}" 2>/dev/null || echo ""`,
-      { silent: true },
-    ).trim();
-    if (syncStatus === "Synced") {
-      log(`   ✅ ${appName} synced`);
-      return;
-    }
-    const opPhase = exec(
-      `kubectl get app ${appName} -n argocd -o jsonpath="{.status.operationState.phase}" 2>/dev/null || echo ""`,
-      { silent: true },
-    ).trim();
-    if (opPhase !== "Running") {
-      exec(
-        `kubectl patch app ${appName} -n argocd --type=json -p='[{"op":"remove","path":"/status/operationState"}]' 2>/dev/null`,
+  let synced = false;
+  await waitFor(
+    { label: `${appName} sync`, timeoutMs: timeoutSeconds * 1000, onTimeout: "warn", intervalMs: 10000 },
+    () => {
+      const syncStatus = kubectl(
+        ["get", "app", appName, "-n", "argocd", "jsonpath={.status.sync.status}"],
         { silent: true, ignoreErrors: true },
-      );
-      exec(
-        `kubectl patch app ${appName} -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'`,
+      ).trim();
+      if (syncStatus === "Synced") {
+        log(`   ✅ ${appName} synced`);
+        synced = true;
+        return true;
+      }
+      const opPhase = kubectl(
+        ["get", "app", appName, "-n", "argocd", "jsonpath={.status.operationState.phase}"],
         { silent: true, ignoreErrors: true },
-      );
-      await sleep(3000);
-      exec(
-        `kubectl patch app ${appName} -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"nebula-bootstrap"},"sync":{"syncOptions":["CreateNamespace=true","ServerSideApply=true","SkipDryRunOnMissingResource=true","RespectIgnoreDifferences=true"]}}}'`,
-        { silent: true, ignoreErrors: true },
-      );
-    }
-    await sleep(10000);
-  }
-  log(`   ⚠️  ${appName} did not reach Synced within ${timeoutSeconds}s`);
+      ).trim();
+      if (opPhase !== "Running") {
+        kubectl(
+          ["patch", "app", appName, "-n", "argocd", "--type", "json", "-p", JSON.stringify([{ op: "remove", path: "/status/operationState" }])],
+          { silent: true, ignoreErrors: true },
+        );
+        kubectl(
+          ["patch", "app", appName, "-n", "argocd", "--type", "merge", "-p", JSON.stringify({ metadata: { annotations: { "argocd.argoproj.io/refresh": "hard" } } })],
+          { silent: true, ignoreErrors: true },
+        );
+        sleep(3000);
+        kubectl(
+          [
+            "patch",
+            "app",
+            appName,
+            "-n",
+            "argocd",
+            "--type",
+            "merge",
+            "-p",
+            JSON.stringify({
+              operation: {
+                initiatedBy: { username: "nebula-bootstrap" },
+                sync: {
+                  syncOptions: [
+                    "CreateNamespace=true",
+                    "ServerSideApply=true",
+                    "SkipDryRunOnMissingResource=true",
+                    "RespectIgnoreDifferences=true",
+                  ],
+                },
+              },
+            }),
+          ],
+          { silent: true, ignoreErrors: true },
+        );
+      }
+      return false;
+    },
+  );
+  if (!synced) log(`   ⚠️  ${appName} did not reach Synced within ${timeoutSeconds}s`);
 }
 
 /** Wait for ArgoCD then sync the app-of-apps; ArgoCD auto-syncs everything else from git. */
 async function syncCriticalApps(): Promise<void> {
   log("   Waiting for ArgoCD to be ready...");
-  const deadline = Date.now() + 120_000;
-  while (Date.now() < deadline) {
-    const ready = exec(
-      'kubectl get statefulset argocd-application-controller -n argocd -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0"',
-      { silent: true },
-    ).trim();
-    if (ready && parseInt(ready) > 0) break;
-    await sleep(5000);
-  }
+  await waitFor(
+    { label: "ArgoCD ready", timeoutMs: 120_000, onTimeout: "continue" },
+    () => {
+      const ready = kubectl(
+        [
+          "get",
+          "statefulset",
+          "argocd-application-controller",
+          "-n",
+          "argocd",
+          "jsonpath={.status.readyReplicas}",
+        ],
+        { silent: true, ignoreErrors: true },
+      ).trim();
+      return !!(ready && parseInt(ready) > 0);
+    },
+  );
   await syncAppWithRetry("argocd-apps", 180);
   log("   ✅ ArgoCD apps synced — auto-sync will handle the rest");
 }
@@ -264,18 +325,16 @@ async function syncCriticalApps(): Promise<void> {
 async function postDeploymentValidation(): Promise<void> {
   try {
     const jobs = JSON.parse(
-      exec('kubectl get jobs -n argocd -o json 2>/dev/null || echo \'{"items":[]}\'', {
-        silent: true,
-      }),
+      kubectl(["get", "jobs", "-n", "argocd", "-o", "json"], { silent: true, ignoreErrors: true }) ||
+        '{"items":[]}',
     );
     for (const job of jobs.items) {
       const failed = job.status?.conditions?.find(
-        (c: { type: string; status: string }) =>
-          c.type === "Failed" && c.status === "True",
+        (c: { type: string; status: string }) => c.type === "Failed" && c.status === "True",
       );
       if (failed) {
         log(`   Deleting failed job ${job.metadata.name} (ArgoCD will recreate it)...`);
-        exec(`kubectl delete job ${job.metadata.name} -n argocd`, {
+        kubectl(["delete", "job", job.metadata.name, "-n", "argocd"], {
           silent: true,
           ignoreErrors: true,
         });
@@ -287,9 +346,8 @@ async function postDeploymentValidation(): Promise<void> {
 
   try {
     const crds = JSON.parse(
-      exec('kubectl get crds -o json 2>/dev/null || echo \'{"items":[]}\'', {
-        silent: true,
-      }),
+      kubectl(["get", "crds", "-o", "json"], { silent: true, ignoreErrors: true }) ||
+        '{"items":[]}',
     );
     for (const crd of crds.items) {
       if (!crd.metadata.deletionTimestamp) continue;
@@ -297,16 +355,24 @@ async function postDeploymentValidation(): Promise<void> {
       if (!crdName.includes("crossplane.io")) continue;
       log(`   Found terminating Crossplane CRD: ${crdName}`);
       const instances = JSON.parse(
-        exec(`kubectl get ${crdName} -A -o json 2>/dev/null || echo '{"items":[]}'`, {
-          silent: true,
-        }),
+        kubectl(["get", crdName, "-A", "-o", "json"], { silent: true, ignoreErrors: true }) ||
+          '{"items":[]}',
       );
       for (const inst of instances.items) {
         if ((inst.metadata.finalizers || []).length === 0) continue;
-        const nsFlag = inst.metadata.namespace ? `-n ${inst.metadata.namespace}` : "";
+        const ns = inst.metadata.namespace as string | undefined;
         log(`   Removing finalizers from ${crdName}/${inst.metadata.name}...`);
-        exec(
-          `kubectl patch ${crdName} ${inst.metadata.name} ${nsFlag} --type merge -p '{"metadata":{"finalizers":[]}}'`,
+        kubectl(
+          [
+            "patch",
+            crdName,
+            inst.metadata.name,
+            ...(ns ? ["-n", ns] : []),
+            "--type",
+            "merge",
+            "-p",
+            JSON.stringify({ metadata: { finalizers: [] } }),
+          ],
           { silent: true, ignoreErrors: true },
         );
       }
@@ -317,10 +383,10 @@ async function postDeploymentValidation(): Promise<void> {
 
   try {
     const revs = JSON.parse(
-      exec(
-        'kubectl get providerrevisions.pkg.crossplane.io -o json 2>/dev/null || echo \'{"items":[]}\'',
-        { silent: true },
-      ),
+      kubectl(["get", "providerrevisions.pkg.crossplane.io", "-o", "json"], {
+        silent: true,
+        ignoreErrors: true,
+      }) || '{"items":[]}',
     );
     for (const rev of revs.items) {
       const healthy = rev.status?.conditions?.find(
@@ -331,11 +397,14 @@ async function postDeploymentValidation(): Promise<void> {
         /cannot establish control of object: (\S+) is already controlled by/,
       );
       if (!match) continue;
+      const target = match[1];
+      // Defense-in-depth: only patch things that look like CRD names (<plural>.<group>).
+      if (!/^[a-z0-9.-]+\.[a-z]+$/i.test(target)) continue;
       log(
-        `   Clearing stale owner reference on CRD ${match[1]} for provider revision ${rev.metadata.name}...`,
+        `   Clearing stale owner reference on CRD ${target} for provider revision ${rev.metadata.name}...`,
       );
-      exec(
-        `kubectl patch crd ${match[1]} --type merge -p '{"metadata":{"ownerReferences":[]}}'`,
+      kubectl(
+        ["patch", "crd", target, "--type", "merge", "-p", JSON.stringify({ metadata: { ownerReferences: [] } })],
         { silent: true, ignoreErrors: true },
       );
     }
@@ -373,7 +442,10 @@ async function deployToGke(): Promise<void> {
         : null;
     if (!entry) continue;
     log(`   - ${entry}`);
-    exec(`npx cdk8s synth -o "dist/${mod}" --app "npx tsx ${entry}"`, { silent: true });
+    run("npx", ["cdk8s", "synth", "-o", `dist/${mod}`, "--app", `npx tsx ${entry}`], {
+      silent: true,
+      ignoreErrors: true,
+    });
   }
 
   // Fail fast on unresolved secret references rather than applying broken manifests.
@@ -397,7 +469,10 @@ async function deployToGke(): Promise<void> {
   log("   Phase 1: Applying Crossplane infrastructure...");
   for (const mod of ["infra/providers", "infra/crossplane"]) {
     if (fs.existsSync(`dist/${mod}`)) {
-      exec(`npx nebula apply --file "dist/${mod}/*.k8s.yaml"`, { silent: true });
+      run("npx", ["nebula", "apply", "--file", `dist/${mod}/*.k8s.yaml`], {
+        silent: true,
+        ignoreErrors: true,
+      });
     }
   }
   log("   Waiting for Crossplane providers to be healthy...");
@@ -408,7 +483,10 @@ async function deployToGke(): Promise<void> {
   log("   Phase 2: Applying ArgoCD...");
   for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
     if (fs.existsSync(`dist/${mod}`)) {
-      exec(`npx nebula apply --file "dist/${mod}/*.k8s.yaml"`, { silent: true });
+      run("npx", ["nebula", "apply", "--file", `dist/${mod}/*.k8s.yaml`], {
+        silent: true,
+        ignoreErrors: true,
+      });
     }
   }
   log(`   ✅ Bootstrap modules deployed to GKE`);
@@ -429,9 +507,7 @@ function readProjectFromConfig(): string | null {
   const configPath = path.join(process.cwd(), "config.ts");
   if (!fs.existsSync(configPath)) return null;
   try {
-    const match = fs
-      .readFileSync(configPath, "utf-8")
-      .match(/project:\s*["']([^"']+)["']/);
+    const match = fs.readFileSync(configPath, "utf-8").match(/project:\s*["']([^"']+)["']/);
     return match ? match[1] : null;
   } catch {
     return null;
@@ -480,7 +556,7 @@ async function bootstrapGcp(options: BootstrapOptions): Promise<void> {
   log(`   Kind: kubectl config use-context kind-${clusterName}`);
   if (gke) {
     log(
-      `   GKE:  gcloud container clusters get-credentials ${gke.name} --zone ${gke.location} --project ${gke.project || project}`,
+      `   GKE:  gcloud container clusters get-credentials ${gke.name} ${gkeLocationArgs(gke.location).join(" ")} --project ${gke.project || project}`,
     );
   }
   log("");

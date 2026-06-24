@@ -21,8 +21,12 @@ import {
   BucketV1Beta2 as GcsBucket,
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
-import { HelmModule } from "../../../core";
-import { bindWorkloadIdentityUser } from "../../infra/gcp/workload-identity";
+import { HelmModule, type Toleration } from "../../../core";
+import { normalizeAccountId } from "../../infra/_shared";
+import {
+  bindWorkloadIdentityUser,
+  wiKsaAnnotations,
+} from "../../infra/gcp/workload-identity";
 
 /** Thanos configuration for multi-cluster metrics aggregation */
 export interface ThanosConfig {
@@ -87,12 +91,7 @@ export interface PrometheusOperatorConfig {
   /** Grafana admin password */
   grafanaAdminPassword?: string;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
 export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
@@ -526,9 +525,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           serviceAccount: {
             create: true,
             name: "thanos-query",
-            annotations: {
-              "iam.gke.io/gcp-service-account": this.thanosServiceAccountEmail,
-            },
+            annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
           },
         },
         queryFrontend: {
@@ -546,9 +543,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           serviceAccount: {
             create: true,
             name: "thanos-storegateway",
-            annotations: {
-              "iam.gke.io/gcp-service-account": this.thanosServiceAccountEmail,
-            },
+            annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
           },
         },
         compactor: {
@@ -562,9 +557,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           serviceAccount: {
             create: true,
             name: "thanos-compactor",
-            annotations: {
-              "iam.gke.io/gcp-service-account": this.thanosServiceAccountEmail,
-            },
+            annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
           },
         },
         ruler: { enabled: false },
@@ -613,10 +606,4 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
   }
 }
 
-function normalizeAccountId(raw: string): string {
-  let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (!/^[a-z]/.test(s)) s = `a-${s}`;
-  if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-  if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-  return s;
-}
+// normalizeAccountId is imported from ../../infra/_shared (DRY).
