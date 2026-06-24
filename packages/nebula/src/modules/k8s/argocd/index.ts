@@ -114,6 +114,19 @@ export interface NebulaPluginConfig {
   /** Secret containing GCP credentials (alternative to Workload Identity) */
   gcpCredentialsSecret?: string;
   /**
+   * age-based SOPS decryption — vendor-neutral, needs no cloud identity. The
+   * referenced Secret's key is mounted into the repo-server CMP sidecar and
+   * SOPS_AGE_KEY_FILE is pointed at it, so `vals` resolves `ref+sops://` at synth
+   * time. Use this on clouds without keyless Workload Identity (e.g. self-managed
+   * k0s on AWS) instead of `gcpProject` (GCP KMS + WI).
+   */
+  sopsAge?: {
+    /** Name of the Secret holding the age private key(s). */
+    secretName: string;
+    /** Key within the Secret that holds the key file (default "keys.txt"). */
+    secretKey?: string;
+  };
+  /**
    * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
    * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
@@ -749,6 +762,7 @@ done
       name: string;
       mountPath: string;
       subPath?: string;
+      readOnly?: boolean;
     }> = [
       {
         name: "cmp-plugin",
@@ -775,6 +789,26 @@ done
       volumes.push({
         name: "gcp-credentials",
         secret: { secretName: pluginConfig.gcpCredentialsSecret },
+      });
+    }
+
+    // age-based SOPS decryption (vendor-neutral; no cloud identity). Mount the
+    // age key Secret and point SOPS_AGE_KEY_FILE at it so `vals` can decrypt
+    // ref+sops:// at synth time on clouds without keyless Workload Identity.
+    if (pluginConfig.sopsAge) {
+      const ageKeyFile = pluginConfig.sopsAge.secretKey ?? "keys.txt";
+      sidecarEnv.push({
+        name: "SOPS_AGE_KEY_FILE",
+        value: `/secrets/sops-age/${ageKeyFile}`,
+      });
+      volumeMounts.push({
+        name: "sops-age",
+        mountPath: "/secrets/sops-age",
+        readOnly: true,
+      });
+      volumes.push({
+        name: "sops-age",
+        secret: { secretName: pluginConfig.sopsAge.secretName },
       });
     }
 
