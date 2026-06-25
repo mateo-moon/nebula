@@ -50,19 +50,14 @@ program
   .command('bootstrap')
   .description(
     'Full deployment. gcp: Kind → Crossplane → GKE → Workloads. ' +
-      'aws: Kind → Crossplane + CAPA → self-managed HA k0s management cluster; with --gitops-dir, ArgoCD inherits the platform from git and Kind is discarded.',
+      'aws: thin bootstrap — Kind runs CAPA to create a self-managed k0s management cluster, installs ArgoCD, and hands off; ArgoCD then reconciles the whole platform and all apps from the aws/ repo (config + cdk8s modules). Kind is discarded.',
   )
   .option('-n, --name <name>', 'Kind cluster name', 'nebula')
   .option('--provider <provider>', "Management cluster cloud: 'gcp' or 'aws'", 'gcp')
   .option('-p, --project <project>', 'GCP project ID (gcp)')
   .option('-c, --credentials <path>', 'Path to GCP credentials JSON file (gcp)')
-  .option('--region <region>', 'AWS region, e.g. eu-central-1 (aws)')
   .option('--aws-profile <profile>', 'AWS named profile for credentials (aws)')
-  .option('--ami-id <ami>', 'AMI for the management cluster nodes (aws; recommend Ubuntu 22.04)')
-  .option('--cluster-name <name>', "Management cluster name (aws; default 'mgmt') — set a distinct value to isolate from another cluster in the same account")
-  .option('--cp-replicas <n>', 'Number of control-plane nodes (aws; default 3)', (v: string) => parseInt(v, 10))
-  .option('--ssh-key-name <name>', 'Pre-existing EC2 key pair for SSH access to the nodes (aws; for debugging)')
-  .option('--gitops-dir <path>', 'Repo subtree with meta/argocd + meta/argocd-apps; hands the platform off to ArgoCD ← git (aws)')
+  .option('--gitops-dir <path>', 'Path to the aws/ repo subtree — the single source of truth (config.ts + cdk8s modules) ArgoCD reconciles; region/cluster/AMI/replicas all live there, NOT in flags (aws; default: current dir). Scaffold with: nebula init --provider aws')
   .option('--skip-kind', 'Skip Kind cluster creation')
   .option('--skip-credentials', 'Skip credentials setup')
   .option('--skip-gke', 'Skip GKE deployment (gcp, Kind only)')

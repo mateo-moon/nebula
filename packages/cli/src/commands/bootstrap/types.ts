@@ -18,31 +18,14 @@ export interface BootstrapOptions {
   skipGke?: boolean;
 
   // --- aws ---
-  /** AWS region (aws) */
-  region?: string;
-  /** AWS named profile to resolve credentials from (aws) */
+  /** AWS named profile to resolve credentials from (aws; else default cred chain/env). */
   awsProfile?: string;
-  /** AMI id for the management cluster nodes (aws; recommend Ubuntu 22.04) */
-  amiId?: string;
   /**
-   * Management cluster name (aws; default 'mgmt'). Drives the CAPI cluster name,
-   * AWS resource tags, and the node IAM names — set a distinct value to run
-   * isolated from another cluster in the same account.
-   */
-  clusterName?: string;
-  /** Number of control-plane nodes (aws; default 3). Use 1 for a quick/test cluster. */
-  cpReplicas?: number;
-  /**
-   * Pre-existing EC2 key pair name (aws) for SSH access to the nodes — useful for
-   * debugging k0s on the control-plane/worker machines. The key pair must already
-   * exist in the target region.
-   */
-  sshKeyName?: string;
-  /**
-   * Opt-in GitOps handoff (aws): path to a checked-out repo subtree with
-   * `meta/argocd` + `meta/argocd-apps` modules (e.g. `.../DevOps/aws`). When set,
-   * the bootstrap installs ArgoCD on the management cluster and syncs the
-   * app-of-apps so ArgoCD reconciles the platform from git thereafter.
+   * Path to the `aws/` repo subtree — the single source of truth (aws; default cwd).
+   * Its `config.ts` (region, cluster name, AMI, replicas, …) and cdk8s modules under
+   * `infra/*` + `apps/*` are what both the bootstrap and ArgoCD use. The thin bootstrap
+   * brings up Kind + the mgmt cluster + ArgoCD; ArgoCD reconciles everything else from
+   * this tree. Scaffold one with `nebula init --provider aws`.
    */
   gitopsDir?: string;
 }
