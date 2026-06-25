@@ -8,7 +8,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { apply } from "../apply";
 // Re-export the no-shell primitives so provider modules can import everything
 // from "./shared" without depending on "./exec" directly.
 export {
@@ -189,24 +188,4 @@ export async function waitForManagedReady(
       return true;
     },
   );
-}
-
-/** Synth (in-process) into `outdir`, then apply it — optionally to another cluster via kubeconfig. */
-export async function synthAndApply(
-  outdir: string,
-  synthFn: () => void,
-  kubeconfig?: string,
-): Promise<void> {
-  fs.rmSync(outdir, { recursive: true, force: true });
-  synthFn();
-  const prev = process.env.KUBECONFIG;
-  if (kubeconfig) process.env.KUBECONFIG = kubeconfig;
-  try {
-    await apply({ file: `${outdir}/*.k8s.yaml` });
-  } finally {
-    if (kubeconfig) {
-      if (prev === undefined) delete process.env.KUBECONFIG;
-      else process.env.KUBECONFIG = prev;
-    }
-  }
 }

@@ -23,21 +23,14 @@ import {
   waitForProviders,
   waitForCrds,
   waitForManagedReady,
-  synthAndApply,
   waitFor,
   ensureNamespace,
   sleep,
 } from "./shared";
-import {
-  synthAwsPlatform,
-  synthAwsCluster,
-  AwsBootstrapAppOptions,
-} from "./aws-apps";
 import type { BootstrapOptions, BootstrapProvider } from "./types";
 import { buildCapaCredentialsIni, toCapaB64 } from "nebula-cdk8s";
 import { apply } from "../apply";
 
-const DEFAULT_MGMT_CLUSTER = "mgmt";
 const MGMT_NAMESPACE = "default";
 
 /** CRDs the cluster-api-operator installs at runtime that the cluster CRs depend on. */
@@ -190,40 +183,149 @@ async function setupAwsCredentials(
   );
 }
 
+/** Install the repo deps once (the modules import nebula-cdk8s via a github ref). */
+function ensureRepoDeps(gitopsDir: string): void {
+  if (!fs.existsSync(path.join(gitopsDir, "node_modules"))) {
+    log("   Installing repo dependencies (pnpm install)...");
+    run("pnpm", ["install"], { cwd: gitopsDir });
+  }
+}
+
 /**
- * Apply the platform stage: Crossplane + cert-manager + provider-aws + node IAM +
- * cluster-api-operator. cert-manager must be up before the operator's webhook cert
- * is issued, so we apply, wait for cert-manager, then re-apply (idempotent) so the
- * operator's Certificate/Issuer land. Used for both Kind and the mgmt cluster.
+ * Read the repo's `config.ts` — the single source of truth — by evaluating it with
+ * tsx and printing the resolved object. Avoids brittle regex-scraping and keeps the
+ * bootstrap's imperative values (region, cluster name) identical to what the cdk8s
+ * modules (and ArgoCD) use.
+ */
+function readAwsRepoConfig(gitopsDir: string): {
+  region: string;
+  clusterName: string;
+} {
+  // Run a throwaway reader IN the repo dir so `import "./config"` resolves exactly
+  // like the cdk8s modules do (tsx -e has ESM eval quirks; a real file does not).
+  const reader = path.join(gitopsDir, ".nebula-readconfig.ts");
+  fs.writeFileSync(
+    reader,
+    'import { config } from "./config";\nprocess.stdout.write(JSON.stringify(config));\n',
+  );
+  let out = "";
+  try {
+    out = run("npx", ["tsx", ".nebula-readconfig.ts"], {
+      cwd: gitopsDir,
+      silent: true,
+    });
+  } finally {
+    fs.rmSync(reader, { force: true });
+  }
+  const start = out.indexOf("{");
+  const end = out.lastIndexOf("}");
+  let cfg: { aws?: { region?: string; clusterName?: string } } = {};
+  try {
+    cfg = JSON.parse(out.slice(start, end + 1));
+  } catch {
+    throw new Error(
+      `Could not read config.ts from ${gitopsDir} (expected 'export const config').`,
+    );
+  }
+  if (!cfg.aws?.region || !cfg.aws?.clusterName) {
+    throw new Error("config.ts must define aws.region and aws.clusterName.");
+  }
+  return { region: cfg.aws.region, clusterName: cfg.aws.clusterName };
+}
+
+/**
+ * Synth one in-repo cdk8s module (`<mod>/index.ts`, e.g. `infra/crossplane`) to a
+ * per-module dir and assert it left no unresolved `ref+` secrets. This is the same
+ * machinery ArgoCD's nebula-cmp sidecar runs — the bootstrap just applies the
+ * modules imperatively first so the management cluster exists.
+ */
+function synthRepoModule(
+  gitopsDir: string,
+  mod: string,
+  clusterName: string,
+  ageKeyFile?: string,
+): string {
+  const outdir = path.join(
+    stateDir(clusterName),
+    "synth-repo",
+    mod.replace(/\//g, "_"),
+  );
+  fs.rmSync(outdir, { recursive: true, force: true });
+  fs.mkdirSync(outdir, { recursive: true });
+  run("npx", ["tsx", `${mod}/index.ts`], {
+    cwd: gitopsDir,
+    env: {
+      ...process.env,
+      CDK8S_OUTDIR: outdir,
+      ...(ageKeyFile ? { SOPS_AGE_KEY_FILE: ageKeyFile } : {}),
+    },
+  });
+  assertNoUnresolvedRefs(outdir);
+  return outdir;
+}
+
+/** Synth a repo module and apply it (optionally to another cluster's kubeconfig). */
+async function applyRepoModule(
+  gitopsDir: string,
+  mod: string,
+  clusterName: string,
+  opts: { kubeconfig?: string; ageKeyFile?: string } = {},
+): Promise<void> {
+  const outdir = synthRepoModule(gitopsDir, mod, clusterName, opts.ageKeyFile);
+  const prev = process.env.KUBECONFIG;
+  if (opts.kubeconfig) process.env.KUBECONFIG = opts.kubeconfig;
+  try {
+    await apply({ file: `${outdir}/*.k8s.yaml` });
+  } finally {
+    if (opts.kubeconfig) {
+      if (prev === undefined) delete process.env.KUBECONFIG;
+      else process.env.KUBECONFIG = prev;
+    }
+  }
+}
+
+/**
+ * Install the platform on a cluster by applying the repo's `infra/*` modules in
+ * dependency order. Used ONLY for Kind (the minimum to run CAPA and create the
+ * management cluster); on the management cluster ArgoCD installs the platform.
+ * Per-module applies mean cross-module ordering is ours: CRD/controller modules
+ * (crossplane, cert-manager) before the things that need them.
  */
 async function deployPlatform(
-  appOpts: AwsBootstrapAppOptions,
+  gitopsDir: string,
+  clusterName: string,
   kubeconfig?: string,
 ): Promise<void> {
-  const outdir = path.join(stateDir(appOpts.clusterName), "synth-platform");
-
-  await synthAndApply(outdir, () => synthAwsPlatform(outdir, appOpts), kubeconfig);
-
-  // Wait for the cert-manager webhook and FAIL FAST if it doesn't come up — the
-  // whole subsequent flow (cluster-api-operator admission, CRD serving certs)
-  // depends on it. (Previously this was masked by ignoreErrors.)
+  const opts = { kubeconfig };
+  // Crossplane controller + the Provider CRD the provider CRs depend on.
+  await applyRepoModule(gitopsDir, "infra/crossplane", clusterName, opts);
+  // cert-manager — its webhook must be up before the CAPA operator's Certificate.
+  await applyRepoModule(gitopsDir, "infra/cert-manager", clusterName, opts);
   log("   Waiting for cert-manager webhook...");
   kubectl(
     ["-n", "cert-manager", "rollout", "status", "deploy/cert-manager-webhook", "--timeout=240s"],
     { kubeconfig },
   );
-  // Re-apply so the operator's cert-manager Certificate/Issuer (which need the
-  // webhook up) and any first-pass-skipped resources are created.
-  await synthAndApply(outdir, () => synthAwsPlatform(outdir, appOpts), kubeconfig);
-
+  // Crossplane provider-aws (ec2/iam/route53/kms) — wait until Healthy before the
+  // node-IAM module (which manages IAM via provider-aws-iam).
+  await applyRepoModule(gitopsDir, "infra/providers", clusterName, opts);
   log("   Waiting for Crossplane providers...");
+  await waitForProviders(300, kubeconfig);
+  // CAPA operator — cert-manager is up, so its Certificate is admitted first pass.
+  // One idempotent re-apply as a safety net for webhook/CRD timing.
+  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
+  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
+  // Node IAM (role + instance profile CAPA requires before launching machines).
+  await applyRepoModule(gitopsDir, "infra/node-iam", clusterName, opts);
   await waitForProviders(300, kubeconfig);
 }
 
 /** Apply the management cluster CRs (after the operator installs the CAPA/k0s CRDs). */
-async function deployCluster(appOpts: AwsBootstrapAppOptions): Promise<void> {
-  const outdir = path.join(stateDir(appOpts.clusterName), "synth-cluster");
-  await synthAndApply(outdir, () => synthAwsCluster(outdir, appOpts));
+async function deployCluster(
+  gitopsDir: string,
+  clusterName: string,
+): Promise<void> {
+  await applyRepoModule(gitopsDir, "infra/cluster-api", clusterName);
 }
 
 /** Wait until the CAPI cluster's control plane is ready and its kubeconfig secret exists. */
@@ -397,10 +499,7 @@ async function deployGitopsHandoff(
   log("📦 Step 7: GitOps handoff — ArgoCD ← git");
   log("─".repeat(50));
 
-  if (!fs.existsSync(path.join(gitopsDir, "node_modules"))) {
-    log("   Installing repo dependencies (pnpm install)...");
-    run("pnpm", ["install"], { cwd: gitopsDir });
-  }
+  ensureRepoDeps(gitopsDir);
 
   // The age key resolves ref+sops:// at synth time (here) and is mounted into the
   // repo-server CMP sidecar (as the nebula-sops-age Secret) for ArgoCD's own syncs.
@@ -424,25 +523,12 @@ async function deployGitopsHandoff(
     { kubeconfig },
   );
 
-  const prev = process.env.KUBECONFIG;
-  process.env.KUBECONFIG = kubeconfig;
-  try {
-    for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
-      log(`   Synthesizing ${mod}...`);
-      const outdir = path.join(stateDir(clusterName), "synth-gitops", mod);
-      fs.rmSync(outdir, { recursive: true, force: true });
-      fs.mkdirSync(outdir, { recursive: true });
-      run("npx", ["tsx", `${mod}/index.ts`], {
-        cwd: gitopsDir,
-        env: { ...process.env, CDK8S_OUTDIR: outdir, SOPS_AGE_KEY_FILE: ageKeyFile },
-      });
-      assertNoUnresolvedRefs(outdir);
-      log(`   Applying ${mod}...`);
-      await apply({ file: `${outdir}/*.k8s.yaml` });
-    }
-  } finally {
-    if (prev === undefined) delete process.env.KUBECONFIG;
-    else process.env.KUBECONFIG = prev;
+  // Install ArgoCD + the root app-of-apps. ArgoCD then reconciles infra/* (the full
+  // platform) and apps/* onto the management cluster from git — the bootstrap does
+  // NOT install the platform on mgmt; ArgoCD owns it.
+  for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
+    log(`   Applying ${mod}...`);
+    await applyRepoModule(gitopsDir, mod, clusterName, { kubeconfig, ageKeyFile });
   }
 
   // Wait for the ArgoCD application controller, then sync the root app-of-apps;
@@ -501,50 +587,52 @@ async function waitForMgmtApiStable(
 
 async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const kindName = options.name || "nebula";
-  const clusterName = options.clusterName || DEFAULT_MGMT_CLUSTER;
-  const region = options.region;
-  if (!region) {
-    throw new Error("AWS provider requires --region (e.g. --region eu-central-1)");
+
+  // The repo is the single source of truth: everything configurable (cluster name,
+  // region, AMI, replicas, instance type, …) lives in its config.ts and cdk8s
+  // modules, NOT in CLI flags. The bootstrap just needs the path to that repo.
+  const gitopsDir = path.resolve(options.gitopsDir || process.cwd());
+  if (!fs.existsSync(path.join(gitopsDir, "config.ts"))) {
+    throw new Error(
+      `No config.ts in ${gitopsDir}. Run from your aws/ repo subtree or pass ` +
+        `--gitops-dir <path>. Scaffold one with: nebula init --provider aws`,
+    );
   }
-  const appOpts: AwsBootstrapAppOptions = {
-    region,
-    clusterName,
-    amiId: options.amiId,
-    ...(options.cpReplicas ? { cpReplicas: options.cpReplicas } : {}),
-    ...(options.sshKeyName ? { sshKeyName: options.sshKeyName } : {}),
-  };
 
-  log("");
-  log("🚀 Nebula AWS Bootstrap (vendor-free, self-managed k0s management cluster)");
-  log("═".repeat(50));
-  log(`   Kind cluster: ${kindName}`);
-  log(`   Region:       ${region}`);
-  log(`   Mgmt cluster: ${clusterName}`);
-  log(`   AMI:          ${appOpts.amiId ?? "(CAPA image lookup — pass --ami-id)"}`);
-
-  for (const tool of ["kubectl", "aws", "kind"]) {
+  for (const tool of ["kubectl", "aws", "kind", "pnpm", "helm"]) {
     if (!commandExists(tool)) throw new Error(`${tool} is not installed`);
   }
 
-  // Step 1: Kind bootstrap cluster (ephemeral).
+  ensureRepoDeps(gitopsDir);
+  const { region, clusterName } = readAwsRepoConfig(gitopsDir);
+
+  log("");
+  log("🚀 Nebula AWS Bootstrap (thin — ArgoCD reconciles the platform from git)");
+  log("═".repeat(50));
+  log(`   Repo (config):     ${gitopsDir}`);
+  log(`   Kind (bootstrap):  ${kindName}`);
+  log(`   Region:            ${region}`);
+  log(`   Mgmt cluster:      ${clusterName}`);
+
+  // Step 1: Kind bootstrap cluster (ephemeral — only runs CAPA to create mgmt).
   if (!options.skipKind) await createKindCluster(kindName);
 
   // Step 2: AWS credentials (Crossplane + CAPA secrets).
   if (!options.skipCredentials) await setupAwsCredentials(region, options.awsProfile);
 
-  // Step 3: Platform on Kind, then wait for the operator to install CAPA/k0s CRDs.
+  // Step 3: Platform on Kind ONLY — the minimum to run CAPA and create the mgmt
+  // cluster. (On mgmt, ArgoCD installs the platform.) Then wait for the operator
+  // to install the CAPA/k0s CRDs.
   log("");
-  log("📦 Step 3: Deploying the platform to Kind (Crossplane + cert-manager + CAPA)");
+  log("📦 Step 3: Bootstrapping the platform on Kind (to run CAPA)");
   log("─".repeat(50));
-  await deployPlatform(appOpts);
+  await deployPlatform(gitopsDir, clusterName);
   log("   Waiting for the cluster-api-operator to install CAPA/k0s CRDs...");
   await waitForCrds(CAPI_CLUSTER_CRDS, 600);
 
   // Gate cluster creation on the node IAM being fully provisioned. CAPA launches
   // the EC2 instance as soon as its instance profile exists and won't wait for
-  // Crossplane to finish attaching the role's policies; a node launched before
-  // the Secrets-Manager read policy is attached can't fetch its bootstrap data
-  // and silently fails cloud-init (k0s never installs). Wait for the role +
+  // Crossplane to finish attaching the role's policies. Wait for the role +
   // instance profile + policy attachments to be Ready, then let the IAM change
   // propagate to EC2's view before any machine launches.
   log("   Waiting for the node IAM (role + instance profile + policies) to be ready...");
@@ -555,7 +643,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("");
   log("📦 Step 4: Creating the management cluster (CAPA + k0s)");
   log("─".repeat(50));
-  await deployCluster(appOpts);
+  await deployCluster(gitopsDir, clusterName);
   await waitForClusterReady(1800, clusterName);
 
   // Step 5: Fetch the management cluster kubeconfig.
@@ -564,21 +652,14 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("─".repeat(50));
   const mgmtKubeconfig = fetchKubeconfig(clusterName);
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
-
-  // Step 6: Install the platform on the management cluster. The standalone k0s
-  // control plane is self-contained; ArgoCD (Step 7) inherits the rest from git.
-  log("");
-  log("📦 Step 6: Installing the platform on the management cluster");
-  log("─".repeat(50));
   await waitForMgmtApiStable(mgmtKubeconfig, 300);
-  await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
-  await deployPlatform(appOpts, mgmtKubeconfig);
 
-  // Step 7 (opt-in): hand the platform off to ArgoCD ← git, so the management
-  // cluster self-manages from the repo instead of via in-process applies.
-  if (options.gitopsDir) {
-    await deployGitopsHandoff(options.gitopsDir, mgmtKubeconfig, clusterName);
-  }
+  // Step 6: Hand off to ArgoCD. The bootstrap installs ONLY the credential secrets
+  // and ArgoCD on the management cluster — ArgoCD then reconciles the full platform
+  // (infra/*) and all apps (apps/*) from git, including the cluster's own CAPI
+  // definition (it adopts the AWS resources Kind's CAPA created).
+  await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
+  await deployGitopsHandoff(gitopsDir, mgmtKubeconfig, clusterName);
 
   log("");
   log("═".repeat(50));
@@ -587,16 +668,10 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   Kind (bootstrap):  kind-${kindName}`);
   log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
-  if (options.gitopsDir) {
-    log("   ArgoCD now reconciles the platform from git — including infra/cluster-api,");
-    log("   so the management cluster inherits ownership of its own CAPI lifecycle.");
-    log("   Kind was only the bootstrap scaffold — delete it freely:");
-    log(`     kind delete cluster --name ${kindName}`);
-  } else {
-    log("   ⚠️  No GitOps handoff (--gitops-dir not set): the management cluster's CAPI");
-    log("   lifecycle objects live on Kind. Re-run with --gitops-dir so ArgoCD inherits");
-    log("   them from git before deleting Kind.");
-  }
+  log("   ArgoCD now reconciles the whole platform and all apps from git — including");
+  log("   infra/cluster-api, so the management cluster owns its own CAPI lifecycle.");
+  log("   Kind was only the bootstrap scaffold — delete it freely once ArgoCD is green:");
+  log(`     kind delete cluster --name ${kindName}`);
   log("");
   log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
   log("   kubectl get nodes");
