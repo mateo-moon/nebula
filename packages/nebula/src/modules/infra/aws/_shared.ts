@@ -5,6 +5,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
   AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol as IngressProtocol,
+  AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol as LbListenerProtocol,
   AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
   AwsMachineTemplateV1Beta2,
 } from "#imports/infrastructure.cluster.x-k8s.io";
@@ -162,6 +163,14 @@ export function emitAwsClusterCr(
         ...(opts.loadBalancerScheme
           ? { scheme: opts.loadBalancerScheme }
           : {}),
+        // Expose k0s's konnectivity server (8132) on the control-plane NLB. CAPA
+        // only adds the 6443 (API) listener by default, so the konnectivity-agent
+        // (a pod in the VPC) times out dialing <endpoint>:8132 → the API↔pod tunnel
+        // never forms ("No agent available") → no logs/exec/port-forward AND
+        // admission webhooks (cert-manager, CAPA, crossplane) are unreachable. The
+        // matching 8132 SG ingress rule is added below (CAPA's additionalListeners
+        // creates the listener+target group but not the SG rule).
+        additionalListeners: [{ port: 8132, protocol: LbListenerProtocol.TCP }],
       },
       network: {
         vpc: {
@@ -185,6 +194,16 @@ export function emitAwsClusterCr(
             protocol: IngressProtocol.TCP,
             fromPort: 9443,
             toPort: 9443,
+            cidrBlocks: [opts.vpcCidr],
+          },
+          {
+            // konnectivity server (API↔pod tunnel). Pairs with the 8132 NLB
+            // listener above; without this SG rule the agent's connection to the
+            // NLB target times out and the tunnel never forms.
+            description: "konnectivity (API->pod tunnel)",
+            protocol: IngressProtocol.TCP,
+            fromPort: 8132,
+            toPort: 8132,
             cidrBlocks: [opts.vpcCidr],
           },
         ],
