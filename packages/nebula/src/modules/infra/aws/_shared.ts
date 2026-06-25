@@ -5,6 +5,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
   AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol as IngressProtocol,
+  AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
   AwsMachineTemplateV1Beta2,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 
@@ -140,6 +141,12 @@ export function emitAwsClusterCr(
      */
     loadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
     vpcCidr: string;
+    /**
+     * Cap the number of AZs CAPA spreads subnets across. CAPA creates one NAT
+     * gateway (and thus one Elastic IP) per AZ, so on EIP-constrained accounts set
+     * this to 1 (single-AZ, 1 NAT/EIP). Omitted = CAPA default (up to 3 AZs).
+     */
+    availabilityZoneUsageLimit?: number;
   },
 ): AwsClusterV1Beta2 {
   return new AwsClusterV1Beta2(scope, "aws-cluster", {
@@ -157,7 +164,16 @@ export function emitAwsClusterCr(
           : {}),
       },
       network: {
-        vpc: { cidrBlock: opts.vpcCidr },
+        vpc: {
+          cidrBlock: opts.vpcCidr,
+          // One NAT gateway/EIP per AZ — cap AZs on EIP-constrained accounts.
+          ...(opts.availabilityZoneUsageLimit
+            ? {
+                availabilityZoneUsageLimit: opts.availabilityZoneUsageLimit,
+                availabilityZoneSelection: AzSelection.ORDERED,
+              }
+            : {}),
+        },
         // CAPA's control-plane security group opens the standard k8s/etcd ports
         // (6443, 2379-2380) but NOT k0s's controller-join API on 9443. Without
         // this, a 2nd/3rd K0sControlPlane replica hangs at "Joining existing

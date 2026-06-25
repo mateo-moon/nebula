@@ -65,6 +65,12 @@ export interface AwsK0sClusterConfig {
   serviceCidr?: string;
   /** VPC CIDR CAPA will create (default "10.0.0.0/16") */
   vpcCidr?: string;
+  /**
+   * Cap the number of AZs CAPA spreads subnets across. CAPA creates one NAT
+   * gateway + Elastic IP per AZ; set to 1 on EIP-constrained accounts (single-AZ,
+   * 1 NAT/EIP — no AZ-level HA). Omitted = CAPA default (up to 3 AZs).
+   */
+  availabilityZoneUsageLimit?: number;
   /** Pre-existing EC2 key pair name for SSH access to nodes */
   sshKeyName?: string;
   /**
@@ -146,6 +152,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
         this.config.controlPlaneLoadBalancerScheme ??
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
       vpcCidr,
+      availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
     });
 
     // 3. AWSMachineTemplate for the control-plane nodes
