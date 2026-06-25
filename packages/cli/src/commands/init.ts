@@ -9,8 +9,11 @@ import * as fs from "fs";
 import * as path from "path";
 import chalk from "chalk";
 import { input, checkbox } from "@inquirer/prompts";
+import { initAws } from "./init-aws";
 
 export interface InitOptions {
+  /** Management cluster cloud: 'gcp' (default) or 'aws'. */
+  provider?: string;
   project?: string;
   region?: string;
   domain?: string;
@@ -20,6 +23,17 @@ export interface InitOptions {
   gitRepo?: string;
   addons?: string;
   outputDir?: string;
+
+  // --- aws (init --provider aws) ---
+  clusterName?: string;
+  instanceType?: string;
+  amiId?: string;
+  cpReplicas?: number;
+  targetRevision?: string;
+  pathPrefix?: string;
+  sshKnownHosts?: string;
+  argoProject?: string;
+  cmpImage?: string;
 }
 
 interface ResolvedConfig {
@@ -1190,6 +1204,13 @@ export async function init(options: InitOptions): Promise<void> {
     throw new Error(
       "config.ts already exists in this directory. Remove it to re-initialize.",
     );
+  }
+
+  // AWS variant scaffolds a self-contained GitOps subtree (the single source of
+  // truth the thin bootstrap and ArgoCD both consume).
+  if (options.provider === "aws") {
+    await initAws(options, outputDir);
+    return;
   }
 
   // Gather config via prompts or flags
