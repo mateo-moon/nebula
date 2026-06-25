@@ -311,6 +311,10 @@ async function deployPlatform(
   await applyRepoModule(gitopsDir, "infra/providers", clusterName, opts);
   log("   Waiting for Crossplane providers...");
   await waitForProviders(300, kubeconfig);
+  // Re-apply: the ProviderConfig's CRD (providerconfigs.aws.upbound.io) only
+  // registers once the provider is Healthy, so the first apply skipped it. Now the
+  // CRD exists, this lands the ProviderConfig the IAM/CR modules reference.
+  await applyRepoModule(gitopsDir, "infra/providers", clusterName, opts);
   // CAPA operator — cert-manager is up, so its Certificate is admitted first pass.
   // One idempotent re-apply as a safety net for webhook/CRD timing.
   await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
