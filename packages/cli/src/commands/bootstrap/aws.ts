@@ -104,7 +104,14 @@ function awsExportCredentials(profile?: string): AwsCreds {
   return { accessKeyId, secretAccessKey, sessionToken };
 }
 
-/** Create the Crossplane (`aws-creds`) and CAPA (`aws-capa-credentials`) secrets on the target cluster. */
+/**
+ * Create the Crossplane (`aws-creds`) and CAPA (`aws-capa-credentials`) secrets with
+ * real exported keys. Always used on the KIND bootstrap cluster (it has no instance
+ * profile, so it needs real keys to provision the node role + AWS resources). Also
+ * baked on the MANAGEMENT cluster (pass `kubeconfig`) ONLY for a SECRET-mode
+ * (non-keyless) cluster — a keyless cluster authenticates via the node instance
+ * profile and never gets credential secrets baked here.
+ */
 async function setupAwsCredentials(
   region: string,
   profile?: string,
@@ -112,7 +119,7 @@ async function setupAwsCredentials(
 ): Promise<void> {
   if (!kubeconfig) {
     log("");
-    log("🔐 Step 2: Setting up AWS credentials");
+    log("🔐 Step 2: Setting up AWS credentials (Kind bootstrap cluster)");
     log("─".repeat(50));
   }
 
@@ -200,6 +207,7 @@ function ensureRepoDeps(gitopsDir: string): void {
 function readAwsRepoConfig(gitopsDir: string): {
   region: string;
   clusterName: string;
+  keyless: boolean;
 } {
   // Run a throwaway reader IN the repo dir so `import "./config"` resolves exactly
   // like the cdk8s modules do (tsx -e has ESM eval quirks; a real file does not).
@@ -219,7 +227,9 @@ function readAwsRepoConfig(gitopsDir: string): {
   }
   const start = out.indexOf("{");
   const end = out.lastIndexOf("}");
-  let cfg: { aws?: { region?: string; clusterName?: string } } = {};
+  let cfg: {
+    aws?: { region?: string; clusterName?: string; keyless?: boolean };
+  } = {};
   try {
     cfg = JSON.parse(out.slice(start, end + 1));
   } catch {
@@ -230,7 +240,11 @@ function readAwsRepoConfig(gitopsDir: string): {
   if (!cfg.aws?.region || !cfg.aws?.clusterName) {
     throw new Error("config.ts must define aws.region and aws.clusterName.");
   }
-  return { region: cfg.aws.region, clusterName: cfg.aws.clusterName };
+  return {
+    region: cfg.aws.region,
+    clusterName: cfg.aws.clusterName,
+    keyless: cfg.aws.keyless === true,
+  };
 }
 
 /**
@@ -243,7 +257,7 @@ function synthRepoModule(
   gitopsDir: string,
   mod: string,
   clusterName: string,
-  ageKeyFile?: string,
+  opts: { ageKeyFile?: string; extraEnv?: Record<string, string> } = {},
 ): string {
   const outdir = path.join(
     stateDir(clusterName),
@@ -252,14 +266,22 @@ function synthRepoModule(
   );
   fs.rmSync(outdir, { recursive: true, force: true });
   fs.mkdirSync(outdir, { recursive: true });
-  run("npx", ["tsx", `${mod}/index.ts`], {
-    cwd: gitopsDir,
-    env: {
-      ...process.env,
-      CDK8S_OUTDIR: outdir,
-      ...(ageKeyFile ? { SOPS_AGE_KEY_FILE: ageKeyFile } : {}),
-    },
-  });
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    CDK8S_OUTDIR: outdir,
+    ...(opts.ageKeyFile ? { SOPS_AGE_KEY_FILE: opts.ageKeyFile } : {}),
+  };
+  // The Kind-stage credential mode must be driven ONLY by an explicit per-call
+  // override, never by whatever the operator happens to have exported in their
+  // shell — a stray ambient NEBULA_AWS_CREDS_MODE=secret would otherwise leak into
+  // the keyless mgmt/handoff synths and silently render secret-mode (referencing
+  // creds that don't exist on the keyless cluster). Strip it, then apply extraEnv.
+  delete env.NEBULA_AWS_CREDS_MODE;
+  Object.assign(env, opts.extraEnv ?? {});
+  log(
+    `   synth ${mod} (creds mode: ${env.NEBULA_AWS_CREDS_MODE === "secret" ? "secret" : "keyless/default"})`,
+  );
+  run("npx", ["tsx", `${mod}/index.ts`], { cwd: gitopsDir, env });
   assertNoUnresolvedRefs(outdir);
   return outdir;
 }
@@ -269,9 +291,16 @@ async function applyRepoModule(
   gitopsDir: string,
   mod: string,
   clusterName: string,
-  opts: { kubeconfig?: string; ageKeyFile?: string } = {},
+  opts: {
+    kubeconfig?: string;
+    ageKeyFile?: string;
+    extraEnv?: Record<string, string>;
+  } = {},
 ): Promise<void> {
-  const outdir = synthRepoModule(gitopsDir, mod, clusterName, opts.ageKeyFile);
+  const outdir = synthRepoModule(gitopsDir, mod, clusterName, {
+    ageKeyFile: opts.ageKeyFile,
+    extraEnv: opts.extraEnv,
+  });
   const prev = process.env.KUBECONFIG;
   if (opts.kubeconfig) process.env.KUBECONFIG = opts.kubeconfig;
   try {
@@ -296,7 +325,14 @@ async function deployPlatform(
   clusterName: string,
   kubeconfig?: string,
 ): Promise<void> {
-  const opts = { kubeconfig };
+  // Kind has no instance profile, so the credential-mode-aware modules
+  // (infra/providers, infra/cluster-api-operator) must render SECRET creds here —
+  // Crossplane provider-aws reads `aws-creds` and CAPA reads `aws-capa-credentials`
+  // (both seeded by setupAwsCredentials). On the management cluster these same
+  // modules default to keyless (instance profile). Only those two modules read the
+  // var; the rest ignore it, so it's safe to set for every apply in this Kind-only
+  // function.
+  const opts = { kubeconfig, extraEnv: { NEBULA_AWS_CREDS_MODE: "secret" } };
   // Crossplane controller + the Provider CRD the provider CRs depend on.
   await applyRepoModule(gitopsDir, "infra/crossplane", clusterName, opts);
   // cert-manager — its webhook must be up before the CAPA operator's Certificate.
@@ -488,17 +524,22 @@ function assertNoUnresolvedRefs(dir: string): void {
 }
 
 /**
- * GitOps handoff (opt-in via --gitops-dir). Installs ArgoCD + the app-of-apps
- * from the repo subtree onto the management cluster and syncs the root app, so
- * ArgoCD reconciles the platform from git thereafter. Mirrors the GCP
- * deployToGke handoff. `gitopsDir` is a checked-out `aws/`-style layout
- * (meta/argocd, meta/argocd-apps); deps are installed if missing.
+ * GitOps handoff (opt-in via --gitops-dir). Installs Crossplane + provider-aws and
+ * then ArgoCD + the app-of-apps onto the management cluster, syncs the root app, so
+ * ArgoCD reconciles the platform from git thereafter. Mirrors the GCP deployToGke
+ * handoff (Crossplane before ArgoCD). In KEYLESS mode the provider authenticates via
+ * the node instance profile (`type: none`) with NO AWS keys baked on mgmt; in secret
+ * mode the caller must bake `aws-creds`/`aws-capa-credentials` on mgmt FIRST.
+ * `gitopsDir` is a checked-out `aws/`-style layout (infra/crossplane, infra/providers,
+ * infra/node-iam, meta/argocd, meta/argocd-apps); deps are installed if missing.
  */
 async function deployGitopsHandoff(
   gitopsDir: string,
   kubeconfig: string,
   clusterName: string,
+  keyless: boolean,
 ): Promise<void> {
+  const mode = keyless ? "keyless" : "secret";
   log("");
   log("📦 Step 7: GitOps handoff — ArgoCD ← git");
   log("─".repeat(50));
@@ -527,9 +568,39 @@ async function deployGitopsHandoff(
     { kubeconfig },
   );
 
-  // Install ArgoCD + the root app-of-apps. ArgoCD then reconciles infra/* (the full
-  // platform) and apps/* onto the management cluster from git — the bootstrap does
-  // NOT install the platform on mgmt; ArgoCD owns it.
+  // Phase 1: install Crossplane + provider-aws on the management cluster first —
+  // mirrors the GCP deployToGke handoff (Crossplane before ArgoCD) and de-risks the
+  // provider by bringing it up imperatively before ArgoCD reconciles node-iam /
+  // cluster-api against it. In keyless mode infra/providers renders the `type: none`
+  // ProviderConfig (instance-profile auth, no keys on mgmt); in secret mode it
+  // renders `type: secret` and the caller baked aws-creds on mgmt first.
+  log(`   Phase 1: installing Crossplane + provider-aws (${mode}) on mgmt...`);
+  await applyRepoModule(gitopsDir, "infra/crossplane", clusterName, { kubeconfig, ageKeyFile });
+  await applyRepoModule(gitopsDir, "infra/providers", clusterName, { kubeconfig, ageKeyFile });
+  log("   Waiting for Crossplane providers to be healthy...");
+  await waitForProviders(300, kubeconfig);
+  // Re-apply providers: the ProviderConfig's CRD (providerconfigs.aws.upbound.io)
+  // only registers once the provider is Healthy, so the first apply skipped the
+  // ProviderConfig. Land it now (mirrors the Kind-stage double-apply).
+  await applyRepoModule(gitopsDir, "infra/providers", clusterName, { kubeconfig, ageKeyFile });
+
+  // REAL auth probe — fail fast, locally. waitForProviders only checks the provider
+  // PACKAGE's Healthy condition (it makes no AWS API call), so a genuine auth failure
+  // (in keyless mode: IMDS unreachable, wrong hop limit, missing role perms) passes
+  // it green and would otherwise surface much later as an opaque ArgoCD sync error.
+  // Instead: apply node IAM on mgmt and wait for the managed resources to be Ready.
+  // The role + instance profile already exist (created on Kind), so the mgmt provider
+  // only has to OBSERVE/adopt them — which REQUIRES a working credential chain (in
+  // keyless mode: IMDS hop 2 + the controller inline policy). If auth is broken they
+  // never reach Ready and this throws here.
+  log(`   Verifying mgmt AWS auth (${mode}) by applying node IAM on mgmt...`);
+  await applyRepoModule(gitopsDir, "infra/node-iam", clusterName, { kubeconfig, ageKeyFile });
+  await waitForManagedReady(NODE_IAM_KINDS, 300, kubeconfig);
+
+  // Phase 2: install ArgoCD + the root app-of-apps. ArgoCD then reconciles the full
+  // platform (infra/*) and apps/* onto the management cluster from git — including
+  // cert-manager, the CAPA operator, node IAM, and the cluster's own CAPI definition.
+  log("   Phase 2: installing ArgoCD (with Crossplane already present)...");
   for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
     log(`   Applying ${mod}...`);
     await applyRepoModule(gitopsDir, mod, clusterName, { kubeconfig, ageKeyFile });
@@ -608,7 +679,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   }
 
   ensureRepoDeps(gitopsDir);
-  const { region, clusterName } = readAwsRepoConfig(gitopsDir);
+  const { region, clusterName, keyless } = readAwsRepoConfig(gitopsDir);
 
   log("");
   log("🚀 Nebula AWS Bootstrap (thin — ArgoCD reconciles the platform from git)");
@@ -617,6 +688,9 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   Kind (bootstrap):  ${kindName}`);
   log(`   Region:            ${region}`);
   log(`   Mgmt cluster:      ${clusterName}`);
+  log(
+    `   Credential mode:   ${keyless ? "KEYLESS (node instance profile / IMDS)" : "secret (static keys baked on mgmt)"}`,
+  );
 
   // Step 1: Kind bootstrap cluster (ephemeral — only runs CAPA to create mgmt).
   if (!options.skipKind) await createKindCluster(kindName);
@@ -658,12 +732,18 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
   await waitForMgmtApiStable(mgmtKubeconfig, 300);
 
-  // Step 6: Hand off to ArgoCD. The bootstrap installs ONLY the credential secrets
-  // and ArgoCD on the management cluster — ArgoCD then reconciles the full platform
-  // (infra/*) and all apps (apps/*) from git, including the cluster's own CAPI
-  // definition (it adopts the AWS resources Kind's CAPA created).
-  await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
-  await deployGitopsHandoff(gitopsDir, mgmtKubeconfig, clusterName);
+  // Step 6: Hand off to ArgoCD. Installs Crossplane + provider-aws and ArgoCD on
+  // mgmt, then ArgoCD reconciles the full platform (infra/*) and all apps (apps/*)
+  // from git, including the cluster's own CAPI definition (it adopts the AWS
+  // resources Kind's CAPA created). In KEYLESS mode no AWS credentials are baked on
+  // mgmt — Crossplane and CAPA authenticate via the node instance profile (whose
+  // controller permissions were provisioned on Kind, AwsIam controllerPolicies). In
+  // secret mode the static keys must be baked on mgmt first (provider-aws/CAPA read
+  // them), since config.aws.keyless=false renders the modules in secret mode.
+  if (!keyless) {
+    await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
+  }
+  await deployGitopsHandoff(gitopsDir, mgmtKubeconfig, clusterName, keyless);
 
   log("");
   log("═".repeat(50));

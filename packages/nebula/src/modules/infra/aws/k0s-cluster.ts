@@ -81,6 +81,17 @@ export interface AwsK0sClusterConfig {
   /** Control-plane configuration */
   controlPlane?: AwsK0sControlPlaneOptions;
   /**
+   * Make the cluster KEYLESS-capable: emit `instanceMetadataOptions` (IMDSv2,
+   * hop limit 2) on the control-plane AWSMachineTemplate so pod-networked
+   * controllers (Crossplane provider-aws, CAPA) on the control-plane nodes can
+   * reach IMDS and authenticate via the node instance profile. Pair with
+   * `Aws`/`AwsIam` `controllerPolicies` (instance-profile carries the perms) and
+   * keyless ProviderConfig/CAPA creds. Off by default. NOTE: this is part of the
+   * immutable AWSMachineTemplate spec — enabling it on an already-running cluster
+   * forces a control-plane machine roll, so set it at cluster creation.
+   */
+  imdsPodAccess?: boolean;
+  /**
    * Scheme of the control-plane Network Load Balancer. Defaults to INTERNAL so
    * the k0s API endpoint is not exposed to the internet (mTLS still guards it).
    * Set to `AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING`
@@ -166,6 +177,8 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       rootVolumeSizeGiB: cp.rootVolumeSizeGiB ?? 80,
       rootVolumeType: cp.rootVolumeType ?? "gp3",
       ami: cp.ami,
+      // Keyless mgmt control plane: let controller pods reach IMDS (IMDSv2, hop 2).
+      imdsPodAccess: this.config.imdsPodAccess,
     });
 
     // 4. K0sControlPlane - standalone HA control plane on the EC2 nodes.

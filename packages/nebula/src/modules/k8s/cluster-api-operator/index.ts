@@ -101,6 +101,16 @@ export interface ClusterApiOperatorAwsConfig {
   accessKeyId?: string;
   /** AWS secret access key. Supports `ref+sops://...`. */
   secretAccessKey?: string;
+  /**
+   * Keyless mode for a self-managed management cluster whose nodes carry an
+   * instance profile with controller permissions (see AwsIam `controllerPolicies`).
+   * Creates the credentials secret with an EMPTY `AWS_B64ENCODED_CREDENTIALS` so
+   * CAPA's AWS SDK finds no static key and falls through the default credential
+   * chain to the instance profile (IMDS). No AWS keys are stored on the cluster.
+   * Mutually exclusive with `accessKeyId`/`secretAccessKey` (keyless wins).
+   * @default false
+   */
+  keyless?: boolean;
 }
 
 export interface ClusterApiOperatorConfig {
@@ -332,6 +342,22 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
     const aws = this.config.aws!;
     const secretName = aws.secretName ?? "aws-capa-credentials";
     const secretNamespace = aws.secretNamespace ?? capaNamespace;
+
+    // Keyless: create the secret with an EMPTY credentials blob so CAPA finds no
+    // static key and falls through to the node instance profile (IMDS). The
+    // AWS_REGION key is still provided (CAPA needs the default region). An empty
+    // (no `[default]` section) shared-credentials file makes the SDK's shared
+    // provider return nothing and continue down the chain to the instance role.
+    if (aws.keyless) {
+      new kplus.Secret(this, "capa-credentials", {
+        metadata: { name: secretName, namespace: secretNamespace },
+        stringData: {
+          AWS_B64ENCODED_CREDENTIALS: toCapaB64(""),
+          AWS_REGION: aws.region,
+        },
+      });
+      return { name: secretName, namespace: secretNamespace };
+    }
 
     // Only create the secret when explicit credentials are supplied; otherwise
     // assume the named secret already exists in the cluster.

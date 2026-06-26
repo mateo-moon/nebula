@@ -94,6 +94,7 @@ export class Aws extends BaseConstruct<AwsConfig> {
         name: this.config.name,
         instanceProfileName: iamCfg.instanceProfileName,
         managedPolicyArns: iamCfg.managedPolicyArns,
+        controllerPolicies: iamCfg.controllerPolicies,
         providerConfigRef: providerConfigRef.name,
         tags: baseTags,
       });

@@ -21,6 +21,45 @@ const EC2_ASSUME_ROLE_POLICY = JSON.stringify({
 export const DEFAULT_NODE_INSTANCE_PROFILE =
   "nodes.cluster-api-provider-aws.sigs.k8s.io";
 
+/**
+ * Coarse "mgmt controller" permission set, attached to the node role as an INLINE
+ * policy when `controllerPolicies` is set. This is what makes the management
+ * cluster KEYLESS: its Crossplane provider-aws and CAPA controllers run on these
+ * nodes and pick up the role via the instance profile (IMDS / default AWS SDK
+ * chain), so no static AWS keys are baked on the cluster.
+ *
+ * Service-level wildcards (not the verbose clusterawsadm/Crossplane scoped
+ * policies) keep this small enough for a single inline policy (well under IAM's
+ * 10,240-char per-role inline limit) and avoid needing `iam:CreatePolicy` on the
+ * bootstrap credentials — only `iam:PutRolePolicy`, which the bootstrap already
+ * holds (it creates the role). The blast radius is broad, but a keyless mgmt
+ * control-plane identity is inherently near-admin (it provisions IAM, VPCs, EC2,
+ * ELB, Route53, KMS for the whole platform). `secretsmanager:*` is included for
+ * CAPA parity even though we use insecureSkipSecretsManager.
+ */
+const CONTROLLER_INLINE_POLICY = JSON.stringify({
+  Version: "2012-10-17",
+  Statement: [
+    {
+      Sid: "NebulaMgmtControllers",
+      Effect: "Allow",
+      Resource: "*",
+      Action: [
+        "ec2:*",
+        "elasticloadbalancing:*",
+        "autoscaling:*",
+        "iam:*",
+        "route53:*",
+        "kms:*",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "secretsmanager:*",
+        "tag:GetResources",
+      ],
+    },
+  ],
+});
+
 export interface AwsIamConfig {
   /** Resource name prefix */
   name: string;
@@ -41,6 +80,15 @@ export interface AwsIamConfig {
   tags?: Record<string, string>;
   /** ProviderConfig name to use */
   providerConfigRef?: string;
+  /**
+   * Attach the coarse "mgmt controller" inline policy (see
+   * {@link CONTROLLER_INLINE_POLICY}) to the node role so the instance profile
+   * carries CAPA + Crossplane permissions. This is what makes the management
+   * cluster keyless — its controllers authenticate via the node instance profile
+   * (IMDS) instead of a static AWS key. Leave unset for plain worker nodes.
+   * @default false
+   */
+  controllerPolicies?: boolean;
 }
 
 /**
@@ -79,6 +127,19 @@ export class AwsIam extends Construct {
         forProvider: {
           assumeRolePolicy: EC2_ASSUME_ROLE_POLICY,
           description: "Nebula self-managed worker node role",
+          // Keyless mgmt: attach the controller permissions inline on the role
+          // (iam:PutRolePolicy only — no iam:CreatePolicy needed) so the instance
+          // profile carries CAPA + Crossplane perms.
+          ...(config.controllerPolicies
+            ? {
+                inlinePolicy: [
+                  {
+                    name: `${config.name}-mgmt-controllers`,
+                    policy: CONTROLLER_INLINE_POLICY,
+                  },
+                ],
+              }
+            : {}),
           tags,
         },
         providerConfigRef,

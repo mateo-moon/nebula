@@ -9,6 +9,8 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol as LbIngressProtocol,
   AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
   AwsMachineTemplateV1Beta2,
+  AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpEndpoint as ImdsHttpEndpoint,
+  AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpTokens as ImdsHttpTokens,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 
 /**
@@ -257,6 +259,13 @@ export function emitAwsMachineTemplate(
     rootVolumeSizeGiB: number;
     rootVolumeType: string;
     ami?: AmiSelection;
+    /**
+     * Allow pod-networked workloads on the node to reach IMDS (for keyless
+     * instance-profile auth). Off by default — only the keyless management
+     * control plane needs it; ordinary worker nodes should NOT expose their
+     * instance role to every pod. See the field comment below.
+     */
+    imdsPodAccess?: boolean;
   },
 ): AwsMachineTemplateV1Beta2 {
   return new AwsMachineTemplateV1Beta2(scope, id, {
@@ -276,6 +285,26 @@ export function emitAwsMachineTemplate(
           cloudInit: { insecureSkipSecretsManager: true },
           // "" (not omitted) so CAPA does not fall back to the "default" key pair.
           sshKeyName: opts.sshKeyName ?? "",
+          // KEYLESS-only (imdsPodAccess): let pod-networked controllers reach the
+          // EC2 Instance Metadata Service (IMDS) for instance-profile auth.
+          // Crossplane provider-aws and the CAPA controller run as ordinary pods;
+          // their IMDS request crosses the CNI bridge, which adds one network hop,
+          // so the EC2 default hop limit of 1 drops it (TTL→0 at the bridge) and
+          // the AWS SDK finds no credentials even with a correct role. Hop limit 2
+          // lets the request through. httpTokens=required enforces IMDSv2 (the token
+          // PUT response also respects the hop limit, so pod auth still works) — a
+          // GET-only SSRF then cannot read the near-admin instance-profile creds.
+          // Omitted entirely for non-keyless nodes (workers), which keep the EC2
+          // default (hop limit 1) and do NOT expose their role to pods.
+          ...(opts.imdsPodAccess
+            ? {
+                instanceMetadataOptions: {
+                  httpEndpoint: ImdsHttpEndpoint.ENABLED,
+                  httpTokens: ImdsHttpTokens.REQUIRED,
+                  httpPutResponseHopLimit: 2,
+                },
+              }
+            : {}),
           rootVolume: {
             size: opts.rootVolumeSizeGiB,
             type: opts.rootVolumeType,
