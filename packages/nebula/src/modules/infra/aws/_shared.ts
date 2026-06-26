@@ -6,6 +6,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
   AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol as IngressProtocol,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol as LbListenerProtocol,
+  AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol as LbIngressProtocol,
   AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
   AwsMachineTemplateV1Beta2,
 } from "#imports/infrastructure.cluster.x-k8s.io";
@@ -165,12 +166,36 @@ export function emitAwsClusterCr(
           : {}),
         // Expose k0s's konnectivity server (8132) on the control-plane NLB. CAPA
         // only adds the 6443 (API) listener by default, so the konnectivity-agent
-        // (a pod in the VPC) times out dialing <endpoint>:8132 → the API↔pod tunnel
-        // never forms ("No agent available") → no logs/exec/port-forward AND
-        // admission webhooks (cert-manager, CAPA, crossplane) are unreachable. The
-        // matching 8132 SG ingress rule is added below (CAPA's additionalListeners
-        // creates the listener+target group but not the SG rule).
+        // (a pod in the VPC) times out dialing <endpoint>:8132 → the API<->pod
+        // tunnel never forms ("No agent available") → no logs/exec/port-forward
+        // AND admission webhooks (cert-manager, CAPA, crossplane) are unreachable.
         additionalListeners: [{ port: 8132, protocol: LbListenerProtocol.TCP }],
+        // ...and open 8132 on the NLB's OWN security group. additionalListeners
+        // creates the listener + target group + registers the node (so the target
+        // reads "healthy"), but does NOT open the port on the LB's security group —
+        // so inbound 8132 is silently dropped at the NLB (i/o timeout) even though
+        // the target is healthy. Scope it to the cluster's own traffic, not the
+        // internet like 6443: the VPC CIDR (internal LB / same-VPC clients) and the
+        // NAT gateway IPs (with an internet-facing LB, in-VPC nodes reach it via
+        // NAT, so the LB sees the NAT EIP as source — this is the single-node
+        // konnectivity hairpin: agent and server are on the same node). The
+        // matching node-side 8132 rule is in additionalControlPlaneIngressRules.
+        ingressRules: [
+          {
+            description: "konnectivity (API to pod tunnel)",
+            protocol: LbIngressProtocol.TCP,
+            fromPort: 8132,
+            toPort: 8132,
+            cidrBlocks: [opts.vpcCidr],
+          },
+          {
+            description: "konnectivity (API to pod tunnel via NAT)",
+            protocol: LbIngressProtocol.TCP,
+            fromPort: 8132,
+            toPort: 8132,
+            natGatewaysIPsSource: true,
+          },
+        ],
       },
       network: {
         vpc: {
