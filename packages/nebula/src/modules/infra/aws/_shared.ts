@@ -197,10 +197,13 @@ export function emitAwsClusterCr(
             cidrBlocks: [opts.vpcCidr],
           },
           {
-            // konnectivity server (API↔pod tunnel). Pairs with the 8132 NLB
+            // konnectivity server (API<->pod tunnel). Pairs with the 8132 NLB
             // listener above; without this SG rule the agent's connection to the
             // NLB target times out and the tunnel never forms.
-            description: "konnectivity (API->pod tunnel)",
+            // NB: AWS SG rule descriptions reject '>' (allowed set is
+            // a-zA-Z0-9. _-:/()#,@[]+=&;{}!$*), so the description must not
+            // contain a "->" arrow or the whole authorize call is rejected.
+            description: "konnectivity (API to pod tunnel)",
             protocol: IngressProtocol.TCP,
             fromPort: 8132,
             toPort: 8132,
