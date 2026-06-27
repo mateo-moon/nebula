@@ -52,6 +52,33 @@ const NODE_IAM_KINDS = [
 ];
 
 /**
+ * cluster-api-operator provider CRs that must report Ready=True on the move TARGET
+ * (the management cluster) before {@link pivotToMgmt} runs `clusterctl move`. A
+ * missing provider Kind makes move fail mid-graph with a `NoKindMatchError`, so all
+ * of them — CAPI core, the AWS + k0smotron infra providers, and k0smotron's
+ * bootstrap/control-plane providers — must be installed and Ready first.
+ */
+const CAPI_OPERATOR_PROVIDERS = [
+  "coreproviders.operator.cluster.x-k8s.io",
+  "infrastructureproviders.operator.cluster.x-k8s.io",
+  "bootstrapproviders.operator.cluster.x-k8s.io",
+  "controlplaneproviders.operator.cluster.x-k8s.io",
+];
+
+/**
+ * clusterctl version pinned to the CAPI CORE contract the cluster-api-operator
+ * installs (CoreProvider v1.12.9 → the v1beta2 contract). `clusterctl move` runs
+ * `CheckCAPIContract` against BOTH the Kind source and the mgmt target; clusterctl
+ * and the core provider must agree on the contract (a v1beta2 clusterctl refuses a
+ * v1beta1 cluster and vice-versa). The host's clusterctl is whatever happens to be
+ * on PATH, so the pivot fetches + caches a matching binary under ~/.nebula/bin
+ * instead of depending on it. MUST stay in lockstep with the operator's CoreProvider
+ * version (nebula k8s/cluster-api-operator: `cluster-api` v1.12.9) — match the
+ * clusterctl MINOR to the core minor for move/upgrade.
+ */
+const CLUSTERCTL_VERSION = "v1.12.9";
+
+/**
  * Per-cluster directory for bootstrap artifacts (the management cluster's
  * kubeconfig and transient synth output). Lives under the user's home —
  * `~/.nebula/<cluster>/` — NOT the current working directory, so running the CLI
@@ -731,17 +758,224 @@ function assertNoUnresolvedRefs(dir: string): void {
 }
 
 /**
- * GitOps handoff (opt-in via --gitops-dir). Installs Crossplane + provider-aws and
- * then ArgoCD + the app-of-apps onto the management cluster, syncs the root app, so
- * ArgoCD reconciles the platform from git thereafter. Mirrors the GCP deployToGke
+ * Fetch + cache a {@link CLUSTERCTL_VERSION}-pinned clusterctl binary under
+ * ~/.nebula/bin and return its path. We never trust the host's clusterctl: the pivot
+ * needs a binary on the SAME CAPI contract the operator installs (v1beta1), and a
+ * newer host clusterctl hard-refuses the move. Cached across runs; downloaded once.
+ */
+async function ensureClusterctl(): Promise<string> {
+  const binDir = path.join(os.homedir(), ".nebula", "bin");
+  const dest = path.join(binDir, `clusterctl-${CLUSTERCTL_VERSION}`);
+  if (fs.existsSync(dest)) return dest;
+
+  fs.mkdirSync(binDir, { recursive: true });
+  const arch = os.arch() === "arm64" ? "arm64" : "amd64";
+  const plat = os.platform() === "darwin" ? "darwin" : "linux";
+  const url =
+    `https://github.com/kubernetes-sigs/cluster-api/releases/download/` +
+    `${CLUSTERCTL_VERSION}/clusterctl-${plat}-${arch}`;
+  log(`   Fetching clusterctl ${CLUSTERCTL_VERSION} (${plat}/${arch})...`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(
+      `Failed to download clusterctl ${CLUSTERCTL_VERSION} from ${url} (HTTP ${res.status}).`,
+    );
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  // Write to a private temp name then rename so a concurrent/aborted run never
+  // leaves a half-written binary at the cached path.
+  const tmp = path.join(binDir, `.clusterctl-${CLUSTERCTL_VERSION}.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, buf, { mode: 0o755 });
+  fs.renameSync(tmp, dest);
+  const reported = run(dest, ["version", "--output", "short"], {
+    silent: true,
+    ignoreErrors: true,
+  }).trim();
+  if (!reported.includes(CLUSTERCTL_VERSION)) {
+    log(`   ⚠️  clusterctl reports "${reported}", expected ${CLUSTERCTL_VERSION} (continuing).`);
+  }
+  return dest;
+}
+
+/** Wait until every {@link CAPI_OPERATOR_PROVIDERS} CR reports Ready=True on `kubeconfig`. */
+async function waitForCapiProvidersReady(
+  timeoutSeconds: number,
+  kubeconfig: string,
+): Promise<void> {
+  await waitFor(
+    {
+      label: "CAPI providers Ready (core + aws + k0smotron)",
+      timeoutMs: timeoutSeconds * 1000,
+      intervalMs: 10000,
+      onTimeout: "throw",
+    },
+    () => {
+      for (const kind of CAPI_OPERATOR_PROVIDERS) {
+        const opts = { kubeconfig, silent: true, ignoreErrors: true } as const;
+        const items = kubectl(
+          ["get", kind, "-A", "-o", "jsonpath={.items[*].metadata.name}"],
+          opts,
+        ).trim().split(" ").filter(Boolean);
+        if (items.length === 0) return false; // provider CR not created yet
+        const ready = kubectl(
+          ["get", kind, "-A", "-o", "jsonpath={.items[*].status.conditions[?(@.type=='Ready')].status}"],
+          opts,
+        ).trim().split(" ").filter(Boolean);
+        if (ready.length !== items.length || !ready.every((s) => s === "True")) return false;
+      }
+      log("   ✅ CAPI providers Ready on mgmt");
+      return true;
+    },
+  );
+}
+
+/**
+ * Verify the pivot landed cleanly: the management cluster now owns the control-plane
+ * Machine (the adopted node — proof its k0smotron took over the MOVED object rather
+ * than bootstrapping a duplicate) and the cluster CA secret is present (the SAME CA
+ * was carried over, so no fresh-CA split-brain). More than one control-plane Machine
+ * would mean a second CP node was minted — the exact failure this whole pivot exists
+ * to prevent — so surface the count.
+ */
+async function verifyPivot(kubeconfig: string, clusterName: string): Promise<void> {
+  log("   Verifying the pivot on mgmt (adopted CP Machine + reused CA)...");
+  await waitFor(
+    {
+      label: "moved control-plane Machine adopted on mgmt",
+      timeoutMs: 300_000,
+      intervalMs: 10000,
+      onTimeout: "throw",
+    },
+    () => {
+      const cp = kubectl(
+        ["get", "machines", "-n", MGMT_NAMESPACE, "-l", "cluster.x-k8s.io/control-plane",
+          "-o", "jsonpath={.items[*].metadata.name}"],
+        { kubeconfig, silent: true, ignoreErrors: true },
+      ).trim().split(" ").filter(Boolean);
+      return cp.length >= 1;
+    },
+  );
+  const ca = kubectl(
+    ["get", "secret", `${clusterName}-ca`, "-n", MGMT_NAMESPACE, "-o", "name"],
+    { kubeconfig, silent: true, ignoreErrors: true },
+  ).trim();
+  if (!ca) {
+    throw new Error(
+      `Pivot verify: ${clusterName}-ca not found on mgmt — the cluster CA did not move ` +
+        `(a fresh CA would mean split-brain). Aborting before the ArgoCD handoff.`,
+    );
+  }
+  const cpCount = kubectl(
+    ["get", "machines", "-n", MGMT_NAMESPACE, "-l", "cluster.x-k8s.io/control-plane",
+      "-o", "jsonpath={.items[*].metadata.name}"],
+    { kubeconfig, silent: true, ignoreErrors: true },
+  ).trim().split(" ").filter(Boolean).length;
+  log(`   ✅ Pivot verified: ${cpCount} control-plane Machine(s) on mgmt, CA reused.`);
+  if (cpCount > 1) {
+    log(`   ⚠️  More than one control-plane Machine on mgmt — investigate for a duplicate CP node.`);
+  }
+}
+
+/**
+ * One-time PIVOT: `clusterctl move` the CAPI object graph from the Kind bootstrap
+ * cluster onto the management cluster, so the management cluster's OWN CAPA +
+ * k0smotron adopt the existing control plane (Machine graph + cluster CA) instead of
+ * bootstrapping a duplicate CP node. This is what makes the everything-in-git model
+ * work for a self-managed (non-EKS) k0s control plane: k0smotron's K0sControlPlane has
+ * NO machine-adoption logic, so simply re-applying its spec on a fresh cluster (what
+ * ArgoCD would do) mints a SECOND CP node with a FRESH CA — the split-brain. `move`
+ * instead transfers the live Machine/AWSMachine (with their providerID, so CAPA
+ * re-adopts the running EC2 — no re-provision) and the CA/PKI secrets (owned up the
+ * Cluster graph, so the SAME CA is reused), pausing the source and unpausing the
+ * target. Runs ONCE at bootstrap; steady state is then 100% git/ArgoCD.
+ *
+ * MUST complete BEFORE ArgoCD reconciles infra/cluster-api — otherwise the mgmt
+ * k0smotron reconciles the (un-adopted) K0sControlPlane spec and bootstraps the
+ * duplicate. The move target therefore gets its providers installed here
+ * (cert-manager + cluster-api-operator), but NO Cluster/K0sControlPlane CRs and NO
+ * ArgoCD, until the move has landed.
+ */
+async function pivotToMgmt(
+  gitopsDir: string,
+  kindName: string,
+  mgmtKubeconfig: string,
+  clusterName: string,
+  ageKeyFile: string,
+): Promise<void> {
+  log("");
+  log("📦 Step 6.5: Pivot — clusterctl move (Kind → management cluster)");
+  log("─".repeat(50));
+
+  // 1. Install the move TARGET's providers on mgmt — cert-manager (the operator's
+  //    webhook Certificate needs it) then the cluster-api-operator (CAPA + k0smotron).
+  //    Mirrors deployPlatform's Kind sequence, but on mgmt and in the cluster's native
+  //    creds mode (config.aws.keyless drives the module render — keyless = instance
+  //    profile, no NEBULA_AWS_CREDS_MODE override here). NO Cluster/K0sControlPlane CRs
+  //    and NO ArgoCD yet: the target must have the controllers but no CAPI objects
+  //    before the move (pausing only sets Cluster.spec.paused; it does not stop a
+  //    target controller that already has objects to reconcile).
+  const opts = { kubeconfig: mgmtKubeconfig, ageKeyFile };
+  log("   Installing cert-manager on mgmt (move-target prereq)...");
+  await applyRepoModule(gitopsDir, "infra/cert-manager", clusterName, opts);
+  kubectl(
+    ["-n", "cert-manager", "rollout", "status", "deploy/cert-manager-webhook", "--timeout=240s"],
+    { kubeconfig: mgmtKubeconfig },
+  );
+  log("   Installing cluster-api-operator (CAPA + k0smotron) on mgmt...");
+  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
+  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
+  log("   Waiting for the CAPA/k0s CRDs + providers on mgmt...");
+  await waitForCrds(CAPI_CLUSTER_CRDS, 600, mgmtKubeconfig);
+  await waitForCapiProvidersReady(600, mgmtKubeconfig);
+
+  // 2. clusterctl move (version-pinned to the operator's CAPI contract). Dry-run first
+  //    as a preflight: it validates the object graph AND that BOTH source and target
+  //    satisfy the contract, with no side effects, so a contract/provider mismatch
+  //    fails fast and locally instead of half-moving the live graph.
+  const clusterctl = await ensureClusterctl();
+  const moveArgs = [
+    "move",
+    "--kubeconfig-context", `kind-${kindName}`,
+    "--to-kubeconfig", mgmtKubeconfig,
+    "-n", MGMT_NAMESPACE,
+  ];
+  log("   Preflight: clusterctl move --dry-run...");
+  run(clusterctl, [...moveArgs, "--dry-run"]);
+  log(`   Moving the CAPI object graph: kind-${kindName} → ${clusterName}...`);
+  // On a half-failed move clusterctl leaves the SOURCE Cluster paused (CAPI #7407) and
+  // does not auto-unpause it; surface that remediation rather than swallow the error.
+  try {
+    run(clusterctl, moveArgs);
+  } catch (e: any) {
+    throw new Error(
+      `clusterctl move failed. The source (kind-${kindName}) Cluster may be left paused — ` +
+        `if you retry/roll back, clear it with:\n` +
+        `  kubectl --context kind-${kindName} patch cluster ${clusterName} -n ${MGMT_NAMESPACE} ` +
+        `--type=merge -p '{"spec":{"paused":false}}'\n${e?.message ?? e}`,
+    );
+  }
+  log("   ✅ Move complete — mgmt owns the Cluster / K0sControlPlane / Machine + CA.");
+
+  // 3. Verify the pivot before handing off to ArgoCD.
+  await verifyPivot(mgmtKubeconfig, clusterName);
+}
+
+/**
+ * GitOps handoff (opt-in via --gitops-dir). Installs Crossplane + provider-aws,
+ * performs the one-time {@link pivotToMgmt} (clusterctl move Kind → mgmt) so the
+ * management cluster adopts its own control plane, and only THEN installs ArgoCD +
+ * the app-of-apps and syncs the root app, so ArgoCD reconciles the platform — incl.
+ * the now-adopted infra/cluster-api — from git thereafter. Mirrors the GCP deployToGke
  * handoff (Crossplane before ArgoCD). In KEYLESS mode the provider authenticates via
  * the node instance profile (`type: none`) with NO AWS keys baked on mgmt; in secret
  * mode the caller must bake `aws-creds`/`aws-capa-credentials` on mgmt FIRST.
  * `gitopsDir` is a checked-out `aws/`-style layout (infra/crossplane, infra/providers,
- * infra/node-iam, meta/argocd, meta/argocd-apps); deps are installed if missing.
+ * infra/node-iam, infra/cluster-api-operator, meta/argocd, meta/argocd-apps); deps are
+ * installed if missing.
  */
 async function deployGitopsHandoff(
   gitopsDir: string,
+  kindName: string,
   kubeconfig: string,
   clusterName: string,
   keyless: boolean,
@@ -804,9 +1038,19 @@ async function deployGitopsHandoff(
   await applyRepoModule(gitopsDir, "infra/node-iam", clusterName, { kubeconfig, ageKeyFile });
   await waitForManagedReady(NODE_IAM_KINDS, 300, kubeconfig);
 
+  // Phase 1.5: PIVOT — clusterctl move Kind → mgmt. MUST run BEFORE ArgoCD so the
+  // management cluster's own k0smotron ADOPTS the moved control plane (the Machine
+  // graph + the cluster CA) instead of bootstrapping a duplicate CP node with a fresh
+  // CA (the split-brain). pivotToMgmt installs the move-target providers (cert-manager
+  // + cluster-api-operator) on mgmt first; it creates NO Cluster/K0sControlPlane CRs
+  // and starts NO ArgoCD until the move has landed and been verified.
+  await pivotToMgmt(gitopsDir, kindName, kubeconfig, clusterName, ageKeyFile);
+
   // Phase 2: install ArgoCD + the root app-of-apps. ArgoCD then reconciles the full
   // platform (infra/*) and apps/* onto the management cluster from git — including
-  // cert-manager, the CAPA operator, node IAM, and the cluster's own CAPI definition.
+  // cert-manager, the CAPA operator, node IAM, and infra/cluster-api, which now
+  // server-side-applies onto the MOVED Cluster/K0sControlPlane (same names) → adopts,
+  // no duplicate CP.
   log("   Phase 2: installing ArgoCD (with Crossplane already present)...");
   for (const mod of ["meta/argocd", "meta/argocd-apps"]) {
     log(`   Applying ${mod}...`);
@@ -965,7 +1209,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   if (!keyless) {
     await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
   }
-  await deployGitopsHandoff(gitopsDir, mgmtKubeconfig, clusterName, keyless);
+  await deployGitopsHandoff(gitopsDir, kindName, mgmtKubeconfig, clusterName, keyless);
 
   log("");
   log("═".repeat(50));

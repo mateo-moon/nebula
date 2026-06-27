@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { ClusterV1Beta1 } from "#imports/cluster.x-k8s.io";
+import { ClusterV1Beta2 } from "#imports/cluster.x-k8s.io";
 import {
   AwsClusterV1Beta2,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
@@ -104,21 +104,26 @@ export function emitClusterCr(
     controlPlaneKind: string;
     controlPlaneName: string;
   },
-): ClusterV1Beta1 {
-  return new ClusterV1Beta1(scope, "cluster", {
+): ClusterV1Beta2 {
+  return new ClusterV1Beta2(scope, "cluster", {
     metadata: { name: opts.clusterName, namespace: opts.namespace },
     spec: {
       clusterNetwork: {
         pods: { cidrBlocks: [opts.podCidr] },
         services: { cidrBlocks: [opts.serviceCidr] },
       },
+      // CAPI v1beta2 uses ContractVersionedObjectReference: the ref carries
+      // `apiGroup` (NOT a versioned `apiVersion`) — the version is resolved from
+      // the referenced CRD's contract labels — and `namespace` is no longer
+      // permitted on these refs. Emitting the old apiVersion shape under a
+      // v1beta2 Cluster would silently drop the ref (split control plane / infra).
       controlPlaneRef: {
-        apiVersion: "controlplane.cluster.x-k8s.io/v1beta1",
+        apiGroup: "controlplane.cluster.x-k8s.io",
         kind: opts.controlPlaneKind,
         name: opts.controlPlaneName,
       },
       infrastructureRef: {
-        apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
+        apiGroup: "infrastructure.cluster.x-k8s.io",
         kind: "AWSCluster",
         name: opts.clusterName,
       },

@@ -28,9 +28,18 @@ import {
   Composition,
 } from "#imports/apiextensions.crossplane.io";
 
-/** k0smotron releases base URL for fetchConfig */
+/**
+ * k0smotron version + releases base URL for fetchConfig. PIN THE EXACT TAG (never
+ * `releases/latest`): k0smotron ships a PARALLEL v1.10.x **v1beta1** maintenance
+ * line on the same dates as the v2.0.x **v1beta2** line, so a floating `latest`
+ * can silently install v1beta1 components — the management cluster comes up on the
+ * v1beta1 contract and `clusterctl move` (v1beta2) refuses it. v2.0.2 is the first
+ * k0smotron line serving the CAPI v1beta2 contract (built against cluster-api
+ * v1.11.4). Keep this in lockstep with the CAPI core / CAPA versions below.
+ */
+const K0SMOTRON_VERSION = "v2.0.2";
 const K0SMOTRON_RELEASES_BASE =
-  "https://github.com/k0sproject/k0smotron/releases/latest/download";
+  `https://github.com/k0sproject/k0smotron/releases/download/${K0SMOTRON_VERSION}`;
 
 /** k0smotron fetchConfig URLs for each provider type */
 const K0SMOTRON_FETCH_URLS = {
@@ -196,7 +205,7 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
     // Build infrastructure providers based on config
     const infrastructureProviders: Record<string, unknown> = {
       k0smotron: {
-        version: this.config.infrastructure?.k0smotron?.version ?? "v1.7.0",
+        version: this.config.infrastructure?.k0smotron?.version ?? K0SMOTRON_VERSION,
         fetchConfig: {
           url: K0SMOTRON_FETCH_URLS.infrastructure,
         },
@@ -236,7 +245,7 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
         this.setupAwsCredentials(capaNamespace);
 
       infrastructureProviders.aws = {
-        version: this.config.infrastructure?.aws?.version ?? "v2.7.1",
+        version: this.config.infrastructure?.aws?.version ?? "v2.11.1",
         configSecret: {
           name: awsSecretName,
           namespace: awsSecretNamespace,
@@ -251,12 +260,12 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
       infrastructure: infrastructureProviders,
       core: {
         "cluster-api": {
-          version: this.config.core?.["cluster-api"]?.version ?? "v1.9.5",
+          version: this.config.core?.["cluster-api"]?.version ?? "v1.12.9",
         },
       },
       controlPlane: {
         k0smotron: {
-          version: this.config.controlPlane?.k0smotron?.version ?? "v1.7.0",
+          version: this.config.controlPlane?.k0smotron?.version ?? K0SMOTRON_VERSION,
           fetchConfig: {
             url: K0SMOTRON_FETCH_URLS.controlPlane,
           },
@@ -264,7 +273,7 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
       },
       bootstrap: {
         k0smotron: {
-          version: this.config.bootstrap?.k0smotron?.version ?? "v1.7.0",
+          version: this.config.bootstrap?.k0smotron?.version ?? K0SMOTRON_VERSION,
           fetchConfig: {
             url: K0SMOTRON_FETCH_URLS.bootstrap,
           },
@@ -299,7 +308,7 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
       repo:
         this.config.repository ??
         "https://kubernetes-sigs.github.io/cluster-api-operator",
-      version: this.config.version ?? "0.25.0",
+      version: this.config.version ?? "0.27.0",
       defaultValues,
       values: this.config.values,
     });

@@ -69,7 +69,7 @@ export interface ClusterProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * ClusterSpec defines the desired state of Cluster.
+   * spec is the desired state of Cluster.
    *
    * @schema Cluster#spec
    */
@@ -92,13 +92,13 @@ export function toJson_ClusterProps(obj: ClusterProps | undefined): Record<strin
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * ClusterSpec defines the desired state of Cluster.
+ * spec is the desired state of Cluster.
  *
  * @schema ClusterSpec
  */
 export interface ClusterSpec {
   /**
-   * Cluster network configuration.
+   * clusterNetwork is the cluster network configuration.
    *
    * @schema ClusterSpec#clusterNetwork
    */
@@ -154,7 +154,7 @@ export function toJson_ClusterSpec(obj: ClusterSpec | undefined): Record<string,
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Cluster network configuration.
+ * clusterNetwork is the cluster network configuration.
  *
  * @schema ClusterSpecClusterNetwork
  */
@@ -169,21 +169,21 @@ export interface ClusterSpecClusterNetwork {
   readonly apiServerPort?: number;
 
   /**
-   * The network ranges from which Pod networks are allocated.
+   * pods is the network ranges from which Pod networks are allocated.
    *
    * @schema ClusterSpecClusterNetwork#pods
    */
   readonly pods?: ClusterSpecClusterNetworkPods;
 
   /**
-   * Domain name for services.
+   * serviceDomain is the domain name for services.
    *
    * @schema ClusterSpecClusterNetwork#serviceDomain
    */
   readonly serviceDomain?: string;
 
   /**
-   * The network ranges from which service VIPs are allocated.
+   * services is the network ranges from which service VIPs are allocated.
    *
    * @schema ClusterSpecClusterNetwork#services
    */
@@ -214,14 +214,14 @@ export function toJson_ClusterSpecClusterNetwork(obj: ClusterSpecClusterNetwork 
  */
 export interface ClusterSpecControlPlaneEndpoint {
   /**
-   * The hostname on which the API server is serving.
+   * host is the hostname on which the API server is serving.
    *
    * @schema ClusterSpecControlPlaneEndpoint#host
    */
   readonly host: string;
 
   /**
-   * The port on which the API server is serving.
+   * port is the port on which the API server is serving.
    *
    * @schema ClusterSpecControlPlaneEndpoint#port
    */
@@ -420,12 +420,14 @@ export function toJson_ClusterSpecInfrastructureRef(obj: ClusterSpecInfrastructu
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The network ranges from which Pod networks are allocated.
+ * pods is the network ranges from which Pod networks are allocated.
  *
  * @schema ClusterSpecClusterNetworkPods
  */
 export interface ClusterSpecClusterNetworkPods {
   /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
    * @schema ClusterSpecClusterNetworkPods#cidrBlocks
    */
   readonly cidrBlocks: string[];
@@ -446,12 +448,14 @@ export function toJson_ClusterSpecClusterNetworkPods(obj: ClusterSpecClusterNetw
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The network ranges from which service VIPs are allocated.
+ * services is the network ranges from which service VIPs are allocated.
  *
  * @schema ClusterSpecClusterNetworkServices
  */
 export interface ClusterSpecClusterNetworkServices {
   /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
    * @schema ClusterSpecClusterNetworkServices#cidrBlocks
    */
   readonly cidrBlocks: string[];
@@ -542,7 +546,7 @@ export interface ClusterV1Alpha4Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * ClusterSpec defines the desired state of Cluster.
+   * spec is the desired state of Cluster.
    *
    * @schema ClusterV1Alpha4#spec
    */
@@ -565,13 +569,13 @@ export function toJson_ClusterV1Alpha4Props(obj: ClusterV1Alpha4Props | undefine
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * ClusterSpec defines the desired state of Cluster.
+ * spec is the desired state of Cluster.
  *
  * @schema ClusterV1Alpha4Spec
  */
 export interface ClusterV1Alpha4Spec {
   /**
-   * Cluster network configuration.
+   * clusterNetwork is the cluster network configuration.
    *
    * @schema ClusterV1Alpha4Spec#clusterNetwork
    */
@@ -608,7 +612,7 @@ export interface ClusterV1Alpha4Spec {
   readonly paused?: boolean;
 
   /**
-   * This encapsulates the topology for the cluster.
+   * topology encapsulates the topology for the cluster.
    * NOTE: It is required to enable the ClusterTopology
    * feature gate flag to activate managed topologies support;
    * this feature is highly experimental, and parts of it might still be not implemented.
@@ -638,7 +642,7 @@ export function toJson_ClusterV1Alpha4Spec(obj: ClusterV1Alpha4Spec | undefined)
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Cluster network configuration.
+ * clusterNetwork is the cluster network configuration.
  *
  * @schema ClusterV1Alpha4SpecClusterNetwork
  */
@@ -653,21 +657,21 @@ export interface ClusterV1Alpha4SpecClusterNetwork {
   readonly apiServerPort?: number;
 
   /**
-   * The network ranges from which Pod networks are allocated.
+   * pods is the network ranges from which Pod networks are allocated.
    *
    * @schema ClusterV1Alpha4SpecClusterNetwork#pods
    */
   readonly pods?: ClusterV1Alpha4SpecClusterNetworkPods;
 
   /**
-   * Domain name for services.
+   * serviceDomain is the domain name for services.
    *
    * @schema ClusterV1Alpha4SpecClusterNetwork#serviceDomain
    */
   readonly serviceDomain?: string;
 
   /**
-   * The network ranges from which service VIPs are allocated.
+   * services is the network ranges from which service VIPs are allocated.
    *
    * @schema ClusterV1Alpha4SpecClusterNetwork#services
    */
@@ -698,14 +702,14 @@ export function toJson_ClusterV1Alpha4SpecClusterNetwork(obj: ClusterV1Alpha4Spe
  */
 export interface ClusterV1Alpha4SpecControlPlaneEndpoint {
   /**
-   * The hostname on which the API server is serving.
+   * host is the hostname on which the API server is serving.
    *
    * @schema ClusterV1Alpha4SpecControlPlaneEndpoint#host
    */
   readonly host: string;
 
   /**
-   * The port on which the API server is serving.
+   * port is the port on which the API server is serving.
    *
    * @schema ClusterV1Alpha4SpecControlPlaneEndpoint#port
    */
@@ -904,7 +908,7 @@ export function toJson_ClusterV1Alpha4SpecInfrastructureRef(obj: ClusterV1Alpha4
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * This encapsulates the topology for the cluster.
+ * topology encapsulates the topology for the cluster.
  * NOTE: It is required to enable the ClusterTopology
  * feature gate flag to activate managed topologies support;
  * this feature is highly experimental, and parts of it might still be not implemented.
@@ -913,7 +917,7 @@ export function toJson_ClusterV1Alpha4SpecInfrastructureRef(obj: ClusterV1Alpha4
  */
 export interface ClusterV1Alpha4SpecTopology {
   /**
-   * The name of the ClusterClass object to create the topology.
+   * class is the name of the ClusterClass object to create the topology.
    *
    * @schema ClusterV1Alpha4SpecTopology#class
    */
@@ -935,7 +939,7 @@ export interface ClusterV1Alpha4SpecTopology {
   readonly rolloutAfter?: Date;
 
   /**
-   * The Kubernetes version of the cluster.
+   * version is the Kubernetes version of the cluster.
    *
    * @schema ClusterV1Alpha4SpecTopology#version
    */
@@ -969,12 +973,14 @@ export function toJson_ClusterV1Alpha4SpecTopology(obj: ClusterV1Alpha4SpecTopol
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The network ranges from which Pod networks are allocated.
+ * pods is the network ranges from which Pod networks are allocated.
  *
  * @schema ClusterV1Alpha4SpecClusterNetworkPods
  */
 export interface ClusterV1Alpha4SpecClusterNetworkPods {
   /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
    * @schema ClusterV1Alpha4SpecClusterNetworkPods#cidrBlocks
    */
   readonly cidrBlocks: string[];
@@ -995,12 +1001,14 @@ export function toJson_ClusterV1Alpha4SpecClusterNetworkPods(obj: ClusterV1Alpha
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The network ranges from which service VIPs are allocated.
+ * services is the network ranges from which service VIPs are allocated.
  *
  * @schema ClusterV1Alpha4SpecClusterNetworkServices
  */
 export interface ClusterV1Alpha4SpecClusterNetworkServices {
   /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
    * @schema ClusterV1Alpha4SpecClusterNetworkServices#cidrBlocks
    */
   readonly cidrBlocks: string[];
@@ -1113,7 +1121,7 @@ export interface ClusterV1Alpha4SpecTopologyControlPlaneMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -1218,7 +1226,7 @@ export interface ClusterV1Alpha4SpecTopologyWorkersMachineDeploymentsMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -1310,7 +1318,7 @@ export interface ClusterV1Beta1Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * ClusterSpec defines the desired state of Cluster.
+   * spec is the desired state of Cluster.
    *
    * @schema ClusterV1Beta1#spec
    */
@@ -1333,13 +1341,16 @@ export function toJson_ClusterV1Beta1Props(obj: ClusterV1Beta1Props | undefined)
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * ClusterSpec defines the desired state of Cluster.
+ * spec is the desired state of Cluster.
  *
  * @schema ClusterV1Beta1Spec
  */
 export interface ClusterV1Beta1Spec {
   /**
    * availabilityGates specifies additional conditions to include when evaluating Cluster Available condition.
+   *
+   * If this field is not defined and the Cluster implements a managed topology, availabilityGates
+   * from the corresponding ClusterClass will be used, if any.
    *
    * NOTE: this field is considered only for computing v1beta2 conditions.
    *
@@ -1348,7 +1359,7 @@ export interface ClusterV1Beta1Spec {
   readonly availabilityGates?: ClusterV1Beta1SpecAvailabilityGates[];
 
   /**
-   * Cluster network configuration.
+   * clusterNetwork represents the cluster network configuration.
    *
    * @schema ClusterV1Beta1Spec#clusterNetwork
    */
@@ -1385,7 +1396,7 @@ export interface ClusterV1Beta1Spec {
   readonly paused?: boolean;
 
   /**
-   * This encapsulates the topology for the cluster.
+   * topology encapsulates the topology for the cluster.
    * NOTE: It is required to enable the ClusterTopology
    * feature gate flag to activate managed topologies support;
    * this feature is highly experimental, and parts of it might still be not implemented.
@@ -1422,13 +1433,24 @@ export function toJson_ClusterV1Beta1Spec(obj: ClusterV1Beta1Spec | undefined): 
  */
 export interface ClusterV1Beta1SpecAvailabilityGates {
   /**
-   * conditionType refers to a positive polarity condition (status true means good) with matching type in the Cluster's condition list.
+   * conditionType refers to a condition with matching type in the Cluster's condition list.
    * If the conditions doesn't exist, it will be treated as unknown.
    * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as availability gates.
    *
    * @schema ClusterV1Beta1SpecAvailabilityGates#conditionType
    */
   readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this availabilityGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema ClusterV1Beta1SpecAvailabilityGates#polarity
+   */
+  readonly polarity?: ClusterV1Beta1SpecAvailabilityGatesPolarity;
 }
 
 /**
@@ -1439,6 +1461,7 @@ export function toJson_ClusterV1Beta1SpecAvailabilityGates(obj: ClusterV1Beta1Sp
   if (obj === undefined) { return undefined; }
   const result = {
     'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -1446,7 +1469,7 @@ export function toJson_ClusterV1Beta1SpecAvailabilityGates(obj: ClusterV1Beta1Sp
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Cluster network configuration.
+ * clusterNetwork represents the cluster network configuration.
  *
  * @schema ClusterV1Beta1SpecClusterNetwork
  */
@@ -1461,21 +1484,21 @@ export interface ClusterV1Beta1SpecClusterNetwork {
   readonly apiServerPort?: number;
 
   /**
-   * The network ranges from which Pod networks are allocated.
+   * pods is the network ranges from which Pod networks are allocated.
    *
    * @schema ClusterV1Beta1SpecClusterNetwork#pods
    */
   readonly pods?: ClusterV1Beta1SpecClusterNetworkPods;
 
   /**
-   * Domain name for services.
+   * serviceDomain is the domain name for services.
    *
    * @schema ClusterV1Beta1SpecClusterNetwork#serviceDomain
    */
   readonly serviceDomain?: string;
 
   /**
-   * The network ranges from which service VIPs are allocated.
+   * services is the network ranges from which service VIPs are allocated.
    *
    * @schema ClusterV1Beta1SpecClusterNetwork#services
    */
@@ -1506,18 +1529,18 @@ export function toJson_ClusterV1Beta1SpecClusterNetwork(obj: ClusterV1Beta1SpecC
  */
 export interface ClusterV1Beta1SpecControlPlaneEndpoint {
   /**
-   * The hostname on which the API server is serving.
+   * host is the hostname on which the API server is serving.
    *
    * @schema ClusterV1Beta1SpecControlPlaneEndpoint#host
    */
-  readonly host: string;
+  readonly host?: string;
 
   /**
-   * The port on which the API server is serving.
+   * port is the port on which the API server is serving.
    *
    * @schema ClusterV1Beta1SpecControlPlaneEndpoint#port
    */
-  readonly port: number;
+  readonly port?: number;
 }
 
 /**
@@ -1712,7 +1735,7 @@ export function toJson_ClusterV1Beta1SpecInfrastructureRef(obj: ClusterV1Beta1Sp
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * This encapsulates the topology for the cluster.
+ * topology encapsulates the topology for the cluster.
  * NOTE: It is required to enable the ClusterTopology
  * feature gate flag to activate managed topologies support;
  * this feature is highly experimental, and parts of it might still be not implemented.
@@ -1721,16 +1744,18 @@ export function toJson_ClusterV1Beta1SpecInfrastructureRef(obj: ClusterV1Beta1Sp
  */
 export interface ClusterV1Beta1SpecTopology {
   /**
-   * The name of the ClusterClass object to create the topology.
+   * class is the name of the ClusterClass object to create the topology.
    *
    * @schema ClusterV1Beta1SpecTopology#class
    */
   readonly class: string;
 
   /**
-   * classNamespace is the namespace of the ClusterClass object to create the topology.
-   * If the namespace is empty or not set, it is defaulted to the namespace of the cluster object.
-   * Value must follow the DNS1123Subdomain syntax.
+   * classNamespace is the namespace of the ClusterClass that should be used for the topology.
+   * If classNamespace is empty or not set, it is defaulted to the namespace of the Cluster object.
+   * classNamespace must be a valid namespace name and because of that be at most 63 characters in length
+   * and it must consist only of lower case alphanumeric characters or hyphens (-), and must start
+   * and end with an alphanumeric character.
    *
    * @schema ClusterV1Beta1SpecTopology#classNamespace
    */
@@ -1763,7 +1788,7 @@ export interface ClusterV1Beta1SpecTopology {
   readonly variables?: ClusterV1Beta1SpecTopologyVariables[];
 
   /**
-   * The Kubernetes version of the cluster.
+   * version is the Kubernetes version of the cluster.
    *
    * @schema ClusterV1Beta1SpecTopology#version
    */
@@ -1799,12 +1824,30 @@ export function toJson_ClusterV1Beta1SpecTopology(obj: ClusterV1Beta1SpecTopolog
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The network ranges from which Pod networks are allocated.
+ * polarity of the conditionType specified in this availabilityGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema ClusterV1Beta1SpecAvailabilityGatesPolarity
+ */
+export enum ClusterV1Beta1SpecAvailabilityGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * pods is the network ranges from which Pod networks are allocated.
  *
  * @schema ClusterV1Beta1SpecClusterNetworkPods
  */
 export interface ClusterV1Beta1SpecClusterNetworkPods {
   /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
    * @schema ClusterV1Beta1SpecClusterNetworkPods#cidrBlocks
    */
   readonly cidrBlocks: string[];
@@ -1825,12 +1868,14 @@ export function toJson_ClusterV1Beta1SpecClusterNetworkPods(obj: ClusterV1Beta1S
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The network ranges from which service VIPs are allocated.
+ * services is the network ranges from which service VIPs are allocated.
  *
  * @schema ClusterV1Beta1SpecClusterNetworkServices
  */
 export interface ClusterV1Beta1SpecClusterNetworkServices {
   /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
    * @schema ClusterV1Beta1SpecClusterNetworkServices#cidrBlocks
    */
   readonly cidrBlocks: string[];
@@ -1902,6 +1947,22 @@ export interface ClusterV1Beta1SpecTopologyControlPlane {
   readonly nodeVolumeDetachTimeout?: string;
 
   /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. to instruct the machine controller to include in the computation for Machine's ready
+   * computation a condition, managed by an external controllers, reporting the status of special software/hardware installed on the Machine.
+   *
+   * If this field is not defined, readinessGates from the corresponding ControlPlaneClass will be used, if any.
+   *
+   * NOTE: This field is considered only for computing v1beta2 conditions.
+   * NOTE: Specific control plane provider implementations might automatically extend the list of readinessGates;
+   * e.g. the kubeadm control provider adds ReadinessGates for the APIServerPodHealthy, SchedulerPodHealthy conditions, etc.
+   *
+   * @schema ClusterV1Beta1SpecTopologyControlPlane#readinessGates
+   */
+  readonly readinessGates?: ClusterV1Beta1SpecTopologyControlPlaneReadinessGates[];
+
+  /**
    * replicas is the number of control plane nodes.
    * If the value is nil, the ControlPlane object is created without the number of Replicas
    * and it's assumed that the control plane controller does not implement support for this field.
@@ -1931,6 +1992,7 @@ export function toJson_ClusterV1Beta1SpecTopologyControlPlane(obj: ClusterV1Beta
     'nodeDeletionTimeout': obj.nodeDeletionTimeout,
     'nodeDrainTimeout': obj.nodeDrainTimeout,
     'nodeVolumeDetachTimeout': obj.nodeVolumeDetachTimeout,
+    'readinessGates': obj.readinessGates?.map(y => toJson_ClusterV1Beta1SpecTopologyControlPlaneReadinessGates(y)),
     'replicas': obj.replicas,
     'variables': toJson_ClusterV1Beta1SpecTopologyControlPlaneVariables(obj.variables),
   };
@@ -2052,7 +2114,8 @@ export interface ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheck {
   readonly enable?: boolean;
 
   /**
-   * Any further remediation is only allowed if at most "MaxUnhealthy" machines selected by
+   * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+   * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
    * "selector" are not healthy.
    *
    * @schema ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheck#maxUnhealthy
@@ -2100,8 +2163,9 @@ export interface ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheck {
   readonly unhealthyConditions?: ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckUnhealthyConditions[];
 
   /**
+   * unhealthyRange specifies the range of unhealthy machines allowed.
    * Any further remediation is only allowed if the number of machines selected by "selector" as not healthy
-   * is within the range of "UnhealthyRange". Takes precedence over MaxUnhealthy.
+   * is within the range of "unhealthyRange". Takes precedence over maxUnhealthy.
    * Eg. "[3-5]" - This means that remediation will be allowed only when:
    * (a) there are at least 3 unhealthy machines (and)
    * (b) there are at most 5 unhealthy machines
@@ -2150,7 +2214,7 @@ export interface ClusterV1Beta1SpecTopologyControlPlaneMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -2169,6 +2233,48 @@ export function toJson_ClusterV1Beta1SpecTopologyControlPlaneMetadata(obj: Clust
   const result = {
     'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
     'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema ClusterV1Beta1SpecTopologyControlPlaneReadinessGates
+ */
+export interface ClusterV1Beta1SpecTopologyControlPlaneReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema ClusterV1Beta1SpecTopologyControlPlaneReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema ClusterV1Beta1SpecTopologyControlPlaneReadinessGates#polarity
+   */
+  readonly polarity?: ClusterV1Beta1SpecTopologyControlPlaneReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta1SpecTopologyControlPlaneReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta1SpecTopologyControlPlaneReadinessGates(obj: ClusterV1Beta1SpecTopologyControlPlaneReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -2244,7 +2350,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeployments {
   readonly metadata?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMetadata;
 
   /**
-   * Minimum number of seconds for which a newly created machine should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine should
    * be ready.
    * Defaults to 0 (machine will be considered available as soon as it
    * is ready)
@@ -2292,6 +2398,20 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeployments {
   readonly nodeVolumeDetachTimeout?: string;
 
   /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. to instruct the machine controller to include in the computation for Machine's ready
+   * computation a condition, managed by an external controllers, reporting the status of special software/hardware installed on the Machine.
+   *
+   * If this field is not defined, readinessGates from the corresponding MachineDeploymentClass will be used, if any.
+   *
+   * NOTE: This field is considered only for computing v1beta2 conditions.
+   *
+   * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeployments#readinessGates
+   */
+  readonly readinessGates?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates[];
+
+  /**
    * replicas is the number of worker nodes belonging to this set.
    * If the value is nil, the MachineDeployment is created without the number of Replicas (defaulting to 1)
    * and it's assumed that an external entity (like cluster autoscaler) is responsible for the management
@@ -2302,7 +2422,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeployments {
   readonly replicas?: number;
 
   /**
-   * The deployment strategy to use to replace existing machines with
+   * strategy is the deployment strategy to use to replace existing machines with
    * new ones.
    *
    * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeployments#strategy
@@ -2333,6 +2453,7 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeployments(obj: 
     'nodeDeletionTimeout': obj.nodeDeletionTimeout,
     'nodeDrainTimeout': obj.nodeDrainTimeout,
     'nodeVolumeDetachTimeout': obj.nodeVolumeDetachTimeout,
+    'readinessGates': obj.readinessGates?.map(y => toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates(y)),
     'replicas': obj.replicas,
     'strategy': toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategy(obj.strategy),
     'variables': toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsVariables(obj.variables),
@@ -2375,7 +2496,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachinePools {
   readonly metadata?: ClusterV1Beta1SpecTopologyWorkersMachinePoolsMetadata;
 
   /**
-   * Minimum number of seconds for which a newly created machine pool should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine pool should
    * be ready.
    * Defaults to 0 (machine will be considered available as soon as it
    * is ready)
@@ -2464,7 +2585,8 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachinePools(obj: Cluste
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Any further remediation is only allowed if at most "MaxUnhealthy" machines selected by
+ * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+ * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
  * "selector" are not healthy.
  *
  * @schema ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckMaxUnhealthy
@@ -2581,16 +2703,25 @@ export function toJson_ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckR
  */
 export interface ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckUnhealthyConditions {
   /**
+   * status of the condition, one of True, False, Unknown.
+   *
    * @schema ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckUnhealthyConditions#status
    */
   readonly status: string;
 
   /**
+   * timeout is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "1h", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
    * @schema ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckUnhealthyConditions#timeout
    */
   readonly timeout: string;
 
   /**
+   * type of Node condition
+   *
    * @schema ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckUnhealthyConditions#type
    */
   readonly type: string;
@@ -2611,6 +2742,22 @@ export function toJson_ClusterV1Beta1SpecTopologyControlPlaneMachineHealthCheckU
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema ClusterV1Beta1SpecTopologyControlPlaneReadinessGatesPolarity
+ */
+export enum ClusterV1Beta1SpecTopologyControlPlaneReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
 
 /**
  * ClusterVariable can be used to customize the Cluster through patches. Each ClusterVariable is associated with a
@@ -2688,7 +2835,8 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealt
   readonly enable?: boolean;
 
   /**
-   * Any further remediation is only allowed if at most "MaxUnhealthy" machines selected by
+   * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+   * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
    * "selector" are not healthy.
    *
    * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheck#maxUnhealthy
@@ -2736,8 +2884,9 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealt
   readonly unhealthyConditions?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheckUnhealthyConditions[];
 
   /**
+   * unhealthyRange specifies the range of unhealthy machines allowed.
    * Any further remediation is only allowed if the number of machines selected by "selector" as not healthy
-   * is within the range of "UnhealthyRange". Takes precedence over MaxUnhealthy.
+   * is within the range of "unhealthyRange". Takes precedence over maxUnhealthy.
    * Eg. "[3-5]" - This means that remediation will be allowed only when:
    * (a) there are at least 3 unhealthy machines (and)
    * (b) there are at most 5 unhealthy machines
@@ -2784,7 +2933,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -2810,7 +2959,49 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMetada
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The deployment strategy to use to replace existing machines with
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates
+ */
+export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates#polarity
+   */
+  readonly polarity?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates(obj: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * strategy is the deployment strategy to use to replace existing machines with
  * new ones.
  *
  * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategy
@@ -2825,7 +3016,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategy {
   readonly remediation?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRemediation;
 
   /**
-   * Rolling update config params. Present only if
+   * rollingUpdate is the rolling update config params. Present only if
    * MachineDeploymentStrategyType = RollingUpdate.
    *
    * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategy#rollingUpdate
@@ -2903,7 +3094,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachinePoolsMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -2957,7 +3148,8 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachinePoolsVariables(ob
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Any further remediation is only allowed if at most "MaxUnhealthy" machines selected by
+ * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+ * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
  * "selector" are not healthy.
  *
  * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheckMaxUnhealthy
@@ -3074,16 +3266,25 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachin
  */
 export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheckUnhealthyConditions {
   /**
+   * status of the condition, one of True, False, Unknown.
+   *
    * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheckUnhealthyConditions#status
    */
   readonly status: string;
 
   /**
+   * timeout is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "1h", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
    * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheckUnhealthyConditions#timeout
    */
   readonly timeout: string;
 
   /**
+   * type of Node condition
+   *
    * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachineHealthCheckUnhealthyConditions#type
    */
   readonly type: string;
@@ -3104,6 +3305,22 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsMachin
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGatesPolarity
+ */
+export enum ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
 
 /**
  * remediation controls the strategy of remediating unhealthy machines
@@ -3148,7 +3365,7 @@ export function toJson_ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrate
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Rolling update config params. Present only if
+ * rollingUpdate is the rolling update config params. Present only if
  * MachineDeploymentStrategyType = RollingUpdate.
  *
  * @schema ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingUpdate
@@ -3164,7 +3381,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRoll
   readonly deletePolicy?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingUpdateDeletePolicy;
 
   /**
-   * The maximum number of machines that can be scheduled above the
+   * maxSurge is the maximum number of machines that can be scheduled above the
    * desired number of machines.
    * Value can be an absolute number (ex: 5) or a percentage of
    * desired machines (ex: 10%).
@@ -3184,7 +3401,7 @@ export interface ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRoll
   readonly maxSurge?: ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingUpdateMaxSurge;
 
   /**
-   * The maximum number of machines that can be unavailable during the update.
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
    * Value can be an absolute number (ex: 5) or a percentage of desired
    * machines (ex: 10%).
    * Absolute number is calculated from percentage by rounding down.
@@ -3384,7 +3601,7 @@ export enum ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingUp
 }
 
 /**
- * The maximum number of machines that can be scheduled above the
+ * maxSurge is the maximum number of machines that can be scheduled above the
  * desired number of machines.
  * Value can be an absolute number (ex: 5) or a percentage of
  * desired machines (ex: 10%).
@@ -3413,7 +3630,7 @@ export class ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingU
 }
 
 /**
- * The maximum number of machines that can be unavailable during the update.
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
  * Value can be an absolute number (ex: 5) or a percentage of desired
  * machines (ex: 10%).
  * Absolute number is calculated from percentage by rounding down.
@@ -3435,6 +3652,2723 @@ export class ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingU
   }
   public static fromString(value: string): ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingUpdateMaxUnavailable {
     return new ClusterV1Beta1SpecTopologyWorkersMachineDeploymentsStrategyRollingUpdateMaxUnavailable(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+
+/**
+ * Cluster is the Schema for the clusters API.
+ *
+ * @schema ClusterV1Beta2
+ */
+export class ClusterV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "ClusterV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta2',
+    kind: 'Cluster',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "ClusterV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: ClusterV1Beta2Props): any {
+    return {
+      ...ClusterV1Beta2.GVK,
+      ...toJson_ClusterV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "ClusterV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: ClusterV1Beta2Props) {
+    super(scope, id, {
+      ...ClusterV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...ClusterV1Beta2.GVK,
+      ...toJson_ClusterV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * Cluster is the Schema for the clusters API.
+ *
+ * @schema ClusterV1Beta2
+ */
+export interface ClusterV1Beta2Props {
+  /**
+   * @schema ClusterV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the desired state of Cluster.
+   *
+   * @schema ClusterV1Beta2#spec
+   */
+  readonly spec: ClusterV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2Props(obj: ClusterV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_ClusterV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the desired state of Cluster.
+ *
+ * @schema ClusterV1Beta2Spec
+ */
+export interface ClusterV1Beta2Spec {
+  /**
+   * availabilityGates specifies additional conditions to include when evaluating Cluster Available condition.
+   *
+   * If this field is not defined and the Cluster implements a managed topology, availabilityGates
+   * from the corresponding ClusterClass will be used, if any.
+   *
+   * @schema ClusterV1Beta2Spec#availabilityGates
+   */
+  readonly availabilityGates?: ClusterV1Beta2SpecAvailabilityGates[];
+
+  /**
+   * clusterNetwork represents the cluster network configuration.
+   *
+   * @schema ClusterV1Beta2Spec#clusterNetwork
+   */
+  readonly clusterNetwork?: ClusterV1Beta2SpecClusterNetwork;
+
+  /**
+   * controlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+   *
+   * @schema ClusterV1Beta2Spec#controlPlaneEndpoint
+   */
+  readonly controlPlaneEndpoint?: ClusterV1Beta2SpecControlPlaneEndpoint;
+
+  /**
+   * controlPlaneRef is an optional reference to a provider-specific resource that holds
+   * the details for provisioning the Control Plane for a Cluster.
+   *
+   * @schema ClusterV1Beta2Spec#controlPlaneRef
+   */
+  readonly controlPlaneRef?: ClusterV1Beta2SpecControlPlaneRef;
+
+  /**
+   * infrastructureRef is a reference to a provider-specific resource that holds the details
+   * for provisioning infrastructure for a cluster in said provider.
+   *
+   * @schema ClusterV1Beta2Spec#infrastructureRef
+   */
+  readonly infrastructureRef?: ClusterV1Beta2SpecInfrastructureRef;
+
+  /**
+   * paused can be used to prevent controllers from processing the Cluster and all its associated objects.
+   *
+   * @schema ClusterV1Beta2Spec#paused
+   */
+  readonly paused?: boolean;
+
+  /**
+   * topology encapsulates the topology for the cluster.
+   * NOTE: It is required to enable the ClusterTopology
+   * feature gate flag to activate managed topologies support;
+   * this feature is highly experimental, and parts of it might still be not implemented.
+   *
+   * @schema ClusterV1Beta2Spec#topology
+   */
+  readonly topology?: ClusterV1Beta2SpecTopology;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2Spec(obj: ClusterV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'availabilityGates': obj.availabilityGates?.map(y => toJson_ClusterV1Beta2SpecAvailabilityGates(y)),
+    'clusterNetwork': toJson_ClusterV1Beta2SpecClusterNetwork(obj.clusterNetwork),
+    'controlPlaneEndpoint': toJson_ClusterV1Beta2SpecControlPlaneEndpoint(obj.controlPlaneEndpoint),
+    'controlPlaneRef': toJson_ClusterV1Beta2SpecControlPlaneRef(obj.controlPlaneRef),
+    'infrastructureRef': toJson_ClusterV1Beta2SpecInfrastructureRef(obj.infrastructureRef),
+    'paused': obj.paused,
+    'topology': toJson_ClusterV1Beta2SpecTopology(obj.topology),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterAvailabilityGate contains the type of a Cluster condition to be used as availability gate.
+ *
+ * @schema ClusterV1Beta2SpecAvailabilityGates
+ */
+export interface ClusterV1Beta2SpecAvailabilityGates {
+  /**
+   * conditionType refers to a condition with matching type in the Cluster's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as availability gates.
+   *
+   * @schema ClusterV1Beta2SpecAvailabilityGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this availabilityGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema ClusterV1Beta2SpecAvailabilityGates#polarity
+   */
+  readonly polarity?: ClusterV1Beta2SpecAvailabilityGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecAvailabilityGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecAvailabilityGates(obj: ClusterV1Beta2SpecAvailabilityGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * clusterNetwork represents the cluster network configuration.
+ *
+ * @schema ClusterV1Beta2SpecClusterNetwork
+ */
+export interface ClusterV1Beta2SpecClusterNetwork {
+  /**
+   * apiServerPort specifies the port the API Server should bind to.
+   * Defaults to 6443.
+   *
+   * @default 6443.
+   * @schema ClusterV1Beta2SpecClusterNetwork#apiServerPort
+   */
+  readonly apiServerPort?: number;
+
+  /**
+   * pods is the network ranges from which Pod networks are allocated.
+   *
+   * @schema ClusterV1Beta2SpecClusterNetwork#pods
+   */
+  readonly pods?: ClusterV1Beta2SpecClusterNetworkPods;
+
+  /**
+   * serviceDomain is the domain name for services.
+   *
+   * @schema ClusterV1Beta2SpecClusterNetwork#serviceDomain
+   */
+  readonly serviceDomain?: string;
+
+  /**
+   * services is the network ranges from which service VIPs are allocated.
+   *
+   * @schema ClusterV1Beta2SpecClusterNetwork#services
+   */
+  readonly services?: ClusterV1Beta2SpecClusterNetworkServices;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecClusterNetwork' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecClusterNetwork(obj: ClusterV1Beta2SpecClusterNetwork | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiServerPort': obj.apiServerPort,
+    'pods': toJson_ClusterV1Beta2SpecClusterNetworkPods(obj.pods),
+    'serviceDomain': obj.serviceDomain,
+    'services': toJson_ClusterV1Beta2SpecClusterNetworkServices(obj.services),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * controlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+ *
+ * @schema ClusterV1Beta2SpecControlPlaneEndpoint
+ */
+export interface ClusterV1Beta2SpecControlPlaneEndpoint {
+  /**
+   * host is the hostname on which the API server is serving.
+   *
+   * @schema ClusterV1Beta2SpecControlPlaneEndpoint#host
+   */
+  readonly host?: string;
+
+  /**
+   * port is the port on which the API server is serving.
+   *
+   * @schema ClusterV1Beta2SpecControlPlaneEndpoint#port
+   */
+  readonly port?: number;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecControlPlaneEndpoint' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecControlPlaneEndpoint(obj: ClusterV1Beta2SpecControlPlaneEndpoint | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'host': obj.host,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * controlPlaneRef is an optional reference to a provider-specific resource that holds
+ * the details for provisioning the Control Plane for a Cluster.
+ *
+ * @schema ClusterV1Beta2SpecControlPlaneRef
+ */
+export interface ClusterV1Beta2SpecControlPlaneRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema ClusterV1Beta2SpecControlPlaneRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecControlPlaneRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecControlPlaneRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecControlPlaneRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecControlPlaneRef(obj: ClusterV1Beta2SpecControlPlaneRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * infrastructureRef is a reference to a provider-specific resource that holds the details
+ * for provisioning infrastructure for a cluster in said provider.
+ *
+ * @schema ClusterV1Beta2SpecInfrastructureRef
+ */
+export interface ClusterV1Beta2SpecInfrastructureRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema ClusterV1Beta2SpecInfrastructureRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecInfrastructureRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecInfrastructureRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecInfrastructureRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecInfrastructureRef(obj: ClusterV1Beta2SpecInfrastructureRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * topology encapsulates the topology for the cluster.
+ * NOTE: It is required to enable the ClusterTopology
+ * feature gate flag to activate managed topologies support;
+ * this feature is highly experimental, and parts of it might still be not implemented.
+ *
+ * @schema ClusterV1Beta2SpecTopology
+ */
+export interface ClusterV1Beta2SpecTopology {
+  /**
+   * classRef is the ref to the ClusterClass that should be used for the topology.
+   *
+   * @schema ClusterV1Beta2SpecTopology#classRef
+   */
+  readonly classRef: ClusterV1Beta2SpecTopologyClassRef;
+
+  /**
+   * controlPlane describes the cluster control plane.
+   *
+   * @schema ClusterV1Beta2SpecTopology#controlPlane
+   */
+  readonly controlPlane?: ClusterV1Beta2SpecTopologyControlPlane;
+
+  /**
+   * variables can be used to customize the Cluster through
+   * patches. They must comply to the corresponding
+   * VariableClasses defined in the ClusterClass.
+   *
+   * @schema ClusterV1Beta2SpecTopology#variables
+   */
+  readonly variables?: ClusterV1Beta2SpecTopologyVariables[];
+
+  /**
+   * version is the Kubernetes version of the cluster.
+   *
+   * @schema ClusterV1Beta2SpecTopology#version
+   */
+  readonly version: string;
+
+  /**
+   * workers encapsulates the different constructs that form the worker nodes
+   * for the cluster.
+   *
+   * @schema ClusterV1Beta2SpecTopology#workers
+   */
+  readonly workers?: ClusterV1Beta2SpecTopologyWorkers;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopology' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopology(obj: ClusterV1Beta2SpecTopology | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'classRef': toJson_ClusterV1Beta2SpecTopologyClassRef(obj.classRef),
+    'controlPlane': toJson_ClusterV1Beta2SpecTopologyControlPlane(obj.controlPlane),
+    'variables': obj.variables?.map(y => toJson_ClusterV1Beta2SpecTopologyVariables(y)),
+    'version': obj.version,
+    'workers': toJson_ClusterV1Beta2SpecTopologyWorkers(obj.workers),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this availabilityGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema ClusterV1Beta2SpecAvailabilityGatesPolarity
+ */
+export enum ClusterV1Beta2SpecAvailabilityGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * pods is the network ranges from which Pod networks are allocated.
+ *
+ * @schema ClusterV1Beta2SpecClusterNetworkPods
+ */
+export interface ClusterV1Beta2SpecClusterNetworkPods {
+  /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
+   * @schema ClusterV1Beta2SpecClusterNetworkPods#cidrBlocks
+   */
+  readonly cidrBlocks: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecClusterNetworkPods' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecClusterNetworkPods(obj: ClusterV1Beta2SpecClusterNetworkPods | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlocks': obj.cidrBlocks?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * services is the network ranges from which service VIPs are allocated.
+ *
+ * @schema ClusterV1Beta2SpecClusterNetworkServices
+ */
+export interface ClusterV1Beta2SpecClusterNetworkServices {
+  /**
+   * cidrBlocks is a list of CIDR blocks.
+   *
+   * @schema ClusterV1Beta2SpecClusterNetworkServices#cidrBlocks
+   */
+  readonly cidrBlocks: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecClusterNetworkServices' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecClusterNetworkServices(obj: ClusterV1Beta2SpecClusterNetworkServices | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cidrBlocks': obj.cidrBlocks?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * classRef is the ref to the ClusterClass that should be used for the topology.
+ *
+ * @schema ClusterV1Beta2SpecTopologyClassRef
+ */
+export interface ClusterV1Beta2SpecTopologyClassRef {
+  /**
+   * name is the name of the ClusterClass that should be used for the topology.
+   * name must be a valid ClusterClass name and because of that be at most 253 characters in length
+   * and it must consist only of lower case alphanumeric characters, hyphens (-) and periods (.), and must start
+   * and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecTopologyClassRef#name
+   */
+  readonly name: string;
+
+  /**
+   * namespace is the namespace of the ClusterClass that should be used for the topology.
+   * If namespace is empty or not set, it is defaulted to the namespace of the Cluster object.
+   * namespace must be a valid namespace name and because of that be at most 63 characters in length
+   * and it must consist only of lower case alphanumeric characters or hyphens (-), and must start
+   * and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecTopologyClassRef#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyClassRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyClassRef(obj: ClusterV1Beta2SpecTopologyClassRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * controlPlane describes the cluster control plane.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlane
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlane {
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlane#deletion
+   */
+  readonly deletion?: ClusterV1Beta2SpecTopologyControlPlaneDeletion;
+
+  /**
+   * healthCheck allows to enable, disable and override control plane health check
+   * configuration from the ClusterClass for this control plane.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlane#healthCheck
+   */
+  readonly healthCheck?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheck;
+
+  /**
+   * metadata is the metadata applied to the ControlPlane and the Machines of the ControlPlane
+   * if the ControlPlaneTemplate referenced by the ClusterClass is machine based. If not, it
+   * is applied only to the ControlPlane.
+   * At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlane#metadata
+   */
+  readonly metadata?: ClusterV1Beta2SpecTopologyControlPlaneMetadata;
+
+  /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. to instruct the machine controller to include in the computation for Machine's ready
+   * computation a condition, managed by an external controllers, reporting the status of special software/hardware installed on the Machine.
+   *
+   * If this field is not defined, readinessGates from the corresponding ControlPlaneClass will be used, if any.
+   *
+   * NOTE: Specific control plane provider implementations might automatically extend the list of readinessGates;
+   * e.g. the kubeadm control provider adds ReadinessGates for the APIServerPodHealthy, SchedulerPodHealthy conditions, etc.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlane#readinessGates
+   */
+  readonly readinessGates?: ClusterV1Beta2SpecTopologyControlPlaneReadinessGates[];
+
+  /**
+   * replicas is the number of control plane nodes.
+   * If the value is not set, the ControlPlane object is created without the number of Replicas
+   * and it's assumed that the control plane controller does not implement support for this field.
+   * When specified against a control plane provider that lacks support for this field, this value will be ignored.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlane#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * variables can be used to customize the ControlPlane through patches.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlane#variables
+   */
+  readonly variables?: ClusterV1Beta2SpecTopologyControlPlaneVariables;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlane' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlane(obj: ClusterV1Beta2SpecTopologyControlPlane | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deletion': toJson_ClusterV1Beta2SpecTopologyControlPlaneDeletion(obj.deletion),
+    'healthCheck': toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheck(obj.healthCheck),
+    'metadata': toJson_ClusterV1Beta2SpecTopologyControlPlaneMetadata(obj.metadata),
+    'readinessGates': obj.readinessGates?.map(y => toJson_ClusterV1Beta2SpecTopologyControlPlaneReadinessGates(y)),
+    'replicas': obj.replicas,
+    'variables': toJson_ClusterV1Beta2SpecTopologyControlPlaneVariables(obj.variables),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterVariable can be used to customize the Cluster through patches. Each ClusterVariable is associated with a
+ * Variable definition in the ClusterClass `status` variables.
+ *
+ * @schema ClusterV1Beta2SpecTopologyVariables
+ */
+export interface ClusterV1Beta2SpecTopologyVariables {
+  /**
+   * name of the variable.
+   *
+   * @schema ClusterV1Beta2SpecTopologyVariables#name
+   */
+  readonly name: string;
+
+  /**
+   * value of the variable.
+   * Note: the value will be validated against the schema of the corresponding ClusterClassVariable
+   * from the ClusterClass.
+   * Note: We have to use apiextensionsv1.JSON instead of a custom JSON type, because controller-tools has a
+   * hard-coded schema for apiextensionsv1.JSON which cannot be produced by another type via controller-tools,
+   * i.e. it is not possible to have no type field.
+   * Ref: https://github.com/kubernetes-sigs/controller-tools/blob/d0e03a142d0ecdd5491593e941ee1d6b5d91dba6/pkg/crd/known_types.go#L106-L111
+   *
+   * @schema ClusterV1Beta2SpecTopologyVariables#value
+   */
+  readonly value: any;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyVariables' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyVariables(obj: ClusterV1Beta2SpecTopologyVariables | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * workers encapsulates the different constructs that form the worker nodes
+ * for the cluster.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkers
+ */
+export interface ClusterV1Beta2SpecTopologyWorkers {
+  /**
+   * machineDeployments is a list of machine deployments in the cluster.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkers#machineDeployments
+   */
+  readonly machineDeployments?: ClusterV1Beta2SpecTopologyWorkersMachineDeployments[];
+
+  /**
+   * machinePools is a list of machine pools in the cluster.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkers#machinePools
+   */
+  readonly machinePools?: ClusterV1Beta2SpecTopologyWorkersMachinePools[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkers' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkers(obj: ClusterV1Beta2SpecTopologyWorkers | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'machineDeployments': obj.machineDeployments?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeployments(y)),
+    'machinePools': obj.machinePools?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachinePools(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneDeletion
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the Machine
+   * hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneDeletion(obj: ClusterV1Beta2SpecTopologyControlPlaneDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * healthCheck allows to enable, disable and override control plane health check
+ * configuration from the ClusterClass for this control plane.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheck
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheck {
+  /**
+   * checks are the checks that are used to evaluate if a Machine is healthy.
+   *
+   * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+   * and as a consequence the checks and remediation fields from Cluster will be used instead of the
+   * corresponding fields in ClusterClass.
+   *
+   * Independent of this configuration the MachineHealthCheck controller will always
+   * flag Machines with `cluster.x-k8s.io/remediate-machine` annotation and
+   * Machines with deleted Nodes as unhealthy.
+   *
+   * Furthermore, if checks.nodeStartupTimeoutSeconds is not set it
+   * is defaulted to 10 minutes and evaluated accordingly.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheck#checks
+   */
+  readonly checks?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks;
+
+  /**
+   * enabled controls if a MachineHealthCheck should be created for the target machines.
+   *
+   * If false: No MachineHealthCheck will be created.
+   *
+   * If not set(default): A MachineHealthCheck will be created if it is defined here or
+   * in the associated ClusterClass. If no MachineHealthCheck is defined then none will be created.
+   *
+   * If true: A MachineHealthCheck is guaranteed to be created. Cluster validation will
+   * block if `enable` is true and no MachineHealthCheck definition is available.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheck#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * remediation configures if and how remediations are triggered if a Machine is unhealthy.
+   *
+   * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+   * and as a consequence the checks and remediation fields from cluster will be used instead of the
+   * corresponding fields in ClusterClass.
+   *
+   * If an health check override is defined and remediation or remediation.triggerIf is not set,
+   * remediation will always be triggered for unhealthy Machines.
+   *
+   * If an health check override is defined and remediation or remediation.templateRef is not set,
+   * the OwnerRemediated condition will be set on unhealthy Machines to trigger remediation via
+   * the owner of the Machines, for example a MachineSet or a KubeadmControlPlane.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheck#remediation
+   */
+  readonly remediation?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheck' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheck(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheck | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'checks': toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks(obj.checks),
+    'enabled': obj.enabled,
+    'remediation': toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation(obj.remediation),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * metadata is the metadata applied to the ControlPlane and the Machines of the ControlPlane
+ * if the ControlPlaneTemplate referenced by the ClusterClass is machine based. If not, it
+ * is applied only to the ControlPlane.
+ * At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneMetadata
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneMetadata {
+  /**
+   * annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * labels is a map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneMetadata(obj: ClusterV1Beta2SpecTopologyControlPlaneMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneReadinessGates
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneReadinessGates#polarity
+   */
+  readonly polarity?: ClusterV1Beta2SpecTopologyControlPlaneReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneReadinessGates(obj: ClusterV1Beta2SpecTopologyControlPlaneReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * variables can be used to customize the ControlPlane through patches.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneVariables
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneVariables {
+  /**
+   * overrides can be used to override Cluster level variables.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneVariables#overrides
+   */
+  readonly overrides?: ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneVariables' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneVariables(obj: ClusterV1Beta2SpecTopologyControlPlaneVariables | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'overrides': obj.overrides?.map(y => toJson_ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineDeploymentTopology specifies the different parameters for a set of worker nodes in the topology.
+ * This set of nodes is managed by a MachineDeployment object whose lifecycle is managed by the Cluster controller.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeployments {
+  /**
+   * class is the name of the MachineDeploymentClass used to create the set of worker nodes.
+   * This should match one of the deployment classes defined in the ClusterClass object
+   * mentioned in the `Cluster.Spec.Class` field.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#class
+   */
+  readonly class: string;
+
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#deletion
+   */
+  readonly deletion?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion;
+
+  /**
+   * failureDomain is the failure domain the machines will be created in.
+   * Must match a key in the FailureDomains map stored on the cluster object.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * healthCheck allows to enable, disable and override MachineDeployment health check
+   * configuration from the ClusterClass for this MachineDeployment.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#healthCheck
+   */
+  readonly healthCheck?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck;
+
+  /**
+   * metadata is the metadata applied to the MachineDeployment and the machines of the MachineDeployment.
+   * At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#metadata
+   */
+  readonly metadata?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata;
+
+  /**
+   * minReadySeconds is the minimum number of seconds for which a newly created machine should
+   * be ready.
+   * Defaults to 0 (machine will be considered available as soon as it
+   * is ready)
+   *
+   * @default 0 (machine will be considered available as soon as it
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#minReadySeconds
+   */
+  readonly minReadySeconds?: number;
+
+  /**
+   * name is the unique identifier for this MachineDeploymentTopology.
+   * The value is used with other unique identifiers to create a MachineDeployment's Name
+   * (e.g. cluster's name, etc). In case the name is greater than the allowed maximum length,
+   * the values are hashed together.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#name
+   */
+  readonly name: string;
+
+  /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. to instruct the machine controller to include in the computation for Machine's ready
+   * computation a condition, managed by an external controllers, reporting the status of special software/hardware installed on the Machine.
+   *
+   * If this field is not defined, readinessGates from the corresponding MachineDeploymentClass will be used, if any.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#readinessGates
+   */
+  readonly readinessGates?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates[];
+
+  /**
+   * replicas is the number of worker nodes belonging to this set.
+   * If the value is nil, the MachineDeployment is created without the number of Replicas (defaulting to 1)
+   * and it's assumed that an external entity (like cluster autoscaler) is responsible for the management
+   * of this value.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * rollout allows you to configure the behaviour of rolling updates to the MachineDeployment Machines.
+   * It allows you to define the strategy used during rolling replacements.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#rollout
+   */
+  readonly rollout?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout;
+
+  /**
+   * variables can be used to customize the MachineDeployment through patches.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeployments#variables
+   */
+  readonly variables?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeployments' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeployments(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeployments | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'class': obj.class,
+    'deletion': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion(obj.deletion),
+    'failureDomain': obj.failureDomain,
+    'healthCheck': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck(obj.healthCheck),
+    'metadata': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata(obj.metadata),
+    'minReadySeconds': obj.minReadySeconds,
+    'name': obj.name,
+    'readinessGates': obj.readinessGates?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates(y)),
+    'replicas': obj.replicas,
+    'rollout': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout(obj.rollout),
+    'variables': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables(obj.variables),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachinePoolTopology specifies the different parameters for a pool of worker nodes in the topology.
+ * This pool of nodes is managed by a MachinePool object whose lifecycle is managed by the Cluster controller.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachinePools {
+  /**
+   * class is the name of the MachinePoolClass used to create the pool of worker nodes.
+   * This should match one of the deployment classes defined in the ClusterClass object
+   * mentioned in the `Cluster.Spec.Class` field.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#class
+   */
+  readonly class: string;
+
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#deletion
+   */
+  readonly deletion?: ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion;
+
+  /**
+   * failureDomains is the list of failure domains the machine pool will be created in.
+   * Must match a key in the FailureDomains map stored on the cluster object.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#failureDomains
+   */
+  readonly failureDomains?: string[];
+
+  /**
+   * metadata is the metadata applied to the MachinePool.
+   * At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#metadata
+   */
+  readonly metadata?: ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata;
+
+  /**
+   * minReadySeconds is the minimum number of seconds for which a newly created machine pool should
+   * be ready.
+   * Defaults to 0 (machine will be considered available as soon as it
+   * is ready)
+   *
+   * @default 0 (machine will be considered available as soon as it
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#minReadySeconds
+   */
+  readonly minReadySeconds?: number;
+
+  /**
+   * name is the unique identifier for this MachinePoolTopology.
+   * The value is used with other unique identifiers to create a MachinePool's Name
+   * (e.g. cluster's name, etc). In case the name is greater than the allowed maximum length,
+   * the values are hashed together.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#name
+   */
+  readonly name: string;
+
+  /**
+   * replicas is the number of nodes belonging to this pool.
+   * If the value is nil, the MachinePool is created without the number of Replicas (defaulting to 1)
+   * and it's assumed that an external entity (like cluster autoscaler) is responsible for the management
+   * of this value.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * variables can be used to customize the MachinePool through patches.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePools#variables
+   */
+  readonly variables?: ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachinePools' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachinePools(obj: ClusterV1Beta2SpecTopologyWorkersMachinePools | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'class': obj.class,
+    'deletion': toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion(obj.deletion),
+    'failureDomains': obj.failureDomains?.map(y => y),
+    'metadata': toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata(obj.metadata),
+    'minReadySeconds': obj.minReadySeconds,
+    'name': obj.name,
+    'replicas': obj.replicas,
+    'variables': toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables(obj.variables),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * checks are the checks that are used to evaluate if a Machine is healthy.
+ *
+ * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+ * and as a consequence the checks and remediation fields from Cluster will be used instead of the
+ * corresponding fields in ClusterClass.
+ *
+ * Independent of this configuration the MachineHealthCheck controller will always
+ * flag Machines with `cluster.x-k8s.io/remediate-machine` annotation and
+ * Machines with deleted Nodes as unhealthy.
+ *
+ * Furthermore, if checks.nodeStartupTimeoutSeconds is not set it
+ * is defaulted to 10 minutes and evaluated accordingly.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks {
+  /**
+   * nodeStartupTimeoutSeconds allows to set the maximum time for MachineHealthCheck
+   * to consider a Machine unhealthy if a corresponding Node isn't associated
+   * through a `Spec.ProviderID` field.
+   *
+   * The duration set in this field is compared to the greatest of:
+   * - Cluster's infrastructure ready condition timestamp (if and when available)
+   * - Control Plane's initialized condition timestamp (if and when available)
+   * - Machine's infrastructure ready condition timestamp (if and when available)
+   * - Machine's metadata creation timestamp
+   *
+   * Defaults to 10 minutes.
+   * If you wish to disable this feature, set the value explicitly to 0.
+   *
+   * @default 10 minutes.
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks#nodeStartupTimeoutSeconds
+   */
+  readonly nodeStartupTimeoutSeconds?: number;
+
+  /**
+   * unhealthyMachineConditions contains a list of the machine conditions that determine
+   * whether a machine is considered unhealthy.  The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the machine is unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks#unhealthyMachineConditions
+   */
+  readonly unhealthyMachineConditions?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions[];
+
+  /**
+   * unhealthyNodeConditions contains a list of conditions that determine
+   * whether a node is considered unhealthy. The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the node is unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks#unhealthyNodeConditions
+   */
+  readonly unhealthyNodeConditions?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecks | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeStartupTimeoutSeconds': obj.nodeStartupTimeoutSeconds,
+    'unhealthyMachineConditions': obj.unhealthyMachineConditions?.map(y => toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions(y)),
+    'unhealthyNodeConditions': obj.unhealthyNodeConditions?.map(y => toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * remediation configures if and how remediations are triggered if a Machine is unhealthy.
+ *
+ * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+ * and as a consequence the checks and remediation fields from cluster will be used instead of the
+ * corresponding fields in ClusterClass.
+ *
+ * If an health check override is defined and remediation or remediation.triggerIf is not set,
+ * remediation will always be triggered for unhealthy Machines.
+ *
+ * If an health check override is defined and remediation or remediation.templateRef is not set,
+ * the OwnerRemediated condition will be set on unhealthy Machines to trigger remediation via
+ * the owner of the Machines, for example a MachineSet or a KubeadmControlPlane.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation {
+  /**
+   * templateRef is a reference to a remediation template
+   * provided by an infrastructure provider.
+   *
+   * This field is completely optional, when filled, the MachineHealthCheck controller
+   * creates a new object from the template referenced and hands off remediation of the machine to
+   * a controller that lives outside of Cluster API.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation#templateRef
+   */
+  readonly templateRef?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef;
+
+  /**
+   * triggerIf configures if remediations are triggered.
+   * If this field is not set, remediations are always triggered.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation#triggerIf
+   */
+  readonly triggerIf?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediation | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'templateRef': toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef(obj.templateRef),
+    'triggerIf': toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf(obj.triggerIf),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneReadinessGatesPolarity
+ */
+export enum ClusterV1Beta2SpecTopologyControlPlaneReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * ClusterVariable can be used to customize the Cluster through patches. Each ClusterVariable is associated with a
+ * Variable definition in the ClusterClass `status` variables.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides {
+  /**
+   * name of the variable.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides#name
+   */
+  readonly name: string;
+
+  /**
+   * value of the variable.
+   * Note: the value will be validated against the schema of the corresponding ClusterClassVariable
+   * from the ClusterClass.
+   * Note: We have to use apiextensionsv1.JSON instead of a custom JSON type, because controller-tools has a
+   * hard-coded schema for apiextensionsv1.JSON which cannot be produced by another type via controller-tools,
+   * i.e. it is not possible to have no type field.
+   * Ref: https://github.com/kubernetes-sigs/controller-tools/blob/d0e03a142d0ecdd5491593e941ee1d6b5d91dba6/pkg/crd/known_types.go#L106-L111
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides#value
+   */
+  readonly value: any;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides(obj: ClusterV1Beta2SpecTopologyControlPlaneVariablesOverrides | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the Machine
+   * hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+
+  /**
+   * order defines the order in which Machines are deleted when downscaling.
+   * Defaults to "Random".  Valid values are "Random, "Newest", "Oldest"
+   *
+   * @default Random".  Valid values are "Random, "Newest", "Oldest"
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion#order
+   */
+  readonly order?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletionOrder;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+    'order': obj.order,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * healthCheck allows to enable, disable and override MachineDeployment health check
+ * configuration from the ClusterClass for this MachineDeployment.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck {
+  /**
+   * checks are the checks that are used to evaluate if a Machine is healthy.
+   *
+   * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+   * and as a consequence the checks and remediation fields from Cluster will be used instead of the
+   * corresponding fields in ClusterClass.
+   *
+   * Independent of this configuration the MachineHealthCheck controller will always
+   * flag Machines with `cluster.x-k8s.io/remediate-machine` annotation and
+   * Machines with deleted Nodes as unhealthy.
+   *
+   * Furthermore, if checks.nodeStartupTimeoutSeconds is not set it
+   * is defaulted to 10 minutes and evaluated accordingly.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck#checks
+   */
+  readonly checks?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks;
+
+  /**
+   * enabled controls if a MachineHealthCheck should be created for the target machines.
+   *
+   * If false: No MachineHealthCheck will be created.
+   *
+   * If not set(default): A MachineHealthCheck will be created if it is defined here or
+   * in the associated ClusterClass. If no MachineHealthCheck is defined then none will be created.
+   *
+   * If true: A MachineHealthCheck is guaranteed to be created. Cluster validation will
+   * block if `enable` is true and no MachineHealthCheck definition is available.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * remediation configures if and how remediations are triggered if a Machine is unhealthy.
+   *
+   * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+   * and as a consequence the checks and remediation fields from cluster will be used instead of the
+   * corresponding fields in ClusterClass.
+   *
+   * If an health check override is defined and remediation or remediation.triggerIf is not set,
+   * remediation will always be triggered for unhealthy Machines.
+   *
+   * If an health check override is defined and remediation or remediation.templateRef is not set,
+   * the OwnerRemediated condition will be set on unhealthy Machines to trigger remediation via
+   * the owner of the Machines, for example a MachineSet or a KubeadmControlPlane.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck#remediation
+   */
+  readonly remediation?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheck | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'checks': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks(obj.checks),
+    'enabled': obj.enabled,
+    'remediation': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation(obj.remediation),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * metadata is the metadata applied to the MachineDeployment and the machines of the MachineDeployment.
+ * At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata {
+  /**
+   * annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * labels is a map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates#polarity
+   */
+  readonly polarity?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * rollout allows you to configure the behaviour of rolling updates to the MachineDeployment Machines.
+ * It allows you to define the strategy used during rolling replacements.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout {
+  /**
+   * strategy specifies how to roll out control plane Machines.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout#strategy
+   */
+  readonly strategy?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRollout | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'strategy': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy(obj.strategy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * variables can be used to customize the MachineDeployment through patches.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables {
+  /**
+   * overrides can be used to override Cluster level variables.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables#overrides
+   */
+  readonly overrides?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariables | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'overrides': obj.overrides?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the MachinePool
+   * hosts after the MachinePool is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion(obj: ClusterV1Beta2SpecTopologyWorkersMachinePoolsDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * metadata is the metadata applied to the MachinePool.
+ * At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata {
+  /**
+   * annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * labels is a map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata(obj: ClusterV1Beta2SpecTopologyWorkersMachinePoolsMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * variables can be used to customize the MachinePool through patches.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables {
+  /**
+   * overrides can be used to override Cluster level variables.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables#overrides
+   */
+  readonly overrides?: ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables(obj: ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariables | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'overrides': obj.overrides?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyMachineCondition represents a Machine condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a machine is considered unhealthy.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions#status
+   */
+  readonly status: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditionsStatus;
+
+  /**
+   * timeoutSeconds is the duration that a machine must be in a given status for,
+   * after which the machine is considered unhealthy.
+   * For example, with a value of "3600", the machine must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions#timeoutSeconds
+   */
+  readonly timeoutSeconds: number;
+
+  /**
+   * type of Machine condition
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyNodeCondition represents a Node condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a node is considered unhealthy.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * timeoutSeconds is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "3600", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions#timeoutSeconds
+   */
+  readonly timeoutSeconds: number;
+
+  /**
+   * type of Node condition
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyNodeConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * templateRef is a reference to a remediation template
+ * provided by an infrastructure provider.
+ *
+ * This field is completely optional, when filled, the MachineHealthCheck controller
+ * creates a new object from the template referenced and hands off remediation of the machine to
+ * a controller that lives outside of Cluster API.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef {
+  /**
+   * apiVersion of the remediation template.
+   * apiVersion must be fully qualified domain name followed by / and a version.
+   * NOTE: This field must be kept in sync with the APIVersion of the remediation template.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef#apiVersion
+   */
+  readonly apiVersion: string;
+
+  /**
+   * kind of the remediation template.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the remediation template.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTemplateRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * triggerIf configures if remediations are triggered.
+ * If this field is not set, remediations are always triggered.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf
+ */
+export interface ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf {
+  /**
+   * unhealthyInRange specifies that remediations are only triggered if the number of
+   * unhealthy Machines is in the configured range.
+   * Takes precedence over unhealthyLessThanOrEqualTo.
+   * Eg. "[3-5]" - This means that remediation will be allowed only when:
+   * (a) there are at least 3 unhealthy Machines (and)
+   * (b) there are at most 5 unhealthy Machines
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf#unhealthyInRange
+   */
+  readonly unhealthyInRange?: string;
+
+  /**
+   * unhealthyLessThanOrEqualTo specifies that remediations are only triggered if the number of
+   * unhealthy Machines is less than or equal to the configured value.
+   * unhealthyInRange takes precedence if set.
+   *
+   * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf#unhealthyLessThanOrEqualTo
+   */
+  readonly unhealthyLessThanOrEqualTo?: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf(obj: ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIf | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'unhealthyInRange': obj.unhealthyInRange,
+    'unhealthyLessThanOrEqualTo': obj.unhealthyLessThanOrEqualTo?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * order defines the order in which Machines are deleted when downscaling.
+ * Defaults to "Random".  Valid values are "Random, "Newest", "Oldest"
+ *
+ * @default Random".  Valid values are "Random, "Newest", "Oldest"
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletionOrder
+ */
+export enum ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsDeletionOrder {
+  /** Random */
+  RANDOM = "Random",
+  /** Newest */
+  NEWEST = "Newest",
+  /** Oldest */
+  OLDEST = "Oldest",
+}
+
+/**
+ * checks are the checks that are used to evaluate if a Machine is healthy.
+ *
+ * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+ * and as a consequence the checks and remediation fields from Cluster will be used instead of the
+ * corresponding fields in ClusterClass.
+ *
+ * Independent of this configuration the MachineHealthCheck controller will always
+ * flag Machines with `cluster.x-k8s.io/remediate-machine` annotation and
+ * Machines with deleted Nodes as unhealthy.
+ *
+ * Furthermore, if checks.nodeStartupTimeoutSeconds is not set it
+ * is defaulted to 10 minutes and evaluated accordingly.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks {
+  /**
+   * nodeStartupTimeoutSeconds allows to set the maximum time for MachineHealthCheck
+   * to consider a Machine unhealthy if a corresponding Node isn't associated
+   * through a `Spec.ProviderID` field.
+   *
+   * The duration set in this field is compared to the greatest of:
+   * - Cluster's infrastructure ready condition timestamp (if and when available)
+   * - Control Plane's initialized condition timestamp (if and when available)
+   * - Machine's infrastructure ready condition timestamp (if and when available)
+   * - Machine's metadata creation timestamp
+   *
+   * Defaults to 10 minutes.
+   * If you wish to disable this feature, set the value explicitly to 0.
+   *
+   * @default 10 minutes.
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks#nodeStartupTimeoutSeconds
+   */
+  readonly nodeStartupTimeoutSeconds?: number;
+
+  /**
+   * unhealthyMachineConditions contains a list of the machine conditions that determine
+   * whether a machine is considered unhealthy.  The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the machine is unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks#unhealthyMachineConditions
+   */
+  readonly unhealthyMachineConditions?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions[];
+
+  /**
+   * unhealthyNodeConditions contains a list of conditions that determine
+   * whether a node is considered unhealthy. The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the node is unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks#unhealthyNodeConditions
+   */
+  readonly unhealthyNodeConditions?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecks | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeStartupTimeoutSeconds': obj.nodeStartupTimeoutSeconds,
+    'unhealthyMachineConditions': obj.unhealthyMachineConditions?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions(y)),
+    'unhealthyNodeConditions': obj.unhealthyNodeConditions?.map(y => toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * remediation configures if and how remediations are triggered if a Machine is unhealthy.
+ *
+ * If one of checks and remediation fields are set, the system assumes that an healthCheck override is defined,
+ * and as a consequence the checks and remediation fields from cluster will be used instead of the
+ * corresponding fields in ClusterClass.
+ *
+ * If an health check override is defined and remediation or remediation.triggerIf is not set,
+ * remediation will always be triggered for unhealthy Machines.
+ *
+ * If an health check override is defined and remediation or remediation.templateRef is not set,
+ * the OwnerRemediated condition will be set on unhealthy Machines to trigger remediation via
+ * the owner of the Machines, for example a MachineSet or a KubeadmControlPlane.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation {
+  /**
+   * maxInFlight determines how many in flight remediations should happen at the same time.
+   *
+   * Remediation only happens on the MachineSet with the most current revision, while
+   * older MachineSets (usually present during rollout operations) aren't allowed to remediate.
+   *
+   * Note: In general (independent of remediations), unhealthy machines are always
+   * prioritized during scale down operations over healthy ones.
+   *
+   * MaxInFlight can be set to a fixed number or a percentage.
+   * Example: when this is set to 20%, the MachineSet controller deletes at most 20% of
+   * the desired replicas.
+   *
+   * If not set, remediation is limited to all machines (bounded by replicas)
+   * under the active MachineSet's management.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation#maxInFlight
+   */
+  readonly maxInFlight?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight;
+
+  /**
+   * templateRef is a reference to a remediation template
+   * provided by an infrastructure provider.
+   *
+   * This field is completely optional, when filled, the MachineHealthCheck controller
+   * creates a new object from the template referenced and hands off remediation of the machine to
+   * a controller that lives outside of Cluster API.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation#templateRef
+   */
+  readonly templateRef?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef;
+
+  /**
+   * triggerIf configures if remediations are triggered.
+   * If this field is not set, remediations are always triggered.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation#triggerIf
+   */
+  readonly triggerIf?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediation | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxInFlight': obj.maxInFlight?.value,
+    'templateRef': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef(obj.templateRef),
+    'triggerIf': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf(obj.triggerIf),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGatesPolarity
+ */
+export enum ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * strategy specifies how to roll out control plane Machines.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy {
+  /**
+   * rollingUpdate is the rolling update config params. Present only if
+   * type = RollingUpdate.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy#rollingUpdate
+   */
+  readonly rollingUpdate?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate;
+
+  /**
+   * type of rollout. Allowed values are RollingUpdate and OnDelete.
+   * Default is RollingUpdate.
+   *
+   * @default RollingUpdate.
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy#type
+   */
+  readonly type: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyType;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'rollingUpdate': toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate(obj.rollingUpdate),
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterVariable can be used to customize the Cluster through patches. Each ClusterVariable is associated with a
+ * Variable definition in the ClusterClass `status` variables.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides {
+  /**
+   * name of the variable.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides#name
+   */
+  readonly name: string;
+
+  /**
+   * value of the variable.
+   * Note: the value will be validated against the schema of the corresponding ClusterClassVariable
+   * from the ClusterClass.
+   * Note: We have to use apiextensionsv1.JSON instead of a custom JSON type, because controller-tools has a
+   * hard-coded schema for apiextensionsv1.JSON which cannot be produced by another type via controller-tools,
+   * i.e. it is not possible to have no type field.
+   * Ref: https://github.com/kubernetes-sigs/controller-tools/blob/d0e03a142d0ecdd5491593e941ee1d6b5d91dba6/pkg/crd/known_types.go#L106-L111
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides#value
+   */
+  readonly value: any;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsVariablesOverrides | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterVariable can be used to customize the Cluster through patches. Each ClusterVariable is associated with a
+ * Variable definition in the ClusterClass `status` variables.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides {
+  /**
+   * name of the variable.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides#name
+   */
+  readonly name: string;
+
+  /**
+   * value of the variable.
+   * Note: the value will be validated against the schema of the corresponding ClusterClassVariable
+   * from the ClusterClass.
+   * Note: We have to use apiextensionsv1.JSON instead of a custom JSON type, because controller-tools has a
+   * hard-coded schema for apiextensionsv1.JSON which cannot be produced by another type via controller-tools,
+   * i.e. it is not possible to have no type field.
+   * Ref: https://github.com/kubernetes-sigs/controller-tools/blob/d0e03a142d0ecdd5491593e941ee1d6b5d91dba6/pkg/crd/known_types.go#L106-L111
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides#value
+   */
+  readonly value: any;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides(obj: ClusterV1Beta2SpecTopologyWorkersMachinePoolsVariablesOverrides | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * status of the condition, one of True, False, Unknown.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditionsStatus
+ */
+export enum ClusterV1Beta2SpecTopologyControlPlaneHealthCheckChecksUnhealthyMachineConditionsStatus {
+  /** True */
+  TRUE = "True",
+  /** False */
+  FALSE = "False",
+  /** Unknown */
+  UNKNOWN = "Unknown",
+}
+
+/**
+ * unhealthyLessThanOrEqualTo specifies that remediations are only triggered if the number of
+ * unhealthy Machines is less than or equal to the configured value.
+ * unhealthyInRange takes precedence if set.
+ *
+ * @schema ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo
+ */
+export class ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+  public static fromNumber(value: number): ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+    return new ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+    return new ClusterV1Beta2SpecTopologyControlPlaneHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * UnhealthyMachineCondition represents a Machine condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a machine is considered unhealthy.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions#status
+   */
+  readonly status: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditionsStatus;
+
+  /**
+   * timeoutSeconds is the duration that a machine must be in a given status for,
+   * after which the machine is considered unhealthy.
+   * For example, with a value of "3600", the machine must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions#timeoutSeconds
+   */
+  readonly timeoutSeconds: number;
+
+  /**
+   * type of Machine condition
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyNodeCondition represents a Node condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a node is considered unhealthy.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * timeoutSeconds is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "3600", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions#timeoutSeconds
+   */
+  readonly timeoutSeconds: number;
+
+  /**
+   * type of Node condition
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyNodeConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * maxInFlight determines how many in flight remediations should happen at the same time.
+ *
+ * Remediation only happens on the MachineSet with the most current revision, while
+ * older MachineSets (usually present during rollout operations) aren't allowed to remediate.
+ *
+ * Note: In general (independent of remediations), unhealthy machines are always
+ * prioritized during scale down operations over healthy ones.
+ *
+ * MaxInFlight can be set to a fixed number or a percentage.
+ * Example: when this is set to 20%, the MachineSet controller deletes at most 20% of
+ * the desired replicas.
+ *
+ * If not set, remediation is limited to all machines (bounded by replicas)
+ * under the active MachineSet's management.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight
+ */
+export class ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight {
+  public static fromNumber(value: number): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationMaxInFlight(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * templateRef is a reference to a remediation template
+ * provided by an infrastructure provider.
+ *
+ * This field is completely optional, when filled, the MachineHealthCheck controller
+ * creates a new object from the template referenced and hands off remediation of the machine to
+ * a controller that lives outside of Cluster API.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef {
+  /**
+   * apiVersion of the remediation template.
+   * apiVersion must be fully qualified domain name followed by / and a version.
+   * NOTE: This field must be kept in sync with the APIVersion of the remediation template.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef#apiVersion
+   */
+  readonly apiVersion: string;
+
+  /**
+   * kind of the remediation template.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the remediation template.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTemplateRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * triggerIf configures if remediations are triggered.
+ * If this field is not set, remediations are always triggered.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf {
+  /**
+   * unhealthyInRange specifies that remediations are only triggered if the number of
+   * unhealthy Machines is in the configured range.
+   * Takes precedence over unhealthyLessThanOrEqualTo.
+   * Eg. "[3-5]" - This means that remediation will be allowed only when:
+   * (a) there are at least 3 unhealthy Machines (and)
+   * (b) there are at most 5 unhealthy Machines
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf#unhealthyInRange
+   */
+  readonly unhealthyInRange?: string;
+
+  /**
+   * unhealthyLessThanOrEqualTo specifies that remediations are only triggered if the number of
+   * unhealthy Machines is less than or equal to the configured value.
+   * unhealthyInRange takes precedence if set.
+   *
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf#unhealthyLessThanOrEqualTo
+   */
+  readonly unhealthyLessThanOrEqualTo?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIf | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'unhealthyInRange': obj.unhealthyInRange,
+    'unhealthyLessThanOrEqualTo': obj.unhealthyLessThanOrEqualTo?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * rollingUpdate is the rolling update config params. Present only if
+ * type = RollingUpdate.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate
+ */
+export interface ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate {
+  /**
+   * maxSurge is the maximum number of machines that can be scheduled above the
+   * desired number of machines.
+   * Value can be an absolute number (ex: 5) or a percentage of
+   * desired machines (ex: 10%).
+   * This can not be 0 if MaxUnavailable is 0.
+   * Absolute number is calculated from percentage by rounding up.
+   * Defaults to 1.
+   * Example: when this is set to 30%, the new MachineSet can be scaled
+   * up immediately when the rolling update starts, such that the total
+   * number of old and new machines do not exceed 130% of desired
+   * machines. Once old machines have been killed, new MachineSet can
+   * be scaled up further, ensuring that total number of machines running
+   * at any time during the update is at most 130% of desired machines.
+   *
+   * @default 1.
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate#maxSurge
+   */
+  readonly maxSurge?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge;
+
+  /**
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
+   * Value can be an absolute number (ex: 5) or a percentage of desired
+   * machines (ex: 10%).
+   * Absolute number is calculated from percentage by rounding down.
+   * This can not be 0 if MaxSurge is 0.
+   * Defaults to 0.
+   * Example: when this is set to 30%, the old MachineSet can be scaled
+   * down to 70% of desired machines immediately when the rolling update
+   * starts. Once new machines are ready, old MachineSet can be scaled
+   * down further, followed by scaling up the new MachineSet, ensuring
+   * that the total number of machines available at all times
+   * during the update is at least 70% of desired machines.
+   *
+   * @default 0.
+   * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate#maxUnavailable
+   */
+  readonly maxUnavailable?: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate(obj: ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxSurge': obj.maxSurge?.value,
+    'maxUnavailable': obj.maxUnavailable?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * type of rollout. Allowed values are RollingUpdate and OnDelete.
+ * Default is RollingUpdate.
+ *
+ * @default RollingUpdate.
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyType
+ */
+export enum ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyType {
+  /** RollingUpdate */
+  ROLLING_UPDATE = "RollingUpdate",
+  /** OnDelete */
+  ON_DELETE = "OnDelete",
+}
+
+/**
+ * status of the condition, one of True, False, Unknown.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditionsStatus
+ */
+export enum ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckChecksUnhealthyMachineConditionsStatus {
+  /** True */
+  TRUE = "True",
+  /** False */
+  FALSE = "False",
+  /** Unknown */
+  UNKNOWN = "Unknown",
+}
+
+/**
+ * unhealthyLessThanOrEqualTo specifies that remediations are only triggered if the number of
+ * unhealthy Machines is less than or equal to the configured value.
+ * unhealthyInRange takes precedence if set.
+ *
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo
+ */
+export class ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+  public static fromNumber(value: number): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsHealthCheckRemediationTriggerIfUnhealthyLessThanOrEqualTo(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * maxSurge is the maximum number of machines that can be scheduled above the
+ * desired number of machines.
+ * Value can be an absolute number (ex: 5) or a percentage of
+ * desired machines (ex: 10%).
+ * This can not be 0 if MaxUnavailable is 0.
+ * Absolute number is calculated from percentage by rounding up.
+ * Defaults to 1.
+ * Example: when this is set to 30%, the new MachineSet can be scaled
+ * up immediately when the rolling update starts, such that the total
+ * number of old and new machines do not exceed 130% of desired
+ * machines. Once old machines have been killed, new MachineSet can
+ * be scaled up further, ensuring that total number of machines running
+ * at any time during the update is at most 130% of desired machines.
+ *
+ * @default 1.
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge
+ */
+export class ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge {
+  public static fromNumber(value: number): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxSurge(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
+ * Value can be an absolute number (ex: 5) or a percentage of desired
+ * machines (ex: 10%).
+ * Absolute number is calculated from percentage by rounding down.
+ * This can not be 0 if MaxSurge is 0.
+ * Defaults to 0.
+ * Example: when this is set to 30%, the old MachineSet can be scaled
+ * down to 70% of desired machines immediately when the rolling update
+ * starts. Once new machines are ready, old MachineSet can be scaled
+ * down further, followed by scaling up the new MachineSet, ensuring
+ * that the total number of machines available at all times
+ * during the update is at least 70% of desired machines.
+ *
+ * @default 0.
+ * @schema ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable
+ */
+export class ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable {
+  public static fromNumber(value: number): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable {
+    return new ClusterV1Beta2SpecTopologyWorkersMachineDeploymentsRolloutStrategyRollingUpdateMaxUnavailable(value);
   }
   private constructor(public readonly value: number | string) {
   }
@@ -3511,7 +6445,7 @@ export interface MachineProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineSpec defines the desired state of Machine.
+   * spec is the desired state of Machine.
    *
    * @schema Machine#spec
    */
@@ -3534,7 +6468,7 @@ export function toJson_MachineProps(obj: MachineProps | undefined): Record<strin
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineSpec defines the desired state of Machine.
+ * spec is the desired state of Machine.
  *
  * @schema MachineSpec
  */
@@ -3925,7 +6859,7 @@ export interface MachineV1Alpha4Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineSpec defines the desired state of Machine.
+   * spec is the desired state of Machine.
    *
    * @schema MachineV1Alpha4#spec
    */
@@ -3948,7 +6882,7 @@ export function toJson_MachineV1Alpha4Props(obj: MachineV1Alpha4Props | undefine
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineSpec defines the desired state of Machine.
+ * spec is the desired state of Machine.
  *
  * @schema MachineV1Alpha4Spec
  */
@@ -4324,7 +7258,7 @@ export interface MachineV1Beta1Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineSpec defines the desired state of Machine.
+   * spec is the desired state of Machine.
    *
    * @schema MachineV1Beta1#spec
    */
@@ -4347,7 +7281,7 @@ export function toJson_MachineV1Beta1Props(obj: MachineV1Beta1Props | undefined)
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineSpec defines the desired state of Machine.
+ * spec is the desired state of Machine.
  *
  * @schema MachineV1Beta1Spec
  */
@@ -4614,13 +7548,24 @@ export function toJson_MachineV1Beta1SpecInfrastructureRef(obj: MachineV1Beta1Sp
  */
 export interface MachineV1Beta1SpecReadinessGates {
   /**
-   * conditionType refers to a positive polarity condition (status true means good) with matching type in the Machine's condition list.
+   * conditionType refers to a condition with matching type in the Machine's condition list.
    * If the conditions doesn't exist, it will be treated as unknown.
    * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
    *
    * @schema MachineV1Beta1SpecReadinessGates#conditionType
    */
   readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachineV1Beta1SpecReadinessGates#polarity
+   */
+  readonly polarity?: MachineV1Beta1SpecReadinessGatesPolarity;
 }
 
 /**
@@ -4631,6 +7576,7 @@ export function toJson_MachineV1Beta1SpecReadinessGates(obj: MachineV1Beta1SpecR
   if (obj === undefined) { return undefined; }
   const result = {
     'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -4727,6 +7673,585 @@ export function toJson_MachineV1Beta1SpecBootstrapConfigRef(obj: MachineV1Beta1S
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachineV1Beta1SpecReadinessGatesPolarity
+ */
+export enum MachineV1Beta1SpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+
+/**
+ * Machine is the Schema for the machines API.
+ *
+ * @schema MachineV1Beta2
+ */
+export class MachineV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta2',
+    kind: 'Machine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineV1Beta2Props): any {
+    return {
+      ...MachineV1Beta2.GVK,
+      ...toJson_MachineV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineV1Beta2Props) {
+    super(scope, id, {
+      ...MachineV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineV1Beta2.GVK,
+      ...toJson_MachineV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * Machine is the Schema for the machines API.
+ *
+ * @schema MachineV1Beta2
+ */
+export interface MachineV1Beta2Props {
+  /**
+   * @schema MachineV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the desired state of Machine.
+   *
+   * @schema MachineV1Beta2#spec
+   */
+  readonly spec: MachineV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2Props(obj: MachineV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the desired state of Machine.
+ *
+ * @schema MachineV1Beta2Spec
+ */
+export interface MachineV1Beta2Spec {
+  /**
+   * bootstrap is a reference to a local struct which encapsulates
+   * fields to configure the Machine’s bootstrapping mechanism.
+   *
+   * @schema MachineV1Beta2Spec#bootstrap
+   */
+  readonly bootstrap: MachineV1Beta2SpecBootstrap;
+
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineV1Beta2Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema MachineV1Beta2Spec#deletion
+   */
+  readonly deletion?: MachineV1Beta2SpecDeletion;
+
+  /**
+   * failureDomain is the failure domain the machine will be created in.
+   * Must match the name of a FailureDomain from the Cluster status.
+   *
+   * @schema MachineV1Beta2Spec#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * infrastructureRef is a required reference to a custom resource
+   * offered by an infrastructure provider.
+   *
+   * @schema MachineV1Beta2Spec#infrastructureRef
+   */
+  readonly infrastructureRef: MachineV1Beta2SpecInfrastructureRef;
+
+  /**
+   * minReadySeconds is the minimum number of seconds for which a Machine should be ready before considering it available.
+   * Defaults to 0 (Machine will be considered available as soon as the Machine is ready)
+   *
+   * @default 0 (Machine will be considered available as soon as the Machine is ready)
+   * @schema MachineV1Beta2Spec#minReadySeconds
+   */
+  readonly minReadySeconds?: number;
+
+  /**
+   * providerID is the identification ID of the machine provided by the provider.
+   * This field must match the provider ID as seen on the node object corresponding to this machine.
+   * This field is required by higher level consumers of cluster-api. Example use case is cluster autoscaler
+   * with cluster-api as provider. Clean-up logic in the autoscaler compares machines to nodes to find out
+   * machines at provider which could not get registered as Kubernetes nodes. With cluster-api as a
+   * generic out-of-tree provider for autoscaler, this field is required by autoscaler to be
+   * able to have a provider view of the list of machines. Another list of nodes is queried from the k8s apiserver
+   * and then a comparison is done to find out unregistered machines and are marked for delete.
+   * This field will be set by the actuators and consumed by higher level entities like autoscaler that will
+   * be interfacing with cluster-api as generic provider.
+   *
+   * @schema MachineV1Beta2Spec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. by Cluster API control plane providers to extend the semantic of the
+   * Ready condition for the Machine they control, like the kubeadm control provider adding ReadinessGates
+   * for the APIServerPodHealthy, SchedulerPodHealthy conditions, etc.
+   *
+   * Another example are external controllers, e.g. responsible to install special software/hardware on the Machines;
+   * they can include the status of those components with a new condition and add this condition to ReadinessGates.
+   *
+   * NOTE: In case readinessGates conditions start with the APIServer, ControllerManager, Scheduler prefix, and all those
+   * readiness gates condition are reporting the same message, when computing the Machine's Ready condition those
+   * readinessGates will be replaced by a single entry reporting "Control plane components: " + message.
+   * This helps to improve readability of conditions bubbling up to the Machine's owner resource / to the Cluster).
+   *
+   * @schema MachineV1Beta2Spec#readinessGates
+   */
+  readonly readinessGates?: MachineV1Beta2SpecReadinessGates[];
+
+  /**
+   * taints are the node taints that Cluster API will manage.
+   * This list is not necessarily complete: other Kubernetes components may add or remove other taints from nodes,
+   * e.g. the node controller might add the node.kubernetes.io/not-ready taint.
+   * Only those taints defined in this list will be added or removed by core Cluster API controllers.
+   *
+   * There can be at most 64 taints.
+   * A pod would have to tolerate all existing taints to run on the corresponding node.
+   *
+   * NOTE: This list is implemented as a "map" type, meaning that individual elements can be managed by different owners.
+   *
+   * @schema MachineV1Beta2Spec#taints
+   */
+  readonly taints?: MachineV1Beta2SpecTaints[];
+
+  /**
+   * version defines the desired Kubernetes version.
+   * This field is meant to be optionally used by bootstrap providers.
+   *
+   * @schema MachineV1Beta2Spec#version
+   */
+  readonly version?: string;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2Spec(obj: MachineV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bootstrap': toJson_MachineV1Beta2SpecBootstrap(obj.bootstrap),
+    'clusterName': obj.clusterName,
+    'deletion': toJson_MachineV1Beta2SpecDeletion(obj.deletion),
+    'failureDomain': obj.failureDomain,
+    'infrastructureRef': toJson_MachineV1Beta2SpecInfrastructureRef(obj.infrastructureRef),
+    'minReadySeconds': obj.minReadySeconds,
+    'providerID': obj.providerId,
+    'readinessGates': obj.readinessGates?.map(y => toJson_MachineV1Beta2SpecReadinessGates(y)),
+    'taints': obj.taints?.map(y => toJson_MachineV1Beta2SpecTaints(y)),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * bootstrap is a reference to a local struct which encapsulates
+ * fields to configure the Machine’s bootstrapping mechanism.
+ *
+ * @schema MachineV1Beta2SpecBootstrap
+ */
+export interface MachineV1Beta2SpecBootstrap {
+  /**
+   * configRef is a reference to a bootstrap provider-specific resource
+   * that holds configuration details. The reference is optional to
+   * allow users/operators to specify Bootstrap.DataSecretName without
+   * the need of a controller.
+   *
+   * @schema MachineV1Beta2SpecBootstrap#configRef
+   */
+  readonly configRef?: MachineV1Beta2SpecBootstrapConfigRef;
+
+  /**
+   * dataSecretName is the name of the secret that stores the bootstrap data script.
+   * If nil, the Machine should remain in the Pending state.
+   *
+   * @schema MachineV1Beta2SpecBootstrap#dataSecretName
+   */
+  readonly dataSecretName?: string;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2SpecBootstrap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2SpecBootstrap(obj: MachineV1Beta2SpecBootstrap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configRef': toJson_MachineV1Beta2SpecBootstrapConfigRef(obj.configRef),
+    'dataSecretName': obj.dataSecretName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema MachineV1Beta2SpecDeletion
+ */
+export interface MachineV1Beta2SpecDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the Machine
+   * hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema MachineV1Beta2SpecDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema MachineV1Beta2SpecDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema MachineV1Beta2SpecDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2SpecDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2SpecDeletion(obj: MachineV1Beta2SpecDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * infrastructureRef is a required reference to a custom resource
+ * offered by an infrastructure provider.
+ *
+ * @schema MachineV1Beta2SpecInfrastructureRef
+ */
+export interface MachineV1Beta2SpecInfrastructureRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachineV1Beta2SpecInfrastructureRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineV1Beta2SpecInfrastructureRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineV1Beta2SpecInfrastructureRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2SpecInfrastructureRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2SpecInfrastructureRef(obj: MachineV1Beta2SpecInfrastructureRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema MachineV1Beta2SpecReadinessGates
+ */
+export interface MachineV1Beta2SpecReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema MachineV1Beta2SpecReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachineV1Beta2SpecReadinessGates#polarity
+   */
+  readonly polarity?: MachineV1Beta2SpecReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2SpecReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2SpecReadinessGates(obj: MachineV1Beta2SpecReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineTaint defines a taint equivalent to corev1.Taint, but additionally having a propagation field.
+ *
+ * @schema MachineV1Beta2SpecTaints
+ */
+export interface MachineV1Beta2SpecTaints {
+  /**
+   * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+   *
+   * @schema MachineV1Beta2SpecTaints#effect
+   */
+  readonly effect: MachineV1Beta2SpecTaintsEffect;
+
+  /**
+   * key is the taint key to be applied to a node.
+   * Must be a valid qualified name of maximum size 63 characters
+   * with an optional subdomain prefix of maximum size 253 characters,
+   * separated by a `/`.
+   *
+   * @schema MachineV1Beta2SpecTaints#key
+   */
+  readonly key: string;
+
+  /**
+   * propagation defines how this taint should be propagated to nodes.
+   * Valid values are 'Always' and 'OnInitialization'.
+   * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+   * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+   *
+   * @schema MachineV1Beta2SpecTaints#propagation
+   */
+  readonly propagation: MachineV1Beta2SpecTaintsPropagation;
+
+  /**
+   * value is the taint value corresponding to the taint key.
+   * It must be a valid label value of maximum size 63 characters.
+   *
+   * @schema MachineV1Beta2SpecTaints#value
+   */
+  readonly value?: string;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2SpecTaints' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2SpecTaints(obj: MachineV1Beta2SpecTaints | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'effect': obj.effect,
+    'key': obj.key,
+    'propagation': obj.propagation,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configRef is a reference to a bootstrap provider-specific resource
+ * that holds configuration details. The reference is optional to
+ * allow users/operators to specify Bootstrap.DataSecretName without
+ * the need of a controller.
+ *
+ * @schema MachineV1Beta2SpecBootstrapConfigRef
+ */
+export interface MachineV1Beta2SpecBootstrapConfigRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachineV1Beta2SpecBootstrapConfigRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineV1Beta2SpecBootstrapConfigRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineV1Beta2SpecBootstrapConfigRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineV1Beta2SpecBootstrapConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineV1Beta2SpecBootstrapConfigRef(obj: MachineV1Beta2SpecBootstrapConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachineV1Beta2SpecReadinessGatesPolarity
+ */
+export enum MachineV1Beta2SpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+ *
+ * @schema MachineV1Beta2SpecTaintsEffect
+ */
+export enum MachineV1Beta2SpecTaintsEffect {
+  /** NoSchedule */
+  NO_SCHEDULE = "NoSchedule",
+  /** PreferNoSchedule */
+  PREFER_NO_SCHEDULE = "PreferNoSchedule",
+  /** NoExecute */
+  NO_EXECUTE = "NoExecute",
+}
+
+/**
+ * propagation defines how this taint should be propagated to nodes.
+ * Valid values are 'Always' and 'OnInitialization'.
+ * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+ * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+ *
+ * @schema MachineV1Beta2SpecTaintsPropagation
+ */
+export enum MachineV1Beta2SpecTaintsPropagation {
+  /** Always */
+  ALWAYS = "Always",
+  /** OnInitialization */
+  ON_INITIALIZATION = "OnInitialization",
+}
+
 
 /**
  * MachineDeployment is the Schema for the machinedeployments API.
@@ -4798,7 +8323,7 @@ export interface MachineDeploymentProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineDeploymentSpec defines the desired state of MachineDeployment.
+   * spec is the desired state of MachineDeployment.
    *
    * @schema MachineDeployment#spec
    */
@@ -4821,7 +8346,7 @@ export function toJson_MachineDeploymentProps(obj: MachineDeploymentProps | unde
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineDeploymentSpec defines the desired state of MachineDeployment.
+ * spec is the desired state of MachineDeployment.
  *
  * @schema MachineDeploymentSpec
  */
@@ -4834,7 +8359,7 @@ export interface MachineDeploymentSpec {
   readonly clusterName: string;
 
   /**
-   * Minimum number of seconds for which a newly created machine should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine should
    * be ready.
    * Defaults to 0 (machine will be considered available as soon as it
    * is ready)
@@ -4845,14 +8370,14 @@ export interface MachineDeploymentSpec {
   readonly minReadySeconds?: number;
 
   /**
-   * Indicates that the deployment is paused.
+   * paused indicates that the deployment is paused.
    *
    * @schema MachineDeploymentSpec#paused
    */
   readonly paused?: boolean;
 
   /**
-   * The maximum time in seconds for a deployment to make progress before it
+   * progressDeadlineSeconds is the maximum time in seconds for a deployment to make progress before it
    * is considered to be failed. The deployment controller will continue to
    * process failed deployments and a condition with a ProgressDeadlineExceeded
    * reason will be surfaced in the deployment status. Note that progress will
@@ -4864,7 +8389,7 @@ export interface MachineDeploymentSpec {
   readonly progressDeadlineSeconds?: number;
 
   /**
-   * Number of desired machines. Defaults to 1.
+   * replicas is the number of desired machines. Defaults to 1.
    * This is a pointer to distinguish between explicit zero and not specified.
    *
    * @default 1.
@@ -4873,7 +8398,7 @@ export interface MachineDeploymentSpec {
   readonly replicas?: number;
 
   /**
-   * The number of old MachineSets to retain to allow rollback.
+   * revisionHistoryLimit is the number of old MachineSets to retain to allow rollback.
    * This is a pointer to distinguish between explicit zero and not specified.
    * Defaults to 1.
    *
@@ -4883,7 +8408,7 @@ export interface MachineDeploymentSpec {
   readonly revisionHistoryLimit?: number;
 
   /**
-   * Label selector for machines. Existing MachineSets whose machines are
+   * selector is the label selector for machines. Existing MachineSets whose machines are
    * selected by this will be the ones affected by this deployment.
    * It must match the machine template's labels.
    *
@@ -4892,7 +8417,7 @@ export interface MachineDeploymentSpec {
   readonly selector: MachineDeploymentSpecSelector;
 
   /**
-   * The deployment strategy to use to replace existing machines with
+   * strategy is the deployment strategy to use to replace existing machines with
    * new ones.
    *
    * @schema MachineDeploymentSpec#strategy
@@ -4930,7 +8455,7 @@ export function toJson_MachineDeploymentSpec(obj: MachineDeploymentSpec | undefi
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Label selector for machines. Existing MachineSets whose machines are
+ * selector is the label selector for machines. Existing MachineSets whose machines are
  * selected by this will be the ones affected by this deployment.
  * It must match the machine template's labels.
  *
@@ -4970,14 +8495,14 @@ export function toJson_MachineDeploymentSpecSelector(obj: MachineDeploymentSpecS
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The deployment strategy to use to replace existing machines with
+ * strategy is the deployment strategy to use to replace existing machines with
  * new ones.
  *
  * @schema MachineDeploymentSpecStrategy
  */
 export interface MachineDeploymentSpecStrategy {
   /**
-   * Rolling update config params. Present only if
+   * rollingUpdate is the rolling update config params. Present only if
    * MachineDeploymentStrategyType = RollingUpdate.
    *
    * @schema MachineDeploymentSpecStrategy#rollingUpdate
@@ -5017,7 +8542,7 @@ export function toJson_MachineDeploymentSpecStrategy(obj: MachineDeploymentSpecS
  */
 export interface MachineDeploymentSpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachineDeploymentSpecTemplate#metadata
@@ -5025,7 +8550,7 @@ export interface MachineDeploymentSpecTemplate {
   readonly metadata?: MachineDeploymentSpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachineDeploymentSpecTemplate#spec
@@ -5098,14 +8623,14 @@ export function toJson_MachineDeploymentSpecSelectorMatchExpressions(obj: Machin
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Rolling update config params. Present only if
+ * rollingUpdate is the rolling update config params. Present only if
  * MachineDeploymentStrategyType = RollingUpdate.
  *
  * @schema MachineDeploymentSpecStrategyRollingUpdate
  */
 export interface MachineDeploymentSpecStrategyRollingUpdate {
   /**
-   * The maximum number of machines that can be scheduled above the
+   * maxSurge is the maximum number of machines that can be scheduled above the
    * desired number of machines.
    * Value can be an absolute number (ex: 5) or a percentage of
    * desired machines (ex: 10%).
@@ -5125,7 +8650,7 @@ export interface MachineDeploymentSpecStrategyRollingUpdate {
   readonly maxSurge?: MachineDeploymentSpecStrategyRollingUpdateMaxSurge;
 
   /**
-   * The maximum number of machines that can be unavailable during the update.
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
    * Value can be an absolute number (ex: 5) or a percentage of desired
    * machines (ex: 10%).
    * Absolute number is calculated from percentage by rounding down.
@@ -5160,7 +8685,7 @@ export function toJson_MachineDeploymentSpecStrategyRollingUpdate(obj: MachineDe
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachineDeploymentSpecTemplateMetadata
@@ -5200,7 +8725,7 @@ export interface MachineDeploymentSpecTemplateMetadata {
   readonly generateName?: string;
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -5240,7 +8765,7 @@ export interface MachineDeploymentSpecTemplateMetadata {
   readonly namespace?: string;
 
   /**
-   * List of objects depended by this object. If ALL objects in the list have
+   * ownerReferences is the list of objects depended by this object. If ALL objects in the list have
    * been deleted, this object will be garbage collected. If this object is managed by a controller,
    * then an entry in this list will point to this controller, with the controller field set to true.
    * There cannot be more than one managing controller.
@@ -5272,7 +8797,7 @@ export function toJson_MachineDeploymentSpecTemplateMetadata(obj: MachineDeploym
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachineDeploymentSpecTemplateSpec
@@ -5364,7 +8889,7 @@ export function toJson_MachineDeploymentSpecTemplateSpec(obj: MachineDeploymentS
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The maximum number of machines that can be scheduled above the
+ * maxSurge is the maximum number of machines that can be scheduled above the
  * desired number of machines.
  * Value can be an absolute number (ex: 5) or a percentage of
  * desired machines (ex: 10%).
@@ -5393,7 +8918,7 @@ export class MachineDeploymentSpecStrategyRollingUpdateMaxSurge {
 }
 
 /**
- * The maximum number of machines that can be unavailable during the update.
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
  * Value can be an absolute number (ex: 5) or a percentage of desired
  * machines (ex: 10%).
  * Absolute number is calculated from percentage by rounding down.
@@ -5802,7 +9327,7 @@ export interface MachineDeploymentV1Alpha4Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineDeploymentSpec defines the desired state of MachineDeployment.
+   * spec is the desired state of MachineDeployment.
    *
    * @schema MachineDeploymentV1Alpha4#spec
    */
@@ -5825,7 +9350,7 @@ export function toJson_MachineDeploymentV1Alpha4Props(obj: MachineDeploymentV1Al
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineDeploymentSpec defines the desired state of MachineDeployment.
+ * spec is the desired state of MachineDeployment.
  *
  * @schema MachineDeploymentV1Alpha4Spec
  */
@@ -5838,7 +9363,7 @@ export interface MachineDeploymentV1Alpha4Spec {
   readonly clusterName: string;
 
   /**
-   * Minimum number of seconds for which a newly created machine should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine should
    * be ready.
    * Defaults to 0 (machine will be considered available as soon as it
    * is ready)
@@ -5849,14 +9374,14 @@ export interface MachineDeploymentV1Alpha4Spec {
   readonly minReadySeconds?: number;
 
   /**
-   * Indicates that the deployment is paused.
+   * paused indicates that the deployment is paused.
    *
    * @schema MachineDeploymentV1Alpha4Spec#paused
    */
   readonly paused?: boolean;
 
   /**
-   * The maximum time in seconds for a deployment to make progress before it
+   * progressDeadlineSeconds is the maximum time in seconds for a deployment to make progress before it
    * is considered to be failed. The deployment controller will continue to
    * process failed deployments and a condition with a ProgressDeadlineExceeded
    * reason will be surfaced in the deployment status. Note that progress will
@@ -5868,7 +9393,7 @@ export interface MachineDeploymentV1Alpha4Spec {
   readonly progressDeadlineSeconds?: number;
 
   /**
-   * Number of desired machines. Defaults to 1.
+   * replicas is the number of desired machines. Defaults to 1.
    * This is a pointer to distinguish between explicit zero and not specified.
    *
    * @default 1.
@@ -5877,7 +9402,7 @@ export interface MachineDeploymentV1Alpha4Spec {
   readonly replicas?: number;
 
   /**
-   * The number of old MachineSets to retain to allow rollback.
+   * revisionHistoryLimit is the number of old MachineSets to retain to allow rollback.
    * This is a pointer to distinguish between explicit zero and not specified.
    * Defaults to 1.
    *
@@ -5887,7 +9412,7 @@ export interface MachineDeploymentV1Alpha4Spec {
   readonly revisionHistoryLimit?: number;
 
   /**
-   * Label selector for machines. Existing MachineSets whose machines are
+   * selector is the label selector for machines. Existing MachineSets whose machines are
    * selected by this will be the ones affected by this deployment.
    * It must match the machine template's labels.
    *
@@ -5896,7 +9421,7 @@ export interface MachineDeploymentV1Alpha4Spec {
   readonly selector: MachineDeploymentV1Alpha4SpecSelector;
 
   /**
-   * The deployment strategy to use to replace existing machines with
+   * strategy is the deployment strategy to use to replace existing machines with
    * new ones.
    *
    * @schema MachineDeploymentV1Alpha4Spec#strategy
@@ -5934,7 +9459,7 @@ export function toJson_MachineDeploymentV1Alpha4Spec(obj: MachineDeploymentV1Alp
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Label selector for machines. Existing MachineSets whose machines are
+ * selector is the label selector for machines. Existing MachineSets whose machines are
  * selected by this will be the ones affected by this deployment.
  * It must match the machine template's labels.
  *
@@ -5974,14 +9499,14 @@ export function toJson_MachineDeploymentV1Alpha4SpecSelector(obj: MachineDeploym
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The deployment strategy to use to replace existing machines with
+ * strategy is the deployment strategy to use to replace existing machines with
  * new ones.
  *
  * @schema MachineDeploymentV1Alpha4SpecStrategy
  */
 export interface MachineDeploymentV1Alpha4SpecStrategy {
   /**
-   * Rolling update config params. Present only if
+   * rollingUpdate is the rolling update config params. Present only if
    * MachineDeploymentStrategyType = RollingUpdate.
    *
    * @schema MachineDeploymentV1Alpha4SpecStrategy#rollingUpdate
@@ -6020,7 +9545,7 @@ export function toJson_MachineDeploymentV1Alpha4SpecStrategy(obj: MachineDeploym
  */
 export interface MachineDeploymentV1Alpha4SpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachineDeploymentV1Alpha4SpecTemplate#metadata
@@ -6028,7 +9553,7 @@ export interface MachineDeploymentV1Alpha4SpecTemplate {
   readonly metadata?: MachineDeploymentV1Alpha4SpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachineDeploymentV1Alpha4SpecTemplate#spec
@@ -6101,7 +9626,7 @@ export function toJson_MachineDeploymentV1Alpha4SpecSelectorMatchExpressions(obj
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Rolling update config params. Present only if
+ * rollingUpdate is the rolling update config params. Present only if
  * MachineDeploymentStrategyType = RollingUpdate.
  *
  * @schema MachineDeploymentV1Alpha4SpecStrategyRollingUpdate
@@ -6117,7 +9642,7 @@ export interface MachineDeploymentV1Alpha4SpecStrategyRollingUpdate {
   readonly deletePolicy?: MachineDeploymentV1Alpha4SpecStrategyRollingUpdateDeletePolicy;
 
   /**
-   * The maximum number of machines that can be scheduled above the
+   * maxSurge is the maximum number of machines that can be scheduled above the
    * desired number of machines.
    * Value can be an absolute number (ex: 5) or a percentage of
    * desired machines (ex: 10%).
@@ -6137,7 +9662,7 @@ export interface MachineDeploymentV1Alpha4SpecStrategyRollingUpdate {
   readonly maxSurge?: MachineDeploymentV1Alpha4SpecStrategyRollingUpdateMaxSurge;
 
   /**
-   * The maximum number of machines that can be unavailable during the update.
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
    * Value can be an absolute number (ex: 5) or a percentage of desired
    * machines (ex: 10%).
    * Absolute number is calculated from percentage by rounding down.
@@ -6187,7 +9712,7 @@ export enum MachineDeploymentV1Alpha4SpecStrategyType {
 }
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachineDeploymentV1Alpha4SpecTemplateMetadata
@@ -6204,7 +9729,7 @@ export interface MachineDeploymentV1Alpha4SpecTemplateMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -6230,7 +9755,7 @@ export function toJson_MachineDeploymentV1Alpha4SpecTemplateMetadata(obj: Machin
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachineDeploymentV1Alpha4SpecTemplateSpec
@@ -6338,7 +9863,7 @@ export enum MachineDeploymentV1Alpha4SpecStrategyRollingUpdateDeletePolicy {
 }
 
 /**
- * The maximum number of machines that can be scheduled above the
+ * maxSurge is the maximum number of machines that can be scheduled above the
  * desired number of machines.
  * Value can be an absolute number (ex: 5) or a percentage of
  * desired machines (ex: 10%).
@@ -6367,7 +9892,7 @@ export class MachineDeploymentV1Alpha4SpecStrategyRollingUpdateMaxSurge {
 }
 
 /**
- * The maximum number of machines that can be unavailable during the update.
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
  * Value can be an absolute number (ex: 5) or a percentage of desired
  * machines (ex: 10%).
  * Absolute number is calculated from percentage by rounding down.
@@ -6680,7 +10205,7 @@ export interface MachineDeploymentV1Beta1Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineDeploymentSpec defines the desired state of MachineDeployment.
+   * spec is the desired state of MachineDeployment.
    *
    * @schema MachineDeploymentV1Beta1#spec
    */
@@ -6703,7 +10228,7 @@ export function toJson_MachineDeploymentV1Beta1Props(obj: MachineDeploymentV1Bet
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineDeploymentSpec defines the desired state of MachineDeployment.
+ * spec is the desired state of MachineDeployment.
  *
  * @schema MachineDeploymentV1Beta1Spec
  */
@@ -6716,6 +10241,14 @@ export interface MachineDeploymentV1Beta1Spec {
   readonly clusterName: string;
 
   /**
+   * machineNamingStrategy allows changing the naming pattern used when creating Machines.
+   * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+   *
+   * @schema MachineDeploymentV1Beta1Spec#machineNamingStrategy
+   */
+  readonly machineNamingStrategy?: MachineDeploymentV1Beta1SpecMachineNamingStrategy;
+
+  /**
    * minReadySeconds is the minimum number of seconds for which a Node for a newly created machine should be ready before considering the replica available.
    * Defaults to 0 (machine will be considered available as soon as the Node is ready)
    *
@@ -6725,14 +10258,14 @@ export interface MachineDeploymentV1Beta1Spec {
   readonly minReadySeconds?: number;
 
   /**
-   * Indicates that the deployment is paused.
+   * paused indicates that the deployment is paused.
    *
    * @schema MachineDeploymentV1Beta1Spec#paused
    */
   readonly paused?: boolean;
 
   /**
-   * The maximum time in seconds for a deployment to make progress before it
+   * progressDeadlineSeconds is the maximum time in seconds for a deployment to make progress before it
    * is considered to be failed. The deployment controller will continue to
    * process failed deployments and a condition with a ProgressDeadlineExceeded
    * reason will be surfaced in the deployment status. Note that progress will
@@ -6746,7 +10279,7 @@ export interface MachineDeploymentV1Beta1Spec {
   readonly progressDeadlineSeconds?: number;
 
   /**
-   * Number of desired machines.
+   * replicas is the number of desired machines.
    * This is a pointer to distinguish between explicit zero and not specified.
    *
    * Defaults to:
@@ -6770,7 +10303,7 @@ export interface MachineDeploymentV1Beta1Spec {
   readonly replicas?: number;
 
   /**
-   * The number of old MachineSets to retain to allow rollback.
+   * revisionHistoryLimit is the number of old MachineSets to retain to allow rollback.
    * This is a pointer to distinguish between explicit zero and not specified.
    * Defaults to 1.
    *
@@ -6794,7 +10327,7 @@ export interface MachineDeploymentV1Beta1Spec {
   readonly rolloutAfter?: Date;
 
   /**
-   * Label selector for machines. Existing MachineSets whose machines are
+   * selector is the label selector for machines. Existing MachineSets whose machines are
    * selected by this will be the ones affected by this deployment.
    * It must match the machine template's labels.
    *
@@ -6803,7 +10336,7 @@ export interface MachineDeploymentV1Beta1Spec {
   readonly selector: MachineDeploymentV1Beta1SpecSelector;
 
   /**
-   * The deployment strategy to use to replace existing machines with
+   * strategy is the deployment strategy to use to replace existing machines with
    * new ones.
    *
    * @schema MachineDeploymentV1Beta1Spec#strategy
@@ -6826,6 +10359,7 @@ export function toJson_MachineDeploymentV1Beta1Spec(obj: MachineDeploymentV1Beta
   if (obj === undefined) { return undefined; }
   const result = {
     'clusterName': obj.clusterName,
+    'machineNamingStrategy': toJson_MachineDeploymentV1Beta1SpecMachineNamingStrategy(obj.machineNamingStrategy),
     'minReadySeconds': obj.minReadySeconds,
     'paused': obj.paused,
     'progressDeadlineSeconds': obj.progressDeadlineSeconds,
@@ -6842,7 +10376,51 @@ export function toJson_MachineDeploymentV1Beta1Spec(obj: MachineDeploymentV1Beta
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Label selector for machines. Existing MachineSets whose machines are
+ * machineNamingStrategy allows changing the naming pattern used when creating Machines.
+ * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+ *
+ * @schema MachineDeploymentV1Beta1SpecMachineNamingStrategy
+ */
+export interface MachineDeploymentV1Beta1SpecMachineNamingStrategy {
+  /**
+   * template defines the template to use for generating the names of the
+   * Machine objects.
+   * If not defined, it will fallback to `{{ .machineSet.name }}-{{ .random }}`.
+   * If the generated name string exceeds 63 characters, it will be trimmed to
+   * 58 characters and will
+   * get concatenated with a random suffix of length 5.
+   * Length of the template string must not exceed 256 characters.
+   * The template allows the following variables `.cluster.name`,
+   * `.machineSet.name` and `.random`.
+   * The variable `.cluster.name` retrieves the name of the cluster object
+   * that owns the Machines being created.
+   * The variable `.machineSet.name` retrieves the name of the MachineSet
+   * object that owns the Machines being created.
+   * The variable `.random` is substituted with random alphanumeric string,
+   * without vowels, of length 5. This variable is required part of the
+   * template. If not provided, validation will fail.
+   *
+   * @schema MachineDeploymentV1Beta1SpecMachineNamingStrategy#template
+   */
+  readonly template?: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta1SpecMachineNamingStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta1SpecMachineNamingStrategy(obj: MachineDeploymentV1Beta1SpecMachineNamingStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': obj.template,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is the label selector for machines. Existing MachineSets whose machines are
  * selected by this will be the ones affected by this deployment.
  * It must match the machine template's labels.
  *
@@ -6882,7 +10460,7 @@ export function toJson_MachineDeploymentV1Beta1SpecSelector(obj: MachineDeployme
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The deployment strategy to use to replace existing machines with
+ * strategy is the deployment strategy to use to replace existing machines with
  * new ones.
  *
  * @schema MachineDeploymentV1Beta1SpecStrategy
@@ -6897,7 +10475,7 @@ export interface MachineDeploymentV1Beta1SpecStrategy {
   readonly remediation?: MachineDeploymentV1Beta1SpecStrategyRemediation;
 
   /**
-   * Rolling update config params. Present only if
+   * rollingUpdate is the rolling update config params. Present only if
    * MachineDeploymentStrategyType = RollingUpdate.
    *
    * @schema MachineDeploymentV1Beta1SpecStrategy#rollingUpdate
@@ -6936,7 +10514,7 @@ export function toJson_MachineDeploymentV1Beta1SpecStrategy(obj: MachineDeployme
  */
 export interface MachineDeploymentV1Beta1SpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachineDeploymentV1Beta1SpecTemplate#metadata
@@ -6944,7 +10522,7 @@ export interface MachineDeploymentV1Beta1SpecTemplate {
   readonly metadata?: MachineDeploymentV1Beta1SpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachineDeploymentV1Beta1SpecTemplate#spec
@@ -7059,7 +10637,7 @@ export function toJson_MachineDeploymentV1Beta1SpecStrategyRemediation(obj: Mach
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Rolling update config params. Present only if
+ * rollingUpdate is the rolling update config params. Present only if
  * MachineDeploymentStrategyType = RollingUpdate.
  *
  * @schema MachineDeploymentV1Beta1SpecStrategyRollingUpdate
@@ -7075,7 +10653,7 @@ export interface MachineDeploymentV1Beta1SpecStrategyRollingUpdate {
   readonly deletePolicy?: MachineDeploymentV1Beta1SpecStrategyRollingUpdateDeletePolicy;
 
   /**
-   * The maximum number of machines that can be scheduled above the
+   * maxSurge is the maximum number of machines that can be scheduled above the
    * desired number of machines.
    * Value can be an absolute number (ex: 5) or a percentage of
    * desired machines (ex: 10%).
@@ -7095,7 +10673,7 @@ export interface MachineDeploymentV1Beta1SpecStrategyRollingUpdate {
   readonly maxSurge?: MachineDeploymentV1Beta1SpecStrategyRollingUpdateMaxSurge;
 
   /**
-   * The maximum number of machines that can be unavailable during the update.
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
    * Value can be an absolute number (ex: 5) or a percentage of desired
    * machines (ex: 10%).
    * Absolute number is calculated from percentage by rounding down.
@@ -7144,7 +10722,7 @@ export enum MachineDeploymentV1Beta1SpecStrategyType {
 }
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachineDeploymentV1Beta1SpecTemplateMetadata
@@ -7161,7 +10739,7 @@ export interface MachineDeploymentV1Beta1SpecTemplateMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -7187,7 +10765,7 @@ export function toJson_MachineDeploymentV1Beta1SpecTemplateMetadata(obj: Machine
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachineDeploymentV1Beta1SpecTemplateSpec
@@ -7365,7 +10943,7 @@ export enum MachineDeploymentV1Beta1SpecStrategyRollingUpdateDeletePolicy {
 }
 
 /**
- * The maximum number of machines that can be scheduled above the
+ * maxSurge is the maximum number of machines that can be scheduled above the
  * desired number of machines.
  * Value can be an absolute number (ex: 5) or a percentage of
  * desired machines (ex: 10%).
@@ -7394,7 +10972,7 @@ export class MachineDeploymentV1Beta1SpecStrategyRollingUpdateMaxSurge {
 }
 
 /**
- * The maximum number of machines that can be unavailable during the update.
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
  * Value can be an absolute number (ex: 5) or a percentage of desired
  * machines (ex: 10%).
  * Absolute number is calculated from percentage by rounding down.
@@ -7557,13 +11135,24 @@ export function toJson_MachineDeploymentV1Beta1SpecTemplateSpecInfrastructureRef
  */
 export interface MachineDeploymentV1Beta1SpecTemplateSpecReadinessGates {
   /**
-   * conditionType refers to a positive polarity condition (status true means good) with matching type in the Machine's condition list.
+   * conditionType refers to a condition with matching type in the Machine's condition list.
    * If the conditions doesn't exist, it will be treated as unknown.
    * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
    *
    * @schema MachineDeploymentV1Beta1SpecTemplateSpecReadinessGates#conditionType
    */
   readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachineDeploymentV1Beta1SpecTemplateSpecReadinessGates#polarity
+   */
+  readonly polarity?: MachineDeploymentV1Beta1SpecTemplateSpecReadinessGatesPolarity;
 }
 
 /**
@@ -7574,6 +11163,7 @@ export function toJson_MachineDeploymentV1Beta1SpecTemplateSpecReadinessGates(ob
   if (obj === undefined) { return undefined; }
   const result = {
     'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -7670,6 +11260,1245 @@ export function toJson_MachineDeploymentV1Beta1SpecTemplateSpecBootstrapConfigRe
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachineDeploymentV1Beta1SpecTemplateSpecReadinessGatesPolarity
+ */
+export enum MachineDeploymentV1Beta1SpecTemplateSpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+
+/**
+ * MachineDeployment is the Schema for the machinedeployments API.
+ *
+ * @schema MachineDeploymentV1Beta2
+ */
+export class MachineDeploymentV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineDeploymentV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta2',
+    kind: 'MachineDeployment',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineDeploymentV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineDeploymentV1Beta2Props): any {
+    return {
+      ...MachineDeploymentV1Beta2.GVK,
+      ...toJson_MachineDeploymentV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineDeploymentV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineDeploymentV1Beta2Props) {
+    super(scope, id, {
+      ...MachineDeploymentV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineDeploymentV1Beta2.GVK,
+      ...toJson_MachineDeploymentV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * MachineDeployment is the Schema for the machinedeployments API.
+ *
+ * @schema MachineDeploymentV1Beta2
+ */
+export interface MachineDeploymentV1Beta2Props {
+  /**
+   * @schema MachineDeploymentV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the desired state of MachineDeployment.
+   *
+   * @schema MachineDeploymentV1Beta2#spec
+   */
+  readonly spec: MachineDeploymentV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2Props(obj: MachineDeploymentV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineDeploymentV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the desired state of MachineDeployment.
+ *
+ * @schema MachineDeploymentV1Beta2Spec
+ */
+export interface MachineDeploymentV1Beta2Spec {
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * deletion contains configuration options for MachineDeployment deletion.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#deletion
+   */
+  readonly deletion?: MachineDeploymentV1Beta2SpecDeletion;
+
+  /**
+   * machineNaming allows changing the naming pattern used when creating Machines.
+   * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#machineNaming
+   */
+  readonly machineNaming?: MachineDeploymentV1Beta2SpecMachineNaming;
+
+  /**
+   * paused indicates that the deployment is paused.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#paused
+   */
+  readonly paused?: boolean;
+
+  /**
+   * remediation controls how unhealthy Machines are remediated.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#remediation
+   */
+  readonly remediation?: MachineDeploymentV1Beta2SpecRemediation;
+
+  /**
+   * replicas is the number of desired machines.
+   * This is a pointer to distinguish between explicit zero and not specified.
+   *
+   * Defaults to:
+   * * if the Kubernetes autoscaler min size and max size annotations are set:
+   * - if it's a new MachineDeployment, use min size
+   * - if the replicas field of the old MachineDeployment is < min size, use min size
+   * - if the replicas field of the old MachineDeployment is > max size, use max size
+   * - if the replicas field of the old MachineDeployment is in the (min size, max size) range, keep the value from the oldMD
+   * * otherwise use 1
+   * Note: Defaulting will be run whenever the replicas field is not set:
+   * * A new MachineDeployment is created with replicas not set.
+   * * On an existing MachineDeployment the replicas field was first set and is now unset.
+   * Those cases are especially relevant for the following Kubernetes autoscaler use cases:
+   * * A new MachineDeployment is created and replicas should be managed by the autoscaler
+   * * An existing MachineDeployment which initially wasn't controlled by the autoscaler
+   * should be later controlled by the autoscaler
+   *
+   * @default if the Kubernetes autoscaler min size and max size annotations are set:
+   * @schema MachineDeploymentV1Beta2Spec#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * rollout allows you to configure the behaviour of rolling updates to the MachineDeployment Machines.
+   * It allows you to require that all Machines are replaced after a certain time,
+   * and allows you to define the strategy used during rolling replacements.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#rollout
+   */
+  readonly rollout?: MachineDeploymentV1Beta2SpecRollout;
+
+  /**
+   * selector is the label selector for machines. Existing MachineSets whose machines are
+   * selected by this will be the ones affected by this deployment.
+   * It must match the machine template's labels.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#selector
+   */
+  readonly selector: MachineDeploymentV1Beta2SpecSelector;
+
+  /**
+   * template describes the machines that will be created.
+   *
+   * @schema MachineDeploymentV1Beta2Spec#template
+   */
+  readonly template: MachineDeploymentV1Beta2SpecTemplate;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2Spec(obj: MachineDeploymentV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'deletion': toJson_MachineDeploymentV1Beta2SpecDeletion(obj.deletion),
+    'machineNaming': toJson_MachineDeploymentV1Beta2SpecMachineNaming(obj.machineNaming),
+    'paused': obj.paused,
+    'remediation': toJson_MachineDeploymentV1Beta2SpecRemediation(obj.remediation),
+    'replicas': obj.replicas,
+    'rollout': toJson_MachineDeploymentV1Beta2SpecRollout(obj.rollout),
+    'selector': toJson_MachineDeploymentV1Beta2SpecSelector(obj.selector),
+    'template': toJson_MachineDeploymentV1Beta2SpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for MachineDeployment deletion.
+ *
+ * @schema MachineDeploymentV1Beta2SpecDeletion
+ */
+export interface MachineDeploymentV1Beta2SpecDeletion {
+  /**
+   * order defines the order in which Machines are deleted when downscaling.
+   * Defaults to "Random".  Valid values are "Random, "Newest", "Oldest"
+   *
+   * @default Random".  Valid values are "Random, "Newest", "Oldest"
+   * @schema MachineDeploymentV1Beta2SpecDeletion#order
+   */
+  readonly order?: MachineDeploymentV1Beta2SpecDeletionOrder;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecDeletion(obj: MachineDeploymentV1Beta2SpecDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'order': obj.order,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * machineNaming allows changing the naming pattern used when creating Machines.
+ * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+ *
+ * @schema MachineDeploymentV1Beta2SpecMachineNaming
+ */
+export interface MachineDeploymentV1Beta2SpecMachineNaming {
+  /**
+   * template defines the template to use for generating the names of the
+   * Machine objects.
+   * If not defined, it will fallback to `{{ .machineSet.name }}-{{ .random }}`.
+   * If the generated name string exceeds 63 characters, it will be trimmed to
+   * 58 characters and will
+   * get concatenated with a random suffix of length 5.
+   * Length of the template string must not exceed 256 characters.
+   * The template allows the following variables `.cluster.name`,
+   * `.machineSet.name` and `.random`.
+   * The variable `.cluster.name` retrieves the name of the cluster object
+   * that owns the Machines being created.
+   * The variable `.machineSet.name` retrieves the name of the MachineSet
+   * object that owns the Machines being created.
+   * The variable `.random` is substituted with random alphanumeric string,
+   * without vowels, of length 5. This variable is required part of the
+   * template. If not provided, validation will fail.
+   *
+   * @schema MachineDeploymentV1Beta2SpecMachineNaming#template
+   */
+  readonly template?: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecMachineNaming' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecMachineNaming(obj: MachineDeploymentV1Beta2SpecMachineNaming | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': obj.template,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * remediation controls how unhealthy Machines are remediated.
+ *
+ * @schema MachineDeploymentV1Beta2SpecRemediation
+ */
+export interface MachineDeploymentV1Beta2SpecRemediation {
+  /**
+   * maxInFlight determines how many in flight remediations should happen at the same time.
+   *
+   * Remediation only happens on the MachineSet with the most current revision, while
+   * older MachineSets (usually present during rollout operations) aren't allowed to remediate.
+   *
+   * Note: In general (independent of remediations), unhealthy machines are always
+   * prioritized during scale down operations over healthy ones.
+   *
+   * MaxInFlight can be set to a fixed number or a percentage.
+   * Example: when this is set to 20%, the MachineSet controller deletes at most 20% of
+   * the desired replicas.
+   *
+   * If not set, remediation is limited to all machines (bounded by replicas)
+   * under the active MachineSet's management.
+   *
+   * @schema MachineDeploymentV1Beta2SpecRemediation#maxInFlight
+   */
+  readonly maxInFlight?: MachineDeploymentV1Beta2SpecRemediationMaxInFlight;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecRemediation' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecRemediation(obj: MachineDeploymentV1Beta2SpecRemediation | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxInFlight': obj.maxInFlight?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * rollout allows you to configure the behaviour of rolling updates to the MachineDeployment Machines.
+ * It allows you to require that all Machines are replaced after a certain time,
+ * and allows you to define the strategy used during rolling replacements.
+ *
+ * @schema MachineDeploymentV1Beta2SpecRollout
+ */
+export interface MachineDeploymentV1Beta2SpecRollout {
+  /**
+   * after is a field to indicate a rollout should be performed
+   * after the specified time even if no changes have been made to the
+   * MachineDeployment.
+   * Example: In the YAML the time can be specified in the RFC3339 format.
+   * To specify the rolloutAfter target as March 9, 2023, at 9 am UTC
+   * use "2023-03-09T09:00:00Z".
+   *
+   * @schema MachineDeploymentV1Beta2SpecRollout#after
+   */
+  readonly after?: Date;
+
+  /**
+   * strategy specifies how to roll out control plane Machines.
+   *
+   * @schema MachineDeploymentV1Beta2SpecRollout#strategy
+   */
+  readonly strategy?: MachineDeploymentV1Beta2SpecRolloutStrategy;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecRollout' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecRollout(obj: MachineDeploymentV1Beta2SpecRollout | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'after': obj.after?.toISOString(),
+    'strategy': toJson_MachineDeploymentV1Beta2SpecRolloutStrategy(obj.strategy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is the label selector for machines. Existing MachineSets whose machines are
+ * selected by this will be the ones affected by this deployment.
+ * It must match the machine template's labels.
+ *
+ * @schema MachineDeploymentV1Beta2SpecSelector
+ */
+export interface MachineDeploymentV1Beta2SpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema MachineDeploymentV1Beta2SpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: MachineDeploymentV1Beta2SpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema MachineDeploymentV1Beta2SpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecSelector(obj: MachineDeploymentV1Beta2SpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_MachineDeploymentV1Beta2SpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * template describes the machines that will be created.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplate
+ */
+export interface MachineDeploymentV1Beta2SpecTemplate {
+  /**
+   * metadata is the standard object's metadata.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplate#metadata
+   */
+  readonly metadata?: MachineDeploymentV1Beta2SpecTemplateMetadata;
+
+  /**
+   * spec is the specification of the desired behavior of the machine.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplate#spec
+   */
+  readonly spec: MachineDeploymentV1Beta2SpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplate(obj: MachineDeploymentV1Beta2SpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_MachineDeploymentV1Beta2SpecTemplateMetadata(obj.metadata),
+    'spec': toJson_MachineDeploymentV1Beta2SpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * order defines the order in which Machines are deleted when downscaling.
+ * Defaults to "Random".  Valid values are "Random, "Newest", "Oldest"
+ *
+ * @default Random".  Valid values are "Random, "Newest", "Oldest"
+ * @schema MachineDeploymentV1Beta2SpecDeletionOrder
+ */
+export enum MachineDeploymentV1Beta2SpecDeletionOrder {
+  /** Random */
+  RANDOM = "Random",
+  /** Newest */
+  NEWEST = "Newest",
+  /** Oldest */
+  OLDEST = "Oldest",
+}
+
+/**
+ * maxInFlight determines how many in flight remediations should happen at the same time.
+ *
+ * Remediation only happens on the MachineSet with the most current revision, while
+ * older MachineSets (usually present during rollout operations) aren't allowed to remediate.
+ *
+ * Note: In general (independent of remediations), unhealthy machines are always
+ * prioritized during scale down operations over healthy ones.
+ *
+ * MaxInFlight can be set to a fixed number or a percentage.
+ * Example: when this is set to 20%, the MachineSet controller deletes at most 20% of
+ * the desired replicas.
+ *
+ * If not set, remediation is limited to all machines (bounded by replicas)
+ * under the active MachineSet's management.
+ *
+ * @schema MachineDeploymentV1Beta2SpecRemediationMaxInFlight
+ */
+export class MachineDeploymentV1Beta2SpecRemediationMaxInFlight {
+  public static fromNumber(value: number): MachineDeploymentV1Beta2SpecRemediationMaxInFlight {
+    return new MachineDeploymentV1Beta2SpecRemediationMaxInFlight(value);
+  }
+  public static fromString(value: string): MachineDeploymentV1Beta2SpecRemediationMaxInFlight {
+    return new MachineDeploymentV1Beta2SpecRemediationMaxInFlight(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * strategy specifies how to roll out control plane Machines.
+ *
+ * @schema MachineDeploymentV1Beta2SpecRolloutStrategy
+ */
+export interface MachineDeploymentV1Beta2SpecRolloutStrategy {
+  /**
+   * rollingUpdate is the rolling update config params. Present only if
+   * type = RollingUpdate.
+   *
+   * @schema MachineDeploymentV1Beta2SpecRolloutStrategy#rollingUpdate
+   */
+  readonly rollingUpdate?: MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate;
+
+  /**
+   * type of rollout. Allowed values are RollingUpdate and OnDelete.
+   * Default is RollingUpdate.
+   *
+   * @default RollingUpdate.
+   * @schema MachineDeploymentV1Beta2SpecRolloutStrategy#type
+   */
+  readonly type: MachineDeploymentV1Beta2SpecRolloutStrategyType;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecRolloutStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecRolloutStrategy(obj: MachineDeploymentV1Beta2SpecRolloutStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'rollingUpdate': toJson_MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate(obj.rollingUpdate),
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema MachineDeploymentV1Beta2SpecSelectorMatchExpressions
+ */
+export interface MachineDeploymentV1Beta2SpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema MachineDeploymentV1Beta2SpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema MachineDeploymentV1Beta2SpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema MachineDeploymentV1Beta2SpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecSelectorMatchExpressions(obj: MachineDeploymentV1Beta2SpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * metadata is the standard object's metadata.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateMetadata
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateMetadata {
+  /**
+   * annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * labels is a map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateMetadata(obj: MachineDeploymentV1Beta2SpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of the desired behavior of the machine.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpec
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpec {
+  /**
+   * bootstrap is a reference to a local struct which encapsulates
+   * fields to configure the Machine’s bootstrapping mechanism.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#bootstrap
+   */
+  readonly bootstrap: MachineDeploymentV1Beta2SpecTemplateSpecBootstrap;
+
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#deletion
+   */
+  readonly deletion?: MachineDeploymentV1Beta2SpecTemplateSpecDeletion;
+
+  /**
+   * failureDomain is the failure domain the machine will be created in.
+   * Must match the name of a FailureDomain from the Cluster status.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * infrastructureRef is a required reference to a custom resource
+   * offered by an infrastructure provider.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#infrastructureRef
+   */
+  readonly infrastructureRef: MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef;
+
+  /**
+   * minReadySeconds is the minimum number of seconds for which a Machine should be ready before considering it available.
+   * Defaults to 0 (Machine will be considered available as soon as the Machine is ready)
+   *
+   * @default 0 (Machine will be considered available as soon as the Machine is ready)
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#minReadySeconds
+   */
+  readonly minReadySeconds?: number;
+
+  /**
+   * providerID is the identification ID of the machine provided by the provider.
+   * This field must match the provider ID as seen on the node object corresponding to this machine.
+   * This field is required by higher level consumers of cluster-api. Example use case is cluster autoscaler
+   * with cluster-api as provider. Clean-up logic in the autoscaler compares machines to nodes to find out
+   * machines at provider which could not get registered as Kubernetes nodes. With cluster-api as a
+   * generic out-of-tree provider for autoscaler, this field is required by autoscaler to be
+   * able to have a provider view of the list of machines. Another list of nodes is queried from the k8s apiserver
+   * and then a comparison is done to find out unregistered machines and are marked for delete.
+   * This field will be set by the actuators and consumed by higher level entities like autoscaler that will
+   * be interfacing with cluster-api as generic provider.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. by Cluster API control plane providers to extend the semantic of the
+   * Ready condition for the Machine they control, like the kubeadm control provider adding ReadinessGates
+   * for the APIServerPodHealthy, SchedulerPodHealthy conditions, etc.
+   *
+   * Another example are external controllers, e.g. responsible to install special software/hardware on the Machines;
+   * they can include the status of those components with a new condition and add this condition to ReadinessGates.
+   *
+   * NOTE: In case readinessGates conditions start with the APIServer, ControllerManager, Scheduler prefix, and all those
+   * readiness gates condition are reporting the same message, when computing the Machine's Ready condition those
+   * readinessGates will be replaced by a single entry reporting "Control plane components: " + message.
+   * This helps to improve readability of conditions bubbling up to the Machine's owner resource / to the Cluster).
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#readinessGates
+   */
+  readonly readinessGates?: MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates[];
+
+  /**
+   * taints are the node taints that Cluster API will manage.
+   * This list is not necessarily complete: other Kubernetes components may add or remove other taints from nodes,
+   * e.g. the node controller might add the node.kubernetes.io/not-ready taint.
+   * Only those taints defined in this list will be added or removed by core Cluster API controllers.
+   *
+   * There can be at most 64 taints.
+   * A pod would have to tolerate all existing taints to run on the corresponding node.
+   *
+   * NOTE: This list is implemented as a "map" type, meaning that individual elements can be managed by different owners.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#taints
+   */
+  readonly taints?: MachineDeploymentV1Beta2SpecTemplateSpecTaints[];
+
+  /**
+   * version defines the desired Kubernetes version.
+   * This field is meant to be optionally used by bootstrap providers.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpec#version
+   */
+  readonly version?: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpec(obj: MachineDeploymentV1Beta2SpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bootstrap': toJson_MachineDeploymentV1Beta2SpecTemplateSpecBootstrap(obj.bootstrap),
+    'clusterName': obj.clusterName,
+    'deletion': toJson_MachineDeploymentV1Beta2SpecTemplateSpecDeletion(obj.deletion),
+    'failureDomain': obj.failureDomain,
+    'infrastructureRef': toJson_MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef(obj.infrastructureRef),
+    'minReadySeconds': obj.minReadySeconds,
+    'providerID': obj.providerId,
+    'readinessGates': obj.readinessGates?.map(y => toJson_MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates(y)),
+    'taints': obj.taints?.map(y => toJson_MachineDeploymentV1Beta2SpecTemplateSpecTaints(y)),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * rollingUpdate is the rolling update config params. Present only if
+ * type = RollingUpdate.
+ *
+ * @schema MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate
+ */
+export interface MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate {
+  /**
+   * maxSurge is the maximum number of machines that can be scheduled above the
+   * desired number of machines.
+   * Value can be an absolute number (ex: 5) or a percentage of
+   * desired machines (ex: 10%).
+   * This can not be 0 if MaxUnavailable is 0.
+   * Absolute number is calculated from percentage by rounding up.
+   * Defaults to 1.
+   * Example: when this is set to 30%, the new MachineSet can be scaled
+   * up immediately when the rolling update starts, such that the total
+   * number of old and new machines do not exceed 130% of desired
+   * machines. Once old machines have been killed, new MachineSet can
+   * be scaled up further, ensuring that total number of machines running
+   * at any time during the update is at most 130% of desired machines.
+   *
+   * @default 1.
+   * @schema MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate#maxSurge
+   */
+  readonly maxSurge?: MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge;
+
+  /**
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
+   * Value can be an absolute number (ex: 5) or a percentage of desired
+   * machines (ex: 10%).
+   * Absolute number is calculated from percentage by rounding down.
+   * This can not be 0 if MaxSurge is 0.
+   * Defaults to 0.
+   * Example: when this is set to 30%, the old MachineSet can be scaled
+   * down to 70% of desired machines immediately when the rolling update
+   * starts. Once new machines are ready, old MachineSet can be scaled
+   * down further, followed by scaling up the new MachineSet, ensuring
+   * that the total number of machines available at all times
+   * during the update is at least 70% of desired machines.
+   *
+   * @default 0.
+   * @schema MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate#maxUnavailable
+   */
+  readonly maxUnavailable?: MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate(obj: MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'maxSurge': obj.maxSurge?.value,
+    'maxUnavailable': obj.maxUnavailable?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * type of rollout. Allowed values are RollingUpdate and OnDelete.
+ * Default is RollingUpdate.
+ *
+ * @default RollingUpdate.
+ * @schema MachineDeploymentV1Beta2SpecRolloutStrategyType
+ */
+export enum MachineDeploymentV1Beta2SpecRolloutStrategyType {
+  /** RollingUpdate */
+  ROLLING_UPDATE = "RollingUpdate",
+  /** OnDelete */
+  ON_DELETE = "OnDelete",
+}
+
+/**
+ * bootstrap is a reference to a local struct which encapsulates
+ * fields to configure the Machine’s bootstrapping mechanism.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrap
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpecBootstrap {
+  /**
+   * configRef is a reference to a bootstrap provider-specific resource
+   * that holds configuration details. The reference is optional to
+   * allow users/operators to specify Bootstrap.DataSecretName without
+   * the need of a controller.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrap#configRef
+   */
+  readonly configRef?: MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef;
+
+  /**
+   * dataSecretName is the name of the secret that stores the bootstrap data script.
+   * If nil, the Machine should remain in the Pending state.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrap#dataSecretName
+   */
+  readonly dataSecretName?: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpecBootstrap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpecBootstrap(obj: MachineDeploymentV1Beta2SpecTemplateSpecBootstrap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configRef': toJson_MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef(obj.configRef),
+    'dataSecretName': obj.dataSecretName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecDeletion
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpecDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the Machine
+   * hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpecDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpecDeletion(obj: MachineDeploymentV1Beta2SpecTemplateSpecDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * infrastructureRef is a required reference to a custom resource
+ * offered by an infrastructure provider.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef(obj: MachineDeploymentV1Beta2SpecTemplateSpecInfrastructureRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates#polarity
+   */
+  readonly polarity?: MachineDeploymentV1Beta2SpecTemplateSpecReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates(obj: MachineDeploymentV1Beta2SpecTemplateSpecReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineTaint defines a taint equivalent to corev1.Taint, but additionally having a propagation field.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaints
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpecTaints {
+  /**
+   * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaints#effect
+   */
+  readonly effect: MachineDeploymentV1Beta2SpecTemplateSpecTaintsEffect;
+
+  /**
+   * key is the taint key to be applied to a node.
+   * Must be a valid qualified name of maximum size 63 characters
+   * with an optional subdomain prefix of maximum size 253 characters,
+   * separated by a `/`.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaints#key
+   */
+  readonly key: string;
+
+  /**
+   * propagation defines how this taint should be propagated to nodes.
+   * Valid values are 'Always' and 'OnInitialization'.
+   * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+   * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaints#propagation
+   */
+  readonly propagation: MachineDeploymentV1Beta2SpecTemplateSpecTaintsPropagation;
+
+  /**
+   * value is the taint value corresponding to the taint key.
+   * It must be a valid label value of maximum size 63 characters.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaints#value
+   */
+  readonly value?: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpecTaints' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpecTaints(obj: MachineDeploymentV1Beta2SpecTemplateSpecTaints | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'effect': obj.effect,
+    'key': obj.key,
+    'propagation': obj.propagation,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * maxSurge is the maximum number of machines that can be scheduled above the
+ * desired number of machines.
+ * Value can be an absolute number (ex: 5) or a percentage of
+ * desired machines (ex: 10%).
+ * This can not be 0 if MaxUnavailable is 0.
+ * Absolute number is calculated from percentage by rounding up.
+ * Defaults to 1.
+ * Example: when this is set to 30%, the new MachineSet can be scaled
+ * up immediately when the rolling update starts, such that the total
+ * number of old and new machines do not exceed 130% of desired
+ * machines. Once old machines have been killed, new MachineSet can
+ * be scaled up further, ensuring that total number of machines running
+ * at any time during the update is at most 130% of desired machines.
+ *
+ * @default 1.
+ * @schema MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge
+ */
+export class MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge {
+  public static fromNumber(value: number): MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge {
+    return new MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge(value);
+  }
+  public static fromString(value: string): MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge {
+    return new MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
+ * Value can be an absolute number (ex: 5) or a percentage of desired
+ * machines (ex: 10%).
+ * Absolute number is calculated from percentage by rounding down.
+ * This can not be 0 if MaxSurge is 0.
+ * Defaults to 0.
+ * Example: when this is set to 30%, the old MachineSet can be scaled
+ * down to 70% of desired machines immediately when the rolling update
+ * starts. Once new machines are ready, old MachineSet can be scaled
+ * down further, followed by scaling up the new MachineSet, ensuring
+ * that the total number of machines available at all times
+ * during the update is at least 70% of desired machines.
+ *
+ * @default 0.
+ * @schema MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable
+ */
+export class MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable {
+  public static fromNumber(value: number): MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable {
+    return new MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable(value);
+  }
+  public static fromString(value: string): MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable {
+    return new MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * configRef is a reference to a bootstrap provider-specific resource
+ * that holds configuration details. The reference is optional to
+ * allow users/operators to specify Bootstrap.DataSecretName without
+ * the need of a controller.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef
+ */
+export interface MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef(obj: MachineDeploymentV1Beta2SpecTemplateSpecBootstrapConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecReadinessGatesPolarity
+ */
+export enum MachineDeploymentV1Beta2SpecTemplateSpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaintsEffect
+ */
+export enum MachineDeploymentV1Beta2SpecTemplateSpecTaintsEffect {
+  /** NoSchedule */
+  NO_SCHEDULE = "NoSchedule",
+  /** PreferNoSchedule */
+  PREFER_NO_SCHEDULE = "PreferNoSchedule",
+  /** NoExecute */
+  NO_EXECUTE = "NoExecute",
+}
+
+/**
+ * propagation defines how this taint should be propagated to nodes.
+ * Valid values are 'Always' and 'OnInitialization'.
+ * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+ * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+ *
+ * @schema MachineDeploymentV1Beta2SpecTemplateSpecTaintsPropagation
+ */
+export enum MachineDeploymentV1Beta2SpecTemplateSpecTaintsPropagation {
+  /** Always */
+  ALWAYS = "Always",
+  /** OnInitialization */
+  ON_INITIALIZATION = "OnInitialization",
+}
+
 
 /**
  * MachinePool is the Schema for the machinepools API.
@@ -7741,7 +12570,7 @@ export interface MachinePoolProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachinePoolSpec defines the desired state of MachinePool.
+   * spec is the desired state of MachinePool.
    *
    * @schema MachinePool#spec
    */
@@ -7764,7 +12593,7 @@ export function toJson_MachinePoolProps(obj: MachinePoolProps | undefined): Reco
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachinePoolSpec defines the desired state of MachinePool.
+ * spec is the desired state of MachinePool.
  *
  * @schema MachinePoolSpec
  */
@@ -7784,7 +12613,7 @@ export interface MachinePoolSpec {
   readonly failureDomains?: string[];
 
   /**
-   * Minimum number of seconds for which a newly created machine instances should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine instances should
    * be ready.
    * Defaults to 0 (machine instance will be considered available as soon as it
    * is ready)
@@ -7803,7 +12632,7 @@ export interface MachinePoolSpec {
   readonly providerIdList?: string[];
 
   /**
-   * Number of desired machines. Defaults to 1.
+   * replicas is the number of desired machines. Defaults to 1.
    * This is a pointer to distinguish between explicit zero and not specified.
    *
    * @default 1.
@@ -7812,7 +12641,7 @@ export interface MachinePoolSpec {
   readonly replicas?: number;
 
   /**
-   * The deployment strategy to use to replace existing machine instances with
+   * strategy is the deployment strategy to use to replace existing machine instances with
    * new ones.
    *
    * @schema MachinePoolSpec#strategy
@@ -7848,14 +12677,14 @@ export function toJson_MachinePoolSpec(obj: MachinePoolSpec | undefined): Record
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The deployment strategy to use to replace existing machine instances with
+ * strategy is the deployment strategy to use to replace existing machine instances with
  * new ones.
  *
  * @schema MachinePoolSpecStrategy
  */
 export interface MachinePoolSpecStrategy {
   /**
-   * Rolling update config params. Present only if
+   * rollingUpdate is the rolling update config params. Present only if
    * MachineDeploymentStrategyType = RollingUpdate.
    *
    * @schema MachinePoolSpecStrategy#rollingUpdate
@@ -7895,7 +12724,7 @@ export function toJson_MachinePoolSpecStrategy(obj: MachinePoolSpecStrategy | un
  */
 export interface MachinePoolSpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachinePoolSpecTemplate#metadata
@@ -7903,7 +12732,7 @@ export interface MachinePoolSpecTemplate {
   readonly metadata?: MachinePoolSpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachinePoolSpecTemplate#spec
@@ -7927,14 +12756,14 @@ export function toJson_MachinePoolSpecTemplate(obj: MachinePoolSpecTemplate | un
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Rolling update config params. Present only if
+ * rollingUpdate is the rolling update config params. Present only if
  * MachineDeploymentStrategyType = RollingUpdate.
  *
  * @schema MachinePoolSpecStrategyRollingUpdate
  */
 export interface MachinePoolSpecStrategyRollingUpdate {
   /**
-   * The maximum number of machines that can be scheduled above the
+   * maxSurge is the maximum number of machines that can be scheduled above the
    * desired number of machines.
    * Value can be an absolute number (ex: 5) or a percentage of
    * desired machines (ex: 10%).
@@ -7954,7 +12783,7 @@ export interface MachinePoolSpecStrategyRollingUpdate {
   readonly maxSurge?: MachinePoolSpecStrategyRollingUpdateMaxSurge;
 
   /**
-   * The maximum number of machines that can be unavailable during the update.
+   * maxUnavailable is the maximum number of machines that can be unavailable during the update.
    * Value can be an absolute number (ex: 5) or a percentage of desired
    * machines (ex: 10%).
    * Absolute number is calculated from percentage by rounding down.
@@ -7989,7 +12818,7 @@ export function toJson_MachinePoolSpecStrategyRollingUpdate(obj: MachinePoolSpec
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachinePoolSpecTemplateMetadata
@@ -8029,7 +12858,7 @@ export interface MachinePoolSpecTemplateMetadata {
   readonly generateName?: string;
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -8069,7 +12898,7 @@ export interface MachinePoolSpecTemplateMetadata {
   readonly namespace?: string;
 
   /**
-   * List of objects depended by this object. If ALL objects in the list have
+   * ownerReferences is the list of objects depended by this object. If ALL objects in the list have
    * been deleted, this object will be garbage collected. If this object is managed by a controller,
    * then an entry in this list will point to this controller, with the controller field set to true.
    * There cannot be more than one managing controller.
@@ -8101,7 +12930,7 @@ export function toJson_MachinePoolSpecTemplateMetadata(obj: MachinePoolSpecTempl
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachinePoolSpecTemplateSpec
@@ -8193,7 +13022,7 @@ export function toJson_MachinePoolSpecTemplateSpec(obj: MachinePoolSpecTemplateS
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * The maximum number of machines that can be scheduled above the
+ * maxSurge is the maximum number of machines that can be scheduled above the
  * desired number of machines.
  * Value can be an absolute number (ex: 5) or a percentage of
  * desired machines (ex: 10%).
@@ -8222,7 +13051,7 @@ export class MachinePoolSpecStrategyRollingUpdateMaxSurge {
 }
 
 /**
- * The maximum number of machines that can be unavailable during the update.
+ * maxUnavailable is the maximum number of machines that can be unavailable during the update.
  * Value can be an absolute number (ex: 5) or a percentage of desired
  * machines (ex: 10%).
  * Absolute number is calculated from percentage by rounding down.
@@ -8631,7 +13460,7 @@ export interface MachinePoolV1Alpha4Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachinePoolSpec defines the desired state of MachinePool.
+   * spec is the desired state of MachinePool.
    *
    * @schema MachinePoolV1Alpha4#spec
    */
@@ -8654,7 +13483,7 @@ export function toJson_MachinePoolV1Alpha4Props(obj: MachinePoolV1Alpha4Props | 
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachinePoolSpec defines the desired state of MachinePool.
+ * spec is the desired state of MachinePool.
  *
  * @schema MachinePoolV1Alpha4Spec
  */
@@ -8674,7 +13503,7 @@ export interface MachinePoolV1Alpha4Spec {
   readonly failureDomains?: string[];
 
   /**
-   * Minimum number of seconds for which a newly created machine instances should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine instances should
    * be ready.
    * Defaults to 0 (machine instance will be considered available as soon as it
    * is ready)
@@ -8693,7 +13522,7 @@ export interface MachinePoolV1Alpha4Spec {
   readonly providerIdList?: string[];
 
   /**
-   * Number of desired machines. Defaults to 1.
+   * replicas is the number of desired machines. Defaults to 1.
    * This is a pointer to distinguish between explicit zero and not specified.
    *
    * @default 1.
@@ -8735,7 +13564,7 @@ export function toJson_MachinePoolV1Alpha4Spec(obj: MachinePoolV1Alpha4Spec | un
  */
 export interface MachinePoolV1Alpha4SpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachinePoolV1Alpha4SpecTemplate#metadata
@@ -8743,7 +13572,7 @@ export interface MachinePoolV1Alpha4SpecTemplate {
   readonly metadata?: MachinePoolV1Alpha4SpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachinePoolV1Alpha4SpecTemplate#spec
@@ -8767,7 +13596,7 @@ export function toJson_MachinePoolV1Alpha4SpecTemplate(obj: MachinePoolV1Alpha4S
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachinePoolV1Alpha4SpecTemplateMetadata
@@ -8784,7 +13613,7 @@ export interface MachinePoolV1Alpha4SpecTemplateMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -8810,7 +13639,7 @@ export function toJson_MachinePoolV1Alpha4SpecTemplateMetadata(obj: MachinePoolV
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachinePoolV1Alpha4SpecTemplateSpec
@@ -9187,7 +14016,7 @@ export interface MachinePoolV1Beta1Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachinePoolSpec defines the desired state of MachinePool.
+   * spec is the desired state of MachinePool.
    *
    * @schema MachinePoolV1Beta1#spec
    */
@@ -9210,7 +14039,7 @@ export function toJson_MachinePoolV1Beta1Props(obj: MachinePoolV1Beta1Props | un
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachinePoolSpec defines the desired state of MachinePool.
+ * spec is the desired state of MachinePool.
  *
  * @schema MachinePoolV1Beta1Spec
  */
@@ -9230,7 +14059,7 @@ export interface MachinePoolV1Beta1Spec {
   readonly failureDomains?: string[];
 
   /**
-   * Minimum number of seconds for which a newly created machine instances should
+   * minReadySeconds is the minimum number of seconds for which a newly created machine instances should
    * be ready.
    * Defaults to 0 (machine instance will be considered available as soon as it
    * is ready)
@@ -9249,7 +14078,7 @@ export interface MachinePoolV1Beta1Spec {
   readonly providerIdList?: string[];
 
   /**
-   * Number of desired machines. Defaults to 1.
+   * replicas is the number of desired machines. Defaults to 1.
    * This is a pointer to distinguish between explicit zero and not specified.
    *
    * @default 1.
@@ -9291,7 +14120,7 @@ export function toJson_MachinePoolV1Beta1Spec(obj: MachinePoolV1Beta1Spec | unde
  */
 export interface MachinePoolV1Beta1SpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachinePoolV1Beta1SpecTemplate#metadata
@@ -9299,7 +14128,7 @@ export interface MachinePoolV1Beta1SpecTemplate {
   readonly metadata?: MachinePoolV1Beta1SpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachinePoolV1Beta1SpecTemplate#spec
@@ -9323,7 +14152,7 @@ export function toJson_MachinePoolV1Beta1SpecTemplate(obj: MachinePoolV1Beta1Spe
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachinePoolV1Beta1SpecTemplateMetadata
@@ -9340,7 +14169,7 @@ export interface MachinePoolV1Beta1SpecTemplateMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -9366,7 +14195,7 @@ export function toJson_MachinePoolV1Beta1SpecTemplateMetadata(obj: MachinePoolV1
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachinePoolV1Beta1SpecTemplateSpec
@@ -9634,13 +14463,24 @@ export function toJson_MachinePoolV1Beta1SpecTemplateSpecInfrastructureRef(obj: 
  */
 export interface MachinePoolV1Beta1SpecTemplateSpecReadinessGates {
   /**
-   * conditionType refers to a positive polarity condition (status true means good) with matching type in the Machine's condition list.
+   * conditionType refers to a condition with matching type in the Machine's condition list.
    * If the conditions doesn't exist, it will be treated as unknown.
    * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
    *
    * @schema MachinePoolV1Beta1SpecTemplateSpecReadinessGates#conditionType
    */
   readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachinePoolV1Beta1SpecTemplateSpecReadinessGates#polarity
+   */
+  readonly polarity?: MachinePoolV1Beta1SpecTemplateSpecReadinessGatesPolarity;
 }
 
 /**
@@ -9651,6 +14491,7 @@ export function toJson_MachinePoolV1Beta1SpecTemplateSpecReadinessGates(obj: Mac
   if (obj === undefined) { return undefined; }
   const result = {
     'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -9747,6 +14588,732 @@ export function toJson_MachinePoolV1Beta1SpecTemplateSpecBootstrapConfigRef(obj:
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachinePoolV1Beta1SpecTemplateSpecReadinessGatesPolarity
+ */
+export enum MachinePoolV1Beta1SpecTemplateSpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+
+/**
+ * MachinePool is the Schema for the machinepools API.
+NOTE: This CRD can only be used if the MachinePool feature gate is enabled.
+ *
+ * @schema MachinePoolV1Beta2
+ */
+export class MachinePoolV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachinePoolV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta2',
+    kind: 'MachinePool',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachinePoolV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachinePoolV1Beta2Props): any {
+    return {
+      ...MachinePoolV1Beta2.GVK,
+      ...toJson_MachinePoolV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachinePoolV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachinePoolV1Beta2Props) {
+    super(scope, id, {
+      ...MachinePoolV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachinePoolV1Beta2.GVK,
+      ...toJson_MachinePoolV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * MachinePool is the Schema for the machinepools API.
+ * NOTE: This CRD can only be used if the MachinePool feature gate is enabled.
+ *
+ * @schema MachinePoolV1Beta2
+ */
+export interface MachinePoolV1Beta2Props {
+  /**
+   * @schema MachinePoolV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the desired state of MachinePool.
+   *
+   * @schema MachinePoolV1Beta2#spec
+   */
+  readonly spec: MachinePoolV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2Props(obj: MachinePoolV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachinePoolV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the desired state of MachinePool.
+ *
+ * @schema MachinePoolV1Beta2Spec
+ */
+export interface MachinePoolV1Beta2Spec {
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachinePoolV1Beta2Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * failureDomains is the list of failure domains this MachinePool should be attached to.
+   *
+   * @schema MachinePoolV1Beta2Spec#failureDomains
+   */
+  readonly failureDomains?: string[];
+
+  /**
+   * providerIDList are the identification IDs of machine instances provided by the provider.
+   * This field must match the provider IDs as seen on the node objects corresponding to a machine pool's machine instances.
+   *
+   * @schema MachinePoolV1Beta2Spec#providerIDList
+   */
+  readonly providerIdList?: string[];
+
+  /**
+   * replicas is the number of desired machines. Defaults to 1.
+   * This is a pointer to distinguish between explicit zero and not specified.
+   *
+   * @default 1.
+   * @schema MachinePoolV1Beta2Spec#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * template describes the machines that will be created.
+   *
+   * @schema MachinePoolV1Beta2Spec#template
+   */
+  readonly template: MachinePoolV1Beta2SpecTemplate;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2Spec(obj: MachinePoolV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'failureDomains': obj.failureDomains?.map(y => y),
+    'providerIDList': obj.providerIdList?.map(y => y),
+    'replicas': obj.replicas,
+    'template': toJson_MachinePoolV1Beta2SpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * template describes the machines that will be created.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplate
+ */
+export interface MachinePoolV1Beta2SpecTemplate {
+  /**
+   * metadata is the standard object's metadata.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+   *
+   * @schema MachinePoolV1Beta2SpecTemplate#metadata
+   */
+  readonly metadata?: MachinePoolV1Beta2SpecTemplateMetadata;
+
+  /**
+   * spec is the specification of the desired behavior of the machine.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+   *
+   * @schema MachinePoolV1Beta2SpecTemplate#spec
+   */
+  readonly spec: MachinePoolV1Beta2SpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplate(obj: MachinePoolV1Beta2SpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_MachinePoolV1Beta2SpecTemplateMetadata(obj.metadata),
+    'spec': toJson_MachinePoolV1Beta2SpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * metadata is the standard object's metadata.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateMetadata
+ */
+export interface MachinePoolV1Beta2SpecTemplateMetadata {
+  /**
+   * annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * labels is a map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateMetadata(obj: MachinePoolV1Beta2SpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of the desired behavior of the machine.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpec
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpec {
+  /**
+   * bootstrap is a reference to a local struct which encapsulates
+   * fields to configure the Machine’s bootstrapping mechanism.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#bootstrap
+   */
+  readonly bootstrap: MachinePoolV1Beta2SpecTemplateSpecBootstrap;
+
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#deletion
+   */
+  readonly deletion?: MachinePoolV1Beta2SpecTemplateSpecDeletion;
+
+  /**
+   * failureDomain is the failure domain the machine will be created in.
+   * Must match the name of a FailureDomain from the Cluster status.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * infrastructureRef is a required reference to a custom resource
+   * offered by an infrastructure provider.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#infrastructureRef
+   */
+  readonly infrastructureRef: MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef;
+
+  /**
+   * minReadySeconds is the minimum number of seconds for which a Machine should be ready before considering it available.
+   * Defaults to 0 (Machine will be considered available as soon as the Machine is ready)
+   *
+   * @default 0 (Machine will be considered available as soon as the Machine is ready)
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#minReadySeconds
+   */
+  readonly minReadySeconds?: number;
+
+  /**
+   * providerID is the identification ID of the machine provided by the provider.
+   * This field must match the provider ID as seen on the node object corresponding to this machine.
+   * This field is required by higher level consumers of cluster-api. Example use case is cluster autoscaler
+   * with cluster-api as provider. Clean-up logic in the autoscaler compares machines to nodes to find out
+   * machines at provider which could not get registered as Kubernetes nodes. With cluster-api as a
+   * generic out-of-tree provider for autoscaler, this field is required by autoscaler to be
+   * able to have a provider view of the list of machines. Another list of nodes is queried from the k8s apiserver
+   * and then a comparison is done to find out unregistered machines and are marked for delete.
+   * This field will be set by the actuators and consumed by higher level entities like autoscaler that will
+   * be interfacing with cluster-api as generic provider.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. by Cluster API control plane providers to extend the semantic of the
+   * Ready condition for the Machine they control, like the kubeadm control provider adding ReadinessGates
+   * for the APIServerPodHealthy, SchedulerPodHealthy conditions, etc.
+   *
+   * Another example are external controllers, e.g. responsible to install special software/hardware on the Machines;
+   * they can include the status of those components with a new condition and add this condition to ReadinessGates.
+   *
+   * NOTE: In case readinessGates conditions start with the APIServer, ControllerManager, Scheduler prefix, and all those
+   * readiness gates condition are reporting the same message, when computing the Machine's Ready condition those
+   * readinessGates will be replaced by a single entry reporting "Control plane components: " + message.
+   * This helps to improve readability of conditions bubbling up to the Machine's owner resource / to the Cluster).
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#readinessGates
+   */
+  readonly readinessGates?: MachinePoolV1Beta2SpecTemplateSpecReadinessGates[];
+
+  /**
+   * taints are the node taints that Cluster API will manage.
+   * This list is not necessarily complete: other Kubernetes components may add or remove other taints from nodes,
+   * e.g. the node controller might add the node.kubernetes.io/not-ready taint.
+   * Only those taints defined in this list will be added or removed by core Cluster API controllers.
+   *
+   * There can be at most 64 taints.
+   * A pod would have to tolerate all existing taints to run on the corresponding node.
+   *
+   * NOTE: This list is implemented as a "map" type, meaning that individual elements can be managed by different owners.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#taints
+   */
+  readonly taints?: MachinePoolV1Beta2SpecTemplateSpecTaints[];
+
+  /**
+   * version defines the desired Kubernetes version.
+   * This field is meant to be optionally used by bootstrap providers.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpec#version
+   */
+  readonly version?: string;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpec(obj: MachinePoolV1Beta2SpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bootstrap': toJson_MachinePoolV1Beta2SpecTemplateSpecBootstrap(obj.bootstrap),
+    'clusterName': obj.clusterName,
+    'deletion': toJson_MachinePoolV1Beta2SpecTemplateSpecDeletion(obj.deletion),
+    'failureDomain': obj.failureDomain,
+    'infrastructureRef': toJson_MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef(obj.infrastructureRef),
+    'minReadySeconds': obj.minReadySeconds,
+    'providerID': obj.providerId,
+    'readinessGates': obj.readinessGates?.map(y => toJson_MachinePoolV1Beta2SpecTemplateSpecReadinessGates(y)),
+    'taints': obj.taints?.map(y => toJson_MachinePoolV1Beta2SpecTemplateSpecTaints(y)),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * bootstrap is a reference to a local struct which encapsulates
+ * fields to configure the Machine’s bootstrapping mechanism.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrap
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpecBootstrap {
+  /**
+   * configRef is a reference to a bootstrap provider-specific resource
+   * that holds configuration details. The reference is optional to
+   * allow users/operators to specify Bootstrap.DataSecretName without
+   * the need of a controller.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrap#configRef
+   */
+  readonly configRef?: MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef;
+
+  /**
+   * dataSecretName is the name of the secret that stores the bootstrap data script.
+   * If nil, the Machine should remain in the Pending state.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrap#dataSecretName
+   */
+  readonly dataSecretName?: string;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpecBootstrap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpecBootstrap(obj: MachinePoolV1Beta2SpecTemplateSpecBootstrap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configRef': toJson_MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef(obj.configRef),
+    'dataSecretName': obj.dataSecretName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecDeletion
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpecDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the Machine
+   * hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema MachinePoolV1Beta2SpecTemplateSpecDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpecDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpecDeletion(obj: MachinePoolV1Beta2SpecTemplateSpecDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * infrastructureRef is a required reference to a custom resource
+ * offered by an infrastructure provider.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef(obj: MachinePoolV1Beta2SpecTemplateSpecInfrastructureRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecReadinessGates
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpecReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecReadinessGates#polarity
+   */
+  readonly polarity?: MachinePoolV1Beta2SpecTemplateSpecReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpecReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpecReadinessGates(obj: MachinePoolV1Beta2SpecTemplateSpecReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineTaint defines a taint equivalent to corev1.Taint, but additionally having a propagation field.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecTaints
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpecTaints {
+  /**
+   * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecTaints#effect
+   */
+  readonly effect: MachinePoolV1Beta2SpecTemplateSpecTaintsEffect;
+
+  /**
+   * key is the taint key to be applied to a node.
+   * Must be a valid qualified name of maximum size 63 characters
+   * with an optional subdomain prefix of maximum size 253 characters,
+   * separated by a `/`.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecTaints#key
+   */
+  readonly key: string;
+
+  /**
+   * propagation defines how this taint should be propagated to nodes.
+   * Valid values are 'Always' and 'OnInitialization'.
+   * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+   * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecTaints#propagation
+   */
+  readonly propagation: MachinePoolV1Beta2SpecTemplateSpecTaintsPropagation;
+
+  /**
+   * value is the taint value corresponding to the taint key.
+   * It must be a valid label value of maximum size 63 characters.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecTaints#value
+   */
+  readonly value?: string;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpecTaints' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpecTaints(obj: MachinePoolV1Beta2SpecTemplateSpecTaints | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'effect': obj.effect,
+    'key': obj.key,
+    'propagation': obj.propagation,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configRef is a reference to a bootstrap provider-specific resource
+ * that holds configuration details. The reference is optional to
+ * allow users/operators to specify Bootstrap.DataSecretName without
+ * the need of a controller.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef
+ */
+export interface MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef(obj: MachinePoolV1Beta2SpecTemplateSpecBootstrapConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecReadinessGatesPolarity
+ */
+export enum MachinePoolV1Beta2SpecTemplateSpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecTaintsEffect
+ */
+export enum MachinePoolV1Beta2SpecTemplateSpecTaintsEffect {
+  /** NoSchedule */
+  NO_SCHEDULE = "NoSchedule",
+  /** PreferNoSchedule */
+  PREFER_NO_SCHEDULE = "PreferNoSchedule",
+  /** NoExecute */
+  NO_EXECUTE = "NoExecute",
+}
+
+/**
+ * propagation defines how this taint should be propagated to nodes.
+ * Valid values are 'Always' and 'OnInitialization'.
+ * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+ * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+ *
+ * @schema MachinePoolV1Beta2SpecTemplateSpecTaintsPropagation
+ */
+export enum MachinePoolV1Beta2SpecTemplateSpecTaintsPropagation {
+  /** Always */
+  ALWAYS = "Always",
+  /** OnInitialization */
+  ON_INITIALIZATION = "OnInitialization",
+}
+
 
 /**
  * MachineSet is the Schema for the machinesets API.
@@ -9818,7 +15385,7 @@ export interface MachineSetProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineSetSpec defines the desired state of MachineSet.
+   * spec is the desired state of MachineSet.
    *
    * @schema MachineSet#spec
    */
@@ -9841,7 +15408,7 @@ export function toJson_MachineSetProps(obj: MachineSetProps | undefined): Record
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineSetSpec defines the desired state of MachineSet.
+ * spec is the desired state of MachineSet.
  *
  * @schema MachineSetSpec
  */
@@ -9986,7 +15553,7 @@ export function toJson_MachineSetSpecSelector(obj: MachineSetSpecSelector | unde
  */
 export interface MachineSetSpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachineSetSpecTemplate#metadata
@@ -9994,7 +15561,7 @@ export interface MachineSetSpecTemplate {
   readonly metadata?: MachineSetSpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachineSetSpecTemplate#spec
@@ -10067,7 +15634,7 @@ export function toJson_MachineSetSpecSelectorMatchExpressions(obj: MachineSetSpe
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachineSetSpecTemplateMetadata
@@ -10107,7 +15674,7 @@ export interface MachineSetSpecTemplateMetadata {
   readonly generateName?: string;
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -10147,7 +15714,7 @@ export interface MachineSetSpecTemplateMetadata {
   readonly namespace?: string;
 
   /**
-   * List of objects depended by this object. If ALL objects in the list have
+   * ownerReferences is the list of objects depended by this object. If ALL objects in the list have
    * been deleted, this object will be garbage collected. If this object is managed by a controller,
    * then an entry in this list will point to this controller, with the controller field set to true.
    * There cannot be more than one managing controller.
@@ -10179,7 +15746,7 @@ export function toJson_MachineSetSpecTemplateMetadata(obj: MachineSetSpecTemplat
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachineSetSpecTemplateSpec
@@ -10652,7 +16219,7 @@ export interface MachineSetV1Alpha4Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineSetSpec defines the desired state of MachineSet.
+   * spec is the desired state of MachineSet.
    *
    * @schema MachineSetV1Alpha4#spec
    */
@@ -10675,7 +16242,7 @@ export function toJson_MachineSetV1Alpha4Props(obj: MachineSetV1Alpha4Props | un
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineSetSpec defines the desired state of MachineSet.
+ * spec is the desired state of MachineSet.
  *
  * @schema MachineSetV1Alpha4Spec
  */
@@ -10820,7 +16387,7 @@ export function toJson_MachineSetV1Alpha4SpecSelector(obj: MachineSetV1Alpha4Spe
  */
 export interface MachineSetV1Alpha4SpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachineSetV1Alpha4SpecTemplate#metadata
@@ -10828,7 +16395,7 @@ export interface MachineSetV1Alpha4SpecTemplate {
   readonly metadata?: MachineSetV1Alpha4SpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachineSetV1Alpha4SpecTemplate#spec
@@ -10901,7 +16468,7 @@ export function toJson_MachineSetV1Alpha4SpecSelectorMatchExpressions(obj: Machi
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachineSetV1Alpha4SpecTemplateMetadata
@@ -10918,7 +16485,7 @@ export interface MachineSetV1Alpha4SpecTemplateMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -10944,7 +16511,7 @@ export function toJson_MachineSetV1Alpha4SpecTemplateMetadata(obj: MachineSetV1A
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachineSetV1Alpha4SpecTemplateSpec
@@ -11321,7 +16888,7 @@ export interface MachineSetV1Beta1Props {
   readonly metadata?: ApiObjectMetadata;
 
   /**
-   * MachineSetSpec defines the desired state of MachineSet.
+   * spec is the desired state of MachineSet.
    *
    * @schema MachineSetV1Beta1#spec
    */
@@ -11344,7 +16911,7 @@ export function toJson_MachineSetV1Beta1Props(obj: MachineSetV1Beta1Props | unde
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * MachineSetSpec defines the desired state of MachineSet.
+ * spec is the desired state of MachineSet.
  *
  * @schema MachineSetV1Beta1Spec
  */
@@ -11364,6 +16931,14 @@ export interface MachineSetV1Beta1Spec {
    * @schema MachineSetV1Beta1Spec#deletePolicy
    */
   readonly deletePolicy?: MachineSetV1Beta1SpecDeletePolicy;
+
+  /**
+   * machineNamingStrategy allows changing the naming pattern used when creating Machines.
+   * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+   *
+   * @schema MachineSetV1Beta1Spec#machineNamingStrategy
+   */
+  readonly machineNamingStrategy?: MachineSetV1Beta1SpecMachineNamingStrategy;
 
   /**
    * minReadySeconds is the minimum number of seconds for which a Node for a newly created machine should be ready before considering the replica available.
@@ -11427,6 +17002,7 @@ export function toJson_MachineSetV1Beta1Spec(obj: MachineSetV1Beta1Spec | undefi
   const result = {
     'clusterName': obj.clusterName,
     'deletePolicy': obj.deletePolicy,
+    'machineNamingStrategy': toJson_MachineSetV1Beta1SpecMachineNamingStrategy(obj.machineNamingStrategy),
     'minReadySeconds': obj.minReadySeconds,
     'replicas': obj.replicas,
     'selector': toJson_MachineSetV1Beta1SpecSelector(obj.selector),
@@ -11452,6 +17028,50 @@ export enum MachineSetV1Beta1SpecDeletePolicy {
   /** Oldest */
   OLDEST = "Oldest",
 }
+
+/**
+ * machineNamingStrategy allows changing the naming pattern used when creating Machines.
+ * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+ *
+ * @schema MachineSetV1Beta1SpecMachineNamingStrategy
+ */
+export interface MachineSetV1Beta1SpecMachineNamingStrategy {
+  /**
+   * template defines the template to use for generating the names of the
+   * Machine objects.
+   * If not defined, it will fallback to `{{ .machineSet.name }}-{{ .random }}`.
+   * If the generated name string exceeds 63 characters, it will be trimmed to
+   * 58 characters and will
+   * get concatenated with a random suffix of length 5.
+   * Length of the template string must not exceed 256 characters.
+   * The template allows the following variables `.cluster.name`,
+   * `.machineSet.name` and `.random`.
+   * The variable `.cluster.name` retrieves the name of the cluster object
+   * that owns the Machines being created.
+   * The variable `.machineSet.name` retrieves the name of the MachineSet
+   * object that owns the Machines being created.
+   * The variable `.random` is substituted with random alphanumeric string,
+   * without vowels, of length 5. This variable is required part of the
+   * template. If not provided, validation will fail.
+   *
+   * @schema MachineSetV1Beta1SpecMachineNamingStrategy#template
+   */
+  readonly template?: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta1SpecMachineNamingStrategy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta1SpecMachineNamingStrategy(obj: MachineSetV1Beta1SpecMachineNamingStrategy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': obj.template,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
  * selector is a label query over machines that should match the replica count.
@@ -11503,7 +17123,7 @@ export function toJson_MachineSetV1Beta1SpecSelector(obj: MachineSetV1Beta1SpecS
  */
 export interface MachineSetV1Beta1SpecTemplate {
   /**
-   * Standard object's metadata.
+   * metadata is the standard object's metadata.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
    *
    * @schema MachineSetV1Beta1SpecTemplate#metadata
@@ -11511,7 +17131,7 @@ export interface MachineSetV1Beta1SpecTemplate {
   readonly metadata?: MachineSetV1Beta1SpecTemplateMetadata;
 
   /**
-   * Specification of the desired behavior of the machine.
+   * spec is the specification of the desired behavior of the machine.
    * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
    *
    * @schema MachineSetV1Beta1SpecTemplate#spec
@@ -11584,7 +17204,7 @@ export function toJson_MachineSetV1Beta1SpecSelectorMatchExpressions(obj: Machin
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Standard object's metadata.
+ * metadata is the standard object's metadata.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
  *
  * @schema MachineSetV1Beta1SpecTemplateMetadata
@@ -11601,7 +17221,7 @@ export interface MachineSetV1Beta1SpecTemplateMetadata {
   readonly annotations?: { [key: string]: string };
 
   /**
-   * Map of string keys and values that can be used to organize and categorize
+   * labels is a map of string keys and values that can be used to organize and categorize
    * (scope and select) objects. May match selectors of replication controllers
    * and services.
    * More info: http://kubernetes.io/docs/user-guide/labels
@@ -11627,7 +17247,7 @@ export function toJson_MachineSetV1Beta1SpecTemplateMetadata(obj: MachineSetV1Be
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Specification of the desired behavior of the machine.
+ * spec is the specification of the desired behavior of the machine.
  * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
  *
  * @schema MachineSetV1Beta1SpecTemplateSpec
@@ -11895,13 +17515,24 @@ export function toJson_MachineSetV1Beta1SpecTemplateSpecInfrastructureRef(obj: M
  */
 export interface MachineSetV1Beta1SpecTemplateSpecReadinessGates {
   /**
-   * conditionType refers to a positive polarity condition (status true means good) with matching type in the Machine's condition list.
+   * conditionType refers to a condition with matching type in the Machine's condition list.
    * If the conditions doesn't exist, it will be treated as unknown.
    * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
    *
    * @schema MachineSetV1Beta1SpecTemplateSpecReadinessGates#conditionType
    */
   readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachineSetV1Beta1SpecTemplateSpecReadinessGates#polarity
+   */
+  readonly polarity?: MachineSetV1Beta1SpecTemplateSpecReadinessGatesPolarity;
 }
 
 /**
@@ -11912,6 +17543,7 @@ export function toJson_MachineSetV1Beta1SpecTemplateSpecReadinessGates(obj: Mach
   if (obj === undefined) { return undefined; }
   const result = {
     'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -12007,4 +17639,938 @@ export function toJson_MachineSetV1Beta1SpecTemplateSpecBootstrapConfigRef(obj: 
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachineSetV1Beta1SpecTemplateSpecReadinessGatesPolarity
+ */
+export enum MachineSetV1Beta1SpecTemplateSpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+
+/**
+ * MachineSet is the Schema for the machinesets API.
+ *
+ * @schema MachineSetV1Beta2
+ */
+export class MachineSetV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineSetV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta2',
+    kind: 'MachineSet',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineSetV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineSetV1Beta2Props): any {
+    return {
+      ...MachineSetV1Beta2.GVK,
+      ...toJson_MachineSetV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineSetV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineSetV1Beta2Props) {
+    super(scope, id, {
+      ...MachineSetV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineSetV1Beta2.GVK,
+      ...toJson_MachineSetV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * MachineSet is the Schema for the machinesets API.
+ *
+ * @schema MachineSetV1Beta2
+ */
+export interface MachineSetV1Beta2Props {
+  /**
+   * @schema MachineSetV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the desired state of MachineSet.
+   *
+   * @schema MachineSetV1Beta2#spec
+   */
+  readonly spec: MachineSetV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2Props(obj: MachineSetV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineSetV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the desired state of MachineSet.
+ *
+ * @schema MachineSetV1Beta2Spec
+ */
+export interface MachineSetV1Beta2Spec {
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineSetV1Beta2Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * deletion contains configuration options for MachineSet deletion.
+   *
+   * @schema MachineSetV1Beta2Spec#deletion
+   */
+  readonly deletion?: MachineSetV1Beta2SpecDeletion;
+
+  /**
+   * machineNaming allows changing the naming pattern used when creating Machines.
+   * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+   *
+   * @schema MachineSetV1Beta2Spec#machineNaming
+   */
+  readonly machineNaming?: MachineSetV1Beta2SpecMachineNaming;
+
+  /**
+   * replicas is the number of desired replicas.
+   * This is a pointer to distinguish between explicit zero and unspecified.
+   *
+   * Defaults to:
+   * * if the Kubernetes autoscaler min size and max size annotations are set:
+   * - if it's a new MachineSet, use min size
+   * - if the replicas field of the old MachineSet is < min size, use min size
+   * - if the replicas field of the old MachineSet is > max size, use max size
+   * - if the replicas field of the old MachineSet is in the (min size, max size) range, keep the value from the oldMS
+   * * otherwise use 1
+   * Note: Defaulting will be run whenever the replicas field is not set:
+   * * A new MachineSet is created with replicas not set.
+   * * On an existing MachineSet the replicas field was first set and is now unset.
+   * Those cases are especially relevant for the following Kubernetes autoscaler use cases:
+   * * A new MachineSet is created and replicas should be managed by the autoscaler
+   * * An existing MachineSet which initially wasn't controlled by the autoscaler
+   * should be later controlled by the autoscaler
+   *
+   * @default if the Kubernetes autoscaler min size and max size annotations are set:
+   * @schema MachineSetV1Beta2Spec#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * selector is a label query over machines that should match the replica count.
+   * Label keys and values that must match in order to be controlled by this MachineSet.
+   * It must match the machine template's labels.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors
+   *
+   * @schema MachineSetV1Beta2Spec#selector
+   */
+  readonly selector: MachineSetV1Beta2SpecSelector;
+
+  /**
+   * template is the object that describes the machine that will be created if
+   * insufficient replicas are detected.
+   * Object references to custom resources are treated as templates.
+   *
+   * @schema MachineSetV1Beta2Spec#template
+   */
+  readonly template: MachineSetV1Beta2SpecTemplate;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2Spec(obj: MachineSetV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'deletion': toJson_MachineSetV1Beta2SpecDeletion(obj.deletion),
+    'machineNaming': toJson_MachineSetV1Beta2SpecMachineNaming(obj.machineNaming),
+    'replicas': obj.replicas,
+    'selector': toJson_MachineSetV1Beta2SpecSelector(obj.selector),
+    'template': toJson_MachineSetV1Beta2SpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for MachineSet deletion.
+ *
+ * @schema MachineSetV1Beta2SpecDeletion
+ */
+export interface MachineSetV1Beta2SpecDeletion {
+  /**
+   * order defines the order in which Machines are deleted when downscaling.
+   * Defaults to "Random".  Valid values are "Random, "Newest", "Oldest"
+   *
+   * @default Random".  Valid values are "Random, "Newest", "Oldest"
+   * @schema MachineSetV1Beta2SpecDeletion#order
+   */
+  readonly order?: MachineSetV1Beta2SpecDeletionOrder;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecDeletion(obj: MachineSetV1Beta2SpecDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'order': obj.order,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * machineNaming allows changing the naming pattern used when creating Machines.
+ * Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.
+ *
+ * @schema MachineSetV1Beta2SpecMachineNaming
+ */
+export interface MachineSetV1Beta2SpecMachineNaming {
+  /**
+   * template defines the template to use for generating the names of the
+   * Machine objects.
+   * If not defined, it will fallback to `{{ .machineSet.name }}-{{ .random }}`.
+   * If the generated name string exceeds 63 characters, it will be trimmed to
+   * 58 characters and will
+   * get concatenated with a random suffix of length 5.
+   * Length of the template string must not exceed 256 characters.
+   * The template allows the following variables `.cluster.name`,
+   * `.machineSet.name` and `.random`.
+   * The variable `.cluster.name` retrieves the name of the cluster object
+   * that owns the Machines being created.
+   * The variable `.machineSet.name` retrieves the name of the MachineSet
+   * object that owns the Machines being created.
+   * The variable `.random` is substituted with random alphanumeric string,
+   * without vowels, of length 5. This variable is required part of the
+   * template. If not provided, validation will fail.
+   *
+   * @schema MachineSetV1Beta2SpecMachineNaming#template
+   */
+  readonly template?: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecMachineNaming' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecMachineNaming(obj: MachineSetV1Beta2SpecMachineNaming | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': obj.template,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is a label query over machines that should match the replica count.
+ * Label keys and values that must match in order to be controlled by this MachineSet.
+ * It must match the machine template's labels.
+ * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors
+ *
+ * @schema MachineSetV1Beta2SpecSelector
+ */
+export interface MachineSetV1Beta2SpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema MachineSetV1Beta2SpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: MachineSetV1Beta2SpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema MachineSetV1Beta2SpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecSelector(obj: MachineSetV1Beta2SpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_MachineSetV1Beta2SpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * template is the object that describes the machine that will be created if
+ * insufficient replicas are detected.
+ * Object references to custom resources are treated as templates.
+ *
+ * @schema MachineSetV1Beta2SpecTemplate
+ */
+export interface MachineSetV1Beta2SpecTemplate {
+  /**
+   * metadata is the standard object's metadata.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+   *
+   * @schema MachineSetV1Beta2SpecTemplate#metadata
+   */
+  readonly metadata?: MachineSetV1Beta2SpecTemplateMetadata;
+
+  /**
+   * spec is the specification of the desired behavior of the machine.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+   *
+   * @schema MachineSetV1Beta2SpecTemplate#spec
+   */
+  readonly spec: MachineSetV1Beta2SpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplate(obj: MachineSetV1Beta2SpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_MachineSetV1Beta2SpecTemplateMetadata(obj.metadata),
+    'spec': toJson_MachineSetV1Beta2SpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * order defines the order in which Machines are deleted when downscaling.
+ * Defaults to "Random".  Valid values are "Random, "Newest", "Oldest"
+ *
+ * @default Random".  Valid values are "Random, "Newest", "Oldest"
+ * @schema MachineSetV1Beta2SpecDeletionOrder
+ */
+export enum MachineSetV1Beta2SpecDeletionOrder {
+  /** Random */
+  RANDOM = "Random",
+  /** Newest */
+  NEWEST = "Newest",
+  /** Oldest */
+  OLDEST = "Oldest",
+}
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema MachineSetV1Beta2SpecSelectorMatchExpressions
+ */
+export interface MachineSetV1Beta2SpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema MachineSetV1Beta2SpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema MachineSetV1Beta2SpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema MachineSetV1Beta2SpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecSelectorMatchExpressions(obj: MachineSetV1Beta2SpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * metadata is the standard object's metadata.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+ *
+ * @schema MachineSetV1Beta2SpecTemplateMetadata
+ */
+export interface MachineSetV1Beta2SpecTemplateMetadata {
+  /**
+   * annotations is an unstructured key value map stored with a resource that may be
+   * set by external tools to store and retrieve arbitrary metadata. They are not
+   * queryable and should be preserved when modifying objects.
+   * More info: http://kubernetes.io/docs/user-guide/annotations
+   *
+   * @schema MachineSetV1Beta2SpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * labels is a map of string keys and values that can be used to organize and categorize
+   * (scope and select) objects. May match selectors of replication controllers
+   * and services.
+   * More info: http://kubernetes.io/docs/user-guide/labels
+   *
+   * @schema MachineSetV1Beta2SpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateMetadata(obj: MachineSetV1Beta2SpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of the desired behavior of the machine.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpec
+ */
+export interface MachineSetV1Beta2SpecTemplateSpec {
+  /**
+   * bootstrap is a reference to a local struct which encapsulates
+   * fields to configure the Machine’s bootstrapping mechanism.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#bootstrap
+   */
+  readonly bootstrap: MachineSetV1Beta2SpecTemplateSpecBootstrap;
+
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * deletion contains configuration options for Machine deletion.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#deletion
+   */
+  readonly deletion?: MachineSetV1Beta2SpecTemplateSpecDeletion;
+
+  /**
+   * failureDomain is the failure domain the machine will be created in.
+   * Must match the name of a FailureDomain from the Cluster status.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#failureDomain
+   */
+  readonly failureDomain?: string;
+
+  /**
+   * infrastructureRef is a required reference to a custom resource
+   * offered by an infrastructure provider.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#infrastructureRef
+   */
+  readonly infrastructureRef: MachineSetV1Beta2SpecTemplateSpecInfrastructureRef;
+
+  /**
+   * minReadySeconds is the minimum number of seconds for which a Machine should be ready before considering it available.
+   * Defaults to 0 (Machine will be considered available as soon as the Machine is ready)
+   *
+   * @default 0 (Machine will be considered available as soon as the Machine is ready)
+   * @schema MachineSetV1Beta2SpecTemplateSpec#minReadySeconds
+   */
+  readonly minReadySeconds?: number;
+
+  /**
+   * providerID is the identification ID of the machine provided by the provider.
+   * This field must match the provider ID as seen on the node object corresponding to this machine.
+   * This field is required by higher level consumers of cluster-api. Example use case is cluster autoscaler
+   * with cluster-api as provider. Clean-up logic in the autoscaler compares machines to nodes to find out
+   * machines at provider which could not get registered as Kubernetes nodes. With cluster-api as a
+   * generic out-of-tree provider for autoscaler, this field is required by autoscaler to be
+   * able to have a provider view of the list of machines. Another list of nodes is queried from the k8s apiserver
+   * and then a comparison is done to find out unregistered machines and are marked for delete.
+   * This field will be set by the actuators and consumed by higher level entities like autoscaler that will
+   * be interfacing with cluster-api as generic provider.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#providerID
+   */
+  readonly providerId?: string;
+
+  /**
+   * readinessGates specifies additional conditions to include when evaluating Machine Ready condition.
+   *
+   * This field can be used e.g. by Cluster API control plane providers to extend the semantic of the
+   * Ready condition for the Machine they control, like the kubeadm control provider adding ReadinessGates
+   * for the APIServerPodHealthy, SchedulerPodHealthy conditions, etc.
+   *
+   * Another example are external controllers, e.g. responsible to install special software/hardware on the Machines;
+   * they can include the status of those components with a new condition and add this condition to ReadinessGates.
+   *
+   * NOTE: In case readinessGates conditions start with the APIServer, ControllerManager, Scheduler prefix, and all those
+   * readiness gates condition are reporting the same message, when computing the Machine's Ready condition those
+   * readinessGates will be replaced by a single entry reporting "Control plane components: " + message.
+   * This helps to improve readability of conditions bubbling up to the Machine's owner resource / to the Cluster).
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#readinessGates
+   */
+  readonly readinessGates?: MachineSetV1Beta2SpecTemplateSpecReadinessGates[];
+
+  /**
+   * taints are the node taints that Cluster API will manage.
+   * This list is not necessarily complete: other Kubernetes components may add or remove other taints from nodes,
+   * e.g. the node controller might add the node.kubernetes.io/not-ready taint.
+   * Only those taints defined in this list will be added or removed by core Cluster API controllers.
+   *
+   * There can be at most 64 taints.
+   * A pod would have to tolerate all existing taints to run on the corresponding node.
+   *
+   * NOTE: This list is implemented as a "map" type, meaning that individual elements can be managed by different owners.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#taints
+   */
+  readonly taints?: MachineSetV1Beta2SpecTemplateSpecTaints[];
+
+  /**
+   * version defines the desired Kubernetes version.
+   * This field is meant to be optionally used by bootstrap providers.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpec#version
+   */
+  readonly version?: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpec(obj: MachineSetV1Beta2SpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bootstrap': toJson_MachineSetV1Beta2SpecTemplateSpecBootstrap(obj.bootstrap),
+    'clusterName': obj.clusterName,
+    'deletion': toJson_MachineSetV1Beta2SpecTemplateSpecDeletion(obj.deletion),
+    'failureDomain': obj.failureDomain,
+    'infrastructureRef': toJson_MachineSetV1Beta2SpecTemplateSpecInfrastructureRef(obj.infrastructureRef),
+    'minReadySeconds': obj.minReadySeconds,
+    'providerID': obj.providerId,
+    'readinessGates': obj.readinessGates?.map(y => toJson_MachineSetV1Beta2SpecTemplateSpecReadinessGates(y)),
+    'taints': obj.taints?.map(y => toJson_MachineSetV1Beta2SpecTemplateSpecTaints(y)),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * bootstrap is a reference to a local struct which encapsulates
+ * fields to configure the Machine’s bootstrapping mechanism.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecBootstrap
+ */
+export interface MachineSetV1Beta2SpecTemplateSpecBootstrap {
+  /**
+   * configRef is a reference to a bootstrap provider-specific resource
+   * that holds configuration details. The reference is optional to
+   * allow users/operators to specify Bootstrap.DataSecretName without
+   * the need of a controller.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecBootstrap#configRef
+   */
+  readonly configRef?: MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef;
+
+  /**
+   * dataSecretName is the name of the secret that stores the bootstrap data script.
+   * If nil, the Machine should remain in the Pending state.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecBootstrap#dataSecretName
+   */
+  readonly dataSecretName?: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpecBootstrap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpecBootstrap(obj: MachineSetV1Beta2SpecTemplateSpecBootstrap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configRef': toJson_MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef(obj.configRef),
+    'dataSecretName': obj.dataSecretName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * deletion contains configuration options for Machine deletion.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecDeletion
+ */
+export interface MachineSetV1Beta2SpecTemplateSpecDeletion {
+  /**
+   * nodeDeletionTimeoutSeconds defines how long the controller will attempt to delete the Node that the Machine
+   * hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
+   * Defaults to 10 seconds.
+   *
+   * @default 10 seconds.
+   * @schema MachineSetV1Beta2SpecTemplateSpecDeletion#nodeDeletionTimeoutSeconds
+   */
+  readonly nodeDeletionTimeoutSeconds?: number;
+
+  /**
+   * nodeDrainTimeoutSeconds is the total amount of time that the controller will spend on draining a node.
+   * The default value is 0, meaning that the node can be drained without any time limitations.
+   * NOTE: nodeDrainTimeoutSeconds is different from `kubectl drain --timeout`
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecDeletion#nodeDrainTimeoutSeconds
+   */
+  readonly nodeDrainTimeoutSeconds?: number;
+
+  /**
+   * nodeVolumeDetachTimeoutSeconds is the total amount of time that the controller will spend on waiting for all volumes
+   * to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecDeletion#nodeVolumeDetachTimeoutSeconds
+   */
+  readonly nodeVolumeDetachTimeoutSeconds?: number;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpecDeletion' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpecDeletion(obj: MachineSetV1Beta2SpecTemplateSpecDeletion | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeDeletionTimeoutSeconds': obj.nodeDeletionTimeoutSeconds,
+    'nodeDrainTimeoutSeconds': obj.nodeDrainTimeoutSeconds,
+    'nodeVolumeDetachTimeoutSeconds': obj.nodeVolumeDetachTimeoutSeconds,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * infrastructureRef is a required reference to a custom resource
+ * offered by an infrastructure provider.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecInfrastructureRef
+ */
+export interface MachineSetV1Beta2SpecTemplateSpecInfrastructureRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecInfrastructureRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecInfrastructureRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecInfrastructureRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpecInfrastructureRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpecInfrastructureRef(obj: MachineSetV1Beta2SpecTemplateSpecInfrastructureRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineReadinessGate contains the type of a Machine condition to be used as a readiness gate.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecReadinessGates
+ */
+export interface MachineSetV1Beta2SpecTemplateSpecReadinessGates {
+  /**
+   * conditionType refers to a condition with matching type in the Machine's condition list.
+   * If the conditions doesn't exist, it will be treated as unknown.
+   * Note: Both Cluster API conditions or conditions added by 3rd party controllers can be used as readiness gates.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecReadinessGates#conditionType
+   */
+  readonly conditionType: string;
+
+  /**
+   * polarity of the conditionType specified in this readinessGate.
+   * Valid values are Positive, Negative and omitted.
+   * When omitted, the default behaviour will be Positive.
+   * A positive polarity means that the condition should report a true status under normal conditions.
+   * A negative polarity means that the condition should report a false status under normal conditions.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecReadinessGates#polarity
+   */
+  readonly polarity?: MachineSetV1Beta2SpecTemplateSpecReadinessGatesPolarity;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpecReadinessGates' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpecReadinessGates(obj: MachineSetV1Beta2SpecTemplateSpecReadinessGates | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'conditionType': obj.conditionType,
+    'polarity': obj.polarity,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * MachineTaint defines a taint equivalent to corev1.Taint, but additionally having a propagation field.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecTaints
+ */
+export interface MachineSetV1Beta2SpecTemplateSpecTaints {
+  /**
+   * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecTaints#effect
+   */
+  readonly effect: MachineSetV1Beta2SpecTemplateSpecTaintsEffect;
+
+  /**
+   * key is the taint key to be applied to a node.
+   * Must be a valid qualified name of maximum size 63 characters
+   * with an optional subdomain prefix of maximum size 253 characters,
+   * separated by a `/`.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecTaints#key
+   */
+  readonly key: string;
+
+  /**
+   * propagation defines how this taint should be propagated to nodes.
+   * Valid values are 'Always' and 'OnInitialization'.
+   * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+   * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecTaints#propagation
+   */
+  readonly propagation: MachineSetV1Beta2SpecTemplateSpecTaintsPropagation;
+
+  /**
+   * value is the taint value corresponding to the taint key.
+   * It must be a valid label value of maximum size 63 characters.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecTaints#value
+   */
+  readonly value?: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpecTaints' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpecTaints(obj: MachineSetV1Beta2SpecTemplateSpecTaints | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'effect': obj.effect,
+    'key': obj.key,
+    'propagation': obj.propagation,
+    'value': obj.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configRef is a reference to a bootstrap provider-specific resource
+ * that holds configuration details. The reference is optional to
+ * allow users/operators to specify Bootstrap.DataSecretName without
+ * the need of a controller.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef
+ */
+export interface MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef {
+  /**
+   * apiGroup is the group of the resource being referenced.
+   * apiGroup must be fully qualified domain name.
+   * The corresponding version for this reference will be looked up from the contract
+   * labels of the corresponding CRD of the resource being referenced.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef#apiGroup
+   */
+  readonly apiGroup: string;
+
+  /**
+   * kind of the resource being referenced.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the resource being referenced.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef(obj: MachineSetV1Beta2SpecTemplateSpecBootstrapConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * polarity of the conditionType specified in this readinessGate.
+ * Valid values are Positive, Negative and omitted.
+ * When omitted, the default behaviour will be Positive.
+ * A positive polarity means that the condition should report a true status under normal conditions.
+ * A negative polarity means that the condition should report a false status under normal conditions.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecReadinessGatesPolarity
+ */
+export enum MachineSetV1Beta2SpecTemplateSpecReadinessGatesPolarity {
+  /** Positive */
+  POSITIVE = "Positive",
+  /** Negative */
+  NEGATIVE = "Negative",
+}
+
+/**
+ * effect is the effect for the taint. Valid values are NoSchedule, PreferNoSchedule and NoExecute.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecTaintsEffect
+ */
+export enum MachineSetV1Beta2SpecTemplateSpecTaintsEffect {
+  /** NoSchedule */
+  NO_SCHEDULE = "NoSchedule",
+  /** PreferNoSchedule */
+  PREFER_NO_SCHEDULE = "PreferNoSchedule",
+  /** NoExecute */
+  NO_EXECUTE = "NoExecute",
+}
+
+/**
+ * propagation defines how this taint should be propagated to nodes.
+ * Valid values are 'Always' and 'OnInitialization'.
+ * Always: The taint will be continuously reconciled. If it is not set for a node, it will be added during reconciliation.
+ * OnInitialization: The taint will be added during node initialization. If it gets removed from the node later on it will not get added again.
+ *
+ * @schema MachineSetV1Beta2SpecTemplateSpecTaintsPropagation
+ */
+export enum MachineSetV1Beta2SpecTemplateSpecTaintsPropagation {
+  /** Always */
+  ALWAYS = "Always",
+  /** OnInitialization */
+  ON_INITIALIZATION = "OnInitialization",
+}
 

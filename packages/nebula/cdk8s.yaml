@@ -71,12 +71,12 @@ imports:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/applicationset-crd.yaml
   # Crossplane ArgoCD Provider CRDs
   - https://raw.githubusercontent.com/crossplane-contrib/provider-argocd/v0.13.0/package/crds/argocd.crossplane.io_providerconfigs.yaml
-  # Cluster API Core CRDs (v1.9.5)
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.9.5/config/crd/bases/cluster.x-k8s.io_clusters.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.9.5/config/crd/bases/cluster.x-k8s.io_machines.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.9.5/config/crd/bases/cluster.x-k8s.io_machinesets.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.9.5/config/crd/bases/cluster.x-k8s.io_machinedeployments.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.9.5/config/crd/bases/cluster.x-k8s.io_machinepools.yaml
+  # Cluster API Core CRDs (v1.12.9 — v1beta2 contract)
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_clusters.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machines.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinesets.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinedeployments.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinepools.yaml
   # Cluster API GCP Infrastructure Provider CRDs (v1.10.0)
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpclusters.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpclustertemplates.yaml
@@ -85,14 +85,14 @@ imports:
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedclusters.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedcontrolplanes.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpmanagedmachinepools.yaml
-  # Cluster API AWS Infrastructure Provider CRDs (CAPA v2.7.1, contract v1beta1, AWSCluster storage v1beta2)
+  # Cluster API AWS Infrastructure Provider CRDs (CAPA v2.11.1, contract v1beta2, AWSCluster storage v1beta2)
   # EC2/self-managed-k0s path only - EKS (awsmanaged*) and awsmachinepools deliberately excluded (static MachineDeployment, no Karpenter)
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusters.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsmachines.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsmachinetemplates.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclustercontrolleridentities.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusterroleidentities.yaml
-  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.7.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusterstaticidentities.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.11.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusters.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.11.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsmachines.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.11.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsmachinetemplates.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.11.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclustercontrolleridentities.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.11.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusterroleidentities.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-aws/v2.11.1/config/crd/bases/infrastructure.cluster.x-k8s.io_awsclusterstaticidentities.yaml
   # Cluster API Hetzner Infrastructure Provider CRDs (v1.0.7) - HCloud (VMs)
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerclusters.yaml
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerclustertemplates.yaml
@@ -106,22 +106,22 @@ imports:
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerbaremetalmachinetemplates.yaml
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerbaremetalremediations.yaml
   - https://raw.githubusercontent.com/syself/cluster-api-provider-hetzner/v1.0.7/config/crd/bases/infrastructure.cluster.x-k8s.io_hetznerbaremetalremediationtemplates.yaml
-  # k0smotron Control Plane CRDs (v1.7.0)
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/controlplane/controlplane.cluster.x-k8s.io_k0scontrolplanes.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/controlplane/controlplane.cluster.x-k8s.io_k0scontrolplanetemplates.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/controlplane/controlplane.cluster.x-k8s.io_k0smotroncontrolplanes.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/controlplane/controlplane.cluster.x-k8s.io_k0smotroncontrolplanetemplates.yaml
-  # k0smotron Bootstrap CRDs (v1.7.0)
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/bootstrap/bootstrap.cluster.x-k8s.io_k0scontrollerconfigs.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/bootstrap/bootstrap.cluster.x-k8s.io_k0sworkerconfigs.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/bootstrap/bootstrap.cluster.x-k8s.io_k0sworkerconfigtemplates.yaml
-  # k0smotron Infrastructure CRDs (v1.7.0)
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/infrastructure/infrastructure.cluster.x-k8s.io_remoteclusters.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/infrastructure/infrastructure.cluster.x-k8s.io_remotemachines.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/infrastructure/infrastructure.cluster.x-k8s.io_remotemachinetemplates.yaml
-  # k0smotron Core CRDs (v1.7.0)
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/k0smotron.io/k0smotron.io_clusters.yaml
-  - https://raw.githubusercontent.com/k0sproject/k0smotron/v1.7.0/config/crd/bases/k0smotron.io/k0smotron.io_jointokenrequests.yaml
+  # k0smotron Control Plane CRDs (v2.0.2 — v1beta2 contract; repo reorganized to config/clusterapi/*)
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/controlplane/crd/bases/controlplane.cluster.x-k8s.io_k0scontrolplanes.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/controlplane/crd/bases/controlplane.cluster.x-k8s.io_k0scontrolplanetemplates.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/controlplane/crd/bases/controlplane.cluster.x-k8s.io_k0smotroncontrolplanes.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/controlplane/crd/bases/controlplane.cluster.x-k8s.io_k0smotroncontrolplanetemplates.yaml
+  # k0smotron Bootstrap CRDs (v2.0.2)
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/bootstrap/crd/bases/bootstrap.cluster.x-k8s.io_k0scontrollerconfigs.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/bootstrap/crd/bases/bootstrap.cluster.x-k8s.io_k0sworkerconfigs.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/bootstrap/crd/bases/bootstrap.cluster.x-k8s.io_k0sworkerconfigtemplates.yaml
+  # k0smotron Infrastructure CRDs (v2.0.2)
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_remoteclusters.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_remotemachines.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_remotemachinetemplates.yaml
+  # k0smotron Core CRDs (v2.0.2 — now under config/crd/)
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/crd/k0smotron.io_clusters.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/crd/k0smotron.io_jointokenrequests.yaml
   # Karmada CRDs (v1.16.0) - Policy APIs
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_propagationpolicies.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_clusterpropagationpolicies.yaml
