@@ -92,6 +92,20 @@ export interface AwsK0sClusterConfig {
    */
   imdsPodAccess?: boolean;
   /**
+   * Configure the kube-apiserver as an OIDC issuer for IRSA/WebIdentity (so AWS
+   * STS can validate this cluster's projected service-account tokens). `issuerUrl`
+   * is the PUBLIC HTTPS base URL hosting the OIDC discovery + JWKS (a public S3
+   * bucket); it becomes the token `iss` claim and must match the AWS IAM OIDC
+   * provider URL byte-for-byte (regional virtual-hosted S3 host, no trailing
+   * slash). Sets `--service-account-issuer` + `--service-account-jwks-uri` on the
+   * apiserver. MUST be set at cluster creation (changing it later rolls the
+   * control plane and changes `iss`). The discovery docs are published to S3
+   * out-of-band (the bootstrap's setupIrsa step). `api-audiences` is left at its
+   * default (= the issuer) so in-cluster SA auth is unaffected; the
+   * sts.amazonaws.com audience is minted per projected-token-volume via TokenRequest.
+   */
+  oidcIssuer?: { issuerUrl: string };
+  /**
    * Scheme of the control-plane Network Load Balancer. Defaults to INTERNAL so
    * the k0s API endpoint is not exposed to the internet (mTLS still guards it).
    * Set to `AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING`
@@ -207,6 +221,19 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
+              // OIDC issuer for IRSA: point the apiserver's service-account issuer
+              // at the public S3-hosted discovery so AWS STS can validate this
+              // cluster's projected SA tokens. extraArgs is a map (single issuer).
+              ...(this.config.oidcIssuer
+                ? {
+                    api: {
+                      extraArgs: {
+                        "service-account-issuer": this.config.oidcIssuer.issuerUrl,
+                        "service-account-jwks-uri": `${this.config.oidcIssuer.issuerUrl}/keys.json`,
+                      },
+                    },
+                  }
+                : {}),
             },
           },
           preStartCommands: [
