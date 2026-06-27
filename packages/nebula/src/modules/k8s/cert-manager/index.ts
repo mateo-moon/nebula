@@ -79,7 +79,11 @@ export class CertManager extends HelmModule<CertManagerConfig> {
       chart: "cert-manager",
       releaseName: "cert-manager",
       repo: this.config.repository ?? "https://charts.jetstack.io",
-      version: this.config.version ?? "v1.19.3",
+      // v1.20.2 is exactly clusterctl v1.12/v1.13's bundled default
+      // (CertManagerDefaultVersion), so the pivot's clusterctl never
+      // delete/reinstalls cert-manager (CRD churn) during init/move. Also lifts
+      // off v1.19.3, which predates the GHSA-8rvj-mm4h-c258 fix.
+      version: this.config.version ?? "v1.20.2",
       defaultValues,
       values: this.config.values,
     });

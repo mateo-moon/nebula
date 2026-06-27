@@ -7,7 +7,7 @@ import {
   emitAwsClusterCr,
   emitAwsMachineTemplate,
 } from "./_shared";
-import { K0sControlPlane } from "#imports/controlplane.cluster.x-k8s.io";
+import { K0sControlPlaneV1Beta2 } from "#imports/controlplane.cluster.x-k8s.io";
 import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
@@ -201,7 +201,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       ...(enableWorker ? ["--enable-worker", "--no-taints"] : []),
       ...(cp.extraArgs ?? []),
     ];
-    new K0sControlPlane(this, "control-plane", {
+    new K0sControlPlaneV1Beta2(this, "control-plane", {
       metadata: { name: controlPlaneName, namespace },
       spec: {
         replicas: cp.replicas ?? 3,
@@ -236,7 +236,9 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
                 : {}),
             },
           },
-          preStartCommands: [
+          // k0smotron v1beta2 renamed bootstrap `preStartCommands` → `preK0sCommands`
+          // (generated TS property `preK0SCommands`).
+          preK0SCommands: [
             ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
           ],
