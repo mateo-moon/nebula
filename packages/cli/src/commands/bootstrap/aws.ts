@@ -431,8 +431,23 @@ async function setupIrsa(
       aws(["iam", "update-assume-role-policy", "--role-name", roleName,
         "--policy-document", `file://${trustPath}`], { ignoreErrors: true });
     }
-    aws(["iam", "put-role-policy", "--role-name", roleName, "--policy-name", "nebula-controllers",
-      "--policy-document", CONTROLLER_POLICY_JSON]);
+    // Attach the controller permissions as a CUSTOMER-MANAGED policy (iam:CreatePolicy
+    // + iam:AttachRolePolicy — NOT iam:PutRolePolicy, which an SSO PowerUser
+    // permission set may not grant). This is the SAME policy AwsIam creates on Kind
+    // for the node role (`<cluster>-controllers`); create-if-missing keeps setupIrsa
+    // self-sufficient and idempotent.
+    const controllerPolicyName = `${clusterName}-controllers`;
+    const controllerPolicyArn = `arn:aws:iam::${oidc.accountId}:policy/${controllerPolicyName}`;
+    try {
+      aws([
+        "iam", "create-policy", "--policy-name", controllerPolicyName,
+        "--policy-document", CONTROLLER_POLICY_JSON,
+        "--description", "Nebula keyless mgmt controller permissions (CAPA + Crossplane)",
+      ]);
+    } catch (e) {
+      if (!isAlreadyExists(e)) throw e;
+    }
+    aws(["iam", "attach-role-policy", "--role-name", roleName, "--policy-arn", controllerPolicyArn]);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

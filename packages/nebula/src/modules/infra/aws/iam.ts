@@ -1,6 +1,7 @@
 import { Construct } from "constructs";
 import {
   Role as CpRole,
+  Policy as CpPolicy,
   RolePolicyAttachment as CpRolePolicyAttachment,
   InstanceProfile as CpInstanceProfile,
 } from "#imports/iam.aws.upbound.io";
@@ -22,22 +23,21 @@ export const DEFAULT_NODE_INSTANCE_PROFILE =
   "nodes.cluster-api-provider-aws.sigs.k8s.io";
 
 /**
- * Coarse "mgmt controller" permission set, attached to the node role as an INLINE
- * policy when `controllerPolicies` is set. This is what makes the management
- * cluster KEYLESS: its Crossplane provider-aws and CAPA controllers run on these
- * nodes and pick up the role via the instance profile (IMDS / default AWS SDK
- * chain), so no static AWS keys are baked on the cluster.
+ * Coarse "mgmt controller" permission set, delivered as a CUSTOMER-MANAGED policy
+ * attached to the node role when `controllerPolicies` is set (CAPA on the keyless
+ * management cluster assumes the node role via the instance profile, so it needs
+ * these controller perms). A customer-managed policy (iam:CreatePolicy +
+ * iam:AttachRolePolicy) is used rather than an inline policy (iam:PutRolePolicy)
+ * because some bootstrap principals (e.g. an SSO PowerUser permission set) grant
+ * the former but not the latter.
  *
  * Service-level wildcards (not the verbose clusterawsadm/Crossplane scoped
- * policies) keep this small enough for a single inline policy (well under IAM's
- * 10,240-char per-role inline limit) and avoid needing `iam:CreatePolicy` on the
- * bootstrap credentials — only `iam:PutRolePolicy`, which the bootstrap already
- * holds (it creates the role). The blast radius is broad, but a keyless mgmt
- * control-plane identity is inherently near-admin (it provisions IAM, VPCs, EC2,
- * ELB, Route53, KMS for the whole platform). `secretsmanager:*` is included for
- * CAPA parity even though we use insecureSkipSecretsManager.
+ * policies). The blast radius is broad, but a keyless mgmt control-plane identity
+ * is inherently near-admin (it provisions IAM, VPCs, EC2, ELB, Route53, KMS for
+ * the whole platform). `secretsmanager:*` is included for CAPA parity even though
+ * we use insecureSkipSecretsManager.
  */
-const CONTROLLER_INLINE_POLICY = JSON.stringify({
+const CONTROLLER_POLICY_DOCUMENT = JSON.stringify({
   Version: "2012-10-17",
   Statement: [
     {
@@ -82,10 +82,11 @@ export interface AwsIamConfig {
   providerConfigRef?: string;
   /**
    * Attach the coarse "mgmt controller" inline policy (see
-   * {@link CONTROLLER_INLINE_POLICY}) to the node role so the instance profile
-   * carries CAPA + Crossplane permissions. This is what makes the management
-   * cluster keyless — its controllers authenticate via the node instance profile
-   * (IMDS) instead of a static AWS key. Leave unset for plain worker nodes.
+   * {@link CONTROLLER_POLICY_DOCUMENT}) to the node role (as a customer-managed
+   * policy) so the instance profile carries CAPA + Crossplane permissions. This is
+   * what lets CAPA on the keyless management cluster authenticate via the node
+   * instance profile (IMDS) instead of a static AWS key. Leave unset for plain
+   * worker nodes.
    * @default false
    */
   controllerPolicies?: boolean;
@@ -127,19 +128,6 @@ export class AwsIam extends Construct {
         forProvider: {
           assumeRolePolicy: EC2_ASSUME_ROLE_POLICY,
           description: "Nebula self-managed worker node role",
-          // Keyless mgmt: attach the controller permissions inline on the role
-          // (iam:PutRolePolicy only — no iam:CreatePolicy needed) so the instance
-          // profile carries CAPA + Crossplane perms.
-          ...(config.controllerPolicies
-            ? {
-                inlinePolicy: [
-                  {
-                    name: `${config.name}-mgmt-controllers`,
-                    policy: CONTROLLER_INLINE_POLICY,
-                  },
-                ],
-              }
-            : {}),
           tags,
         },
         providerConfigRef,
@@ -159,6 +147,40 @@ export class AwsIam extends Construct {
         },
       });
     });
+
+    // Keyless mgmt: the node instance profile must carry the CAPA + Crossplane
+    // controller permissions. Deliver them as a CUSTOMER-MANAGED policy + role
+    // attachment (iam:CreatePolicy + iam:AttachRolePolicy) rather than an inline
+    // policy (iam:PutRolePolicy), which some bootstrap principals (SSO PowerUser)
+    // lack. The same policy is attached to the Crossplane WebIdentity role
+    // out-of-band by the bootstrap's setupIrsa step.
+    if (config.controllerPolicies) {
+      const controllerPolicyName = `${config.name}-controllers`;
+      new CpPolicy(this, "controllers-policy", {
+        metadata: {
+          name: controllerPolicyName,
+          annotations: { "crossplane.io/external-name": controllerPolicyName },
+        },
+        spec: {
+          forProvider: {
+            policy: CONTROLLER_POLICY_DOCUMENT,
+            description: "Nebula keyless mgmt controller permissions (CAPA + Crossplane)",
+            tags,
+          },
+          providerConfigRef,
+        },
+      });
+      new CpRolePolicyAttachment(this, "controllers-attach", {
+        metadata: { name: `${config.name}-controllers-attach` },
+        spec: {
+          forProvider: {
+            policyArnRef: { name: "controllers-policy" },
+            roleRef: { name: roleName },
+          },
+          providerConfigRef,
+        },
+      });
+    }
 
     // Note: nodes do NOT need Secrets Manager access — bootstrap data is
     // delivered via EC2 user-data (cloudInit.insecureSkipSecretsManager on the
