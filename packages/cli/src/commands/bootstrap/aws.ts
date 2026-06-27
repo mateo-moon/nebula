@@ -204,10 +204,18 @@ function ensureRepoDeps(gitopsDir: string): void {
  * bootstrap's imperative values (region, cluster name) identical to what the cdk8s
  * modules (and ArgoCD) use.
  */
+interface OidcConfig {
+  accountId: string;
+  bucket: string;
+  issuerUrl: string;
+  providerRoleArn: string;
+}
+
 function readAwsRepoConfig(gitopsDir: string): {
   region: string;
   clusterName: string;
   keyless: boolean;
+  oidc?: OidcConfig;
 } {
   // Run a throwaway reader IN the repo dir so `import "./config"` resolves exactly
   // like the cdk8s modules do (tsx -e has ESM eval quirks; a real file does not).
@@ -229,6 +237,7 @@ function readAwsRepoConfig(gitopsDir: string): {
   const end = out.lastIndexOf("}");
   let cfg: {
     aws?: { region?: string; clusterName?: string; keyless?: boolean };
+    oidc?: OidcConfig;
   } = {};
   try {
     cfg = JSON.parse(out.slice(start, end + 1));
@@ -244,7 +253,190 @@ function readAwsRepoConfig(gitopsDir: string): {
     region: cfg.aws.region,
     clusterName: cfg.aws.clusterName,
     keyless: cfg.aws.keyless === true,
+    oidc: cfg.oidc,
   };
+}
+
+/** The coarse controller permission set (shared with AwsIam's node-role inline policy). */
+const CONTROLLER_POLICY_JSON = JSON.stringify({
+  Version: "2012-10-17",
+  Statement: [
+    {
+      Sid: "NebulaControllers",
+      Effect: "Allow",
+      Resource: "*",
+      Action: [
+        "ec2:*",
+        "elasticloadbalancing:*",
+        "autoscaling:*",
+        "iam:*",
+        "route53:*",
+        "kms:*",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "secretsmanager:*",
+        "tag:GetResources",
+      ],
+    },
+  ],
+});
+
+/** True if an `aws`/`kubectl` invocation failed only because the resource already exists. */
+function isAlreadyExists(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /EntityAlreadyExists|BucketAlreadyOwnedByYou|already exists/i.test(m);
+}
+
+/**
+ * IRSA setup (keyless): make AWS STS able to validate this cluster's service-account
+ * tokens and create the IAM role the Crossplane provider assumes. Runs on the live
+ * management cluster with the BOOTSTRAP credentials (idempotent), BEFORE the GitOps
+ * handoff — because the handoff's keyless auth probe needs the OIDC provider + role
+ * to already exist. Steps: publish the cluster's real OIDC discovery + JWKS to a
+ * public S3 bucket; register the IAM OIDC provider for that issuer; create the
+ * provider role with a WebIdentity trust policy + the controller permissions inline.
+ * CAPA is unaffected (it stays keyless via the node instance profile).
+ */
+async function setupIrsa(
+  mgmtKubeconfig: string,
+  region: string,
+  clusterName: string,
+  oidc: OidcConfig,
+  profile?: string,
+): Promise<void> {
+  log("");
+  log("🔑 Step 5.5: IRSA — self-hosted OIDC for the Crossplane provider (keyless)");
+  log("─".repeat(50));
+  const aws = (args: string[], opts: { ignoreErrors?: boolean } = {}) =>
+    run("aws", [...(profile ? ["--profile", profile] : []), ...args], {
+      silent: true,
+      ignoreErrors: opts.ignoreErrors,
+    });
+  const oidcHost = oidc.issuerUrl.replace(/^https:\/\//, ""); // <bucket>.s3.<region>.amazonaws.com
+  const providerArn = `arn:aws:iam::${oidc.accountId}:oidc-provider/${oidcHost}`;
+  const roleName = `${clusterName}-crossplane-provider-aws`;
+
+  // 1. Fetch the cluster's REAL OIDC discovery + JWKS (signed with k0s's sa.key, so
+  //    the published JWKS matches the token signatures) and write the discovery doc.
+  const jwks = kubectl(["get", "--raw", "/openid/v1/jwks"], {
+    kubeconfig: mgmtKubeconfig,
+    silent: true,
+  });
+  const discovery = JSON.stringify({
+    issuer: oidc.issuerUrl,
+    jwks_uri: `${oidc.issuerUrl}/keys.json`,
+    authorization_endpoint: "urn:kubernetes:programmatic_authorization",
+    response_types_supported: ["id_token"],
+    subject_types_supported: ["public"],
+    id_token_signing_alg_values_supported: ["RS256"],
+    claims_supported: ["sub", "iss"],
+  });
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-irsa-"));
+  const jwksPath = path.join(tmpDir, "keys.json");
+  const discPath = path.join(tmpDir, "openid-configuration");
+  const trustPath = path.join(tmpDir, "trust.json");
+  try {
+    fs.writeFileSync(jwksPath, jwks, { mode: 0o600 });
+    fs.writeFileSync(discPath, discovery, { mode: 0o600 });
+
+    // 2. Public S3 bucket (ACLs disabled by default → public read via bucket POLICY,
+    //    not --acl). Idempotent.
+    log(`   Creating/configuring OIDC bucket ${oidc.bucket}...`);
+    try {
+      aws([
+        "s3api", "create-bucket", "--bucket", oidc.bucket, "--region", region,
+        "--create-bucket-configuration", `LocationConstraint=${region}`,
+      ]);
+    } catch (e) {
+      if (!isAlreadyExists(e)) throw e;
+    }
+    aws(["s3api", "delete-public-access-block", "--bucket", oidc.bucket], { ignoreErrors: true });
+    const bucketPolicy = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "PublicReadOidc",
+          Effect: "Allow",
+          Principal: "*",
+          Action: "s3:GetObject",
+          Resource: [
+            `arn:aws:s3:::${oidc.bucket}/.well-known/openid-configuration`,
+            `arn:aws:s3:::${oidc.bucket}/keys.json`,
+          ],
+        },
+      ],
+    });
+    aws(["s3api", "put-bucket-policy", "--bucket", oidc.bucket, "--policy", bucketPolicy]);
+
+    // 3. Upload discovery + JWKS (object key has NO extension for the discovery doc).
+    log("   Publishing OIDC discovery + JWKS to S3...");
+    aws(["s3api", "put-object", "--bucket", oidc.bucket, "--key", ".well-known/openid-configuration",
+      "--body", discPath, "--content-type", "application/json"]);
+    aws(["s3api", "put-object", "--bucket", oidc.bucket, "--key", "keys.json",
+      "--body", jwksPath, "--content-type", "application/json"]);
+
+    // 4. Verify both are publicly reachable over HTTPS before wiring IAM (AWS STS
+    //    needs this). S3 is eventually consistent — retry briefly.
+    log("   Verifying OIDC discovery is publicly reachable...");
+    for (const suffix of ["/.well-known/openid-configuration", "/keys.json"]) {
+      let ok = false;
+      for (let i = 0; i < 12 && !ok; i++) {
+        const code = run("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", `${oidc.issuerUrl}${suffix}`],
+          { silent: true, ignoreErrors: true }).trim();
+        ok = code === "200";
+        if (!ok) await sleep(5000);
+      }
+      if (!ok) throw new Error(`OIDC document not reachable: ${oidc.issuerUrl}${suffix} (S3 public access / region host?)`);
+    }
+
+    // 5. IAM OIDC provider (thumbprint is a required-but-ignored placeholder for the
+    //    S3-hosted JWKS — AWS trusts the S3 CA). Idempotent.
+    log("   Registering the IAM OIDC provider...");
+    try {
+      aws(["iam", "create-open-id-connect-provider", "--url", oidc.issuerUrl,
+        "--client-id-list", "sts.amazonaws.com",
+        "--thumbprint-list", "3fe05b486e3f0987130ba1d4ea0f299539a58243"]);
+    } catch (e) {
+      if (!isAlreadyExists(e)) throw e;
+      log("   (OIDC provider already exists)");
+    }
+
+    // 6. Provider role with WebIdentity trust (scoped to the provider SAs) + the
+    //    controller permissions inline. Idempotent.
+    log(`   Creating the provider role ${roleName}...`);
+    const trust = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Principal: { Federated: providerArn },
+          Action: "sts:AssumeRoleWithWebIdentity",
+          Condition: {
+            StringEquals: { [`${oidcHost}:aud`]: "sts.amazonaws.com" },
+            StringLike: {
+              [`${oidcHost}:sub`]: "system:serviceaccount:crossplane-system:provider-aws-*",
+            },
+          },
+        },
+      ],
+    });
+    fs.writeFileSync(trustPath, trust, { mode: 0o600 });
+    try {
+      aws(["iam", "create-role", "--role-name", roleName,
+        "--assume-role-policy-document", `file://${trustPath}`]);
+    } catch (e) {
+      if (!isAlreadyExists(e)) throw e;
+      // Keep the trust policy current on re-runs.
+      aws(["iam", "update-assume-role-policy", "--role-name", roleName,
+        "--policy-document", `file://${trustPath}`], { ignoreErrors: true });
+    }
+    aws(["iam", "put-role-policy", "--role-name", roleName, "--policy-name", "nebula-controllers",
+      "--policy-document", CONTROLLER_POLICY_JSON]);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+  log(`   ✅ IRSA ready: issuer ${oidc.issuerUrl}, role ${oidc.providerRoleArn}`);
 }
 
 /**
@@ -679,7 +871,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   }
 
   ensureRepoDeps(gitopsDir);
-  const { region, clusterName, keyless } = readAwsRepoConfig(gitopsDir);
+  const { region, clusterName, keyless, oidc } = readAwsRepoConfig(gitopsDir);
 
   log("");
   log("🚀 Nebula AWS Bootstrap (thin — ArgoCD reconciles the platform from git)");
@@ -731,6 +923,21 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const mgmtKubeconfig = fetchKubeconfig(clusterName);
   log(`   ✅ Wrote ${mgmtKubeconfig}`);
   await waitForMgmtApiStable(mgmtKubeconfig, 300);
+
+  // Step 5.5: IRSA (keyless only) — publish the cluster's OIDC discovery to S3 and
+  // create the IAM OIDC provider + provider role, so the keyless Crossplane provider
+  // can assume the role via WebIdentity. Must precede the handoff (its auth probe
+  // exercises WebIdentity). The cluster was created with the matching OIDC issuer
+  // flag (infra/cluster-api oidcIssuer). CAPA stays keyless via the instance profile.
+  if (keyless) {
+    if (!oidc) {
+      throw new Error(
+        "config.aws.keyless is true but config.oidc is missing — the keyless Crossplane " +
+          "provider needs IRSA (oidc.{accountId,bucket,issuerUrl,providerRoleArn}).",
+      );
+    }
+    await setupIrsa(mgmtKubeconfig, region, clusterName, oidc, options.awsProfile);
+  }
 
   // Step 6: Hand off to ArgoCD. Installs Crossplane + provider-aws and ArgoCD on
   // mgmt, then ArgoCD reconciles the full platform (infra/*) and all apps (apps/*)
