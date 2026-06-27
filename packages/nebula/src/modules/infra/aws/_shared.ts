@@ -184,6 +184,22 @@ export function emitAwsClusterCr(
         // matching node-side 8132 rule is in additionalControlPlaneIngressRules.
         ingressRules: [
           {
+            // CAPA auto-adds the API rule (6443 → 0.0.0.0/0 for an internet-facing
+            // LB) ONLY when no custom controlPlaneLoadBalancer.ingressRules are
+            // present. Specifying ANY ingressRules (the konnectivity 8132 rules
+            // below) makes CAPA treat the list as authoritative and DROP that
+            // default, leaving 6443 reachable only from the node's NAT hairpin — so
+            // the management cluster (Kind/k0smotron) and operators can't reach the
+            // API to initialize/reconcile it (K0sControlPlane never goes
+            // controlPlaneInitialized). Re-add the API rule explicitly. The LB is
+            // internet-facing by design; the k8s API enforces TLS client-cert auth.
+            description: "kube API server",
+            protocol: LbIngressProtocol.TCP,
+            fromPort: 6443,
+            toPort: 6443,
+            cidrBlocks: ["0.0.0.0/0"],
+          },
+          {
             description: "konnectivity (API to pod tunnel)",
             protocol: LbIngressProtocol.TCP,
             fromPort: 8132,
