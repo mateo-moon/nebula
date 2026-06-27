@@ -174,7 +174,9 @@ export class AwsIam extends Construct {
         metadata: { name: `${config.name}-controllers-attach` },
         spec: {
           forProvider: {
-            policyArnRef: { name: "controllers-policy" },
+            // Cross-resource ref by the Policy's Kubernetes metadata.name (NOT the
+            // cdk8s construct id) — Crossplane resolves it to the policy ARN.
+            policyArnRef: { name: controllerPolicyName },
             roleRef: { name: roleName },
           },
           providerConfigRef,
