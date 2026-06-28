@@ -121,6 +121,19 @@ export interface AwsK0sClusterConfig {
    * disruptive pod re-IP migration, so pick this on a FRESH bootstrap.
    */
   networkProvider?: "kuberouter" | "calico" | "custom";
+  /**
+   * k0s-bundled Calico settings, emitted into `spec.network.calico` ONLY when
+   * `networkProvider` is `"calico"`. Defaults to `mode: "vxlan"` (no BGP — works
+   * on any L2/L3 underlay incl. AWS). `wireguard: true` enables encrypted
+   * node-to-node pod traffic — inert on a single node, active once there are
+   * multiple nodes. Set it at create so it's already in the cluster's k0s config
+   * when you scale (changing the k0sConfigSpec later rolls the control plane).
+   */
+  calico?: {
+    wireguard?: boolean;
+    mode?: "vxlan" | "ipip" | "bird";
+    mtu?: number;
+  };
 }
 
 /**
@@ -157,6 +170,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const vpcCidr = this.config.vpcCidr ?? "10.0.0.0/16";
     const cp = this.config.controlPlane ?? {};
     const networkProvider = this.config.networkProvider ?? "kuberouter";
+    const calico = this.config.calico ?? {};
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
 
@@ -231,6 +245,17 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
             spec: {
               network: {
                 provider: networkProvider,
+                // k0s-bundled Calico tuning (only meaningful for provider=calico):
+                // vxlan overlay (no BGP) + optional wireguard node-mesh encryption.
+                ...(networkProvider === "calico"
+                  ? {
+                      calico: {
+                        mode: calico.mode ?? "vxlan",
+                        wireguard: calico.wireguard ?? false,
+                        ...(calico.mtu ? { mtu: calico.mtu } : {}),
+                      },
+                    }
+                  : {}),
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
