@@ -112,6 +112,15 @@ export interface AwsK0sClusterConfig {
    * ("internet-facing") to publish the API publicly.
    */
   controlPlaneLoadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
+  /**
+   * CNI for the embedded k0s ClusterConfig (`spec.network.provider`). Defaults to
+   * `"kuberouter"` (k0s's built-in CNI). Set to `"custom"` to make k0s install NO
+   * CNI, so a CNI is deployed separately (e.g. the `Calico` module owns pod
+   * networking + the encrypted node mesh) — mirrors {@link AwsWorkloadCluster}.
+   * **Immutable at cluster creation**: switching the CNI on a running cluster is a
+   * disruptive pod re-IP migration, so pick this on a FRESH bootstrap.
+   */
+  networkProvider?: "kuberouter" | "calico" | "custom";
 }
 
 /**
@@ -129,8 +138,9 @@ export interface AwsK0sClusterConfig {
  *    `controlPlaneLoadBalancerScheme` to expose it publicly.
  *
  * By default the control-plane nodes run in combined controller+worker mode so a
- * small (3-node) cluster also hosts Crossplane/CAPI/ArgoCD. Uses k0s's default
- * CNI (kube-router) — Calico/WireGuard is reserved for workload clusters.
+ * small (3-node) cluster also hosts Crossplane/CAPI/ArgoCD. CNI defaults to k0s's
+ * built-in kube-router; set `networkProvider: "custom"` to make k0s install no CNI
+ * and own networking with the `Calico` module (its wireguard mode = encrypted node mesh).
  *
  * The IAM instance profile must pre-exist — create it with `Aws`/`AwsIam`.
  */
@@ -146,6 +156,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const vpcCidr = this.config.vpcCidr ?? "10.0.0.0/16";
     const cp = this.config.controlPlane ?? {};
+    const networkProvider = this.config.networkProvider ?? "kuberouter";
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
 
@@ -211,13 +222,15 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
           // Propagate the pod/service CIDRs into the embedded k0s ClusterConfig
           // so the real control plane matches the CAPI clusterNetwork above.
           // Without this, k0s falls back to its own defaults whenever a caller
-          // overrides podCidr/serviceCidr. CNI is left at the k0s default
-          // (kube-router) for the standalone management cluster.
+          // overrides podCidr/serviceCidr. The CNI is selected by `networkProvider`
+          // ("kuberouter" default; "custom" makes k0s install NO CNI so the Calico
+          // module owns networking + the encrypted node mesh).
           k0S: {
             apiVersion: "k0s.k0sproject.io/v1beta1",
             kind: "ClusterConfig",
             spec: {
               network: {
+                provider: networkProvider,
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
