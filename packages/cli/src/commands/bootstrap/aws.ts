@@ -666,7 +666,12 @@ async function waitForClusterReady(
     // Fully-qualify: once Crossplane's provider-argocd is installed, a bare
     // `cluster` is ambiguous (cluster.argocd.crossplane.io / k0smotron.io also
     // define `clusters`) and resolves to the wrong CRD → empty status forever.
-    const cpReady = kget(["get", "cluster.cluster.x-k8s.io", clusterName, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.controlPlaneReady}"]);
+    // CAPI v1beta2 removed the v1beta1 `status.controlPlaneReady` boolean; the
+    // equivalent "CP API is up and the kubeconfig is valid" signal is
+    // `status.initialization.controlPlaneInitialized` (set once, stays true). The
+    // old field renders empty under v1beta2, so probing it waits out the full
+    // timeout on a perfectly healthy cluster.
+    const cpReady = kget(["get", "cluster.cluster.x-k8s.io", clusterName, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.initialization.controlPlaneInitialized}"]);
     const phase = kget(["get", "cluster.cluster.x-k8s.io", clusterName, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.status.phase}"]);
     const kubeconfigExists = kget(["get", "secret", `${clusterName}-kubeconfig`, "-n", MGMT_NAMESPACE, "-o", "name"]);
 
