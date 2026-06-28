@@ -1,3 +1,4 @@
+import * as crypto from "crypto";
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
@@ -176,7 +177,29 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
 
     const clusterName = name;
     const controlPlaneName = `${name}-control-plane`;
-    const cpMachineTemplateName = `${name}-control-plane`;
+    // CAPA AWSMachineTemplate spec is IMMUTABLE — the admission webhook rejects any
+    // in-place edit, so a fixed template name can NEVER change disk/instanceType/AMI/
+    // IMDS on a running cluster. Derive the name from a hash of the template spec
+    // instead: any spec change yields a new name, CAPA creates a fresh template, and
+    // the K0sControlPlane's infrastructureRef repoints to it — which rolls the nodes
+    // (the standard CAPI rotate-on-change pattern). A no-op synth hashes identically,
+    // so steady state does not churn. The K0sControlPlane name stays stable (only the
+    // infra template rotates), so the pivot-adopted CP object is untouched.
+    const cpTemplateSpec = {
+      instanceType: cp.instanceType ?? "t4g.large",
+      iamInstanceProfile,
+      sshKeyName: this.config.sshKeyName ?? null,
+      rootVolumeSizeGiB: cp.rootVolumeSizeGiB ?? 80,
+      rootVolumeType: cp.rootVolumeType ?? "gp3",
+      ami: cp.ami ?? null,
+      imdsPodAccess: this.config.imdsPodAccess ?? false,
+    };
+    const cpTemplateHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(cpTemplateSpec))
+      .digest("hex")
+      .slice(0, 8);
+    const cpMachineTemplateName = `${name}-control-plane-${cpTemplateHash}`;
 
     // 1. Cluster-API Cluster
     emitClusterCr(this, {
