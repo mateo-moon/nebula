@@ -530,6 +530,13 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
       version: this.config.version ?? "9.4.0",
       namespace: namespaceName,
       values: chartValues,
+      // The argo-cd chart guards its ServiceMonitor + PrometheusRule resources
+      // behind `.Capabilities.APIVersions.Has "monitoring.coreos.com/v1"`. cdk8s
+      // runs `helm template`, which reports NO capabilities, so those resources
+      // silently render to nothing even when metrics.serviceMonitor/rules are
+      // enabled. Declare the prometheus-operator API so they render (harmless when
+      // the values leave them disabled; the CRDs must exist at apply time).
+      helmFlags: ["--api-versions", "monitoring.coreos.com/v1"],
     });
 
     // Create AppProject if configured using imported CRD
