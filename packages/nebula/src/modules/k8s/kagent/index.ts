@@ -115,7 +115,7 @@ export interface KagentRbacConfig {
 export interface KagentConfig {
   /** Namespace for kagent (default: "kagent"). */
   namespace?: string;
-  /** kagent controller chart version (default: "0.9.7"). */
+  /** kagent controller chart version (default: "0.9.9"). */
   version?: string;
   /** kagent-crds chart version (default: same as `version`). */
   crdsVersion?: string;
@@ -192,7 +192,7 @@ export class Kagent extends BaseConstruct<KagentConfig> {
     this.namespaceName = ns;
     const registry =
       this.config.registry ?? "oci://ghcr.io/kagent-dev/kagent/helm";
-    const version = this.config.version ?? "0.9.7";
+    const version = this.config.version ?? "0.9.9";
     const crdsVersion = this.config.crdsVersion ?? version;
     const provider = this.config.provider ?? "anthropic";
 
