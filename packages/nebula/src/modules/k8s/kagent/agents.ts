@@ -63,6 +63,13 @@ export interface DeclareAgentsOptions {
   /** Per-cluster context (access method, API endpoint, deploy commands) for the docs-agent.
    *  Provide via env at synth time. If unset, the docs-agent tells users to ask the operator. */
   clusterContext?: string;
+  /**
+   * ModelConfig name for embedding generation (memory vector store).
+   * CRITICAL: must be an OpenAI-compatible embedding model (e.g. text-embedding-3-small,
+   * or Ollama nomic-embed-text). Anthropic does NOT have an embeddings API — using a
+   * Claude model here silently fails (memories never get written). If unset, memory is disabled.
+   */
+  embeddingModelConfig?: string;
 }
 
 /** Declare the agents + the docs-agent context ConfigMap. */
@@ -200,8 +207,13 @@ export function declareAgents(
       "Operators: export KUBECONFIG=~/.nebula/<cluster>/kubeconfig; kubectl get nodes.",
       "Provide BOTH methods in your answer. Never ask which role they are.",
     ].join("\n"),
-    // Vector memory (cross-session recall; pgvector 0.8.3 verified on external Postgres).
-    memory: { modelConfig: SUBAGENT_MODEL_CONFIG, ttlDays: 30 },
+    // Vector memory (cross-session recall; pgvector verified).
+    // CRITICAL: the modelConfig must point to an EMBEDDING model (OpenAI-compatible),
+    // NOT a chat model. Anthropic has no embeddings API — using claude-* here silently
+    // fails (memories never written). See DeclareAgentsOptions.embeddingModelConfig.
+    ...(opts.embeddingModelConfig
+      ? { memory: { modelConfig: opts.embeddingModelConfig, ttlDays: 30 } }
+      : {}),
     tools: [
       agentTool("docs-agent", namespace),
       agentTool("k8s-inspector", namespace),
