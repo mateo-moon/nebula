@@ -200,8 +200,8 @@ export function declareAgents(
       "Operators: export KUBECONFIG=~/.nebula/<cluster>/kubeconfig; kubectl get nodes.",
       "Provide BOTH methods in your answer. Never ask which role they are.",
     ].join("\n"),
-    // TODO: re-enable memory after verifying pgvector migration on the external Postgres.
-    // memory: { modelConfig: SUBAGENT_MODEL_CONFIG, ttlDays: 30 },
+    // Vector memory (cross-session recall; pgvector 0.8.3 verified on external Postgres).
+    memory: { modelConfig: SUBAGENT_MODEL_CONFIG, ttlDays: 30 },
     tools: [
       agentTool("docs-agent", namespace),
       agentTool("k8s-inspector", namespace),
