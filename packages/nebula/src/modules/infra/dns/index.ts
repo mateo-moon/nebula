@@ -42,6 +42,16 @@ export type {
   DnsWorkloadIdentityConfig, // @deprecated - use DnsGkeWorkloadIdentityConfig
 } from './cloudflare-composition';
 
+// Re-export Hetzner Composition classes (Crossplane v2)
+export {
+  DnsHetznerComposition,
+  DnsZoneHetzner,
+} from './hetzner-composition';
+export type {
+  DnsHetznerCompositionConfig,
+  DnsZoneHetznerConfig,
+} from './hetzner-composition';
+
 export interface DnsZoneConfig {
   /** Zone name (used as resource name) */
   name: string;
