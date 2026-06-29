@@ -19,7 +19,7 @@ import { HelmModule } from "../../../core";
 export interface CertManagerConfig {
   /** Namespace for cert-manager (defaults to cert-manager) */
   namespace?: string;
-  /** Helm chart version (defaults to v1.19.3) */
+  /** Helm chart version (defaults to v1.20.2) */
   version?: string;
   /** Helm repository URL */
   repository?: string;

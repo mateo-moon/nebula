@@ -10,7 +10,7 @@ export interface KarmadaConfig {
   /** Namespace for Karmada control plane (defaults to karmada-system) */
   namespace?: string;
 
-  /** Helm chart version (defaults to latest stable) */
+  /** Helm chart version (defaults to 1.16.0, KARMADA_VERSION) */
   version?: string;
 
   /** Helm repository URL */
