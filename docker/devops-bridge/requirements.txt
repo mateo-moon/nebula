@@ -1,0 +1,9 @@
+# Shared deps for all DevOps-agent bridges / comms bots.
+# One image; each bridge is a different entrypoint (see Dockerfile).
+httpx>=0.27,<1.0      # A2A client (a2a_common.py) — used by every bridge
+fastapi>=0.115        # webhook receivers (alert_bridge, github_bridge)
+uvicorn[standard]>=0.30
+kubernetes>=30        # k8s_watch informers
+python-telegram-bot>=21  # telegram_bot
+matrix-nio>=0.25      # matrix_bridge
+mcp>=1.0             # cluster_info MCP server (official MCP Python SDK)
