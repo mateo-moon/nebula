@@ -699,11 +699,11 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
           name: nebulaSaName,
           namespace: namespaceName,
         },
-        {
-          kind: "ServiceAccount",
-          name: "argocd-repo-server",
-          namespace: namespaceName,
-        },
+        // NOTE: argocd-repo-server was previously a subject here too, giving the
+        // whole repo-server pod (which hosts the cmp sidecar) cluster-admin — a
+        // supply-chain RCE path (a compromised dep in the cmp = cluster root).
+        // Removed: the cmp renderer only writes manifests to stdout and needs zero
+        // in-cluster permissions (the application-controller applies them).
       ],
     });
 
