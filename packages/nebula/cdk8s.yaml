@@ -58,6 +58,8 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/route53.aws.upbound.io_zones.yaml
   # AWS Provider CRDs - KMS (SOPS key, optional)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/kms.aws.upbound.io_keys.yaml
+  # AWS Provider CRDs - S3 (Thanos long-term metrics bucket)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/s3.aws.upbound.io_buckets.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/kms.aws.upbound.io_aliases.yaml
   # cert-manager CRDs (using v1.18.0 - CRDs are backward compatible)
   - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-clusterissuers.yaml
