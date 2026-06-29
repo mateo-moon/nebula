@@ -13,6 +13,7 @@
 import { ApiObject } from "cdk8s";
 import type { Construct } from "constructs";
 import { remoteMcp } from "./crd";
+import { DEFAULT_BRIDGE_IMAGE } from "./bridges";
 
 export interface GithubMcpConfig {
   /** github-mcp-server image (default ghcr.io/github/github-mcp-server:latest). */
@@ -99,6 +100,105 @@ export function declareGithubMcp(
     url: `http://${name}.${ns}:${port}/sse`,
     timeout: "60s",
     sseReadTimeout: "5m",
+  });
+
+  return name;
+}
+
+// ── cluster-info MCP (#4) ─────────────────────────────────────────────────────
+//
+// The cluster-info MCP server (docker/devops-bridge/cluster_info/main.py) gives
+// agents a tool to query THIS cluster's access method, API endpoint, agent topology,
+// and step-by-step access instructions. It's baked into the shared devops-bridge
+// image (the Dockerfile COPYs cluster_info/) but runs here as a STANDALONE MCP
+// server — NOT as a bridge — driven by the official MCP Python SDK (FastMCP) in
+// streamable-http mode. The docs-agent references it so its answers come from the
+// live server (always accurate, configurable via env) rather than a frozen prompt.
+
+export interface ClusterInfoMcpConfig {
+  /** Image bundling cluster_info/main.py (default: the shared devops-bridge image). */
+  image?: string;
+  /** Cluster name surfaced by get_cluster_info (env CLUSTER_NAME; defaults to the server's
+   *  built-in default if unset — pass the real cluster name for portability). */
+  clusterName?: string;
+  /** API endpoint surfaced by get_cluster_info (env API_ENDPOINT; optional). */
+  apiEndpoint?: string;
+  /** Listening port (default 8080 — the FastMCP streamable-http port). */
+  port?: number;
+}
+
+/** The RemoteMCPServer name agents reference this server by. */
+export const CLUSTER_INFO_MCP = "cluster-info";
+
+/**
+ * Declare the cluster-info MCP Deployment + Service + RemoteMCPServer. Returns the
+ * RemoteMCPServer name (`cluster-info`) for agent wiring — pass it to
+ * `declareAgents({ clusterInfoMcp })` so the docs-agent can call get_cluster_info /
+ * get_access_instructions.
+ *
+ * The server is stateless + tokenless, so it's safe to deploy unconditionally
+ * (unlike the bridges, it won't crash-loop on a missing secret).
+ */
+export function declareClusterInfoMcp(
+  scope: Construct,
+  ns: string,
+  cfg: ClusterInfoMcpConfig = {},
+): string {
+  const name = CLUSTER_INFO_MCP;
+  const image = cfg.image ?? DEFAULT_BRIDGE_IMAGE;
+  const port = cfg.port ?? 8080;
+
+  // Env for main.py: PORT (listen port) + the optional cluster specifics it surfaces.
+  const env: { name: string; value: string }[] = [{ name: "PORT", value: String(port) }];
+  if (cfg.clusterName) env.push({ name: "CLUSTER_NAME", value: cfg.clusterName });
+  if (cfg.apiEndpoint) env.push({ name: "API_ENDPOINT", value: cfg.apiEndpoint });
+
+  new ApiObject(scope, "cluster-info-mcp-deploy", {
+    apiVersion: "apps/v1",
+    kind: "Deployment",
+    metadata: { name, namespace: ns },
+    spec: {
+      replicas: 1,
+      selector: { matchLabels: { app: name } },
+      template: {
+        metadata: { labels: { app: name } },
+        spec: {
+          containers: [
+            {
+              name: "mcp",
+              image,
+              imagePullPolicy: "IfNotPresent",
+              // FastMCP streamable-http server. main.py's __main__ block calls
+              // mcp.run(transport="streamable-http", host="0.0.0.0", port=PORT).
+              // Matches the bridges.ts entrypoint convention (full cmd in args;
+              // the devops-bridge image has no ENTRYPOINT).
+              args: ["python", "-u", "/app/cluster_info/main.py"],
+              env,
+              ports: [{ containerPort: port }],
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  new ApiObject(scope, "cluster-info-mcp-svc", {
+    apiVersion: "v1",
+    kind: "Service",
+    metadata: { name, namespace: ns },
+    spec: { type: "ClusterIP", selector: { app: name }, ports: [{ port, targetPort: port }] },
+  });
+
+  remoteMcp(scope, "cluster-info-mcp-server", {
+    name,
+    namespace: ns,
+    description:
+      "Cluster-info MCP — get_cluster_info + get_access_instructions for THIS cluster.",
+    // FastMCP streamable-http mounts its endpoint at /mcp by default
+    // (MCP Python SDK: SSE→/sse, streamable-http→/mcp).
+    protocol: "STREAMABLE_HTTP",
+    url: `http://${name}.${ns}:${port}/mcp`,
+    timeout: "30s",
   });
 
   return name;
