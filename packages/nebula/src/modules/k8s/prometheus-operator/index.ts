@@ -196,22 +196,26 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
     // JSON is valid YAML and matches the legacy secret format. S3/MinIO OMIT
     // access_key/secret_key so Thanos falls back to the default credential chain
     // — on k0s that resolves to the EC2 instance metadata service = the node role.
-    const thanosObjstoreConfig: Record<string, unknown> = thanosEnabled
-      ? storeType === "gcs"
-        ? { type: "GCS", config: { bucket: objstoreBucket } }
-        : {
-            type: "S3",
-            config: {
-              bucket: objstoreBucket,
-              ...(thanosCfg!.objectStore?.region
-                ? { region: thanosCfg!.objectStore.region }
-                : {}),
-              ...(thanosCfg!.objectStore?.endpoint
-                ? { endpoint: thanosCfg!.objectStore.endpoint }
-                : {}),
-            },
-          }
-      : {};
+    let thanosObjstoreConfig: Record<string, unknown> = {};
+    if (thanosEnabled) {
+      if (storeType === "gcs") {
+        thanosObjstoreConfig = { type: "GCS", config: { bucket: objstoreBucket } };
+      } else {
+        const s3region = thanosCfg!.objectStore?.region;
+        thanosObjstoreConfig = {
+          type: "S3",
+          config: {
+            bucket: objstoreBucket,
+            // Thanos REQUIRES an explicit S3 endpoint (it does NOT derive one from
+            // the region). Default to the AWS regional endpoint; auth stays keyless
+            // via the node instance profile (no access_key/secret_key in the doc).
+            endpoint:
+              thanosCfg!.objectStore?.endpoint ?? `s3.${s3region}.amazonaws.com`,
+            ...(s3region ? { region: s3region } : {}),
+          },
+        };
+      }
+    }
 
     // Create the objstore Secret before the Prometheus release so the sidecar
     // can reference it at apply time.
@@ -633,10 +637,10 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             // "prometheus" + thanosService.enabled) exposes the sidecar gRPC store
             // as service "prometheus-kube-prometheus-stack-thanos-discovery:10901".
             `dnssrv+_grpc._tcp.prometheus-kube-prometheus-stack-thanos-discovery.${namespaceName}.svc.cluster.local`,
-            // This deployment's store gateway (releaseName "thanos") serving
-            // historical blocks from the objstore bucket.
-            `dnssrv+_grpc._tcp.thanos-storegateway.${namespaceName}.svc.cluster.local`,
             // Cross-cluster stores (e.g. another cluster's sidecar/store gRPC).
+            // NOTE: do NOT add the local thanos-storegateway here — the bitnami
+            // chart auto-injects it when storegateway.enabled. Adding it explicitly
+            // duplicates the query --endpoint and thanos exits "Address ... duplicated".
             ...(thanosCfg!.externalStores ?? []),
           ],
           serviceAccount: {
