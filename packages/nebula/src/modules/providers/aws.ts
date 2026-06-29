@@ -78,10 +78,11 @@ export interface AwsProviderConfig {
  * AwsProvider - installs the Upbound AWS Crossplane provider families and a
  * single ProviderConfig that the `infra/aws` modules reference.
  *
- * Mirrors {@link GcpProvider} but without the GCP Workload-Identity /
- * DeploymentRuntimeConfig machinery: for a cross-cloud management cluster
- * (GKE / BYO k8s provisioning AWS), credentials are supplied as a static
- * Secret rather than via an injected cloud identity.
+ * Mirrors {@link GcpProvider}. Credentials default to a static Secret (for a
+ * cross-cloud management cluster — GKE/BYO k8s provisioning AWS); a `webIdentity`
+ * source (self-hosted OIDC) instead emits per-family DeploymentRuntimeConfigs so
+ * each controller family auths via its own role (the keyless path used on the AWS
+ * stage).
  *
  * @example
  * ```typescript
