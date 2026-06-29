@@ -252,7 +252,9 @@ export class CloudNativePg extends HelmModule<CloudNativePgConfig> {
                   kind: "Secret",
                   name: connectionSecretName,
                   namespace: namespaceName,
-                  fieldPath: "data.private_key",
+                  // upbound ServiceAccountKey exposes the key under attribute.private_key
+                  // (data.private_key resolves nothing -> barman-cloud GCS backup auth fails).
+                  fieldPath: "data.attribute.private_key",
                 },
                 toFieldPath: "data.gcsCredentials",
               },
