@@ -22,6 +22,11 @@ export interface PrometheusOperatorConfig {
   prometheusRwAuthHtpasswd?: string | pulumi.Output<string>;
   /** Prometheus remote_write Ingress hostname (e.g., "prometheus-rw.dev.nuconstruct.xyz") */
   prometheusRwHost?: string;
+  /** Deploy a local Loki + its Grafana datasource (default true). Set false to ship logs to a
+   *  remote Loki (see promtailClient) and skip the local Loki stack. */
+  deployLoki?: boolean;
+  /** When set, Promtail ships to this remote Loki push URL with basic auth instead of the local gateway. */
+  promtailClient?: { url: string; username?: pulumi.Input<string>; password?: pulumi.Input<string>; externalLabels?: Record<string, string> };
 }
 
 export class PrometheusOperator extends pulumi.ComponentResource {
@@ -462,7 +467,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       lokiChartArgs.version = lokiVersion;
     }
 
-    const lokiChart = new k8s.helm.v4.Chart(
+    const lokiChart = args.deployLoki === false ? undefined : new k8s.helm.v4.Chart(
       "loki",
       lokiChartArgs,
       { parent: this, dependsOn: [namespace, chart] }
@@ -557,9 +562,17 @@ export class PrometheusOperator extends pulumi.ComponentResource {
       values: {
         config: {
           clients: [
-            {
-              url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`
-            }
+            args.promtailClient
+              ? {
+                  url: args.promtailClient.url,
+                  ...(args.promtailClient.username && args.promtailClient.password
+                    ? { basic_auth: { username: args.promtailClient.username, password: args.promtailClient.password } }
+                    : {}),
+                  ...(args.promtailClient.externalLabels ? { external_labels: args.promtailClient.externalLabels } : {}),
+                }
+              : {
+                  url: `http://loki-gateway.${namespaceName}.svc.cluster.local:80/loki/api/v1/push`,
+                },
           ],
           snippets: {
             scrapeConfigs: `- job_name: kubernetes-pods
@@ -628,7 +641,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     const promtailChart = new k8s.helm.v4.Chart(
       "promtail",
       promtailChartArgs,
-      { parent: this, dependsOn: [lokiChart] }
+      { parent: this, dependsOn: lokiChart ? [lokiChart] : [namespace] }
     );
     
     // Ensure Promtail is tracked by the component
@@ -639,6 +652,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
     // Patch existing Grafana datasource ConfigMap to add Loki
     // Note: We create a separate ConfigMap that Grafana will load
     // Grafana loads all ConfigMaps with label grafana_datasource=1
+    if (args.deployLoki !== false)
     new k8s.core.v1.ConfigMap(
       "loki-grafana-datasource",
       {
@@ -672,7 +686,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           })
         }
       },
-      { parent: this, dependsOn: [chart, lokiChart] }
+      { parent: this, dependsOn: [chart] }
     );
   }
 }
