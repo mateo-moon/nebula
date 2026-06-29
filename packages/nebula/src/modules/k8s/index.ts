@@ -70,6 +70,11 @@ export type { DeclareAgentsOptions } from "./kagent/agents";
 // Self-hosted github-mcp server.
 export { declareGithubMcp, GITHUB_MCP } from "./kagent/mcp";
 
+// Cluster-info MCP server (get_cluster_info + get_access_instructions) — baked into the
+// devops-bridge image, run standalone as a streamable-http MCP the docs-agent calls.
+export { declareClusterInfoMcp, CLUSTER_INFO_MCP } from "./kagent/mcp";
+export type { GithubMcpConfig, ClusterInfoMcpConfig } from "./kagent/mcp";
+
 // Developer OIDC kubeconfig ConfigMap (agent serves this to developers).
 export { declareDevKubeconfig, type DevKubeconfigOptions } from "./kagent/access";
 

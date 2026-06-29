@@ -89,9 +89,15 @@ export interface KagentIngressConfig {
   enabled: boolean;
   /** Ingress class name (default: "nginx"). */
   className?: string;
-  /** Hostname for the UI (e.g. "kagent.example.com"). */
+  /** Hostname for the UI (e.g. "kagent.example.com"). Env fallback: `KAGENT_UI_HOST`. */
   host?: string;
-  /** TLS configuration (if omitted, ingress is HTTP-only). */
+  /**
+   * Hostname for the A2A (:8083 controller) endpoint when `expose` includes
+   * "a2a". Defaults to `host`; use a dedicated hostname when exposing both UI
+   * and A2A (they each serve at `/`). Env fallback: `KAGENT_A2A_HOST`.
+   */
+  a2aHost?: string;
+  /** TLS configuration (if omitted, ingress is HTTP-only). Env issuer fallback: `KAGENT_TLS_ISSUER`. */
   tls?: { issuer?: string; host?: string };
   /** Which endpoints to expose: "ui" (default), "a2a" (the :8083 controller endpoint). */
   expose?: ("ui" | "a2a")[];
@@ -325,21 +331,31 @@ export class Kagent extends BaseConstruct<KagentConfig> {
 
   /**
    * Create Ingress resources for the UI (and optionally the A2A :8083 endpoint).
-   * The chart does not provide ingress configuration — we build it with
-   * kplus.Ingress + ArgoCD annotations.
+   * The chart does not provide ingress configuration — we build it as raw
+   * `networking.k8s.io/v1` Ingress objects with ArgoCD sync-wave + cert-manager
+   * annotations. external-dns (configured with `--source=ingress`, the nebula
+   * module default) reads each host from `spec.rules[].host`, so it auto-creates
+   * the DNS records without any per-Ingress hostname annotation.
+   *
+   * Hosts are configurable via {@link KagentIngressConfig} fields or env vars
+   * (`KAGENT_UI_HOST`, `KAGENT_A2A_HOST`, `KAGENT_TLS_ISSUER`).
    */
   private createIngress(ns: string): void {
     const cfg = this.config.ingress!;
     const className = cfg.className ?? "nginx";
-    const host = cfg.host ?? "kagent.local";
+    const host = cfg.host ?? process.env.KAGENT_UI_HOST ?? "kagent.local";
     const expose = cfg.expose ?? ["ui"];
 
+    // Base annotations shared by the UI + A2A ingresses.
     const annotations: Record<string, string> = {
       ...cfg.annotations,
       ...syncWave(2),
     };
-    if (cfg.tls?.issuer) {
-      annotations["cert-manager.io/cluster-issuer"] = cfg.tls.issuer;
+    if (cfg.tls) {
+      annotations["cert-manager.io/cluster-issuer"] =
+        cfg.tls.issuer ??
+        process.env.KAGENT_TLS_ISSUER ??
+        "letsencrypt-prod";
     }
 
     if (expose.includes("ui")) {
@@ -376,6 +392,55 @@ export class Kagent extends BaseConstruct<KagentConfig> {
                   {
                     hosts: [cfg.tls.host ?? host],
                     secretName: "kagent-ui-tls",
+                  },
+                ],
+              }
+            : {}),
+        },
+      });
+    }
+
+    // A2A (controller :8083) endpoint. A dedicated hostname is recommended when
+    // the UI is also exposed — both serve at `/`.
+    if (expose.includes("a2a")) {
+      const a2aHost =
+        cfg.a2aHost ?? process.env.KAGENT_A2A_HOST ?? host;
+      new ApiObject(this, "ingress-a2a", {
+        apiVersion: "networking.k8s.io/v1",
+        kind: "Ingress",
+        metadata: {
+          name: "kagent-a2a",
+          namespace: ns,
+          annotations,
+          labels: { "app.kubernetes.io/managed-by": "nebula" },
+        },
+        spec: {
+          ingressClassName: className,
+          rules: [
+            {
+              host: a2aHost,
+              http: {
+                paths: [
+                  {
+                    path: "/",
+                    pathType: "Prefix",
+                    backend: {
+                      service: {
+                        name: "kagent-controller",
+                        port: { number: 8083 },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+          ...(cfg.tls
+            ? {
+                tls: [
+                  {
+                    hosts: [cfg.tls.host ?? a2aHost],
+                    secretName: "kagent-a2a-tls",
                   },
                 ],
               }

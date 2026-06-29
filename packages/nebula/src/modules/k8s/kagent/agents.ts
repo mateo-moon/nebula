@@ -60,6 +60,10 @@ const KIND_FIX_DEPLOYMENT = {
 
 export interface DeclareAgentsOptions {
   githubMcp?: string;
+  /** Name of the cluster-info RemoteMCPServer (from declareClusterInfoMcp). When set, the
+   *  docs-agent gets get_cluster_info + get_access_instructions tools so its answers come
+   *  from the live cluster-info server rather than only the frozen CLUSTER CONTEXT prompt. */
+  clusterInfoMcp?: string;
   /** Per-cluster context (access method, API endpoint, deploy commands) for the docs-agent.
    *  Provide via env at synth time. If unset, the docs-agent tells users to ask the operator. */
   clusterContext?: string;
@@ -108,6 +112,10 @@ export function declareAgents(
   // NOTE: kagent 0.9.7's CRD doesn't have systemMessageFrom — using inline systemMessage.
   // The ConfigMap (docs-agent-context) is kept as the updatable source; update both when
   // changing the cluster context. Future kagent versions may support systemMessageFrom.
+  //
+  // When clusterInfoMcp is wired, the docs-agent calls the live cluster-info MCP server
+  // (get_cluster_info / get_access_instructions) for always-accurate specifics, instead of
+  // relying solely on the frozen CLUSTER CONTEXT prompt.
   defineAgent(chart, "docs-agent", {
     name: "docs-agent",
     namespace,
@@ -117,6 +125,15 @@ export function declareAgents(
       "Cluster documentation specialist. Answers 'how to' / access questions with " +
       "specific commands for THIS cluster. Never gives generic advice.",
     systemMessage: docsPrompt,
+    ...(opts.clusterInfoMcp
+      ? {
+          tools: [
+            mcpTool(opts.clusterInfoMcp, {
+              toolNames: ["get_cluster_info", "get_access_instructions"],
+            }),
+          ],
+        }
+      : {}),
   });
 
   // ── k8s-inspector: read-only cluster specialist ──────────────────────────────

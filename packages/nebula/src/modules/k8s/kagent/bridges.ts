@@ -20,6 +20,7 @@
  */
 import { ApiObject, type ApiObjectMetadata } from "cdk8s";
 import type { Construct } from "constructs";
+import { syncWave } from "../../../core";
 
 /**
  * Default bridge image — the canonical DevOps-bridge image built from
@@ -52,10 +53,12 @@ export interface BridgesConfig {
     matrixToken?: string;
     matrixRooms?: string;
   };
-  /** Public host for the GitHub webhook ingress (Phase 5). */
+  /** Public host for the GitHub webhook ingress. Env fallback: `GITHUB_WEBHOOK_HOST`. */
   githubWebhookHost?: string;
+  /** Ingress class for the public webhook ingress (default: "nginx"). */
+  ingressClassName?: string;
   /** TLS for the public webhook ingress (cert-manager cluster-issuer). M14: never serve the
-   *  secret-bearing webhook over plain HTTP. */
+   *  secret-bearing webhook over plain HTTP. Env issuer fallback: `GITHUB_WEBHOOK_TLS_ISSUER`. */
   tls?: { issuer?: string };
 }
 
@@ -198,24 +201,49 @@ export function declareBridges(scope: Construct, ns: string, cfg: BridgesConfig)
       ],
     });
     service(scope, "github-bridge", ns, 8080, "github-bridge");
-    if (cfg.githubWebhookHost) {
+    const webhookHost = cfg.githubWebhookHost ?? process.env.GITHUB_WEBHOOK_HOST;
+    if (webhookHost) {
+      // external-dns (`--source=ingress`, the nebula default) reads the host from
+      // spec.rules[].host and creates the DNS record automatically.
+      const annotations: Record<string, string> = { ...syncWave(2) };
+      if (cfg.tls) {
+        // M14: terminate TLS — never serve the secret-bearing webhook over plain HTTP.
+        annotations["cert-manager.io/cluster-issuer"] =
+          cfg.tls.issuer ??
+          process.env.GITHUB_WEBHOOK_TLS_ISSUER ??
+          "letsencrypt-prod";
+      }
       new ApiObject(scope, "github-bridge-ingress", {
         apiVersion: "networking.k8s.io/v1",
         kind: "Ingress",
-        ...meta("github-bridge", ns),
+        metadata: {
+          name: "github-bridge",
+          namespace: ns,
+          labels: LABELS,
+          annotations,
+        },
         spec: {
-          ingressClassName: "nginx",
-          rules: [{ host: cfg.githubWebhookHost, http: { paths: [{ path: "/github", pathType: "Prefix", backend: { service: { name: "github-bridge", port: { number: 8080 } } } }] } }],
-          // M14: terminate TLS — never serve the secret-bearing webhook over plain HTTP.
+          ingressClassName: cfg.ingressClassName ?? "nginx",
+          rules: [
+            {
+              host: webhookHost,
+              http: {
+                paths: [
+                  {
+                    path: "/github",
+                    pathType: "Prefix",
+                    backend: {
+                      service: { name: "github-bridge", port: { number: 8080 } },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
           ...(cfg.tls
-            ? {
-                tls: [{ hosts: [cfg.githubWebhookHost], secretName: "github-bridge-tls" }],
-              }
+            ? { tls: [{ hosts: [webhookHost], secretName: "github-bridge-tls" }] }
             : {}),
         },
-        ...(cfg.tls
-          ? { metadata: { name: "github-bridge", namespace: ns, labels: LABELS, annotations: { "cert-manager.io/cluster-issuer": cfg.tls.issuer ?? "letsencrypt-prod" } } }
-          : {}),
       });
     }
   }
