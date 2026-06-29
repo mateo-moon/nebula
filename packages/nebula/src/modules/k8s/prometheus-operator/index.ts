@@ -28,10 +28,38 @@ import {
   wiKsaAnnotations,
 } from "../../infra/gcp/workload-identity";
 
+/** Object-store backend for Thanos long-term metrics storage. */
+export interface ThanosObjectStore {
+  /**
+   * Backend type. Defaults to 'gcs' (GCS bucket + GCP Workload Identity via
+   * Crossplane) for backward compatibility with gcpProject/existingBucket — this
+   * is the path the dev GKE cluster uses.
+   *
+   * 's3' targets AWS S3 KEYLESSLY via the k0s node instance profile: NO IAM
+   * resources are created here — grant the node role s3:GetObject/PutObject on
+   * the bucket out of band, and Thanos resolves credentials through the default
+   * chain (→ EC2 instance metadata = the node role). 'minio' targets an
+   * in-cluster MinIO endpoint (supply bucket + endpoint).
+   */
+  type?: "gcs" | "s3" | "minio";
+  /** S3/MinIO bucket name (required for 's3' and 'minio'). */
+  bucket?: string;
+  /** S3 region, e.g. "eu-west-1" (recommended for 's3'). */
+  region?: string;
+  /** Endpoint URL for MinIO or any S3-compatible store ('minio'). */
+  endpoint?: string;
+}
+
 /** Thanos configuration for multi-cluster metrics aggregation */
 export interface ThanosConfig {
   /** Enable Thanos for long-term metrics storage and multi-cluster querying */
   enabled: boolean;
+  /**
+   * Object store backend. Omit (or type 'gcs') for the legacy GCS + Workload
+   * Identity path. Set type 's3' for AWS (keyless via the node instance profile)
+   * or 'minio' for an in-cluster MinIO endpoint.
+   */
+  objectStore?: ThanosObjectStore;
   /** Thanos version (default: v0.34.1) */
   version?: string;
   /** Use existing GCS bucket name (if not provided, bucket is created automatically) */
@@ -122,18 +150,93 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
     // (e.g. GKE: components.gke.io/gke-managed-components).
     const defaultTolerations = this.config.tolerations ?? [];
 
+    // --- Thanos plan ---------------------------------------------------------
+    // Computed EARLY so the Prometheus→Thanos sidecar can be wired into the
+    // kube-prometheus-stack release below. That release's Helm values are frozen
+    // at creation time, so the objstore Secret and the sidecar config must exist
+    // BEFORE `createHelmRelease` is called (the previous revision created them
+    // only afterwards, leaving the sidecar un-wired — see the historical note in
+    // the Thanos resources block below).
+    const thanosCfg = this.config.thanos;
+    const thanosEnabled = !!thanosCfg?.enabled;
+    const thanosVersion = thanosCfg?.version ?? "v0.34.1";
+    // 'gcs' is the default (legacy/dev path). 's3' = AWS keyless via the node
+    // instance profile. 'minio' = in-cluster endpoint.
+    const storeType = thanosCfg?.objectStore?.type ?? "gcs";
+    const createWiBindings =
+      thanosCfg?.createWorkloadIdentityBindings !== false;
+
+    // Resolve the object-store bucket + the GCP service-account email (GCP only).
+    // S3/MinIO carry credentials out of band (instance profile / endpoint), so
+    // no IAM resources are created for them here.
+    let objstoreBucket = "";
+    if (thanosEnabled) {
+      if (storeType === "gcs") {
+        if (!thanosCfg?.gcpProject && !thanosCfg?.existingBucket) {
+          throw new Error(
+            "thanos.objectStore 'gcs' requires gcpProject (or existingBucket).",
+          );
+        }
+        const gcpProject = thanosCfg!.gcpProject!;
+        objstoreBucket = thanosCfg!.existingBucket ?? `${id}-thanos-${gcpProject}`;
+        const accountId = normalizeAccountId(`${id}-thanos`);
+        this.thanosServiceAccountEmail = `${accountId}@${gcpProject}.iam.gserviceaccount.com`;
+      } else {
+        // S3 / MinIO
+        if (!thanosCfg?.objectStore?.bucket) {
+          throw new Error(
+            `thanos.objectStore '${storeType}' requires objectStore.bucket.`,
+          );
+        }
+        objstoreBucket = thanosCfg.objectStore.bucket;
+      }
+    }
+
+    // Thanos objstore config document (https://thanos.io/tip/thanos/storage.md/).
+    // JSON is valid YAML and matches the legacy secret format. S3/MinIO OMIT
+    // access_key/secret_key so Thanos falls back to the default credential chain
+    // — on k0s that resolves to the EC2 instance metadata service = the node role.
+    const thanosObjstoreConfig: Record<string, unknown> = thanosEnabled
+      ? storeType === "gcs"
+        ? { type: "GCS", config: { bucket: objstoreBucket } }
+        : {
+            type: "S3",
+            config: {
+              bucket: objstoreBucket,
+              ...(thanosCfg!.objectStore?.region
+                ? { region: thanosCfg!.objectStore.region }
+                : {}),
+              ...(thanosCfg!.objectStore?.endpoint
+                ? { endpoint: thanosCfg!.objectStore.endpoint }
+                : {}),
+            },
+          }
+      : {};
+
+    // Create the objstore Secret before the Prometheus release so the sidecar
+    // can reference it at apply time.
+    if (thanosEnabled) {
+      new kplus.Secret(this, "thanos-objstore-secret", {
+        metadata: { name: "thanos-objstore-config", namespace: namespaceName },
+        stringData: { "objstore.yml": JSON.stringify(thanosObjstoreConfig) },
+      });
+    }
+
     const defaultValues: Record<string, unknown> = {
       crds: { install: true },
       prometheus: {
+        // When Thanos owns long-term storage, Prometheus keeps only a short local
+        // retention (the sidecar uploads every TSDB block to the objstore). Without
+        // Thanos, retain 30d / 50Gi locally as before.
         prometheusSpec: {
           tolerations: defaultTolerations,
-          retention: "30d",
+          retention: thanosEnabled ? "24h" : "30d",
           storageSpec: {
             volumeClaimTemplate: {
               spec: {
                 storageClassName: storageClassName,
                 accessModes: ["ReadWriteOnce"],
-                resources: { requests: { storage: "50Gi" } },
+                resources: { requests: { storage: thanosEnabled ? "20Gi" : "50Gi" } },
               },
             },
           },
@@ -142,7 +245,41 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           podMonitorSelectorNilUsesHelmValues: false,
           probeSelectorNilUsesHelmValues: false,
           scrapeConfigSelectorNilUsesHelmValues: false,
+          // Prometheus→Thanos sidecar: uploads blocks to the objstore and exposes
+          // a gRPC store that Thanos Query discovers via `thanosService` below.
+          ...(thanosEnabled
+            ? {
+                thanos: {
+                  objectStorageConfig: {
+                    // Secret created above (or supplied via objectStore.existingSecret).
+                    existingSecret: {
+                      name: "thanos-objstore-config",
+                      key: "objstore.yml",
+                    },
+                  },
+                },
+              }
+            : {}),
         },
+        // Expose the sidecar gRPC store + a ServiceMonitor so Thanos Query can
+        // discover it (releaseName "prometheus" → service
+        // "prometheus-kube-prometheus-stack-thanos-discovery").
+        ...(thanosEnabled
+          ? {
+              thanosService: { enabled: true },
+              thanosServiceMonitor: { enabled: true },
+              // GCP Workload Identity: annotate the Prometheus ServiceAccount so
+              // the sidecar can authenticate to GCS. (S3/MinIO need no annotation —
+              // the node instance profile / endpoint handles auth.)
+              ...(storeType === "gcs" && createWiBindings && this.thanosServiceAccountEmail
+                ? {
+                    serviceAccount: {
+                      annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
+                    },
+                  }
+                : {}),
+            }
+          : {}),
       },
       prometheusOperator: {
         tolerations: defaultTolerations,
@@ -372,145 +509,115 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
     // above), using the correct service port names. We do not hand-roll them
     // here to avoid duplicate, non-functional monitors.
 
-    // Deploy Thanos for long-term metrics storage
-    if (this.config.thanos?.enabled) {
-      const thanosVersion = this.config.thanos.version ?? "v0.34.1";
-      const providerConfigRef =
-        this.config.thanos.providerConfigRef ?? "default";
+    // Deploy Thanos components (Query / Store Gateway / Compactor). The
+    // Prometheus→Thanos sidecar + the objstore Secret are wired into the
+    // kube-prometheus-stack release above, so block upload works end-to-end
+    // automatically. (The previous revision left the sidecar un-wired AND gave
+    // Thanos Query an empty `stores` list, so nothing actually reached long-term
+    // storage — both are fixed here.) Query now discovers the local sidecar +
+    // this deployment's store gateway via DNS, plus any external cross-cluster
+    // stores.
+    if (thanosEnabled) {
+      const providerConfigRef = thanosCfg!.providerConfigRef ?? "default";
+      const gcpProject = thanosCfg!.gcpProject;
 
-      if (
-        !this.config.thanos.gcpProject &&
-        !this.config.thanos.existingBucket
-      ) {
-        throw new Error(
-          "gcpProject is required for Thanos when not using existingBucket",
-        );
-      }
+      // GCP-only resources: the GCS bucket, GCP service account, bucket IAM grant,
+      // and Workload-Identity bindings for the Prometheus sidecar + Thanos
+      // component service accounts. S3/MinIO authenticate out of band (node
+      // instance profile / endpoint) and need none of this.
+      if (storeType === "gcs" && gcpProject) {
+        // Create GCS bucket if not using an existing one.
+        if (!thanosCfg!.existingBucket) {
+          this.thanosBucket = new GcsBucket(this, "thanos-bucket", {
+            metadata: {
+              name: `${id}-thanos-bucket`,
+              annotations: { "crossplane.io/external-name": objstoreBucket },
+            },
+            spec: {
+              forProvider: {
+                project: gcpProject,
+                location: "EU",
+                storageClass: "STANDARD",
+                uniformBucketLevelAccess: true,
+                versioning: { enabled: false },
+                lifecycleRule: [
+                  { action: { type: "Delete" }, condition: { age: 365 } },
+                ],
+              },
+              providerConfigRef: { name: providerConfigRef },
+            },
+          });
+        }
 
-      const gcpProject = this.config.thanos.gcpProject!;
-      const bucketName =
-        this.config.thanos.existingBucket ?? `${id}-thanos-${gcpProject}`;
-      const accountId = normalizeAccountId(`${id}-thanos`);
-      this.thanosServiceAccountEmail = `${accountId}@${gcpProject}.iam.gserviceaccount.com`;
-
-      // Create GCS bucket if not using existing
-      if (!this.config.thanos.existingBucket) {
-        this.thanosBucket = new GcsBucket(this, "thanos-bucket", {
+        this.thanosServiceAccount = new CpServiceAccount(this, "thanos-gsa", {
           metadata: {
-            name: `${id}-thanos-bucket`,
+            name: `${id}-thanos-gsa`,
             annotations: {
-              "crossplane.io/external-name": bucketName,
+              "crossplane.io/external-name": normalizeAccountId(`${id}-thanos`),
             },
           },
           spec: {
+            forProvider: { displayName: `Thanos for ${id}`, project: gcpProject },
+            providerConfigRef: { name: providerConfigRef },
+          },
+        });
+
+        new BucketIamMember(this, "thanos-bucket-iam", {
+          metadata: { name: `${id}-thanos-bucket-iam` },
+          spec: {
             forProvider: {
-              project: gcpProject,
-              location: "EU",
-              storageClass: "STANDARD",
-              uniformBucketLevelAccess: true,
-              versioning: { enabled: false },
-              lifecycleRule: [
-                {
-                  action: { type: "Delete" },
-                  condition: { age: 365 }, // Delete data older than 1 year
-                },
-              ],
+              bucket: objstoreBucket,
+              role: "roles/storage.objectAdmin",
+              member: `serviceAccount:${this.thanosServiceAccountEmail}`,
             },
             providerConfigRef: { name: providerConfigRef },
           },
         });
-      }
 
-      // Create GCP Service Account for Thanos
-      this.thanosServiceAccount = new CpServiceAccount(this, "thanos-gsa", {
-        metadata: {
-          name: `${id}-thanos-gsa`,
-          annotations: {
-            "crossplane.io/external-name": accountId,
-          },
-        },
-        spec: {
-          forProvider: {
-            displayName: `Thanos for ${id}`,
-            project: gcpProject,
-          },
-          providerConfigRef: { name: providerConfigRef },
-        },
-      });
-
-      // Grant Storage Object Admin on the bucket
-      new BucketIamMember(this, "thanos-bucket-iam", {
-        metadata: {
-          name: `${id}-thanos-bucket-iam`,
-        },
-        spec: {
-          forProvider: {
-            bucket: bucketName,
-            role: "roles/storage.objectAdmin",
-            member: `serviceAccount:${this.thanosServiceAccountEmail}`,
-          },
-          providerConfigRef: { name: providerConfigRef },
-        },
-      });
-
-      // Workload Identity bindings - enabled by default
-      // Requires Crossplane GSA to have roles/iam.serviceAccountAdmin
-      if (this.config.thanos.createWorkloadIdentityBindings !== false) {
-        // Workload Identity binding for Prometheus sidecar.
-        // The kube-prometheus-stack chart (releaseName "prometheus") names the
-        // Prometheus ServiceAccount "prometheus-kube-prometheus-stack-prometheus".
-        const prometheusKsa = "prometheus-kube-prometheus-stack-prometheus";
-        bindWorkloadIdentityUser({
-          scope: this,
-          id: "thanos-wi-prometheus",
-          name: `${id}-thanos-wi-prometheus`,
-          project: gcpProject,
-          namespace: namespaceName,
-          ksa: prometheusKsa,
-          gsaEmail: this.thanosServiceAccountEmail!,
-          providerConfigRef,
-        });
-
-        // Workload Identity bindings for Thanos components
-        const thanosComponents = [
-          "thanos-storegateway",
-          "thanos-compactor",
-          "thanos-query",
-        ];
-        thanosComponents.forEach((component, idx) => {
+        // Workload Identity bindings (requires Crossplane GSA to hold
+        // roles/iam.serviceAccountAdmin). Enabled unless createWorkloadIdentityBindings=false.
+        if (createWiBindings) {
+          // Prometheus sidecar service account (releaseName "prometheus").
           bindWorkloadIdentityUser({
             scope: this,
-            id: `thanos-wi-${idx}`,
-            name: `${id}-thanos-wi-${component}`,
+            id: "thanos-wi-prometheus",
+            name: `${id}-thanos-wi-prometheus`,
             project: gcpProject,
             namespace: namespaceName,
-            ksa: component,
+            ksa: "prometheus-kube-prometheus-stack-prometheus",
             gsaEmail: this.thanosServiceAccountEmail!,
             providerConfigRef,
           });
-        });
+          ["thanos-storegateway", "thanos-compactor", "thanos-query"].forEach(
+            (component, idx) => {
+              bindWorkloadIdentityUser({
+                scope: this,
+                id: `thanos-wi-${idx}`,
+                name: `${id}-thanos-wi-${component}`,
+                project: gcpProject,
+                namespace: namespaceName,
+                ksa: component,
+                gsaEmail: this.thanosServiceAccountEmail!,
+                providerConfigRef,
+              });
+            },
+          );
+        }
+      } else if (storeType !== "gcs") {
+        // S3 / MinIO: no IAM resources are created. Grant the node instance
+        // profile (S3) or the MinIO credentials (MinIO) access to the bucket OUT
+        // OF BAND — see the AWS infra / operator runbook for the node-role S3
+        // policy. Thanos resolves S3 creds via the default chain → IMDS → node role.
       }
 
-      // Create Thanos objstore config secret
-      const objstoreConfig = {
-        type: "GCS",
-        config: {
-          bucket: bucketName,
-        },
-      };
+      // GCP Workload-Identity email annotation for the Thanos component service
+      // accounts; empty for S3/MinIO (no per-SA identity — instance profile auth).
+      const componentSaAnnotations =
+        storeType === "gcs" && this.thanosServiceAccountEmail
+          ? wiKsaAnnotations(this.thanosServiceAccountEmail)
+          : {};
 
-      new kplus.Secret(this, "thanos-objstore-secret", {
-        metadata: {
-          name: "thanos-objstore-config",
-          namespace: namespaceName,
-        },
-        stringData: {
-          // Use objstore.yml to match Thanos default expectations
-          "objstore.yml": JSON.stringify(objstoreConfig),
-        },
-      });
-
-      // Deploy Thanos using Bitnami Helm chart
+      // Deploy Thanos using the Bitnami chart.
       const defaultThanosValues: Record<string, unknown> = {
         image: {
           registry: "quay.io",
@@ -521,17 +628,24 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         query: {
           enabled: true,
           tolerations: defaultTolerations,
-          stores: this.config.thanos.externalStores ?? [],
+          stores: [
+            // Local Prometheus Thanos sidecar. kube-prometheus-stack (releaseName
+            // "prometheus" + thanosService.enabled) exposes the sidecar gRPC store
+            // as service "prometheus-kube-prometheus-stack-thanos-discovery:10901".
+            `dnssrv+_grpc._tcp.prometheus-kube-prometheus-stack-thanos-discovery.${namespaceName}.svc.cluster.local`,
+            // This deployment's store gateway (releaseName "thanos") serving
+            // historical blocks from the objstore bucket.
+            `dnssrv+_grpc._tcp.thanos-storegateway.${namespaceName}.svc.cluster.local`,
+            // Cross-cluster stores (e.g. another cluster's sidecar/store gRPC).
+            ...(thanosCfg!.externalStores ?? []),
+          ],
           serviceAccount: {
             create: true,
             name: "thanos-query",
-            annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
+            annotations: componentSaAnnotations,
           },
         },
-        queryFrontend: {
-          enabled: true,
-          tolerations: defaultTolerations,
-        },
+        queryFrontend: { enabled: true, tolerations: defaultTolerations },
         storegateway: {
           enabled: true,
           tolerations: defaultTolerations,
@@ -543,7 +657,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           serviceAccount: {
             create: true,
             name: "thanos-storegateway",
-            annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
+            annotations: componentSaAnnotations,
           },
         },
         compactor: {
@@ -557,7 +671,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           serviceAccount: {
             create: true,
             name: "thanos-compactor",
-            annotations: wiKsaAnnotations(this.thanosServiceAccountEmail),
+            annotations: componentSaAnnotations,
           },
         },
         ruler: { enabled: false },
@@ -573,35 +687,37 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         namespace: namespaceName,
         values: deepmerge(
           defaultThanosValues,
-          this.config.thanos.thanosValues ?? {},
+          thanosCfg!.thanosValues ?? {},
         ),
       });
 
-      // IMPORTANT: the Prometheus -> Thanos sidecar is NOT wired up automatically.
-      // The kube-prometheus-stack Helm release is created above with its values
-      // already frozen, so the store gateway/query have nothing to read until you
-      // enable the sidecar yourself. Pass these via the top-level `values` option:
-      //
-      //   values: {
-      //     prometheus: {
-      //       serviceAccount: {
-      //         annotations: {
-      //           "iam.gke.io/gcp-service-account": "<this.thanosServiceAccountEmail>",
-      //         },
-      //       },
-      //       prometheusSpec: {
-      //         thanos: {
-      //           objectStorageConfig: {
-      //             existingSecret: { name: "thanos-objstore-config", key: "objstore.yml" },
-      //           },
-      //         },
-      //       },
-      //     },
-      //   }
-      //
-      // The "thanos-objstore-config" secret and the WI binding for the Prometheus
-      // ServiceAccount (prometheus-kube-prometheus-stack-prometheus) are created
-      // above, so once the sidecar is enabled it can upload blocks to GCS.
+      // Expose Thanos Query as a Grafana datasource (long-term + cross-cluster view).
+      new kplus.ConfigMap(this, "thanos-grafana-datasource", {
+        metadata: {
+          name: "thanos-datasource",
+          namespace: namespaceName,
+          labels: { grafana_datasource: "1" },
+        },
+        data: {
+          // Grafana datasource provisioning files must be { apiVersion, datasources },
+          // not a bare array (a bare array crashes Grafana provisioning).
+          "datasource.yaml": JSON.stringify({
+            apiVersion: 1,
+            datasources: [
+              {
+                name: "Thanos",
+                type: "prometheus",
+                uid: "thanos",
+                url: `http://thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
+                access: "proxy",
+                isDefault: false,
+                editable: true,
+                jsonData: { httpMethod: "POST", timeInterval: "30s" },
+              },
+            ],
+          }),
+        },
+      });
     }
   }
 }
