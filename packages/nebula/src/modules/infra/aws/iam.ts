@@ -54,7 +54,6 @@ const CONTROLLER_POLICY_DOCUMENT = JSON.stringify({
         "s3:*",
         "ssm:GetParameter",
         "ssm:GetParameters",
-        "secretsmanager:*",
         "tag:GetResources",
       ],
     },
