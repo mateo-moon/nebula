@@ -9,7 +9,79 @@ export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
 
 export { Kagent } from "./kagent";
-export type { KagentConfig, KagentProvider } from "./kagent";
+export type {
+  KagentConfig,
+  KagentProvider,
+  KagentHaConfig,
+  KagentExternalPostgresConfig,
+  KagentIngressConfig,
+  KagentRbacConfig,
+} from "./kagent";
+
+// CRD helpers — typed builders for kagent.dev custom resources (Agent, ModelConfig, RemoteMCPServer, MCPServer).
+export {
+  defineAgent,
+  modelConfig,
+  remoteMcp,
+  localMcp,
+  agentTool,
+  mcpTool,
+  KAGENT_API_GROUP,
+  KAGENT_API,
+} from "./kagent/crd";
+export type {
+  AgentToolEntry,
+  AgentToolTarget,
+  McpServerTool,
+  DefineAgentOptions,
+  ModelConfigOptions,
+  RemoteMcpOptions,
+  LocalMcpOptions,
+} from "./kagent/crd";
+
+// Tool name constants + gating lists for kagent-tool-server.
+export {
+  K8S_READ_TOOLS,
+  HELM_READ_TOOLS,
+  PROM_TOOLS,
+  MISC_TOOLS,
+  READ_ONLY_TOOLS,
+  GATED_WRITE_TOOLS,
+  GITHUB_READ_TOOLS,
+  GITHUB_PROPOSE_TOOLS,
+  GITHUB_GATED_TOOLS,
+} from "./kagent/tools";
+
+// Tiered ModelConfig helpers.
+export {
+  DEFAULT_MODEL_CONFIG,
+  SUBAGENT_MODEL_CONFIG,
+  SUBAGENT_MODEL,
+  ORCHESTRATOR_MODEL_CONFIG,
+  ORCHESTRATOR_MODEL,
+  declareModelConfigs,
+  type ModelSecretRef,
+} from "./kagent/models";
+
+// DevOps agent topology — orchestrator → k8s-inspector / change-author / docs-agent.
+export { declareAgents } from "./kagent/agents";
+export type { DeclareAgentsOptions } from "./kagent/agents";
+
+// Self-hosted github-mcp server.
+export { declareGithubMcp, GITHUB_MCP } from "./kagent/mcp";
+
+// Developer OIDC kubeconfig ConfigMap (agent serves this to developers).
+export { declareDevKubeconfig, type DevKubeconfigOptions } from "./kagent/access";
+
+// Proactive bridges + comms bots (k8s-watch, alertmanager, telegram, matrix, github-webhook).
+export { declareBridges, DEFAULT_BRIDGE_IMAGE, type BridgesConfig } from "./kagent/bridges";
+
+// External ephemeral pgvector Postgres (emptyDir workaround for clusters with no StorageClass).
+export {
+  declareExternalPostgres,
+  KAGENT_PG_URL,
+  type ExternalPostgresOptions,
+} from "./kagent/postgres";
 
 export { ClusterApiOperator } from "./cluster-api-operator";
 export type {

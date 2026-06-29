@@ -4,8 +4,8 @@
  * Deploys the kagent CRDs chart and the kagent controller chart (which also
  * brings up the web UI, a bundled Postgres, kmcp and the built-in tools MCP
  * server). Agents/ModelConfigs themselves are normal `kagent.dev` custom
- * resources that you declare in your app (see the kagent-poc project), so this
- * module only owns the platform install.
+ * resources that you declare in your app, so this module only owns the platform
+ * install.
  *
  * Charts are published as OCI artifacts at
  * `oci://ghcr.io/kagent-dev/kagent/helm/{kagent-crds,kagent}`. cdk8s renders
@@ -13,21 +13,33 @@
  * vendor them with `helm pull <oci> --version <v> --untar` and pass
  * `localChartPath` / `localCrdsChartPath`.
  *
+ * This module extends `BaseConstruct` (not `HelmModule`) because kagent uses OCI
+ * charts — `HelmModule.createHelmRelease` requires a non-optional `repo` field
+ * and always emits `helm template --repo`, which is incompatible with `oci://`
+ * URLs. Same intentional pattern as `confidential-containers`.
+ *
  * @example
  * ```typescript
- * import { Kagent } from 'nebula-cdk8s';
- *
  * new Kagent(chart, 'kagent', {
+ *   namespace: 'kagent',
  *   provider: 'anthropic',
  *   apiKey: process.env.ANTHROPIC_API_KEY!, // or 'ref+sops://.secrets/secrets.yaml#kagent/anthropic_api_key'
+ *   tolerations: [{ key: 'node-role.kubernetes.io/control-plane', operator: 'Exists', effect: 'NoSchedule' }],
+ *   externalPostgres: { url: 'postgresql://kagent:kagent@kagent-pg.kagent:5432/kagent' },
+ *   ingress: { enabled: true, host: 'kagent.example.com' },
  * });
  * ```
  */
 import { Construct } from "constructs";
-import { Helm } from "cdk8s";
+import { ApiObject, Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import {
+  BaseConstruct,
+  type Toleration,
+  ARGOCD_KEEP_ON_DELETE,
+  syncWave,
+} from "../../../core";
 
 /** Model provider key as understood by the kagent Helm chart (`providers.<key>`). */
 export type KagentProvider =
@@ -36,6 +48,69 @@ export type KagentProvider =
   | "ollama"
   | "gemini"
   | "azureOpenAI";
+
+/** HA / scaling configuration for the kagent control-plane pods. */
+export interface KagentHaConfig {
+  /** Controller replicas (default: 1; kagent auto-enables leader election >1). */
+  controllerReplicas?: number;
+  /** UI replicas (default: 1). */
+  uiReplicas?: number;
+  /** Tool server replica count (default: 1). */
+  toolsReplicas?: number;
+  /** Resource requests/limits for controller/ui/tools. */
+  resources?: {
+    controller?: kplus.ResourceProps;
+    ui?: kplus.ResourceProps;
+    tools?: kplus.ResourceProps;
+  };
+  /** Node selector applied to controller + UI. */
+  nodeSelector?: Record<string, string>;
+  /** Tolerations applied to controller + UI. */
+  tolerations?: Toleration[];
+  /** Restrict controller RBAC + reconciliation to these namespaces (empty = cluster-wide). */
+  watchNamespaces?: string[];
+}
+
+/** External Postgres configuration (replaces the bundled dev/eval Postgres). */
+export interface KagentExternalPostgresConfig {
+  /** External Postgres connection URL. Takes precedence over bundled. */
+  url?: string;
+  /** Path to a file containing the database URL (takes precedence over `url`). */
+  urlFileSecret?: { name: string; key?: string };
+  /** Enable pgvector migration (required for kagent long-term memory). */
+  vectorEnabled?: boolean;
+  /** Disable the bundled Postgres entirely (default: true when any field is set). */
+  bundled?: boolean;
+}
+
+/** Ingress configuration for the kagent UI + A2A endpoint. */
+export interface KagentIngressConfig {
+  /** Enable ingress (creates Ingress resources for UI + optionally A2A). */
+  enabled: boolean;
+  /** Ingress class name (default: "nginx"). */
+  className?: string;
+  /** Hostname for the UI (e.g. "kagent.example.com"). */
+  host?: string;
+  /** TLS configuration (if omitted, ingress is HTTP-only). */
+  tls?: { issuer?: string; host?: string };
+  /** Which endpoints to expose: "ui" (default), "a2a" (the :8083 controller endpoint). */
+  expose?: ("ui" | "a2a")[];
+  /** Extra annotations. */
+  annotations?: Record<string, string>;
+}
+
+/** RBAC scope for the kagent-tools ServiceAccount (the MCP tool server the agents drive). */
+export interface KagentRbacConfig {
+  /**
+   * "cluster-admin" (default — the chart's built-in role; NOT recommended for production).
+   * "scoped" — the module creates a least-privilege ClusterRole (read-everything +
+   *   workload-write only; NO ClusterRoleBindings, node writes, secret writes, or PV writes).
+   *   The chart's cluster-admin binding is deleted and replaced.
+   */
+  scope?: "cluster-admin" | "scoped";
+  /** When scope="scoped", restrict write to these namespaces (empty = all). */
+  writeNamespaces?: string[];
+}
 
 export interface KagentConfig {
   /** Namespace for kagent (default: "kagent"). */
@@ -62,9 +137,22 @@ export interface KagentConfig {
   /**
    * Install the chart's bundled example agents (k8s-agent, istio-agent, …) and
    * extra tool servers (grafana-mcp, querydoc). Default `false` keeps the
-   * install lean — handy for local/PoC clusters. Set `true` for the full set.
+   * install lean. Set `true` for the full set.
    */
   bundledAgents?: boolean;
+  /** HA / scaling configuration for production deployments. */
+  ha?: KagentHaConfig;
+  /** External Postgres (use this instead of the bundled dev Postgres for production). */
+  externalPostgres?: KagentExternalPostgresConfig;
+  /** Ingress for the kagent UI + optionally the A2A endpoint. */
+  ingress?: KagentIngressConfig;
+  /**
+   * RBAC scope for the kagent-tools ServiceAccount. Default "cluster-admin" (chart
+   * default). Set scope="scoped" for least-privilege (recommended for production).
+   */
+  rbac?: KagentRbacConfig;
+  /** Tolerations applied to all kagent pods (useful for control-plane taints). */
+  tolerations?: Toleration[];
   /** Extra Helm values for the kagent controller chart (deep-merged last). */
   values?: Record<string, unknown>;
   /** Extra Helm values for the kagent-crds chart. */
@@ -139,7 +227,80 @@ export class Kagent extends BaseConstruct<KagentConfig> {
       }
     }
 
-    const baseValues = deepmerge({ providers: providerValues }, leanValues);
+    // Tolerations (global — applied to all kagent pods).
+    const tolerationValues: Record<string, unknown> = {};
+    if (this.config.tolerations?.length || this.config.ha?.tolerations?.length) {
+      const allTolerations = [
+        ...(this.config.tolerations ?? []),
+        ...(this.config.ha?.tolerations ?? []),
+      ];
+      tolerationValues.globalTolerations = allTolerations;
+    }
+
+    // HA configuration.
+    const haValues: Record<string, unknown> = {};
+    if (this.config.ha) {
+      const ha = this.config.ha;
+      if (ha.controllerReplicas !== undefined)
+        haValues.controller = { replicas: ha.controllerReplicas };
+      if (ha.uiReplicas !== undefined)
+        haValues.ui = { replicas: ha.uiReplicas };
+      if (ha.toolsReplicas !== undefined)
+        haValues["kagent-tools"] = { replicaCount: ha.toolsReplicas };
+      if (ha.nodeSelector)
+        haValues.globalNodeSelector = ha.nodeSelector;
+      if (ha.watchNamespaces) {
+        haValues.rbac = { namespaces: ha.watchNamespaces };
+        haValues.controller = {
+          ...(haValues.controller as object),
+          watchNamespaces: ha.watchNamespaces,
+        };
+      }
+      if (ha.resources) {
+        if (ha.resources.controller)
+          haValues.controller = {
+            ...(haValues.controller as object),
+            resources: ha.resources.controller,
+          };
+        if (ha.resources.ui)
+          haValues.ui = { ...(haValues.ui as object), resources: ha.resources.ui };
+        if (ha.resources.tools)
+          haValues["kagent-tools"] = {
+            ...(haValues["kagent-tools"] as object),
+            resources: ha.resources.tools,
+          };
+      }
+    }
+
+    // External Postgres (replaces the bundled dev Postgres).
+    const dbValues: Record<string, unknown> = {};
+    if (this.config.externalPostgres) {
+      const pg = this.config.externalPostgres;
+      dbValues.database = {
+        postgres: {
+          bundled: { enabled: pg.bundled ?? false },
+          ...(pg.url ? { url: pg.url } : {}),
+          ...(pg.urlFileSecret
+            ? {
+                urlFile: pg.urlFileSecret.key
+                  ? `${pg.urlFileSecret.name}/${pg.urlFileSecret.key}`
+                  : pg.urlFileSecret.name,
+              }
+            : {}),
+          ...(pg.vectorEnabled !== undefined
+            ? { vectorEnabled: pg.vectorEnabled }
+            : {}),
+        },
+      };
+    }
+
+    const baseValues = deepmerge(
+      { providers: providerValues },
+      leanValues,
+      tolerationValues,
+      haValues,
+      dbValues,
+    );
     const chartValues = deepmerge(baseValues, this.config.values ?? {});
 
     // 2) Controller chart (UI, controller, bundled Postgres, kmcp, tools).
@@ -150,5 +311,183 @@ export class Kagent extends BaseConstruct<KagentConfig> {
       namespace: ns,
       values: chartValues,
     });
+
+    // Ingress (the chart has no built-in ingress — we build it).
+    if (this.config.ingress?.enabled) {
+      this.createIngress(ns);
+    }
+
+    // RBAC scoping (replace the chart's cluster-admin with a scoped role).
+    if (this.config.rbac?.scope === "scoped") {
+      this.createScopedRbac(ns);
+    }
+  }
+
+  /**
+   * Create Ingress resources for the UI (and optionally the A2A :8083 endpoint).
+   * The chart does not provide ingress configuration — we build it with
+   * kplus.Ingress + ArgoCD annotations.
+   */
+  private createIngress(ns: string): void {
+    const cfg = this.config.ingress!;
+    const className = cfg.className ?? "nginx";
+    const host = cfg.host ?? "kagent.local";
+    const expose = cfg.expose ?? ["ui"];
+
+    const annotations: Record<string, string> = {
+      ...cfg.annotations,
+      ...syncWave(2),
+    };
+    if (cfg.tls?.issuer) {
+      annotations["cert-manager.io/cluster-issuer"] = cfg.tls.issuer;
+    }
+
+    if (expose.includes("ui")) {
+      new ApiObject(this, "ingress-ui", {
+        apiVersion: "networking.k8s.io/v1",
+        kind: "Ingress",
+        metadata: {
+          name: "kagent-ui",
+          namespace: ns,
+          annotations,
+          labels: { "app.kubernetes.io/managed-by": "nebula" },
+        },
+        spec: {
+          ingressClassName: className,
+          rules: [
+            {
+              host,
+              http: {
+                paths: [
+                  {
+                    path: "/",
+                    pathType: "Prefix",
+                    backend: {
+                      service: { name: "kagent-ui", port: { number: 8080 } },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+          ...(cfg.tls
+            ? {
+                tls: [
+                  {
+                    hosts: [cfg.tls.host ?? host],
+                    secretName: "kagent-ui-tls",
+                  },
+                ],
+              }
+            : {}),
+        },
+      });
+    }
+  }
+
+  /**
+   * Create a scoped ClusterRole + binding for the kagent-tools ServiceAccount,
+   * replacing the chart's default cluster-admin binding.
+   *
+   * Scope: read-everything (get/list/watch) + workload-write (pods, deployments,
+   * services, configmaps, namespaces). Explicitly DENIED: ClusterRoleBindings
+   * (privilege escalation), node writes (cordon/drain), secret writes,
+   * persistentvolume writes.
+   */
+  private createScopedRbac(ns: string): void {
+    const writeNs = this.config.rbac?.writeNamespaces?.length
+      ? this.config.rbac.writeNamespaces
+      : undefined;
+
+    // Scoped ClusterRole (read-everything + workload-write).
+    new ApiObject(this, "scoped-role", {
+      apiVersion: "rbac.authorization.k8s.io/v1",
+      kind: "ClusterRole",
+      metadata: {
+        name: "kagent-tools-scoped",
+        labels: {
+          "app.kubernetes.io/name": "kagent-tools",
+          "nebula.sh/managed-by": "nebula",
+        },
+        annotations: ARGOCD_KEEP_ON_DELETE,
+      },
+      rules: [
+        // Broad read (the inspector needs get/list/watch on everything).
+        {
+          apiGroups: ["*"],
+          resources: ["*"],
+          verbs: ["get", "list", "watch"],
+        },
+        // Pod logs.
+        { apiGroups: [""], resources: ["pods/log"], verbs: ["get"] },
+        // Workload write — for gated apply/delete/scale.
+        {
+          apiGroups: ["", "apps", "batch"],
+          resources: [
+            "pods",
+            "deployments",
+            "daemonsets",
+            "statefulsets",
+            "replicasets",
+            "services",
+            "configmaps",
+            "namespaces",
+            "jobs",
+            "cronjobs",
+          ],
+          verbs: ["create", "update", "patch", "delete"],
+        },
+        // Explicitly NOT granted: clusterrolebindings, clusterroles, nodes (write),
+        // persistentvolumes (write), secrets (write) — defense-in-depth.
+      ],
+    });
+
+    // Binding (cluster-wide or namespace-scoped).
+    if (writeNs) {
+      for (const wns of writeNs) {
+        new ApiObject(this, `scoped-binding-${wns}`, {
+          apiVersion: "rbac.authorization.k8s.io/v1",
+          kind: "RoleBinding",
+          metadata: {
+            name: `kagent-tools-scoped-${wns}`,
+            namespace: wns,
+            annotations: ARGOCD_KEEP_ON_DELETE,
+          },
+          subjects: [
+            {
+              kind: "ServiceAccount",
+              name: "kagent-tools",
+              namespace: ns,
+            },
+          ],
+          roleRef: {
+            kind: "ClusterRole",
+            name: "kagent-tools-scoped",
+            apiGroup: "rbac.authorization.k8s.io",
+          },
+        });
+      }
+    } else {
+      new ApiObject(this, "scoped-binding", {
+        apiVersion: "rbac.authorization.k8s.io/v1",
+        kind: "ClusterRoleBinding",
+        metadata: {
+          name: "kagent-tools-scoped",
+          annotations: ARGOCD_KEEP_ON_DELETE,
+        },
+        subjects: [
+          {
+            kind: "ServiceAccount",
+            name: "kagent-tools",
+            namespace: ns,
+          },
+        ],
+        roleRef: {
+          kind: "ClusterRole",
+          name: "kagent-tools-scoped",
+          apiGroup: "rbac.authorization.k8s.io",
+        },
+      });
+    }
   }
 }
