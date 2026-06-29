@@ -1,4 +1,5 @@
 import { Construct } from "constructs";
+import { JsonPatch } from "cdk8s";
 import { ClusterV1Beta2 } from "#imports/cluster.x-k8s.io";
 import {
   AwsClusterV1Beta2,
@@ -156,9 +157,35 @@ export function emitAwsClusterCr(
      * this to 1 (single-AZ, 1 NAT/EIP). Omitted = CAPA default (up to 3 AZs).
      */
     availabilityZoneUsageLimit?: number;
+    /**
+     * Secondary IPv4 CIDR blocks to associate with the managed VPC. CAPA associates
+     * these on a LIVE VPC (not only at creation), so it's how you add address space
+     * for additional-AZ subnets once the primary cidrBlock is fully tiled. Emitted
+     * via JsonPatch — the field postdates the generated cdk8s CRD types.
+     */
+    secondaryCidrBlocks?: string[];
+    /**
+     * Explicit subnet set (the FULL list: existing + new). When provided, CAPA adopts
+     * existing subnets by AZ+CIDR and CREATES the rest. Required to add AZs to a live
+     * cluster — availabilityZoneUsageLimit is honored ONLY at VPC creation, so it is
+     * inert on an already-provisioned VPC.
+     */
+    subnets?: Array<{
+      availabilityZone: string;
+      cidrBlock: string;
+      isPublic: boolean;
+      /** Logical id (CAPA convention: `<cluster>-subnet-<public|private>-<az>`). */
+      id: string;
+    }>;
   },
 ): AwsClusterV1Beta2 {
-  return new AwsClusterV1Beta2(scope, "aws-cluster", {
+  // SG rules that gate node-to-node + NLB traffic must cover EVERY CIDR a node can
+  // get an IP from: the primary VPC CIDR plus any secondary CIDRs (added-AZ subnets
+  // are carved from those). Scoping these to just vpcCidr would silently deny the
+  // 9443 controller-join + 8132 konnectivity rules to nodes in a secondary-CIDR AZ.
+  const nodeCidrs = [opts.vpcCidr, ...(opts.secondaryCidrBlocks ?? [])];
+
+  const cr = new AwsClusterV1Beta2(scope, "aws-cluster", {
     metadata: { name: opts.clusterName, namespace: opts.namespace },
     spec: {
       region: opts.region,
@@ -209,7 +236,7 @@ export function emitAwsClusterCr(
             protocol: LbIngressProtocol.TCP,
             fromPort: 8132,
             toPort: 8132,
-            cidrBlocks: [opts.vpcCidr],
+            cidrBlocks: nodeCidrs,
           },
           {
             description: "konnectivity (API to pod tunnel via NAT)",
@@ -231,6 +258,10 @@ export function emitAwsClusterCr(
               }
             : {}),
         },
+        // Explicit subnets (existing 1a + added AZs): CAPA adopts existing ones by
+        // AZ+CIDR and creates the rest. Required to grow AZs on a LIVE cluster, since
+        // availabilityZoneUsageLimit only auto-derives subnets at VPC creation.
+        ...(opts.subnets?.length ? { subnets: opts.subnets } : {}),
         // CAPA's control-plane security group opens the standard k8s/etcd ports
         // (6443, 2379-2380) but NOT k0s's controller-join API on 9443. Without
         // this, a 2nd/3rd K0sControlPlane replica hangs at "Joining existing
@@ -242,7 +273,7 @@ export function emitAwsClusterCr(
             protocol: IngressProtocol.TCP,
             fromPort: 9443,
             toPort: 9443,
-            cidrBlocks: [opts.vpcCidr],
+            cidrBlocks: nodeCidrs,
           },
           {
             // konnectivity server (API<->pod tunnel). Pairs with the 8132 NLB
@@ -255,12 +286,25 @@ export function emitAwsClusterCr(
             protocol: IngressProtocol.TCP,
             fromPort: 8132,
             toPort: 8132,
-            cidrBlocks: [opts.vpcCidr],
+            cidrBlocks: nodeCidrs,
           },
         ],
       },
     },
   });
+
+  // secondaryCidrBlocks postdates the generated cdk8s CRD types, so inject it via a
+  // JsonPatch (the live CAPA v2.11.1 CRD accepts it; CAPA associates the block on the
+  // existing VPC). The added-AZ subnets above are carved from these blocks.
+  if (opts.secondaryCidrBlocks?.length) {
+    cr.addJsonPatch(
+      JsonPatch.add(
+        "/spec/network/vpc/secondaryCidrBlocks",
+        opts.secondaryCidrBlocks.map((c) => ({ ipv4CidrBlock: c })),
+      ),
+    );
+  }
+  return cr;
 }
 
 /**
