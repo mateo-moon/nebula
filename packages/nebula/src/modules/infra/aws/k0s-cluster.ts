@@ -72,6 +72,26 @@ export interface AwsK0sClusterConfig {
    * 1 NAT/EIP — no AZ-level HA). Omitted = CAPA default (up to 3 AZs).
    */
   availabilityZoneUsageLimit?: number;
+  /**
+   * Secondary IPv4 CIDR block(s) to associate with the managed VPC, e.g.
+   * ["10.1.0.0/16"]. Use when the primary vpcCidr is fully tiled by existing subnets
+   * and you need address space for additional-AZ subnets on a LIVE cluster (CAPA
+   * associates these on the existing VPC, then creates subnets carved from them).
+   */
+  secondaryCidrBlocks?: string[];
+  /**
+   * Explicit subnet set (the FULL list: existing + new) to grow a live cluster's AZ
+   * coverage. CAPA adopts existing subnets by AZ+CIDR and creates the rest — so list
+   * the existing subnets at their exact CIDR/AZ. Omitted = CAPA auto-derives subnets
+   * from availabilityZoneUsageLimit (which only applies at VPC creation).
+   */
+  subnets?: Array<{
+    availabilityZone: string;
+    cidrBlock: string;
+    isPublic: boolean;
+    /** Logical id (CAPA convention: `<cluster>-subnet-<public|private>-<az>`). */
+    id: string;
+  }>;
   /** Pre-existing EC2 key pair name for SSH access to nodes */
   sshKeyName?: string;
   /**
@@ -226,6 +246,8 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
       vpcCidr,
       availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
+      secondaryCidrBlocks: this.config.secondaryCidrBlocks,
+      subnets: this.config.subnets,
     });
 
     // 3. AWSMachineTemplate for the control-plane nodes
