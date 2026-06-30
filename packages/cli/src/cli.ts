@@ -70,6 +70,7 @@ program
   .option('--aws-profile <profile>', 'AWS named profile for credentials (aws)')
   .option('--gitops-dir <path>', 'Path to the aws/ repo subtree — the single source of truth (config.ts + cdk8s modules) ArgoCD reconciles; region/cluster/AMI/replicas all live there, NOT in flags (aws; default: current dir). Scaffold with: nebula init --provider aws')
   .option('--skip-kind', 'Skip Kind cluster creation')
+  .option('--keep-kind', 'Keep the Kind bootstrap cluster after handoff instead of deleting it (aws; default: delete once the pivot has moved CAPI onto the mgmt cluster). Use only to inspect a failed bootstrap.')
   .option('--skip-credentials', 'Skip credentials setup')
   .option('--skip-gke', 'Skip GKE deployment (gcp, Kind only)')
   .action(async (opts: BootstrapOptions) => {

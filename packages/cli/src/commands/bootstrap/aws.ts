@@ -1116,6 +1116,38 @@ async function waitForMgmtApiStable(
   );
 }
 
+/**
+ * Step 7: dispose of the Kind bootstrap cluster. The pivot (Step 6.5) already MOVED the
+ * entire CAPI object graph off Kind onto the management cluster and verifyPivot confirmed
+ * the adoption, so Kind now holds only the idle CAPA/k0smotron controllers with NO CRs to
+ * reconcile — deleting it is safe and is the intended final step ("Kind is discarded").
+ * Skipping this is exactly how a bootstrap leaves an orphan Kind cluster running forever.
+ *
+ * Last guard before the irreversible delete: re-confirm the management cluster OWNS the
+ * moved Cluster CR. If it does not (a half-landed pivot), KEEP Kind and print the manual
+ * command rather than delete the only place the CAPI graph might still live. `--keep-kind`
+ * skips teardown entirely (debugging a failed/partial bootstrap).
+ */
+async function disposeKind(
+  kindName: string,
+  mgmtKubeconfig: string,
+  clusterName: string,
+): Promise<boolean> {
+  const ownsCluster = kubectl(
+    ["get", "cluster", clusterName, "-n", MGMT_NAMESPACE, "-o", "jsonpath={.metadata.name}"],
+    { kubeconfig: mgmtKubeconfig, silent: true, ignoreErrors: true },
+  ).trim();
+  if (ownsCluster !== clusterName) {
+    log(`   ⚠️  Keeping Kind: management cluster does not own Cluster/${clusterName} yet (pivot not confirmed).`);
+    log(`      Verify, then delete manually: kind delete cluster --name ${kindName}`);
+    return false;
+  }
+  log(`   🧹 Step 7: deleting the Kind bootstrap cluster (kind-${kindName})...`);
+  // Best-effort: a delete hiccup must not fail an already-successful bootstrap.
+  run("kind", ["delete", "cluster", "--name", kindName], { ignoreErrors: true });
+  return true;
+}
+
 async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   const kindName = options.name || "nebula";
 
@@ -1216,17 +1248,29 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   }
   await deployGitopsHandoff(gitopsDir, kindName, mgmtKubeconfig, clusterName, keyless);
 
+  // Step 7: dispose of the Kind scaffold now that the pivot has handed the CAPI graph to
+  // the management cluster. Default behavior (the CLI description already promises "Kind
+  // is discarded"); --keep-kind opts out for debugging.
+  let kindDeleted = false;
+  if (options.keepKind) {
+    log("   Keeping the Kind bootstrap cluster (--keep-kind).");
+  } else {
+    kindDeleted = await disposeKind(kindName, mgmtKubeconfig, clusterName);
+  }
+
   log("");
   log("═".repeat(50));
   log("✨ AWS bootstrap complete!");
   log("");
-  log(`   Kind (bootstrap):  kind-${kindName}`);
+  log(`   Kind (bootstrap):  ${kindDeleted ? "deleted ✅" : `kind-${kindName} (still present)`}`);
   log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
   log("   ArgoCD now reconciles the whole platform and all apps from git — including");
   log("   infra/cluster-api, so the management cluster owns its own CAPI lifecycle.");
-  log("   Kind was only the bootstrap scaffold — delete it freely once ArgoCD is green:");
-  log(`     kind delete cluster --name ${kindName}`);
+  if (!kindDeleted) {
+    log("   Kind was only the bootstrap scaffold — delete it once ArgoCD is green:");
+    log(`     kind delete cluster --name ${kindName}`);
+  }
   log("");
   log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
   log("   kubectl get nodes");

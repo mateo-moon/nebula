@@ -6,6 +6,13 @@ export interface BootstrapOptions {
   provider?: string;
   /** Skip Kind cluster creation */
   skipKind?: boolean;
+  /**
+   * Keep the Kind bootstrap cluster after a successful pivot + handoff instead of
+   * deleting it (aws). Default is to delete: the pivot moves the CAPI graph onto the
+   * management cluster, so Kind is a disposable scaffold. Set this only to inspect a
+   * failed/partial bootstrap.
+   */
+  keepKind?: boolean;
   /** Skip credentials setup */
   skipCredentials?: boolean;
 
