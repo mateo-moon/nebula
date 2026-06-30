@@ -13,7 +13,7 @@
  */
 import type { Chart } from "cdk8s";
 import { ApiObject } from "cdk8s";
-import { agentTool, defineAgent, mcpTool } from "./crd";
+import { agentTool, defineAgent, KAGENT_WAVE, mcpTool } from "./crd";
 import { ORCHESTRATOR_MODEL_CONFIG, SUBAGENT_MODEL_CONFIG } from "./models";
 import {
   GATED_WRITE_TOOLS,
@@ -112,6 +112,7 @@ export function declareAgents(
     name: "docs-agent",
     namespace,
     modelConfig: SUBAGENT_MODEL_CONFIG,
+    syncWave: KAGENT_WAVE.AGENT,
     deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Cluster documentation specialist. Answers 'how to' / access questions with " +
@@ -133,6 +134,7 @@ export function declareAgents(
     name: "k8s-inspector",
     namespace,
     modelConfig: SUBAGENT_MODEL_CONFIG,
+    syncWave: KAGENT_WAVE.AGENT,
     deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Read-only Kubernetes specialist. Inspects pods, events, logs, resources, " +
@@ -151,6 +153,7 @@ export function declareAgents(
     name: "change-author",
     namespace,
     modelConfig: ORCHESTRATOR_MODEL_CONFIG,
+    syncWave: KAGENT_WAVE.AGENT,
     deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Drafts infrastructure and code changes. Proposes manifests/branches/PRs; " +
@@ -182,6 +185,10 @@ export function declareAgents(
     name: "devops-orchestrator",
     namespace,
     modelConfig: ORCHESTRATOR_MODEL_CONFIG,
+    // A later wave than the leaf agents: the orchestrator delegates to docs-agent /
+    // k8s-inspector / change-author via A2A (agentTool below) and references an embedding
+    // ModelConfig for memory — all must exist before its first reconcile.
+    syncWave: KAGENT_WAVE.AGENT_ORCHESTRATOR,
     deployment: KIND_FIX_DEPLOYMENT,
     description:
       "The DevOps engineer agent. Understands intent, routes to specialists, " +

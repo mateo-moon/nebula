@@ -12,9 +12,53 @@
  */
 import { ApiObject } from "cdk8s";
 import type { Construct } from "constructs";
+import { syncWave } from "../../../core";
 
 export const KAGENT_API_GROUP = "kagent.dev";
 export const KAGENT_API = "kagent.dev/v1alpha2";
+
+/**
+ * Argo CD sync-wave tiers for kagent custom resources (lower wave applies first).
+ *
+ * The kagent controller validates an Agent's references — its `ModelConfig`, any MCP
+ * servers, and (for A2A) the other Agents it delegates to — on the FIRST reconcile and
+ * marks the Agent `Accepted=false` if a reference is missing. kagent 0.9.x does NOT
+ * re-reconcile the Agent when the missing reference shows up later, so an Agent created
+ * in the same sync as (or before) its `ModelConfig`/MCP server can stay stuck
+ * "not Accepted" until a manual `kagent-controller` restart. Placing the dependencies in
+ * earlier waves makes them exist before the Agent is ever created, so the first reconcile
+ * sees a complete reference graph and the Agent is Accepted immediately.
+ *
+ * All tiers are deliberately `> 0`. When the kagent platform (the `kagent-crds` +
+ * controller Helm charts) and these CRs live in ONE Argo CD Application, the CRD
+ * definitions render at the default wave `0`; a CR placed in a negative wave would be
+ * applied before its CRD exists ("no matches for kind …"). Keep CRs at wave `>= 1` so the
+ * CRDs (and the controller) settle in wave 0 first.
+ */
+export const KAGENT_WAVE = {
+  /** ModelConfigs + RemoteMCPServer/MCPServer CRs — the things Agents reference. */
+  DEPENDENCY: 1,
+  /** Leaf Agents — reference only ModelConfigs / MCP servers (no other Agents). */
+  AGENT: 2,
+  /** Agents that delegate to other Agents (A2A) — applied after their callees exist. */
+  AGENT_ORCHESTRATOR: 3,
+} as const;
+
+/**
+ * Build kagent CR `metadata`, attaching the Argo CD sync-wave annotation when a wave is
+ * given. Keeps the four CR builders below identical and DRY.
+ */
+function crMeta(
+  name: string,
+  namespace: string,
+  wave?: number,
+): { name: string; namespace: string; annotations?: Record<string, string> } {
+  return {
+    name,
+    namespace,
+    ...(wave !== undefined ? { annotations: syncWave(wave) } : {}),
+  };
+}
 
 // ── tools[] entries (shared by Agent.declarative.tools) ───────────────────────
 
@@ -95,6 +139,10 @@ export interface DefineAgentOptions {
   };
   /** Pod deployment overrides (volumes, volumeMounts, env — reconciled by kagent into the harness Deployment). */
   deployment?: Record<string, unknown>;
+  /** Argo CD sync-wave (see {@link KAGENT_WAVE}). Order an Agent after the ModelConfig/MCP
+   *  servers it references — and after any Agents it delegates to — so it is Accepted on the
+   *  first reconcile. Default: unset (wave 0). */
+  syncWave?: number;
 }
 
 /** Author a kagent `Agent` (Declarative by default). */
@@ -127,7 +175,7 @@ export function defineAgent(
   return new ApiObject(scope, id, {
     apiVersion: KAGENT_API,
     kind: "Agent",
-    metadata: { name: opts.name, namespace: opts.namespace },
+    metadata: crMeta(opts.name, opts.namespace, opts.syncWave),
     spec: {
       type: opts.type ?? "Declarative",
       description: opts.description,
@@ -147,6 +195,9 @@ export interface ModelConfigOptions {
   apiKeySecret: string;
   /** Key inside that Secret (e.g. "ANTHROPIC_API_KEY"). */
   apiKeySecretKey?: string;
+  /** Argo CD sync-wave (see {@link KAGENT_WAVE}). A ModelConfig should apply in an earlier
+   *  wave than the Agents that reference it. Default: unset (wave 0). */
+  syncWave?: number;
 }
 
 /**
@@ -168,7 +219,7 @@ export function modelConfig(
   return new ApiObject(scope, id, {
     apiVersion: KAGENT_API,
     kind: "ModelConfig",
-    metadata: { name: opts.name, namespace: opts.namespace },
+    metadata: crMeta(opts.name, opts.namespace, opts.syncWave),
     spec,
   });
 }
@@ -184,6 +235,9 @@ export interface RemoteMcpOptions {
   protocol?: "SSE" | "STREAMABLE_HTTP";
   timeout?: string; // e.g. "30s"
   sseReadTimeout?: string; // e.g. "5m0s"
+  /** Argo CD sync-wave (see {@link KAGENT_WAVE}). A RemoteMCPServer should apply in an
+   *  earlier wave than the Agents that reference it. Default: unset (wave 0). */
+  syncWave?: number;
 }
 
 export function remoteMcp(
@@ -199,7 +253,7 @@ export function remoteMcp(
   return new ApiObject(scope, id, {
     apiVersion: KAGENT_API,
     kind: "RemoteMCPServer",
-    metadata: { name: opts.name, namespace: opts.namespace },
+    metadata: crMeta(opts.name, opts.namespace, opts.syncWave),
     spec,
   });
 }
@@ -216,6 +270,9 @@ export interface LocalMcpOptions {
   port?: number;
   transportType?: "stdio" | "http"; // default http
   env?: Record<string, string>;
+  /** Argo CD sync-wave (see {@link KAGENT_WAVE}). An MCPServer should apply in an earlier
+   *  wave than the Agents that reference it. Default: unset (wave 0). */
+  syncWave?: number;
 }
 
 /**
@@ -235,7 +292,7 @@ export function localMcp(
   return new ApiObject(scope, id, {
     apiVersion: "kagent.dev/v1alpha1",
     kind: "MCPServer",
-    metadata: { name: opts.name, namespace: opts.namespace },
+    metadata: crMeta(opts.name, opts.namespace, opts.syncWave),
     spec: { transportType: opts.transportType ?? "http", deployment },
   });
 }

@@ -12,7 +12,7 @@
  */
 import { ApiObject } from "cdk8s";
 import type { Construct } from "constructs";
-import { remoteMcp } from "./crd";
+import { KAGENT_WAVE, remoteMcp } from "./crd";
 import { DEFAULT_BRIDGE_IMAGE } from "./bridges";
 
 export interface GithubMcpConfig {
@@ -100,6 +100,8 @@ export function declareGithubMcp(
     url: `http://${name}.${ns}:${port}/sse`,
     timeout: "60s",
     sseReadTimeout: "5m",
+    // Apply before the Agents that reference this server (so they are Accepted first-try).
+    syncWave: KAGENT_WAVE.DEPENDENCY,
   });
 
   return name;
@@ -199,6 +201,8 @@ export function declareClusterInfoMcp(
     protocol: "STREAMABLE_HTTP",
     url: `http://${name}.${ns}:${port}/mcp`,
     timeout: "30s",
+    // Apply before the docs-agent that references this server (so it is Accepted first-try).
+    syncWave: KAGENT_WAVE.DEPENDENCY,
   });
 
   return name;

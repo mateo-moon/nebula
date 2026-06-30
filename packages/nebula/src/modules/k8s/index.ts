@@ -28,6 +28,7 @@ export {
   mcpTool,
   KAGENT_API_GROUP,
   KAGENT_API,
+  KAGENT_WAVE,
 } from "./kagent/crd";
 export type {
   AgentToolEntry,
