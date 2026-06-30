@@ -46,17 +46,9 @@ const SITECUSTOMIZE_PY = [
   '    pass',
 ].join("\n");
 
-const KIND_FIX_DEPLOYMENT = {
-  volumes: [{ name: "kind-fix", configMap: { name: "kagent-kind-fix" } }],
-  volumeMounts: [{
-    name: "kind-fix",
-    // Mount the patched _task_store.py at the actual SDK path (replaces the original).
-    // The ConfigMap `kagent-kind-fix` (key: _task_store.py) is managed via kubectl,
-    // NOT by cdk8s — so the patched content persists across re-synths.
-    mountPath: "/.kagent/packages/kagent-core/src/kagent/core/a2a/_task_store.py",
-    subPath: "_task_store.py",
-  }],
-};
+const KIND_FIX_DEPLOYMENT = undefined; // kagent 0.9.9+ fixes the kind="" bug upstream — no mount needed.
+// For 0.9.7: create a kagent-kind-fix ConfigMap (key: _task_store.py with the
+// patched content above) + set this to the volumes/volumeMounts object.
 
 export interface DeclareAgentsOptions {
   githubMcp?: string;
