@@ -18,7 +18,11 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("cluster-info")
+# Host/port are configured on the FastMCP instance (its Settings), NOT passed to
+# run(): newer mcp SDKs dropped the host/port kwargs from FastMCP.run() and raise
+# TypeError if they are supplied. Set them here so run(transport="streamable-http")
+# binds 0.0.0.0:$PORT.
+mcp = FastMCP("cluster-info", host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
 
 CLUSTER_INFO = {
     "cluster_name": os.getenv("CLUSTER_NAME", "kagent-e2e"),
@@ -84,4 +88,4 @@ def get_access_instructions(audience: str = "developer") -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
+    mcp.run(transport="streamable-http")
