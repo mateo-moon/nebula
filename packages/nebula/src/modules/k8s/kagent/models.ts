@@ -7,7 +7,7 @@
  * and a stronger model for the orchestrator + change-author.
  */
 import type { Chart } from "cdk8s";
-import { modelConfig } from "./crd";
+import { KAGENT_WAVE, modelConfig } from "./crd";
 
 /** Chart-created default (Anthropic, claude-haiku-4-5). */
 export const DEFAULT_MODEL_CONFIG = "default-model-config";
@@ -37,6 +37,9 @@ export function declareModelConfigs(
   namespace: string,
   secret: ModelSecretRef,
 ): void {
+  // Apply a wave earlier than the Agents (KAGENT_WAVE.AGENT/AGENT_ORCHESTRATOR) so these
+  // ModelConfigs exist before the Agents that reference them are reconciled — otherwise the
+  // Agent's first reconcile sees a missing ModelConfig and is never re-queued to "Accepted".
   modelConfig(chart, SUBAGENT_MODEL_CONFIG, {
     name: SUBAGENT_MODEL_CONFIG,
     namespace,
@@ -44,6 +47,7 @@ export function declareModelConfigs(
     model: SUBAGENT_MODEL,
     apiKeySecret: secret.name,
     apiKeySecretKey: secret.key,
+    syncWave: KAGENT_WAVE.DEPENDENCY,
   });
   modelConfig(chart, ORCHESTRATOR_MODEL_CONFIG, {
     name: ORCHESTRATOR_MODEL_CONFIG,
@@ -52,5 +56,6 @@ export function declareModelConfigs(
     model: ORCHESTRATOR_MODEL,
     apiKeySecret: secret.name,
     apiKeySecretKey: secret.key,
+    syncWave: KAGENT_WAVE.DEPENDENCY,
   });
 }
