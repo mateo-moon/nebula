@@ -1,3 +1,4 @@
+import * as crypto from "crypto";
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
@@ -6,6 +7,8 @@ import {
   emitClusterCr,
   emitAwsClusterCr,
   emitAwsMachineTemplate,
+  NodeIngressRuleSpec,
+  SpotSelection,
 } from "./_shared";
 import { MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
 import {
@@ -43,6 +46,33 @@ export interface AwsWorkloadClusterWorkers {
   extraPreStartCommands?: string[];
   /** Failure domain / AZ hint for the MachineDeployment */
   failureDomain?: string;
+  /**
+   * Run this pool's instances as EC2 Spot. `true` (or `{}`) caps the bid at
+   * the on-demand price; `{ maxPrice: "0.20" }` sets an explicit USD/hour cap.
+   * Spot nodes can be reclaimed with a 2-minute notice — only use for pools
+   * that tolerate node loss. Default off (on-demand).
+   */
+  spot?: SpotSelection;
+  /**
+   * Node labels applied at registration via the native `k0s worker
+   * --labels=k=v,...` flag (rendered into the K0sWorkerConfigTemplate args).
+   */
+  nodeLabels?: Record<string, string>;
+  /**
+   * Node taints applied at registration via the native `k0s worker
+   * --taints=key=value:Effect,...` flag. Omit `value` for a value-less taint
+   * (rendered as `key:Effect`).
+   */
+  taints?: Array<{
+    key: string;
+    value?: string;
+    effect: "NoSchedule" | "PreferNoSchedule" | "NoExecute";
+  }>;
+  /**
+   * Extra raw `k0s worker` args appended after the generated
+   * `--labels`/`--taints` (see https://docs.k0sproject.io/stable/cli/k0s_worker/).
+   */
+  k0sArgs?: string[];
 }
 
 export interface AwsWorkloadClusterConfig {
@@ -60,6 +90,39 @@ export interface AwsWorkloadClusterConfig {
   serviceCidr?: string;
   /** VPC CIDR CAPA will create (default "10.0.0.0/16") */
   vpcCidr?: string;
+  /**
+   * Cap the number of AZs CAPA spreads subnets across. CAPA creates one NAT
+   * gateway + Elastic IP per AZ; set to 1 on EIP-constrained accounts (single-AZ,
+   * 1 NAT/EIP — no AZ-level HA). Omitted = CAPA default (up to 3 AZs).
+   */
+  availabilityZoneUsageLimit?: number;
+  /**
+   * Secondary IPv4 CIDR block(s) to associate with the managed VPC, e.g.
+   * ["10.1.0.0/16"]. Use when the primary vpcCidr is fully tiled by existing subnets
+   * and you need address space for additional-AZ subnets on a LIVE cluster (CAPA
+   * associates these on the existing VPC, then creates subnets carved from them).
+   */
+  secondaryCidrBlocks?: string[];
+  /**
+   * Explicit subnet set (the FULL list: existing + new) to grow a live cluster's AZ
+   * coverage. CAPA adopts existing subnets by AZ+CIDR and creates the rest — so list
+   * the existing subnets at their exact CIDR/AZ. Omitted = CAPA auto-derives subnets
+   * from availabilityZoneUsageLimit (which only applies at VPC creation).
+   */
+  subnets?: Array<{
+    availabilityZone: string;
+    cidrBlock: string;
+    isPublic: boolean;
+    /** Logical id (CAPA convention: `<cluster>-subnet-<public|private>-<az>`). */
+    id: string;
+  }>;
+  /**
+   * Extra ingress rules opened on the NODE security group (CAPA
+   * `network.additionalNodeIngressRules`). Use for workloads that need public
+   * inbound ports on the workers, e.g. Ethereum P2P (30303 + 9000 tcp/udp from
+   * 0.0.0.0/0). Default none — the node SG stays CAPA-default (intra-cluster only).
+   */
+  additionalNodeIngressRules?: NodeIngressRuleSpec[];
   /** Pre-existing EC2 key pair name for SSH access to nodes */
   sshKeyName?: string;
   /**
@@ -68,8 +131,18 @@ export interface AwsWorkloadClusterConfig {
    * 'nodes.cluster-api-provider-aws.sigs.k8s.io'.
    */
   iamInstanceProfile?: string;
-  /** Worker node configuration */
+  /** Worker node configuration (the DEFAULT pool — see `workerPools`) */
   workers?: AwsWorkloadClusterWorkers;
+  /**
+   * Additional named worker pools, each rendering its own AWSMachineTemplate +
+   * K0sWorkerConfigTemplate + MachineDeployment named `<cluster>-<pool>`. The
+   * pool AWSMachineTemplate name embeds a spec hash (rotate-on-change — CAPA
+   * template specs are immutable, see AwsK0sCluster), so instanceType/AMI/spot
+   * changes roll the pool's nodes. `workers` keeps working unchanged as the
+   * default pool (fixed resource names, so existing clusters are untouched);
+   * it is skipped ONLY when `workerPools` is set and `workers` is not.
+   */
+  workerPools?: Record<string, AwsWorkloadClusterWorkers>;
   /**
    * Service type for the k0smotron control-plane API endpoint. This Service runs
    * in the MANAGEMENT cluster (k0smotron hosts the control plane), so it uses the
@@ -152,6 +225,10 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
       loadBalancerType:
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.DISABLED,
       vpcCidr,
+      availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
+      secondaryCidrBlocks: this.config.secondaryCidrBlocks,
+      subnets: this.config.subnets,
+      additionalNodeIngressRules: this.config.additionalNodeIngressRules,
     });
 
     // 3. K0smotronControlPlane (hosted in the management cluster)
@@ -209,67 +286,148 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
       },
     });
 
-    // 4. AWSMachineTemplate - CAPA places nodes in the subnets it created (no
-    //    subnet/SG filters needed since CAPA owns networking).
-    emitAwsMachineTemplate(this, "worker-template", {
-      name: machineTemplateName,
-      namespace,
-      instanceType: workers.instanceType ?? "m6i.large",
-      iamInstanceProfile,
-      publicIp: workers.publicIp ?? false,
-      sshKeyName: this.config.sshKeyName,
-      rootVolumeSizeGiB: workers.rootVolumeSizeGiB ?? 80,
-      rootVolumeType: workers.rootVolumeType ?? "gp3",
-      ami: workers.ami,
-    });
+    // 4-6. Worker pools — per pool: AWSMachineTemplate (CAPA places nodes in
+    //    the subnets it created; no subnet/SG filters needed since CAPA owns
+    //    networking) + K0sWorkerConfigTemplate (cloud-init for storage deps
+    //    (Piraeus/LINSTOR) + k0s registration args) + MachineDeployment
+    //    (static replicas — no autoscaler).
+    const emitWorkerPool = (opts: {
+      /** cdk8s construct-id suffix ("" for the default pool) */
+      idSuffix: string;
+      machineTemplateName: string;
+      workerConfigName: string;
+      machineDeploymentName: string;
+      pool: AwsWorkloadClusterWorkers;
+    }) => {
+      const pool = opts.pool;
+      emitAwsMachineTemplate(this, `worker-template${opts.idSuffix}`, {
+        name: opts.machineTemplateName,
+        namespace,
+        instanceType: pool.instanceType ?? "m6i.large",
+        iamInstanceProfile,
+        publicIp: pool.publicIp ?? false,
+        sshKeyName: this.config.sshKeyName,
+        rootVolumeSizeGiB: pool.rootVolumeSizeGiB ?? 80,
+        rootVolumeType: pool.rootVolumeType ?? "gp3",
+        ami: pool.ami,
+        spot: pool.spot,
+      });
 
-    // 5. K0sWorkerConfigTemplate - cloud-init for storage deps (Piraeus/LINSTOR)
-    new K0sWorkerConfigTemplate(this, "worker-config", {
-      metadata: { name: workerConfigName, namespace },
-      spec: {
-        template: {
-          spec: {
-            version: k0sWorkerVersion,
-            preStartCommands: [
-              ...DEFAULT_PRESTART_COMMANDS,
-              ...(workers.extraPreStartCommands ?? []),
-            ],
+      // k0s registration args: labels/taints go through the NATIVE `k0s worker`
+      // --labels/--taints flags (both take comma-separated lists; taints use the
+      // standard key=value:Effect form) — no kubelet-extra-args indirection.
+      const k0sWorkerArgs: string[] = [];
+      if (pool.nodeLabels && Object.keys(pool.nodeLabels).length > 0) {
+        k0sWorkerArgs.push(
+          `--labels=${Object.entries(pool.nodeLabels)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(",")}`,
+        );
+      }
+      if (pool.taints?.length) {
+        k0sWorkerArgs.push(
+          `--taints=${pool.taints
+            .map(
+              (t) =>
+                `${t.key}${t.value !== undefined ? `=${t.value}` : ""}:${t.effect}`,
+            )
+            .join(",")}`,
+        );
+      }
+      k0sWorkerArgs.push(...(pool.k0sArgs ?? []));
+
+      new K0sWorkerConfigTemplate(this, `worker-config${opts.idSuffix}`, {
+        metadata: { name: opts.workerConfigName, namespace },
+        spec: {
+          template: {
+            spec: {
+              version: k0sWorkerVersion,
+              ...(k0sWorkerArgs.length ? { args: k0sWorkerArgs } : {}),
+              preStartCommands: [
+                ...DEFAULT_PRESTART_COMMANDS,
+                ...(pool.extraPreStartCommands ?? []),
+              ],
+            },
           },
         },
-      },
-    });
+      });
 
-    // 6. MachineDeployment (static replicas — no autoscaler)
-    new MachineDeploymentV1Beta1(this, "worker-md", {
-      metadata: { name: `${name}-workers`, namespace },
-      spec: {
-        clusterName,
-        replicas: workers.replicas ?? 2,
-        selector: {
-          matchLabels: { "cluster.x-k8s.io/cluster-name": clusterName },
-        },
-        template: {
-          spec: {
-            clusterName,
-            version: k8sVersion,
-            ...(workers.failureDomain
-              ? { failureDomain: workers.failureDomain }
-              : {}),
-            bootstrap: {
-              configRef: {
-                apiVersion: "bootstrap.cluster.x-k8s.io/v1beta1",
-                kind: "K0sWorkerConfigTemplate",
-                name: workerConfigName,
+      new MachineDeploymentV1Beta1(this, `worker-md${opts.idSuffix}`, {
+        metadata: { name: opts.machineDeploymentName, namespace },
+        spec: {
+          clusterName,
+          replicas: pool.replicas ?? 2,
+          selector: {
+            matchLabels: { "cluster.x-k8s.io/cluster-name": clusterName },
+          },
+          template: {
+            spec: {
+              clusterName,
+              version: k8sVersion,
+              ...(pool.failureDomain
+                ? { failureDomain: pool.failureDomain }
+                : {}),
+              bootstrap: {
+                configRef: {
+                  apiVersion: "bootstrap.cluster.x-k8s.io/v1beta1",
+                  kind: "K0sWorkerConfigTemplate",
+                  name: opts.workerConfigName,
+                },
+              },
+              infrastructureRef: {
+                apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
+                kind: "AWSMachineTemplate",
+                name: opts.machineTemplateName,
               },
             },
-            infrastructureRef: {
-              apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
-              kind: "AWSMachineTemplate",
-              name: machineTemplateName,
-            },
           },
         },
-      },
-    });
+      });
+    };
+
+    // Default pool (the legacy `workers` block). Fixed resource names — NOT
+    // hash-rotated — so pre-existing clusters keep their objects untouched.
+    // Skipped only when `workerPools` is given without `workers` (pools-only).
+    if (this.config.workers || !this.config.workerPools) {
+      emitWorkerPool({
+        idSuffix: "",
+        machineTemplateName,
+        workerConfigName,
+        machineDeploymentName: `${name}-workers`,
+        pool: workers,
+      });
+    }
+
+    // Named pools. The AWSMachineTemplate spec is IMMUTABLE (CAPA's admission
+    // webhook rejects in-place edits), so — like the AwsK0sCluster control
+    // plane — the template name embeds a hash of its spec: any change yields a
+    // new template and the MachineDeployment's infrastructureRef repoints to
+    // it, rolling the pool (the standard CAPI rotate-on-change pattern).
+    for (const [poolName, pool] of Object.entries(
+      this.config.workerPools ?? {},
+    )) {
+      const poolTemplateSpec = {
+        instanceType: pool.instanceType ?? "m6i.large",
+        iamInstanceProfile,
+        sshKeyName: this.config.sshKeyName ?? null,
+        publicIp: pool.publicIp ?? false,
+        rootVolumeSizeGiB: pool.rootVolumeSizeGiB ?? 80,
+        rootVolumeType: pool.rootVolumeType ?? "gp3",
+        ami: pool.ami ?? null,
+        spot: pool.spot ?? false,
+      };
+      const poolTemplateHash = crypto
+        .createHash("sha256")
+        .update(JSON.stringify(poolTemplateSpec))
+        .digest("hex")
+        .slice(0, 8);
+      emitWorkerPool({
+        idSuffix: `-${poolName}`,
+        machineTemplateName: `${name}-${poolName}-${poolTemplateHash}`,
+        workerConfigName: `${name}-${poolName}-config`,
+        machineDeploymentName: `${name}-${poolName}`,
+        pool,
+      });
+    }
   }
 }

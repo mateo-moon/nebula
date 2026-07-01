@@ -6,11 +6,15 @@ import { AwsIam, AwsIamConfig } from "./iam";
 
 export { AwsIam, DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
 export { buildCapaCredentialsIni, toCapaB64 } from "./_shared";
+export type { NodeIngressRuleSpec, SpotSelection } from "./_shared";
 export type { AwsIamConfig } from "./iam";
 export { S3Bucket } from "./s3";
 export type { S3BucketConfig } from "./s3";
 export { AwsWorkloadCluster } from "./cluster";
-export type { AwsWorkloadClusterConfig } from "./cluster";
+export type {
+  AwsWorkloadClusterConfig,
+  AwsWorkloadClusterWorkers,
+} from "./cluster";
 export { AwsK0sCluster } from "./k0s-cluster";
 // Re-export so consumers can set controlPlaneLoadBalancerScheme without a deep import.
 export { AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme } from "#imports/infrastructure.cluster.x-k8s.io";

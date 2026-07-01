@@ -79,12 +79,72 @@ new AwsWorkloadCluster(mgmt, "workload", {
   k8sVersion: "v1.31.8",
   sshKeyName: "nucon-aws", // a pre-existing EC2 key pair
   iamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
+  // Spread subnets/NAT gateways across 3 AZs (one NAT + Elastic IP per AZ).
+  availabilityZoneUsageLimit: 3,
+  // Ethereum P2P: the node SG only allows intra-cluster traffic by default,
+  // so open the P2P ports to the internet on every node.
+  additionalNodeIngressRules: [
+    {
+      description: "Ethereum execution P2P (TCP)",
+      protocol: "tcp",
+      fromPort: 30303,
+      toPort: 30303,
+      cidrBlocks: ["0.0.0.0/0"],
+    },
+    {
+      description: "Ethereum execution P2P (UDP discovery)",
+      protocol: "udp",
+      fromPort: 30303,
+      toPort: 30303,
+      cidrBlocks: ["0.0.0.0/0"],
+    },
+    {
+      description: "Ethereum consensus P2P (TCP)",
+      protocol: "tcp",
+      fromPort: 9000,
+      toPort: 9000,
+      cidrBlocks: ["0.0.0.0/0"],
+    },
+    {
+      description: "Ethereum consensus P2P (UDP discovery)",
+      protocol: "udp",
+      fromPort: 9000,
+      toPort: 9000,
+      cidrBlocks: ["0.0.0.0/0"],
+    },
+  ],
+  // Default pool: general-purpose on-demand workers.
   workers: {
     replicas: 3,
     instanceType: "m6i.xlarge",
     rootVolumeSizeGiB: 100,
     // Recommended: a region-specific Ubuntu 22.04 AMI (k0s is installed via cloud-init).
     ami: { id: "ami-0123456789abcdef0" },
+  },
+  // Named pools: each renders its own AWSMachineTemplate (hash-rotated name) +
+  // K0sWorkerConfigTemplate + MachineDeployment "<cluster>-<pool>".
+  workerPools: {
+    // Dedicated Ethereum-node pool: labeled + tainted (only tolerating pods
+    // land here) and running on Spot capped below the on-demand price.
+    ethereum: {
+      replicas: 2,
+      instanceType: "m6i.2xlarge",
+      rootVolumeSizeGiB: 500,
+      ami: { id: "ami-0123456789abcdef0" },
+      spot: { maxPrice: "0.30" },
+      nodeLabels: { "nucon.io/pool": "ethereum" },
+      taints: [{ key: "nucon.io/ethereum", value: "true", effect: "NoSchedule" }],
+      // Extra raw `k0s worker` args, appended after --labels/--taints.
+      k0sArgs: ["--kubelet-extra-args=--max-pods=64"],
+    },
+    // Burst pool: plain Spot (empty spotMarketOptions = capped at on-demand).
+    burst: {
+      replicas: 1,
+      instanceType: "m6i.large",
+      ami: { id: "ami-0123456789abcdef0" },
+      spot: true,
+      nodeLabels: { "nucon.io/pool": "burst" },
+    },
   },
 });
 

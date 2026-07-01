@@ -6,6 +6,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
   AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol as IngressProtocol,
+  AwsClusterV1Beta2SpecNetworkAdditionalNodeIngressRulesProtocol as NodeIngressProtocol,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol as LbListenerProtocol,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol as LbIngressProtocol,
   AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
@@ -26,6 +27,32 @@ export interface AmiSelection {
   lookupOrg?: string;
   lookupBaseOs?: string;
   lookupFormat?: string;
+}
+
+/**
+ * EC2 Spot selection shared by the AWS cluster modules.
+ *
+ * `true` (or `{}`) requests Spot capacity with the bid capped at the on-demand
+ * price (CAPA emits an empty `spotMarketOptions`); `{ maxPrice: "0.20" }` sets
+ * an explicit USD/hour cap. Spot instances can be reclaimed with a 2-minute
+ * notice, so only use for pools that tolerate node loss.
+ */
+export type SpotSelection = boolean | { maxPrice?: string };
+
+/**
+ * A node security-group ingress rule (friendly shape for module configs; mapped
+ * onto CAPA's `network.additionalNodeIngressRules` CRD field, which appends
+ * rules to the node security group).
+ */
+export interface NodeIngressRuleSpec {
+  /** AWS SG rule description (NB: '>' is rejected by AWS — no "->" arrows). */
+  description: string;
+  /** Protocol — the values match CAPA's enum ("-1" = all protocols). */
+  protocol: "tcp" | "udp" | "icmp" | "-1";
+  fromPort: number;
+  toPort: number;
+  /** Source CIDR blocks (e.g. ["0.0.0.0/0"] for public P2P ports). */
+  cidrBlocks: string[];
 }
 
 /**
@@ -177,6 +204,14 @@ export function emitAwsClusterCr(
       /** Logical id (CAPA convention: `<cluster>-subnet-<public|private>-<az>`). */
       id: string;
     }>;
+    /**
+     * Extra ingress rules appended to the NODE security group (CAPA
+     * `network.additionalNodeIngressRules`). Use for workloads that need
+     * public inbound ports on the workers, e.g. Ethereum P2P (30303 + 9000
+     * tcp/udp from 0.0.0.0/0). Omitted = the node SG stays CAPA-default
+     * (intra-cluster only).
+     */
+    additionalNodeIngressRules?: NodeIngressRuleSpec[];
   },
 ): AwsClusterV1Beta2 {
   // SG rules that gate node-to-node + NLB traffic must cover EVERY CIDR a node can
@@ -311,6 +346,22 @@ export function emitAwsClusterCr(
             cidrBlocks: nodeCidrs,
           },
         ],
+        // Opt-in extra node-SG rules (e.g. public P2P ports). The friendly
+        // protocol strings are the CAPA enum's literal values, so a cast maps
+        // them onto the generated type.
+        ...(opts.additionalNodeIngressRules?.length
+          ? {
+              additionalNodeIngressRules: opts.additionalNodeIngressRules.map(
+                (r) => ({
+                  description: r.description,
+                  protocol: r.protocol as NodeIngressProtocol,
+                  fromPort: r.fromPort,
+                  toPort: r.toPort,
+                  cidrBlocks: r.cidrBlocks,
+                }),
+              ),
+            }
+          : {}),
       },
     },
   });
@@ -346,6 +397,12 @@ export function emitAwsMachineTemplate(
     rootVolumeSizeGiB: number;
     rootVolumeType: string;
     ami?: AmiSelection;
+    /**
+     * Run the instances as EC2 Spot. `true` (or `{}`) caps the bid at the
+     * on-demand price; `{ maxPrice: "0.20" }` sets an explicit USD/hour cap.
+     * Default off (on-demand).
+     */
+    spot?: SpotSelection;
     /**
      * Allow pod-networked workloads on the node to reach IMDS (for keyless
      * instance-profile auth). Off by default — only the keyless management
@@ -396,6 +453,17 @@ export function emitAwsMachineTemplate(
             size: opts.rootVolumeSizeGiB,
             type: opts.rootVolumeType,
           },
+          // Spot capacity: an EMPTY spotMarketOptions means "spot, bid capped
+          // at the on-demand price" (CAPA/EC2 semantics); maxPrice tightens the
+          // cap. Omitted entirely for on-demand pools.
+          ...(opts.spot
+            ? {
+                spotMarketOptions:
+                  typeof opts.spot === "object" && opts.spot.maxPrice
+                    ? { maxPrice: opts.spot.maxPrice }
+                    : {},
+              }
+            : {}),
           ...buildAmiSpec(opts.ami),
         },
       },
