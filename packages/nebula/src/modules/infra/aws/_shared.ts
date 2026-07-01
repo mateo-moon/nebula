@@ -288,6 +288,28 @@ export function emitAwsClusterCr(
             toPort: 8132,
             cidrBlocks: nodeCidrs,
           },
+          // node-exporter (:9100) and kube-proxy (:10249) serve /metrics on the
+          // node's hostNetwork. Same gap as 9443/8132 above: CAPA's control-plane
+          // SG opens the standard k8s/etcd ports but NOT these, so Prometheus
+          // (which runs on ONE control-plane node) can scrape only its OWN node's
+          // exporter — every cross-node (i.e. cross-AZ) target is dropped by the SG
+          // → TargetDown fires for 2/3 of the targets. Open them between nodes in
+          // the VPC so every control-plane node is scrapeable. Purely intra-cluster
+          // (nodeCidrs), never internet-exposed.
+          {
+            description: "node-exporter metrics (Prometheus scrape)",
+            protocol: IngressProtocol.TCP,
+            fromPort: 9100,
+            toPort: 9100,
+            cidrBlocks: nodeCidrs,
+          },
+          {
+            description: "kube-proxy metrics (Prometheus scrape)",
+            protocol: IngressProtocol.TCP,
+            fromPort: 10249,
+            toPort: 10249,
+            cidrBlocks: nodeCidrs,
+          },
         ],
       },
     },
