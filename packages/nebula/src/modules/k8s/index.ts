@@ -203,6 +203,12 @@ export type {
   LonghornBackupConfig,
 } from "./longhorn";
 
+export { AwsEbsCsiDriver } from "./aws-ebs-csi-driver";
+export type {
+  AwsEbsCsiDriverConfig,
+  AwsEbsCsiDriverStorageClassConfig,
+} from "./aws-ebs-csi-driver";
+
 export { Piraeus } from "./piraeus";
 export type {
   PiraeusConfig,
