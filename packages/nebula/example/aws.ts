@@ -29,6 +29,7 @@ import {
   CertManager,
   IngressNginx,
   ExternalDns,
+  AwsEbsCsiDriver,
 } from "../src/modules/k8s";
 
 const app = new App();
@@ -158,6 +159,15 @@ new Calico(workload, "calico", { kubeletPath: k0sKubeletPath });
 
 // Self-hosted storage on the worker nodes' EBS volumes (no cloud CSI).
 new Longhorn(workload, "longhorn", {});
+
+// AWS EBS CSI driver — keyless (node instance profile over IMDS, no IRSA);
+// region/cluster pinned explicitly since the non-EKS SDK can't self-derive.
+// Renders an encrypted gp3 StorageClass marked as the cluster default.
+new AwsEbsCsiDriver(workload, "aws-ebs-csi-driver", {
+  region,
+  clusterName: "nucon-aws",
+  storageClass: { isDefault: true },
+});
 
 new CertManager(workload, "cert-manager", { acmeEmail: `admin@${domain}` });
 
