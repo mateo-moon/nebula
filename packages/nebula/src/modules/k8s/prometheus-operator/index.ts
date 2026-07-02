@@ -571,6 +571,16 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
     // Deploy Promtail
     if (this.config.promtail?.enabled !== false) {
       const promtailClient = this.config.promtailClient;
+      // Half-configured auth would silently ship an auth-less client that
+      // 401s at the sink — fail at synth instead.
+      if (
+        promtailClient &&
+        !!promtailClient.username !== !!promtailClient.passwordRef
+      ) {
+        throw new Error(
+          "promtailClient: username and passwordRef must be set together (or both omitted for a no-auth sink)",
+        );
+      }
       this.promtailHelm = new Helm(this, "promtail", {
         chart: "promtail",
         releaseName: "promtail",
