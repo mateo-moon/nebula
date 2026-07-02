@@ -4,9 +4,10 @@ import {
   ServiceAccountSpecDeletionPolicy,
   ProjectIamMember as CpProjectIamMember,
   ProjectIamMemberSpecDeletionPolicy,
-  ServiceAccountIamMember as CpServiceAccountIamMember,
   ServiceAccountIamMemberSpecDeletionPolicy,
 } from "#imports/cloudplatform.gcp.upbound.io";
+import { mapDeletionPolicy, normalizeAccountId } from "../_shared";
+import { bindWorkloadIdentityUser } from "./workload-identity";
 
 export interface WorkloadIdentityConfig {
   /** Enable this service account */
@@ -67,14 +68,7 @@ export class Iam extends Construct {
       return;
     }
 
-    // Helper to normalize account IDs (GCP requires 6-30 chars, lowercase, start with letter)
-    const normalizeAccountId = (raw: string): string => {
-      let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-      if (!/^[a-z]/.test(s)) s = `a-${s}`;
-      if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-      if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-      return s;
-    };
+    // Account-ID normalization is shared (infra/_shared.ts normalizeAccountId).
 
     // Helper to create a service account with IAM bindings
     const createServiceAccountWithBindings = (
@@ -125,9 +119,9 @@ export class Iam extends Construct {
               name: providerConfigRef,
             },
             deletionPolicy:
-              deletionPolicy === ServiceAccountSpecDeletionPolicy.ORPHAN
-                ? ProjectIamMemberSpecDeletionPolicy.ORPHAN
-                : ProjectIamMemberSpecDeletionPolicy.DELETE,
+              mapDeletionPolicy<ProjectIamMemberSpecDeletionPolicy>(
+                deletionPolicy,
+              ) ?? ProjectIamMemberSpecDeletionPolicy.DELETE,
           },
         });
       });
@@ -138,25 +132,19 @@ export class Iam extends Construct {
       const enableWorkloadIdentity = spec.workloadIdentity !== false;
       const createIamBinding = spec.createIamBinding !== false;
       if (enableWorkloadIdentity && createIamBinding) {
-        const wiMember = `serviceAccount:${config.project}.svc.id.goog[${ns}/${ksa}]`;
-        new CpServiceAccountIamMember(this, `${kind}-wi`, {
-          metadata: {
-            name: `${id}-${kind}-wi`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${config.project}/serviceAccounts/${accountId}@${config.project}.iam.gserviceaccount.com`,
-              role: "roles/iam.workloadIdentityUser",
-              member: wiMember,
-            },
-            providerConfigRef: {
-              name: providerConfigRef,
-            },
-            deletionPolicy:
-              deletionPolicy === ServiceAccountSpecDeletionPolicy.ORPHAN
-                ? ServiceAccountIamMemberSpecDeletionPolicy.ORPHAN
-                : ServiceAccountIamMemberSpecDeletionPolicy.DELETE,
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: `${kind}-wi`,
+          name: `${id}-${kind}-wi`,
+          project: config.project,
+          namespace: ns,
+          ksa,
+          gsaEmail: `${accountId}@${config.project}.iam.gserviceaccount.com`,
+          providerConfigRef,
+          deletionPolicy:
+            mapDeletionPolicy<ServiceAccountIamMemberSpecDeletionPolicy>(
+              deletionPolicy,
+            ) ?? ServiceAccountIamMemberSpecDeletionPolicy.DELETE,
         });
       }
 

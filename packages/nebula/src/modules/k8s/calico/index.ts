@@ -19,8 +19,7 @@
 import { Construct } from "constructs";
 import { ApiObject, Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { HelmModule, syncWave } from "../../../core";
 
 export interface CalicoConfig {
   /** Namespace for tigera-operator (defaults to tigera-operator) */
@@ -61,7 +60,7 @@ export interface CalicoConfig {
   values?: Record<string, unknown>;
 }
 
-export class Calico extends BaseConstruct<CalicoConfig> {
+export class Calico extends HelmModule<CalicoConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
 
@@ -79,9 +78,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
 
     // --- Namespace ---
 
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // --- Helm (tigera-operator) ---
 
@@ -120,17 +117,16 @@ export class Calico extends BaseConstruct<CalicoConfig> {
       ...(kubeletPath && { kubeletVolumePluginPath: kubeletPath }),
     };
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "tigera-operator",
       releaseName: "calico",
       repo:
         this.config.repository ?? "https://docs.tigera.io/calico/charts",
       version: this.config.version ?? "v3.29.3",
+      defaultValues,
+      values: this.config.values,
       helmFlags: ["--include-crds"],
-      namespace: namespaceName,
-      values: chartValues,
     });
 
     // FelixConfiguration — separate CRD (not part of Installation spec)
@@ -140,7 +136,7 @@ export class Calico extends BaseConstruct<CalicoConfig> {
         kind: "FelixConfiguration",
         metadata: {
           name: "default",
-          annotations: { "argocd.argoproj.io/sync-wave": "5" },
+          annotations: syncWave(5),
         },
         spec: {
           wireguardEnabled: true,

@@ -6,7 +6,6 @@
  * CAPI-provisioned clusters with Karmada.
  */
 import { Construct } from "constructs";
-import * as kplus from "cdk8s-plus-33";
 import { Cluster } from "./cluster";
 import type {
   ClusterRegistrationConfig,
@@ -43,6 +42,15 @@ export class KarmadaClusterRegistration extends Construct {
     super(scope, id);
 
     const mode: KarmadaClusterMode = config.mode ?? "Push";
+    // Push mode reaches out to the member API endpoint, so it must be supplied.
+    // The type marks apiEndpoint required, but enforce it at runtime too — a
+    // missing endpoint would otherwise render spec.apiEndpoint as undefined and
+    // the registration would silently fail to connect.
+    if (mode === "Push" && !config.apiEndpoint) {
+      throw new Error(
+        `${id}: apiEndpoint is required for Push-mode Karmada registration`,
+      );
+    }
     const secretNamespace = config.secretNamespace ?? "karmada-system";
 
     // Build cluster labels
@@ -85,19 +93,21 @@ export class KarmadaClusterRegistration extends Construct {
 /**
  * KarmadaCapiClusterRegistration - Registers a CAPI-provisioned cluster with Karmada.
  *
- * This creates:
- * 1. A Karmada Cluster resource referencing the CAPI cluster's kubeconfig
- * 2. Reflector annotations on the kubeconfig secret for cross-namespace replication
+ * This creates a Karmada `Cluster` resource (Push mode) wired to:
+ * - the member API endpoint (`apiEndpoint`), and
+ * - a credential secret in the Karmada namespace holding `token` + `caBundle`.
  *
- * Note: CAPI creates a kubeconfig secret named `{cluster-name}-kubeconfig` in the
- * same namespace as the Cluster resource. This secret needs to be copied to the
- * Karmada namespace for Karmada to access it.
+ * IMPORTANT: Karmada cannot read CAPI's raw `<clusterName>-kubeconfig` secret
+ * (single `value` key with a full kubeconfig). The required `token` + `caBundle`
+ * secret is produced by `KarmadaCredentialSync`; point `credentialSecretName` at
+ * that secret (default `<clusterName>-kubeconfig`, matching its example output).
  *
  * @example
  * ```typescript
  * // Register the dev-cluster CAPI cluster with Karmada
  * new KarmadaCapiClusterRegistration(chart, 'register-dev', {
  *   clusterName: 'dev-cluster',
+ *   apiEndpoint: 'https://dev-cluster-api.example.com:6443',
  *   labels: {
  *     env: 'dev',
  *     monitoring: 'enabled',
@@ -109,7 +119,6 @@ export class KarmadaClusterRegistration extends Construct {
  */
 export class KarmadaCapiClusterRegistration extends Construct {
   public readonly cluster: Cluster;
-  public readonly secretReflection: kplus.Secret;
 
   constructor(
     scope: Construct,
@@ -118,9 +127,19 @@ export class KarmadaCapiClusterRegistration extends Construct {
   ) {
     super(scope, id);
 
+    // Push mode (hardcoded below) requires the member API endpoint.
+    if (!config.apiEndpoint) {
+      throw new Error(
+        `${id}: apiEndpoint is required (KarmadaCapiClusterRegistration is Push-mode)`,
+      );
+    }
+
     const clusterNamespace = config.clusterNamespace ?? "default";
     const karmadaNamespace = config.karmadaNamespace ?? "karmada-system";
-    const kubeconfigSecretName = `${config.clusterName}-kubeconfig`;
+    // Karmada needs a secret with `token` + `caBundle` keys (produced by
+    // KarmadaCredentialSync), NOT the raw CAPI kubeconfig secret.
+    const credentialSecretName =
+      config.credentialSecretName ?? `${config.clusterName}-kubeconfig`;
 
     // Build cluster labels
     const labels: Record<string, string> = {
@@ -152,34 +171,17 @@ export class KarmadaCapiClusterRegistration extends Construct {
       },
       spec: {
         syncMode: "Push",
-        // The kubeconfig secret must be in karmada-system namespace
-        // This can be achieved via secret replication (reflector, external-secrets, etc.)
+        // Push mode requires the member API endpoint so the control plane can
+        // reach out to it.
+        apiEndpoint: config.apiEndpoint,
+        // Credentials (token + caBundle) live in the Karmada namespace.
         secretRef: {
-          name: kubeconfigSecretName,
+          name: credentialSecretName,
           namespace: karmadaNamespace,
         },
         provider: config.provider,
         region: config.region,
         zone: config.zone,
-      },
-    });
-
-    // Create a secret with reflector annotations to replicate to karmada-system
-    // This uses kubernetes-reflector to copy secrets across namespaces
-    // The actual secret content is created by CAPI - we just add annotations
-    this.secretReflection = new kplus.Secret(this, "secret-reflection", {
-      metadata: {
-        name: kubeconfigSecretName,
-        namespace: clusterNamespace,
-        annotations: {
-          // Reflector annotations to copy to karmada-system
-          "reflector.v1.k8s.emberstack.com/reflection-allowed": "true",
-          "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces":
-            karmadaNamespace,
-          "reflector.v1.k8s.emberstack.com/reflection-auto-enabled": "true",
-          "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces":
-            karmadaNamespace,
-        },
       },
     });
   }

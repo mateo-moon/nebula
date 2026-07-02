@@ -16,7 +16,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { BaseConstruct } from "../../../core";
+import { HelmModule, type Toleration } from "../../../core";
 
 export type DeschedulerKind = "Deployment" | "CronJob";
 
@@ -66,15 +66,10 @@ export interface DeschedulerConfig {
   /** Helm chart version */
   version?: string;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
-export class Descheduler extends BaseConstruct<DeschedulerConfig> {
+export class Descheduler extends HelmModule<DeschedulerConfig> {
   public readonly helm: Helm;
   public readonly namespace?: kplus.Namespace;
 
@@ -109,9 +104,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
 
     // Create namespace if not kube-system (kube-system already exists)
     if (namespaceName !== "kube-system") {
-      this.namespace = new kplus.Namespace(this, "namespace", {
-        metadata: { name: namespaceName },
-      });
+      this.namespace = this.createNamespace(namespaceName);
     }
 
     // Build enabled plugins list
@@ -137,13 +130,27 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       deschedulePlugins.push("RemovePodsHavingTooManyRestarts");
     }
 
+    // Namespace exclusion in descheduler v1alpha2 is applied per-plugin via the
+    // plugin args, not globally and not via DefaultEvictor (which has no
+    // namespace field). Most plugins read `namespaces.exclude`; the node-level
+    // utilization plugins read `evictableNamespaces.exclude` (only `exclude` is
+    // honored there).
+    const namespaceArgs =
+      excludeNamespaces.length > 0
+        ? { namespaces: { exclude: excludeNamespaces } }
+        : {};
+    const evictableNamespaceArgs =
+      excludeNamespaces.length > 0
+        ? { evictableNamespaces: { exclude: excludeNamespaces } }
+        : {};
+
     // Build plugin configurations - every enabled plugin needs a config entry
     const pluginConfig: Record<string, unknown>[] = [];
 
     if (this.config.enableRemoveDuplicates !== false) {
       pluginConfig.push({
         name: "RemoveDuplicates",
-        args: {},
+        args: { ...namespaceArgs },
       });
     }
 
@@ -161,6 +168,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
             memory: targetThresholds.memory,
             pods: targetThresholds.pods,
           },
+          ...evictableNamespaceArgs,
         },
       });
     }
@@ -171,6 +179,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         args: {
           podRestartThreshold: this.config.podRestartThreshold ?? 100,
           includingInitContainers: true,
+          ...namespaceArgs,
         },
       });
     }
@@ -180,6 +189,7 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         name: "RemovePodsViolatingNodeAffinity",
         args: {
           nodeAffinityType: ["requiredDuringSchedulingIgnoredDuringExecution"],
+          ...namespaceArgs,
         },
       });
     }
@@ -187,14 +197,14 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
     if (this.config.enableRemovePodsViolatingNodeTaints !== false) {
       pluginConfig.push({
         name: "RemovePodsViolatingNodeTaints",
-        args: {},
+        args: { ...namespaceArgs },
       });
     }
 
     if (this.config.enableRemovePodsViolatingInterPodAntiAffinity !== false) {
       pluginConfig.push({
         name: "RemovePodsViolatingInterPodAntiAffinity",
-        args: {},
+        args: { ...namespaceArgs },
       });
     }
 
@@ -216,7 +226,8 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       ],
     };
 
-    // Add namespace filter if excludeNamespaces specified
+    // Prepend a DefaultEvictor (eviction policy). Namespace exclusion itself is
+    // applied per-plugin via the args above, not here.
     if (excludeNamespaces.length > 0) {
       (deschedulerPolicy.profiles[0] as Record<string, unknown>).pluginConfig =
         [
@@ -233,15 +244,11 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
         ];
     }
 
-    const defaultTolerations = [
-      {
-        key: "components.gke.io/gke-managed-components",
-        operator: "Exists",
-        effect: "NoSchedule",
-      },
-    ];
+    // Portable by default (no vendor-specific tolerations). Add via config/values
+    // where needed (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations: Array<Record<string, unknown>> = [];
 
-    const values: Record<string, unknown> = {
+    const defaultValues: Record<string, unknown> = {
       kind,
       ...(kind === "Deployment"
         ? { deschedulingInterval }
@@ -253,16 +260,20 @@ export class Descheduler extends BaseConstruct<DeschedulerConfig> {
       leaderElection: {
         enabled: replicas > 1,
       },
-      ...(this.config.values ?? {}),
     };
 
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "descheduler",
       releaseName: "descheduler",
       repo: "https://kubernetes-sigs.github.io/descheduler/",
-      ...(this.config.version ? { version: this.config.version } : {}),
-      namespace: namespaceName,
-      values,
+      version: this.config.version ?? "0.33.0",
+      defaultValues,
+      values: this.config.values,
+      // Restore main's shallow-merge semantics: the HelmModule default
+      // (deepmerge) would concatenate array values such as policy profiles,
+      // which can yield a duplicate "default" profile the controller rejects.
+      merge: "spread",
     });
   }
 }

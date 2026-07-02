@@ -25,7 +25,7 @@ import { Construct } from "constructs";
 import { Helm, ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { KubeStorageClass } from "cdk8s-plus-33/lib/imports/k8s";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
 
 /** LUKS encryption configuration */
 export interface LonghornEncryptionConfig {
@@ -62,6 +62,14 @@ export interface LonghornConfig {
   namespace?: string;
   /** Helm chart version (defaults to 1.11.0) */
   version?: string;
+  /**
+   * Override the longhorn instance-manager image tag.
+   * Longhorn 1.11.0 ships a required instance-manager hotfix image, so when
+   * version is 1.11.0 this defaults to "v1.11.0-hotfix-1". For any other
+   * version the chart's own instance-manager tag is used unless set here
+   * (hotfix images are published per-version and do not exist for every release).
+   */
+  instanceManagerTag?: string;
   /** Default data path on nodes (defaults to /data/longhorn) */
   defaultDataPath?: string;
   /** Default replica count (defaults to 1) */
@@ -80,7 +88,7 @@ export interface LonghornConfig {
   dataLocality?: string;
 }
 
-export class Longhorn extends BaseConstruct<LonghornConfig> {
+export class Longhorn extends HelmModule<LonghornConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly storageClassName: string;
@@ -91,9 +99,7 @@ export class Longhorn extends BaseConstruct<LonghornConfig> {
     const namespaceName = this.config.namespace ?? "longhorn-system";
     this.storageClassName = this.config.storageClassName ?? "longhorn-encrypted";
 
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // --- Encryption secret ---
 
@@ -128,14 +134,26 @@ export class Longhorn extends BaseConstruct<LonghornConfig> {
 
     // --- Helm chart ---
 
-    const helmValues: Record<string, unknown> = {
-      image: {
-        longhorn: {
-          instanceManager: {
-            tag: `v${this.config.version ?? "1.11.0"}-hotfix-1`,
-          },
-        },
-      },
+    const version = this.config.version ?? "1.11.0";
+    // Only pin the instance-manager hotfix image for the version it was
+    // published for. Templating "-hotfix-1" onto an arbitrary version yields a
+    // non-existent tag and ImagePullBackOff for every instance manager.
+    const instanceManagerTag =
+      this.config.instanceManagerTag ??
+      (version === "1.11.0" ? "v1.11.0-hotfix-1" : undefined);
+
+    const defaultValues: Record<string, unknown> = {
+      ...(instanceManagerTag
+        ? {
+            image: {
+              longhorn: {
+                instanceManager: {
+                  tag: instanceManagerTag,
+                },
+              },
+            },
+          }
+        : {}),
       defaultSettings: {
         defaultDataPath: this.config.defaultDataPath ?? "/data/longhorn",
         defaultReplicaCount: this.config.defaultReplicaCount ?? 1,
@@ -146,16 +164,19 @@ export class Longhorn extends BaseConstruct<LonghornConfig> {
             }
           : {}),
       },
-      ...this.config.values,
     };
 
-    this.helm = new Helm(this, "helm", {
+    // Longhorn historically shallow-merges user values over the defaults, so
+    // use the "spread" strategy to keep the rendered values byte-identical.
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "longhorn",
       releaseName: "longhorn",
       repo: "https://charts.longhorn.io",
-      version: this.config.version ?? "1.11.0",
-      namespace: namespaceName,
-      values: helmValues,
+      version,
+      defaultValues,
+      values: this.config.values,
+      merge: "spread",
     });
 
     // --- Encrypted StorageClass ---

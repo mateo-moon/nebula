@@ -174,7 +174,7 @@ new IngressNginx(chart, 'ingress-nginx', {
 
 // ExternalDns - DNS record management
 new ExternalDns(chart, 'external-dns', {
-  project: 'my-gcp-project',
+  gcpProject: 'my-gcp-project',
   domainFilters: ['dev.example.com'],
   policy: 'sync',
   txtOwnerId: 'example-dev',

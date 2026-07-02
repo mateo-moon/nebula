@@ -9,6 +9,7 @@ import { Helm, ApiObject } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import type { KarmadaConfig } from "./types";
+import { syncWave } from "../../../core";
 
 /** Default Karmada version */
 export const KARMADA_VERSION = "1.16.0";
@@ -47,29 +48,32 @@ export class KarmadaControlPlane extends Construct {
     });
 
     // GKE requires a ResourceQuota to allow pods with system-node-critical priority class
-    // The Karmada operator creates etcd with this priority class
-    new ApiObject(this, "critical-pods-quota", {
-      apiVersion: "v1",
-      kind: "ResourceQuota",
-      metadata: {
-        name: "gcp-critical-pods",
-        namespace: namespaceName,
-      },
-      spec: {
-        hard: {
-          pods: "1000000000",
+    // The Karmada operator creates etcd with this priority class. Enabled by default;
+    // opt out via `criticalPodsQuota: false` on clusters that don't need it.
+    if (config.criticalPodsQuota !== false) {
+      new ApiObject(this, "critical-pods-quota", {
+        apiVersion: "v1",
+        kind: "ResourceQuota",
+        metadata: {
+          name: "gcp-critical-pods",
+          namespace: namespaceName,
         },
-        scopeSelector: {
-          matchExpressions: [
-            {
-              operator: "In",
-              scopeName: "PriorityClass",
-              values: ["system-node-critical", "system-cluster-critical"],
-            },
-          ],
+        spec: {
+          hard: {
+            pods: "1000000000",
+          },
+          scopeSelector: {
+            matchExpressions: [
+              {
+                operator: "In",
+                scopeName: "PriorityClass",
+                values: ["system-node-critical", "system-cluster-critical"],
+              },
+            ],
+          },
         },
-      },
-    });
+      });
+    }
 
     // Install Karmada Operator via Helm
     const operatorValues: Record<string, unknown> = {
@@ -139,10 +143,8 @@ export class KarmadaControlPlane extends Construct {
       metadata: {
         name: karmadaName,
         namespace: namespaceName,
-        annotations: {
-          // Ensure operator is deployed before CR
-          "argocd.argoproj.io/sync-wave": "1",
-        },
+        // Ensure operator is deployed before CR
+        annotations: syncWave(1),
       },
       spec: karmadaSpec,
     });

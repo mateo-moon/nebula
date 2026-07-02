@@ -46,9 +46,12 @@ import { AppProject } from "#imports/argoproj.io";
 import {
   ServiceAccount as GcpServiceAccount,
   ProjectIamMember,
-  ServiceAccountIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule, type Toleration } from "../../../core";
+import {
+  bindWorkloadIdentityUser,
+  wiKsaAnnotations,
+} from "../../infra/gcp/workload-identity";
 
 // Dex configuration types
 export interface DexGithubConfig {
@@ -111,6 +114,19 @@ export interface NebulaPluginConfig {
   /** Secret containing GCP credentials (alternative to Workload Identity) */
   gcpCredentialsSecret?: string;
   /**
+   * age-based SOPS decryption — vendor-neutral, needs no cloud identity. The
+   * referenced Secret's key is mounted into the repo-server CMP sidecar and
+   * SOPS_AGE_KEY_FILE is pointed at it, so `vals` resolves `ref+sops://` at synth
+   * time. Use this on clouds without keyless Workload Identity (e.g. self-managed
+   * k0s on AWS) instead of `gcpProject` (GCP KMS + WI).
+   */
+  sopsAge?: {
+    /** Name of the Secret holding the age private key(s). */
+    secretName: string;
+    /** Key within the Secret that holds the key file (default "keys.txt"). */
+    secretKey?: string;
+  };
+  /**
    * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
    * Requires Crossplane's GSA to have roles/iam.serviceAccountAdmin.
@@ -135,6 +151,15 @@ export interface ArgoCdConfig {
   version?: string;
   /** Helm repository URL */
   repository?: string;
+  /**
+   * Extra SSH known_hosts entries, appended to ArgoCD's built-in defaults
+   * (github/gitlab/…) in the argocd-ssh-known-hosts-cm ConfigMap. REQUIRED for
+   * repositories on self-hosted SSH git servers (e.g. a private Gitea): without
+   * the server's host key, ArgoCD's repo-server rejects the clone with
+   * "ssh: handshake failed: knownhosts: key is unknown" and nothing syncs.
+   * Provide ssh-keyscan output, e.g. "[gitea.example.com]:2222 ssh-rsa AAAA...".
+   */
+  sshKnownHosts?: string;
   /** Additional Helm values - supports full ArgoCD Helm chart values */
   values?: {
     extraObjects?: Array<{
@@ -259,12 +284,7 @@ export interface ArgoCdConfig {
     port?: number;
   };
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
   /** Extra data to add to the argocd-secret (e.g., OIDC clientID, clientSecret) */
   extraSecretData?: Record<string, string>;
 }
@@ -314,7 +334,7 @@ function hashPassword(password: string): string {
   return bcrypt.hashSync(password, bcryptSalt);
 }
 
-export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
+export class ArgoCd extends HelmModule<ArgoCdConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly serverSecret: kplus.Secret;
@@ -356,9 +376,7 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
     }
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Note: Redis secret is managed by the Helm chart's redis-secret-init job
     // to ensure password stability across synths
@@ -393,13 +411,9 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       stringData: argocdSecretData,
     });
 
-    const defaultTolerations = this.config.tolerations ?? [
-      {
-        key: "components.gke.io/gke-managed-components",
-        operator: "Exists",
-        effect: "NoSchedule",
-      },
-    ];
+    // Portable by default; set config.tolerations to add cloud-specific ones
+    // (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations = this.config.tolerations ?? [];
 
     // Build default values
     const defaultValues: Record<string, unknown> = {
@@ -470,6 +484,17 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       }
     }
 
+    // Append extra SSH known_hosts (self-hosted git servers) to ArgoCD's
+    // defaults so the repo-server can clone over SSH (e.g. a private Gitea).
+    if (this.config.sshKnownHosts) {
+      if (!chartValues["configs"]) chartValues["configs"] = {};
+      const configs = chartValues["configs"] as Record<string, unknown>;
+      configs["ssh"] = {
+        ...(configs["ssh"] as Record<string, unknown> | undefined),
+        extraHosts: this.config.sshKnownHosts,
+      };
+    }
+
     // Add crossplane user account to cm if enabled
     if (this.config.crossplaneUser?.enabled) {
       if (!chartValues["configs"]) chartValues["configs"] = {};
@@ -494,6 +519,10 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       this.setupNebulaPlugin(chartValues, namespaceName);
     }
 
+    // NOTE: this module extends HelmModule but deliberately builds the Helm
+    // release directly (not via createHelmRelease) because chartValues is
+    // post-mutated above (params flatten, dex stringify, crossplane account
+    // injection, nebula-CMP sidecar) after the values are assembled.
     this.helm = new Helm(this, "helm", {
       chart: "argo-cd",
       releaseName: "argocd",
@@ -501,6 +530,13 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       version: this.config.version ?? "9.4.0",
       namespace: namespaceName,
       values: chartValues,
+      // The argo-cd chart guards its ServiceMonitor + PrometheusRule resources
+      // behind `.Capabilities.APIVersions.Has "monitoring.coreos.com/v1"`. cdk8s
+      // runs `helm template`, which reports NO capabilities, so those resources
+      // silently render to nothing even when metrics.serviceMonitor/rules are
+      // enabled. Declare the prometheus-operator API so they render (harmless when
+      // the values leave them disabled; the CRDs must exist at apply time).
+      helmFlags: ["--api-versions", "monitoring.coreos.com/v1"],
     });
 
     // Create AppProject if configured using imported CRD
@@ -610,16 +646,15 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       // Workload Identity binding - allow repo-server SA to impersonate GCP SA
       // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
       if (pluginConfig.createWorkloadIdentityBinding !== false) {
-        new ServiceAccountIamMember(this, "nebula-wi", {
-          metadata: { name: `${gsaName}-wi` },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${gcpProject}/serviceAccounts/${gcpServiceAccountEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${gcpProject}.svc.id.goog[${namespaceName}/argocd-repo-server]`,
-            },
-            providerConfigRef: { name: providerConfigRef },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: "nebula-wi",
+          name: `${gsaName}-wi`,
+          project: gcpProject,
+          namespace: namespaceName,
+          ksa: "argocd-repo-server",
+          gsaEmail: gcpServiceAccountEmail,
+          providerConfigRef,
         });
       }
     }
@@ -630,11 +665,9 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
       metadata: {
         name: nebulaSaName,
         namespace: namespaceName,
-        ...(gcpServiceAccountEmail && {
-          annotations: {
-            "iam.gke.io/gcp-service-account": gcpServiceAccountEmail,
-          },
-        }),
+        ...(gcpServiceAccountEmail
+          ? { annotations: wiKsaAnnotations(gcpServiceAccountEmail) }
+          : {}),
       },
     });
 
@@ -666,11 +699,11 @@ export class ArgoCd extends BaseConstruct<ArgoCdConfig> {
           name: nebulaSaName,
           namespace: namespaceName,
         },
-        {
-          kind: "ServiceAccount",
-          name: "argocd-repo-server",
-          namespace: namespaceName,
-        },
+        // NOTE: argocd-repo-server was previously a subject here too, giving the
+        // whole repo-server pod (which hosts the cmp sidecar) cluster-admin — a
+        // supply-chain RCE path (a compromised dep in the cmp = cluster root).
+        // Removed: the cmp renderer only writes manifests to stdout and needs zero
+        // in-cluster permissions (the application-controller applies them).
       ],
     });
 
@@ -756,6 +789,7 @@ done
       name: string;
       mountPath: string;
       subPath?: string;
+      readOnly?: boolean;
     }> = [
       {
         name: "cmp-plugin",
@@ -782,6 +816,26 @@ done
       volumes.push({
         name: "gcp-credentials",
         secret: { secretName: pluginConfig.gcpCredentialsSecret },
+      });
+    }
+
+    // age-based SOPS decryption (vendor-neutral; no cloud identity). Mount the
+    // age key Secret and point SOPS_AGE_KEY_FILE at it so `vals` can decrypt
+    // ref+sops:// at synth time on clouds without keyless Workload Identity.
+    if (pluginConfig.sopsAge) {
+      const ageKeyFile = pluginConfig.sopsAge.secretKey ?? "keys.txt";
+      sidecarEnv.push({
+        name: "SOPS_AGE_KEY_FILE",
+        value: `/secrets/sops-age/${ageKeyFile}`,
+      });
+      volumeMounts.push({
+        name: "sops-age",
+        mountPath: "/secrets/sops-age",
+        readOnly: true,
+      });
+      volumes.push({
+        name: "sops-age",
+        secret: { secretName: pluginConfig.sopsAge.secretName },
       });
     }
 
@@ -855,9 +909,12 @@ done
     // Create the target namespace only if not skipped
     let crossplaneNs: kplus.Namespace | undefined;
     if (!this.config.crossplaneUser!.skipNamespaceCreation) {
-      crossplaneNs = new kplus.Namespace(this, "crossplane-namespace", {
-        metadata: { name: targetNamespace },
-      });
+      // Reuse the HelmModule namespace helper (same construct id) instead of
+      // hand-rolling a second Namespace here.
+      crossplaneNs = this.createNamespace(
+        targetNamespace,
+        "crossplane-namespace",
+      );
     }
 
     // Create a secret to hold the password for the job
@@ -993,3 +1050,23 @@ export {
   ArgoCdClusterSync,
 } from "./argocd-cluster-sync";
 export type { ArgoCdClusterSyncConfig } from "./argocd-cluster-sync";
+
+// Re-export the app-of-apps tier factory
+export {
+  ArgoCdAppTier,
+  CAPI_IGNORE_DIFFERENCES,
+  ARGOCD_IN_CLUSTER_SERVER,
+} from "./app-tier";
+export type {
+  ArgoCdAppTierConfig,
+  ArgoCdAppTierDiscovery,
+  ArgoCdAppTierRegistryDiscovery,
+  ArgoCdAppTierAutoDiscovery,
+  ArgoCdAppTierClustersDiscovery,
+  ArgoCdAppTierClusterAppConfig,
+  ArgoCdAppTierModule,
+  ArgoCdAppTierPluginConfig,
+  ArgoCdAppTierProjectConfig,
+  ArgoCdAppTierSyncPolicyOverrides,
+  ArgoCdSyncPolicyPreset,
+} from "./app-tier";

@@ -23,6 +23,13 @@ export * as gcpDns from "./dns.gcp.upbound.io";
 export * as gcpStorage from "./storage.gcp.upbound.io";
 export * as gcpCloudplatform from "./cloudplatform.gcp.upbound.io";
 
+// Crossplane AWS providers
+export * as aws from "./aws.upbound.io";
+export * as awsEc2 from "./ec2.aws.upbound.io";
+export * as awsIam from "./iam.aws.upbound.io";
+export * as awsRoute53 from "./route53.aws.upbound.io";
+export * as awsKms from "./kms.aws.upbound.io";
+
 // Cert-Manager
 export * as certManager from "./cert-manager.io";
 

@@ -4,7 +4,7 @@ import { Construct } from 'constructs';
 
 
 /**
- *
+ * K0sControllerConfig is the Schema for the k0scontrollerconfigs API
  *
  * @schema K0sControllerConfig
  */
@@ -58,6 +58,8 @@ export class K0sControllerConfig extends ApiObject {
 }
 
 /**
+ * K0sControllerConfig is the Schema for the k0scontrollerconfigs API
+ *
  * @schema K0sControllerConfig
  */
 export interface K0sControllerConfigProps {
@@ -67,6 +69,8 @@ export interface K0sControllerConfigProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
+   * K0sControllerConfigSpec defines the desired state of K0sControllerConfig
+   *
    * @schema K0sControllerConfig#spec
    */
   readonly spec?: K0SControllerConfigSpec;
@@ -88,6 +92,8 @@ export function toJson_K0sControllerConfigProps(obj: K0sControllerConfigProps | 
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * K0sControllerConfigSpec defines the desired state of K0sControllerConfig
+ *
  * @schema K0SControllerConfigSpec
  */
 export interface K0SControllerConfigSpec {
@@ -111,6 +117,13 @@ export interface K0SControllerConfigSpec {
   /**
    * DownloadURL specifies the URL from which to download the k0s binary.
    * If the version field is specified, it is ignored, and whatever version is downloaded from the URL is used.
+   * Supported protocols are: http, https, oci. Using 'oci' scheme requires 'oras' to be installed on the target system.
+   *
+   * If 'oci' schema is used and the OCI registry requires authentication, make sure to set up the authentication beforehand
+   * by adding a file to the Files section that contains the necessary config for ORAS. See: https://oras.land/docs/how_to_guides/authentication/
+   * The file must be placed at `/root` directory (HOME for cloud-init execution time) and named `config.json`.
+   * NOTE: use `.preStartCommands` to set DOCKER_CONFIG environment variable in order to let ORAS pick up your custom config file.
+   * When no value is specified, k0smotron will use the default URL: https://get.k0s.sh
    *
    * @schema K0SControllerConfigSpec#downloadURL
    */
@@ -124,12 +137,27 @@ export interface K0SControllerConfigSpec {
   readonly files?: K0SControllerConfigSpecFiles[];
 
   /**
+   * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+   *
+   * @schema K0SControllerConfigSpec#ignition
+   */
+  readonly ignition?: K0SControllerConfigSpecIgnition;
+
+  /**
    * K0s defines the k0s configuration. Note, that some fields will be overwritten by k0smotron.
    * If empty, will be used default configuration. @see https://docs.k0sproject.io/stable/configuration/
    *
    * @schema K0SControllerConfigSpec#k0s
    */
   readonly k0S?: any;
+
+  /**
+   * K0sInstallDir specifies the directory where k0s binary will be installed.
+   * If empty, k0smotron will use /usr/local/bin, which is the default install path used by k0s get script.
+   *
+   * @schema K0SControllerConfigSpec#k0sInstallDir
+   */
+  readonly k0SInstallDir?: string;
 
   /**
    * PostStartCommands specifies commands to be run after starting k0s worker.
@@ -176,6 +204,13 @@ export interface K0SControllerConfigSpec {
    * @schema K0SControllerConfigSpec#version
    */
   readonly version?: string;
+
+  /**
+   * WorkingDir specifies the working directory where k0smotron will place its files.
+   *
+   * @schema K0SControllerConfigSpec#workingDir
+   */
+  readonly workingDir?: string;
 }
 
 /**
@@ -189,13 +224,16 @@ export function toJson_K0SControllerConfigSpec(obj: K0SControllerConfigSpec | un
     'customUserDataRef': toJson_K0SControllerConfigSpecCustomUserDataRef(obj.customUserDataRef),
     'downloadURL': obj.downloadUrl,
     'files': obj.files?.map(y => toJson_K0SControllerConfigSpecFiles(y)),
+    'ignition': toJson_K0SControllerConfigSpecIgnition(obj.ignition),
     'k0s': obj.k0S,
+    'k0sInstallDir': obj.k0SInstallDir,
     'postStartCommands': obj.postStartCommands?.map(y => y),
     'preInstalledK0s': obj.preInstalledK0S,
     'preStartCommands': obj.preStartCommands?.map(y => y),
     'tunneling': toJson_K0SControllerConfigSpecTunneling(obj.tunneling),
     'useSystemHostname': obj.useSystemHostname,
     'version': obj.version,
+    'workingDir': obj.workingDir,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -280,6 +318,55 @@ export function toJson_K0SControllerConfigSpecFiles(obj: K0SControllerConfigSpec
     'contentFrom': toJson_K0SControllerConfigSpecFilesContentFrom(obj.contentFrom),
     'path': obj.path,
     'permissions': obj.permissions,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+ *
+ * @schema K0SControllerConfigSpecIgnition
+ */
+export interface K0SControllerConfigSpecIgnition {
+  /**
+   * AdditionalConfig is an unstructured object that contains additional config to be merged
+   * with the generated one. The format follows Butane spec: https://coreos.github.io/butane/
+   *
+   * @schema K0SControllerConfigSpecIgnition#additionalConfig
+   */
+  readonly additionalConfig?: string;
+
+  /**
+   * Variant declares which distribution variant the generated config is for.
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SControllerConfigSpecIgnition#variant
+   */
+  readonly variant: K0SControllerConfigSpecIgnitionVariant;
+
+  /**
+   * Version is the schema version of the Butane config to use
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SControllerConfigSpecIgnition#version
+   */
+  readonly version: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigSpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigSpecIgnition(obj: K0SControllerConfigSpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalConfig': obj.additionalConfig,
+    'variant': obj.variant,
+    'version': obj.version,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -459,6 +546,26 @@ export function toJson_K0SControllerConfigSpecFilesContentFrom(obj: K0SControlle
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Variant declares which distribution variant the generated config is for.
+ * Check the supported variants and versions here:
+ * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+ *
+ * @schema K0SControllerConfigSpecIgnitionVariant
+ */
+export enum K0SControllerConfigSpecIgnitionVariant {
+  /** fcos */
+  FCOS = "fcos",
+  /** flatcar */
+  FLATCAR = "flatcar",
+  /** openshift */
+  OPENSHIFT = "openshift",
+  /** r4e */
+  R4E = "r4e",
+  /** fiot */
+  FIOT = "fiot",
+}
+
+/**
  * Mode describes tunneling mode.
  * If empty, k0smotron will use the default one.
  *
@@ -545,7 +652,773 @@ export function toJson_K0SControllerConfigSpecFilesContentFromSecretRef(obj: K0S
 
 
 /**
+ * K0sControllerConfig describes a k0s controller configuration.
  *
+ * @schema K0sControllerConfigV1Beta2
+ */
+export class K0sControllerConfigV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "K0sControllerConfigV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'bootstrap.cluster.x-k8s.io/v1beta2',
+    kind: 'K0sControllerConfig',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "K0sControllerConfigV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: K0sControllerConfigV1Beta2Props = {}): any {
+    return {
+      ...K0sControllerConfigV1Beta2.GVK,
+      ...toJson_K0sControllerConfigV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "K0sControllerConfigV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: K0sControllerConfigV1Beta2Props = {}) {
+    super(scope, id, {
+      ...K0sControllerConfigV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...K0sControllerConfigV1Beta2.GVK,
+      ...toJson_K0sControllerConfigV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * K0sControllerConfig describes a k0s controller configuration.
+ *
+ * @schema K0sControllerConfigV1Beta2
+ */
+export interface K0sControllerConfigV1Beta2Props {
+  /**
+   * @schema K0sControllerConfigV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * K0sControllerConfigSpec describes a k0s controller configuration's spec.
+   *
+   * @schema K0sControllerConfigV1Beta2#spec
+   */
+  readonly spec?: K0SControllerConfigV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'K0sControllerConfigV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0sControllerConfigV1Beta2Props(obj: K0sControllerConfigV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_K0SControllerConfigV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * K0sControllerConfigSpec describes a k0s controller configuration's spec.
+ *
+ * @schema K0SControllerConfigV1Beta2Spec
+ */
+export interface K0SControllerConfigV1Beta2Spec {
+  /**
+   * Args specifies extra arguments to be passed to k0s controller.
+   * See: https://docs.k0sproject.io/stable/cli/k0s_controller/
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#args
+   */
+  readonly args?: string[];
+
+  /**
+   * DownloadURL specifies the URL from which to download the k0s binary.
+   * If the version field is specified, it is ignored, and whatever version is downloaded from the URL is used.
+   * Supported protocols are: http, https, oci. Using 'oci' scheme requires 'oras' to be installed on the target system.
+   *
+   * If 'oci' schema is used and the OCI registry requires authentication, make sure to set up the authentication beforehand
+   * by adding a file to the Files section that contains the necessary config for ORAS. See: https://oras.land/docs/how_to_guides/authentication/
+   * The file must be placed at `/root` directory (HOME for cloud-init execution time) and named `config.json`.
+   * NOTE: use `.preStartCommands` to set DOCKER_CONFIG environment variable in order to let ORAS pick up your custom config file.
+   * When no value is specified, k0smotron will use the default URL: https://get.k0s.sh
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#downloadURL
+   */
+  readonly downloadUrl?: string;
+
+  /**
+   * Files specifies extra files to be passed to user_data upon creation.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#files
+   */
+  readonly files?: K0SControllerConfigV1Beta2SpecFiles[];
+
+  /**
+   * K0s defines the k0s configuration. Note, that some fields will be overwritten by k0smotron.
+   * If empty, will be used default configuration. @see https://docs.k0sproject.io/stable/configuration/
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#k0s
+   */
+  readonly k0S?: any;
+
+  /**
+   * K0sInstallDir specifies the directory where k0s binary will be installed.
+   * If empty, k0smotron will use /usr/local/bin, which is the default install path used by k0s get script.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#k0sInstallDir
+   */
+  readonly k0SInstallDir?: string;
+
+  /**
+   * PostK0sCommands specifies commands to be run after starting k0s worker.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#postK0sCommands
+   */
+  readonly postK0SCommands?: string[];
+
+  /**
+   * PreInstallK0s specifies whether k0s binary is pre-installed on the node.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#preInstalledK0s
+   */
+  readonly preInstalledK0S?: boolean;
+
+  /**
+   * PreK0sCommands specifies commands to be run before starting k0s worker.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#preK0sCommands
+   */
+  readonly preK0SCommands?: string[];
+
+  /**
+   * Provisioner defines the provisioner configuration. Defaults to cloud-init.
+   *
+   * @default cloud-init.
+   * @schema K0SControllerConfigV1Beta2Spec#provisioner
+   */
+  readonly provisioner?: K0SControllerConfigV1Beta2SpecProvisioner;
+
+  /**
+   * SecretMetadata specifies metadata (labels and annotations) to be propagated to the bootstrap Secret.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#secretMetadata
+   */
+  readonly secretMetadata?: K0SControllerConfigV1Beta2SpecSecretMetadata;
+
+  /**
+   * Tunneling defines the tunneling configuration for the cluster.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#tunneling
+   */
+  readonly tunneling?: K0SControllerConfigV1Beta2SpecTunneling;
+
+  /**
+   * UseSystemHostname specifies whether to use the system hostname for the kubernetes node name.
+   * By default, k0smotron will use Machine name as a node name. If true, it will pick it from `hostname` command output.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#useSystemHostname
+   */
+  readonly useSystemHostname?: boolean;
+
+  /**
+   * Version is the version of k0s to use. In case this is not set, k0smotron will use
+   * a version field of the Machine object. If it's empty, the latest version is used.
+   * Make sure the version is compatible with the k0s version running on the control plane.
+   * For reference see the Kubernetes version skew policy: https://kubernetes.io/docs/setup/release/version-skew-policy/
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#version
+   */
+  readonly version?: string;
+
+  /**
+   * WorkingDir specifies the working directory where k0smotron will place its files.
+   *
+   * @schema K0SControllerConfigV1Beta2Spec#workingDir
+   */
+  readonly workingDir?: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2Spec(obj: K0SControllerConfigV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'args': obj.args?.map(y => y),
+    'downloadURL': obj.downloadUrl,
+    'files': obj.files?.map(y => toJson_K0SControllerConfigV1Beta2SpecFiles(y)),
+    'k0s': obj.k0S,
+    'k0sInstallDir': obj.k0SInstallDir,
+    'postK0sCommands': obj.postK0SCommands?.map(y => y),
+    'preInstalledK0s': obj.preInstalledK0S,
+    'preK0sCommands': obj.preK0SCommands?.map(y => y),
+    'provisioner': toJson_K0SControllerConfigV1Beta2SpecProvisioner(obj.provisioner),
+    'secretMetadata': toJson_K0SControllerConfigV1Beta2SpecSecretMetadata(obj.secretMetadata),
+    'tunneling': toJson_K0SControllerConfigV1Beta2SpecTunneling(obj.tunneling),
+    'useSystemHostname': obj.useSystemHostname,
+    'version': obj.version,
+    'workingDir': obj.workingDir,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * File defines a file to be passed to user_data upon creation.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecFiles
+ */
+export interface K0SControllerConfigV1Beta2SpecFiles {
+  /**
+   * @schema K0SControllerConfigV1Beta2SpecFiles#content
+   */
+  readonly content?: string;
+
+  /**
+   * ContentFrom specifies the source of the content.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFiles#contentFrom
+   */
+  readonly contentFrom?: K0SControllerConfigV1Beta2SpecFilesContentFrom;
+
+  /**
+   * @schema K0SControllerConfigV1Beta2SpecFiles#path
+   */
+  readonly path?: string;
+
+  /**
+   * @schema K0SControllerConfigV1Beta2SpecFiles#permissions
+   */
+  readonly permissions?: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecFiles' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecFiles(obj: K0SControllerConfigV1Beta2SpecFiles | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'content': obj.content,
+    'contentFrom': toJson_K0SControllerConfigV1Beta2SpecFilesContentFrom(obj.contentFrom),
+    'path': obj.path,
+    'permissions': obj.permissions,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Provisioner defines the provisioner configuration. Defaults to cloud-init.
+ *
+ * @default cloud-init.
+ * @schema K0SControllerConfigV1Beta2SpecProvisioner
+ */
+export interface K0SControllerConfigV1Beta2SpecProvisioner {
+  /**
+   * CustomUserDataRef is a reference to a secret or a configmap that contains the custom user data.
+   * Provided user-data will be merged with the one generated by k0smotron. Note that you may want to specify the merge type.
+   * See: https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisioner#customUserDataRef
+   */
+  readonly customUserDataRef?: K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef;
+
+  /**
+   * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisioner#ignition
+   */
+  readonly ignition?: K0SControllerConfigV1Beta2SpecProvisionerIgnition;
+
+  /**
+   * Platform specifies the target platform for the worker node.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisioner#platform
+   */
+  readonly platform?: K0SControllerConfigV1Beta2SpecProvisionerPlatform;
+
+  /**
+   * Type is the provisioner format type.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisioner#type
+   */
+  readonly type?: K0SControllerConfigV1Beta2SpecProvisionerType;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecProvisioner' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecProvisioner(obj: K0SControllerConfigV1Beta2SpecProvisioner | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'customUserDataRef': toJson_K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef(obj.customUserDataRef),
+    'ignition': toJson_K0SControllerConfigV1Beta2SpecProvisionerIgnition(obj.ignition),
+    'platform': obj.platform,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretMetadata specifies metadata (labels and annotations) to be propagated to the bootstrap Secret.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecSecretMetadata
+ */
+export interface K0SControllerConfigV1Beta2SpecSecretMetadata {
+  /**
+   * Annotations to be added to the bootstrap Secret
+   *
+   * @schema K0SControllerConfigV1Beta2SpecSecretMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Labels to be added to the bootstrap Secret
+   *
+   * @schema K0SControllerConfigV1Beta2SpecSecretMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecSecretMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecSecretMetadata(obj: K0SControllerConfigV1Beta2SpecSecretMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Tunneling defines the tunneling configuration for the cluster.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecTunneling
+ */
+export interface K0SControllerConfigV1Beta2SpecTunneling {
+  /**
+   * Enabled specifies whether tunneling is enabled.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecTunneling#enabled
+   */
+  readonly enabled?: boolean;
+
+  /**
+   * Mode describes tunneling mode.
+   * If empty, k0smotron will use the default one.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecTunneling#mode
+   */
+  readonly mode?: K0SControllerConfigV1Beta2SpecTunnelingMode;
+
+  /**
+   * Server address of the tunneling server.
+   * If empty, k0smotron will try to detect worker node address for.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecTunneling#serverAddress
+   */
+  readonly serverAddress?: string;
+
+  /**
+   * NodePort to publish for server port of the tunneling server.
+   * If empty, k0smotron will use the default one.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecTunneling#serverNodePort
+   */
+  readonly serverNodePort?: number;
+
+  /**
+   * NodePort to publish for tunneling port.
+   * If empty, k0smotron will use the default one.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecTunneling#tunnelingNodePort
+   */
+  readonly tunnelingNodePort?: number;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecTunneling' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecTunneling(obj: K0SControllerConfigV1Beta2SpecTunneling | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+    'mode': obj.mode,
+    'serverAddress': obj.serverAddress,
+    'serverNodePort': obj.serverNodePort,
+    'tunnelingNodePort': obj.tunnelingNodePort,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ContentFrom specifies the source of the content.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecFilesContentFrom
+ */
+export interface K0SControllerConfigV1Beta2SpecFilesContentFrom {
+  /**
+   * ConfigMapRef is a reference to a configmap that contains the content.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFilesContentFrom#configMapRef
+   */
+  readonly configMapRef?: K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef;
+
+  /**
+   * SecretRef is a reference to a secret that contains the content.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFilesContentFrom#secretRef
+   */
+  readonly secretRef?: K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecFilesContentFrom' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecFilesContentFrom(obj: K0SControllerConfigV1Beta2SpecFilesContentFrom | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configMapRef': toJson_K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef(obj.configMapRef),
+    'secretRef': toJson_K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CustomUserDataRef is a reference to a secret or a configmap that contains the custom user data.
+ * Provided user-data will be merged with the one generated by k0smotron. Note that you may want to specify the merge type.
+ * See: https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef
+ */
+export interface K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef {
+  /**
+   * ConfigMapRef is a reference to a configmap that contains the content.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef#configMapRef
+   */
+  readonly configMapRef?: K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef;
+
+  /**
+   * SecretRef is a reference to a secret that contains the content.
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef#secretRef
+   */
+  readonly secretRef?: K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef(obj: K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configMapRef': toJson_K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef(obj.configMapRef),
+    'secretRef': toJson_K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerIgnition
+ */
+export interface K0SControllerConfigV1Beta2SpecProvisionerIgnition {
+  /**
+   * AdditionalConfig is an unstructured object that contains additional config to be merged
+   * with the generated one. The format follows Butane spec: https://coreos.github.io/butane/
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerIgnition#additionalConfig
+   */
+  readonly additionalConfig?: string;
+
+  /**
+   * Variant declares which distribution variant the generated config is for.
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerIgnition#variant
+   */
+  readonly variant: K0SControllerConfigV1Beta2SpecProvisionerIgnitionVariant;
+
+  /**
+   * Version is the schema version of the Butane config to use
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerIgnition#version
+   */
+  readonly version: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecProvisionerIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecProvisionerIgnition(obj: K0SControllerConfigV1Beta2SpecProvisionerIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalConfig': obj.additionalConfig,
+    'variant': obj.variant,
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Platform specifies the target platform for the worker node.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerPlatform
+ */
+export enum K0SControllerConfigV1Beta2SpecProvisionerPlatform {
+  /** linux */
+  LINUX = "linux",
+  /** windows */
+  WINDOWS = "windows",
+}
+
+/**
+ * Type is the provisioner format type.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerType
+ */
+export enum K0SControllerConfigV1Beta2SpecProvisionerType {
+  /** cloud-config */
+  CLOUD_HYPHEN_CONFIG = "cloud-config",
+  /** ignition */
+  IGNITION = "ignition",
+  /** powershell */
+  POWERSHELL = "powershell",
+  /** powershell-xml */
+  POWERSHELL_HYPHEN_XML = "powershell-xml",
+}
+
+/**
+ * Mode describes tunneling mode.
+ * If empty, k0smotron will use the default one.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecTunnelingMode
+ */
+export enum K0SControllerConfigV1Beta2SpecTunnelingMode {
+  /** tunnel */
+  TUNNEL = "tunnel",
+  /** proxy */
+  PROXY = "proxy",
+}
+
+/**
+ * ConfigMapRef is a reference to a configmap that contains the content.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef
+ */
+export interface K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef(obj: K0SControllerConfigV1Beta2SpecFilesContentFromConfigMapRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretRef is a reference to a secret that contains the content.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef
+ */
+export interface K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef(obj: K0SControllerConfigV1Beta2SpecFilesContentFromSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ConfigMapRef is a reference to a configmap that contains the content.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef
+ */
+export interface K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef(obj: K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretRef is a reference to a secret that contains the content.
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef
+ */
+export interface K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef(obj: K0SControllerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Variant declares which distribution variant the generated config is for.
+ * Check the supported variants and versions here:
+ * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+ *
+ * @schema K0SControllerConfigV1Beta2SpecProvisionerIgnitionVariant
+ */
+export enum K0SControllerConfigV1Beta2SpecProvisionerIgnitionVariant {
+  /** fcos */
+  FCOS = "fcos",
+  /** flatcar */
+  FLATCAR = "flatcar",
+  /** openshift */
+  OPENSHIFT = "openshift",
+  /** r4e */
+  R4E = "r4e",
+  /** fiot */
+  FIOT = "fiot",
+}
+
+
+/**
+ * K0sWorkerConfig is the Schema for the k0sworkerconfigs API
  *
  * @schema K0sWorkerConfig
  */
@@ -599,6 +1472,8 @@ export class K0sWorkerConfig extends ApiObject {
 }
 
 /**
+ * K0sWorkerConfig is the Schema for the k0sworkerconfigs API
+ *
  * @schema K0sWorkerConfig
  */
 export interface K0sWorkerConfigProps {
@@ -608,6 +1483,8 @@ export interface K0sWorkerConfigProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
+   * K0sWorkerConfigSpec defines the desired state of K0sWorkerConfig
+   *
    * @schema K0sWorkerConfig#spec
    */
   readonly spec?: K0SWorkerConfigSpec;
@@ -629,6 +1506,8 @@ export function toJson_K0sWorkerConfigProps(obj: K0sWorkerConfigProps | undefine
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * K0sWorkerConfigSpec defines the desired state of K0sWorkerConfig
+ *
  * @schema K0SWorkerConfigSpec
  */
 export interface K0SWorkerConfigSpec {
@@ -653,6 +1532,7 @@ export interface K0SWorkerConfigSpec {
   /**
    * DownloadURL specifies the URL to download k0s binary from.
    * If specified the version field is ignored and what ever version is downloaded from the URL is used.
+   * When no value is specified, k0smotron will use the default URL: https://get.k0s.sh
    *
    * @schema K0SWorkerConfigSpec#downloadURL
    */
@@ -664,6 +1544,21 @@ export interface K0SWorkerConfigSpec {
    * @schema K0SWorkerConfigSpec#files
    */
   readonly files?: K0SWorkerConfigSpecFiles[];
+
+  /**
+   * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+   *
+   * @schema K0SWorkerConfigSpec#ignition
+   */
+  readonly ignition?: K0SWorkerConfigSpecIgnition;
+
+  /**
+   * K0sInstallDir specifies the directory where k0s binary will be installed.
+   * If empty, k0smotron will use /usr/local/bin, which is the default install path used by k0s get script.
+   *
+   * @schema K0SWorkerConfigSpec#k0sInstallDir
+   */
+  readonly k0SInstallDir?: string;
 
   /**
    * PostStartCommands specifies commands to be run after starting k0s worker.
@@ -710,6 +1605,13 @@ export interface K0SWorkerConfigSpec {
    * @schema K0SWorkerConfigSpec#version
    */
   readonly version?: string;
+
+  /**
+   * WorkingDir specifies the working directory where k0smotron will place its files.
+   *
+   * @schema K0SWorkerConfigSpec#workingDir
+   */
+  readonly workingDir?: string;
 }
 
 /**
@@ -723,12 +1625,15 @@ export function toJson_K0SWorkerConfigSpec(obj: K0SWorkerConfigSpec | undefined)
     'customUserDataRef': toJson_K0SWorkerConfigSpecCustomUserDataRef(obj.customUserDataRef),
     'downloadURL': obj.downloadUrl,
     'files': obj.files?.map(y => toJson_K0SWorkerConfigSpecFiles(y)),
+    'ignition': toJson_K0SWorkerConfigSpecIgnition(obj.ignition),
+    'k0sInstallDir': obj.k0SInstallDir,
     'postStartCommands': obj.postStartCommands?.map(y => y),
     'preInstalledK0s': obj.preInstalledK0S,
     'preStartCommands': obj.preStartCommands?.map(y => y),
     'secretMetadata': toJson_K0SWorkerConfigSpecSecretMetadata(obj.secretMetadata),
     'useSystemHostname': obj.useSystemHostname,
     'version': obj.version,
+    'workingDir': obj.workingDir,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -813,6 +1718,55 @@ export function toJson_K0SWorkerConfigSpecFiles(obj: K0SWorkerConfigSpecFiles | 
     'contentFrom': toJson_K0SWorkerConfigSpecFilesContentFrom(obj.contentFrom),
     'path': obj.path,
     'permissions': obj.permissions,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+ *
+ * @schema K0SWorkerConfigSpecIgnition
+ */
+export interface K0SWorkerConfigSpecIgnition {
+  /**
+   * AdditionalConfig is an unstructured object that contains additional config to be merged
+   * with the generated one. The format follows Butane spec: https://coreos.github.io/butane/
+   *
+   * @schema K0SWorkerConfigSpecIgnition#additionalConfig
+   */
+  readonly additionalConfig?: string;
+
+  /**
+   * Variant declares which distribution variant the generated config is for.
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigSpecIgnition#variant
+   */
+  readonly variant: K0SWorkerConfigSpecIgnitionVariant;
+
+  /**
+   * Version is the schema version of the Butane config to use
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigSpecIgnition#version
+   */
+  readonly version: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigSpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigSpecIgnition(obj: K0SWorkerConfigSpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalConfig': obj.additionalConfig,
+    'variant': obj.variant,
+    'version': obj.version,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -964,6 +1918,26 @@ export function toJson_K0SWorkerConfigSpecFilesContentFrom(obj: K0SWorkerConfigS
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Variant declares which distribution variant the generated config is for.
+ * Check the supported variants and versions here:
+ * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+ *
+ * @schema K0SWorkerConfigSpecIgnitionVariant
+ */
+export enum K0SWorkerConfigSpecIgnitionVariant {
+  /** fcos */
+  FCOS = "fcos",
+  /** flatcar */
+  FLATCAR = "flatcar",
+  /** openshift */
+  OPENSHIFT = "openshift",
+  /** r4e */
+  R4E = "r4e",
+  /** fiot */
+  FIOT = "fiot",
+}
+
+/**
  * ConfigMapRef is a reference to a configmap that contains the content.
  *
  * @schema K0SWorkerConfigSpecFilesContentFromConfigMapRef
@@ -1037,7 +2011,674 @@ export function toJson_K0SWorkerConfigSpecFilesContentFromSecretRef(obj: K0SWork
 
 
 /**
+ * K0sWorkerConfig describes a k0s worker configuration.
  *
+ * @schema K0sWorkerConfigV1Beta2
+ */
+export class K0sWorkerConfigV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "K0sWorkerConfigV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'bootstrap.cluster.x-k8s.io/v1beta2',
+    kind: 'K0sWorkerConfig',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "K0sWorkerConfigV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: K0sWorkerConfigV1Beta2Props = {}): any {
+    return {
+      ...K0sWorkerConfigV1Beta2.GVK,
+      ...toJson_K0sWorkerConfigV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "K0sWorkerConfigV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: K0sWorkerConfigV1Beta2Props = {}) {
+    super(scope, id, {
+      ...K0sWorkerConfigV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...K0sWorkerConfigV1Beta2.GVK,
+      ...toJson_K0sWorkerConfigV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * K0sWorkerConfig describes a k0s worker configuration.
+ *
+ * @schema K0sWorkerConfigV1Beta2
+ */
+export interface K0sWorkerConfigV1Beta2Props {
+  /**
+   * @schema K0sWorkerConfigV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * K0sWorkerConfigSpec describes a k0s worker configuration's spec.
+   *
+   * @schema K0sWorkerConfigV1Beta2#spec
+   */
+  readonly spec?: K0SWorkerConfigV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'K0sWorkerConfigV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0sWorkerConfigV1Beta2Props(obj: K0sWorkerConfigV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_K0SWorkerConfigV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * K0sWorkerConfigSpec describes a k0s worker configuration's spec.
+ *
+ * @schema K0SWorkerConfigV1Beta2Spec
+ */
+export interface K0SWorkerConfigV1Beta2Spec {
+  /**
+   * Args specifies extra arguments to be passed to k0s worker.
+   * See: https://docs.k0sproject.io/stable/worker-node-config/
+   * See: https://docs.k0sproject.io/stable/cli/k0s_worker/
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#args
+   */
+  readonly args?: string[];
+
+  /**
+   * DownloadURL specifies the URL to download k0s binary from.
+   * If specified the version field is ignored and what ever version is downloaded from the URL is used.
+   * When no value is specified, k0smotron will use the default URL: https://get.k0s.sh
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#downloadURL
+   */
+  readonly downloadUrl?: string;
+
+  /**
+   * Files specifies extra files to be passed to user_data upon creation.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#files
+   */
+  readonly files?: K0SWorkerConfigV1Beta2SpecFiles[];
+
+  /**
+   * K0sInstallDir specifies the directory where k0s binary will be installed.
+   * If empty, k0smotron will use /usr/local/bin, which is the default install path used by k0s get script.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#k0sInstallDir
+   */
+  readonly k0SInstallDir?: string;
+
+  /**
+   * PostK0sCommands specifies commands to be run after starting k0s worker.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#postK0sCommands
+   */
+  readonly postK0SCommands?: string[];
+
+  /**
+   * PreInstallK0s specifies whether k0s binary is pre-installed on the node.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#preInstalledK0s
+   */
+  readonly preInstalledK0S?: boolean;
+
+  /**
+   * PreK0sCommands specifies commands to be run before starting k0s worker.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#preK0sCommands
+   */
+  readonly preK0SCommands?: string[];
+
+  /**
+   * Provisioner defines the provisioner configuration. Defaults to cloud-init.
+   *
+   * @default cloud-init.
+   * @schema K0SWorkerConfigV1Beta2Spec#provisioner
+   */
+  readonly provisioner?: K0SWorkerConfigV1Beta2SpecProvisioner;
+
+  /**
+   * SecretMetadata specifies metadata (labels and annotations) to be propagated to the bootstrap Secret.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#secretMetadata
+   */
+  readonly secretMetadata?: K0SWorkerConfigV1Beta2SpecSecretMetadata;
+
+  /**
+   * UseSystemHostname specifies whether to use the system hostname for the kubernetes node name.
+   * By default, k0smotron will use Machine name as a node name. If true, it will pick it from `hostname` command output.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#useSystemHostname
+   */
+  readonly useSystemHostname?: boolean;
+
+  /**
+   * Version is the version of k0s to use. In case this is not set, k0smotron will use
+   * a version field of the Machine object. If it's empty, the latest version is used.
+   * Make sure the version is compatible with the k0s version running on the control plane.
+   * For reference see the Kubernetes version skew policy: https://kubernetes.io/docs/setup/release/version-skew-policy/
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#version
+   */
+  readonly version?: string;
+
+  /**
+   * WorkingDir specifies the working directory where k0smotron will place its files.
+   *
+   * @schema K0SWorkerConfigV1Beta2Spec#workingDir
+   */
+  readonly workingDir?: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2Spec(obj: K0SWorkerConfigV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'args': obj.args?.map(y => y),
+    'downloadURL': obj.downloadUrl,
+    'files': obj.files?.map(y => toJson_K0SWorkerConfigV1Beta2SpecFiles(y)),
+    'k0sInstallDir': obj.k0SInstallDir,
+    'postK0sCommands': obj.postK0SCommands?.map(y => y),
+    'preInstalledK0s': obj.preInstalledK0S,
+    'preK0sCommands': obj.preK0SCommands?.map(y => y),
+    'provisioner': toJson_K0SWorkerConfigV1Beta2SpecProvisioner(obj.provisioner),
+    'secretMetadata': toJson_K0SWorkerConfigV1Beta2SpecSecretMetadata(obj.secretMetadata),
+    'useSystemHostname': obj.useSystemHostname,
+    'version': obj.version,
+    'workingDir': obj.workingDir,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * File defines a file to be passed to user_data upon creation.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecFiles
+ */
+export interface K0SWorkerConfigV1Beta2SpecFiles {
+  /**
+   * @schema K0SWorkerConfigV1Beta2SpecFiles#content
+   */
+  readonly content?: string;
+
+  /**
+   * ContentFrom specifies the source of the content.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFiles#contentFrom
+   */
+  readonly contentFrom?: K0SWorkerConfigV1Beta2SpecFilesContentFrom;
+
+  /**
+   * @schema K0SWorkerConfigV1Beta2SpecFiles#path
+   */
+  readonly path?: string;
+
+  /**
+   * @schema K0SWorkerConfigV1Beta2SpecFiles#permissions
+   */
+  readonly permissions?: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecFiles' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecFiles(obj: K0SWorkerConfigV1Beta2SpecFiles | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'content': obj.content,
+    'contentFrom': toJson_K0SWorkerConfigV1Beta2SpecFilesContentFrom(obj.contentFrom),
+    'path': obj.path,
+    'permissions': obj.permissions,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Provisioner defines the provisioner configuration. Defaults to cloud-init.
+ *
+ * @default cloud-init.
+ * @schema K0SWorkerConfigV1Beta2SpecProvisioner
+ */
+export interface K0SWorkerConfigV1Beta2SpecProvisioner {
+  /**
+   * CustomUserDataRef is a reference to a secret or a configmap that contains the custom user data.
+   * Provided user-data will be merged with the one generated by k0smotron. Note that you may want to specify the merge type.
+   * See: https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisioner#customUserDataRef
+   */
+  readonly customUserDataRef?: K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef;
+
+  /**
+   * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisioner#ignition
+   */
+  readonly ignition?: K0SWorkerConfigV1Beta2SpecProvisionerIgnition;
+
+  /**
+   * Platform specifies the target platform for the worker node.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisioner#platform
+   */
+  readonly platform?: K0SWorkerConfigV1Beta2SpecProvisionerPlatform;
+
+  /**
+   * Type is the provisioner format type.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisioner#type
+   */
+  readonly type?: K0SWorkerConfigV1Beta2SpecProvisionerType;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecProvisioner' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecProvisioner(obj: K0SWorkerConfigV1Beta2SpecProvisioner | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'customUserDataRef': toJson_K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef(obj.customUserDataRef),
+    'ignition': toJson_K0SWorkerConfigV1Beta2SpecProvisionerIgnition(obj.ignition),
+    'platform': obj.platform,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretMetadata specifies metadata (labels and annotations) to be propagated to the bootstrap Secret.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecSecretMetadata
+ */
+export interface K0SWorkerConfigV1Beta2SpecSecretMetadata {
+  /**
+   * Annotations to be added to the bootstrap Secret
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecSecretMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Labels to be added to the bootstrap Secret
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecSecretMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecSecretMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecSecretMetadata(obj: K0SWorkerConfigV1Beta2SpecSecretMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ContentFrom specifies the source of the content.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecFilesContentFrom
+ */
+export interface K0SWorkerConfigV1Beta2SpecFilesContentFrom {
+  /**
+   * ConfigMapRef is a reference to a configmap that contains the content.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFilesContentFrom#configMapRef
+   */
+  readonly configMapRef?: K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef;
+
+  /**
+   * SecretRef is a reference to a secret that contains the content.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFilesContentFrom#secretRef
+   */
+  readonly secretRef?: K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecFilesContentFrom' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecFilesContentFrom(obj: K0SWorkerConfigV1Beta2SpecFilesContentFrom | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configMapRef': toJson_K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef(obj.configMapRef),
+    'secretRef': toJson_K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CustomUserDataRef is a reference to a secret or a configmap that contains the custom user data.
+ * Provided user-data will be merged with the one generated by k0smotron. Note that you may want to specify the merge type.
+ * See: https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef
+ */
+export interface K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef {
+  /**
+   * ConfigMapRef is a reference to a configmap that contains the content.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef#configMapRef
+   */
+  readonly configMapRef?: K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef;
+
+  /**
+   * SecretRef is a reference to a secret that contains the content.
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef#secretRef
+   */
+  readonly secretRef?: K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef(obj: K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configMapRef': toJson_K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef(obj.configMapRef),
+    'secretRef': toJson_K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerIgnition
+ */
+export interface K0SWorkerConfigV1Beta2SpecProvisionerIgnition {
+  /**
+   * AdditionalConfig is an unstructured object that contains additional config to be merged
+   * with the generated one. The format follows Butane spec: https://coreos.github.io/butane/
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerIgnition#additionalConfig
+   */
+  readonly additionalConfig?: string;
+
+  /**
+   * Variant declares which distribution variant the generated config is for.
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerIgnition#variant
+   */
+  readonly variant: K0SWorkerConfigV1Beta2SpecProvisionerIgnitionVariant;
+
+  /**
+   * Version is the schema version of the Butane config to use
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerIgnition#version
+   */
+  readonly version: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecProvisionerIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecProvisionerIgnition(obj: K0SWorkerConfigV1Beta2SpecProvisionerIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalConfig': obj.additionalConfig,
+    'variant': obj.variant,
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Platform specifies the target platform for the worker node.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerPlatform
+ */
+export enum K0SWorkerConfigV1Beta2SpecProvisionerPlatform {
+  /** linux */
+  LINUX = "linux",
+  /** windows */
+  WINDOWS = "windows",
+}
+
+/**
+ * Type is the provisioner format type.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerType
+ */
+export enum K0SWorkerConfigV1Beta2SpecProvisionerType {
+  /** cloud-config */
+  CLOUD_HYPHEN_CONFIG = "cloud-config",
+  /** ignition */
+  IGNITION = "ignition",
+  /** powershell */
+  POWERSHELL = "powershell",
+  /** powershell-xml */
+  POWERSHELL_HYPHEN_XML = "powershell-xml",
+}
+
+/**
+ * ConfigMapRef is a reference to a configmap that contains the content.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef
+ */
+export interface K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef(obj: K0SWorkerConfigV1Beta2SpecFilesContentFromConfigMapRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretRef is a reference to a secret that contains the content.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef
+ */
+export interface K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef(obj: K0SWorkerConfigV1Beta2SpecFilesContentFromSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ConfigMapRef is a reference to a configmap that contains the content.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef
+ */
+export interface K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef(obj: K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefConfigMapRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretRef is a reference to a secret that contains the content.
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef
+ */
+export interface K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef(obj: K0SWorkerConfigV1Beta2SpecProvisionerCustomUserDataRefSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Variant declares which distribution variant the generated config is for.
+ * Check the supported variants and versions here:
+ * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+ *
+ * @schema K0SWorkerConfigV1Beta2SpecProvisionerIgnitionVariant
+ */
+export enum K0SWorkerConfigV1Beta2SpecProvisionerIgnitionVariant {
+  /** fcos */
+  FCOS = "fcos",
+  /** flatcar */
+  FLATCAR = "flatcar",
+  /** openshift */
+  OPENSHIFT = "openshift",
+  /** r4e */
+  R4E = "r4e",
+  /** fiot */
+  FIOT = "fiot",
+}
+
+
+/**
+ * K0sWorkerConfigTemplate is the Schema for the k0sworkerconfigtemplates API
  *
  * @schema K0sWorkerConfigTemplate
  */
@@ -1091,6 +2732,8 @@ export class K0sWorkerConfigTemplate extends ApiObject {
 }
 
 /**
+ * K0sWorkerConfigTemplate is the Schema for the k0sworkerconfigtemplates API
+ *
  * @schema K0sWorkerConfigTemplate
  */
 export interface K0sWorkerConfigTemplateProps {
@@ -1100,6 +2743,8 @@ export interface K0sWorkerConfigTemplateProps {
   readonly metadata?: ApiObjectMetadata;
 
   /**
+   * K0sWorkerConfigTemplateSpec defines the desired state of K0sWorkerConfigTemplate
+   *
    * @schema K0sWorkerConfigTemplate#spec
    */
   readonly spec?: K0SWorkerConfigTemplateSpec;
@@ -1121,10 +2766,14 @@ export function toJson_K0sWorkerConfigTemplateProps(obj: K0sWorkerConfigTemplate
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * K0sWorkerConfigTemplateSpec defines the desired state of K0sWorkerConfigTemplate
+ *
  * @schema K0SWorkerConfigTemplateSpec
  */
 export interface K0SWorkerConfigTemplateSpec {
   /**
+   * K0sWorkerConfigTemplateResource defines the template for the worker config resource
+   *
    * @schema K0SWorkerConfigTemplateSpec#template
    */
   readonly template?: K0SWorkerConfigTemplateSpecTemplate;
@@ -1145,6 +2794,8 @@ export function toJson_K0SWorkerConfigTemplateSpec(obj: K0SWorkerConfigTemplateS
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * K0sWorkerConfigTemplateResource defines the template for the worker config resource
+ *
  * @schema K0SWorkerConfigTemplateSpecTemplate
  */
 export interface K0SWorkerConfigTemplateSpecTemplate {
@@ -1154,6 +2805,8 @@ export interface K0SWorkerConfigTemplateSpecTemplate {
   readonly metadata?: K0SWorkerConfigTemplateSpecTemplateMetadata;
 
   /**
+   * K0sWorkerConfigSpec defines the desired state of K0sWorkerConfig
+   *
    * @schema K0SWorkerConfigTemplateSpecTemplate#spec
    */
   readonly spec?: K0SWorkerConfigTemplateSpecTemplateSpec;
@@ -1223,6 +2876,8 @@ export function toJson_K0SWorkerConfigTemplateSpecTemplateMetadata(obj: K0SWorke
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * K0sWorkerConfigSpec defines the desired state of K0sWorkerConfig
+ *
  * @schema K0SWorkerConfigTemplateSpecTemplateSpec
  */
 export interface K0SWorkerConfigTemplateSpecTemplateSpec {
@@ -1247,6 +2902,7 @@ export interface K0SWorkerConfigTemplateSpecTemplateSpec {
   /**
    * DownloadURL specifies the URL to download k0s binary from.
    * If specified the version field is ignored and what ever version is downloaded from the URL is used.
+   * When no value is specified, k0smotron will use the default URL: https://get.k0s.sh
    *
    * @schema K0SWorkerConfigTemplateSpecTemplateSpec#downloadURL
    */
@@ -1258,6 +2914,21 @@ export interface K0SWorkerConfigTemplateSpecTemplateSpec {
    * @schema K0SWorkerConfigTemplateSpecTemplateSpec#files
    */
   readonly files?: K0SWorkerConfigTemplateSpecTemplateSpecFiles[];
+
+  /**
+   * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+   *
+   * @schema K0SWorkerConfigTemplateSpecTemplateSpec#ignition
+   */
+  readonly ignition?: K0SWorkerConfigTemplateSpecTemplateSpecIgnition;
+
+  /**
+   * K0sInstallDir specifies the directory where k0s binary will be installed.
+   * If empty, k0smotron will use /usr/local/bin, which is the default install path used by k0s get script.
+   *
+   * @schema K0SWorkerConfigTemplateSpecTemplateSpec#k0sInstallDir
+   */
+  readonly k0SInstallDir?: string;
 
   /**
    * PostStartCommands specifies commands to be run after starting k0s worker.
@@ -1304,6 +2975,13 @@ export interface K0SWorkerConfigTemplateSpecTemplateSpec {
    * @schema K0SWorkerConfigTemplateSpecTemplateSpec#version
    */
   readonly version?: string;
+
+  /**
+   * WorkingDir specifies the working directory where k0smotron will place its files.
+   *
+   * @schema K0SWorkerConfigTemplateSpecTemplateSpec#workingDir
+   */
+  readonly workingDir?: string;
 }
 
 /**
@@ -1317,12 +2995,15 @@ export function toJson_K0SWorkerConfigTemplateSpecTemplateSpec(obj: K0SWorkerCon
     'customUserDataRef': toJson_K0SWorkerConfigTemplateSpecTemplateSpecCustomUserDataRef(obj.customUserDataRef),
     'downloadURL': obj.downloadUrl,
     'files': obj.files?.map(y => toJson_K0SWorkerConfigTemplateSpecTemplateSpecFiles(y)),
+    'ignition': toJson_K0SWorkerConfigTemplateSpecTemplateSpecIgnition(obj.ignition),
+    'k0sInstallDir': obj.k0SInstallDir,
     'postStartCommands': obj.postStartCommands?.map(y => y),
     'preInstalledK0s': obj.preInstalledK0S,
     'preStartCommands': obj.preStartCommands?.map(y => y),
     'secretMetadata': toJson_K0SWorkerConfigTemplateSpecTemplateSpecSecretMetadata(obj.secretMetadata),
     'useSystemHostname': obj.useSystemHostname,
     'version': obj.version,
+    'workingDir': obj.workingDir,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -1407,6 +3088,55 @@ export function toJson_K0SWorkerConfigTemplateSpecTemplateSpecFiles(obj: K0SWork
     'contentFrom': toJson_K0SWorkerConfigTemplateSpecTemplateSpecFilesContentFrom(obj.contentFrom),
     'path': obj.path,
     'permissions': obj.permissions,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+ *
+ * @schema K0SWorkerConfigTemplateSpecTemplateSpecIgnition
+ */
+export interface K0SWorkerConfigTemplateSpecTemplateSpecIgnition {
+  /**
+   * AdditionalConfig is an unstructured object that contains additional config to be merged
+   * with the generated one. The format follows Butane spec: https://coreos.github.io/butane/
+   *
+   * @schema K0SWorkerConfigTemplateSpecTemplateSpecIgnition#additionalConfig
+   */
+  readonly additionalConfig?: string;
+
+  /**
+   * Variant declares which distribution variant the generated config is for.
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigTemplateSpecTemplateSpecIgnition#variant
+   */
+  readonly variant: K0SWorkerConfigTemplateSpecTemplateSpecIgnitionVariant;
+
+  /**
+   * Version is the schema version of the Butane config to use
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigTemplateSpecTemplateSpecIgnition#version
+   */
+  readonly version: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateSpecTemplateSpecIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateSpecTemplateSpecIgnition(obj: K0SWorkerConfigTemplateSpecTemplateSpecIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalConfig': obj.additionalConfig,
+    'variant': obj.variant,
+    'version': obj.version,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -1558,6 +3288,26 @@ export function toJson_K0SWorkerConfigTemplateSpecTemplateSpecFilesContentFrom(o
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Variant declares which distribution variant the generated config is for.
+ * Check the supported variants and versions here:
+ * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+ *
+ * @schema K0SWorkerConfigTemplateSpecTemplateSpecIgnitionVariant
+ */
+export enum K0SWorkerConfigTemplateSpecTemplateSpecIgnitionVariant {
+  /** fcos */
+  FCOS = "fcos",
+  /** flatcar */
+  FLATCAR = "flatcar",
+  /** openshift */
+  OPENSHIFT = "openshift",
+  /** r4e */
+  R4E = "r4e",
+  /** fiot */
+  FIOT = "fiot",
+}
+
+/**
  * ConfigMapRef is a reference to a configmap that contains the content.
  *
  * @schema K0SWorkerConfigTemplateSpecTemplateSpecFilesContentFromConfigMapRef
@@ -1628,4 +3378,781 @@ export function toJson_K0SWorkerConfigTemplateSpecTemplateSpecFilesContentFromSe
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
 }
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * K0sWorkerConfigTemplate describes a k0s worker configuration template.
+ *
+ * @schema K0sWorkerConfigTemplateV1Beta2
+ */
+export class K0sWorkerConfigTemplateV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "K0sWorkerConfigTemplateV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'bootstrap.cluster.x-k8s.io/v1beta2',
+    kind: 'K0sWorkerConfigTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "K0sWorkerConfigTemplateV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: K0sWorkerConfigTemplateV1Beta2Props = {}): any {
+    return {
+      ...K0sWorkerConfigTemplateV1Beta2.GVK,
+      ...toJson_K0sWorkerConfigTemplateV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "K0sWorkerConfigTemplateV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: K0sWorkerConfigTemplateV1Beta2Props = {}) {
+    super(scope, id, {
+      ...K0sWorkerConfigTemplateV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...K0sWorkerConfigTemplateV1Beta2.GVK,
+      ...toJson_K0sWorkerConfigTemplateV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * K0sWorkerConfigTemplate describes a k0s worker configuration template.
+ *
+ * @schema K0sWorkerConfigTemplateV1Beta2
+ */
+export interface K0sWorkerConfigTemplateV1Beta2Props {
+  /**
+   * @schema K0sWorkerConfigTemplateV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * K0sWorkerConfigTemplateSpec describes a k0s worker configuration template's spec.
+   *
+   * @schema K0sWorkerConfigTemplateV1Beta2#spec
+   */
+  readonly spec?: K0SWorkerConfigTemplateV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'K0sWorkerConfigTemplateV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0sWorkerConfigTemplateV1Beta2Props(obj: K0sWorkerConfigTemplateV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_K0SWorkerConfigTemplateV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * K0sWorkerConfigTemplateSpec describes a k0s worker configuration template's spec.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2Spec
+ */
+export interface K0SWorkerConfigTemplateV1Beta2Spec {
+  /**
+   * K0sWorkerConfigTemplateResource describes the data needed to create a K0sWorkerConfig from a template.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2Spec#template
+   */
+  readonly template?: K0SWorkerConfigTemplateV1Beta2SpecTemplate;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2Spec(obj: K0SWorkerConfigTemplateV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'template': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplate(obj.template),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * K0sWorkerConfigTemplateResource describes the data needed to create a K0sWorkerConfig from a template.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplate
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplate {
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplate#metadata
+   */
+  readonly metadata?: K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata;
+
+  /**
+   * K0sWorkerConfigSpec describes a k0s worker configuration's spec.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplate#spec
+   */
+  readonly spec?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplate(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata(obj.metadata),
+    'spec': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata {
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata#finalizers
+   */
+  readonly finalizers?: string[];
+
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata#name
+   */
+  readonly name?: string;
+
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'finalizers': obj.finalizers?.map(y => y),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * K0sWorkerConfigSpec describes a k0s worker configuration's spec.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec {
+  /**
+   * Args specifies extra arguments to be passed to k0s worker.
+   * See: https://docs.k0sproject.io/stable/worker-node-config/
+   * See: https://docs.k0sproject.io/stable/cli/k0s_worker/
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#args
+   */
+  readonly args?: string[];
+
+  /**
+   * DownloadURL specifies the URL to download k0s binary from.
+   * If specified the version field is ignored and what ever version is downloaded from the URL is used.
+   * When no value is specified, k0smotron will use the default URL: https://get.k0s.sh
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#downloadURL
+   */
+  readonly downloadUrl?: string;
+
+  /**
+   * Files specifies extra files to be passed to user_data upon creation.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#files
+   */
+  readonly files?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles[];
+
+  /**
+   * K0sInstallDir specifies the directory where k0s binary will be installed.
+   * If empty, k0smotron will use /usr/local/bin, which is the default install path used by k0s get script.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#k0sInstallDir
+   */
+  readonly k0SInstallDir?: string;
+
+  /**
+   * PostK0sCommands specifies commands to be run after starting k0s worker.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#postK0sCommands
+   */
+  readonly postK0SCommands?: string[];
+
+  /**
+   * PreInstallK0s specifies whether k0s binary is pre-installed on the node.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#preInstalledK0s
+   */
+  readonly preInstalledK0S?: boolean;
+
+  /**
+   * PreK0sCommands specifies commands to be run before starting k0s worker.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#preK0sCommands
+   */
+  readonly preK0SCommands?: string[];
+
+  /**
+   * Provisioner defines the provisioner configuration. Defaults to cloud-init.
+   *
+   * @default cloud-init.
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#provisioner
+   */
+  readonly provisioner?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner;
+
+  /**
+   * SecretMetadata specifies metadata (labels and annotations) to be propagated to the bootstrap Secret.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#secretMetadata
+   */
+  readonly secretMetadata?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata;
+
+  /**
+   * UseSystemHostname specifies whether to use the system hostname for the kubernetes node name.
+   * By default, k0smotron will use Machine name as a node name. If true, it will pick it from `hostname` command output.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#useSystemHostname
+   */
+  readonly useSystemHostname?: boolean;
+
+  /**
+   * Version is the version of k0s to use. In case this is not set, k0smotron will use
+   * a version field of the Machine object. If it's empty, the latest version is used.
+   * Make sure the version is compatible with the k0s version running on the control plane.
+   * For reference see the Kubernetes version skew policy: https://kubernetes.io/docs/setup/release/version-skew-policy/
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#version
+   */
+  readonly version?: string;
+
+  /**
+   * WorkingDir specifies the working directory where k0smotron will place its files.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec#workingDir
+   */
+  readonly workingDir?: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'args': obj.args?.map(y => y),
+    'downloadURL': obj.downloadUrl,
+    'files': obj.files?.map(y => toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles(y)),
+    'k0sInstallDir': obj.k0SInstallDir,
+    'postK0sCommands': obj.postK0SCommands?.map(y => y),
+    'preInstalledK0s': obj.preInstalledK0S,
+    'preK0sCommands': obj.preK0SCommands?.map(y => y),
+    'provisioner': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner(obj.provisioner),
+    'secretMetadata': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata(obj.secretMetadata),
+    'useSystemHostname': obj.useSystemHostname,
+    'version': obj.version,
+    'workingDir': obj.workingDir,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * File defines a file to be passed to user_data upon creation.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles {
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles#content
+   */
+  readonly content?: string;
+
+  /**
+   * ContentFrom specifies the source of the content.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles#contentFrom
+   */
+  readonly contentFrom?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom;
+
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles#path
+   */
+  readonly path?: string;
+
+  /**
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles#permissions
+   */
+  readonly permissions?: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFiles | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'content': obj.content,
+    'contentFrom': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom(obj.contentFrom),
+    'path': obj.path,
+    'permissions': obj.permissions,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Provisioner defines the provisioner configuration. Defaults to cloud-init.
+ *
+ * @default cloud-init.
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner {
+  /**
+   * CustomUserDataRef is a reference to a secret or a configmap that contains the custom user data.
+   * Provided user-data will be merged with the one generated by k0smotron. Note that you may want to specify the merge type.
+   * See: https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner#customUserDataRef
+   */
+  readonly customUserDataRef?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef;
+
+  /**
+   * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner#ignition
+   */
+  readonly ignition?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition;
+
+  /**
+   * Platform specifies the target platform for the worker node.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner#platform
+   */
+  readonly platform?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerPlatform;
+
+  /**
+   * Type is the provisioner format type.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner#type
+   */
+  readonly type?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerType;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisioner | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'customUserDataRef': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef(obj.customUserDataRef),
+    'ignition': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition(obj.ignition),
+    'platform': obj.platform,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretMetadata specifies metadata (labels and annotations) to be propagated to the bootstrap Secret.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata {
+  /**
+   * Annotations to be added to the bootstrap Secret
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Labels to be added to the bootstrap Secret
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecSecretMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ContentFrom specifies the source of the content.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom {
+  /**
+   * ConfigMapRef is a reference to a configmap that contains the content.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom#configMapRef
+   */
+  readonly configMapRef?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef;
+
+  /**
+   * SecretRef is a reference to a secret that contains the content.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom#secretRef
+   */
+  readonly secretRef?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFrom | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configMapRef': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef(obj.configMapRef),
+    'secretRef': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CustomUserDataRef is a reference to a secret or a configmap that contains the custom user data.
+ * Provided user-data will be merged with the one generated by k0smotron. Note that you may want to specify the merge type.
+ * See: https://cloudinit.readthedocs.io/en/latest/reference/merging.html
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef {
+  /**
+   * ConfigMapRef is a reference to a configmap that contains the content.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef#configMapRef
+   */
+  readonly configMapRef?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef;
+
+  /**
+   * SecretRef is a reference to a secret that contains the content.
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef#secretRef
+   */
+  readonly secretRef?: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configMapRef': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef(obj.configMapRef),
+    'secretRef': toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ignition defines the ignition configuration. If empty, k0smotron will use cloud-init.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition {
+  /**
+   * AdditionalConfig is an unstructured object that contains additional config to be merged
+   * with the generated one. The format follows Butane spec: https://coreos.github.io/butane/
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition#additionalConfig
+   */
+  readonly additionalConfig?: string;
+
+  /**
+   * Variant declares which distribution variant the generated config is for.
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition#variant
+   */
+  readonly variant: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnitionVariant;
+
+  /**
+   * Version is the schema version of the Butane config to use
+   * Check the supported variants and versions here:
+   * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition#version
+   */
+  readonly version: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnition | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'additionalConfig': obj.additionalConfig,
+    'variant': obj.variant,
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Platform specifies the target platform for the worker node.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerPlatform
+ */
+export enum K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerPlatform {
+  /** linux */
+  LINUX = "linux",
+  /** windows */
+  WINDOWS = "windows",
+}
+
+/**
+ * Type is the provisioner format type.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerType
+ */
+export enum K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerType {
+  /** cloud-config */
+  CLOUD_HYPHEN_CONFIG = "cloud-config",
+  /** ignition */
+  IGNITION = "ignition",
+  /** powershell */
+  POWERSHELL = "powershell",
+  /** powershell-xml */
+  POWERSHELL_HYPHEN_XML = "powershell-xml",
+}
+
+/**
+ * ConfigMapRef is a reference to a configmap that contains the content.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromConfigMapRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretRef is a reference to a secret that contains the content.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecFilesContentFromSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ConfigMapRef is a reference to a configmap that contains the content.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefConfigMapRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SecretRef is a reference to a secret that contains the content.
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef
+ */
+export interface K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef {
+  /**
+   * Key is the key in the source that contains the content
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef#key
+   */
+  readonly key: string;
+
+  /**
+   * Name is the name of the source
+   *
+   * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef(obj: K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerCustomUserDataRefSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Variant declares which distribution variant the generated config is for.
+ * Check the supported variants and versions here:
+ * https://coreos.github.io/butane/specs/#butane-specifications-and-ignition-specifications
+ *
+ * @schema K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnitionVariant
+ */
+export enum K0SWorkerConfigTemplateV1Beta2SpecTemplateSpecProvisionerIgnitionVariant {
+  /** fcos */
+  FCOS = "fcos",
+  /** flatcar */
+  FLATCAR = "flatcar",
+  /** openshift */
+  OPENSHIFT = "openshift",
+  /** r4e */
+  R4E = "r4e",
+  /** fiot */
+  FIOT = "fiot",
+}
 

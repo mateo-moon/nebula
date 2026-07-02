@@ -7,7 +7,6 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./xrd": "./src/xrd/gcp-infrastructure.ts",
     "./imports": "./imports/index.ts",
     "./imports/*": "./imports/*"
   },
@@ -28,7 +27,9 @@
     "synth": "cdk8s synth",
     "import": "cdk8s import",
     "generate-claims": "tsx scripts/generate-claim-types.ts",
-    "example:synth": "cdk8s synth --app 'tsx example/main.ts'"
+    "example:synth": "cdk8s synth --app 'tsx example/main.ts'",
+    "example:aws:synth": "cdk8s synth --app 'tsx example/aws.ts'",
+    "example:vendor-free:synth": "cdk8s synth --app 'tsx example/vendor-free.ts'"
   },
   "engines": {
     "node": ">=20"

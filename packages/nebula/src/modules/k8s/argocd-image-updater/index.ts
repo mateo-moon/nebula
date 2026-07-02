@@ -23,8 +23,7 @@
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { HelmModule, type Toleration } from "../../../core";
 
 export interface ArgocdImageUpdaterRegistry {
   /** Registry display name */
@@ -59,15 +58,10 @@ export interface ArgocdImageUpdaterConfig {
   /** Additional Helm values */
   values?: Record<string, unknown>;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
-export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> {
+export class ArgocdImageUpdater extends HelmModule<ArgocdImageUpdaterConfig> {
   public readonly helm: Helm;
   public readonly namespace?: kplus.Namespace;
 
@@ -86,9 +80,7 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
 
     // Create namespace if not argocd (argocd namespace is managed by ArgoCD itself)
     if (namespaceName !== "argocd") {
-      this.namespace = new kplus.Namespace(this, "namespace", {
-        metadata: { name: namespaceName },
-      });
+      this.namespace = this.createNamespace(namespaceName);
     }
 
     // Build registries config for Helm values
@@ -105,10 +97,11 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
       return entry;
     });
 
-    // Chart config uses flat keys (rendered as key: "value" in ConfigMap)
+    // Chart config uses flat keys (rendered as key: "value" in ConfigMap).
+    // The binary reads the ArgoCD endpoint from `argocd.server_addr`.
     const defaultValues: Record<string, unknown> = {
       config: {
-        "argocd.serverAddress": argocdServer,
+        "argocd.server_addr": argocdServer,
         "argocd.insecure": "true",
         "argocd.plaintext": "true",
         "log.level": logLevel,
@@ -122,15 +115,14 @@ export class ArgocdImageUpdater extends BaseConstruct<ArgocdImageUpdaterConfig> 
       defaultValues.tolerations = this.config.tolerations;
     }
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "argocd-image-updater",
       releaseName: "argocd-image-updater",
       repo: repoUrl,
-      ...(this.config.version ? { version: this.config.version } : {}),
-      namespace: namespaceName,
-      values: chartValues,
+      version: this.config.version ?? "1.2.2",
+      defaultValues,
+      values: this.config.values,
     });
   }
 }

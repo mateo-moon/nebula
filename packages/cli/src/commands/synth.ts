@@ -1,17 +1,13 @@
 /**
  * Synth command - Synthesize cdk8s manifests
  */
-import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { run, log } from './bootstrap/exec';
 
 export interface SynthOptions {
   app?: string;
   output?: string;
-}
-
-function log(msg: string): void {
-  console.log(msg);
 }
 
 export async function synth(options: SynthOptions): Promise<void> {
@@ -31,10 +27,8 @@ export async function synth(options: SynthOptions): Promise<void> {
   log(`   Output: ${output}/`);
   log('');
 
-  // Run cdk8s synth
-  execSync(`npx cdk8s synth --app 'tsx ${app}' --output ${output}`, {
-    stdio: 'inherit',
-  });
+  // Run cdk8s synth (no shell: --app value passed as a single argv element).
+  run('npx', ['cdk8s', 'synth', '--app', `tsx ${app}`, '--output', output]);
 
   // List generated files
   if (fs.existsSync(output)) {

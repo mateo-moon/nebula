@@ -1,16 +1,37 @@
 /**
  * ExternalDns - Automatic DNS record management for Kubernetes.
  *
- * Creates GCP Service Account with Workload Identity for DNS management.
+ * For the `google` provider this also creates a GCP Service Account with
+ * Workload Identity for DNS management.
+ *
+ * The `aws`, `azure` and `cloudflare` providers get no IAM/Workload-Identity
+ * wiring here - instead supply their credentials from a referenced Kubernetes
+ * Secret via {@link ExternalDnsConfig.credentialsSecret} (which injects the
+ * provider's standard env vars into the external-dns container), or pass
+ * arbitrary env vars directly via {@link ExternalDnsConfig.env}.
  *
  * @example
  * ```typescript
  * import { ExternalDns } from 'nebula/modules/k8s/external-dns';
  *
+ * // GCP (Workload Identity)
  * new ExternalDns(chart, 'external-dns', {
- *   project: 'my-project',
+ *   gcpProject: 'my-project',
  *   domainFilters: ['example.com'],
  *   policy: 'sync',
+ * });
+ *
+ * // AWS (access key env vars from a Secret named `route53-creds`)
+ * new ExternalDns(chart, 'external-dns', {
+ *   provider: 'aws',
+ *   domainFilters: ['example.com'],
+ *   credentialsSecret: { name: 'route53-creds' },
+ * });
+ *
+ * // Cloudflare (CF_API_TOKEN from a Secret)
+ * new ExternalDns(chart, 'external-dns', {
+ *   provider: 'cloudflare',
+ *   credentialsSecret: { name: 'cloudflare-creds' },
  * });
  * ```
  */
@@ -20,12 +41,83 @@ import * as kplus from "cdk8s-plus-33";
 import {
   ServiceAccount as CpServiceAccount,
   ProjectIamMember,
-  ServiceAccountIamMember,
 } from "#imports/cloudplatform.gcp.upbound.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule, type Toleration } from "../../../core";
+import {
+  bindWorkloadIdentityUser,
+  wiKsaAnnotations,
+} from "../../infra/gcp/workload-identity";
+import { normalizeAccountId } from "../../infra/_shared";
 
 export type ExternalDnsProvider = "google" | "aws" | "azure" | "cloudflare";
 export type ExternalDnsPolicy = "sync" | "upsert-only";
+
+/**
+ * A single environment variable injected into the external-dns container
+ * (passed through verbatim to the chart's `env` values). Mirrors the
+ * Kubernetes core/v1 EnvVar shape (literal `value` or a `valueFrom` source).
+ */
+export interface ExternalDnsEnvVar {
+  /** Env var name. */
+  name: string;
+  /** Literal value (mutually exclusive with `valueFrom`). */
+  value?: string;
+  /** Source the value from a Secret/ConfigMap key or a field reference. */
+  valueFrom?: {
+    secretKeyRef?: { name: string; key: string; optional?: boolean };
+    configMapKeyRef?: { name: string; key: string; optional?: boolean };
+    fieldRef?: { fieldPath: string };
+  };
+}
+
+/**
+ * Reference to a Kubernetes Secret (in the external-dns namespace) holding the
+ * cloud-provider credentials for the non-`google` providers. The provider's
+ * standard env vars are injected into external-dns from this Secret:
+ *
+ *  - `aws`:        AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+ *                  (or, with {@link awsSharedCredentialsFileKey}, a mounted
+ *                  shared-credentials file referenced by AWS_SHARED_CREDENTIALS_FILE)
+ *  - `cloudflare`: CF_API_TOKEN
+ *  - `azure`:      AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID,
+ *                  AZURE_CLIENT_SECRET
+ *
+ * Ignored for the `google` provider (which uses Workload Identity instead).
+ */
+export interface ExternalDnsCredentialsSecret {
+  /** Name of an existing Secret in the external-dns namespace. */
+  name: string;
+  /**
+   * Override the Secret key backing each injected env var. Defaults to the
+   * conventional names (the env var name itself), e.g. for `aws`:
+   * `{ AWS_ACCESS_KEY_ID: 'AWS_ACCESS_KEY_ID', AWS_SECRET_ACCESS_KEY: 'AWS_SECRET_ACCESS_KEY' }`.
+   */
+  keys?: Record<string, string>;
+  /**
+   * `aws` only: mount the named Secret key as an AWS shared-credentials file
+   * (at `/etc/aws/<key>`) and point external-dns at it via
+   * AWS_SHARED_CREDENTIALS_FILE, instead of injecting the access-key env vars.
+   */
+  awsSharedCredentialsFileKey?: string;
+}
+
+/**
+ * The standard env vars external-dns reads for each non-google provider. The
+ * default Secret key for an env var is the env var name itself.
+ */
+const PROVIDER_CREDENTIAL_ENV: Record<
+  Exclude<ExternalDnsProvider, "google">,
+  string[]
+> = {
+  aws: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+  cloudflare: ["CF_API_TOKEN"],
+  azure: [
+    "AZURE_TENANT_ID",
+    "AZURE_SUBSCRIPTION_ID",
+    "AZURE_CLIENT_ID",
+    "AZURE_CLIENT_SECRET",
+  ],
+};
 
 export interface ExternalDnsConfig {
   /** Namespace for external-dns (defaults to external-dns) */
@@ -49,9 +141,26 @@ export interface ExternalDnsConfig {
   /** Log level (defaults to info) */
   logLevel?: "info" | "debug" | "error" | string;
   /** GCP project ID (required for google provider) */
-  project?: string;
+  gcpProject?: string;
+  /**
+   * AWS region for the `aws` provider (e.g. "eu-central-1"). Injected as the
+   * `AWS_REGION` env var; required on non-EC2 nodes where the AWS SDK cannot
+   * derive the region from instance metadata.
+   */
+  awsRegion?: string;
   /** Additional extraArgs for external-dns */
   extraArgs?: string[];
+  /**
+   * Inject the configured provider's standard credential env vars into
+   * external-dns from a referenced Kubernetes Secret. Used by the non-`google`
+   * providers (aws/azure/cloudflare); ignored for `google` (Workload Identity).
+   */
+  credentialsSecret?: ExternalDnsCredentialsSecret;
+  /**
+   * Arbitrary env vars injected into the external-dns container (chart `env`
+   * values). Merged with any env produced by {@link credentialsSecret}.
+   */
+  env?: ExternalDnsEnvVar[];
   /** Additional Helm values */
   values?: Record<string, unknown>;
   /** Helm chart version */
@@ -60,7 +169,7 @@ export interface ExternalDnsConfig {
   repository?: string;
   /** ProviderConfig name to use for Crossplane GCP resources */
   providerConfigRef?: string;
-  /** Create GCP Service Account for Workload Identity */
+  /** Create GCP Service Account for Workload Identity (defaults to true only for the google provider) */
   createGcpServiceAccount?: boolean;
   /** Existing GCP Service Account email (if not creating) */
   gcpServiceAccountEmail?: string;
@@ -76,15 +185,10 @@ export interface ExternalDnsConfig {
    */
   createWorkloadIdentityBinding?: boolean;
   /** Tolerations */
-  tolerations?: Array<{
-    key: string;
-    operator: string;
-    effect: string;
-    value?: string;
-  }>;
+  tolerations?: Toleration[];
 }
 
-export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
+export class ExternalDns extends HelmModule<ExternalDnsConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly gcpServiceAccount?: CpServiceAccount;
@@ -101,24 +205,19 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
     const interval = this.config.interval ?? "1m";
     const logLevel = this.config.logLevel ?? "info";
     const providerConfigRef = this.config.providerConfigRef ?? "default";
-    const createGcpServiceAccount = this.config.createGcpServiceAccount ?? true;
+    const createGcpServiceAccount =
+      this.config.createGcpServiceAccount ?? provider === "google";
 
-    if (provider === "google" && !this.config.project) {
+    if (provider === "google" && !this.config.gcpProject) {
       throw new Error('GCP project is required when provider is "google".');
     }
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
-    const defaultTolerations = [
-      {
-        key: "components.gke.io/gke-managed-components",
-        operator: "Exists",
-        effect: "NoSchedule",
-      },
-    ];
+    // Portable by default (no vendor-specific tolerations). Add via config/values
+    // where needed (e.g. GKE: components.gke.io/gke-managed-components).
+    const defaultTolerations: Array<Record<string, unknown>> = [];
 
     let gcpServiceAccountEmail = this.config.gcpServiceAccountEmail;
 
@@ -126,10 +225,10 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
     if (
       provider === "google" &&
       createGcpServiceAccount &&
-      this.config.project
+      this.config.gcpProject
     ) {
       const accountId = normalizeAccountId(`${id}-external-dns`);
-      gcpServiceAccountEmail = `${accountId}@${this.config.project}.iam.gserviceaccount.com`;
+      gcpServiceAccountEmail = `${accountId}@${this.config.gcpProject}.iam.gserviceaccount.com`;
       this.gcpServiceAccountEmail = gcpServiceAccountEmail;
 
       // Create GCP Service Account via Crossplane
@@ -144,7 +243,7 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
         spec: {
           forProvider: {
             displayName: `${id} external-dns`,
-            project: this.config.project,
+            project: this.config.gcpProject,
           },
           providerConfigRef: {
             name: providerConfigRef,
@@ -159,7 +258,7 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
         },
         spec: {
           forProvider: {
-            project: this.config.project,
+            project: this.config.gcpProject,
             role: "roles/dns.admin",
             member: `serviceAccount:${gcpServiceAccountEmail}`,
           },
@@ -172,20 +271,15 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       // Grant Workload Identity User role (on the service account itself)
       // Enabled by default - requires Crossplane GSA to have roles/iam.serviceAccountAdmin
       if (this.config.createWorkloadIdentityBinding !== false) {
-        new ServiceAccountIamMember(this, "workload-identity-role", {
-          metadata: {
-            name: `${id}-external-dns-wi`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${this.config.project}/serviceAccounts/${gcpServiceAccountEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${this.config.project}.svc.id.goog[${namespaceName}/external-dns]`,
-            },
-            providerConfigRef: {
-              name: providerConfigRef,
-            },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: "workload-identity-role",
+          name: `${id}-external-dns-wi`,
+          project: this.config.gcpProject,
+          namespace: namespaceName,
+          ksa: "external-dns",
+          gsaEmail: gcpServiceAccountEmail,
+          providerConfigRef,
         });
       }
 
@@ -198,7 +292,7 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
             },
             spec: {
               forProvider: {
-                project: this.config.project!,
+                project: this.config.gcpProject!,
                 role: role,
                 member: `serviceAccount:${gcpServiceAccountEmail}`,
               },
@@ -211,7 +305,21 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       }
     }
 
-    const values: Record<string, unknown> = {
+    // Provider credentials (non-google) injected from a referenced Secret, plus
+    // any arbitrary user env. These keys are only added to the chart values when
+    // non-empty, so the google/Workload-Identity path stays byte-identical.
+    const { env: credentialEnv, extraVolumes, extraVolumeMounts } =
+      buildProviderCredentialValues(
+        provider,
+        this.config.credentialsSecret,
+        this.config.awsRegion,
+      );
+    const containerEnv: ExternalDnsEnvVar[] = [
+      ...credentialEnv,
+      ...(this.config.env ?? []),
+    ];
+
+    const defaultValues: Record<string, unknown> = {
       provider: { name: provider },
       sources,
       policy,
@@ -227,42 +335,109 @@ export class ExternalDns extends BaseConstruct<ExternalDnsConfig> {
       serviceAccount: {
         create: true,
         name: "external-dns",
-        annotations: {
-          ...(provider === "google" && gcpServiceAccountEmail
-            ? { "iam.gke.io/gcp-service-account": gcpServiceAccountEmail }
-            : {}),
-        },
+        annotations: wiKsaAnnotations(
+          provider === "google" ? gcpServiceAccountEmail : undefined,
+        ),
       },
-      ...(provider === "google" && this.config.project
+      ...(provider === "google" && this.config.gcpProject
         ? {
             extraArgs: [
-              `--google-project=${this.config.project}`,
+              `--google-project=${this.config.gcpProject}`,
               ...(this.config.extraArgs ?? []),
             ],
           }
         : this.config.extraArgs
           ? { extraArgs: this.config.extraArgs }
           : {}),
-      ...(this.config.values ?? {}),
+      ...(containerEnv.length > 0 ? { env: containerEnv } : {}),
+      ...(extraVolumes.length > 0 ? { extraVolumes } : {}),
+      ...(extraVolumeMounts.length > 0 ? { extraVolumeMounts } : {}),
     };
 
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "external-dns",
       releaseName: "external-dns",
       repo:
         this.config.repository ??
         "https://kubernetes-sigs.github.io/external-dns/",
-      ...(this.config.version ? { version: this.config.version } : {}),
-      namespace: namespaceName,
-      values,
+      version: this.config.version ?? "1.19.0",
+      defaultValues,
+      values: this.config.values,
+      // Restore main's shallow-merge semantics: the HelmModule default
+      // (deepmerge) would concatenate array values (sources/extraArgs/tolerations)
+      // instead of replacing them.
+      merge: "spread",
     });
   }
 }
 
-function normalizeAccountId(raw: string): string {
-  let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (!/^[a-z]/.test(s)) s = `a-${s}`;
-  if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-  if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-  return s;
+/**
+ * Build the chart `env` / `extraVolumes` / `extraVolumeMounts` values that wire
+ * the configured provider's credentials in from a referenced Kubernetes Secret.
+ *
+ * Returns empty arrays for the `google` provider (Workload Identity) or when no
+ * `credentialsSecret` is supplied, so the caller only adds these keys when they
+ * carry content.
+ */
+function buildProviderCredentialValues(
+  provider: ExternalDnsProvider,
+  secret?: ExternalDnsCredentialsSecret,
+  awsRegion?: string,
+): {
+  env: ExternalDnsEnvVar[];
+  extraVolumes: Array<Record<string, unknown>>;
+  extraVolumeMounts: Array<Record<string, unknown>>;
+} {
+  const env: ExternalDnsEnvVar[] = [];
+  const extraVolumes: Array<Record<string, unknown>> = [];
+  const extraVolumeMounts: Array<Record<string, unknown>> = [];
+
+  // The AWS SDK needs AWS_REGION explicitly on non-EC2 nodes (no IMDS). Inject
+  // it before the no-secret early return so it applies to every AWS auth mode
+  // (access-key env, shared-credentials file, and IRSA/pod-identity with no Secret).
+  if (provider === "aws" && awsRegion) {
+    env.push({ name: "AWS_REGION", value: awsRegion });
+  }
+
+  // Workload Identity covers google; nothing to inject from a Secret.
+  if (!secret || provider === "google") {
+    return { env, extraVolumes, extraVolumeMounts };
+  }
+
+  const keys = secret.keys ?? {};
+
+  // aws shared-credentials file: mount the Secret key and point AWS at it,
+  // instead of injecting AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env vars.
+  if (provider === "aws" && secret.awsSharedCredentialsFileKey) {
+    const volumeName = "aws-credentials";
+    const mountPath = "/etc/aws";
+    extraVolumes.push({
+      name: volumeName,
+      secret: { secretName: secret.name },
+    });
+    extraVolumeMounts.push({ name: volumeName, mountPath, readOnly: true });
+    env.push({
+      name: "AWS_SHARED_CREDENTIALS_FILE",
+      value: `${mountPath}/${secret.awsSharedCredentialsFileKey}`,
+    });
+    return { env, extraVolumes, extraVolumeMounts };
+  }
+
+  const providerEnv =
+    PROVIDER_CREDENTIAL_ENV[
+      provider as Exclude<ExternalDnsProvider, "google">
+    ];
+  for (const name of providerEnv) {
+    env.push({
+      name,
+      valueFrom: {
+        secretKeyRef: { name: secret.name, key: keys[name] ?? name },
+      },
+    });
+  }
+
+  return { env, extraVolumes, extraVolumeMounts };
 }
+
+// normalizeAccountId is imported from ../../infra/_shared (DRY).
