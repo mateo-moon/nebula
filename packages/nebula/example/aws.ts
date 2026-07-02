@@ -31,6 +31,7 @@ import {
   ExternalDns,
   AwsEbsCsiDriver,
   ArgoCdAppTier,
+  ImagePullSecret,
 } from "../src/modules/k8s";
 
 const app = new App();
@@ -225,6 +226,15 @@ new AwsEbsCsiDriver(workload, "aws-ebs-csi-driver", {
 });
 
 new CertManager(workload, "cert-manager", { acmeEmail: `admin@${domain}` });
+
+// Cross-cloud image pulls: gcr.io pull credentials fanned out across the
+// workload namespaces. In production use a ref+sops:// reference for the SA
+// key JSON (resolved at synth time).
+new ImagePullSecret(workload, "gcr-pull-secret", {
+  registry: "gcr.io",
+  saJsonRef: '{"type":"service_account","project_id":"example"}',
+  namespaces: ["tool-node", "tool-node-2"],
+});
 
 // NodePort ingress (k0smotron control plane has no AWS LB controller dependency).
 new IngressNginx(workload, "ingress-nginx", {

@@ -249,6 +249,9 @@ export type {
 export { WireGuardMesh } from "./wireguard-mesh";
 export type { WireGuardMeshConfig, WireGuardPeer } from "./wireguard-mesh";
 
+export { ImagePullSecret } from "./image-pull-secret";
+export type { ImagePullSecretConfig } from "./image-pull-secret";
+
 export { Calico } from "./calico";
 export type { CalicoConfig } from "./calico";
 
