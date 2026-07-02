@@ -114,10 +114,15 @@ export type {
   ExternalDnsCredentialsSecret,
 } from "./external-dns";
 
-export { PrometheusOperator } from "./prometheus-operator";
+export { PrometheusOperator, MemberMonitoring } from "./prometheus-operator";
 export type {
   PrometheusOperatorConfig,
   ThanosConfig,
+  PromtailClientConfig,
+  PrometheusRwIngressConfig,
+  LokiPushIngressConfig,
+  MemberMonitoringConfig,
+  MemberRemoteWriteConfig,
 } from "./prometheus-operator";
 
 export { ArgoCd, ArgoCdClusterSyncSetup, ArgoCdClusterSync } from "./argocd";
