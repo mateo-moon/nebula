@@ -13,7 +13,7 @@
  * ```
  */
 import { Construct } from "constructs";
-import { Helm } from "cdk8s";
+import { ApiObject, Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import { ServiceAccount as CpServiceAccount } from "#imports/cloudplatform.gcp.upbound.io";
@@ -83,6 +83,72 @@ export interface ThanosConfig {
   thanosValues?: Record<string, unknown>;
 }
 
+/**
+ * Remote Loki client for Promtail — push logs to a central Loki sink
+ * (basic auth at the sink's ingress) instead of the local Loki service.
+ * The hub-and-spoke "member" pattern: usable with `loki.enabled: false`.
+ */
+export interface PromtailClientConfig {
+  /** Loki push endpoint, e.g. "https://loki.example.com/loki/api/v1/push". */
+  url: string;
+  /** Basic-auth username at the sink. */
+  username?: string;
+  /**
+   * Basic-auth password. A plain string or a ref+ secret reference (e.g.
+   * "ref+sops://.secrets/secrets.yaml#loki/password") — resolved automatically
+   * at synth time like the rest of the module config.
+   */
+  passwordRef?: string;
+  /** external_labels stamped on every pushed stream (e.g. { cluster: "dev" }). */
+  externalLabels?: Record<string, string>;
+}
+
+/**
+ * Basic-auth ingress exposing the Prometheus remote-write receiver to
+ * external producers (only /api/v1/write — the query/admin API stays
+ * cluster-internal). Also flips `enableRemoteWriteReceiver` on Prometheus.
+ */
+export interface PrometheusRwIngressConfig {
+  /** Public hostname, e.g. "prometheus-rw.example.com" (external-dns + TLS). */
+  host: string;
+  /**
+   * htpasswd file content for nginx basic auth. A plain string or a ref+
+   * secret reference (resolved automatically at synth time).
+   */
+  authHtpasswd: string;
+  /**
+   * Extra/override Ingress annotations, merged over the defaults
+   * (cert-manager letsencrypt-prod + external-dns hostname + nginx basic auth).
+   */
+  ingressAnnotations?: Record<string, string>;
+}
+
+/**
+ * Basic-auth ingress exposing the Loki push API to external producers (only
+ * /loki/api/v1/push — the query API stays cluster-internal). Routed straight
+ * to the auth-free `loki` service, NOT through loki-gateway: the gateway does
+ * its own basic-auth with `loki.authHtpasswd`, and stacking the ingress in
+ * front of it would double-auth every request (one Authorization header
+ * checked against two different htpasswds → guaranteed 401 for users not
+ * present in both).
+ */
+export interface LokiPushIngressConfig {
+  /** Public hostname, e.g. "loki.example.com" (external-dns + TLS). */
+  host: string;
+  /**
+   * htpasswd file content for nginx basic auth. A plain string or a ref+
+   * secret reference (resolved automatically at synth time).
+   */
+  authHtpasswd: string;
+  /** Backend service (defaults to the module's Loki service `loki`:3100). */
+  backendService?: { name?: string; port?: number };
+  /**
+   * Extra/override Ingress annotations, merged over the defaults
+   * (cert-manager letsencrypt-prod + external-dns hostname + nginx basic auth).
+   */
+  ingressAnnotations?: Record<string, string>;
+}
+
 export interface PrometheusOperatorConfig {
   /** Namespace for monitoring stack (defaults to monitoring) */
   namespace?: string;
@@ -113,7 +179,29 @@ export interface PrometheusOperatorConfig {
     enabled?: boolean;
     /** Promtail Helm chart version */
     version?: string;
+    /**
+     * Promtail pod tolerations. When set, REPLACES the default list entirely
+     * (module `tolerations` + the tool-node toleration) — all-tainted member
+     * clusters need exact control, e.g. Exists-operator tolerations.
+     */
+    tolerations?: Toleration[];
   };
+  /**
+   * Point Promtail at a remote central Loki sink (basic auth) instead of the
+   * local Loki service — the member/spoke pattern, typically combined with
+   * `loki.enabled: false`.
+   */
+  promtailClient?: PromtailClientConfig;
+  /**
+   * Expose the Prometheus remote-write receiver at a public host behind nginx
+   * basic auth (central-sink / hub pattern).
+   */
+  prometheusRw?: PrometheusRwIngressConfig;
+  /**
+   * Expose the Loki push API at a public host behind nginx basic auth
+   * (central-sink / hub pattern).
+   */
+  lokiPush?: LokiPushIngressConfig;
   /** Thanos configuration for multi-cluster metrics aggregation */
   thanos?: ThanosConfig;
   /** Grafana admin password */
@@ -234,6 +322,11 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         // Thanos, retain 30d / 50Gi locally as before.
         prometheusSpec: {
           tolerations: defaultTolerations,
+          // Accept remote-write pushes when the receiver is exposed via
+          // `prometheusRw` (producers push to /api/v1/write on the ingress).
+          ...(this.config.prometheusRw
+            ? { enableRemoteWriteReceiver: true }
+            : {}),
           retention: thanosEnabled ? "24h" : "30d",
           storageSpec: {
             volumeClaimTemplate: {
@@ -477,6 +570,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
 
     // Deploy Promtail
     if (this.config.promtail?.enabled !== false) {
+      const promtailClient = this.config.promtailClient;
       this.promtailHelm = new Helm(this, "promtail", {
         chart: "promtail",
         releaseName: "promtail",
@@ -486,15 +580,34 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         values: {
           config: {
             clients: [
-              {
-                // Push straight to the Loki service (same target as the Grafana
-                // datasource) so ingestion is unaffected by the optional gateway
-                // basic-auth enabled via loki.authHtpasswd.
-                url: `http://loki.${namespaceName}.svc.cluster.local:3100/loki/api/v1/push`,
-              },
+              promtailClient
+                ? {
+                    // Remote central Loki sink (basic auth at its ingress) —
+                    // the member/spoke pattern; works with loki.enabled=false.
+                    url: promtailClient.url,
+                    ...(promtailClient.username && promtailClient.passwordRef
+                      ? {
+                          basic_auth: {
+                            username: promtailClient.username,
+                            password: promtailClient.passwordRef,
+                          },
+                        }
+                      : {}),
+                    ...(promtailClient.externalLabels
+                      ? { external_labels: promtailClient.externalLabels }
+                      : {}),
+                  }
+                : {
+                    // Push straight to the Loki service (same target as the Grafana
+                    // datasource) so ingestion is unaffected by the optional gateway
+                    // basic-auth enabled via loki.authHtpasswd.
+                    url: `http://loki.${namespaceName}.svc.cluster.local:3100/loki/api/v1/push`,
+                  },
             ],
           },
-          tolerations: [
+          // promtail.tolerations replaces the default list entirely (see the
+          // config JSDoc) — the default tool-node toleration is hub-specific.
+          tolerations: this.config.promtail?.tolerations ?? [
             ...defaultTolerations,
             { key: "workload", value: "tool-node", effect: "NoSchedule" },
           ],
@@ -723,7 +836,133 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         },
       });
     }
+
+    // --- Central-sink ingresses ----------------------------------------------
+    // Expose the Prometheus remote-write receiver and/or the Loki push API to
+    // external producers (other clusters, CVMs, bare nodes) over nginx basic
+    // auth. Port of the pulumi component's prometheusRwHost/-AuthHtpasswd
+    // knobs. NO IP allowlists — auth is basic-auth only (an ingress allowlist
+    // once 403'd all external producers; hard lesson).
+    if (this.config.prometheusRw) {
+      const rw = this.config.prometheusRw;
+      new ApiObject(this, "prometheus-rw-auth", {
+        apiVersion: "v1",
+        kind: "Secret",
+        metadata: { name: "prometheus-rw-auth", namespace: namespaceName },
+        type: "Opaque",
+        stringData: { auth: rw.authHtpasswd },
+      });
+
+      new ApiObject(this, "prometheus-rw-ingress", {
+        apiVersion: "networking.k8s.io/v1",
+        kind: "Ingress",
+        metadata: {
+          name: "prometheus-remote-write",
+          namespace: namespaceName,
+          annotations: {
+            "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+            "external-dns.alpha.kubernetes.io/hostname": rw.host,
+            "nginx.ingress.kubernetes.io/auth-type": "basic",
+            "nginx.ingress.kubernetes.io/auth-secret": "prometheus-rw-auth",
+            "nginx.ingress.kubernetes.io/auth-realm":
+              "Authentication Required - Prometheus Remote Write",
+            ...(rw.ingressAnnotations ?? {}),
+          },
+        },
+        spec: {
+          ingressClassName: "nginx",
+          tls: [{ secretName: "prometheus-rw-tls", hosts: [rw.host] }],
+          rules: [
+            {
+              host: rw.host,
+              http: {
+                paths: [
+                  {
+                    // Only /api/v1/write is exposed — the query/admin API stays
+                    // cluster-internal.
+                    path: "/api/v1/write",
+                    pathType: "Prefix",
+                    backend: {
+                      // kube-prometheus-stack, releaseName "prometheus" →
+                      // fullname trunc-26 "prometheus-kube-prometheus".
+                      service: {
+                        name: "prometheus-kube-prometheus-prometheus",
+                        port: { number: 9090 },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    if (this.config.lokiPush) {
+      const push = this.config.lokiPush;
+      new ApiObject(this, "loki-push-auth", {
+        apiVersion: "v1",
+        kind: "Secret",
+        metadata: { name: "loki-push-auth", namespace: namespaceName },
+        type: "Opaque",
+        stringData: { auth: push.authHtpasswd },
+      });
+
+      new ApiObject(this, "loki-push-ingress", {
+        apiVersion: "networking.k8s.io/v1",
+        kind: "Ingress",
+        metadata: {
+          name: "loki-push",
+          namespace: namespaceName,
+          annotations: {
+            "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+            "external-dns.alpha.kubernetes.io/hostname": push.host,
+            "nginx.ingress.kubernetes.io/auth-type": "basic",
+            "nginx.ingress.kubernetes.io/auth-secret": "loki-push-auth",
+            "nginx.ingress.kubernetes.io/auth-realm":
+              "Authentication Required - Loki Push",
+            ...(push.ingressAnnotations ?? {}),
+          },
+        },
+        spec: {
+          ingressClassName: "nginx",
+          tls: [{ secretName: "loki-push-tls", hosts: [push.host] }],
+          rules: [
+            {
+              host: push.host,
+              http: {
+                paths: [
+                  {
+                    // Only the push path is exposed — the query API stays
+                    // cluster-internal (in-cluster Grafana/Promtail talk to
+                    // loki:3100 directly).
+                    path: "/loki/api/v1/push",
+                    pathType: "Prefix",
+                    backend: {
+                      service: {
+                        name: push.backendService?.name ?? "loki",
+                        port: { number: push.backendService?.port ?? 3100 },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+    }
   }
 }
 
 // normalizeAccountId is imported from ../../infra/_shared (DRY).
+
+// MemberMonitoring — the thin member-cluster (spoke) preset delegating to
+// PrometheusOperator. Re-exported at the bottom so the module class above is
+// fully defined before the cycle-safe "./member-monitoring" → "./index" import.
+export { MemberMonitoring } from "./member-monitoring";
+export type {
+  MemberMonitoringConfig,
+  MemberRemoteWriteConfig,
+} from "./member-monitoring";
