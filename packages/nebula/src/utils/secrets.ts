@@ -172,6 +172,25 @@ function resolveVals(ref: string): string {
     return ref;
   }
 
+  // Backend allowlist: only permit safe vals backends. ref+exec:// / ref+shell://
+  // (and file://) are RCE/read vectors — a git-pushed malicious ref+ value would
+  // execute/read at synth time inside the repo-server. Reject anything not listed.
+  const backend = ref.match(/^ref\+([a-z0-9]+):\/\//i)?.[1]?.toLowerCase();
+  if (backend) {
+    const ALLOWED = new Set([
+      "sops", "awsssm", "awssecretsmanager", "env", "vault", "gcpsecretsmanager",
+    ]);
+    if (!ALLOWED.has(backend)) {
+      const msg =
+        `Secret backend "ref+${backend}://" is not allowlisted ` +
+        `(permitted: sops/awsssm/awssecretsmanager/env/vault/gcpsecretsmanager). ` +
+        `ref+exec/ref+shell/file are blocked (RCE/read risk).`;
+      if (strictMode) throw new Error(msg);
+      console.warn(`[Secrets] ${msg}`);
+      return ref;
+    }
+  }
+
   // Normalize repo-root relative paths for SOPS
   const normalizedRef = normalizeRef(ref);
 

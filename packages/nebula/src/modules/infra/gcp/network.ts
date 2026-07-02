@@ -5,6 +5,7 @@ import {
   Subnetwork as CpSubnetwork,
   SubnetworkSpecDeletionPolicy,
 } from '#imports/compute.gcp.upbound.io';
+import { mapDeletionPolicy } from '../_shared';
 
 export interface NetworkConfig {
   /** Network name */
@@ -34,17 +35,19 @@ export class Network extends Construct {
   public readonly subnetwork: CpSubnetwork;
   public readonly podsRangeName: string;
   public readonly servicesRangeName: string;
+  /** Whether the pods secondary range was actually added to the subnetwork. */
+  public readonly hasPodsSecondaryRange: boolean;
+  /** Whether the services secondary range was actually added to the subnetwork. */
+  public readonly hasServicesSecondaryRange: boolean;
 
   constructor(scope: Construct, id: string, config: NetworkConfig) {
     super(scope, id);
 
     const providerConfigRef = config.providerConfigRef ?? 'default';
     const networkDeletionPolicy = config.deletionPolicy ?? NetworkSpecDeletionPolicy.DELETE;
-    const subnetworkDeletionPolicy = config.deletionPolicy 
-      ? (config.deletionPolicy === NetworkSpecDeletionPolicy.ORPHAN 
-          ? SubnetworkSpecDeletionPolicy.ORPHAN 
-          : SubnetworkSpecDeletionPolicy.DELETE)
-      : SubnetworkSpecDeletionPolicy.DELETE;
+    const subnetworkDeletionPolicy =
+      mapDeletionPolicy<SubnetworkSpecDeletionPolicy>(config.deletionPolicy) ??
+      SubnetworkSpecDeletionPolicy.DELETE;
 
     // Create VPC Network
     this.network = new CpNetwork(this, 'network', {
@@ -67,6 +70,9 @@ export class Network extends Construct {
     const subnetName = `${config.name}-subnet`;
     this.podsRangeName = config.podsRangeName ?? `${subnetName}-pods`;
     this.servicesRangeName = config.servicesRangeName ?? `${subnetName}-services`;
+
+    this.hasPodsSecondaryRange = !!config.podsSecondaryCidr;
+    this.hasServicesSecondaryRange = !!config.servicesSecondaryCidr;
 
     const secondaryIpRanges: Array<{ ipCidrRange: string; rangeName: string }> = [];
     if (config.podsSecondaryCidr) {

@@ -4,8 +4,12 @@ import { Gke, GkeConfig, NodePoolConfig } from "./gke";
 import { Iam, IamConfig, WorkloadIdentityConfig } from "./iam";
 import { NetworkSpecDeletionPolicy } from "#imports/compute.gcp.upbound.io";
 import { ClusterSpecDeletionPolicy } from "#imports/container.gcp.upbound.io";
-import { ProjectIamMember } from "#imports/cloudplatform.gcp.upbound.io";
+import {
+  ProjectIamMember,
+  ServiceAccountSpecDeletionPolicy,
+} from "#imports/cloudplatform.gcp.upbound.io";
 import { BaseConstruct } from "../../../core";
+import { mapDeletionPolicy } from "../_shared";
 
 export { Network } from "./network";
 export type { NetworkConfig } from "./network";
@@ -24,7 +28,7 @@ export interface GcpConfig {
   /** Network configuration */
   network: Omit<NetworkConfig, "name" | "project" | "region">;
   /** GKE configuration (name is optional, defaults to {id}-cluster) */
-  gke: Omit<GkeConfig, "project" | "network"> & { name?: string };
+  gke: Omit<GkeConfig, "project" | "network" | "name"> & { name?: string };
   /** IAM configuration (optional) */
   iam?: Omit<IamConfig, "project" | "providerConfigRef" | "deletionPolicy">;
   /** ProviderConfig name to use for all resources */
@@ -55,11 +59,13 @@ export class Gcp extends BaseConstruct<GcpConfig> {
     const providerConfigRef = this.config.providerConfigRef ?? "default";
     const networkDeletionPolicy =
       this.config.deletionPolicy ?? NetworkSpecDeletionPolicy.DELETE;
-    const clusterDeletionPolicy = this.config.deletionPolicy
-      ? this.config.deletionPolicy === NetworkSpecDeletionPolicy.ORPHAN
-        ? ClusterSpecDeletionPolicy.ORPHAN
-        : ClusterSpecDeletionPolicy.DELETE
-      : ClusterSpecDeletionPolicy.DELETE;
+    const clusterDeletionPolicy =
+      mapDeletionPolicy<ClusterSpecDeletionPolicy>(this.config.deletionPolicy) ??
+      ClusterSpecDeletionPolicy.DELETE;
+    const iamDeletionPolicy =
+      mapDeletionPolicy<ServiceAccountSpecDeletionPolicy>(
+        this.config.deletionPolicy,
+      ) ?? ServiceAccountSpecDeletionPolicy.DELETE;
 
     // Create Network
     this.network = new Network(this, "network", {
@@ -98,6 +104,7 @@ export class Gcp extends BaseConstruct<GcpConfig> {
         externalDns: this.config.iam.externalDns,
         certManager: this.config.iam.certManager,
         providerConfigRef,
+        deletionPolicy: iamDeletionPolicy,
       });
     }
 
@@ -109,7 +116,10 @@ export class Gcp extends BaseConstruct<GcpConfig> {
       const crossplaneGsa = `crossplane-provider@${this.config.project}.iam.gserviceaccount.com`;
       new ProjectIamMember(this, "crossplane-iam-admin", {
         metadata: {
-          name: "crossplane-provider-iam-admin",
+          // Include the project so multiple Gcp modules (e.g. one per project)
+          // synthesized into the same manifest/control cluster don't collide on
+          // this cluster-scoped resource's name.
+          name: `crossplane-provider-iam-admin-${this.config.project}`,
         },
         spec: {
           forProvider: {

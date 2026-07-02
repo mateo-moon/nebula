@@ -35,6 +35,7 @@ import {
   Composition,
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
+import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
 
 export interface ArgoCdClusterSyncConfig {
   /** Human-readable cluster name (used in ArgoCD UI) */
@@ -78,7 +79,7 @@ export class ArgoCdClusterSyncSetup extends Construct {
       metadata: {
         name: "xargocdclustersyncs.nebula.io",
         annotations: {
-          "argocd.argoproj.io/sync-wave": "-10",
+          [ARGOCD_SYNC_WAVE_ANNOTATION]: "-10",
         },
       },
       spec: {
@@ -202,7 +203,7 @@ stringData:
       metadata: {
         name: "argocd-cluster-sync",
         annotations: {
-          "argocd.argoproj.io/sync-wave": "-5",
+          [ARGOCD_SYNC_WAVE_ANNOTATION]: "-5",
         },
       },
       spec: {
@@ -305,7 +306,7 @@ export class ArgoCdClusterSync extends Construct {
       metadata: {
         name: `${config.clusterName}-argocd-sync`,
         annotations: {
-          "argocd.argoproj.io/sync-wave": syncWave,
+          [ARGOCD_SYNC_WAVE_ANNOTATION]: syncWave,
         },
       },
       spec: {

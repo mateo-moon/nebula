@@ -18,7 +18,7 @@
  * // GKE chart — Crossplane GCS backup infra + push secret to bare metal
  * new CloudNativePg(chart, 'cnpg', {
  *   mode: 'backup-infra',
- *   gcpProjectId: 'my-project',
+ *   gcpProject: 'my-project',
  *   bucketName: 'my-cnpg-backups',
  *   remoteCluster: {
  *     kubeconfigSecret: { name: 'dev-cluster-kubeconfig', namespace: 'default', key: 'value' },
@@ -41,7 +41,8 @@ import {
   BucketV1Beta2 as GcsBucket,
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
-import { BaseConstruct } from "../../../core";
+import { HelmModule } from "../../../core";
+import { normalizeAccountId } from "../../infra/_shared";
 
 /** Configuration for pushing backup credentials to a remote cluster */
 export interface RemoteClusterConfig {
@@ -73,7 +74,7 @@ export interface CloudNativePgConfig {
   /** Additional Helm values for the CNPG operator chart */
   values?: Record<string, unknown>;
   /** GCP project ID (required for backup-infra mode) */
-  gcpProjectId?: string;
+  gcpProject?: string;
   /** GCS bucket name for backups (required for backup-infra mode) */
   bucketName?: string;
   /** Bucket lifecycle delete age in days (defaults to 90) */
@@ -84,7 +85,7 @@ export interface CloudNativePgConfig {
   remoteCluster?: RemoteClusterConfig;
 }
 
-export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
+export class CloudNativePg extends HelmModule<CloudNativePgConfig> {
   public readonly helm?: Helm;
   public readonly namespace: kplus.Namespace;
   public readonly bucket?: GcsBucket;
@@ -96,33 +97,32 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
 
     const namespaceName = this.config.namespace ?? "cnpg-system";
 
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     if (this.config.mode === "operator") {
-      this.helm = new Helm(this, "cnpg-operator", {
+      this.helm = this.createHelmRelease({
+        id: "cnpg-operator",
+        namespace: namespaceName,
         chart: "cloudnative-pg",
         releaseName: "cnpg",
         repo: "https://cloudnative-pg.github.io/charts",
         version: this.config.version ?? "0.27.1",
-        namespace: namespaceName,
-        values: this.config.values ?? {},
+        values: this.config.values,
       });
 
       new Include(this, "barman-cloud-plugin", {
         url: `https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/${this.config.barmanCloudVersion ?? "v0.11.0"}/manifest.yaml`,
       });
     } else {
-      if (!this.config.gcpProjectId || !this.config.bucketName) {
+      if (!this.config.gcpProject || !this.config.bucketName) {
         throw new Error(
-          "gcpProjectId and bucketName are required for backup-infra mode",
+          "gcpProject and bucketName are required for backup-infra mode",
         );
       }
 
       const providerConfigRef = this.config.providerConfigRef ?? "default";
       const accountId = normalizeAccountId(`${id}-cnpg-backup`);
-      this.serviceAccountEmail = `${accountId}@${this.config.gcpProjectId}.iam.gserviceaccount.com`;
+      this.serviceAccountEmail = `${accountId}@${this.config.gcpProject}.iam.gserviceaccount.com`;
       const connectionSecretName = `${id}-cnpg-backup-gcs-credentials`;
 
       // GCS Bucket for CNPG backups
@@ -135,7 +135,7 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
         },
         spec: {
           forProvider: {
-            project: this.config.gcpProjectId,
+            project: this.config.gcpProject,
             location: "EU",
             storageClass: "STANDARD",
             uniformBucketLevelAccess: true,
@@ -160,7 +160,7 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
         spec: {
           forProvider: {
             displayName: `CNPG Backup SA for ${id}`,
-            project: this.config.gcpProjectId,
+            project: this.config.gcpProject,
           },
           providerConfigRef: { name: providerConfigRef },
           deletionPolicy: ServiceAccountSpecDeletionPolicy.DELETE,
@@ -252,7 +252,9 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
                   kind: "Secret",
                   name: connectionSecretName,
                   namespace: namespaceName,
-                  fieldPath: "data.private_key",
+                  // upbound ServiceAccountKey exposes the key under attribute.private_key
+                  // (data.private_key resolves nothing -> barman-cloud GCS backup auth fails).
+                  fieldPath: "data.attribute.private_key",
                 },
                 toFieldPath: "data.gcsCredentials",
               },
@@ -264,10 +266,4 @@ export class CloudNativePg extends BaseConstruct<CloudNativePgConfig> {
   }
 }
 
-function normalizeAccountId(raw: string): string {
-  let s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (!/^[a-z]/.test(s)) s = `a-${s}`;
-  if (s.length < 6) s = (s + "-aaaaaa").slice(0, 6);
-  if (s.length > 30) s = `${s.slice(0, 25)}-${s.slice(-4)}`;
-  return s;
-}
+// normalizeAccountId is imported from ../../infra/_shared (DRY).

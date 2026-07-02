@@ -68,12 +68,16 @@ export interface PiraeusSatelliteConfig {
 }
 
 export interface PiraeusConfig {
-  /** Namespace (defaults to "piraeus-datastore") */
+  /**
+   * Namespace (must be "piraeus-datastore", the default).
+   * The bundled upstream operator manifest is published with a hardcoded
+   * "piraeus-datastore" namespace, and the controller resolves the passphrase
+   * secret and the linstor-controller Service in its own namespace, so this
+   * cannot currently be changed without breaking the deployment.
+   */
   namespace?: string;
   /** Piraeus Operator version (defaults to "v2.10.4") */
   operatorVersion?: string;
-  /** linstor-cluster Helm chart version (defaults to "1.1.1") */
-  clusterChartVersion?: string;
   /** Encrypted StorageClass name (defaults to "linstor-encrypted") */
   storageClassName?: string;
   /** LUKS encryption configuration */
@@ -90,8 +94,6 @@ export interface PiraeusConfig {
   hostNetwork?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
   advertiseIP?: string;
-  /** Additional Helm values for linstor-cluster chart */
-  values?: Record<string, unknown>;
 }
 
 export class Piraeus extends BaseConstruct<PiraeusConfig> {
@@ -101,6 +103,20 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
     super(scope, id, config);
 
     const namespaceName = this.config.namespace ?? "piraeus-datastore";
+    // The upstream operator manifest pulled in via Include below hardcodes the
+    // "piraeus-datastore" namespace. The passphrase secret (created here) and
+    // the DRBD sidecar's controller DNS target are placed in `namespaceName`,
+    // and the controller looks for both in its own namespace. Overriding the
+    // namespace would silently break LUKS encryption setup and net-interface
+    // registration, so reject any value that diverges from the operator's.
+    if (namespaceName !== "piraeus-datastore") {
+      throw new Error(
+        `Piraeus: namespace must be "piraeus-datastore" (got "${namespaceName}"). ` +
+          "The bundled operator manifest is published with that namespace " +
+          "hardcoded, so overriding it would break the passphrase secret and " +
+          "DRBD sidecar wiring.",
+      );
+    }
     const operatorVersion = this.config.operatorVersion ?? "v2.10.4";
     this.storageClassName = this.config.storageClassName ?? "linstor-encrypted";
     const poolName = this.config.storagePool?.name ?? "lvm-thin";
@@ -212,17 +228,12 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
         };
       }
 
-      const podSpec: Record<string, unknown> = { hostNetwork: useHostNetwork };
-      if (this.config.advertiseIP && replicationInterface) {
-        if (useHostNetwork) podSpec.dnsPolicy = "ClusterFirstWithHostNet";
-        podSpec.containers = [
-          buildDrbdIpSidecar(
-            this.config.advertiseIP,
-            replicationInterface,
-            namespaceName,
-          ),
-        ];
-      }
+      const podSpec = buildSatellitePodSpec(
+        useHostNetwork,
+        this.config.advertiseIP,
+        replicationInterface,
+        namespaceName,
+      );
 
       new ApiObject(this, "satellite-config", {
         apiVersion: "piraeus.io/v1",
@@ -253,17 +264,12 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           }),
         );
 
-        const podSpec: Record<string, unknown> = { hostNetwork: useHostNetwork };
-        if (sat.advertiseIP && replicationInterface) {
-          if (useHostNetwork) podSpec.dnsPolicy = "ClusterFirstWithHostNet";
-          podSpec.containers = [
-            buildDrbdIpSidecar(
-              sat.advertiseIP,
-              replicationInterface,
-              namespaceName,
-            ),
-          ];
-        }
+        const podSpec = buildSatellitePodSpec(
+          useHostNetwork,
+          sat.advertiseIP,
+          replicationInterface,
+          namespaceName,
+        );
 
         new ApiObject(this, `satellite-config-${sat.name}`, {
           apiVersion: "piraeus.io/v1",
@@ -380,6 +386,27 @@ function buildDrbdIpSidecar(
       },
     ],
   };
+}
+
+/**
+ * Builds the LinstorSatelliteConfiguration podTemplate spec: host networking
+ * plus, when an advertise-IP command and a replication interface are supplied,
+ * the DRBD net-interface registration sidecar (with host-net-friendly DNS).
+ */
+function buildSatellitePodSpec(
+  useHostNetwork: boolean,
+  advertiseIP: string | undefined,
+  replicationInterface: string | undefined,
+  namespace: string,
+): Record<string, unknown> {
+  const podSpec: Record<string, unknown> = { hostNetwork: useHostNetwork };
+  if (advertiseIP && replicationInterface) {
+    if (useHostNetwork) podSpec.dnsPolicy = "ClusterFirstWithHostNet";
+    podSpec.containers = [
+      buildDrbdIpSidecar(advertiseIP, replicationInterface, namespace),
+    ];
+  }
+  return podSpec;
 }
 
 function buildStoragePoolSpec(

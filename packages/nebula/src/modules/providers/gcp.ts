@@ -6,7 +6,9 @@ import {
   ProviderConfigSpecCredentials,
   ProviderConfigSpecCredentialsSource,
 } from "#imports/gcp.upbound.io";
-import { ServiceAccountIamMember } from "#imports/cloudplatform.gcp.upbound.io";
+import { bindWorkloadIdentityUser } from "../infra/gcp/workload-identity";
+import { ARGOCD_KEEP_ON_DELETE } from "../../core";
+import { createProviderFamily } from "./_shared";
 
 /** Credential source for GCP provider */
 export type GcpCredentialSource =
@@ -139,9 +141,7 @@ export class GcpProvider extends Construct {
             kind: "DeploymentRuntimeConfig",
             metadata: {
               name: runtimeConfigName,
-              annotations: {
-                "argocd.argoproj.io/sync-options": "Delete=false",
-              },
+              annotations: ARGOCD_KEEP_ON_DELETE,
             },
             spec: {
               serviceAccountTemplate: {
@@ -153,42 +153,29 @@ export class GcpProvider extends Construct {
       }
     }
 
-    // Create Provider for each family
+    // Create Provider for each family (shared loop body — see providers/_shared).
     for (const family of families) {
-      const providerName = `${providerNamePrefix}-${family}`;
-      const providerPackage = `xpkg.upbound.io/upbound/provider-gcp-${family}`;
       const runtimeConfigName = config.enableDeterministicServiceAccounts
         ? `${providerNamePrefix}-${family}-runtime`
         : undefined;
 
-      const provider = new CpProvider(this, `provider-${family}`, {
-        metadata: {
-          name: providerName,
-          annotations: {
-            "argocd.argoproj.io/sync-options": "Delete=false",
-          },
+      this.providers[family] = createProviderFamily(
+        this,
+        family,
+        `provider-${family}`,
+        {
+          namePrefix: providerNamePrefix,
+          version: providerVersion,
+          cloud: "gcp",
+          runtimeConfigRef: runtimeConfigName,
+          // Ensure DeploymentRuntimeConfig is created before the Provider references it.
+          dependsOn:
+            config.enableDeterministicServiceAccounts &&
+            this.runtimeConfigs[family]
+              ? [this.runtimeConfigs[family]]
+              : undefined,
         },
-        spec: {
-          package: `${providerPackage}:${providerVersion}`,
-          ...(runtimeConfigName
-            ? {
-                runtimeConfigRef: {
-                  name: runtimeConfigName,
-                },
-              }
-            : {}),
-        },
-      });
-
-      // Ensure DeploymentRuntimeConfig is created before Provider references it
-      if (
-        config.enableDeterministicServiceAccounts &&
-        this.runtimeConfigs[family]
-      ) {
-        provider.node.addDependency(this.runtimeConfigs[family]);
-      }
-
-      this.providers[family] = provider;
+      );
     }
 
     // Build credentials spec based on source type
@@ -198,9 +185,7 @@ export class GcpProvider extends Construct {
     this.providerConfig = new CpProviderConfig(this, "provider-config", {
       metadata: {
         name: providerConfigName,
-        annotations: {
-          "argocd.argoproj.io/sync-options": "Delete=false",
-        },
+        annotations: ARGOCD_KEEP_ON_DELETE,
       },
       spec: {
         projectId: config.projectId,
@@ -224,20 +209,15 @@ export class GcpProvider extends Construct {
           providerNamePrefix,
         );
 
-        new ServiceAccountIamMember(this, `wi-binding-${family}`, {
-          metadata: {
-            name: `crossplane-provider-wi-${family}`,
-          },
-          spec: {
-            forProvider: {
-              serviceAccountId: `projects/${config.projectId}/serviceAccounts/${gsaEmail}`,
-              role: "roles/iam.workloadIdentityUser",
-              member: `serviceAccount:${config.projectId}.svc.id.goog[${providerNamespace}/${ksaName}]`,
-            },
-            providerConfigRef: {
-              name: providerConfigName,
-            },
-          },
+        bindWorkloadIdentityUser({
+          scope: this,
+          id: `wi-binding-${family}`,
+          name: `crossplane-provider-wi-${family}`,
+          project: config.projectId,
+          namespace: providerNamespace,
+          ksa: ksaName,
+          gsaEmail,
+          providerConfigRef: providerConfigName,
         });
       }
     }
@@ -276,7 +256,7 @@ export class GcpProvider extends Construct {
         };
       case "impersonate":
         return {
-          source: ProviderConfigSpecCredentialsSource.INJECTED_IDENTITY,
+          source: ProviderConfigSpecCredentialsSource.IMPERSONATE_SERVICE_ACCOUNT,
           impersonateServiceAccount: {
             name: source.serviceAccount,
           },

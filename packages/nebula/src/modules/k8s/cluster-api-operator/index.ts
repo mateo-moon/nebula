@@ -8,7 +8,7 @@
  * new ClusterApiOperator(chart, 'capi', {
  *   version: '0.24.1',
  *   gcp: {
- *     projectId: 'my-project',
+ *     gcpProject: 'my-project',
  *   },
  * });
  * ```
@@ -16,8 +16,8 @@
 import { Construct } from "constructs";
 import { ApiObject, Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
-import { BaseConstruct } from "../../../core";
+import { HelmModule, syncWave } from "../../../core";
+import { buildCapaCredentialsIni, toCapaB64 } from "../../infra/aws/_shared";
 import {
   ServiceAccount,
   ProjectIamMember,
@@ -28,9 +28,18 @@ import {
   Composition,
 } from "#imports/apiextensions.crossplane.io";
 
-/** k0smotron releases base URL for fetchConfig */
+/**
+ * k0smotron version + releases base URL for fetchConfig. PIN THE EXACT TAG (never
+ * `releases/latest`): k0smotron ships a PARALLEL v1.10.x **v1beta1** maintenance
+ * line on the same dates as the v2.0.x **v1beta2** line, so a floating `latest`
+ * can silently install v1beta1 components — the management cluster comes up on the
+ * v1beta1 contract and `clusterctl move` (v1beta2) refuses it. v2.0.2 is the first
+ * k0smotron line serving the CAPI v1beta2 contract (built against cluster-api
+ * v1.11.4). Keep this in lockstep with the CAPI core / CAPA versions below.
+ */
+const K0SMOTRON_VERSION = "v2.0.2";
 const K0SMOTRON_RELEASES_BASE =
-  "https://github.com/k0sproject/k0smotron/releases/latest/download";
+  `https://github.com/k0sproject/k0smotron/releases/download/${K0SMOTRON_VERSION}`;
 
 /** k0smotron fetchConfig URLs for each provider type */
 const K0SMOTRON_FETCH_URLS = {
@@ -42,12 +51,12 @@ const K0SMOTRON_FETCH_URLS = {
 /** GCP IAM configuration for CAPG */
 export interface ClusterApiOperatorGcpConfig {
   /** GCP project ID */
-  projectId: string;
+  gcpProject: string;
   /** ProviderConfig name to use for creating IAM resources (default: 'default') */
   providerConfigRef?: string;
   /**
    * GCP Service Account name for CAPG controller (default: 'capg-controller')
-   * Full email will be: {gsaName}@{projectId}.iam.gserviceaccount.com
+   * Full email will be: {gsaName}@{gcpProject}.iam.gserviceaccount.com
    */
   gsaName?: string;
   /**
@@ -79,6 +88,40 @@ export interface ClusterApiOperatorHetznerConfig {
   version?: string;
 }
 
+/** AWS configuration for CAPA (Cluster API Provider AWS) */
+export interface ClusterApiOperatorAwsConfig {
+  /** Default AWS region for the CAPA controller */
+  region: string;
+  /**
+   * Name of the Kubernetes secret CAPA reads credentials from.
+   * @default 'aws-capa-credentials'
+   */
+  secretName?: string;
+  /**
+   * Namespace for the credentials secret.
+   * @default 'capa-system'
+   */
+  secretNamespace?: string;
+  /**
+   * AWS access key id. Supports `ref+sops://...` (resolved at synth). When both
+   * `accessKeyId` and `secretAccessKey` are set, the credentials secret is
+   * created for you; otherwise an existing `secretName` is referenced.
+   */
+  accessKeyId?: string;
+  /** AWS secret access key. Supports `ref+sops://...`. */
+  secretAccessKey?: string;
+  /**
+   * Keyless mode for a self-managed management cluster whose nodes carry an
+   * instance profile with controller permissions (see AwsIam `controllerPolicies`).
+   * Creates the credentials secret with an EMPTY `AWS_B64ENCODED_CREDENTIALS` so
+   * CAPA's AWS SDK finds no static key and falls through the default credential
+   * chain to the instance profile (IMDS). No AWS keys are stored on the cluster.
+   * Mutually exclusive with `accessKeyId`/`secretAccessKey` (keyless wins).
+   * @default false
+   */
+  keyless?: boolean;
+}
+
 export interface ClusterApiOperatorConfig {
   /** Namespace for the operator (defaults to capi-operator-system) */
   namespace?: string;
@@ -91,6 +134,7 @@ export interface ClusterApiOperatorConfig {
   /** Infrastructure providers configuration */
   infrastructure?: {
     gcp?: { version?: string };
+    aws?: { version?: string };
     hetzner?: { version?: string };
     k0smotron?: { version?: string };
   };
@@ -108,11 +152,13 @@ export interface ClusterApiOperatorConfig {
   };
   /** GCP configuration for CAPG IAM setup */
   gcp?: ClusterApiOperatorGcpConfig;
+  /** AWS configuration for CAPA credentials setup */
+  aws?: ClusterApiOperatorAwsConfig;
   /** Hetzner configuration for CAPH setup */
   hetzner?: ClusterApiOperatorHetznerConfig;
 }
 
-export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> {
+export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
   public readonly helm: Helm;
   public readonly namespace: kplus.Namespace;
   /** GCP Service Account email for CAPG controller (if gcp config provided) */
@@ -129,17 +175,23 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
 
     const namespaceName = this.config.namespace ?? "capi-operator-system";
     const capgNamespace = "capg-system";
+    const capaNamespace = "capa-system";
     const caphNamespace = "caph-system";
 
     // Create namespace
-    this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
-    });
+    this.namespace = this.createNamespace(namespaceName);
 
     // Create CAPG namespace for credentials secret (if GCP is configured)
     if (this.config.gcp) {
       new kplus.Namespace(this, "capg-namespace", {
         metadata: { name: capgNamespace },
+      });
+    }
+
+    // Create CAPA namespace for credentials secret (if AWS is configured)
+    if (this.config.aws) {
+      new kplus.Namespace(this, "capa-namespace", {
+        metadata: { name: capaNamespace },
       });
     }
 
@@ -153,7 +205,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     // Build infrastructure providers based on config
     const infrastructureProviders: Record<string, unknown> = {
       k0smotron: {
-        version: this.config.infrastructure?.k0smotron?.version ?? "v1.7.0",
+        version: this.config.infrastructure?.k0smotron?.version ?? K0SMOTRON_VERSION,
         fetchConfig: {
           url: K0SMOTRON_FETCH_URLS.infrastructure,
         },
@@ -174,7 +226,12 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
         this.config.hetzner.secretNamespace ?? caphNamespace;
 
       infrastructureProviders.hetzner = {
-        version: this.config.infrastructure?.hetzner?.version ?? "v1.0.7",
+        // Honor both the consistent `infrastructure.hetzner.version` path and the
+        // documented `hetzner.version` field (the latter as a fallback).
+        version:
+          this.config.infrastructure?.hetzner?.version ??
+          this.config.hetzner.version ??
+          "v1.0.7",
         configSecret: {
           name: hetznerSecretName,
           namespace: hetznerSecretNamespace,
@@ -182,23 +239,33 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       };
     }
 
-    const defaultValues: Record<string, unknown> = {
-      tolerations: [
-        {
-          key: "components.gke.io/gke-managed-components",
-          operator: "Exists",
-          effect: "NoSchedule",
+    // Add AWS provider (CAPA) if configured
+    if (this.config.aws) {
+      const { name: awsSecretName, namespace: awsSecretNamespace } =
+        this.setupAwsCredentials(capaNamespace);
+
+      infrastructureProviders.aws = {
+        version: this.config.infrastructure?.aws?.version ?? "v2.11.1",
+        configSecret: {
+          name: awsSecretName,
+          namespace: awsSecretNamespace,
         },
-      ],
+      };
+    }
+
+    const defaultValues: Record<string, unknown> = {
+      // Portable by default; add cloud-specific tolerations via `values` if needed
+      // (e.g. GKE: components.gke.io/gke-managed-components).
+      tolerations: [],
       infrastructure: infrastructureProviders,
       core: {
         "cluster-api": {
-          version: this.config.core?.["cluster-api"]?.version ?? "v1.9.5",
+          version: this.config.core?.["cluster-api"]?.version ?? "v1.12.9",
         },
       },
       controlPlane: {
         k0smotron: {
-          version: this.config.controlPlane?.k0smotron?.version ?? "v1.7.0",
+          version: this.config.controlPlane?.k0smotron?.version ?? K0SMOTRON_VERSION,
           fetchConfig: {
             url: K0SMOTRON_FETCH_URLS.controlPlane,
           },
@@ -206,7 +273,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       },
       bootstrap: {
         k0smotron: {
-          version: this.config.bootstrap?.k0smotron?.version ?? "v1.7.0",
+          version: this.config.bootstrap?.k0smotron?.version ?? K0SMOTRON_VERSION,
           fetchConfig: {
             url: K0SMOTRON_FETCH_URLS.bootstrap,
           },
@@ -234,17 +301,16 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       };
     }
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
-
-    this.helm = new Helm(this, "helm", {
+    this.helm = this.createHelmRelease({
+      namespace: namespaceName,
       chart: "cluster-api-operator",
       releaseName: "capi-operator",
       repo:
         this.config.repository ??
         "https://kubernetes-sigs.github.io/cluster-api-operator",
-      version: this.config.version ?? "0.25.0",
-      namespace: namespaceName,
-      values: chartValues,
+      version: this.config.version ?? "0.27.0",
+      defaultValues,
+      values: this.config.values,
     });
 
     // The upstream chart annotates provider instances (CoreProvider,
@@ -270,6 +336,61 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
   }
 
   /**
+   * Create the credentials secret CAPA (Cluster API Provider AWS) reads.
+   *
+   * Mirrors the Hetzner pattern (a static secret) rather than the GCP
+   * XRD/Composition flow: the management cluster is cross-cloud (GKE / BYO k8s
+   * provisioning AWS), so IRSA is unavailable and Crossplane-minting a key would
+   * still require a bootstrap key. CAPA expects `AWS_B64ENCODED_CREDENTIALS` =
+   * base64 of an INI credentials file.
+   */
+  private setupAwsCredentials(capaNamespace: string): {
+    name: string;
+    namespace: string;
+  } {
+    const aws = this.config.aws!;
+    const secretName = aws.secretName ?? "aws-capa-credentials";
+    const secretNamespace = aws.secretNamespace ?? capaNamespace;
+
+    // Keyless: create the secret with an EMPTY credentials blob so CAPA finds no
+    // static key and falls through to the node instance profile (IMDS). The
+    // AWS_REGION key is still provided (CAPA needs the default region). An empty
+    // (no `[default]` section) shared-credentials file makes the SDK's shared
+    // provider return nothing and continue down the chain to the instance role.
+    if (aws.keyless) {
+      new kplus.Secret(this, "capa-credentials", {
+        metadata: { name: secretName, namespace: secretNamespace },
+        stringData: {
+          AWS_B64ENCODED_CREDENTIALS: toCapaB64(""),
+          AWS_REGION: aws.region,
+        },
+      });
+      return { name: secretName, namespace: secretNamespace };
+    }
+
+    // Only create the secret when explicit credentials are supplied; otherwise
+    // assume the named secret already exists in the cluster.
+    if (aws.accessKeyId && aws.secretAccessKey) {
+      const ini = buildCapaCredentialsIni({
+        accessKeyId: aws.accessKeyId,
+        secretAccessKey: aws.secretAccessKey,
+        region: aws.region,
+      });
+      const b64 = toCapaB64(ini);
+
+      new kplus.Secret(this, "capa-credentials", {
+        metadata: { name: secretName, namespace: secretNamespace },
+        stringData: {
+          AWS_B64ENCODED_CREDENTIALS: b64,
+          AWS_REGION: aws.region,
+        },
+      });
+    }
+
+    return { name: secretName, namespace: secretNamespace };
+  }
+
+  /**
    * Setup GCP IAM resources and credentials for CAPG controller
    * Uses Crossplane XRD + Composition to create ServiceAccountKey with proper secret key mapping
    */
@@ -278,7 +399,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     credentialsSecretName: string;
   } {
     const gcp = this.config.gcp!;
-    const projectId = gcp.projectId;
+    const projectId = gcp.gcpProject;
     const providerConfigRef = gcp.providerConfigRef ?? "default";
     const gsaName = gcp.gsaName ?? "capg-controller";
     const gsaEmail = `${gsaName}@${projectId}.iam.gserviceaccount.com`;
@@ -297,9 +418,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       new ServiceAccount(this, "capg-gsa", {
         metadata: {
           name: gsaName,
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "-3",
-          },
+          annotations: syncWave(-3),
         },
         spec: {
           forProvider: {
@@ -315,9 +434,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       new ProjectIamMember(this, "capg-compute-admin", {
         metadata: {
           name: `${gsaName}-compute-admin`,
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "-1",
-          },
+          annotations: syncWave(-1),
         },
         spec: {
           forProvider: {
@@ -334,9 +451,7 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       new ProjectIamMember(this, "capg-sa-user", {
         metadata: {
           name: `${gsaName}-sa-user`,
-          annotations: {
-            "argocd.argoproj.io/sync-wave": "-1",
-          },
+          annotations: syncWave(-1),
         },
         spec: {
           forProvider: {
@@ -356,9 +471,8 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
       kind: "XCapgCredentials",
       metadata: {
         name: "capg-credentials",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "0", // Create XR after XRD and Composition
-        },
+        // Create XR after XRD and Composition
+        annotations: syncWave(0),
       },
       spec: {
         serviceAccountEmail: gsaEmail,
@@ -381,9 +495,8 @@ export class ClusterApiOperator extends BaseConstruct<ClusterApiOperatorConfig> 
     new CompositeResourceDefinitionV2(this, "capg-credentials-xrd", {
       metadata: {
         name: "xcapgcredentials.nebula.io",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "-10", // Create XRD first
-        },
+        // Create XRD first
+        annotations: syncWave(-10),
       },
       spec: {
         group: "nebula.io",
@@ -459,9 +572,8 @@ data:
     new Composition(this, "capg-credentials-composition", {
       metadata: {
         name: "capg-credentials",
-        annotations: {
-          "argocd.argoproj.io/sync-wave": "-5", // Create Composition after XRD
-        },
+        // Create Composition after XRD
+        annotations: syncWave(-5),
       },
       spec: {
         compositeTypeRef: {

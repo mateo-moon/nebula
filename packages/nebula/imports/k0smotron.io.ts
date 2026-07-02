@@ -138,6 +138,13 @@ export interface ClusterSpec {
   readonly image?: string;
 
   /**
+   * Ingress defines the ingress configuration.
+   *
+   * @schema ClusterSpec#ingress
+   */
+  readonly ingress?: ClusterSpecIngress;
+
+  /**
    * k0sConfig defines the k0s configuration. Note, that some fields will be overwritten by k0smotron.
    * If empty, will be used default configuration. @see https://docs.k0sproject.io/stable/configuration/
    *
@@ -166,6 +173,15 @@ export interface ClusterSpec {
    * @schema ClusterSpec#kubeconfigRef
    */
   readonly kubeconfigRef?: ClusterSpecKubeconfigRef;
+
+  /**
+   * KubeconfigSecretMetadata specifies metadata (labels and annotations) to be propagated to the kubeconfig Secret
+   * created for the workload cluster.
+   * Note: This metadata will have precedence over default labels/annotations on the Secret.
+   *
+   * @schema ClusterSpec#kubeconfigSecretMetadata
+   */
+  readonly kubeconfigSecretMetadata?: ClusterSpecKubeconfigSecretMetadata;
 
   /**
    * Manifests allows to specify list of volumes with manifests to be
@@ -209,7 +225,8 @@ export interface ClusterSpec {
 
   /**
    * Replicas is the desired number of replicas of the k0s control planes.
-   * If unspecified, defaults to 1. If the value is above 1, k0smotron requires kine datasource URL to be set.
+   * If unspecified, defaults to 1. If the value is above 1, k0smotron requires kine datasource URL to be set
+   * (spec.kineDataSourceURL or spec.kineDataSourceSecretName).
    * Recommended value is 3.
    *
    * @schema ClusterSpec#replicas
@@ -239,7 +256,7 @@ export interface ClusterSpec {
 
   /**
    * TopologySpreadConstraints will be passed directly to BOTH etcd and k0s pods.
-   * See https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/ for more information.
+   * See https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/ for more details.
    *
    * @schema ClusterSpec#topologySpreadConstraints
    */
@@ -266,10 +283,12 @@ export function toJson_ClusterSpec(obj: ClusterSpec | undefined): Record<string,
     'etcd': toJson_ClusterSpecEtcd(obj.etcd),
     'externalAddress': obj.externalAddress,
     'image': obj.image,
+    'ingress': toJson_ClusterSpecIngress(obj.ingress),
     'k0sConfig': obj.k0SConfig,
     'kineDataSourceSecretName': obj.kineDataSourceSecretName,
     'kineDataSourceURL': obj.kineDataSourceUrl,
     'kubeconfigRef': toJson_ClusterSpecKubeconfigRef(obj.kubeconfigRef),
+    'kubeconfigSecretMetadata': toJson_ClusterSpecKubeconfigSecretMetadata(obj.kubeconfigSecretMetadata),
     'manifests': obj.manifests?.map(y => toJson_ClusterSpecManifests(y)),
     'monitoring': toJson_ClusterSpecMonitoring(obj.monitoring),
     'mounts': obj.mounts?.map(y => toJson_ClusterSpecMounts(y)),
@@ -287,6 +306,8 @@ export function toJson_ClusterSpec(obj: ClusterSpec | undefined): Record<string,
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * CertificateRef defines a reference to a certificate that should be included in the cluster configuration.
+ *
  * @schema ClusterSpecCertificateRefs
  */
 export interface ClusterSpecCertificateRefs {
@@ -385,6 +406,71 @@ export function toJson_ClusterSpecEtcd(obj: ClusterSpecEtcd | undefined): Record
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Ingress defines the ingress configuration.
+ *
+ * @schema ClusterSpecIngress
+ */
+export interface ClusterSpecIngress {
+  /**
+   * Annotations defines extra annotations to be added to the ingress controller service.
+   *
+   * @schema ClusterSpecIngress#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * @schema ClusterSpecIngress#apiHost
+   */
+  readonly apiHost: string;
+
+  /**
+   * ClassName defines the ingress class name to be used by the ingress controller.
+   *
+   * @schema ClusterSpecIngress#className
+   */
+  readonly className?: string;
+
+  /**
+   * Deploy defines whether to deploy an ingress resource for the cluster or let the user do it manually.
+   * Default: true
+   *
+   * @schema ClusterSpecIngress#deploy
+   */
+  readonly deploy?: boolean;
+
+  /**
+   * @schema ClusterSpecIngress#konnectivityHost
+   */
+  readonly konnectivityHost: string;
+
+  /**
+   * Port defines the port used by the ingress controller
+   *
+   * @schema ClusterSpecIngress#port
+   */
+  readonly port?: number;
+}
+
+/**
+ * Converts an object of type 'ClusterSpecIngress' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterSpecIngress(obj: ClusterSpecIngress | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'apiHost': obj.apiHost,
+    'className': obj.className,
+    'deploy': obj.deploy,
+    'konnectivityHost': obj.konnectivityHost,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
  * KubeconfigRef is the reference to the kubeconfig of the hosting cluster.
  * This kubeconfig will be used to deploy the k0s control plane.
  *
@@ -410,7 +496,7 @@ export interface ClusterSpecKubeconfigRef {
    *
    * @schema ClusterSpecKubeconfigRef#namespace
    */
-  readonly namespace?: string;
+  readonly namespace: string;
 }
 
 /**
@@ -430,6 +516,44 @@ export function toJson_ClusterSpecKubeconfigRef(obj: ClusterSpecKubeconfigRef | 
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * KubeconfigSecretMetadata specifies metadata (labels and annotations) to be propagated to the kubeconfig Secret
+ * created for the workload cluster.
+ * Note: This metadata will have precedence over default labels/annotations on the Secret.
+ *
+ * @schema ClusterSpecKubeconfigSecretMetadata
+ */
+export interface ClusterSpecKubeconfigSecretMetadata {
+  /**
+   * Annotations to be added to the bootstrap Secret
+   *
+   * @schema ClusterSpecKubeconfigSecretMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Labels to be added to the bootstrap Secret
+   *
+   * @schema ClusterSpecKubeconfigSecretMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterSpecKubeconfigSecretMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterSpecKubeconfigSecretMetadata(obj: ClusterSpecKubeconfigSecretMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
  * Volume represents a named volume in a pod that may be accessed by any container in the pod.
  *
  * @schema ClusterSpecManifests
@@ -438,6 +562,8 @@ export interface ClusterSpecManifests {
   /**
    * awsElasticBlockStore represents an AWS Disk resource that is attached to a
    * kubelet's host machine and then exposed to the pod.
+   * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+   * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
    *
    * @schema ClusterSpecManifests#awsElasticBlockStore
@@ -446,6 +572,8 @@ export interface ClusterSpecManifests {
 
   /**
    * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+   * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+   * are redirected to the disk.csi.azure.com CSI driver.
    *
    * @schema ClusterSpecManifests#azureDisk
    */
@@ -453,13 +581,16 @@ export interface ClusterSpecManifests {
 
   /**
    * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+   * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+   * are redirected to the file.csi.azure.com CSI driver.
    *
    * @schema ClusterSpecManifests#azureFile
    */
   readonly azureFile?: ClusterSpecManifestsAzureFile;
 
   /**
-   * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime
+   * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+   * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
    *
    * @schema ClusterSpecManifests#cephfs
    */
@@ -467,6 +598,8 @@ export interface ClusterSpecManifests {
 
   /**
    * cinder represents a cinder volume attached and mounted on kubelets host machine.
+   * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+   * are redirected to the cinder.csi.openstack.org CSI driver.
    * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
    *
    * @schema ClusterSpecManifests#cinder
@@ -481,7 +614,7 @@ export interface ClusterSpecManifests {
   readonly configMap?: ClusterSpecManifestsConfigMap;
 
   /**
-   * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers (Beta feature).
+   * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
    *
    * @schema ClusterSpecManifests#csi
    */
@@ -507,7 +640,6 @@ export interface ClusterSpecManifests {
    * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
    * and deleted when the pod is removed.
    *
-   *
    * Use this if:
    * a) the volume is only needed while the pod runs,
    * b) features of normal volumes like restoring from snapshot or capacity
@@ -518,16 +650,13 @@ export interface ClusterSpecManifests {
    * information on the connection between this volume type
    * and PersistentVolumeClaim).
    *
-   *
    * Use PersistentVolumeClaim or one of the vendor-specific
    * APIs for volumes that persist for longer than the lifecycle
    * of an individual pod.
    *
-   *
    * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
    * be used that way - see the documentation of the driver for
    * more information.
-   *
    *
    * A pod can use both types of ephemeral volumes and
    * persistent volumes at the same time.
@@ -546,13 +675,15 @@ export interface ClusterSpecManifests {
   /**
    * flexVolume represents a generic volume resource that is
    * provisioned/attached using an exec based plugin.
+   * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
    *
    * @schema ClusterSpecManifests#flexVolume
    */
   readonly flexVolume?: ClusterSpecManifestsFlexVolume;
 
   /**
-   * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running
+   * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+   * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
    *
    * @schema ClusterSpecManifests#flocker
    */
@@ -561,6 +692,8 @@ export interface ClusterSpecManifests {
   /**
    * gcePersistentDisk represents a GCE Disk resource that is attached to a
    * kubelet's host machine and then exposed to the pod.
+   * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+   * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
    *
    * @schema ClusterSpecManifests#gcePersistentDisk
@@ -569,7 +702,7 @@ export interface ClusterSpecManifests {
 
   /**
    * gitRepo represents a git repository at a particular revision.
-   * DEPRECATED: GitRepo is deprecated. To provision a container with a git repo, mount an
+   * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
    * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
    * into the Pod's container.
    *
@@ -579,7 +712,7 @@ export interface ClusterSpecManifests {
 
   /**
    * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
-   * More info: https://examples.k8s.io/volumes/glusterfs/README.md
+   * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
    *
    * @schema ClusterSpecManifests#glusterfs
    */
@@ -591,18 +724,35 @@ export interface ClusterSpecManifests {
    * used for system agents or other privileged things that are allowed
    * to see the host machine. Most containers will NOT need this.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-   * ---
-   * TODO(jonesdl) We need to restrict who can use host directory mounts and who can/can not
-   * mount host directories as read/write.
    *
    * @schema ClusterSpecManifests#hostPath
    */
   readonly hostPath?: ClusterSpecManifestsHostPath;
 
   /**
+   * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+   * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+   *
+   * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   *
+   * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+   * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+   * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+   * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+   * The volume will be mounted read-only (ro) and non-executable files (noexec).
+   * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+   * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+   *
+   * @schema ClusterSpecManifests#image
+   */
+  readonly image?: ClusterSpecManifestsImage;
+
+  /**
    * iscsi represents an ISCSI Disk resource that is attached to a
    * kubelet's host machine and then exposed to the pod.
-   * More info: https://examples.k8s.io/volumes/iscsi/README.md
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
    *
    * @schema ClusterSpecManifests#iscsi
    */
@@ -635,14 +785,18 @@ export interface ClusterSpecManifests {
   readonly persistentVolumeClaim?: ClusterSpecManifestsPersistentVolumeClaim;
 
   /**
-   * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine
+   * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+   * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
    *
    * @schema ClusterSpecManifests#photonPersistentDisk
    */
   readonly photonPersistentDisk?: ClusterSpecManifestsPhotonPersistentDisk;
 
   /**
-   * portworxVolume represents a portworx volume attached and mounted on kubelets host machine
+   * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+   * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+   * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+   * is on.
    *
    * @schema ClusterSpecManifests#portworxVolume
    */
@@ -656,7 +810,8 @@ export interface ClusterSpecManifests {
   readonly projected?: ClusterSpecManifestsProjected;
 
   /**
-   * quobyte represents a Quobyte mount on the host that shares a pod's lifetime
+   * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+   * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
    *
    * @schema ClusterSpecManifests#quobyte
    */
@@ -664,7 +819,7 @@ export interface ClusterSpecManifests {
 
   /**
    * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
-   * More info: https://examples.k8s.io/volumes/rbd/README.md
+   * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
    *
    * @schema ClusterSpecManifests#rbd
    */
@@ -672,6 +827,7 @@ export interface ClusterSpecManifests {
 
   /**
    * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+   * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
    *
    * @schema ClusterSpecManifests#scaleIO
    */
@@ -687,13 +843,16 @@ export interface ClusterSpecManifests {
 
   /**
    * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+   * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
    *
    * @schema ClusterSpecManifests#storageos
    */
   readonly storageos?: ClusterSpecManifestsStorageos;
 
   /**
-   * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine
+   * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+   * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+   * are redirected to the csi.vsphere.vmware.com CSI driver.
    *
    * @schema ClusterSpecManifests#vsphereVolume
    */
@@ -724,6 +883,7 @@ export function toJson_ClusterSpecManifests(obj: ClusterSpecManifests | undefine
     'gitRepo': toJson_ClusterSpecManifestsGitRepo(obj.gitRepo),
     'glusterfs': toJson_ClusterSpecManifestsGlusterfs(obj.glusterfs),
     'hostPath': toJson_ClusterSpecManifestsHostPath(obj.hostPath),
+    'image': toJson_ClusterSpecManifestsImage(obj.image),
     'iscsi': toJson_ClusterSpecManifestsIscsi(obj.iscsi),
     'name': obj.name,
     'nfs': toJson_ClusterSpecManifestsNfs(obj.nfs),
@@ -789,12 +949,17 @@ export function toJson_ClusterSpecMonitoring(obj: ClusterSpecMonitoring | undefi
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Mount defines a volume to be mounted in the control plane pod,
+ * along with the mount path and read-only flag.
+ *
  * @schema ClusterSpecMounts
  */
 export interface ClusterSpecMounts {
   /**
    * awsElasticBlockStore represents an AWS Disk resource that is attached to a
    * kubelet's host machine and then exposed to the pod.
+   * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+   * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
    *
    * @schema ClusterSpecMounts#awsElasticBlockStore
@@ -803,6 +968,8 @@ export interface ClusterSpecMounts {
 
   /**
    * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+   * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+   * are redirected to the disk.csi.azure.com CSI driver.
    *
    * @schema ClusterSpecMounts#azureDisk
    */
@@ -810,13 +977,16 @@ export interface ClusterSpecMounts {
 
   /**
    * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+   * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+   * are redirected to the file.csi.azure.com CSI driver.
    *
    * @schema ClusterSpecMounts#azureFile
    */
   readonly azureFile?: ClusterSpecMountsAzureFile;
 
   /**
-   * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime
+   * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+   * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
    *
    * @schema ClusterSpecMounts#cephfs
    */
@@ -824,6 +994,8 @@ export interface ClusterSpecMounts {
 
   /**
    * cinder represents a cinder volume attached and mounted on kubelets host machine.
+   * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+   * are redirected to the cinder.csi.openstack.org CSI driver.
    * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
    *
    * @schema ClusterSpecMounts#cinder
@@ -838,7 +1010,7 @@ export interface ClusterSpecMounts {
   readonly configMap?: ClusterSpecMountsConfigMap;
 
   /**
-   * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers (Beta feature).
+   * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
    *
    * @schema ClusterSpecMounts#csi
    */
@@ -864,7 +1036,6 @@ export interface ClusterSpecMounts {
    * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
    * and deleted when the pod is removed.
    *
-   *
    * Use this if:
    * a) the volume is only needed while the pod runs,
    * b) features of normal volumes like restoring from snapshot or capacity
@@ -875,16 +1046,13 @@ export interface ClusterSpecMounts {
    * information on the connection between this volume type
    * and PersistentVolumeClaim).
    *
-   *
    * Use PersistentVolumeClaim or one of the vendor-specific
    * APIs for volumes that persist for longer than the lifecycle
    * of an individual pod.
    *
-   *
    * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
    * be used that way - see the documentation of the driver for
    * more information.
-   *
    *
    * A pod can use both types of ephemeral volumes and
    * persistent volumes at the same time.
@@ -903,13 +1071,15 @@ export interface ClusterSpecMounts {
   /**
    * flexVolume represents a generic volume resource that is
    * provisioned/attached using an exec based plugin.
+   * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
    *
    * @schema ClusterSpecMounts#flexVolume
    */
   readonly flexVolume?: ClusterSpecMountsFlexVolume;
 
   /**
-   * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running
+   * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+   * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
    *
    * @schema ClusterSpecMounts#flocker
    */
@@ -918,6 +1088,8 @@ export interface ClusterSpecMounts {
   /**
    * gcePersistentDisk represents a GCE Disk resource that is attached to a
    * kubelet's host machine and then exposed to the pod.
+   * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+   * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
    *
    * @schema ClusterSpecMounts#gcePersistentDisk
@@ -926,7 +1098,7 @@ export interface ClusterSpecMounts {
 
   /**
    * gitRepo represents a git repository at a particular revision.
-   * DEPRECATED: GitRepo is deprecated. To provision a container with a git repo, mount an
+   * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
    * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
    * into the Pod's container.
    *
@@ -936,7 +1108,7 @@ export interface ClusterSpecMounts {
 
   /**
    * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
-   * More info: https://examples.k8s.io/volumes/glusterfs/README.md
+   * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
    *
    * @schema ClusterSpecMounts#glusterfs
    */
@@ -948,18 +1120,35 @@ export interface ClusterSpecMounts {
    * used for system agents or other privileged things that are allowed
    * to see the host machine. Most containers will NOT need this.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-   * ---
-   * TODO(jonesdl) We need to restrict who can use host directory mounts and who can/can not
-   * mount host directories as read/write.
    *
    * @schema ClusterSpecMounts#hostPath
    */
   readonly hostPath?: ClusterSpecMountsHostPath;
 
   /**
+   * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+   * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+   *
+   * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   *
+   * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+   * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+   * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+   * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+   * The volume will be mounted read-only (ro) and non-executable files (noexec).
+   * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+   * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+   *
+   * @schema ClusterSpecMounts#image
+   */
+  readonly image?: ClusterSpecMountsImage;
+
+  /**
    * iscsi represents an ISCSI Disk resource that is attached to a
    * kubelet's host machine and then exposed to the pod.
-   * More info: https://examples.k8s.io/volumes/iscsi/README.md
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
    *
    * @schema ClusterSpecMounts#iscsi
    */
@@ -988,14 +1177,18 @@ export interface ClusterSpecMounts {
   readonly persistentVolumeClaim?: ClusterSpecMountsPersistentVolumeClaim;
 
   /**
-   * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine
+   * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+   * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
    *
    * @schema ClusterSpecMounts#photonPersistentDisk
    */
   readonly photonPersistentDisk?: ClusterSpecMountsPhotonPersistentDisk;
 
   /**
-   * portworxVolume represents a portworx volume attached and mounted on kubelets host machine
+   * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+   * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+   * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+   * is on.
    *
    * @schema ClusterSpecMounts#portworxVolume
    */
@@ -1009,7 +1202,8 @@ export interface ClusterSpecMounts {
   readonly projected?: ClusterSpecMountsProjected;
 
   /**
-   * quobyte represents a Quobyte mount on the host that shares a pod's lifetime
+   * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+   * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
    *
    * @schema ClusterSpecMounts#quobyte
    */
@@ -1017,7 +1211,7 @@ export interface ClusterSpecMounts {
 
   /**
    * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
-   * More info: https://examples.k8s.io/volumes/rbd/README.md
+   * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
    *
    * @schema ClusterSpecMounts#rbd
    */
@@ -1032,6 +1226,7 @@ export interface ClusterSpecMounts {
 
   /**
    * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+   * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
    *
    * @schema ClusterSpecMounts#scaleIO
    */
@@ -1047,13 +1242,16 @@ export interface ClusterSpecMounts {
 
   /**
    * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+   * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
    *
    * @schema ClusterSpecMounts#storageos
    */
   readonly storageos?: ClusterSpecMountsStorageos;
 
   /**
-   * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine
+   * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+   * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+   * are redirected to the csi.vsphere.vmware.com CSI driver.
    *
    * @schema ClusterSpecMounts#vsphereVolume
    */
@@ -1084,6 +1282,7 @@ export function toJson_ClusterSpecMounts(obj: ClusterSpecMounts | undefined): Re
     'gitRepo': toJson_ClusterSpecMountsGitRepo(obj.gitRepo),
     'glusterfs': toJson_ClusterSpecMountsGlusterfs(obj.glusterfs),
     'hostPath': toJson_ClusterSpecMountsHostPath(obj.hostPath),
+    'image': toJson_ClusterSpecMountsImage(obj.image),
     'iscsi': toJson_ClusterSpecMountsIscsi(obj.iscsi),
     'nfs': toJson_ClusterSpecMountsNfs(obj.nfs),
     'path': obj.path,
@@ -1165,10 +1364,8 @@ export interface ClusterSpecResources {
    * Claims lists the names of resources, defined in spec.resourceClaims,
    * that are used by this container.
    *
-   *
-   * This is an alpha field and requires enabling the
+   * This field depends on the
    * DynamicResourceAllocation feature gate.
-   *
    *
    * This field is immutable. It can only be set for containers.
    *
@@ -1233,6 +1430,13 @@ export interface ClusterSpecService {
   readonly apiPort?: number;
 
   /**
+   * ExternalTrafficPolicy defines the external traffic policy for the service. Used only when service type is NodePort or LoadBalancer.
+   *
+   * @schema ClusterSpecService#externalTrafficPolicy
+   */
+  readonly externalTrafficPolicy?: ClusterSpecServiceExternalTrafficPolicy;
+
+  /**
    * KonnectivityPort defines the konnectivity port. If empty k0smotron
    * will pick it automatically.
    *
@@ -1271,6 +1475,7 @@ export function toJson_ClusterSpecService(obj: ClusterSpecService | undefined): 
   const result = {
     'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
     'apiPort': obj.apiPort,
+    'externalTrafficPolicy': obj.externalTrafficPolicy,
     'konnectivityPort': obj.konnectivityPort,
     'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
     'loadBalancerClass': obj.loadBalancerClass,
@@ -1305,7 +1510,6 @@ export interface ClusterSpecTopologySpreadConstraints {
    * MatchLabelKeys cannot be set when LabelSelector isn't set.
    * Keys that don't exist in the incoming pod labels will
    * be ignored. A null or empty list means only match against labelSelector.
-   *
    *
    * This is a beta field and requires the MatchLabelKeysInPodTopologySpread feature gate to be enabled (enabled by default).
    *
@@ -1348,7 +1552,6 @@ export interface ClusterSpecTopologySpreadConstraints {
    * Valid values are integers greater than 0.
    * When value is not nil, WhenUnsatisfiable must be DoNotSchedule.
    *
-   *
    * For example, in a 3-zone cluster, MaxSkew is set to 2, MinDomains is set to 5 and pods with the same
    * labelSelector spread as 2/2/2:
    * | zone1 | zone2 | zone3 |
@@ -1368,9 +1571,7 @@ export interface ClusterSpecTopologySpreadConstraints {
    * - Honor: only nodes matching nodeAffinity/nodeSelector are included in the calculations.
    * - Ignore: nodeAffinity/nodeSelector are ignored. All nodes are included in the calculations.
    *
-   *
    * If this value is nil, the behavior is equivalent to the Honor policy.
-   * This is a beta-level feature default enabled by the NodeInclusionPolicyInPodTopologySpread feature flag.
    *
    * @schema ClusterSpecTopologySpreadConstraints#nodeAffinityPolicy
    */
@@ -1383,9 +1584,7 @@ export interface ClusterSpecTopologySpreadConstraints {
    * has a toleration, are included.
    * - Ignore: node taints are ignored. All nodes are included.
    *
-   *
    * If this value is nil, the behavior is equivalent to the Ignore policy.
-   * This is a beta-level feature default enabled by the NodeInclusionPolicyInPodTopologySpread feature flag.
    *
    * @schema ClusterSpecTopologySpreadConstraints#nodeTaintsPolicy
    */
@@ -1533,14 +1732,14 @@ export function toJson_ClusterSpecEtcdDefragJob(obj: ClusterSpecEtcdDefragJob | 
  */
 export interface ClusterSpecEtcdPersistence {
   /**
-   * Size defines the size of the etcd volume. Default: 1Gi
+   * Size defines the size of the volume. Default: 1Gi
    *
    * @schema ClusterSpecEtcdPersistence#size
    */
   readonly size?: ClusterSpecEtcdPersistenceSize;
 
   /**
-   * StorageClass defines the storage class to be used for etcd persistence. If empty, will be used the default storage class.
+   * StorageClass defines the storage class to be used. If empty, the default storage class is used.
    *
    * @schema ClusterSpecEtcdPersistence#storageClass
    */
@@ -1572,10 +1771,8 @@ export interface ClusterSpecEtcdResources {
    * Claims lists the names of resources, defined in spec.resourceClaims,
    * that are used by this container.
    *
-   *
-   * This is an alpha field and requires enabling the
+   * This field depends on the
    * DynamicResourceAllocation feature gate.
-   *
    *
    * This field is immutable. It can only be set for containers.
    *
@@ -1621,6 +1818,8 @@ export function toJson_ClusterSpecEtcdResources(obj: ClusterSpecEtcdResources | 
 /**
  * awsElasticBlockStore represents an AWS Disk resource that is attached to a
  * kubelet's host machine and then exposed to the pod.
+ * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+ * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
  * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
  *
  * @schema ClusterSpecManifestsAwsElasticBlockStore
@@ -1631,7 +1830,6 @@ export interface ClusterSpecManifestsAwsElasticBlockStore {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecManifestsAwsElasticBlockStore#fsType
    */
@@ -1683,6 +1881,8 @@ export function toJson_ClusterSpecManifestsAwsElasticBlockStore(obj: ClusterSpec
 
 /**
  * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+ * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+ * are redirected to the disk.csi.azure.com CSI driver.
  *
  * @schema ClusterSpecManifestsAzureDisk
  */
@@ -1755,6 +1955,8 @@ export function toJson_ClusterSpecManifestsAzureDisk(obj: ClusterSpecManifestsAz
 
 /**
  * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+ * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+ * are redirected to the file.csi.azure.com CSI driver.
  *
  * @schema ClusterSpecManifestsAzureFile
  */
@@ -1799,7 +2001,8 @@ export function toJson_ClusterSpecManifestsAzureFile(obj: ClusterSpecManifestsAz
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime
+ * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+ * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
  *
  * @schema ClusterSpecManifestsCephfs
  */
@@ -1875,6 +2078,8 @@ export function toJson_ClusterSpecManifestsCephfs(obj: ClusterSpecManifestsCephf
 
 /**
  * cinder represents a cinder volume attached and mounted on kubelets host machine.
+ * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+ * are redirected to the cinder.csi.openstack.org CSI driver.
  * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
  *
  * @schema ClusterSpecManifestsCinder
@@ -1971,9 +2176,7 @@ export interface ClusterSpecManifestsConfigMap {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsConfigMap#name
    */
@@ -2005,7 +2208,7 @@ export function toJson_ClusterSpecManifestsConfigMap(obj: ClusterSpecManifestsCo
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers (Beta feature).
+ * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
  *
  * @schema ClusterSpecManifestsCsi
  */
@@ -2168,7 +2371,6 @@ export function toJson_ClusterSpecManifestsEmptyDir(obj: ClusterSpecManifestsEmp
  * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
  * and deleted when the pod is removed.
  *
- *
  * Use this if:
  * a) the volume is only needed while the pod runs,
  * b) features of normal volumes like restoring from snapshot or capacity
@@ -2179,16 +2381,13 @@ export function toJson_ClusterSpecManifestsEmptyDir(obj: ClusterSpecManifestsEmp
  * information on the connection between this volume type
  * and PersistentVolumeClaim).
  *
- *
  * Use PersistentVolumeClaim or one of the vendor-specific
  * APIs for volumes that persist for longer than the lifecycle
  * of an individual pod.
  *
- *
  * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
  * be used that way - see the documentation of the driver for
  * more information.
- *
  *
  * A pod can use both types of ephemeral volumes and
  * persistent volumes at the same time.
@@ -2205,7 +2404,6 @@ export interface ClusterSpecManifestsEphemeral {
    * entry. Pod validation will reject the pod if the concatenated name
    * is not valid for a PVC (for example, too long).
    *
-   *
    * An existing PVC with that name that is not owned by the pod
    * will *not* be used for the pod to avoid using an unrelated
    * volume by mistake. Starting the pod is then blocked until
@@ -2215,10 +2413,8 @@ export interface ClusterSpecManifestsEphemeral {
    * this should not be necessary, but it may be useful when
    * manually reconstructing a broken cluster.
    *
-   *
    * This field is read-only and no changes will be made by Kubernetes
    * to the PVC after it has been created.
-   *
    *
    * Required, must not be nil.
    *
@@ -2251,7 +2447,6 @@ export interface ClusterSpecManifestsFc {
    * fsType is the filesystem type to mount.
    * Must be a filesystem type supported by the host operating system.
    * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecManifestsFc#fsType
    */
@@ -2310,6 +2505,7 @@ export function toJson_ClusterSpecManifestsFc(obj: ClusterSpecManifestsFc | unde
 /**
  * flexVolume represents a generic volume resource that is
  * provisioned/attached using an exec based plugin.
+ * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
  *
  * @schema ClusterSpecManifestsFlexVolume
  */
@@ -2376,7 +2572,8 @@ export function toJson_ClusterSpecManifestsFlexVolume(obj: ClusterSpecManifestsF
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running
+ * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+ * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
  *
  * @schema ClusterSpecManifestsFlocker
  */
@@ -2415,6 +2612,8 @@ export function toJson_ClusterSpecManifestsFlocker(obj: ClusterSpecManifestsFloc
 /**
  * gcePersistentDisk represents a GCE Disk resource that is attached to a
  * kubelet's host machine and then exposed to the pod.
+ * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+ * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
  * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
  *
  * @schema ClusterSpecManifestsGcePersistentDisk
@@ -2425,7 +2624,6 @@ export interface ClusterSpecManifestsGcePersistentDisk {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecManifestsGcePersistentDisk#fsType
    */
@@ -2480,7 +2678,7 @@ export function toJson_ClusterSpecManifestsGcePersistentDisk(obj: ClusterSpecMan
 
 /**
  * gitRepo represents a git repository at a particular revision.
- * DEPRECATED: GitRepo is deprecated. To provision a container with a git repo, mount an
+ * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
  * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
  * into the Pod's container.
  *
@@ -2530,14 +2728,13 @@ export function toJson_ClusterSpecManifestsGitRepo(obj: ClusterSpecManifestsGitR
 
 /**
  * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
- * More info: https://examples.k8s.io/volumes/glusterfs/README.md
+ * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
  *
  * @schema ClusterSpecManifestsGlusterfs
  */
 export interface ClusterSpecManifestsGlusterfs {
   /**
    * endpoints is the endpoint name that details Glusterfs topology.
-   * More info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod
    *
    * @schema ClusterSpecManifestsGlusterfs#endpoints
    */
@@ -2584,9 +2781,6 @@ export function toJson_ClusterSpecManifestsGlusterfs(obj: ClusterSpecManifestsGl
  * used for system agents or other privileged things that are allowed
  * to see the host machine. Most containers will NOT need this.
  * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
- * ---
- * TODO(jonesdl) We need to restrict who can use host directory mounts and who can/can not
- * mount host directories as read/write.
  *
  * @schema ClusterSpecManifestsHostPath
  */
@@ -2627,9 +2821,68 @@ export function toJson_ClusterSpecManifestsHostPath(obj: ClusterSpecManifestsHos
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+ * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+ *
+ * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+ * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+ * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+ *
+ * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+ * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+ * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+ * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+ * The volume will be mounted read-only (ro) and non-executable files (noexec).
+ * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+ * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+ *
+ * @schema ClusterSpecManifestsImage
+ */
+export interface ClusterSpecManifestsImage {
+  /**
+   * Policy for pulling OCI objects. Possible values are:
+   * Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   * Defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
+   *
+   * @default Always if :latest tag is specified, or IfNotPresent otherwise.
+   * @schema ClusterSpecManifestsImage#pullPolicy
+   */
+  readonly pullPolicy?: string;
+
+  /**
+   * Required: Image or artifact reference to be used.
+   * Behaves in the same way as pod.spec.containers[*].image.
+   * Pull secrets will be assembled in the same way as for the container image by looking up node credentials, SA image pull secrets, and pod spec image pull secrets.
+   * More info: https://kubernetes.io/docs/concepts/containers/images
+   * This field is optional to allow higher level config management to default or override
+   * container images in workload controllers like Deployments and StatefulSets.
+   *
+   * @schema ClusterSpecManifestsImage#reference
+   */
+  readonly reference?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterSpecManifestsImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterSpecManifestsImage(obj: ClusterSpecManifestsImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'pullPolicy': obj.pullPolicy,
+    'reference': obj.reference,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
  * iscsi represents an ISCSI Disk resource that is attached to a
  * kubelet's host machine and then exposed to the pod.
- * More info: https://examples.k8s.io/volumes/iscsi/README.md
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
  *
  * @schema ClusterSpecManifestsIscsi
  */
@@ -2653,7 +2906,6 @@ export interface ClusterSpecManifestsIscsi {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecManifestsIscsi#fsType
    */
@@ -2839,7 +3091,8 @@ export function toJson_ClusterSpecManifestsPersistentVolumeClaim(obj: ClusterSpe
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine
+ * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+ * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
  *
  * @schema ClusterSpecManifestsPhotonPersistentDisk
  */
@@ -2877,7 +3130,10 @@ export function toJson_ClusterSpecManifestsPhotonPersistentDisk(obj: ClusterSpec
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * portworxVolume represents a portworx volume attached and mounted on kubelets host machine
+ * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+ * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+ * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+ * is on.
  *
  * @schema ClusterSpecManifestsPortworxVolume
  */
@@ -2942,7 +3198,8 @@ export interface ClusterSpecManifestsProjected {
   readonly defaultMode?: number;
 
   /**
-   * sources is the list of volume projections
+   * sources is the list of volume projections. Each entry in this list
+   * handles one source.
    *
    * @schema ClusterSpecManifestsProjected#sources
    */
@@ -2965,7 +3222,8 @@ export function toJson_ClusterSpecManifestsProjected(obj: ClusterSpecManifestsPr
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * quobyte represents a Quobyte mount on the host that shares a pod's lifetime
+ * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+ * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
  *
  * @schema ClusterSpecManifestsQuobyte
  */
@@ -3043,7 +3301,7 @@ export function toJson_ClusterSpecManifestsQuobyte(obj: ClusterSpecManifestsQuob
 
 /**
  * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
- * More info: https://examples.k8s.io/volumes/rbd/README.md
+ * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
  *
  * @schema ClusterSpecManifestsRbd
  */
@@ -3053,7 +3311,6 @@ export interface ClusterSpecManifestsRbd {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#rbd
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecManifestsRbd#fsType
    */
@@ -3150,6 +3407,7 @@ export function toJson_ClusterSpecManifestsRbd(obj: ClusterSpecManifestsRbd | un
 
 /**
  * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+ * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
  *
  * @schema ClusterSpecManifestsScaleIo
  */
@@ -3327,6 +3585,7 @@ export function toJson_ClusterSpecManifestsSecret(obj: ClusterSpecManifestsSecre
 
 /**
  * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+ * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
  *
  * @schema ClusterSpecManifestsStorageos
  */
@@ -3396,7 +3655,9 @@ export function toJson_ClusterSpecManifestsStorageos(obj: ClusterSpecManifestsSt
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine
+ * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+ * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+ * are redirected to the csi.vsphere.vmware.com CSI driver.
  *
  * @schema ClusterSpecManifestsVsphereVolume
  */
@@ -3452,6 +3713,8 @@ export function toJson_ClusterSpecManifestsVsphereVolume(obj: ClusterSpecManifes
 /**
  * awsElasticBlockStore represents an AWS Disk resource that is attached to a
  * kubelet's host machine and then exposed to the pod.
+ * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+ * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
  * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
  *
  * @schema ClusterSpecMountsAwsElasticBlockStore
@@ -3462,7 +3725,6 @@ export interface ClusterSpecMountsAwsElasticBlockStore {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecMountsAwsElasticBlockStore#fsType
    */
@@ -3514,6 +3776,8 @@ export function toJson_ClusterSpecMountsAwsElasticBlockStore(obj: ClusterSpecMou
 
 /**
  * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+ * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+ * are redirected to the disk.csi.azure.com CSI driver.
  *
  * @schema ClusterSpecMountsAzureDisk
  */
@@ -3586,6 +3850,8 @@ export function toJson_ClusterSpecMountsAzureDisk(obj: ClusterSpecMountsAzureDis
 
 /**
  * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+ * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+ * are redirected to the file.csi.azure.com CSI driver.
  *
  * @schema ClusterSpecMountsAzureFile
  */
@@ -3630,7 +3896,8 @@ export function toJson_ClusterSpecMountsAzureFile(obj: ClusterSpecMountsAzureFil
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime
+ * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+ * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
  *
  * @schema ClusterSpecMountsCephfs
  */
@@ -3706,6 +3973,8 @@ export function toJson_ClusterSpecMountsCephfs(obj: ClusterSpecMountsCephfs | un
 
 /**
  * cinder represents a cinder volume attached and mounted on kubelets host machine.
+ * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+ * are redirected to the cinder.csi.openstack.org CSI driver.
  * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
  *
  * @schema ClusterSpecMountsCinder
@@ -3802,9 +4071,7 @@ export interface ClusterSpecMountsConfigMap {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsConfigMap#name
    */
@@ -3836,7 +4103,7 @@ export function toJson_ClusterSpecMountsConfigMap(obj: ClusterSpecMountsConfigMa
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers (Beta feature).
+ * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
  *
  * @schema ClusterSpecMountsCsi
  */
@@ -3999,7 +4266,6 @@ export function toJson_ClusterSpecMountsEmptyDir(obj: ClusterSpecMountsEmptyDir 
  * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
  * and deleted when the pod is removed.
  *
- *
  * Use this if:
  * a) the volume is only needed while the pod runs,
  * b) features of normal volumes like restoring from snapshot or capacity
@@ -4010,16 +4276,13 @@ export function toJson_ClusterSpecMountsEmptyDir(obj: ClusterSpecMountsEmptyDir 
  * information on the connection between this volume type
  * and PersistentVolumeClaim).
  *
- *
  * Use PersistentVolumeClaim or one of the vendor-specific
  * APIs for volumes that persist for longer than the lifecycle
  * of an individual pod.
  *
- *
  * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
  * be used that way - see the documentation of the driver for
  * more information.
- *
  *
  * A pod can use both types of ephemeral volumes and
  * persistent volumes at the same time.
@@ -4036,7 +4299,6 @@ export interface ClusterSpecMountsEphemeral {
    * entry. Pod validation will reject the pod if the concatenated name
    * is not valid for a PVC (for example, too long).
    *
-   *
    * An existing PVC with that name that is not owned by the pod
    * will *not* be used for the pod to avoid using an unrelated
    * volume by mistake. Starting the pod is then blocked until
@@ -4046,10 +4308,8 @@ export interface ClusterSpecMountsEphemeral {
    * this should not be necessary, but it may be useful when
    * manually reconstructing a broken cluster.
    *
-   *
    * This field is read-only and no changes will be made by Kubernetes
    * to the PVC after it has been created.
-   *
    *
    * Required, must not be nil.
    *
@@ -4082,7 +4342,6 @@ export interface ClusterSpecMountsFc {
    * fsType is the filesystem type to mount.
    * Must be a filesystem type supported by the host operating system.
    * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecMountsFc#fsType
    */
@@ -4141,6 +4400,7 @@ export function toJson_ClusterSpecMountsFc(obj: ClusterSpecMountsFc | undefined)
 /**
  * flexVolume represents a generic volume resource that is
  * provisioned/attached using an exec based plugin.
+ * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
  *
  * @schema ClusterSpecMountsFlexVolume
  */
@@ -4207,7 +4467,8 @@ export function toJson_ClusterSpecMountsFlexVolume(obj: ClusterSpecMountsFlexVol
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running
+ * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+ * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
  *
  * @schema ClusterSpecMountsFlocker
  */
@@ -4246,6 +4507,8 @@ export function toJson_ClusterSpecMountsFlocker(obj: ClusterSpecMountsFlocker | 
 /**
  * gcePersistentDisk represents a GCE Disk resource that is attached to a
  * kubelet's host machine and then exposed to the pod.
+ * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+ * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
  * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
  *
  * @schema ClusterSpecMountsGcePersistentDisk
@@ -4256,7 +4519,6 @@ export interface ClusterSpecMountsGcePersistentDisk {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecMountsGcePersistentDisk#fsType
    */
@@ -4311,7 +4573,7 @@ export function toJson_ClusterSpecMountsGcePersistentDisk(obj: ClusterSpecMounts
 
 /**
  * gitRepo represents a git repository at a particular revision.
- * DEPRECATED: GitRepo is deprecated. To provision a container with a git repo, mount an
+ * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
  * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
  * into the Pod's container.
  *
@@ -4361,14 +4623,13 @@ export function toJson_ClusterSpecMountsGitRepo(obj: ClusterSpecMountsGitRepo | 
 
 /**
  * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
- * More info: https://examples.k8s.io/volumes/glusterfs/README.md
+ * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
  *
  * @schema ClusterSpecMountsGlusterfs
  */
 export interface ClusterSpecMountsGlusterfs {
   /**
    * endpoints is the endpoint name that details Glusterfs topology.
-   * More info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod
    *
    * @schema ClusterSpecMountsGlusterfs#endpoints
    */
@@ -4415,9 +4676,6 @@ export function toJson_ClusterSpecMountsGlusterfs(obj: ClusterSpecMountsGlusterf
  * used for system agents or other privileged things that are allowed
  * to see the host machine. Most containers will NOT need this.
  * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
- * ---
- * TODO(jonesdl) We need to restrict who can use host directory mounts and who can/can not
- * mount host directories as read/write.
  *
  * @schema ClusterSpecMountsHostPath
  */
@@ -4458,9 +4716,68 @@ export function toJson_ClusterSpecMountsHostPath(obj: ClusterSpecMountsHostPath 
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+ * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+ *
+ * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+ * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+ * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+ *
+ * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+ * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+ * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+ * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+ * The volume will be mounted read-only (ro) and non-executable files (noexec).
+ * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+ * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+ *
+ * @schema ClusterSpecMountsImage
+ */
+export interface ClusterSpecMountsImage {
+  /**
+   * Policy for pulling OCI objects. Possible values are:
+   * Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   * Defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
+   *
+   * @default Always if :latest tag is specified, or IfNotPresent otherwise.
+   * @schema ClusterSpecMountsImage#pullPolicy
+   */
+  readonly pullPolicy?: string;
+
+  /**
+   * Required: Image or artifact reference to be used.
+   * Behaves in the same way as pod.spec.containers[*].image.
+   * Pull secrets will be assembled in the same way as for the container image by looking up node credentials, SA image pull secrets, and pod spec image pull secrets.
+   * More info: https://kubernetes.io/docs/concepts/containers/images
+   * This field is optional to allow higher level config management to default or override
+   * container images in workload controllers like Deployments and StatefulSets.
+   *
+   * @schema ClusterSpecMountsImage#reference
+   */
+  readonly reference?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterSpecMountsImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterSpecMountsImage(obj: ClusterSpecMountsImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'pullPolicy': obj.pullPolicy,
+    'reference': obj.reference,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
  * iscsi represents an ISCSI Disk resource that is attached to a
  * kubelet's host machine and then exposed to the pod.
- * More info: https://examples.k8s.io/volumes/iscsi/README.md
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
  *
  * @schema ClusterSpecMountsIscsi
  */
@@ -4484,7 +4801,6 @@ export interface ClusterSpecMountsIscsi {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecMountsIscsi#fsType
    */
@@ -4670,7 +4986,8 @@ export function toJson_ClusterSpecMountsPersistentVolumeClaim(obj: ClusterSpecMo
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine
+ * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+ * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
  *
  * @schema ClusterSpecMountsPhotonPersistentDisk
  */
@@ -4708,7 +5025,10 @@ export function toJson_ClusterSpecMountsPhotonPersistentDisk(obj: ClusterSpecMou
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * portworxVolume represents a portworx volume attached and mounted on kubelets host machine
+ * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+ * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+ * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+ * is on.
  *
  * @schema ClusterSpecMountsPortworxVolume
  */
@@ -4773,7 +5093,8 @@ export interface ClusterSpecMountsProjected {
   readonly defaultMode?: number;
 
   /**
-   * sources is the list of volume projections
+   * sources is the list of volume projections. Each entry in this list
+   * handles one source.
    *
    * @schema ClusterSpecMountsProjected#sources
    */
@@ -4796,7 +5117,8 @@ export function toJson_ClusterSpecMountsProjected(obj: ClusterSpecMountsProjecte
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * quobyte represents a Quobyte mount on the host that shares a pod's lifetime
+ * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+ * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
  *
  * @schema ClusterSpecMountsQuobyte
  */
@@ -4874,7 +5196,7 @@ export function toJson_ClusterSpecMountsQuobyte(obj: ClusterSpecMountsQuobyte | 
 
 /**
  * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
- * More info: https://examples.k8s.io/volumes/rbd/README.md
+ * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
  *
  * @schema ClusterSpecMountsRbd
  */
@@ -4884,7 +5206,6 @@ export interface ClusterSpecMountsRbd {
    * Tip: Ensure that the filesystem type is supported by the host operating system.
    * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
    * More info: https://kubernetes.io/docs/concepts/storage/volumes#rbd
-   * TODO: how do we prevent errors in the filesystem from compromising the machine
    *
    * @schema ClusterSpecMountsRbd#fsType
    */
@@ -4981,6 +5302,7 @@ export function toJson_ClusterSpecMountsRbd(obj: ClusterSpecMountsRbd | undefine
 
 /**
  * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+ * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
  *
  * @schema ClusterSpecMountsScaleIo
  */
@@ -5158,6 +5480,7 @@ export function toJson_ClusterSpecMountsSecret(obj: ClusterSpecMountsSecret | un
 
 /**
  * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+ * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
  *
  * @schema ClusterSpecMountsStorageos
  */
@@ -5227,7 +5550,9 @@ export function toJson_ClusterSpecMountsStorageos(obj: ClusterSpecMountsStorageo
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine
+ * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+ * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+ * are redirected to the csi.vsphere.vmware.com CSI driver.
  *
  * @schema ClusterSpecMountsVsphereVolume
  */
@@ -5365,6 +5690,15 @@ export interface ClusterSpecResourcesClaims {
    * @schema ClusterSpecResourcesClaims#name
    */
   readonly name: string;
+
+  /**
+   * Request is the name chosen for a request in the referenced claim.
+   * If empty, everything from the claim is made available, otherwise
+   * only the result of this request.
+   *
+   * @schema ClusterSpecResourcesClaims#request
+   */
+  readonly request?: string;
 }
 
 /**
@@ -5375,6 +5709,7 @@ export function toJson_ClusterSpecResourcesClaims(obj: ClusterSpecResourcesClaim
   if (obj === undefined) { return undefined; }
   const result = {
     'name': obj.name,
+    'request': obj.request,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -5407,6 +5742,18 @@ export class ClusterSpecResourcesRequests {
   }
   private constructor(public readonly value: number | string) {
   }
+}
+
+/**
+ * ExternalTrafficPolicy defines the external traffic policy for the service. Used only when service type is NodePort or LoadBalancer.
+ *
+ * @schema ClusterSpecServiceExternalTrafficPolicy
+ */
+export enum ClusterSpecServiceExternalTrafficPolicy {
+  /** Cluster */
+  CLUSTER = "Cluster",
+  /** Local */
+  LOCAL = "Local",
 }
 
 /**
@@ -5464,7 +5811,7 @@ export function toJson_ClusterSpecTopologySpreadConstraintsLabelSelector(obj: Cl
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Size defines the size of the etcd volume. Default: 1Gi
+ * Size defines the size of the volume. Default: 1Gi
  *
  * @schema ClusterSpecEtcdPersistenceSize
  */
@@ -5493,6 +5840,15 @@ export interface ClusterSpecEtcdResourcesClaims {
    * @schema ClusterSpecEtcdResourcesClaims#name
    */
   readonly name: string;
+
+  /**
+   * Request is the name chosen for a request in the referenced claim.
+   * If empty, everything from the claim is made available, otherwise
+   * only the result of this request.
+   *
+   * @schema ClusterSpecEtcdResourcesClaims#request
+   */
+  readonly request?: string;
 }
 
 /**
@@ -5503,6 +5859,7 @@ export function toJson_ClusterSpecEtcdResourcesClaims(obj: ClusterSpecEtcdResour
   if (obj === undefined) { return undefined; }
   const result = {
     'name': obj.name,
+    'request': obj.request,
   };
   // filter undefined values
   return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
@@ -5549,9 +5906,7 @@ export interface ClusterSpecManifestsCephfsSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsCephfsSecretRef#name
    */
@@ -5584,9 +5939,7 @@ export interface ClusterSpecManifestsCinderSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsCinderSecretRef#name
    */
@@ -5674,9 +6027,7 @@ export interface ClusterSpecManifestsCsiNodePublishSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsCsiNodePublishSecretRef#name
    */
@@ -5785,7 +6136,6 @@ export class ClusterSpecManifestsEmptyDirSizeLimit {
  * entry. Pod validation will reject the pod if the concatenated name
  * is not valid for a PVC (for example, too long).
  *
- *
  * An existing PVC with that name that is not owned by the pod
  * will *not* be used for the pod to avoid using an unrelated
  * volume by mistake. Starting the pod is then blocked until
@@ -5795,10 +6145,8 @@ export class ClusterSpecManifestsEmptyDirSizeLimit {
  * this should not be necessary, but it may be useful when
  * manually reconstructing a broken cluster.
  *
- *
  * This field is read-only and no changes will be made by Kubernetes
  * to the PVC after it has been created.
- *
  *
  * Required, must not be nil.
  *
@@ -5855,9 +6203,7 @@ export interface ClusterSpecManifestsFlexVolumeSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsFlexVolumeSecretRef#name
    */
@@ -5889,9 +6235,7 @@ export interface ClusterSpecManifestsIscsiSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsIscsiSecretRef#name
    */
@@ -5913,7 +6257,8 @@ export function toJson_ClusterSpecManifestsIscsiSecretRef(obj: ClusterSpecManife
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Projection that may be projected along with other supported volume types
+ * Projection that may be projected along with other supported volume types.
+ * Exactly one of these fields must be set.
  *
  * @schema ClusterSpecManifestsProjectedSources
  */
@@ -5922,13 +6267,10 @@ export interface ClusterSpecManifestsProjectedSources {
    * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
    * of ClusterTrustBundle objects in an auto-updating file.
    *
-   *
    * Alpha, gated by the ClusterTrustBundleProjection feature gate.
-   *
    *
    * ClusterTrustBundle objects can either be selected by name, or by the
    * combination of signer name and a label selector.
-   *
    *
    * Kubelet performs aggressive normalization of the PEM contents written
    * into the pod filesystem.  Esoteric PEM features such as inter-block
@@ -5955,6 +6297,46 @@ export interface ClusterSpecManifestsProjectedSources {
   readonly downwardApi?: ClusterSpecManifestsProjectedSourcesDownwardApi;
 
   /**
+   * Projects an auto-rotating credential bundle (private key and certificate
+   * chain) that the pod can use either as a TLS client or server.
+   *
+   * Kubelet generates a private key and uses it to send a
+   * PodCertificateRequest to the named signer.  Once the signer approves the
+   * request and issues a certificate chain, Kubelet writes the key and
+   * certificate chain to the pod filesystem.  The pod does not start until
+   * certificates have been issued for each podCertificate projected volume
+   * source in its spec.
+   *
+   * Kubelet will begin trying to rotate the certificate at the time indicated
+   * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+   * timestamp.
+   *
+   * Kubelet can write a single file, indicated by the credentialBundlePath
+   * field, or separate files, indicated by the keyPath and
+   * certificateChainPath fields.
+   *
+   * The credential bundle is a single file in PEM format.  The first PEM
+   * entry is the private key (in PKCS#8 format), and the remaining PEM
+   * entries are the certificate chain issued by the signer (typically,
+   * signers will return their certificate chain in leaf-to-root order).
+   *
+   * Prefer using the credential bundle format, since your application code
+   * can read it atomically.  If you use keyPath and certificateChainPath,
+   * your application must make two separate file reads. If these coincide
+   * with a certificate rotation, it is possible that the private key and leaf
+   * certificate you read may not correspond to each other.  Your application
+   * will need to check for this condition, and re-read until they are
+   * consistent.
+   *
+   * The named signer controls chooses the format of the certificate it
+   * issues; consult the signer implementation's documentation to learn how to
+   * use the certificates it issues.
+   *
+   * @schema ClusterSpecManifestsProjectedSources#podCertificate
+   */
+  readonly podCertificate?: ClusterSpecManifestsProjectedSourcesPodCertificate;
+
+  /**
    * secret information about the secret data to project
    *
    * @schema ClusterSpecManifestsProjectedSources#secret
@@ -5979,6 +6361,7 @@ export function toJson_ClusterSpecManifestsProjectedSources(obj: ClusterSpecMani
     'clusterTrustBundle': toJson_ClusterSpecManifestsProjectedSourcesClusterTrustBundle(obj.clusterTrustBundle),
     'configMap': toJson_ClusterSpecManifestsProjectedSourcesConfigMap(obj.configMap),
     'downwardAPI': toJson_ClusterSpecManifestsProjectedSourcesDownwardApi(obj.downwardApi),
+    'podCertificate': toJson_ClusterSpecManifestsProjectedSourcesPodCertificate(obj.podCertificate),
     'secret': toJson_ClusterSpecManifestsProjectedSourcesSecret(obj.secret),
     'serviceAccountToken': toJson_ClusterSpecManifestsProjectedSourcesServiceAccountToken(obj.serviceAccountToken),
   };
@@ -6002,9 +6385,7 @@ export interface ClusterSpecManifestsRbdSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsRbdSecretRef#name
    */
@@ -6037,9 +6418,7 @@ export interface ClusterSpecManifestsScaleIoSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsScaleIoSecretRef#name
    */
@@ -6124,9 +6503,7 @@ export interface ClusterSpecManifestsStorageosSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsStorageosSecretRef#name
    */
@@ -6159,9 +6536,7 @@ export interface ClusterSpecMountsCephfsSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsCephfsSecretRef#name
    */
@@ -6194,9 +6569,7 @@ export interface ClusterSpecMountsCinderSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsCinderSecretRef#name
    */
@@ -6284,9 +6657,7 @@ export interface ClusterSpecMountsCsiNodePublishSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsCsiNodePublishSecretRef#name
    */
@@ -6395,7 +6766,6 @@ export class ClusterSpecMountsEmptyDirSizeLimit {
  * entry. Pod validation will reject the pod if the concatenated name
  * is not valid for a PVC (for example, too long).
  *
- *
  * An existing PVC with that name that is not owned by the pod
  * will *not* be used for the pod to avoid using an unrelated
  * volume by mistake. Starting the pod is then blocked until
@@ -6405,10 +6775,8 @@ export class ClusterSpecMountsEmptyDirSizeLimit {
  * this should not be necessary, but it may be useful when
  * manually reconstructing a broken cluster.
  *
- *
  * This field is read-only and no changes will be made by Kubernetes
  * to the PVC after it has been created.
- *
  *
  * Required, must not be nil.
  *
@@ -6465,9 +6833,7 @@ export interface ClusterSpecMountsFlexVolumeSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsFlexVolumeSecretRef#name
    */
@@ -6499,9 +6865,7 @@ export interface ClusterSpecMountsIscsiSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsIscsiSecretRef#name
    */
@@ -6523,7 +6887,8 @@ export function toJson_ClusterSpecMountsIscsiSecretRef(obj: ClusterSpecMountsIsc
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
- * Projection that may be projected along with other supported volume types
+ * Projection that may be projected along with other supported volume types.
+ * Exactly one of these fields must be set.
  *
  * @schema ClusterSpecMountsProjectedSources
  */
@@ -6532,13 +6897,10 @@ export interface ClusterSpecMountsProjectedSources {
    * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
    * of ClusterTrustBundle objects in an auto-updating file.
    *
-   *
    * Alpha, gated by the ClusterTrustBundleProjection feature gate.
-   *
    *
    * ClusterTrustBundle objects can either be selected by name, or by the
    * combination of signer name and a label selector.
-   *
    *
    * Kubelet performs aggressive normalization of the PEM contents written
    * into the pod filesystem.  Esoteric PEM features such as inter-block
@@ -6565,6 +6927,46 @@ export interface ClusterSpecMountsProjectedSources {
   readonly downwardApi?: ClusterSpecMountsProjectedSourcesDownwardApi;
 
   /**
+   * Projects an auto-rotating credential bundle (private key and certificate
+   * chain) that the pod can use either as a TLS client or server.
+   *
+   * Kubelet generates a private key and uses it to send a
+   * PodCertificateRequest to the named signer.  Once the signer approves the
+   * request and issues a certificate chain, Kubelet writes the key and
+   * certificate chain to the pod filesystem.  The pod does not start until
+   * certificates have been issued for each podCertificate projected volume
+   * source in its spec.
+   *
+   * Kubelet will begin trying to rotate the certificate at the time indicated
+   * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+   * timestamp.
+   *
+   * Kubelet can write a single file, indicated by the credentialBundlePath
+   * field, or separate files, indicated by the keyPath and
+   * certificateChainPath fields.
+   *
+   * The credential bundle is a single file in PEM format.  The first PEM
+   * entry is the private key (in PKCS#8 format), and the remaining PEM
+   * entries are the certificate chain issued by the signer (typically,
+   * signers will return their certificate chain in leaf-to-root order).
+   *
+   * Prefer using the credential bundle format, since your application code
+   * can read it atomically.  If you use keyPath and certificateChainPath,
+   * your application must make two separate file reads. If these coincide
+   * with a certificate rotation, it is possible that the private key and leaf
+   * certificate you read may not correspond to each other.  Your application
+   * will need to check for this condition, and re-read until they are
+   * consistent.
+   *
+   * The named signer controls chooses the format of the certificate it
+   * issues; consult the signer implementation's documentation to learn how to
+   * use the certificates it issues.
+   *
+   * @schema ClusterSpecMountsProjectedSources#podCertificate
+   */
+  readonly podCertificate?: ClusterSpecMountsProjectedSourcesPodCertificate;
+
+  /**
    * secret information about the secret data to project
    *
    * @schema ClusterSpecMountsProjectedSources#secret
@@ -6589,6 +6991,7 @@ export function toJson_ClusterSpecMountsProjectedSources(obj: ClusterSpecMountsP
     'clusterTrustBundle': toJson_ClusterSpecMountsProjectedSourcesClusterTrustBundle(obj.clusterTrustBundle),
     'configMap': toJson_ClusterSpecMountsProjectedSourcesConfigMap(obj.configMap),
     'downwardAPI': toJson_ClusterSpecMountsProjectedSourcesDownwardApi(obj.downwardApi),
+    'podCertificate': toJson_ClusterSpecMountsProjectedSourcesPodCertificate(obj.podCertificate),
     'secret': toJson_ClusterSpecMountsProjectedSourcesSecret(obj.secret),
     'serviceAccountToken': toJson_ClusterSpecMountsProjectedSourcesServiceAccountToken(obj.serviceAccountToken),
   };
@@ -6612,9 +7015,7 @@ export interface ClusterSpecMountsRbdSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsRbdSecretRef#name
    */
@@ -6647,9 +7048,7 @@ export interface ClusterSpecMountsScaleIoSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsScaleIoSecretRef#name
    */
@@ -6734,9 +7133,7 @@ export interface ClusterSpecMountsStorageosSecretRef {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsStorageosSecretRef#name
    */
@@ -6896,15 +7293,13 @@ export interface ClusterSpecPersistencePersistentVolumeClaimSpec {
    * volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.
    * If specified, the CSI driver will create or update the volume with the attributes defined
    * in the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,
-   * it can be changed after the claim is created. An empty string value means that no VolumeAttributesClass
-   * will be applied to the claim but it's not allowed to reset this field to empty string once it is set.
-   * If unspecified and the PersistentVolumeClaim is unbound, the default VolumeAttributesClass
-   * will be set by the persistentvolume controller if it exists.
+   * it can be changed after the claim is created. An empty string or nil value indicates that no
+   * VolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,
+   * this field can be reset to its previous value (including nil) to cancel the modification.
    * If the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be
    * set to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource
    * exists.
    * More info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/
-   * (Alpha) Using this field requires the VolumeAttributesClass feature gate to be enabled.
    *
    * @schema ClusterSpecPersistencePersistentVolumeClaimSpec#volumeAttributesClassName
    */
@@ -6973,7 +7368,6 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatus {
    * Apart from above values - keys that are unprefixed or have kubernetes.io prefix are considered
    * reserved and hence may not be used.
    *
-   *
    * ClaimResourceStatus can be in any of following states:
    * - ControllerResizeInProgress:
    * State set when resize controller starts resizing the volume in control-plane.
@@ -6995,12 +7389,10 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatus {
    * - pvc.status.allocatedResourceStatus['storage'] = "NodeResizeFailed"
    * When this field is not set, it means that no resize operation is in progress for the given PVC.
    *
-   *
    * A controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus
    * should ignore the update for the purpose it was designed. For example - a controller that
    * only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid
    * resources associated with PVC.
-   *
    *
    * This is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.
    *
@@ -7017,7 +7409,6 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatus {
    * Apart from above values - keys that are unprefixed or have kubernetes.io prefix are considered
    * reserved and hence may not be used.
    *
-   *
    * Capacity reported here may be larger than the actual capacity when a volume expansion operation
    * is requested.
    * For storage quota, the larger value from allocatedResources and PVC.spec.resources is used.
@@ -7026,12 +7417,10 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatus {
    * lowered if there are no expansion operations in progress and if the actual volume capacity
    * is equal or lower than the requested capacity.
    *
-   *
    * A controller that receives PVC update with previously unknown resourceName
    * should ignore the update for the purpose it was designed. For example - a controller that
    * only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid
    * resources associated with PVC.
-   *
    *
    * This is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.
    *
@@ -7057,7 +7446,6 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatus {
   /**
    * currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.
    * When unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim
-   * This is an alpha field and requires enabling VolumeAttributesClass feature.
    *
    * @schema ClusterSpecPersistencePersistentVolumeClaimStatus#currentVolumeAttributesClassName
    */
@@ -7066,7 +7454,6 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatus {
   /**
    * ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.
    * When this is unset, there is no ModifyVolume operation being attempted.
-   * This is an alpha field and requires enabling VolumeAttributesClass feature.
    *
    * @schema ClusterSpecPersistencePersistentVolumeClaimStatus#modifyVolumeStatus
    */
@@ -7373,15 +7760,13 @@ export interface ClusterSpecManifestsEphemeralVolumeClaimTemplateSpec {
    * volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.
    * If specified, the CSI driver will create or update the volume with the attributes defined
    * in the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,
-   * it can be changed after the claim is created. An empty string value means that no VolumeAttributesClass
-   * will be applied to the claim but it's not allowed to reset this field to empty string once it is set.
-   * If unspecified and the PersistentVolumeClaim is unbound, the default VolumeAttributesClass
-   * will be set by the persistentvolume controller if it exists.
+   * it can be changed after the claim is created. An empty string or nil value indicates that no
+   * VolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,
+   * this field can be reset to its previous value (including nil) to cancel the modification.
    * If the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be
    * set to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource
    * exists.
    * More info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/
-   * (Alpha) Using this field requires the VolumeAttributesClass feature gate to be enabled.
    *
    * @schema ClusterSpecManifestsEphemeralVolumeClaimTemplateSpec#volumeAttributesClassName
    */
@@ -7429,13 +7814,10 @@ export function toJson_ClusterSpecManifestsEphemeralVolumeClaimTemplateSpec(obj:
  * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
  * of ClusterTrustBundle objects in an auto-updating file.
  *
- *
  * Alpha, gated by the ClusterTrustBundleProjection feature gate.
- *
  *
  * ClusterTrustBundle objects can either be selected by name, or by the
  * combination of signer name and a label selector.
- *
  *
  * Kubelet performs aggressive normalization of the PEM contents written
  * into the pod filesystem.  Esoteric PEM features such as inter-block
@@ -7534,9 +7916,7 @@ export interface ClusterSpecManifestsProjectedSourcesConfigMap {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsProjectedSourcesConfigMap#name
    */
@@ -7595,6 +7975,146 @@ export function toJson_ClusterSpecManifestsProjectedSourcesDownwardApi(obj: Clus
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Projects an auto-rotating credential bundle (private key and certificate
+ * chain) that the pod can use either as a TLS client or server.
+ *
+ * Kubelet generates a private key and uses it to send a
+ * PodCertificateRequest to the named signer.  Once the signer approves the
+ * request and issues a certificate chain, Kubelet writes the key and
+ * certificate chain to the pod filesystem.  The pod does not start until
+ * certificates have been issued for each podCertificate projected volume
+ * source in its spec.
+ *
+ * Kubelet will begin trying to rotate the certificate at the time indicated
+ * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+ * timestamp.
+ *
+ * Kubelet can write a single file, indicated by the credentialBundlePath
+ * field, or separate files, indicated by the keyPath and
+ * certificateChainPath fields.
+ *
+ * The credential bundle is a single file in PEM format.  The first PEM
+ * entry is the private key (in PKCS#8 format), and the remaining PEM
+ * entries are the certificate chain issued by the signer (typically,
+ * signers will return their certificate chain in leaf-to-root order).
+ *
+ * Prefer using the credential bundle format, since your application code
+ * can read it atomically.  If you use keyPath and certificateChainPath,
+ * your application must make two separate file reads. If these coincide
+ * with a certificate rotation, it is possible that the private key and leaf
+ * certificate you read may not correspond to each other.  Your application
+ * will need to check for this condition, and re-read until they are
+ * consistent.
+ *
+ * The named signer controls chooses the format of the certificate it
+ * issues; consult the signer implementation's documentation to learn how to
+ * use the certificates it issues.
+ *
+ * @schema ClusterSpecManifestsProjectedSourcesPodCertificate
+ */
+export interface ClusterSpecManifestsProjectedSourcesPodCertificate {
+  /**
+   * Write the certificate chain at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterSpecManifestsProjectedSourcesPodCertificate#certificateChainPath
+   */
+  readonly certificateChainPath?: string;
+
+  /**
+   * Write the credential bundle at this path in the projected volume.
+   *
+   * The credential bundle is a single file that contains multiple PEM blocks.
+   * The first PEM block is a PRIVATE KEY block, containing a PKCS#8 private
+   * key.
+   *
+   * The remaining blocks are CERTIFICATE blocks, containing the issued
+   * certificate chain from the signer (leaf and any intermediates).
+   *
+   * Using credentialBundlePath lets your Pod's application code make a single
+   * atomic read that retrieves a consistent key and certificate chain.  If you
+   * project them to separate files, your application code will need to
+   * additionally check that the leaf certificate was issued to the key.
+   *
+   * @schema ClusterSpecManifestsProjectedSourcesPodCertificate#credentialBundlePath
+   */
+  readonly credentialBundlePath?: string;
+
+  /**
+   * Write the key at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterSpecManifestsProjectedSourcesPodCertificate#keyPath
+   */
+  readonly keyPath?: string;
+
+  /**
+   * The type of keypair Kubelet will generate for the pod.
+   *
+   * Valid values are "RSA3072", "RSA4096", "ECDSAP256", "ECDSAP384",
+   * "ECDSAP521", and "ED25519".
+   *
+   * @schema ClusterSpecManifestsProjectedSourcesPodCertificate#keyType
+   */
+  readonly keyType: string;
+
+  /**
+   * maxExpirationSeconds is the maximum lifetime permitted for the
+   * certificate.
+   *
+   * Kubelet copies this value verbatim into the PodCertificateRequests it
+   * generates for this projection.
+   *
+   * If omitted, kube-apiserver will set it to 86400(24 hours). kube-apiserver
+   * will reject values shorter than 3600 (1 hour).  The maximum allowable
+   * value is 7862400 (91 days).
+   *
+   * The signer implementation is then free to issue a certificate with any
+   * lifetime *shorter* than MaxExpirationSeconds, but no shorter than 3600
+   * seconds (1 hour).  This constraint is enforced by kube-apiserver.
+   * `kubernetes.io` signers will never issue certificates with a lifetime
+   * longer than 24 hours.
+   *
+   * @schema ClusterSpecManifestsProjectedSourcesPodCertificate#maxExpirationSeconds
+   */
+  readonly maxExpirationSeconds?: number;
+
+  /**
+   * Kubelet's generated CSRs will be addressed to this signer.
+   *
+   * @schema ClusterSpecManifestsProjectedSourcesPodCertificate#signerName
+   */
+  readonly signerName: string;
+}
+
+/**
+ * Converts an object of type 'ClusterSpecManifestsProjectedSourcesPodCertificate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterSpecManifestsProjectedSourcesPodCertificate(obj: ClusterSpecManifestsProjectedSourcesPodCertificate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateChainPath': obj.certificateChainPath,
+    'credentialBundlePath': obj.credentialBundlePath,
+    'keyPath': obj.keyPath,
+    'keyType': obj.keyType,
+    'maxExpirationSeconds': obj.maxExpirationSeconds,
+    'signerName': obj.signerName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
  * secret information about the secret data to project
  *
  * @schema ClusterSpecManifestsProjectedSourcesSecret
@@ -7618,9 +8138,7 @@ export interface ClusterSpecManifestsProjectedSourcesSecret {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecManifestsProjectedSourcesSecret#name
    */
@@ -7927,15 +8445,13 @@ export interface ClusterSpecMountsEphemeralVolumeClaimTemplateSpec {
    * volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.
    * If specified, the CSI driver will create or update the volume with the attributes defined
    * in the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,
-   * it can be changed after the claim is created. An empty string value means that no VolumeAttributesClass
-   * will be applied to the claim but it's not allowed to reset this field to empty string once it is set.
-   * If unspecified and the PersistentVolumeClaim is unbound, the default VolumeAttributesClass
-   * will be set by the persistentvolume controller if it exists.
+   * it can be changed after the claim is created. An empty string or nil value indicates that no
+   * VolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,
+   * this field can be reset to its previous value (including nil) to cancel the modification.
    * If the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be
    * set to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource
    * exists.
    * More info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/
-   * (Alpha) Using this field requires the VolumeAttributesClass feature gate to be enabled.
    *
    * @schema ClusterSpecMountsEphemeralVolumeClaimTemplateSpec#volumeAttributesClassName
    */
@@ -7983,13 +8499,10 @@ export function toJson_ClusterSpecMountsEphemeralVolumeClaimTemplateSpec(obj: Cl
  * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
  * of ClusterTrustBundle objects in an auto-updating file.
  *
- *
  * Alpha, gated by the ClusterTrustBundleProjection feature gate.
- *
  *
  * ClusterTrustBundle objects can either be selected by name, or by the
  * combination of signer name and a label selector.
- *
  *
  * Kubelet performs aggressive normalization of the PEM contents written
  * into the pod filesystem.  Esoteric PEM features such as inter-block
@@ -8088,9 +8601,7 @@ export interface ClusterSpecMountsProjectedSourcesConfigMap {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsProjectedSourcesConfigMap#name
    */
@@ -8149,6 +8660,146 @@ export function toJson_ClusterSpecMountsProjectedSourcesDownwardApi(obj: Cluster
 /* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
 
 /**
+ * Projects an auto-rotating credential bundle (private key and certificate
+ * chain) that the pod can use either as a TLS client or server.
+ *
+ * Kubelet generates a private key and uses it to send a
+ * PodCertificateRequest to the named signer.  Once the signer approves the
+ * request and issues a certificate chain, Kubelet writes the key and
+ * certificate chain to the pod filesystem.  The pod does not start until
+ * certificates have been issued for each podCertificate projected volume
+ * source in its spec.
+ *
+ * Kubelet will begin trying to rotate the certificate at the time indicated
+ * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+ * timestamp.
+ *
+ * Kubelet can write a single file, indicated by the credentialBundlePath
+ * field, or separate files, indicated by the keyPath and
+ * certificateChainPath fields.
+ *
+ * The credential bundle is a single file in PEM format.  The first PEM
+ * entry is the private key (in PKCS#8 format), and the remaining PEM
+ * entries are the certificate chain issued by the signer (typically,
+ * signers will return their certificate chain in leaf-to-root order).
+ *
+ * Prefer using the credential bundle format, since your application code
+ * can read it atomically.  If you use keyPath and certificateChainPath,
+ * your application must make two separate file reads. If these coincide
+ * with a certificate rotation, it is possible that the private key and leaf
+ * certificate you read may not correspond to each other.  Your application
+ * will need to check for this condition, and re-read until they are
+ * consistent.
+ *
+ * The named signer controls chooses the format of the certificate it
+ * issues; consult the signer implementation's documentation to learn how to
+ * use the certificates it issues.
+ *
+ * @schema ClusterSpecMountsProjectedSourcesPodCertificate
+ */
+export interface ClusterSpecMountsProjectedSourcesPodCertificate {
+  /**
+   * Write the certificate chain at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterSpecMountsProjectedSourcesPodCertificate#certificateChainPath
+   */
+  readonly certificateChainPath?: string;
+
+  /**
+   * Write the credential bundle at this path in the projected volume.
+   *
+   * The credential bundle is a single file that contains multiple PEM blocks.
+   * The first PEM block is a PRIVATE KEY block, containing a PKCS#8 private
+   * key.
+   *
+   * The remaining blocks are CERTIFICATE blocks, containing the issued
+   * certificate chain from the signer (leaf and any intermediates).
+   *
+   * Using credentialBundlePath lets your Pod's application code make a single
+   * atomic read that retrieves a consistent key and certificate chain.  If you
+   * project them to separate files, your application code will need to
+   * additionally check that the leaf certificate was issued to the key.
+   *
+   * @schema ClusterSpecMountsProjectedSourcesPodCertificate#credentialBundlePath
+   */
+  readonly credentialBundlePath?: string;
+
+  /**
+   * Write the key at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterSpecMountsProjectedSourcesPodCertificate#keyPath
+   */
+  readonly keyPath?: string;
+
+  /**
+   * The type of keypair Kubelet will generate for the pod.
+   *
+   * Valid values are "RSA3072", "RSA4096", "ECDSAP256", "ECDSAP384",
+   * "ECDSAP521", and "ED25519".
+   *
+   * @schema ClusterSpecMountsProjectedSourcesPodCertificate#keyType
+   */
+  readonly keyType: string;
+
+  /**
+   * maxExpirationSeconds is the maximum lifetime permitted for the
+   * certificate.
+   *
+   * Kubelet copies this value verbatim into the PodCertificateRequests it
+   * generates for this projection.
+   *
+   * If omitted, kube-apiserver will set it to 86400(24 hours). kube-apiserver
+   * will reject values shorter than 3600 (1 hour).  The maximum allowable
+   * value is 7862400 (91 days).
+   *
+   * The signer implementation is then free to issue a certificate with any
+   * lifetime *shorter* than MaxExpirationSeconds, but no shorter than 3600
+   * seconds (1 hour).  This constraint is enforced by kube-apiserver.
+   * `kubernetes.io` signers will never issue certificates with a lifetime
+   * longer than 24 hours.
+   *
+   * @schema ClusterSpecMountsProjectedSourcesPodCertificate#maxExpirationSeconds
+   */
+  readonly maxExpirationSeconds?: number;
+
+  /**
+   * Kubelet's generated CSRs will be addressed to this signer.
+   *
+   * @schema ClusterSpecMountsProjectedSourcesPodCertificate#signerName
+   */
+  readonly signerName: string;
+}
+
+/**
+ * Converts an object of type 'ClusterSpecMountsProjectedSourcesPodCertificate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterSpecMountsProjectedSourcesPodCertificate(obj: ClusterSpecMountsProjectedSourcesPodCertificate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateChainPath': obj.certificateChainPath,
+    'credentialBundlePath': obj.credentialBundlePath,
+    'keyPath': obj.keyPath,
+    'keyType': obj.keyType,
+    'maxExpirationSeconds': obj.maxExpirationSeconds,
+    'signerName': obj.signerName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
  * secret information about the secret data to project
  *
  * @schema ClusterSpecMountsProjectedSourcesSecret
@@ -8172,9 +8823,7 @@ export interface ClusterSpecMountsProjectedSourcesSecret {
    * This field is effectively required, but due to backwards compatibility is
    * allowed to be empty. Instances of this type with an empty value here are
    * almost certainly wrong.
-   * TODO: Add other useful fields. apiVersion, kind, uid?
    * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-   * TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
    *
    * @schema ClusterSpecMountsProjectedSourcesSecret#name
    */
@@ -8536,12 +9185,17 @@ export interface ClusterSpecPersistencePersistentVolumeClaimStatusConditions {
   readonly reason?: string;
 
   /**
+   * Status is the status of the condition.
+   * Can be True, False, Unknown.
+   * More info: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#:~:text=state%20of%20pvc-,conditions.status,-(string)%2C%20required
+   *
    * @schema ClusterSpecPersistencePersistentVolumeClaimStatusConditions#status
    */
   readonly status: string;
 
   /**
-   * PersistentVolumeClaimConditionType is a valid value of PersistentVolumeClaimCondition.Type
+   * Type is the type of the condition.
+   * More info: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#:~:text=set%20to%20%27ResizeStarted%27.-,PersistentVolumeClaimCondition,-contains%20details%20about
    *
    * @schema ClusterSpecPersistencePersistentVolumeClaimStatusConditions#type
    */
@@ -8570,7 +9224,6 @@ export function toJson_ClusterSpecPersistencePersistentVolumeClaimStatusConditio
 /**
  * ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.
  * When this is unset, there is no ModifyVolume operation being attempted.
- * This is an alpha field and requires enabling VolumeAttributesClass feature.
  *
  * @schema ClusterSpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus
  */
@@ -10003,6 +10656,10943 @@ export class ClusterSpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDi
 
 
 /**
+ * Cluster is the Schema for the k0smotronclusters API
+ *
+ * @schema ClusterV1Beta2
+ */
+export class ClusterV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "ClusterV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'k0smotron.io/v1beta2',
+    kind: 'Cluster',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "ClusterV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: ClusterV1Beta2Props = {}): any {
+    return {
+      ...ClusterV1Beta2.GVK,
+      ...toJson_ClusterV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "ClusterV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: ClusterV1Beta2Props = {}) {
+    super(scope, id, {
+      ...ClusterV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...ClusterV1Beta2.GVK,
+      ...toJson_ClusterV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * Cluster is the Schema for the k0smotronclusters API
+ *
+ * @schema ClusterV1Beta2
+ */
+export interface ClusterV1Beta2Props {
+  /**
+   * @schema ClusterV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * ClusterSpec defines the desired state of K0smotronCluster
+   *
+   * @schema ClusterV1Beta2#spec
+   */
+  readonly spec?: ClusterV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2Props(obj: ClusterV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_ClusterV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterSpec defines the desired state of K0smotronCluster
+ *
+ * @schema ClusterV1Beta2Spec
+ */
+export interface ClusterV1Beta2Spec {
+  /**
+   * CertificateRefs defines the certificate references.
+   *
+   * @schema ClusterV1Beta2Spec#certificateRefs
+   */
+  readonly certificateRefs?: ClusterV1Beta2SpecCertificateRefs[];
+
+  /**
+   * ControlPlaneFlags allows to configure additional flags for k0s
+   * control plane and to override existing ones. The default flags are
+   * kept unless they are overriden explicitly. Flags with arguments must
+   * be specified as a single string, e.g. --some-flag=argument
+   *
+   * @schema ClusterV1Beta2Spec#controlPlaneFlags
+   */
+  readonly controlPlaneFlags?: string[];
+
+  /**
+   * ExternalAddress defines k0s external address. See https://docs.k0sproject.io/stable/configuration/#specapi
+   * Will be detected automatically for service type LoadBalancer.
+   *
+   * @schema ClusterV1Beta2Spec#externalAddress
+   */
+  readonly externalAddress?: string;
+
+  /**
+   * Image defines the k0s image to be deployed. If empty k0smotron
+   * will pick it automatically. Must not include the image tag.
+   *
+   * @schema ClusterV1Beta2Spec#image
+   */
+  readonly image?: string;
+
+  /**
+   * Ingress defines the ingress configuration.
+   *
+   * @schema ClusterV1Beta2Spec#ingress
+   */
+  readonly ingress?: ClusterV1Beta2SpecIngress;
+
+  /**
+   * k0sConfig defines the k0s configuration. Note, that some fields will be overwritten by k0smotron.
+   * If empty, will be used default configuration. @see https://docs.k0sproject.io/stable/configuration/
+   *
+   * @schema ClusterV1Beta2Spec#k0sConfig
+   */
+  readonly k0SConfig?: any;
+
+  /**
+   * KubeconfigSecretMetadata specifies metadata (labels and annotations) to be propagated to the kubeconfig Secret
+   * created for the workload cluster.
+   * Note: This metadata will have precedence over default labels/annotations on the Secret.
+   *
+   * @schema ClusterV1Beta2Spec#kubeconfigSecretMetadata
+   */
+  readonly kubeconfigSecretMetadata?: ClusterV1Beta2SpecKubeconfigSecretMetadata;
+
+  /**
+   * Manifests allows to specify list of volumes with manifests to be
+   * deployed in the cluster. The volumes will be mounted
+   * in /var/lib/k0s/manifests/<manifests.name>, for this reason each
+   * manifest is a stack. K0smotron allows any kind of volume, but the
+   * recommendation is to use secrets and configmaps.
+   * For more information check:
+   * https://docs.k0sproject.io/stable/manifests/ and
+   * https://kubernetes.io/docs/concepts/storage/volumes
+   *
+   * @schema ClusterV1Beta2Spec#manifests
+   */
+  readonly manifests?: ClusterV1Beta2SpecManifests[];
+
+  /**
+   * Monitoring defines the monitoring configuration.
+   *
+   * @schema ClusterV1Beta2Spec#monitoring
+   */
+  readonly monitoring?: ClusterV1Beta2SpecMonitoring;
+
+  /**
+   * Mounts allows to specify list of volumes with any files to be
+   * mounted in the controlplane pod. K0smotron allows any kind of volume, but the
+   * recommendation is to use secrets and configmaps.
+   * For more information check:
+   * https://kubernetes.io/docs/concepts/storage/volumes
+   *
+   * @schema ClusterV1Beta2Spec#mounts
+   */
+  readonly mounts?: ClusterV1Beta2SpecMounts[];
+
+  /**
+   * Patches defines patches to apply to generated resources (StatefulSet, Service, ConfigMap, etc.).
+   * Patches are applied after generation and before apply. Target resources are matched by Kind and app.kubernetes.io/component label.
+   * For the full list of generated resources and their component labels, see https://docs.k0smotron.io/stable/generated-resources/.
+   *
+   * @schema ClusterV1Beta2Spec#patches
+   */
+  readonly patches?: ClusterV1Beta2SpecPatches[];
+
+  /**
+   * Persistence defines the persistence configuration. If empty k0smotron
+   * will use emptyDir as a volume. See https://docs.k0smotron.io/stable/configuration/#persistence
+   *
+   * @schema ClusterV1Beta2Spec#persistence
+   */
+  readonly persistence?: ClusterV1Beta2SpecPersistence;
+
+  /**
+   * RemoteHostCluster defines the configuration for deploying the k0s control plane in a remote hosting cluster.
+   * If not specified, k0smotron will deploy the control plane in the management cluster.
+   *
+   * @schema ClusterV1Beta2Spec#remoteHostCluster
+   */
+  readonly remoteHostCluster?: ClusterV1Beta2SpecRemoteHostCluster;
+
+  /**
+   * Replicas is the desired number of replicas of the k0s control planes.
+   * If unspecified, defaults to 1. If the value is above 1, k0smotron requires spec.storage.kine.dataSourceURL to be set.
+   * Recommended value is 3.
+   *
+   * @schema ClusterV1Beta2Spec#replicas
+   */
+  readonly replicas?: number;
+
+  /**
+   * Resources describes the compute resource requirements for the control plane pods.
+   *
+   * @schema ClusterV1Beta2Spec#resources
+   */
+  readonly resources?: ClusterV1Beta2SpecResources;
+
+  /**
+   * Service defines the service configuration.
+   *
+   * @schema ClusterV1Beta2Spec#service
+   */
+  readonly service?: ClusterV1Beta2SpecService;
+
+  /**
+   * ServiceAccount defines the service account to be used by both k0s and etcd StatefulSets.
+   *
+   * @schema ClusterV1Beta2Spec#serviceAccount
+   */
+  readonly serviceAccount?: string;
+
+  /**
+   * Storage defines the storage backend configuration.
+   *
+   * @schema ClusterV1Beta2Spec#storage
+   */
+  readonly storage?: ClusterV1Beta2SpecStorage;
+
+  /**
+   * TopologySpreadConstraints will be passed directly to BOTH etcd and k0s pods.
+   * See https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/ for more information.
+   *
+   * @schema ClusterV1Beta2Spec#topologySpreadConstraints
+   */
+  readonly topologySpreadConstraints?: ClusterV1Beta2SpecTopologySpreadConstraints[];
+
+  /**
+   * Version defines the k0s version to be deployed. If empty k0smotron
+   * will pick it automatically.
+   *
+   * @schema ClusterV1Beta2Spec#version
+   */
+  readonly version?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2Spec(obj: ClusterV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateRefs': obj.certificateRefs?.map(y => toJson_ClusterV1Beta2SpecCertificateRefs(y)),
+    'controlPlaneFlags': obj.controlPlaneFlags?.map(y => y),
+    'externalAddress': obj.externalAddress,
+    'image': obj.image,
+    'ingress': toJson_ClusterV1Beta2SpecIngress(obj.ingress),
+    'k0sConfig': obj.k0SConfig,
+    'kubeconfigSecretMetadata': toJson_ClusterV1Beta2SpecKubeconfigSecretMetadata(obj.kubeconfigSecretMetadata),
+    'manifests': obj.manifests?.map(y => toJson_ClusterV1Beta2SpecManifests(y)),
+    'monitoring': toJson_ClusterV1Beta2SpecMonitoring(obj.monitoring),
+    'mounts': obj.mounts?.map(y => toJson_ClusterV1Beta2SpecMounts(y)),
+    'patches': obj.patches?.map(y => toJson_ClusterV1Beta2SpecPatches(y)),
+    'persistence': toJson_ClusterV1Beta2SpecPersistence(obj.persistence),
+    'remoteHostCluster': toJson_ClusterV1Beta2SpecRemoteHostCluster(obj.remoteHostCluster),
+    'replicas': obj.replicas,
+    'resources': toJson_ClusterV1Beta2SpecResources(obj.resources),
+    'service': toJson_ClusterV1Beta2SpecService(obj.service),
+    'serviceAccount': obj.serviceAccount,
+    'storage': toJson_ClusterV1Beta2SpecStorage(obj.storage),
+    'topologySpreadConstraints': obj.topologySpreadConstraints?.map(y => toJson_ClusterV1Beta2SpecTopologySpreadConstraints(y)),
+    'version': obj.version,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * CertificateRef defines a reference to a certificate that should be included in the cluster configuration.
+ *
+ * @schema ClusterV1Beta2SpecCertificateRefs
+ */
+export interface ClusterV1Beta2SpecCertificateRefs {
+  /**
+   * @schema ClusterV1Beta2SpecCertificateRefs#name
+   */
+  readonly name?: string;
+
+  /**
+   * @schema ClusterV1Beta2SpecCertificateRefs#type
+   */
+  readonly type: ClusterV1Beta2SpecCertificateRefsType;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecCertificateRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecCertificateRefs(obj: ClusterV1Beta2SpecCertificateRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Ingress defines the ingress configuration.
+ *
+ * @schema ClusterV1Beta2SpecIngress
+ */
+export interface ClusterV1Beta2SpecIngress {
+  /**
+   * Annotations defines extra annotations to be added to the ingress controller service.
+   *
+   * @schema ClusterV1Beta2SpecIngress#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecIngress#apiHost
+   */
+  readonly apiHost: string;
+
+  /**
+   * ClassName defines the ingress class name to be used by the ingress controller.
+   *
+   * @schema ClusterV1Beta2SpecIngress#className
+   */
+  readonly className?: string;
+
+  /**
+   * Deploy defines whether to deploy an ingress resource for the cluster or let the user do it manually.
+   * Default: true
+   *
+   * @schema ClusterV1Beta2SpecIngress#deploy
+   */
+  readonly deploy?: boolean;
+
+  /**
+   * @schema ClusterV1Beta2SpecIngress#konnectivityHost
+   */
+  readonly konnectivityHost: string;
+
+  /**
+   * Port defines the port used by the ingress controller
+   *
+   * @schema ClusterV1Beta2SpecIngress#port
+   */
+  readonly port?: number;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecIngress' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecIngress(obj: ClusterV1Beta2SpecIngress | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'apiHost': obj.apiHost,
+    'className': obj.className,
+    'deploy': obj.deploy,
+    'konnectivityHost': obj.konnectivityHost,
+    'port': obj.port,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * KubeconfigSecretMetadata specifies metadata (labels and annotations) to be propagated to the kubeconfig Secret
+ * created for the workload cluster.
+ * Note: This metadata will have precedence over default labels/annotations on the Secret.
+ *
+ * @schema ClusterV1Beta2SpecKubeconfigSecretMetadata
+ */
+export interface ClusterV1Beta2SpecKubeconfigSecretMetadata {
+  /**
+   * Annotations to be added to the bootstrap Secret
+   *
+   * @schema ClusterV1Beta2SpecKubeconfigSecretMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * Labels to be added to the bootstrap Secret
+   *
+   * @schema ClusterV1Beta2SpecKubeconfigSecretMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecKubeconfigSecretMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecKubeconfigSecretMetadata(obj: ClusterV1Beta2SpecKubeconfigSecretMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Volume represents a named volume in a pod that may be accessed by any container in the pod.
+ *
+ * @schema ClusterV1Beta2SpecManifests
+ */
+export interface ClusterV1Beta2SpecManifests {
+  /**
+   * awsElasticBlockStore represents an AWS Disk resource that is attached to a
+   * kubelet's host machine and then exposed to the pod.
+   * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+   * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecManifests#awsElasticBlockStore
+   */
+  readonly awsElasticBlockStore?: ClusterV1Beta2SpecManifestsAwsElasticBlockStore;
+
+  /**
+   * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+   * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+   * are redirected to the disk.csi.azure.com CSI driver.
+   *
+   * @schema ClusterV1Beta2SpecManifests#azureDisk
+   */
+  readonly azureDisk?: ClusterV1Beta2SpecManifestsAzureDisk;
+
+  /**
+   * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+   * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+   * are redirected to the file.csi.azure.com CSI driver.
+   *
+   * @schema ClusterV1Beta2SpecManifests#azureFile
+   */
+  readonly azureFile?: ClusterV1Beta2SpecManifestsAzureFile;
+
+  /**
+   * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+   * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#cephfs
+   */
+  readonly cephfs?: ClusterV1Beta2SpecManifestsCephfs;
+
+  /**
+   * cinder represents a cinder volume attached and mounted on kubelets host machine.
+   * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+   * are redirected to the cinder.csi.openstack.org CSI driver.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecManifests#cinder
+   */
+  readonly cinder?: ClusterV1Beta2SpecManifestsCinder;
+
+  /**
+   * configMap represents a configMap that should populate this volume
+   *
+   * @schema ClusterV1Beta2SpecManifests#configMap
+   */
+  readonly configMap?: ClusterV1Beta2SpecManifestsConfigMap;
+
+  /**
+   * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
+   *
+   * @schema ClusterV1Beta2SpecManifests#csi
+   */
+  readonly csi?: ClusterV1Beta2SpecManifestsCsi;
+
+  /**
+   * downwardAPI represents downward API about the pod that should populate this volume
+   *
+   * @schema ClusterV1Beta2SpecManifests#downwardAPI
+   */
+  readonly downwardApi?: ClusterV1Beta2SpecManifestsDownwardApi;
+
+  /**
+   * emptyDir represents a temporary directory that shares a pod's lifetime.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+   *
+   * @schema ClusterV1Beta2SpecManifests#emptyDir
+   */
+  readonly emptyDir?: ClusterV1Beta2SpecManifestsEmptyDir;
+
+  /**
+   * ephemeral represents a volume that is handled by a cluster storage driver.
+   * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
+   * and deleted when the pod is removed.
+   *
+   * Use this if:
+   * a) the volume is only needed while the pod runs,
+   * b) features of normal volumes like restoring from snapshot or capacity
+   * tracking are needed,
+   * c) the storage driver is specified through a storage class, and
+   * d) the storage driver supports dynamic volume provisioning through
+   * a PersistentVolumeClaim (see EphemeralVolumeSource for more
+   * information on the connection between this volume type
+   * and PersistentVolumeClaim).
+   *
+   * Use PersistentVolumeClaim or one of the vendor-specific
+   * APIs for volumes that persist for longer than the lifecycle
+   * of an individual pod.
+   *
+   * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
+   * be used that way - see the documentation of the driver for
+   * more information.
+   *
+   * A pod can use both types of ephemeral volumes and
+   * persistent volumes at the same time.
+   *
+   * @schema ClusterV1Beta2SpecManifests#ephemeral
+   */
+  readonly ephemeral?: ClusterV1Beta2SpecManifestsEphemeral;
+
+  /**
+   * fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.
+   *
+   * @schema ClusterV1Beta2SpecManifests#fc
+   */
+  readonly fc?: ClusterV1Beta2SpecManifestsFc;
+
+  /**
+   * flexVolume represents a generic volume resource that is
+   * provisioned/attached using an exec based plugin.
+   * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
+   *
+   * @schema ClusterV1Beta2SpecManifests#flexVolume
+   */
+  readonly flexVolume?: ClusterV1Beta2SpecManifestsFlexVolume;
+
+  /**
+   * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+   * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#flocker
+   */
+  readonly flocker?: ClusterV1Beta2SpecManifestsFlocker;
+
+  /**
+   * gcePersistentDisk represents a GCE Disk resource that is attached to a
+   * kubelet's host machine and then exposed to the pod.
+   * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+   * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecManifests#gcePersistentDisk
+   */
+  readonly gcePersistentDisk?: ClusterV1Beta2SpecManifestsGcePersistentDisk;
+
+  /**
+   * gitRepo represents a git repository at a particular revision.
+   * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
+   * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
+   * into the Pod's container.
+   *
+   * @schema ClusterV1Beta2SpecManifests#gitRepo
+   */
+  readonly gitRepo?: ClusterV1Beta2SpecManifestsGitRepo;
+
+  /**
+   * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
+   * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#glusterfs
+   */
+  readonly glusterfs?: ClusterV1Beta2SpecManifestsGlusterfs;
+
+  /**
+   * hostPath represents a pre-existing file or directory on the host
+   * machine that is directly exposed to the container. This is generally
+   * used for system agents or other privileged things that are allowed
+   * to see the host machine. Most containers will NOT need this.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   *
+   * @schema ClusterV1Beta2SpecManifests#hostPath
+   */
+  readonly hostPath?: ClusterV1Beta2SpecManifestsHostPath;
+
+  /**
+   * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+   * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+   *
+   * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   *
+   * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+   * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+   * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+   * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+   * The volume will be mounted read-only (ro) and non-executable files (noexec).
+   * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+   * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+   *
+   * @schema ClusterV1Beta2SpecManifests#image
+   */
+  readonly image?: ClusterV1Beta2SpecManifestsImage;
+
+  /**
+   * iscsi represents an ISCSI Disk resource that is attached to a
+   * kubelet's host machine and then exposed to the pod.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
+   *
+   * @schema ClusterV1Beta2SpecManifests#iscsi
+   */
+  readonly iscsi?: ClusterV1Beta2SpecManifestsIscsi;
+
+  /**
+   * name of the volume.
+   * Must be a DNS_LABEL and unique within the pod.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifests#name
+   */
+  readonly name: string;
+
+  /**
+   * nfs represents an NFS mount on the host that shares a pod's lifetime
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @schema ClusterV1Beta2SpecManifests#nfs
+   */
+  readonly nfs?: ClusterV1Beta2SpecManifestsNfs;
+
+  /**
+   * persistentVolumeClaimVolumeSource represents a reference to a
+   * PersistentVolumeClaim in the same namespace.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+   *
+   * @schema ClusterV1Beta2SpecManifests#persistentVolumeClaim
+   */
+  readonly persistentVolumeClaim?: ClusterV1Beta2SpecManifestsPersistentVolumeClaim;
+
+  /**
+   * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+   * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#photonPersistentDisk
+   */
+  readonly photonPersistentDisk?: ClusterV1Beta2SpecManifestsPhotonPersistentDisk;
+
+  /**
+   * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+   * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+   * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+   * is on.
+   *
+   * @schema ClusterV1Beta2SpecManifests#portworxVolume
+   */
+  readonly portworxVolume?: ClusterV1Beta2SpecManifestsPortworxVolume;
+
+  /**
+   * projected items for all in one resources secrets, configmaps, and downward API
+   *
+   * @schema ClusterV1Beta2SpecManifests#projected
+   */
+  readonly projected?: ClusterV1Beta2SpecManifestsProjected;
+
+  /**
+   * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+   * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#quobyte
+   */
+  readonly quobyte?: ClusterV1Beta2SpecManifestsQuobyte;
+
+  /**
+   * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
+   * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#rbd
+   */
+  readonly rbd?: ClusterV1Beta2SpecManifestsRbd;
+
+  /**
+   * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+   * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#scaleIO
+   */
+  readonly scaleIo?: ClusterV1Beta2SpecManifestsScaleIo;
+
+  /**
+   * secret represents a secret that should populate this volume.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#secret
+   *
+   * @schema ClusterV1Beta2SpecManifests#secret
+   */
+  readonly secret?: ClusterV1Beta2SpecManifestsSecret;
+
+  /**
+   * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+   * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecManifests#storageos
+   */
+  readonly storageos?: ClusterV1Beta2SpecManifestsStorageos;
+
+  /**
+   * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+   * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+   * are redirected to the csi.vsphere.vmware.com CSI driver.
+   *
+   * @schema ClusterV1Beta2SpecManifests#vsphereVolume
+   */
+  readonly vsphereVolume?: ClusterV1Beta2SpecManifestsVsphereVolume;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifests' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifests(obj: ClusterV1Beta2SpecManifests | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'awsElasticBlockStore': toJson_ClusterV1Beta2SpecManifestsAwsElasticBlockStore(obj.awsElasticBlockStore),
+    'azureDisk': toJson_ClusterV1Beta2SpecManifestsAzureDisk(obj.azureDisk),
+    'azureFile': toJson_ClusterV1Beta2SpecManifestsAzureFile(obj.azureFile),
+    'cephfs': toJson_ClusterV1Beta2SpecManifestsCephfs(obj.cephfs),
+    'cinder': toJson_ClusterV1Beta2SpecManifestsCinder(obj.cinder),
+    'configMap': toJson_ClusterV1Beta2SpecManifestsConfigMap(obj.configMap),
+    'csi': toJson_ClusterV1Beta2SpecManifestsCsi(obj.csi),
+    'downwardAPI': toJson_ClusterV1Beta2SpecManifestsDownwardApi(obj.downwardApi),
+    'emptyDir': toJson_ClusterV1Beta2SpecManifestsEmptyDir(obj.emptyDir),
+    'ephemeral': toJson_ClusterV1Beta2SpecManifestsEphemeral(obj.ephemeral),
+    'fc': toJson_ClusterV1Beta2SpecManifestsFc(obj.fc),
+    'flexVolume': toJson_ClusterV1Beta2SpecManifestsFlexVolume(obj.flexVolume),
+    'flocker': toJson_ClusterV1Beta2SpecManifestsFlocker(obj.flocker),
+    'gcePersistentDisk': toJson_ClusterV1Beta2SpecManifestsGcePersistentDisk(obj.gcePersistentDisk),
+    'gitRepo': toJson_ClusterV1Beta2SpecManifestsGitRepo(obj.gitRepo),
+    'glusterfs': toJson_ClusterV1Beta2SpecManifestsGlusterfs(obj.glusterfs),
+    'hostPath': toJson_ClusterV1Beta2SpecManifestsHostPath(obj.hostPath),
+    'image': toJson_ClusterV1Beta2SpecManifestsImage(obj.image),
+    'iscsi': toJson_ClusterV1Beta2SpecManifestsIscsi(obj.iscsi),
+    'name': obj.name,
+    'nfs': toJson_ClusterV1Beta2SpecManifestsNfs(obj.nfs),
+    'persistentVolumeClaim': toJson_ClusterV1Beta2SpecManifestsPersistentVolumeClaim(obj.persistentVolumeClaim),
+    'photonPersistentDisk': toJson_ClusterV1Beta2SpecManifestsPhotonPersistentDisk(obj.photonPersistentDisk),
+    'portworxVolume': toJson_ClusterV1Beta2SpecManifestsPortworxVolume(obj.portworxVolume),
+    'projected': toJson_ClusterV1Beta2SpecManifestsProjected(obj.projected),
+    'quobyte': toJson_ClusterV1Beta2SpecManifestsQuobyte(obj.quobyte),
+    'rbd': toJson_ClusterV1Beta2SpecManifestsRbd(obj.rbd),
+    'scaleIO': toJson_ClusterV1Beta2SpecManifestsScaleIo(obj.scaleIo),
+    'secret': toJson_ClusterV1Beta2SpecManifestsSecret(obj.secret),
+    'storageos': toJson_ClusterV1Beta2SpecManifestsStorageos(obj.storageos),
+    'vsphereVolume': toJson_ClusterV1Beta2SpecManifestsVsphereVolume(obj.vsphereVolume),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Monitoring defines the monitoring configuration.
+ *
+ * @schema ClusterV1Beta2SpecMonitoring
+ */
+export interface ClusterV1Beta2SpecMonitoring {
+  /**
+   * Enabled enables prometheus sidecar that scrapes metrics from the child cluster system components and expose
+   * them as usual kubernetes pod metrics.
+   *
+   * @schema ClusterV1Beta2SpecMonitoring#enabled
+   */
+  readonly enabled: boolean;
+
+  /**
+   * PrometheusImage defines the image used for the prometheus sidecar.
+   *
+   * @schema ClusterV1Beta2SpecMonitoring#prometheusImage
+   */
+  readonly prometheusImage: string;
+
+  /**
+   * ProxyImage defines the image used for the nginx proxy sidecar.
+   *
+   * @schema ClusterV1Beta2SpecMonitoring#proxyImage
+   */
+  readonly proxyImage: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMonitoring' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMonitoring(obj: ClusterV1Beta2SpecMonitoring | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+    'prometheusImage': obj.prometheusImage,
+    'proxyImage': obj.proxyImage,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Mount defines a volume to be mounted in the control plane pod,
+ * along with the mount path and read-only flag.
+ *
+ * @schema ClusterV1Beta2SpecMounts
+ */
+export interface ClusterV1Beta2SpecMounts {
+  /**
+   * awsElasticBlockStore represents an AWS Disk resource that is attached to a
+   * kubelet's host machine and then exposed to the pod.
+   * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+   * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecMounts#awsElasticBlockStore
+   */
+  readonly awsElasticBlockStore?: ClusterV1Beta2SpecMountsAwsElasticBlockStore;
+
+  /**
+   * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+   * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+   * are redirected to the disk.csi.azure.com CSI driver.
+   *
+   * @schema ClusterV1Beta2SpecMounts#azureDisk
+   */
+  readonly azureDisk?: ClusterV1Beta2SpecMountsAzureDisk;
+
+  /**
+   * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+   * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+   * are redirected to the file.csi.azure.com CSI driver.
+   *
+   * @schema ClusterV1Beta2SpecMounts#azureFile
+   */
+  readonly azureFile?: ClusterV1Beta2SpecMountsAzureFile;
+
+  /**
+   * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+   * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#cephfs
+   */
+  readonly cephfs?: ClusterV1Beta2SpecMountsCephfs;
+
+  /**
+   * cinder represents a cinder volume attached and mounted on kubelets host machine.
+   * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+   * are redirected to the cinder.csi.openstack.org CSI driver.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecMounts#cinder
+   */
+  readonly cinder?: ClusterV1Beta2SpecMountsCinder;
+
+  /**
+   * configMap represents a configMap that should populate this volume
+   *
+   * @schema ClusterV1Beta2SpecMounts#configMap
+   */
+  readonly configMap?: ClusterV1Beta2SpecMountsConfigMap;
+
+  /**
+   * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
+   *
+   * @schema ClusterV1Beta2SpecMounts#csi
+   */
+  readonly csi?: ClusterV1Beta2SpecMountsCsi;
+
+  /**
+   * downwardAPI represents downward API about the pod that should populate this volume
+   *
+   * @schema ClusterV1Beta2SpecMounts#downwardAPI
+   */
+  readonly downwardApi?: ClusterV1Beta2SpecMountsDownwardApi;
+
+  /**
+   * emptyDir represents a temporary directory that shares a pod's lifetime.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+   *
+   * @schema ClusterV1Beta2SpecMounts#emptyDir
+   */
+  readonly emptyDir?: ClusterV1Beta2SpecMountsEmptyDir;
+
+  /**
+   * ephemeral represents a volume that is handled by a cluster storage driver.
+   * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
+   * and deleted when the pod is removed.
+   *
+   * Use this if:
+   * a) the volume is only needed while the pod runs,
+   * b) features of normal volumes like restoring from snapshot or capacity
+   * tracking are needed,
+   * c) the storage driver is specified through a storage class, and
+   * d) the storage driver supports dynamic volume provisioning through
+   * a PersistentVolumeClaim (see EphemeralVolumeSource for more
+   * information on the connection between this volume type
+   * and PersistentVolumeClaim).
+   *
+   * Use PersistentVolumeClaim or one of the vendor-specific
+   * APIs for volumes that persist for longer than the lifecycle
+   * of an individual pod.
+   *
+   * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
+   * be used that way - see the documentation of the driver for
+   * more information.
+   *
+   * A pod can use both types of ephemeral volumes and
+   * persistent volumes at the same time.
+   *
+   * @schema ClusterV1Beta2SpecMounts#ephemeral
+   */
+  readonly ephemeral?: ClusterV1Beta2SpecMountsEphemeral;
+
+  /**
+   * fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.
+   *
+   * @schema ClusterV1Beta2SpecMounts#fc
+   */
+  readonly fc?: ClusterV1Beta2SpecMountsFc;
+
+  /**
+   * flexVolume represents a generic volume resource that is
+   * provisioned/attached using an exec based plugin.
+   * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
+   *
+   * @schema ClusterV1Beta2SpecMounts#flexVolume
+   */
+  readonly flexVolume?: ClusterV1Beta2SpecMountsFlexVolume;
+
+  /**
+   * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+   * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#flocker
+   */
+  readonly flocker?: ClusterV1Beta2SpecMountsFlocker;
+
+  /**
+   * gcePersistentDisk represents a GCE Disk resource that is attached to a
+   * kubelet's host machine and then exposed to the pod.
+   * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+   * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecMounts#gcePersistentDisk
+   */
+  readonly gcePersistentDisk?: ClusterV1Beta2SpecMountsGcePersistentDisk;
+
+  /**
+   * gitRepo represents a git repository at a particular revision.
+   * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
+   * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
+   * into the Pod's container.
+   *
+   * @schema ClusterV1Beta2SpecMounts#gitRepo
+   */
+  readonly gitRepo?: ClusterV1Beta2SpecMountsGitRepo;
+
+  /**
+   * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
+   * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#glusterfs
+   */
+  readonly glusterfs?: ClusterV1Beta2SpecMountsGlusterfs;
+
+  /**
+   * hostPath represents a pre-existing file or directory on the host
+   * machine that is directly exposed to the container. This is generally
+   * used for system agents or other privileged things that are allowed
+   * to see the host machine. Most containers will NOT need this.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   *
+   * @schema ClusterV1Beta2SpecMounts#hostPath
+   */
+  readonly hostPath?: ClusterV1Beta2SpecMountsHostPath;
+
+  /**
+   * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+   * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+   *
+   * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   *
+   * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+   * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+   * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+   * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+   * The volume will be mounted read-only (ro) and non-executable files (noexec).
+   * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+   * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+   *
+   * @schema ClusterV1Beta2SpecMounts#image
+   */
+  readonly image?: ClusterV1Beta2SpecMountsImage;
+
+  /**
+   * iscsi represents an ISCSI Disk resource that is attached to a
+   * kubelet's host machine and then exposed to the pod.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
+   *
+   * @schema ClusterV1Beta2SpecMounts#iscsi
+   */
+  readonly iscsi?: ClusterV1Beta2SpecMountsIscsi;
+
+  /**
+   * nfs represents an NFS mount on the host that shares a pod's lifetime
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @schema ClusterV1Beta2SpecMounts#nfs
+   */
+  readonly nfs?: ClusterV1Beta2SpecMountsNfs;
+
+  /**
+   * @schema ClusterV1Beta2SpecMounts#path
+   */
+  readonly path: string;
+
+  /**
+   * persistentVolumeClaimVolumeSource represents a reference to a
+   * PersistentVolumeClaim in the same namespace.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+   *
+   * @schema ClusterV1Beta2SpecMounts#persistentVolumeClaim
+   */
+  readonly persistentVolumeClaim?: ClusterV1Beta2SpecMountsPersistentVolumeClaim;
+
+  /**
+   * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+   * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#photonPersistentDisk
+   */
+  readonly photonPersistentDisk?: ClusterV1Beta2SpecMountsPhotonPersistentDisk;
+
+  /**
+   * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+   * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+   * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+   * is on.
+   *
+   * @schema ClusterV1Beta2SpecMounts#portworxVolume
+   */
+  readonly portworxVolume?: ClusterV1Beta2SpecMountsPortworxVolume;
+
+  /**
+   * projected items for all in one resources secrets, configmaps, and downward API
+   *
+   * @schema ClusterV1Beta2SpecMounts#projected
+   */
+  readonly projected?: ClusterV1Beta2SpecMountsProjected;
+
+  /**
+   * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+   * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#quobyte
+   */
+  readonly quobyte?: ClusterV1Beta2SpecMountsQuobyte;
+
+  /**
+   * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
+   * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#rbd
+   */
+  readonly rbd?: ClusterV1Beta2SpecMountsRbd;
+
+  /**
+   * ReadOnly specifies whether the volume should be mounted as read-only. (default: false, except for ConfigMaps and Secrets)
+   *
+   * @schema ClusterV1Beta2SpecMounts#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+   * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#scaleIO
+   */
+  readonly scaleIo?: ClusterV1Beta2SpecMountsScaleIo;
+
+  /**
+   * secret represents a secret that should populate this volume.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#secret
+   *
+   * @schema ClusterV1Beta2SpecMounts#secret
+   */
+  readonly secret?: ClusterV1Beta2SpecMountsSecret;
+
+  /**
+   * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+   * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
+   *
+   * @schema ClusterV1Beta2SpecMounts#storageos
+   */
+  readonly storageos?: ClusterV1Beta2SpecMountsStorageos;
+
+  /**
+   * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+   * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+   * are redirected to the csi.vsphere.vmware.com CSI driver.
+   *
+   * @schema ClusterV1Beta2SpecMounts#vsphereVolume
+   */
+  readonly vsphereVolume?: ClusterV1Beta2SpecMountsVsphereVolume;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMounts' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMounts(obj: ClusterV1Beta2SpecMounts | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'awsElasticBlockStore': toJson_ClusterV1Beta2SpecMountsAwsElasticBlockStore(obj.awsElasticBlockStore),
+    'azureDisk': toJson_ClusterV1Beta2SpecMountsAzureDisk(obj.azureDisk),
+    'azureFile': toJson_ClusterV1Beta2SpecMountsAzureFile(obj.azureFile),
+    'cephfs': toJson_ClusterV1Beta2SpecMountsCephfs(obj.cephfs),
+    'cinder': toJson_ClusterV1Beta2SpecMountsCinder(obj.cinder),
+    'configMap': toJson_ClusterV1Beta2SpecMountsConfigMap(obj.configMap),
+    'csi': toJson_ClusterV1Beta2SpecMountsCsi(obj.csi),
+    'downwardAPI': toJson_ClusterV1Beta2SpecMountsDownwardApi(obj.downwardApi),
+    'emptyDir': toJson_ClusterV1Beta2SpecMountsEmptyDir(obj.emptyDir),
+    'ephemeral': toJson_ClusterV1Beta2SpecMountsEphemeral(obj.ephemeral),
+    'fc': toJson_ClusterV1Beta2SpecMountsFc(obj.fc),
+    'flexVolume': toJson_ClusterV1Beta2SpecMountsFlexVolume(obj.flexVolume),
+    'flocker': toJson_ClusterV1Beta2SpecMountsFlocker(obj.flocker),
+    'gcePersistentDisk': toJson_ClusterV1Beta2SpecMountsGcePersistentDisk(obj.gcePersistentDisk),
+    'gitRepo': toJson_ClusterV1Beta2SpecMountsGitRepo(obj.gitRepo),
+    'glusterfs': toJson_ClusterV1Beta2SpecMountsGlusterfs(obj.glusterfs),
+    'hostPath': toJson_ClusterV1Beta2SpecMountsHostPath(obj.hostPath),
+    'image': toJson_ClusterV1Beta2SpecMountsImage(obj.image),
+    'iscsi': toJson_ClusterV1Beta2SpecMountsIscsi(obj.iscsi),
+    'nfs': toJson_ClusterV1Beta2SpecMountsNfs(obj.nfs),
+    'path': obj.path,
+    'persistentVolumeClaim': toJson_ClusterV1Beta2SpecMountsPersistentVolumeClaim(obj.persistentVolumeClaim),
+    'photonPersistentDisk': toJson_ClusterV1Beta2SpecMountsPhotonPersistentDisk(obj.photonPersistentDisk),
+    'portworxVolume': toJson_ClusterV1Beta2SpecMountsPortworxVolume(obj.portworxVolume),
+    'projected': toJson_ClusterV1Beta2SpecMountsProjected(obj.projected),
+    'quobyte': toJson_ClusterV1Beta2SpecMountsQuobyte(obj.quobyte),
+    'rbd': toJson_ClusterV1Beta2SpecMountsRbd(obj.rbd),
+    'readOnly': obj.readOnly,
+    'scaleIO': toJson_ClusterV1Beta2SpecMountsScaleIo(obj.scaleIo),
+    'secret': toJson_ClusterV1Beta2SpecMountsSecret(obj.secret),
+    'storageos': toJson_ClusterV1Beta2SpecMountsStorageos(obj.storageos),
+    'vsphereVolume': toJson_ClusterV1Beta2SpecMountsVsphereVolume(obj.vsphereVolume),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ComponentPatch defines a patch to apply to a generated resource.
+ *
+ * @schema ClusterV1Beta2SpecPatches
+ */
+export interface ClusterV1Beta2SpecPatches {
+  /**
+   * Patch defines the patch type and content to apply.
+   *
+   * @schema ClusterV1Beta2SpecPatches#patch
+   */
+  readonly patch: ClusterV1Beta2SpecPatchesPatch;
+
+  /**
+   * Target selects which generated resource to patch.
+   *
+   * @schema ClusterV1Beta2SpecPatches#target
+   */
+  readonly target: ClusterV1Beta2SpecPatchesTarget;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPatches' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPatches(obj: ClusterV1Beta2SpecPatches | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'patch': toJson_ClusterV1Beta2SpecPatchesPatch(obj.patch),
+    'target': toJson_ClusterV1Beta2SpecPatchesTarget(obj.target),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Persistence defines the persistence configuration. If empty k0smotron
+ * will use emptyDir as a volume. See https://docs.k0smotron.io/stable/configuration/#persistence
+ *
+ * @schema ClusterV1Beta2SpecPersistence
+ */
+export interface ClusterV1Beta2SpecPersistence {
+  /**
+   * AutoDeletePVCs defines whether the PVC should be deleted when the cluster is deleted.
+   *
+   * @schema ClusterV1Beta2SpecPersistence#autoDeletePVCs
+   */
+  readonly autoDeletePvCs?: boolean;
+
+  /**
+   * HostPath defines the host path configuration. Will be used as is in case of .spec.persistence.type is hostPath.
+   *
+   * @schema ClusterV1Beta2SpecPersistence#hostPath
+   */
+  readonly hostPath?: string;
+
+  /**
+   * PersistentVolumeClaim defines the PVC configuration. Will be used as is in case of .spec.persistence.type is pvc.
+   *
+   * @schema ClusterV1Beta2SpecPersistence#persistentVolumeClaim
+   */
+  readonly persistentVolumeClaim?: ClusterV1Beta2SpecPersistencePersistentVolumeClaim;
+
+  /**
+   * @schema ClusterV1Beta2SpecPersistence#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistence' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistence(obj: ClusterV1Beta2SpecPersistence | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'autoDeletePVCs': obj.autoDeletePvCs,
+    'hostPath': obj.hostPath,
+    'persistentVolumeClaim': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaim(obj.persistentVolumeClaim),
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * RemoteHostCluster defines the configuration for deploying the k0s control plane in a remote hosting cluster.
+ * If not specified, k0smotron will deploy the control plane in the management cluster.
+ *
+ * @schema ClusterV1Beta2SpecRemoteHostCluster
+ */
+export interface ClusterV1Beta2SpecRemoteHostCluster {
+  /**
+   * KubeconfigRef is the reference to the kubeconfig of the hosting cluster.
+   * This kubeconfig will be used to deploy the k0s control plane.
+   *
+   * @schema ClusterV1Beta2SpecRemoteHostCluster#kubeconfigRef
+   */
+  readonly kubeconfigRef?: ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecRemoteHostCluster' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecRemoteHostCluster(obj: ClusterV1Beta2SpecRemoteHostCluster | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'kubeconfigRef': toJson_ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef(obj.kubeconfigRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resources describes the compute resource requirements for the control plane pods.
+ *
+ * @schema ClusterV1Beta2SpecResources
+ */
+export interface ClusterV1Beta2SpecResources {
+  /**
+   * Claims lists the names of resources, defined in spec.resourceClaims,
+   * that are used by this container.
+   *
+   * This field depends on the
+   * DynamicResourceAllocation feature gate.
+   *
+   * This field is immutable. It can only be set for containers.
+   *
+   * @schema ClusterV1Beta2SpecResources#claims
+   */
+  readonly claims?: ClusterV1Beta2SpecResourcesClaims[];
+
+  /**
+   * Limits describes the maximum amount of compute resources allowed.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecResources#limits
+   */
+  readonly limits?: { [key: string]: ClusterV1Beta2SpecResourcesLimits };
+
+  /**
+   * Requests describes the minimum amount of compute resources required.
+   * If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+   * otherwise to an implementation-defined value. Requests cannot exceed Limits.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecResources#requests
+   */
+  readonly requests?: { [key: string]: ClusterV1Beta2SpecResourcesRequests };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecResources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecResources(obj: ClusterV1Beta2SpecResources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'claims': obj.claims?.map(y => toJson_ClusterV1Beta2SpecResourcesClaims(y)),
+    'limits': ((obj.limits) === undefined) ? undefined : (Object.entries(obj.limits).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'requests': ((obj.requests) === undefined) ? undefined : (Object.entries(obj.requests).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Service defines the service configuration.
+ *
+ * @schema ClusterV1Beta2SpecService
+ */
+export interface ClusterV1Beta2SpecService {
+  /**
+   * APIPort defines the kubernetes API port. If empty k0smotron
+   * will pick it automatically.
+   *
+   * @schema ClusterV1Beta2SpecService#apiPort
+   */
+  readonly apiPort?: number;
+
+  /**
+   * KonnectivityPort defines the konnectivity port. If empty k0smotron
+   * will pick it automatically.
+   *
+   * @schema ClusterV1Beta2SpecService#konnectivityPort
+   */
+  readonly konnectivityPort?: number;
+
+  /**
+   * Service Type string describes ingress methods for a service
+   *
+   * @schema ClusterV1Beta2SpecService#type
+   */
+  readonly type: ClusterV1Beta2SpecServiceType;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecService' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecService(obj: ClusterV1Beta2SpecService | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiPort': obj.apiPort,
+    'konnectivityPort': obj.konnectivityPort,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Storage defines the storage backend configuration.
+ *
+ * @schema ClusterV1Beta2SpecStorage
+ */
+export interface ClusterV1Beta2SpecStorage {
+  /**
+   * Etcd defines the etcd storage configuration.
+   *
+   * @schema ClusterV1Beta2SpecStorage#etcd
+   */
+  readonly etcd?: ClusterV1Beta2SpecStorageEtcd;
+
+  /**
+   * Kine defines the kine storage configuration.
+   *
+   * @schema ClusterV1Beta2SpecStorage#kine
+   */
+  readonly kine?: ClusterV1Beta2SpecStorageKine;
+
+  /**
+   * NATS defines the embedded NATS JetStream storage configuration.
+   * Used when Type is set to nats.
+   *
+   * @schema ClusterV1Beta2SpecStorage#nats
+   */
+  readonly nats?: ClusterV1Beta2SpecStorageNats;
+
+  /**
+   * Type defines the storage backend type. Can be etcd, kine, or nats.
+   *
+   * @schema ClusterV1Beta2SpecStorage#type
+   */
+  readonly type?: ClusterV1Beta2SpecStorageType;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorage(obj: ClusterV1Beta2SpecStorage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'etcd': toJson_ClusterV1Beta2SpecStorageEtcd(obj.etcd),
+    'kine': toJson_ClusterV1Beta2SpecStorageKine(obj.kine),
+    'nats': toJson_ClusterV1Beta2SpecStorageNats(obj.nats),
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * TopologySpreadConstraint specifies how to spread matching pods among the given topology.
+ *
+ * @schema ClusterV1Beta2SpecTopologySpreadConstraints
+ */
+export interface ClusterV1Beta2SpecTopologySpreadConstraints {
+  /**
+   * LabelSelector is used to find matching pods.
+   * Pods that match this label selector are counted to determine the number of pods
+   * in their corresponding topology domain.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#labelSelector
+   */
+  readonly labelSelector?: ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector;
+
+  /**
+   * MatchLabelKeys is a set of pod label keys to select the pods over which
+   * spreading will be calculated. The keys are used to lookup values from the
+   * incoming pod labels, those key-value labels are ANDed with labelSelector
+   * to select the group of existing pods over which spreading will be calculated
+   * for the incoming pod. The same key is forbidden to exist in both MatchLabelKeys and LabelSelector.
+   * MatchLabelKeys cannot be set when LabelSelector isn't set.
+   * Keys that don't exist in the incoming pod labels will
+   * be ignored. A null or empty list means only match against labelSelector.
+   *
+   * This is a beta field and requires the MatchLabelKeysInPodTopologySpread feature gate to be enabled (enabled by default).
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#matchLabelKeys
+   */
+  readonly matchLabelKeys?: string[];
+
+  /**
+   * MaxSkew describes the degree to which pods may be unevenly distributed.
+   * When `whenUnsatisfiable=DoNotSchedule`, it is the maximum permitted difference
+   * between the number of matching pods in the target topology and the global minimum.
+   * The global minimum is the minimum number of matching pods in an eligible domain
+   * or zero if the number of eligible domains is less than MinDomains.
+   * For example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same
+   * labelSelector spread as 2/2/1:
+   * In this case, the global minimum is 1.
+   * | zone1 | zone2 | zone3 |
+   * |  P P  |  P P  |   P   |
+   * - if MaxSkew is 1, incoming pod can only be scheduled to zone3 to become 2/2/2;
+   * scheduling it onto zone1(zone2) would make the ActualSkew(3-1) on zone1(zone2)
+   * violate MaxSkew(1).
+   * - if MaxSkew is 2, incoming pod can be scheduled onto any zone.
+   * When `whenUnsatisfiable=ScheduleAnyway`, it is used to give higher precedence
+   * to topologies that satisfy it.
+   * It's a required field. Default value is 1 and 0 is not allowed.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#maxSkew
+   */
+  readonly maxSkew: number;
+
+  /**
+   * MinDomains indicates a minimum number of eligible domains.
+   * When the number of eligible domains with matching topology keys is less than minDomains,
+   * Pod Topology Spread treats "global minimum" as 0, and then the calculation of Skew is performed.
+   * And when the number of eligible domains with matching topology keys equals or greater than minDomains,
+   * this value has no effect on scheduling.
+   * As a result, when the number of eligible domains is less than minDomains,
+   * scheduler won't schedule more than maxSkew Pods to those domains.
+   * If value is nil, the constraint behaves as if MinDomains is equal to 1.
+   * Valid values are integers greater than 0.
+   * When value is not nil, WhenUnsatisfiable must be DoNotSchedule.
+   *
+   * For example, in a 3-zone cluster, MaxSkew is set to 2, MinDomains is set to 5 and pods with the same
+   * labelSelector spread as 2/2/2:
+   * | zone1 | zone2 | zone3 |
+   * |  P P  |  P P  |  P P  |
+   * The number of domains is less than 5(MinDomains), so "global minimum" is treated as 0.
+   * In this situation, new pod with the same labelSelector cannot be scheduled,
+   * because computed skew will be 3(3 - 0) if new Pod is scheduled to any of the three zones,
+   * it will violate MaxSkew.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#minDomains
+   */
+  readonly minDomains?: number;
+
+  /**
+   * NodeAffinityPolicy indicates how we will treat Pod's nodeAffinity/nodeSelector
+   * when calculating pod topology spread skew. Options are:
+   * - Honor: only nodes matching nodeAffinity/nodeSelector are included in the calculations.
+   * - Ignore: nodeAffinity/nodeSelector are ignored. All nodes are included in the calculations.
+   *
+   * If this value is nil, the behavior is equivalent to the Honor policy.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#nodeAffinityPolicy
+   */
+  readonly nodeAffinityPolicy?: string;
+
+  /**
+   * NodeTaintsPolicy indicates how we will treat node taints when calculating
+   * pod topology spread skew. Options are:
+   * - Honor: nodes without taints, along with tainted nodes for which the incoming pod
+   * has a toleration, are included.
+   * - Ignore: node taints are ignored. All nodes are included.
+   *
+   * If this value is nil, the behavior is equivalent to the Ignore policy.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#nodeTaintsPolicy
+   */
+  readonly nodeTaintsPolicy?: string;
+
+  /**
+   * TopologyKey is the key of node labels. Nodes that have a label with this key
+   * and identical values are considered to be in the same topology.
+   * We consider each <key, value> as a "bucket", and try to put balanced number
+   * of pods into each bucket.
+   * We define a domain as a particular instance of a topology.
+   * Also, we define an eligible domain as a domain whose nodes meet the requirements of
+   * nodeAffinityPolicy and nodeTaintsPolicy.
+   * e.g. If TopologyKey is "kubernetes.io/hostname", each Node is a domain of that topology.
+   * And, if TopologyKey is "topology.kubernetes.io/zone", each zone is a domain of that topology.
+   * It's a required field.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#topologyKey
+   */
+  readonly topologyKey: string;
+
+  /**
+   * WhenUnsatisfiable indicates how to deal with a pod if it doesn't satisfy
+   * the spread constraint.
+   * - DoNotSchedule (default) tells the scheduler not to schedule it.
+   * - ScheduleAnyway tells the scheduler to schedule the pod in any location,
+   * but giving higher precedence to topologies that would help reduce the
+   * skew.
+   * A constraint is considered "Unsatisfiable" for an incoming pod
+   * if and only if every possible node assignment for that pod would violate
+   * "MaxSkew" on some topology.
+   * For example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same
+   * labelSelector spread as 3/1/1:
+   * | zone1 | zone2 | zone3 |
+   * | P P P |   P   |   P   |
+   * If WhenUnsatisfiable is set to DoNotSchedule, incoming pod can only be scheduled
+   * to zone2(zone3) to become 3/2/1(3/1/2) as ActualSkew(2-1) on zone2(zone3) satisfies
+   * MaxSkew(1). In other words, the cluster can still be imbalanced, but scheduler
+   * won't make it *more* imbalanced.
+   * It's a required field.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraints#whenUnsatisfiable
+   */
+  readonly whenUnsatisfiable: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologySpreadConstraints' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologySpreadConstraints(obj: ClusterV1Beta2SpecTopologySpreadConstraints | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'labelSelector': toJson_ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector(obj.labelSelector),
+    'matchLabelKeys': obj.matchLabelKeys?.map(y => y),
+    'maxSkew': obj.maxSkew,
+    'minDomains': obj.minDomains,
+    'nodeAffinityPolicy': obj.nodeAffinityPolicy,
+    'nodeTaintsPolicy': obj.nodeTaintsPolicy,
+    'topologyKey': obj.topologyKey,
+    'whenUnsatisfiable': obj.whenUnsatisfiable,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecCertificateRefsType
+ */
+export enum ClusterV1Beta2SpecCertificateRefsType {
+  /** ca */
+  CA = "ca",
+  /** sa */
+  SA = "sa",
+  /** proxy */
+  PROXY = "proxy",
+  /** etcd */
+  ETCD = "etcd",
+  /** apiserver-etcd-client */
+  APISERVER_HYPHEN_ETCD_HYPHEN_CLIENT = "apiserver-etcd-client",
+  /** etcd-peer */
+  ETCD_HYPHEN_PEER = "etcd-peer",
+  /** etcd-server */
+  ETCD_HYPHEN_SERVER = "etcd-server",
+}
+
+/**
+ * awsElasticBlockStore represents an AWS Disk resource that is attached to a
+ * kubelet's host machine and then exposed to the pod.
+ * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+ * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+ *
+ * @schema ClusterV1Beta2SpecManifestsAwsElasticBlockStore
+ */
+export interface ClusterV1Beta2SpecManifestsAwsElasticBlockStore {
+  /**
+   * fsType is the filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecManifestsAwsElasticBlockStore#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * partition is the partition in the volume that you want to mount.
+   * If omitted, the default is to mount by volume name.
+   * Examples: For volume /dev/sda1, you specify the partition as "1".
+   * Similarly, the volume partition for /dev/sda is "0" (or you can leave the property empty).
+   *
+   * @schema ClusterV1Beta2SpecManifestsAwsElasticBlockStore#partition
+   */
+  readonly partition?: number;
+
+  /**
+   * readOnly value true will force the readOnly setting in VolumeMounts.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecManifestsAwsElasticBlockStore#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * volumeID is unique ID of the persistent disk resource in AWS (Amazon EBS volume).
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecManifestsAwsElasticBlockStore#volumeID
+   */
+  readonly volumeId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsAwsElasticBlockStore' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsAwsElasticBlockStore(obj: ClusterV1Beta2SpecManifestsAwsElasticBlockStore | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'partition': obj.partition,
+    'readOnly': obj.readOnly,
+    'volumeID': obj.volumeId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+ * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+ * are redirected to the disk.csi.azure.com CSI driver.
+ *
+ * @schema ClusterV1Beta2SpecManifestsAzureDisk
+ */
+export interface ClusterV1Beta2SpecManifestsAzureDisk {
+  /**
+   * cachingMode is the Host Caching mode: None, Read Only, Read Write.
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureDisk#cachingMode
+   */
+  readonly cachingMode?: string;
+
+  /**
+   * diskName is the Name of the data disk in the blob storage
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureDisk#diskName
+   */
+  readonly diskName: string;
+
+  /**
+   * diskURI is the URI of data disk in the blob storage
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureDisk#diskURI
+   */
+  readonly diskUri: string;
+
+  /**
+   * fsType is Filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureDisk#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * kind expected values are Shared: multiple blob disks per storage account  Dedicated: single blob disk per storage account  Managed: azure managed data disk (only in managed availability set). defaults to shared
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureDisk#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * readOnly Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecManifestsAzureDisk#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsAzureDisk' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsAzureDisk(obj: ClusterV1Beta2SpecManifestsAzureDisk | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cachingMode': obj.cachingMode,
+    'diskName': obj.diskName,
+    'diskURI': obj.diskUri,
+    'fsType': obj.fsType,
+    'kind': obj.kind,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+ * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+ * are redirected to the file.csi.azure.com CSI driver.
+ *
+ * @schema ClusterV1Beta2SpecManifestsAzureFile
+ */
+export interface ClusterV1Beta2SpecManifestsAzureFile {
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureFile#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretName is the  name of secret that contains Azure Storage Account Name and Key
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureFile#secretName
+   */
+  readonly secretName: string;
+
+  /**
+   * shareName is the azure share Name
+   *
+   * @schema ClusterV1Beta2SpecManifestsAzureFile#shareName
+   */
+  readonly shareName: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsAzureFile' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsAzureFile(obj: ClusterV1Beta2SpecManifestsAzureFile | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'readOnly': obj.readOnly,
+    'secretName': obj.secretName,
+    'shareName': obj.shareName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+ * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsCephfs
+ */
+export interface ClusterV1Beta2SpecManifestsCephfs {
+  /**
+   * monitors is Required: Monitors is a collection of Ceph monitors
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecManifestsCephfs#monitors
+   */
+  readonly monitors: string[];
+
+  /**
+   * path is Optional: Used as the mounted root, rather than the full Ceph tree, default is /
+   *
+   * @schema ClusterV1Beta2SpecManifestsCephfs#path
+   */
+  readonly path?: string;
+
+  /**
+   * readOnly is Optional: Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecManifestsCephfs#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretFile is Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecManifestsCephfs#secretFile
+   */
+  readonly secretFile?: string;
+
+  /**
+   * secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecManifestsCephfs#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecManifestsCephfsSecretRef;
+
+  /**
+   * user is optional: User is the rados user name, default is admin
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecManifestsCephfs#user
+   */
+  readonly user?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsCephfs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsCephfs(obj: ClusterV1Beta2SpecManifestsCephfs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'monitors': obj.monitors?.map(y => y),
+    'path': obj.path,
+    'readOnly': obj.readOnly,
+    'secretFile': obj.secretFile,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsCephfsSecretRef(obj.secretRef),
+    'user': obj.user,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * cinder represents a cinder volume attached and mounted on kubelets host machine.
+ * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+ * are redirected to the cinder.csi.openstack.org CSI driver.
+ * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+ *
+ * @schema ClusterV1Beta2SpecManifestsCinder
+ */
+export interface ClusterV1Beta2SpecManifestsCinder {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecManifestsCinder#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecManifestsCinder#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is optional: points to a secret object containing parameters used to connect
+   * to OpenStack.
+   *
+   * @schema ClusterV1Beta2SpecManifestsCinder#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecManifestsCinderSecretRef;
+
+  /**
+   * volumeID used to identify the volume in cinder.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecManifestsCinder#volumeID
+   */
+  readonly volumeId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsCinder' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsCinder(obj: ClusterV1Beta2SpecManifestsCinder | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsCinderSecretRef(obj.secretRef),
+    'volumeID': obj.volumeId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configMap represents a configMap that should populate this volume
+ *
+ * @schema ClusterV1Beta2SpecManifestsConfigMap
+ */
+export interface ClusterV1Beta2SpecManifestsConfigMap {
+  /**
+   * defaultMode is optional: mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * Defaults to 0644.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @default 0644.
+   * @schema ClusterV1Beta2SpecManifestsConfigMap#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * items if unspecified, each key-value pair in the Data field of the referenced
+   * ConfigMap will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the ConfigMap,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsConfigMap#items
+   */
+  readonly items?: ClusterV1Beta2SpecManifestsConfigMapItems[];
+
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsConfigMap#name
+   */
+  readonly name?: string;
+
+  /**
+   * optional specify whether the ConfigMap or its keys must be defined
+   *
+   * @schema ClusterV1Beta2SpecManifestsConfigMap#optional
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsConfigMap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsConfigMap(obj: ClusterV1Beta2SpecManifestsConfigMap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecManifestsConfigMapItems(y)),
+    'name': obj.name,
+    'optional': obj.optional,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
+ *
+ * @schema ClusterV1Beta2SpecManifestsCsi
+ */
+export interface ClusterV1Beta2SpecManifestsCsi {
+  /**
+   * driver is the name of the CSI driver that handles this volume.
+   * Consult with your admin for the correct name as registered in the cluster.
+   *
+   * @schema ClusterV1Beta2SpecManifestsCsi#driver
+   */
+  readonly driver: string;
+
+  /**
+   * fsType to mount. Ex. "ext4", "xfs", "ntfs".
+   * If not provided, the empty value is passed to the associated CSI driver
+   * which will determine the default filesystem to apply.
+   *
+   * @schema ClusterV1Beta2SpecManifestsCsi#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * nodePublishSecretRef is a reference to the secret object containing
+   * sensitive information to pass to the CSI driver to complete the CSI
+   * NodePublishVolume and NodeUnpublishVolume calls.
+   * This field is optional, and  may be empty if no secret is required. If the
+   * secret object contains more than one secret, all secret references are passed.
+   *
+   * @schema ClusterV1Beta2SpecManifestsCsi#nodePublishSecretRef
+   */
+  readonly nodePublishSecretRef?: ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef;
+
+  /**
+   * readOnly specifies a read-only configuration for the volume.
+   * Defaults to false (read/write).
+   *
+   * @default false (read/write).
+   * @schema ClusterV1Beta2SpecManifestsCsi#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * volumeAttributes stores driver-specific properties that are passed to the CSI
+   * driver. Consult your driver's documentation for supported values.
+   *
+   * @schema ClusterV1Beta2SpecManifestsCsi#volumeAttributes
+   */
+  readonly volumeAttributes?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsCsi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsCsi(obj: ClusterV1Beta2SpecManifestsCsi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'driver': obj.driver,
+    'fsType': obj.fsType,
+    'nodePublishSecretRef': toJson_ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef(obj.nodePublishSecretRef),
+    'readOnly': obj.readOnly,
+    'volumeAttributes': ((obj.volumeAttributes) === undefined) ? undefined : (Object.entries(obj.volumeAttributes).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * downwardAPI represents downward API about the pod that should populate this volume
+ *
+ * @schema ClusterV1Beta2SpecManifestsDownwardApi
+ */
+export interface ClusterV1Beta2SpecManifestsDownwardApi {
+  /**
+   * Optional: mode bits to use on created files by default. Must be a
+   * Optional: mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * Defaults to 0644.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @default 0644.
+   * @schema ClusterV1Beta2SpecManifestsDownwardApi#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * Items is a list of downward API volume file
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApi#items
+   */
+  readonly items?: ClusterV1Beta2SpecManifestsDownwardApiItems[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsDownwardApi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsDownwardApi(obj: ClusterV1Beta2SpecManifestsDownwardApi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecManifestsDownwardApiItems(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * emptyDir represents a temporary directory that shares a pod's lifetime.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+ *
+ * @schema ClusterV1Beta2SpecManifestsEmptyDir
+ */
+export interface ClusterV1Beta2SpecManifestsEmptyDir {
+  /**
+   * medium represents what type of storage medium should back this directory.
+   * The default is "" which means to use the node's default medium.
+   * Must be an empty string (default) or Memory.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+   *
+   * @schema ClusterV1Beta2SpecManifestsEmptyDir#medium
+   */
+  readonly medium?: string;
+
+  /**
+   * sizeLimit is the total amount of local storage required for this EmptyDir volume.
+   * The size limit is also applicable for memory medium.
+   * The maximum usage on memory medium EmptyDir would be the minimum value between
+   * the SizeLimit specified here and the sum of memory limits of all containers in a pod.
+   * The default is nil which means that the limit is undefined.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+   *
+   * @schema ClusterV1Beta2SpecManifestsEmptyDir#sizeLimit
+   */
+  readonly sizeLimit?: ClusterV1Beta2SpecManifestsEmptyDirSizeLimit;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEmptyDir' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEmptyDir(obj: ClusterV1Beta2SpecManifestsEmptyDir | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'medium': obj.medium,
+    'sizeLimit': obj.sizeLimit?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ephemeral represents a volume that is handled by a cluster storage driver.
+ * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
+ * and deleted when the pod is removed.
+ *
+ * Use this if:
+ * a) the volume is only needed while the pod runs,
+ * b) features of normal volumes like restoring from snapshot or capacity
+ * tracking are needed,
+ * c) the storage driver is specified through a storage class, and
+ * d) the storage driver supports dynamic volume provisioning through
+ * a PersistentVolumeClaim (see EphemeralVolumeSource for more
+ * information on the connection between this volume type
+ * and PersistentVolumeClaim).
+ *
+ * Use PersistentVolumeClaim or one of the vendor-specific
+ * APIs for volumes that persist for longer than the lifecycle
+ * of an individual pod.
+ *
+ * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
+ * be used that way - see the documentation of the driver for
+ * more information.
+ *
+ * A pod can use both types of ephemeral volumes and
+ * persistent volumes at the same time.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeral
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeral {
+  /**
+   * Will be used to create a stand-alone PVC to provision the volume.
+   * The pod in which this EphemeralVolumeSource is embedded will be the
+   * owner of the PVC, i.e. the PVC will be deleted together with the
+   * pod.  The name of the PVC will be `<pod name>-<volume name>` where
+   * `<volume name>` is the name from the `PodSpec.Volumes` array
+   * entry. Pod validation will reject the pod if the concatenated name
+   * is not valid for a PVC (for example, too long).
+   *
+   * An existing PVC with that name that is not owned by the pod
+   * will *not* be used for the pod to avoid using an unrelated
+   * volume by mistake. Starting the pod is then blocked until
+   * the unrelated PVC is removed. If such a pre-created PVC is
+   * meant to be used by the pod, the PVC has to updated with an
+   * owner reference to the pod once the pod exists. Normally
+   * this should not be necessary, but it may be useful when
+   * manually reconstructing a broken cluster.
+   *
+   * This field is read-only and no changes will be made by Kubernetes
+   * to the PVC after it has been created.
+   *
+   * Required, must not be nil.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeral#volumeClaimTemplate
+   */
+  readonly volumeClaimTemplate?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeral' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeral(obj: ClusterV1Beta2SpecManifestsEphemeral | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'volumeClaimTemplate': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate(obj.volumeClaimTemplate),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.
+ *
+ * @schema ClusterV1Beta2SpecManifestsFc
+ */
+export interface ClusterV1Beta2SpecManifestsFc {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFc#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * lun is Optional: FC target lun number
+   *
+   * @schema ClusterV1Beta2SpecManifestsFc#lun
+   */
+  readonly lun?: number;
+
+  /**
+   * readOnly is Optional: Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecManifestsFc#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * targetWWNs is Optional: FC target worldwide names (WWNs)
+   *
+   * @schema ClusterV1Beta2SpecManifestsFc#targetWWNs
+   */
+  readonly targetWwNs?: string[];
+
+  /**
+   * wwids Optional: FC volume world wide identifiers (wwids)
+   * Either wwids or combination of targetWWNs and lun must be set, but not both simultaneously.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFc#wwids
+   */
+  readonly wwids?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsFc' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsFc(obj: ClusterV1Beta2SpecManifestsFc | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'lun': obj.lun,
+    'readOnly': obj.readOnly,
+    'targetWWNs': obj.targetWwNs?.map(y => y),
+    'wwids': obj.wwids?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * flexVolume represents a generic volume resource that is
+ * provisioned/attached using an exec based plugin.
+ * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
+ *
+ * @schema ClusterV1Beta2SpecManifestsFlexVolume
+ */
+export interface ClusterV1Beta2SpecManifestsFlexVolume {
+  /**
+   * driver is the name of the driver to use for this volume.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlexVolume#driver
+   */
+  readonly driver: string;
+
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". The default filesystem depends on FlexVolume script.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlexVolume#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * options is Optional: this field holds extra command options if any.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlexVolume#options
+   */
+  readonly options?: { [key: string]: string };
+
+  /**
+   * readOnly is Optional: defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlexVolume#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is Optional: secretRef is reference to the secret object containing
+   * sensitive information to pass to the plugin scripts. This may be
+   * empty if no secret object is specified. If the secret object
+   * contains more than one secret, all secrets are passed to the plugin
+   * scripts.
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlexVolume#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecManifestsFlexVolumeSecretRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsFlexVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsFlexVolume(obj: ClusterV1Beta2SpecManifestsFlexVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'driver': obj.driver,
+    'fsType': obj.fsType,
+    'options': ((obj.options) === undefined) ? undefined : (Object.entries(obj.options).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsFlexVolumeSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+ * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsFlocker
+ */
+export interface ClusterV1Beta2SpecManifestsFlocker {
+  /**
+   * datasetName is Name of the dataset stored as metadata -> name on the dataset for Flocker
+   * should be considered as deprecated
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlocker#datasetName
+   */
+  readonly datasetName?: string;
+
+  /**
+   * datasetUUID is the UUID of the dataset. This is unique identifier of a Flocker dataset
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlocker#datasetUUID
+   */
+  readonly datasetUuid?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsFlocker' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsFlocker(obj: ClusterV1Beta2SpecManifestsFlocker | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'datasetName': obj.datasetName,
+    'datasetUUID': obj.datasetUuid,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * gcePersistentDisk represents a GCE Disk resource that is attached to a
+ * kubelet's host machine and then exposed to the pod.
+ * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+ * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+ *
+ * @schema ClusterV1Beta2SpecManifestsGcePersistentDisk
+ */
+export interface ClusterV1Beta2SpecManifestsGcePersistentDisk {
+  /**
+   * fsType is filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecManifestsGcePersistentDisk#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * partition is the partition in the volume that you want to mount.
+   * If omitted, the default is to mount by volume name.
+   * Examples: For volume /dev/sda1, you specify the partition as "1".
+   * Similarly, the volume partition for /dev/sda is "0" (or you can leave the property empty).
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecManifestsGcePersistentDisk#partition
+   */
+  readonly partition?: number;
+
+  /**
+   * pdName is unique name of the PD resource in GCE. Used to identify the disk in GCE.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecManifestsGcePersistentDisk#pdName
+   */
+  readonly pdName: string;
+
+  /**
+   * readOnly here will force the ReadOnly setting in VolumeMounts.
+   * Defaults to false.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecManifestsGcePersistentDisk#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsGcePersistentDisk' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsGcePersistentDisk(obj: ClusterV1Beta2SpecManifestsGcePersistentDisk | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'partition': obj.partition,
+    'pdName': obj.pdName,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * gitRepo represents a git repository at a particular revision.
+ * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
+ * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
+ * into the Pod's container.
+ *
+ * @schema ClusterV1Beta2SpecManifestsGitRepo
+ */
+export interface ClusterV1Beta2SpecManifestsGitRepo {
+  /**
+   * directory is the target directory name.
+   * Must not contain or start with '..'.  If '.' is supplied, the volume directory will be the
+   * git repository.  Otherwise, if specified, the volume will contain the git repository in
+   * the subdirectory with the given name.
+   *
+   * @schema ClusterV1Beta2SpecManifestsGitRepo#directory
+   */
+  readonly directory?: string;
+
+  /**
+   * repository is the URL
+   *
+   * @schema ClusterV1Beta2SpecManifestsGitRepo#repository
+   */
+  readonly repository: string;
+
+  /**
+   * revision is the commit hash for the specified revision.
+   *
+   * @schema ClusterV1Beta2SpecManifestsGitRepo#revision
+   */
+  readonly revision?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsGitRepo' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsGitRepo(obj: ClusterV1Beta2SpecManifestsGitRepo | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'directory': obj.directory,
+    'repository': obj.repository,
+    'revision': obj.revision,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
+ * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsGlusterfs
+ */
+export interface ClusterV1Beta2SpecManifestsGlusterfs {
+  /**
+   * endpoints is the endpoint name that details Glusterfs topology.
+   *
+   * @schema ClusterV1Beta2SpecManifestsGlusterfs#endpoints
+   */
+  readonly endpoints: string;
+
+  /**
+   * path is the Glusterfs volume path.
+   * More info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod
+   *
+   * @schema ClusterV1Beta2SpecManifestsGlusterfs#path
+   */
+  readonly path: string;
+
+  /**
+   * readOnly here will force the Glusterfs volume to be mounted with read-only permissions.
+   * Defaults to false.
+   * More info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecManifestsGlusterfs#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsGlusterfs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsGlusterfs(obj: ClusterV1Beta2SpecManifestsGlusterfs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'endpoints': obj.endpoints,
+    'path': obj.path,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * hostPath represents a pre-existing file or directory on the host
+ * machine that is directly exposed to the container. This is generally
+ * used for system agents or other privileged things that are allowed
+ * to see the host machine. Most containers will NOT need this.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+ *
+ * @schema ClusterV1Beta2SpecManifestsHostPath
+ */
+export interface ClusterV1Beta2SpecManifestsHostPath {
+  /**
+   * path of the directory on the host.
+   * If the path is a symlink, it will follow the link to the real path.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   *
+   * @schema ClusterV1Beta2SpecManifestsHostPath#path
+   */
+  readonly path: string;
+
+  /**
+   * type for HostPath Volume
+   * Defaults to ""
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   *
+   * @default More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   * @schema ClusterV1Beta2SpecManifestsHostPath#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsHostPath' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsHostPath(obj: ClusterV1Beta2SpecManifestsHostPath | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'path': obj.path,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+ * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+ *
+ * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+ * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+ * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+ *
+ * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+ * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+ * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+ * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+ * The volume will be mounted read-only (ro) and non-executable files (noexec).
+ * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+ * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+ *
+ * @schema ClusterV1Beta2SpecManifestsImage
+ */
+export interface ClusterV1Beta2SpecManifestsImage {
+  /**
+   * Policy for pulling OCI objects. Possible values are:
+   * Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   * Defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
+   *
+   * @default Always if :latest tag is specified, or IfNotPresent otherwise.
+   * @schema ClusterV1Beta2SpecManifestsImage#pullPolicy
+   */
+  readonly pullPolicy?: string;
+
+  /**
+   * Required: Image or artifact reference to be used.
+   * Behaves in the same way as pod.spec.containers[*].image.
+   * Pull secrets will be assembled in the same way as for the container image by looking up node credentials, SA image pull secrets, and pod spec image pull secrets.
+   * More info: https://kubernetes.io/docs/concepts/containers/images
+   * This field is optional to allow higher level config management to default or override
+   * container images in workload controllers like Deployments and StatefulSets.
+   *
+   * @schema ClusterV1Beta2SpecManifestsImage#reference
+   */
+  readonly reference?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsImage(obj: ClusterV1Beta2SpecManifestsImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'pullPolicy': obj.pullPolicy,
+    'reference': obj.reference,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * iscsi represents an ISCSI Disk resource that is attached to a
+ * kubelet's host machine and then exposed to the pod.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
+ *
+ * @schema ClusterV1Beta2SpecManifestsIscsi
+ */
+export interface ClusterV1Beta2SpecManifestsIscsi {
+  /**
+   * chapAuthDiscovery defines whether support iSCSI Discovery CHAP authentication
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#chapAuthDiscovery
+   */
+  readonly chapAuthDiscovery?: boolean;
+
+  /**
+   * chapAuthSession defines whether support iSCSI Session CHAP authentication
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#chapAuthSession
+   */
+  readonly chapAuthSession?: boolean;
+
+  /**
+   * fsType is the filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * initiatorName is the custom iSCSI Initiator Name.
+   * If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface
+   * <target portal>:<volume name> will be created for the connection.
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#initiatorName
+   */
+  readonly initiatorName?: string;
+
+  /**
+   * iqn is the target iSCSI Qualified Name.
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#iqn
+   */
+  readonly iqn: string;
+
+  /**
+   * iscsiInterface is the interface Name that uses an iSCSI transport.
+   * Defaults to 'default' (tcp).
+   *
+   * @default default' (tcp).
+   * @schema ClusterV1Beta2SpecManifestsIscsi#iscsiInterface
+   */
+  readonly iscsiInterface?: string;
+
+  /**
+   * lun represents iSCSI Target Lun number.
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#lun
+   */
+  readonly lun: number;
+
+  /**
+   * portals is the iSCSI Target Portal List. The portal is either an IP or ip_addr:port if the port
+   * is other than default (typically TCP ports 860 and 3260).
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#portals
+   */
+  readonly portals?: string[];
+
+  /**
+   * readOnly here will force the ReadOnly setting in VolumeMounts.
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecManifestsIscsi#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is the CHAP Secret for iSCSI target and initiator authentication
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecManifestsIscsiSecretRef;
+
+  /**
+   * targetPortal is iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port
+   * is other than default (typically TCP ports 860 and 3260).
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsi#targetPortal
+   */
+  readonly targetPortal: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsIscsi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsIscsi(obj: ClusterV1Beta2SpecManifestsIscsi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'chapAuthDiscovery': obj.chapAuthDiscovery,
+    'chapAuthSession': obj.chapAuthSession,
+    'fsType': obj.fsType,
+    'initiatorName': obj.initiatorName,
+    'iqn': obj.iqn,
+    'iscsiInterface': obj.iscsiInterface,
+    'lun': obj.lun,
+    'portals': obj.portals?.map(y => y),
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsIscsiSecretRef(obj.secretRef),
+    'targetPortal': obj.targetPortal,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * nfs represents an NFS mount on the host that shares a pod's lifetime
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+ *
+ * @schema ClusterV1Beta2SpecManifestsNfs
+ */
+export interface ClusterV1Beta2SpecManifestsNfs {
+  /**
+   * path that is exported by the NFS server.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @schema ClusterV1Beta2SpecManifestsNfs#path
+   */
+  readonly path: string;
+
+  /**
+   * readOnly here will force the NFS export to be mounted with read-only permissions.
+   * Defaults to false.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecManifestsNfs#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * server is the hostname or IP address of the NFS server.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @schema ClusterV1Beta2SpecManifestsNfs#server
+   */
+  readonly server: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsNfs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsNfs(obj: ClusterV1Beta2SpecManifestsNfs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'path': obj.path,
+    'readOnly': obj.readOnly,
+    'server': obj.server,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * persistentVolumeClaimVolumeSource represents a reference to a
+ * PersistentVolumeClaim in the same namespace.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+ *
+ * @schema ClusterV1Beta2SpecManifestsPersistentVolumeClaim
+ */
+export interface ClusterV1Beta2SpecManifestsPersistentVolumeClaim {
+  /**
+   * claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+   *
+   * @schema ClusterV1Beta2SpecManifestsPersistentVolumeClaim#claimName
+   */
+  readonly claimName: string;
+
+  /**
+   * readOnly Will force the ReadOnly setting in VolumeMounts.
+   * Default false.
+   *
+   * @schema ClusterV1Beta2SpecManifestsPersistentVolumeClaim#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsPersistentVolumeClaim' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsPersistentVolumeClaim(obj: ClusterV1Beta2SpecManifestsPersistentVolumeClaim | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'claimName': obj.claimName,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+ * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsPhotonPersistentDisk
+ */
+export interface ClusterV1Beta2SpecManifestsPhotonPersistentDisk {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecManifestsPhotonPersistentDisk#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * pdID is the ID that identifies Photon Controller persistent disk
+   *
+   * @schema ClusterV1Beta2SpecManifestsPhotonPersistentDisk#pdID
+   */
+  readonly pdId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsPhotonPersistentDisk' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsPhotonPersistentDisk(obj: ClusterV1Beta2SpecManifestsPhotonPersistentDisk | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'pdID': obj.pdId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+ * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+ * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+ * is on.
+ *
+ * @schema ClusterV1Beta2SpecManifestsPortworxVolume
+ */
+export interface ClusterV1Beta2SpecManifestsPortworxVolume {
+  /**
+   * fSType represents the filesystem type to mount
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecManifestsPortworxVolume#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecManifestsPortworxVolume#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * volumeID uniquely identifies a Portworx volume
+   *
+   * @schema ClusterV1Beta2SpecManifestsPortworxVolume#volumeID
+   */
+  readonly volumeId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsPortworxVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsPortworxVolume(obj: ClusterV1Beta2SpecManifestsPortworxVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'readOnly': obj.readOnly,
+    'volumeID': obj.volumeId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * projected items for all in one resources secrets, configmaps, and downward API
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjected
+ */
+export interface ClusterV1Beta2SpecManifestsProjected {
+  /**
+   * defaultMode are the mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjected#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * sources is the list of volume projections. Each entry in this list
+   * handles one source.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjected#sources
+   */
+  readonly sources?: ClusterV1Beta2SpecManifestsProjectedSources[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjected' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjected(obj: ClusterV1Beta2SpecManifestsProjected | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'sources': obj.sources?.map(y => toJson_ClusterV1Beta2SpecManifestsProjectedSources(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+ * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsQuobyte
+ */
+export interface ClusterV1Beta2SpecManifestsQuobyte {
+  /**
+   * group to map volume access to
+   * Default is no group
+   *
+   * @default no group
+   * @schema ClusterV1Beta2SpecManifestsQuobyte#group
+   */
+  readonly group?: string;
+
+  /**
+   * readOnly here will force the Quobyte volume to be mounted with read-only permissions.
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecManifestsQuobyte#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * registry represents a single or multiple Quobyte Registry services
+   * specified as a string as host:port pair (multiple entries are separated with commas)
+   * which acts as the central registry for volumes
+   *
+   * @schema ClusterV1Beta2SpecManifestsQuobyte#registry
+   */
+  readonly registry: string;
+
+  /**
+   * tenant owning the given Quobyte volume in the Backend
+   * Used with dynamically provisioned Quobyte volumes, value is set by the plugin
+   *
+   * @schema ClusterV1Beta2SpecManifestsQuobyte#tenant
+   */
+  readonly tenant?: string;
+
+  /**
+   * user to map volume access to
+   * Defaults to serivceaccount user
+   *
+   * @default serivceaccount user
+   * @schema ClusterV1Beta2SpecManifestsQuobyte#user
+   */
+  readonly user?: string;
+
+  /**
+   * volume is a string that references an already created Quobyte volume by name.
+   *
+   * @schema ClusterV1Beta2SpecManifestsQuobyte#volume
+   */
+  readonly volume: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsQuobyte' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsQuobyte(obj: ClusterV1Beta2SpecManifestsQuobyte | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'group': obj.group,
+    'readOnly': obj.readOnly,
+    'registry': obj.registry,
+    'tenant': obj.tenant,
+    'user': obj.user,
+    'volume': obj.volume,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
+ * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsRbd
+ */
+export interface ClusterV1Beta2SpecManifestsRbd {
+  /**
+   * fsType is the filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#rbd
+   *
+   * @schema ClusterV1Beta2SpecManifestsRbd#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * image is the rados image name.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecManifestsRbd#image
+   */
+  readonly image: string;
+
+  /**
+   * keyring is the path to key ring for RBDUser.
+   * Default is /etc/ceph/keyring.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default etc/ceph/keyring.
+   * @schema ClusterV1Beta2SpecManifestsRbd#keyring
+   */
+  readonly keyring?: string;
+
+  /**
+   * monitors is a collection of Ceph monitors.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecManifestsRbd#monitors
+   */
+  readonly monitors: string[];
+
+  /**
+   * pool is the rados pool name.
+   * Default is rbd.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default rbd.
+   * @schema ClusterV1Beta2SpecManifestsRbd#pool
+   */
+  readonly pool?: string;
+
+  /**
+   * readOnly here will force the ReadOnly setting in VolumeMounts.
+   * Defaults to false.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecManifestsRbd#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is name of the authentication secret for RBDUser. If provided
+   * overrides keyring.
+   * Default is nil.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default nil.
+   * @schema ClusterV1Beta2SpecManifestsRbd#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecManifestsRbdSecretRef;
+
+  /**
+   * user is the rados user name.
+   * Default is admin.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default admin.
+   * @schema ClusterV1Beta2SpecManifestsRbd#user
+   */
+  readonly user?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsRbd' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsRbd(obj: ClusterV1Beta2SpecManifestsRbd | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'image': obj.image,
+    'keyring': obj.keyring,
+    'monitors': obj.monitors?.map(y => y),
+    'pool': obj.pool,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsRbdSecretRef(obj.secretRef),
+    'user': obj.user,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+ * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsScaleIo
+ */
+export interface ClusterV1Beta2SpecManifestsScaleIo {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs".
+   * Default is "xfs".
+   *
+   * @default xfs".
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * gateway is the host address of the ScaleIO API Gateway.
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#gateway
+   */
+  readonly gateway: string;
+
+  /**
+   * protectionDomain is the name of the ScaleIO Protection Domain for the configured storage.
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#protectionDomain
+   */
+  readonly protectionDomain?: string;
+
+  /**
+   * readOnly Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef references to the secret for ScaleIO user and other
+   * sensitive information. If this is not provided, Login operation will fail.
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#secretRef
+   */
+  readonly secretRef: ClusterV1Beta2SpecManifestsScaleIoSecretRef;
+
+  /**
+   * sslEnabled Flag enable/disable SSL communication with Gateway, default false
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#sslEnabled
+   */
+  readonly sslEnabled?: boolean;
+
+  /**
+   * storageMode indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.
+   * Default is ThinProvisioned.
+   *
+   * @default ThinProvisioned.
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#storageMode
+   */
+  readonly storageMode?: string;
+
+  /**
+   * storagePool is the ScaleIO Storage Pool associated with the protection domain.
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#storagePool
+   */
+  readonly storagePool?: string;
+
+  /**
+   * system is the name of the storage system as configured in ScaleIO.
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#system
+   */
+  readonly system: string;
+
+  /**
+   * volumeName is the name of a volume already created in the ScaleIO system
+   * that is associated with this volume source.
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIo#volumeName
+   */
+  readonly volumeName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsScaleIo' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsScaleIo(obj: ClusterV1Beta2SpecManifestsScaleIo | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'gateway': obj.gateway,
+    'protectionDomain': obj.protectionDomain,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsScaleIoSecretRef(obj.secretRef),
+    'sslEnabled': obj.sslEnabled,
+    'storageMode': obj.storageMode,
+    'storagePool': obj.storagePool,
+    'system': obj.system,
+    'volumeName': obj.volumeName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secret represents a secret that should populate this volume.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#secret
+ *
+ * @schema ClusterV1Beta2SpecManifestsSecret
+ */
+export interface ClusterV1Beta2SpecManifestsSecret {
+  /**
+   * defaultMode is Optional: mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values
+   * for mode bits. Defaults to 0644.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @default 0644.
+   * @schema ClusterV1Beta2SpecManifestsSecret#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * items If unspecified, each key-value pair in the Data field of the referenced
+   * Secret will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the Secret,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsSecret#items
+   */
+  readonly items?: ClusterV1Beta2SpecManifestsSecretItems[];
+
+  /**
+   * optional field specify whether the Secret or its keys must be defined
+   *
+   * @schema ClusterV1Beta2SpecManifestsSecret#optional
+   */
+  readonly optional?: boolean;
+
+  /**
+   * secretName is the name of the secret in the pod's namespace to use.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#secret
+   *
+   * @schema ClusterV1Beta2SpecManifestsSecret#secretName
+   */
+  readonly secretName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsSecret' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsSecret(obj: ClusterV1Beta2SpecManifestsSecret | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecManifestsSecretItems(y)),
+    'optional': obj.optional,
+    'secretName': obj.secretName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+ * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsStorageos
+ */
+export interface ClusterV1Beta2SpecManifestsStorageos {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecManifestsStorageos#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecManifestsStorageos#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef specifies the secret to use for obtaining the StorageOS API
+   * credentials.  If not specified, default values will be attempted.
+   *
+   * @schema ClusterV1Beta2SpecManifestsStorageos#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecManifestsStorageosSecretRef;
+
+  /**
+   * volumeName is the human-readable name of the StorageOS volume.  Volume
+   * names are only unique within a namespace.
+   *
+   * @schema ClusterV1Beta2SpecManifestsStorageos#volumeName
+   */
+  readonly volumeName?: string;
+
+  /**
+   * volumeNamespace specifies the scope of the volume within StorageOS.  If no
+   * namespace is specified then the Pod's namespace will be used.  This allows the
+   * Kubernetes name scoping to be mirrored within StorageOS for tighter integration.
+   * Set VolumeName to any name to override the default behaviour.
+   * Set to "default" if you are not using namespaces within StorageOS.
+   * Namespaces that do not pre-exist within StorageOS will be created.
+   *
+   * @schema ClusterV1Beta2SpecManifestsStorageos#volumeNamespace
+   */
+  readonly volumeNamespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsStorageos' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsStorageos(obj: ClusterV1Beta2SpecManifestsStorageos | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecManifestsStorageosSecretRef(obj.secretRef),
+    'volumeName': obj.volumeName,
+    'volumeNamespace': obj.volumeNamespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+ * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+ * are redirected to the csi.vsphere.vmware.com CSI driver.
+ *
+ * @schema ClusterV1Beta2SpecManifestsVsphereVolume
+ */
+export interface ClusterV1Beta2SpecManifestsVsphereVolume {
+  /**
+   * fsType is filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecManifestsVsphereVolume#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * storagePolicyID is the storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName.
+   *
+   * @schema ClusterV1Beta2SpecManifestsVsphereVolume#storagePolicyID
+   */
+  readonly storagePolicyId?: string;
+
+  /**
+   * storagePolicyName is the storage Policy Based Management (SPBM) profile name.
+   *
+   * @schema ClusterV1Beta2SpecManifestsVsphereVolume#storagePolicyName
+   */
+  readonly storagePolicyName?: string;
+
+  /**
+   * volumePath is the path that identifies vSphere volume vmdk
+   *
+   * @schema ClusterV1Beta2SpecManifestsVsphereVolume#volumePath
+   */
+  readonly volumePath: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsVsphereVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsVsphereVolume(obj: ClusterV1Beta2SpecManifestsVsphereVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'storagePolicyID': obj.storagePolicyId,
+    'storagePolicyName': obj.storagePolicyName,
+    'volumePath': obj.volumePath,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * awsElasticBlockStore represents an AWS Disk resource that is attached to a
+ * kubelet's host machine and then exposed to the pod.
+ * Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree
+ * awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+ *
+ * @schema ClusterV1Beta2SpecMountsAwsElasticBlockStore
+ */
+export interface ClusterV1Beta2SpecMountsAwsElasticBlockStore {
+  /**
+   * fsType is the filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecMountsAwsElasticBlockStore#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * partition is the partition in the volume that you want to mount.
+   * If omitted, the default is to mount by volume name.
+   * Examples: For volume /dev/sda1, you specify the partition as "1".
+   * Similarly, the volume partition for /dev/sda is "0" (or you can leave the property empty).
+   *
+   * @schema ClusterV1Beta2SpecMountsAwsElasticBlockStore#partition
+   */
+  readonly partition?: number;
+
+  /**
+   * readOnly value true will force the readOnly setting in VolumeMounts.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecMountsAwsElasticBlockStore#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * volumeID is unique ID of the persistent disk resource in AWS (Amazon EBS volume).
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore
+   *
+   * @schema ClusterV1Beta2SpecMountsAwsElasticBlockStore#volumeID
+   */
+  readonly volumeId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsAwsElasticBlockStore' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsAwsElasticBlockStore(obj: ClusterV1Beta2SpecMountsAwsElasticBlockStore | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'partition': obj.partition,
+    'readOnly': obj.readOnly,
+    'volumeID': obj.volumeId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.
+ * Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type
+ * are redirected to the disk.csi.azure.com CSI driver.
+ *
+ * @schema ClusterV1Beta2SpecMountsAzureDisk
+ */
+export interface ClusterV1Beta2SpecMountsAzureDisk {
+  /**
+   * cachingMode is the Host Caching mode: None, Read Only, Read Write.
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureDisk#cachingMode
+   */
+  readonly cachingMode?: string;
+
+  /**
+   * diskName is the Name of the data disk in the blob storage
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureDisk#diskName
+   */
+  readonly diskName: string;
+
+  /**
+   * diskURI is the URI of data disk in the blob storage
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureDisk#diskURI
+   */
+  readonly diskUri: string;
+
+  /**
+   * fsType is Filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureDisk#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * kind expected values are Shared: multiple blob disks per storage account  Dedicated: single blob disk per storage account  Managed: azure managed data disk (only in managed availability set). defaults to shared
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureDisk#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * readOnly Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecMountsAzureDisk#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsAzureDisk' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsAzureDisk(obj: ClusterV1Beta2SpecMountsAzureDisk | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cachingMode': obj.cachingMode,
+    'diskName': obj.diskName,
+    'diskURI': obj.diskUri,
+    'fsType': obj.fsType,
+    'kind': obj.kind,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * azureFile represents an Azure File Service mount on the host and bind mount to the pod.
+ * Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type
+ * are redirected to the file.csi.azure.com CSI driver.
+ *
+ * @schema ClusterV1Beta2SpecMountsAzureFile
+ */
+export interface ClusterV1Beta2SpecMountsAzureFile {
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureFile#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretName is the  name of secret that contains Azure Storage Account Name and Key
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureFile#secretName
+   */
+  readonly secretName: string;
+
+  /**
+   * shareName is the azure share Name
+   *
+   * @schema ClusterV1Beta2SpecMountsAzureFile#shareName
+   */
+  readonly shareName: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsAzureFile' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsAzureFile(obj: ClusterV1Beta2SpecMountsAzureFile | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'readOnly': obj.readOnly,
+    'secretName': obj.secretName,
+    'shareName': obj.shareName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.
+ * Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsCephfs
+ */
+export interface ClusterV1Beta2SpecMountsCephfs {
+  /**
+   * monitors is Required: Monitors is a collection of Ceph monitors
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecMountsCephfs#monitors
+   */
+  readonly monitors: string[];
+
+  /**
+   * path is Optional: Used as the mounted root, rather than the full Ceph tree, default is /
+   *
+   * @schema ClusterV1Beta2SpecMountsCephfs#path
+   */
+  readonly path?: string;
+
+  /**
+   * readOnly is Optional: Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecMountsCephfs#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretFile is Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecMountsCephfs#secretFile
+   */
+  readonly secretFile?: string;
+
+  /**
+   * secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecMountsCephfs#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecMountsCephfsSecretRef;
+
+  /**
+   * user is optional: User is the rados user name, default is admin
+   * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecMountsCephfs#user
+   */
+  readonly user?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsCephfs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsCephfs(obj: ClusterV1Beta2SpecMountsCephfs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'monitors': obj.monitors?.map(y => y),
+    'path': obj.path,
+    'readOnly': obj.readOnly,
+    'secretFile': obj.secretFile,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsCephfsSecretRef(obj.secretRef),
+    'user': obj.user,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * cinder represents a cinder volume attached and mounted on kubelets host machine.
+ * Deprecated: Cinder is deprecated. All operations for the in-tree cinder type
+ * are redirected to the cinder.csi.openstack.org CSI driver.
+ * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+ *
+ * @schema ClusterV1Beta2SpecMountsCinder
+ */
+export interface ClusterV1Beta2SpecMountsCinder {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecMountsCinder#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecMountsCinder#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is optional: points to a secret object containing parameters used to connect
+   * to OpenStack.
+   *
+   * @schema ClusterV1Beta2SpecMountsCinder#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecMountsCinderSecretRef;
+
+  /**
+   * volumeID used to identify the volume in cinder.
+   * More info: https://examples.k8s.io/mysql-cinder-pd/README.md
+   *
+   * @schema ClusterV1Beta2SpecMountsCinder#volumeID
+   */
+  readonly volumeId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsCinder' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsCinder(obj: ClusterV1Beta2SpecMountsCinder | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsCinderSecretRef(obj.secretRef),
+    'volumeID': obj.volumeId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configMap represents a configMap that should populate this volume
+ *
+ * @schema ClusterV1Beta2SpecMountsConfigMap
+ */
+export interface ClusterV1Beta2SpecMountsConfigMap {
+  /**
+   * defaultMode is optional: mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * Defaults to 0644.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @default 0644.
+   * @schema ClusterV1Beta2SpecMountsConfigMap#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * items if unspecified, each key-value pair in the Data field of the referenced
+   * ConfigMap will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the ConfigMap,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsConfigMap#items
+   */
+  readonly items?: ClusterV1Beta2SpecMountsConfigMapItems[];
+
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsConfigMap#name
+   */
+  readonly name?: string;
+
+  /**
+   * optional specify whether the ConfigMap or its keys must be defined
+   *
+   * @schema ClusterV1Beta2SpecMountsConfigMap#optional
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsConfigMap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsConfigMap(obj: ClusterV1Beta2SpecMountsConfigMap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecMountsConfigMapItems(y)),
+    'name': obj.name,
+    'optional': obj.optional,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.
+ *
+ * @schema ClusterV1Beta2SpecMountsCsi
+ */
+export interface ClusterV1Beta2SpecMountsCsi {
+  /**
+   * driver is the name of the CSI driver that handles this volume.
+   * Consult with your admin for the correct name as registered in the cluster.
+   *
+   * @schema ClusterV1Beta2SpecMountsCsi#driver
+   */
+  readonly driver: string;
+
+  /**
+   * fsType to mount. Ex. "ext4", "xfs", "ntfs".
+   * If not provided, the empty value is passed to the associated CSI driver
+   * which will determine the default filesystem to apply.
+   *
+   * @schema ClusterV1Beta2SpecMountsCsi#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * nodePublishSecretRef is a reference to the secret object containing
+   * sensitive information to pass to the CSI driver to complete the CSI
+   * NodePublishVolume and NodeUnpublishVolume calls.
+   * This field is optional, and  may be empty if no secret is required. If the
+   * secret object contains more than one secret, all secret references are passed.
+   *
+   * @schema ClusterV1Beta2SpecMountsCsi#nodePublishSecretRef
+   */
+  readonly nodePublishSecretRef?: ClusterV1Beta2SpecMountsCsiNodePublishSecretRef;
+
+  /**
+   * readOnly specifies a read-only configuration for the volume.
+   * Defaults to false (read/write).
+   *
+   * @default false (read/write).
+   * @schema ClusterV1Beta2SpecMountsCsi#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * volumeAttributes stores driver-specific properties that are passed to the CSI
+   * driver. Consult your driver's documentation for supported values.
+   *
+   * @schema ClusterV1Beta2SpecMountsCsi#volumeAttributes
+   */
+  readonly volumeAttributes?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsCsi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsCsi(obj: ClusterV1Beta2SpecMountsCsi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'driver': obj.driver,
+    'fsType': obj.fsType,
+    'nodePublishSecretRef': toJson_ClusterV1Beta2SpecMountsCsiNodePublishSecretRef(obj.nodePublishSecretRef),
+    'readOnly': obj.readOnly,
+    'volumeAttributes': ((obj.volumeAttributes) === undefined) ? undefined : (Object.entries(obj.volumeAttributes).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * downwardAPI represents downward API about the pod that should populate this volume
+ *
+ * @schema ClusterV1Beta2SpecMountsDownwardApi
+ */
+export interface ClusterV1Beta2SpecMountsDownwardApi {
+  /**
+   * Optional: mode bits to use on created files by default. Must be a
+   * Optional: mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * Defaults to 0644.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @default 0644.
+   * @schema ClusterV1Beta2SpecMountsDownwardApi#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * Items is a list of downward API volume file
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApi#items
+   */
+  readonly items?: ClusterV1Beta2SpecMountsDownwardApiItems[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsDownwardApi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsDownwardApi(obj: ClusterV1Beta2SpecMountsDownwardApi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecMountsDownwardApiItems(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * emptyDir represents a temporary directory that shares a pod's lifetime.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+ *
+ * @schema ClusterV1Beta2SpecMountsEmptyDir
+ */
+export interface ClusterV1Beta2SpecMountsEmptyDir {
+  /**
+   * medium represents what type of storage medium should back this directory.
+   * The default is "" which means to use the node's default medium.
+   * Must be an empty string (default) or Memory.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+   *
+   * @schema ClusterV1Beta2SpecMountsEmptyDir#medium
+   */
+  readonly medium?: string;
+
+  /**
+   * sizeLimit is the total amount of local storage required for this EmptyDir volume.
+   * The size limit is also applicable for memory medium.
+   * The maximum usage on memory medium EmptyDir would be the minimum value between
+   * the SizeLimit specified here and the sum of memory limits of all containers in a pod.
+   * The default is nil which means that the limit is undefined.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+   *
+   * @schema ClusterV1Beta2SpecMountsEmptyDir#sizeLimit
+   */
+  readonly sizeLimit?: ClusterV1Beta2SpecMountsEmptyDirSizeLimit;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEmptyDir' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEmptyDir(obj: ClusterV1Beta2SpecMountsEmptyDir | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'medium': obj.medium,
+    'sizeLimit': obj.sizeLimit?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ephemeral represents a volume that is handled by a cluster storage driver.
+ * The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,
+ * and deleted when the pod is removed.
+ *
+ * Use this if:
+ * a) the volume is only needed while the pod runs,
+ * b) features of normal volumes like restoring from snapshot or capacity
+ * tracking are needed,
+ * c) the storage driver is specified through a storage class, and
+ * d) the storage driver supports dynamic volume provisioning through
+ * a PersistentVolumeClaim (see EphemeralVolumeSource for more
+ * information on the connection between this volume type
+ * and PersistentVolumeClaim).
+ *
+ * Use PersistentVolumeClaim or one of the vendor-specific
+ * APIs for volumes that persist for longer than the lifecycle
+ * of an individual pod.
+ *
+ * Use CSI for light-weight local ephemeral volumes if the CSI driver is meant to
+ * be used that way - see the documentation of the driver for
+ * more information.
+ *
+ * A pod can use both types of ephemeral volumes and
+ * persistent volumes at the same time.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeral
+ */
+export interface ClusterV1Beta2SpecMountsEphemeral {
+  /**
+   * Will be used to create a stand-alone PVC to provision the volume.
+   * The pod in which this EphemeralVolumeSource is embedded will be the
+   * owner of the PVC, i.e. the PVC will be deleted together with the
+   * pod.  The name of the PVC will be `<pod name>-<volume name>` where
+   * `<volume name>` is the name from the `PodSpec.Volumes` array
+   * entry. Pod validation will reject the pod if the concatenated name
+   * is not valid for a PVC (for example, too long).
+   *
+   * An existing PVC with that name that is not owned by the pod
+   * will *not* be used for the pod to avoid using an unrelated
+   * volume by mistake. Starting the pod is then blocked until
+   * the unrelated PVC is removed. If such a pre-created PVC is
+   * meant to be used by the pod, the PVC has to updated with an
+   * owner reference to the pod once the pod exists. Normally
+   * this should not be necessary, but it may be useful when
+   * manually reconstructing a broken cluster.
+   *
+   * This field is read-only and no changes will be made by Kubernetes
+   * to the PVC after it has been created.
+   *
+   * Required, must not be nil.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeral#volumeClaimTemplate
+   */
+  readonly volumeClaimTemplate?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeral' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeral(obj: ClusterV1Beta2SpecMountsEphemeral | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'volumeClaimTemplate': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate(obj.volumeClaimTemplate),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.
+ *
+ * @schema ClusterV1Beta2SpecMountsFc
+ */
+export interface ClusterV1Beta2SpecMountsFc {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecMountsFc#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * lun is Optional: FC target lun number
+   *
+   * @schema ClusterV1Beta2SpecMountsFc#lun
+   */
+  readonly lun?: number;
+
+  /**
+   * readOnly is Optional: Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecMountsFc#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * targetWWNs is Optional: FC target worldwide names (WWNs)
+   *
+   * @schema ClusterV1Beta2SpecMountsFc#targetWWNs
+   */
+  readonly targetWwNs?: string[];
+
+  /**
+   * wwids Optional: FC volume world wide identifiers (wwids)
+   * Either wwids or combination of targetWWNs and lun must be set, but not both simultaneously.
+   *
+   * @schema ClusterV1Beta2SpecMountsFc#wwids
+   */
+  readonly wwids?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsFc' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsFc(obj: ClusterV1Beta2SpecMountsFc | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'lun': obj.lun,
+    'readOnly': obj.readOnly,
+    'targetWWNs': obj.targetWwNs?.map(y => y),
+    'wwids': obj.wwids?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * flexVolume represents a generic volume resource that is
+ * provisioned/attached using an exec based plugin.
+ * Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.
+ *
+ * @schema ClusterV1Beta2SpecMountsFlexVolume
+ */
+export interface ClusterV1Beta2SpecMountsFlexVolume {
+  /**
+   * driver is the name of the driver to use for this volume.
+   *
+   * @schema ClusterV1Beta2SpecMountsFlexVolume#driver
+   */
+  readonly driver: string;
+
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". The default filesystem depends on FlexVolume script.
+   *
+   * @schema ClusterV1Beta2SpecMountsFlexVolume#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * options is Optional: this field holds extra command options if any.
+   *
+   * @schema ClusterV1Beta2SpecMountsFlexVolume#options
+   */
+  readonly options?: { [key: string]: string };
+
+  /**
+   * readOnly is Optional: defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecMountsFlexVolume#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is Optional: secretRef is reference to the secret object containing
+   * sensitive information to pass to the plugin scripts. This may be
+   * empty if no secret object is specified. If the secret object
+   * contains more than one secret, all secrets are passed to the plugin
+   * scripts.
+   *
+   * @schema ClusterV1Beta2SpecMountsFlexVolume#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecMountsFlexVolumeSecretRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsFlexVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsFlexVolume(obj: ClusterV1Beta2SpecMountsFlexVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'driver': obj.driver,
+    'fsType': obj.fsType,
+    'options': ((obj.options) === undefined) ? undefined : (Object.entries(obj.options).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsFlexVolumeSecretRef(obj.secretRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.
+ * Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsFlocker
+ */
+export interface ClusterV1Beta2SpecMountsFlocker {
+  /**
+   * datasetName is Name of the dataset stored as metadata -> name on the dataset for Flocker
+   * should be considered as deprecated
+   *
+   * @schema ClusterV1Beta2SpecMountsFlocker#datasetName
+   */
+  readonly datasetName?: string;
+
+  /**
+   * datasetUUID is the UUID of the dataset. This is unique identifier of a Flocker dataset
+   *
+   * @schema ClusterV1Beta2SpecMountsFlocker#datasetUUID
+   */
+  readonly datasetUuid?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsFlocker' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsFlocker(obj: ClusterV1Beta2SpecMountsFlocker | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'datasetName': obj.datasetName,
+    'datasetUUID': obj.datasetUuid,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * gcePersistentDisk represents a GCE Disk resource that is attached to a
+ * kubelet's host machine and then exposed to the pod.
+ * Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree
+ * gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+ *
+ * @schema ClusterV1Beta2SpecMountsGcePersistentDisk
+ */
+export interface ClusterV1Beta2SpecMountsGcePersistentDisk {
+  /**
+   * fsType is filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecMountsGcePersistentDisk#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * partition is the partition in the volume that you want to mount.
+   * If omitted, the default is to mount by volume name.
+   * Examples: For volume /dev/sda1, you specify the partition as "1".
+   * Similarly, the volume partition for /dev/sda is "0" (or you can leave the property empty).
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecMountsGcePersistentDisk#partition
+   */
+  readonly partition?: number;
+
+  /**
+   * pdName is unique name of the PD resource in GCE. Used to identify the disk in GCE.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @schema ClusterV1Beta2SpecMountsGcePersistentDisk#pdName
+   */
+  readonly pdName: string;
+
+  /**
+   * readOnly here will force the ReadOnly setting in VolumeMounts.
+   * Defaults to false.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecMountsGcePersistentDisk#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsGcePersistentDisk' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsGcePersistentDisk(obj: ClusterV1Beta2SpecMountsGcePersistentDisk | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'partition': obj.partition,
+    'pdName': obj.pdName,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * gitRepo represents a git repository at a particular revision.
+ * Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an
+ * EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir
+ * into the Pod's container.
+ *
+ * @schema ClusterV1Beta2SpecMountsGitRepo
+ */
+export interface ClusterV1Beta2SpecMountsGitRepo {
+  /**
+   * directory is the target directory name.
+   * Must not contain or start with '..'.  If '.' is supplied, the volume directory will be the
+   * git repository.  Otherwise, if specified, the volume will contain the git repository in
+   * the subdirectory with the given name.
+   *
+   * @schema ClusterV1Beta2SpecMountsGitRepo#directory
+   */
+  readonly directory?: string;
+
+  /**
+   * repository is the URL
+   *
+   * @schema ClusterV1Beta2SpecMountsGitRepo#repository
+   */
+  readonly repository: string;
+
+  /**
+   * revision is the commit hash for the specified revision.
+   *
+   * @schema ClusterV1Beta2SpecMountsGitRepo#revision
+   */
+  readonly revision?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsGitRepo' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsGitRepo(obj: ClusterV1Beta2SpecMountsGitRepo | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'directory': obj.directory,
+    'repository': obj.repository,
+    'revision': obj.revision,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.
+ * Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsGlusterfs
+ */
+export interface ClusterV1Beta2SpecMountsGlusterfs {
+  /**
+   * endpoints is the endpoint name that details Glusterfs topology.
+   *
+   * @schema ClusterV1Beta2SpecMountsGlusterfs#endpoints
+   */
+  readonly endpoints: string;
+
+  /**
+   * path is the Glusterfs volume path.
+   * More info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod
+   *
+   * @schema ClusterV1Beta2SpecMountsGlusterfs#path
+   */
+  readonly path: string;
+
+  /**
+   * readOnly here will force the Glusterfs volume to be mounted with read-only permissions.
+   * Defaults to false.
+   * More info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecMountsGlusterfs#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsGlusterfs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsGlusterfs(obj: ClusterV1Beta2SpecMountsGlusterfs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'endpoints': obj.endpoints,
+    'path': obj.path,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * hostPath represents a pre-existing file or directory on the host
+ * machine that is directly exposed to the container. This is generally
+ * used for system agents or other privileged things that are allowed
+ * to see the host machine. Most containers will NOT need this.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+ *
+ * @schema ClusterV1Beta2SpecMountsHostPath
+ */
+export interface ClusterV1Beta2SpecMountsHostPath {
+  /**
+   * path of the directory on the host.
+   * If the path is a symlink, it will follow the link to the real path.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   *
+   * @schema ClusterV1Beta2SpecMountsHostPath#path
+   */
+  readonly path: string;
+
+  /**
+   * type for HostPath Volume
+   * Defaults to ""
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   *
+   * @default More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+   * @schema ClusterV1Beta2SpecMountsHostPath#type
+   */
+  readonly type?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsHostPath' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsHostPath(obj: ClusterV1Beta2SpecMountsHostPath | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'path': obj.path,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.
+ * The volume is resolved at pod startup depending on which PullPolicy value is provided:
+ *
+ * - Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+ * - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+ * - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+ *
+ * The volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.
+ * A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.
+ * The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.
+ * The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.
+ * The volume will be mounted read-only (ro) and non-executable files (noexec).
+ * Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.
+ * The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.
+ *
+ * @schema ClusterV1Beta2SpecMountsImage
+ */
+export interface ClusterV1Beta2SpecMountsImage {
+  /**
+   * Policy for pulling OCI objects. Possible values are:
+   * Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.
+   * Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.
+   * IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.
+   * Defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
+   *
+   * @default Always if :latest tag is specified, or IfNotPresent otherwise.
+   * @schema ClusterV1Beta2SpecMountsImage#pullPolicy
+   */
+  readonly pullPolicy?: string;
+
+  /**
+   * Required: Image or artifact reference to be used.
+   * Behaves in the same way as pod.spec.containers[*].image.
+   * Pull secrets will be assembled in the same way as for the container image by looking up node credentials, SA image pull secrets, and pod spec image pull secrets.
+   * More info: https://kubernetes.io/docs/concepts/containers/images
+   * This field is optional to allow higher level config management to default or override
+   * container images in workload controllers like Deployments and StatefulSets.
+   *
+   * @schema ClusterV1Beta2SpecMountsImage#reference
+   */
+  readonly reference?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsImage' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsImage(obj: ClusterV1Beta2SpecMountsImage | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'pullPolicy': obj.pullPolicy,
+    'reference': obj.reference,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * iscsi represents an ISCSI Disk resource that is attached to a
+ * kubelet's host machine and then exposed to the pod.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi
+ *
+ * @schema ClusterV1Beta2SpecMountsIscsi
+ */
+export interface ClusterV1Beta2SpecMountsIscsi {
+  /**
+   * chapAuthDiscovery defines whether support iSCSI Discovery CHAP authentication
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#chapAuthDiscovery
+   */
+  readonly chapAuthDiscovery?: boolean;
+
+  /**
+   * chapAuthSession defines whether support iSCSI Session CHAP authentication
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#chapAuthSession
+   */
+  readonly chapAuthSession?: boolean;
+
+  /**
+   * fsType is the filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * initiatorName is the custom iSCSI Initiator Name.
+   * If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface
+   * <target portal>:<volume name> will be created for the connection.
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#initiatorName
+   */
+  readonly initiatorName?: string;
+
+  /**
+   * iqn is the target iSCSI Qualified Name.
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#iqn
+   */
+  readonly iqn: string;
+
+  /**
+   * iscsiInterface is the interface Name that uses an iSCSI transport.
+   * Defaults to 'default' (tcp).
+   *
+   * @default default' (tcp).
+   * @schema ClusterV1Beta2SpecMountsIscsi#iscsiInterface
+   */
+  readonly iscsiInterface?: string;
+
+  /**
+   * lun represents iSCSI Target Lun number.
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#lun
+   */
+  readonly lun: number;
+
+  /**
+   * portals is the iSCSI Target Portal List. The portal is either an IP or ip_addr:port if the port
+   * is other than default (typically TCP ports 860 and 3260).
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#portals
+   */
+  readonly portals?: string[];
+
+  /**
+   * readOnly here will force the ReadOnly setting in VolumeMounts.
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecMountsIscsi#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is the CHAP Secret for iSCSI target and initiator authentication
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecMountsIscsiSecretRef;
+
+  /**
+   * targetPortal is iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port
+   * is other than default (typically TCP ports 860 and 3260).
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsi#targetPortal
+   */
+  readonly targetPortal: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsIscsi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsIscsi(obj: ClusterV1Beta2SpecMountsIscsi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'chapAuthDiscovery': obj.chapAuthDiscovery,
+    'chapAuthSession': obj.chapAuthSession,
+    'fsType': obj.fsType,
+    'initiatorName': obj.initiatorName,
+    'iqn': obj.iqn,
+    'iscsiInterface': obj.iscsiInterface,
+    'lun': obj.lun,
+    'portals': obj.portals?.map(y => y),
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsIscsiSecretRef(obj.secretRef),
+    'targetPortal': obj.targetPortal,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * nfs represents an NFS mount on the host that shares a pod's lifetime
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+ *
+ * @schema ClusterV1Beta2SpecMountsNfs
+ */
+export interface ClusterV1Beta2SpecMountsNfs {
+  /**
+   * path that is exported by the NFS server.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @schema ClusterV1Beta2SpecMountsNfs#path
+   */
+  readonly path: string;
+
+  /**
+   * readOnly here will force the NFS export to be mounted with read-only permissions.
+   * Defaults to false.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecMountsNfs#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * server is the hostname or IP address of the NFS server.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+   *
+   * @schema ClusterV1Beta2SpecMountsNfs#server
+   */
+  readonly server: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsNfs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsNfs(obj: ClusterV1Beta2SpecMountsNfs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'path': obj.path,
+    'readOnly': obj.readOnly,
+    'server': obj.server,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * persistentVolumeClaimVolumeSource represents a reference to a
+ * PersistentVolumeClaim in the same namespace.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+ *
+ * @schema ClusterV1Beta2SpecMountsPersistentVolumeClaim
+ */
+export interface ClusterV1Beta2SpecMountsPersistentVolumeClaim {
+  /**
+   * claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+   *
+   * @schema ClusterV1Beta2SpecMountsPersistentVolumeClaim#claimName
+   */
+  readonly claimName: string;
+
+  /**
+   * readOnly Will force the ReadOnly setting in VolumeMounts.
+   * Default false.
+   *
+   * @schema ClusterV1Beta2SpecMountsPersistentVolumeClaim#readOnly
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsPersistentVolumeClaim' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsPersistentVolumeClaim(obj: ClusterV1Beta2SpecMountsPersistentVolumeClaim | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'claimName': obj.claimName,
+    'readOnly': obj.readOnly,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.
+ * Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsPhotonPersistentDisk
+ */
+export interface ClusterV1Beta2SpecMountsPhotonPersistentDisk {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecMountsPhotonPersistentDisk#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * pdID is the ID that identifies Photon Controller persistent disk
+   *
+   * @schema ClusterV1Beta2SpecMountsPhotonPersistentDisk#pdID
+   */
+  readonly pdId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsPhotonPersistentDisk' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsPhotonPersistentDisk(obj: ClusterV1Beta2SpecMountsPhotonPersistentDisk | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'pdID': obj.pdId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * portworxVolume represents a portworx volume attached and mounted on kubelets host machine.
+ * Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type
+ * are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate
+ * is on.
+ *
+ * @schema ClusterV1Beta2SpecMountsPortworxVolume
+ */
+export interface ClusterV1Beta2SpecMountsPortworxVolume {
+  /**
+   * fSType represents the filesystem type to mount
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecMountsPortworxVolume#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecMountsPortworxVolume#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * volumeID uniquely identifies a Portworx volume
+   *
+   * @schema ClusterV1Beta2SpecMountsPortworxVolume#volumeID
+   */
+  readonly volumeId: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsPortworxVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsPortworxVolume(obj: ClusterV1Beta2SpecMountsPortworxVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'readOnly': obj.readOnly,
+    'volumeID': obj.volumeId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * projected items for all in one resources secrets, configmaps, and downward API
+ *
+ * @schema ClusterV1Beta2SpecMountsProjected
+ */
+export interface ClusterV1Beta2SpecMountsProjected {
+  /**
+   * defaultMode are the mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjected#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * sources is the list of volume projections. Each entry in this list
+   * handles one source.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjected#sources
+   */
+  readonly sources?: ClusterV1Beta2SpecMountsProjectedSources[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjected' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjected(obj: ClusterV1Beta2SpecMountsProjected | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'sources': obj.sources?.map(y => toJson_ClusterV1Beta2SpecMountsProjectedSources(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * quobyte represents a Quobyte mount on the host that shares a pod's lifetime.
+ * Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsQuobyte
+ */
+export interface ClusterV1Beta2SpecMountsQuobyte {
+  /**
+   * group to map volume access to
+   * Default is no group
+   *
+   * @default no group
+   * @schema ClusterV1Beta2SpecMountsQuobyte#group
+   */
+  readonly group?: string;
+
+  /**
+   * readOnly here will force the Quobyte volume to be mounted with read-only permissions.
+   * Defaults to false.
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecMountsQuobyte#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * registry represents a single or multiple Quobyte Registry services
+   * specified as a string as host:port pair (multiple entries are separated with commas)
+   * which acts as the central registry for volumes
+   *
+   * @schema ClusterV1Beta2SpecMountsQuobyte#registry
+   */
+  readonly registry: string;
+
+  /**
+   * tenant owning the given Quobyte volume in the Backend
+   * Used with dynamically provisioned Quobyte volumes, value is set by the plugin
+   *
+   * @schema ClusterV1Beta2SpecMountsQuobyte#tenant
+   */
+  readonly tenant?: string;
+
+  /**
+   * user to map volume access to
+   * Defaults to serivceaccount user
+   *
+   * @default serivceaccount user
+   * @schema ClusterV1Beta2SpecMountsQuobyte#user
+   */
+  readonly user?: string;
+
+  /**
+   * volume is a string that references an already created Quobyte volume by name.
+   *
+   * @schema ClusterV1Beta2SpecMountsQuobyte#volume
+   */
+  readonly volume: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsQuobyte' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsQuobyte(obj: ClusterV1Beta2SpecMountsQuobyte | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'group': obj.group,
+    'readOnly': obj.readOnly,
+    'registry': obj.registry,
+    'tenant': obj.tenant,
+    'user': obj.user,
+    'volume': obj.volume,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.
+ * Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsRbd
+ */
+export interface ClusterV1Beta2SpecMountsRbd {
+  /**
+   * fsType is the filesystem type of the volume that you want to mount.
+   * Tip: Ensure that the filesystem type is supported by the host operating system.
+   * Examples: "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#rbd
+   *
+   * @schema ClusterV1Beta2SpecMountsRbd#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * image is the rados image name.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecMountsRbd#image
+   */
+  readonly image: string;
+
+  /**
+   * keyring is the path to key ring for RBDUser.
+   * Default is /etc/ceph/keyring.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default etc/ceph/keyring.
+   * @schema ClusterV1Beta2SpecMountsRbd#keyring
+   */
+  readonly keyring?: string;
+
+  /**
+   * monitors is a collection of Ceph monitors.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @schema ClusterV1Beta2SpecMountsRbd#monitors
+   */
+  readonly monitors: string[];
+
+  /**
+   * pool is the rados pool name.
+   * Default is rbd.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default rbd.
+   * @schema ClusterV1Beta2SpecMountsRbd#pool
+   */
+  readonly pool?: string;
+
+  /**
+   * readOnly here will force the ReadOnly setting in VolumeMounts.
+   * Defaults to false.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default false.
+   * @schema ClusterV1Beta2SpecMountsRbd#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef is name of the authentication secret for RBDUser. If provided
+   * overrides keyring.
+   * Default is nil.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default nil.
+   * @schema ClusterV1Beta2SpecMountsRbd#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecMountsRbdSecretRef;
+
+  /**
+   * user is the rados user name.
+   * Default is admin.
+   * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+   *
+   * @default admin.
+   * @schema ClusterV1Beta2SpecMountsRbd#user
+   */
+  readonly user?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsRbd' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsRbd(obj: ClusterV1Beta2SpecMountsRbd | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'image': obj.image,
+    'keyring': obj.keyring,
+    'monitors': obj.monitors?.map(y => y),
+    'pool': obj.pool,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsRbdSecretRef(obj.secretRef),
+    'user': obj.user,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
+ * Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsScaleIo
+ */
+export interface ClusterV1Beta2SpecMountsScaleIo {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs".
+   * Default is "xfs".
+   *
+   * @default xfs".
+   * @schema ClusterV1Beta2SpecMountsScaleIo#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * gateway is the host address of the ScaleIO API Gateway.
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#gateway
+   */
+  readonly gateway: string;
+
+  /**
+   * protectionDomain is the name of the ScaleIO Protection Domain for the configured storage.
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#protectionDomain
+   */
+  readonly protectionDomain?: string;
+
+  /**
+   * readOnly Defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @default false (read/write). ReadOnly here will force
+   * @schema ClusterV1Beta2SpecMountsScaleIo#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef references to the secret for ScaleIO user and other
+   * sensitive information. If this is not provided, Login operation will fail.
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#secretRef
+   */
+  readonly secretRef: ClusterV1Beta2SpecMountsScaleIoSecretRef;
+
+  /**
+   * sslEnabled Flag enable/disable SSL communication with Gateway, default false
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#sslEnabled
+   */
+  readonly sslEnabled?: boolean;
+
+  /**
+   * storageMode indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.
+   * Default is ThinProvisioned.
+   *
+   * @default ThinProvisioned.
+   * @schema ClusterV1Beta2SpecMountsScaleIo#storageMode
+   */
+  readonly storageMode?: string;
+
+  /**
+   * storagePool is the ScaleIO Storage Pool associated with the protection domain.
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#storagePool
+   */
+  readonly storagePool?: string;
+
+  /**
+   * system is the name of the storage system as configured in ScaleIO.
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#system
+   */
+  readonly system: string;
+
+  /**
+   * volumeName is the name of a volume already created in the ScaleIO system
+   * that is associated with this volume source.
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIo#volumeName
+   */
+  readonly volumeName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsScaleIo' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsScaleIo(obj: ClusterV1Beta2SpecMountsScaleIo | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'gateway': obj.gateway,
+    'protectionDomain': obj.protectionDomain,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsScaleIoSecretRef(obj.secretRef),
+    'sslEnabled': obj.sslEnabled,
+    'storageMode': obj.storageMode,
+    'storagePool': obj.storagePool,
+    'system': obj.system,
+    'volumeName': obj.volumeName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secret represents a secret that should populate this volume.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#secret
+ *
+ * @schema ClusterV1Beta2SpecMountsSecret
+ */
+export interface ClusterV1Beta2SpecMountsSecret {
+  /**
+   * defaultMode is Optional: mode bits used to set permissions on created files by default.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values
+   * for mode bits. Defaults to 0644.
+   * Directories within the path are not affected by this setting.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @default 0644.
+   * @schema ClusterV1Beta2SpecMountsSecret#defaultMode
+   */
+  readonly defaultMode?: number;
+
+  /**
+   * items If unspecified, each key-value pair in the Data field of the referenced
+   * Secret will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the Secret,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsSecret#items
+   */
+  readonly items?: ClusterV1Beta2SpecMountsSecretItems[];
+
+  /**
+   * optional field specify whether the Secret or its keys must be defined
+   *
+   * @schema ClusterV1Beta2SpecMountsSecret#optional
+   */
+  readonly optional?: boolean;
+
+  /**
+   * secretName is the name of the secret in the pod's namespace to use.
+   * More info: https://kubernetes.io/docs/concepts/storage/volumes#secret
+   *
+   * @schema ClusterV1Beta2SpecMountsSecret#secretName
+   */
+  readonly secretName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsSecret' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsSecret(obj: ClusterV1Beta2SpecMountsSecret | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'defaultMode': obj.defaultMode,
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecMountsSecretItems(y)),
+    'optional': obj.optional,
+    'secretName': obj.secretName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+ * Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsStorageos
+ */
+export interface ClusterV1Beta2SpecMountsStorageos {
+  /**
+   * fsType is the filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecMountsStorageos#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * readOnly defaults to false (read/write). ReadOnly here will force
+   * the ReadOnly setting in VolumeMounts.
+   *
+   * @schema ClusterV1Beta2SpecMountsStorageos#readOnly
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * secretRef specifies the secret to use for obtaining the StorageOS API
+   * credentials.  If not specified, default values will be attempted.
+   *
+   * @schema ClusterV1Beta2SpecMountsStorageos#secretRef
+   */
+  readonly secretRef?: ClusterV1Beta2SpecMountsStorageosSecretRef;
+
+  /**
+   * volumeName is the human-readable name of the StorageOS volume.  Volume
+   * names are only unique within a namespace.
+   *
+   * @schema ClusterV1Beta2SpecMountsStorageos#volumeName
+   */
+  readonly volumeName?: string;
+
+  /**
+   * volumeNamespace specifies the scope of the volume within StorageOS.  If no
+   * namespace is specified then the Pod's namespace will be used.  This allows the
+   * Kubernetes name scoping to be mirrored within StorageOS for tighter integration.
+   * Set VolumeName to any name to override the default behaviour.
+   * Set to "default" if you are not using namespaces within StorageOS.
+   * Namespaces that do not pre-exist within StorageOS will be created.
+   *
+   * @schema ClusterV1Beta2SpecMountsStorageos#volumeNamespace
+   */
+  readonly volumeNamespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsStorageos' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsStorageos(obj: ClusterV1Beta2SpecMountsStorageos | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'readOnly': obj.readOnly,
+    'secretRef': toJson_ClusterV1Beta2SpecMountsStorageosSecretRef(obj.secretRef),
+    'volumeName': obj.volumeName,
+    'volumeNamespace': obj.volumeNamespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.
+ * Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type
+ * are redirected to the csi.vsphere.vmware.com CSI driver.
+ *
+ * @schema ClusterV1Beta2SpecMountsVsphereVolume
+ */
+export interface ClusterV1Beta2SpecMountsVsphereVolume {
+  /**
+   * fsType is filesystem type to mount.
+   * Must be a filesystem type supported by the host operating system.
+   * Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+   *
+   * @schema ClusterV1Beta2SpecMountsVsphereVolume#fsType
+   */
+  readonly fsType?: string;
+
+  /**
+   * storagePolicyID is the storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName.
+   *
+   * @schema ClusterV1Beta2SpecMountsVsphereVolume#storagePolicyID
+   */
+  readonly storagePolicyId?: string;
+
+  /**
+   * storagePolicyName is the storage Policy Based Management (SPBM) profile name.
+   *
+   * @schema ClusterV1Beta2SpecMountsVsphereVolume#storagePolicyName
+   */
+  readonly storagePolicyName?: string;
+
+  /**
+   * volumePath is the path that identifies vSphere volume vmdk
+   *
+   * @schema ClusterV1Beta2SpecMountsVsphereVolume#volumePath
+   */
+  readonly volumePath: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsVsphereVolume' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsVsphereVolume(obj: ClusterV1Beta2SpecMountsVsphereVolume | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fsType': obj.fsType,
+    'storagePolicyID': obj.storagePolicyId,
+    'storagePolicyName': obj.storagePolicyName,
+    'volumePath': obj.volumePath,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Patch defines the patch type and content to apply.
+ *
+ * @schema ClusterV1Beta2SpecPatchesPatch
+ */
+export interface ClusterV1Beta2SpecPatchesPatch {
+  /**
+   * Content is the patch content (JSON/YAML). The format depends on Type.
+   *
+   * @schema ClusterV1Beta2SpecPatchesPatch#content
+   */
+  readonly content: string;
+
+  /**
+   * Type is the patch type to apply: "json", "merge", or "strategic".
+   *
+   * @schema ClusterV1Beta2SpecPatchesPatch#type
+   */
+  readonly type: ClusterV1Beta2SpecPatchesPatchType;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPatchesPatch' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPatchesPatch(obj: ClusterV1Beta2SpecPatchesPatch | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'content': obj.content,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Target selects which generated resource to patch.
+ *
+ * @schema ClusterV1Beta2SpecPatchesTarget
+ */
+export interface ClusterV1Beta2SpecPatchesTarget {
+  /**
+   * Component is the value of the app.kubernetes.io/component label on the target resource.
+   *
+   * @schema ClusterV1Beta2SpecPatchesTarget#component
+   */
+  readonly component: string;
+
+  /**
+   * Kind is the Kubernetes Kind of the target resource (e.g. "StatefulSet", "Service", "ConfigMap").
+   *
+   * @schema ClusterV1Beta2SpecPatchesTarget#kind
+   */
+  readonly kind: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPatchesTarget' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPatchesTarget(obj: ClusterV1Beta2SpecPatchesTarget | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'component': obj.component,
+    'kind': obj.kind,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PersistentVolumeClaim defines the PVC configuration. Will be used as is in case of .spec.persistence.type is pvc.
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaim
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaim {
+  /**
+   * APIVersion defines the versioned schema of this representation of an object.
+   * Servers should convert recognized schemas to the latest internal value, and
+   * may reject unrecognized values.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaim#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * Kind is a string value representing the REST resource this object represents.
+   * Servers may infer this from the endpoint the client submits requests to.
+   * Cannot be updated.
+   * In CamelCase.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaim#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * Standard object's metadata.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaim#metadata
+   */
+  readonly metadata?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata;
+
+  /**
+   * spec defines the desired characteristics of a volume requested by a pod author.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaim#spec
+   */
+  readonly spec?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec;
+
+  /**
+   * status represents the current information/status of a persistent volume claim.
+   * Read-only.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaim#status
+   */
+  readonly status?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaim' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaim(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaim | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'kind': obj.kind,
+    'metadata': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata(obj.metadata),
+    'spec': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec(obj.spec),
+    'status': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus(obj.status),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * KubeconfigRef is the reference to the kubeconfig of the hosting cluster.
+ * This kubeconfig will be used to deploy the k0s control plane.
+ *
+ * @schema ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef
+ */
+export interface ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef {
+  /**
+   * Key is the key in the secret containing the kubeconfig of the hosting cluster.
+   *
+   * @schema ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef#key
+   */
+  readonly key?: string;
+
+  /**
+   * Name is the name of the secret containing the kubeconfig of the hosting cluster.
+   *
+   * @schema ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace is the namespace of the secret containing the kubeconfig of the hosting cluster.
+   *
+   * @schema ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef#namespace
+   */
+  readonly namespace: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef(obj: ClusterV1Beta2SpecRemoteHostClusterKubeconfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ResourceClaim references one entry in PodSpec.ResourceClaims.
+ *
+ * @schema ClusterV1Beta2SpecResourcesClaims
+ */
+export interface ClusterV1Beta2SpecResourcesClaims {
+  /**
+   * Name must match the name of one entry in pod.spec.resourceClaims of
+   * the Pod where this field is used. It makes that resource available
+   * inside a container.
+   *
+   * @schema ClusterV1Beta2SpecResourcesClaims#name
+   */
+  readonly name: string;
+
+  /**
+   * Request is the name chosen for a request in the referenced claim.
+   * If empty, everything from the claim is made available, otherwise
+   * only the result of this request.
+   *
+   * @schema ClusterV1Beta2SpecResourcesClaims#request
+   */
+  readonly request?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecResourcesClaims' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecResourcesClaims(obj: ClusterV1Beta2SpecResourcesClaims | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'request': obj.request,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecResourcesLimits
+ */
+export class ClusterV1Beta2SpecResourcesLimits {
+  public static fromNumber(value: number): ClusterV1Beta2SpecResourcesLimits {
+    return new ClusterV1Beta2SpecResourcesLimits(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecResourcesLimits {
+    return new ClusterV1Beta2SpecResourcesLimits(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * @schema ClusterV1Beta2SpecResourcesRequests
+ */
+export class ClusterV1Beta2SpecResourcesRequests {
+  public static fromNumber(value: number): ClusterV1Beta2SpecResourcesRequests {
+    return new ClusterV1Beta2SpecResourcesRequests(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecResourcesRequests {
+    return new ClusterV1Beta2SpecResourcesRequests(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * Service Type string describes ingress methods for a service
+ *
+ * @schema ClusterV1Beta2SpecServiceType
+ */
+export enum ClusterV1Beta2SpecServiceType {
+  /** ClusterIP */
+  CLUSTER_IP = "ClusterIP",
+  /** NodePort */
+  NODE_PORT = "NodePort",
+  /** LoadBalancer */
+  LOAD_BALANCER = "LoadBalancer",
+}
+
+/**
+ * Etcd defines the etcd storage configuration.
+ *
+ * @schema ClusterV1Beta2SpecStorageEtcd
+ */
+export interface ClusterV1Beta2SpecStorageEtcd {
+  /**
+   * Args defines the etcd arguments.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcd#args
+   */
+  readonly args?: string[];
+
+  /**
+   * AutoDeletePVCs defines whether the PVC should be deleted when the etcd cluster is deleted.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcd#autoDeletePVCs
+   */
+  readonly autoDeletePvCs?: boolean;
+
+  /**
+   * DefragJob defines the etcd defragmentation job configuration.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcd#defragJob
+   */
+  readonly defragJob?: ClusterV1Beta2SpecStorageEtcdDefragJob;
+
+  /**
+   * Image defines the etcd image to be deployed.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcd#image
+   */
+  readonly image: string;
+
+  /**
+   * Persistence defines the persistence configuration.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcd#persistence
+   */
+  readonly persistence?: ClusterV1Beta2SpecStorageEtcdPersistence;
+
+  /**
+   * Resources defines the compute resource requirements for the etcd container.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcd#resources
+   */
+  readonly resources?: ClusterV1Beta2SpecStorageEtcdResources;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageEtcd' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageEtcd(obj: ClusterV1Beta2SpecStorageEtcd | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'args': obj.args?.map(y => y),
+    'autoDeletePVCs': obj.autoDeletePvCs,
+    'defragJob': toJson_ClusterV1Beta2SpecStorageEtcdDefragJob(obj.defragJob),
+    'image': obj.image,
+    'persistence': toJson_ClusterV1Beta2SpecStorageEtcdPersistence(obj.persistence),
+    'resources': toJson_ClusterV1Beta2SpecStorageEtcdResources(obj.resources),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Kine defines the kine storage configuration.
+ *
+ * @schema ClusterV1Beta2SpecStorageKine
+ */
+export interface ClusterV1Beta2SpecStorageKine {
+  /**
+   * DataSourceSecretName defines the name of the secret containing the kine datasource URL.
+   *
+   * @schema ClusterV1Beta2SpecStorageKine#dataSourceSecretName
+   */
+  readonly dataSourceSecretName?: string;
+
+  /**
+   * DataSourceURL defines the kine datasource URL.
+   *
+   * @schema ClusterV1Beta2SpecStorageKine#dataSourceURL
+   */
+  readonly dataSourceUrl?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageKine' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageKine(obj: ClusterV1Beta2SpecStorageKine | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'dataSourceSecretName': obj.dataSourceSecretName,
+    'dataSourceURL': obj.dataSourceUrl,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * NATS defines the embedded NATS JetStream storage configuration.
+ * Used when Type is set to nats.
+ *
+ * @schema ClusterV1Beta2SpecStorageNats
+ */
+export interface ClusterV1Beta2SpecStorageNats {
+  /**
+   * Persistence defines the persistence configuration for the embedded NATS JetStream store.
+   *
+   * @schema ClusterV1Beta2SpecStorageNats#persistence
+   */
+  readonly persistence?: ClusterV1Beta2SpecStorageNatsPersistence;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageNats' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageNats(obj: ClusterV1Beta2SpecStorageNats | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'persistence': toJson_ClusterV1Beta2SpecStorageNatsPersistence(obj.persistence),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Type defines the storage backend type. Can be etcd, kine, or nats.
+ *
+ * @schema ClusterV1Beta2SpecStorageType
+ */
+export enum ClusterV1Beta2SpecStorageType {
+  /** etcd */
+  ETCD = "etcd",
+  /** kine */
+  KINE = "kine",
+  /** nats */
+  NATS = "nats",
+}
+
+/**
+ * LabelSelector is used to find matching pods.
+ * Pods that match this label selector are counted to determine the number of pods
+ * in their corresponding topology domain.
+ *
+ * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector
+ */
+export interface ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector#matchExpressions
+   */
+  readonly matchExpressions?: ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector(obj: ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.
+ * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+ *
+ * @schema ClusterV1Beta2SpecManifestsCephfsSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsCephfsSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsCephfsSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsCephfsSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsCephfsSecretRef(obj: ClusterV1Beta2SpecManifestsCephfsSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is optional: points to a secret object containing parameters used to connect
+ * to OpenStack.
+ *
+ * @schema ClusterV1Beta2SpecManifestsCinderSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsCinderSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsCinderSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsCinderSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsCinderSecretRef(obj: ClusterV1Beta2SpecManifestsCinderSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecManifestsConfigMapItems
+ */
+export interface ClusterV1Beta2SpecManifestsConfigMapItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecManifestsConfigMapItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsConfigMapItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsConfigMapItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsConfigMapItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsConfigMapItems(obj: ClusterV1Beta2SpecManifestsConfigMapItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * nodePublishSecretRef is a reference to the secret object containing
+ * sensitive information to pass to the CSI driver to complete the CSI
+ * NodePublishVolume and NodeUnpublishVolume calls.
+ * This field is optional, and  may be empty if no secret is required. If the
+ * secret object contains more than one secret, all secret references are passed.
+ *
+ * @schema ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef(obj: ClusterV1Beta2SpecManifestsCsiNodePublishSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DownwardAPIVolumeFile represents information to create the file containing the pod field
+ *
+ * @schema ClusterV1Beta2SpecManifestsDownwardApiItems
+ */
+export interface ClusterV1Beta2SpecManifestsDownwardApiItems {
+  /**
+   * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItems#fieldRef
+   */
+  readonly fieldRef?: ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef;
+
+  /**
+   * Optional: mode bits used to set permissions on this file, must be an octal value
+   * between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * Required: Path is  the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItems#path
+   */
+  readonly path: string;
+
+  /**
+   * Selects a resource of the container: only resources limits and requests
+   * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItems#resourceFieldRef
+   */
+  readonly resourceFieldRef?: ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsDownwardApiItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsDownwardApiItems(obj: ClusterV1Beta2SpecManifestsDownwardApiItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fieldRef': toJson_ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef(obj.fieldRef),
+    'mode': obj.mode,
+    'path': obj.path,
+    'resourceFieldRef': toJson_ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef(obj.resourceFieldRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * sizeLimit is the total amount of local storage required for this EmptyDir volume.
+ * The size limit is also applicable for memory medium.
+ * The maximum usage on memory medium EmptyDir would be the minimum value between
+ * the SizeLimit specified here and the sum of memory limits of all containers in a pod.
+ * The default is nil which means that the limit is undefined.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+ *
+ * @schema ClusterV1Beta2SpecManifestsEmptyDirSizeLimit
+ */
+export class ClusterV1Beta2SpecManifestsEmptyDirSizeLimit {
+  public static fromNumber(value: number): ClusterV1Beta2SpecManifestsEmptyDirSizeLimit {
+    return new ClusterV1Beta2SpecManifestsEmptyDirSizeLimit(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecManifestsEmptyDirSizeLimit {
+    return new ClusterV1Beta2SpecManifestsEmptyDirSizeLimit(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * Will be used to create a stand-alone PVC to provision the volume.
+ * The pod in which this EphemeralVolumeSource is embedded will be the
+ * owner of the PVC, i.e. the PVC will be deleted together with the
+ * pod.  The name of the PVC will be `<pod name>-<volume name>` where
+ * `<volume name>` is the name from the `PodSpec.Volumes` array
+ * entry. Pod validation will reject the pod if the concatenated name
+ * is not valid for a PVC (for example, too long).
+ *
+ * An existing PVC with that name that is not owned by the pod
+ * will *not* be used for the pod to avoid using an unrelated
+ * volume by mistake. Starting the pod is then blocked until
+ * the unrelated PVC is removed. If such a pre-created PVC is
+ * meant to be used by the pod, the PVC has to updated with an
+ * owner reference to the pod once the pod exists. Normally
+ * this should not be necessary, but it may be useful when
+ * manually reconstructing a broken cluster.
+ *
+ * This field is read-only and no changes will be made by Kubernetes
+ * to the PVC after it has been created.
+ *
+ * Required, must not be nil.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate {
+  /**
+   * May contain labels and annotations that will be copied into the PVC
+   * when creating it. No other fields are allowed and will be rejected during
+   * validation.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate#metadata
+   */
+  readonly metadata?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata;
+
+  /**
+   * The specification for the PersistentVolumeClaim. The entire content is
+   * copied unchanged into the PVC that gets created from this
+   * template. The same fields as in a PersistentVolumeClaim
+   * are also valid here.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate#spec
+   */
+  readonly spec: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata(obj.metadata),
+    'spec': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is Optional: secretRef is reference to the secret object containing
+ * sensitive information to pass to the plugin scripts. This may be
+ * empty if no secret object is specified. If the secret object
+ * contains more than one secret, all secrets are passed to the plugin
+ * scripts.
+ *
+ * @schema ClusterV1Beta2SpecManifestsFlexVolumeSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsFlexVolumeSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsFlexVolumeSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsFlexVolumeSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsFlexVolumeSecretRef(obj: ClusterV1Beta2SpecManifestsFlexVolumeSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is the CHAP Secret for iSCSI target and initiator authentication
+ *
+ * @schema ClusterV1Beta2SpecManifestsIscsiSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsIscsiSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsIscsiSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsIscsiSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsIscsiSecretRef(obj: ClusterV1Beta2SpecManifestsIscsiSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Projection that may be projected along with other supported volume types.
+ * Exactly one of these fields must be set.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSources
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSources {
+  /**
+   * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
+   * of ClusterTrustBundle objects in an auto-updating file.
+   *
+   * Alpha, gated by the ClusterTrustBundleProjection feature gate.
+   *
+   * ClusterTrustBundle objects can either be selected by name, or by the
+   * combination of signer name and a label selector.
+   *
+   * Kubelet performs aggressive normalization of the PEM contents written
+   * into the pod filesystem.  Esoteric PEM features such as inter-block
+   * comments and block headers are stripped.  Certificates are deduplicated.
+   * The ordering of certificates within the file is arbitrary, and Kubelet
+   * may change the order over time.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSources#clusterTrustBundle
+   */
+  readonly clusterTrustBundle?: ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle;
+
+  /**
+   * configMap information about the configMap data to project
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSources#configMap
+   */
+  readonly configMap?: ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap;
+
+  /**
+   * downwardAPI information about the downwardAPI data to project
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSources#downwardAPI
+   */
+  readonly downwardApi?: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi;
+
+  /**
+   * Projects an auto-rotating credential bundle (private key and certificate
+   * chain) that the pod can use either as a TLS client or server.
+   *
+   * Kubelet generates a private key and uses it to send a
+   * PodCertificateRequest to the named signer.  Once the signer approves the
+   * request and issues a certificate chain, Kubelet writes the key and
+   * certificate chain to the pod filesystem.  The pod does not start until
+   * certificates have been issued for each podCertificate projected volume
+   * source in its spec.
+   *
+   * Kubelet will begin trying to rotate the certificate at the time indicated
+   * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+   * timestamp.
+   *
+   * Kubelet can write a single file, indicated by the credentialBundlePath
+   * field, or separate files, indicated by the keyPath and
+   * certificateChainPath fields.
+   *
+   * The credential bundle is a single file in PEM format.  The first PEM
+   * entry is the private key (in PKCS#8 format), and the remaining PEM
+   * entries are the certificate chain issued by the signer (typically,
+   * signers will return their certificate chain in leaf-to-root order).
+   *
+   * Prefer using the credential bundle format, since your application code
+   * can read it atomically.  If you use keyPath and certificateChainPath,
+   * your application must make two separate file reads. If these coincide
+   * with a certificate rotation, it is possible that the private key and leaf
+   * certificate you read may not correspond to each other.  Your application
+   * will need to check for this condition, and re-read until they are
+   * consistent.
+   *
+   * The named signer controls chooses the format of the certificate it
+   * issues; consult the signer implementation's documentation to learn how to
+   * use the certificates it issues.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSources#podCertificate
+   */
+  readonly podCertificate?: ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate;
+
+  /**
+   * secret information about the secret data to project
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSources#secret
+   */
+  readonly secret?: ClusterV1Beta2SpecManifestsProjectedSourcesSecret;
+
+  /**
+   * serviceAccountToken is information about the serviceAccountToken data to project
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSources#serviceAccountToken
+   */
+  readonly serviceAccountToken?: ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSources(obj: ClusterV1Beta2SpecManifestsProjectedSources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterTrustBundle': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle(obj.clusterTrustBundle),
+    'configMap': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap(obj.configMap),
+    'downwardAPI': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi(obj.downwardApi),
+    'podCertificate': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate(obj.podCertificate),
+    'secret': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesSecret(obj.secret),
+    'serviceAccountToken': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken(obj.serviceAccountToken),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is name of the authentication secret for RBDUser. If provided
+ * overrides keyring.
+ * Default is nil.
+ * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+ *
+ * @default nil.
+ * @schema ClusterV1Beta2SpecManifestsRbdSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsRbdSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsRbdSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsRbdSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsRbdSecretRef(obj: ClusterV1Beta2SpecManifestsRbdSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef references to the secret for ScaleIO user and other
+ * sensitive information. If this is not provided, Login operation will fail.
+ *
+ * @schema ClusterV1Beta2SpecManifestsScaleIoSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsScaleIoSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsScaleIoSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsScaleIoSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsScaleIoSecretRef(obj: ClusterV1Beta2SpecManifestsScaleIoSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecManifestsSecretItems
+ */
+export interface ClusterV1Beta2SpecManifestsSecretItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecManifestsSecretItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsSecretItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsSecretItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsSecretItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsSecretItems(obj: ClusterV1Beta2SpecManifestsSecretItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef specifies the secret to use for obtaining the StorageOS API
+ * credentials.  If not specified, default values will be attempted.
+ *
+ * @schema ClusterV1Beta2SpecManifestsStorageosSecretRef
+ */
+export interface ClusterV1Beta2SpecManifestsStorageosSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsStorageosSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsStorageosSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsStorageosSecretRef(obj: ClusterV1Beta2SpecManifestsStorageosSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.
+ * More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it
+ *
+ * @schema ClusterV1Beta2SpecMountsCephfsSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsCephfsSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsCephfsSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsCephfsSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsCephfsSecretRef(obj: ClusterV1Beta2SpecMountsCephfsSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is optional: points to a secret object containing parameters used to connect
+ * to OpenStack.
+ *
+ * @schema ClusterV1Beta2SpecMountsCinderSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsCinderSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsCinderSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsCinderSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsCinderSecretRef(obj: ClusterV1Beta2SpecMountsCinderSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecMountsConfigMapItems
+ */
+export interface ClusterV1Beta2SpecMountsConfigMapItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecMountsConfigMapItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsConfigMapItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsConfigMapItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsConfigMapItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsConfigMapItems(obj: ClusterV1Beta2SpecMountsConfigMapItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * nodePublishSecretRef is a reference to the secret object containing
+ * sensitive information to pass to the CSI driver to complete the CSI
+ * NodePublishVolume and NodeUnpublishVolume calls.
+ * This field is optional, and  may be empty if no secret is required. If the
+ * secret object contains more than one secret, all secret references are passed.
+ *
+ * @schema ClusterV1Beta2SpecMountsCsiNodePublishSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsCsiNodePublishSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsCsiNodePublishSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsCsiNodePublishSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsCsiNodePublishSecretRef(obj: ClusterV1Beta2SpecMountsCsiNodePublishSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DownwardAPIVolumeFile represents information to create the file containing the pod field
+ *
+ * @schema ClusterV1Beta2SpecMountsDownwardApiItems
+ */
+export interface ClusterV1Beta2SpecMountsDownwardApiItems {
+  /**
+   * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItems#fieldRef
+   */
+  readonly fieldRef?: ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef;
+
+  /**
+   * Optional: mode bits used to set permissions on this file, must be an octal value
+   * between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * Required: Path is  the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItems#path
+   */
+  readonly path: string;
+
+  /**
+   * Selects a resource of the container: only resources limits and requests
+   * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItems#resourceFieldRef
+   */
+  readonly resourceFieldRef?: ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsDownwardApiItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsDownwardApiItems(obj: ClusterV1Beta2SpecMountsDownwardApiItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fieldRef': toJson_ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef(obj.fieldRef),
+    'mode': obj.mode,
+    'path': obj.path,
+    'resourceFieldRef': toJson_ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef(obj.resourceFieldRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * sizeLimit is the total amount of local storage required for this EmptyDir volume.
+ * The size limit is also applicable for memory medium.
+ * The maximum usage on memory medium EmptyDir would be the minimum value between
+ * the SizeLimit specified here and the sum of memory limits of all containers in a pod.
+ * The default is nil which means that the limit is undefined.
+ * More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+ *
+ * @schema ClusterV1Beta2SpecMountsEmptyDirSizeLimit
+ */
+export class ClusterV1Beta2SpecMountsEmptyDirSizeLimit {
+  public static fromNumber(value: number): ClusterV1Beta2SpecMountsEmptyDirSizeLimit {
+    return new ClusterV1Beta2SpecMountsEmptyDirSizeLimit(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecMountsEmptyDirSizeLimit {
+    return new ClusterV1Beta2SpecMountsEmptyDirSizeLimit(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * Will be used to create a stand-alone PVC to provision the volume.
+ * The pod in which this EphemeralVolumeSource is embedded will be the
+ * owner of the PVC, i.e. the PVC will be deleted together with the
+ * pod.  The name of the PVC will be `<pod name>-<volume name>` where
+ * `<volume name>` is the name from the `PodSpec.Volumes` array
+ * entry. Pod validation will reject the pod if the concatenated name
+ * is not valid for a PVC (for example, too long).
+ *
+ * An existing PVC with that name that is not owned by the pod
+ * will *not* be used for the pod to avoid using an unrelated
+ * volume by mistake. Starting the pod is then blocked until
+ * the unrelated PVC is removed. If such a pre-created PVC is
+ * meant to be used by the pod, the PVC has to updated with an
+ * owner reference to the pod once the pod exists. Normally
+ * this should not be necessary, but it may be useful when
+ * manually reconstructing a broken cluster.
+ *
+ * This field is read-only and no changes will be made by Kubernetes
+ * to the PVC after it has been created.
+ *
+ * Required, must not be nil.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate {
+  /**
+   * May contain labels and annotations that will be copied into the PVC
+   * when creating it. No other fields are allowed and will be rejected during
+   * validation.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate#metadata
+   */
+  readonly metadata?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata;
+
+  /**
+   * The specification for the PersistentVolumeClaim. The entire content is
+   * copied unchanged into the PVC that gets created from this
+   * template. The same fields as in a PersistentVolumeClaim
+   * are also valid here.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate#spec
+   */
+  readonly spec: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata(obj.metadata),
+    'spec': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is Optional: secretRef is reference to the secret object containing
+ * sensitive information to pass to the plugin scripts. This may be
+ * empty if no secret object is specified. If the secret object
+ * contains more than one secret, all secrets are passed to the plugin
+ * scripts.
+ *
+ * @schema ClusterV1Beta2SpecMountsFlexVolumeSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsFlexVolumeSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsFlexVolumeSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsFlexVolumeSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsFlexVolumeSecretRef(obj: ClusterV1Beta2SpecMountsFlexVolumeSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is the CHAP Secret for iSCSI target and initiator authentication
+ *
+ * @schema ClusterV1Beta2SpecMountsIscsiSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsIscsiSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsIscsiSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsIscsiSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsIscsiSecretRef(obj: ClusterV1Beta2SpecMountsIscsiSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Projection that may be projected along with other supported volume types.
+ * Exactly one of these fields must be set.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSources
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSources {
+  /**
+   * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
+   * of ClusterTrustBundle objects in an auto-updating file.
+   *
+   * Alpha, gated by the ClusterTrustBundleProjection feature gate.
+   *
+   * ClusterTrustBundle objects can either be selected by name, or by the
+   * combination of signer name and a label selector.
+   *
+   * Kubelet performs aggressive normalization of the PEM contents written
+   * into the pod filesystem.  Esoteric PEM features such as inter-block
+   * comments and block headers are stripped.  Certificates are deduplicated.
+   * The ordering of certificates within the file is arbitrary, and Kubelet
+   * may change the order over time.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSources#clusterTrustBundle
+   */
+  readonly clusterTrustBundle?: ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle;
+
+  /**
+   * configMap information about the configMap data to project
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSources#configMap
+   */
+  readonly configMap?: ClusterV1Beta2SpecMountsProjectedSourcesConfigMap;
+
+  /**
+   * downwardAPI information about the downwardAPI data to project
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSources#downwardAPI
+   */
+  readonly downwardApi?: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi;
+
+  /**
+   * Projects an auto-rotating credential bundle (private key and certificate
+   * chain) that the pod can use either as a TLS client or server.
+   *
+   * Kubelet generates a private key and uses it to send a
+   * PodCertificateRequest to the named signer.  Once the signer approves the
+   * request and issues a certificate chain, Kubelet writes the key and
+   * certificate chain to the pod filesystem.  The pod does not start until
+   * certificates have been issued for each podCertificate projected volume
+   * source in its spec.
+   *
+   * Kubelet will begin trying to rotate the certificate at the time indicated
+   * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+   * timestamp.
+   *
+   * Kubelet can write a single file, indicated by the credentialBundlePath
+   * field, or separate files, indicated by the keyPath and
+   * certificateChainPath fields.
+   *
+   * The credential bundle is a single file in PEM format.  The first PEM
+   * entry is the private key (in PKCS#8 format), and the remaining PEM
+   * entries are the certificate chain issued by the signer (typically,
+   * signers will return their certificate chain in leaf-to-root order).
+   *
+   * Prefer using the credential bundle format, since your application code
+   * can read it atomically.  If you use keyPath and certificateChainPath,
+   * your application must make two separate file reads. If these coincide
+   * with a certificate rotation, it is possible that the private key and leaf
+   * certificate you read may not correspond to each other.  Your application
+   * will need to check for this condition, and re-read until they are
+   * consistent.
+   *
+   * The named signer controls chooses the format of the certificate it
+   * issues; consult the signer implementation's documentation to learn how to
+   * use the certificates it issues.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSources#podCertificate
+   */
+  readonly podCertificate?: ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate;
+
+  /**
+   * secret information about the secret data to project
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSources#secret
+   */
+  readonly secret?: ClusterV1Beta2SpecMountsProjectedSourcesSecret;
+
+  /**
+   * serviceAccountToken is information about the serviceAccountToken data to project
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSources#serviceAccountToken
+   */
+  readonly serviceAccountToken?: ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSources(obj: ClusterV1Beta2SpecMountsProjectedSources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterTrustBundle': toJson_ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle(obj.clusterTrustBundle),
+    'configMap': toJson_ClusterV1Beta2SpecMountsProjectedSourcesConfigMap(obj.configMap),
+    'downwardAPI': toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi(obj.downwardApi),
+    'podCertificate': toJson_ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate(obj.podCertificate),
+    'secret': toJson_ClusterV1Beta2SpecMountsProjectedSourcesSecret(obj.secret),
+    'serviceAccountToken': toJson_ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken(obj.serviceAccountToken),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef is name of the authentication secret for RBDUser. If provided
+ * overrides keyring.
+ * Default is nil.
+ * More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it
+ *
+ * @default nil.
+ * @schema ClusterV1Beta2SpecMountsRbdSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsRbdSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsRbdSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsRbdSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsRbdSecretRef(obj: ClusterV1Beta2SpecMountsRbdSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef references to the secret for ScaleIO user and other
+ * sensitive information. If this is not provided, Login operation will fail.
+ *
+ * @schema ClusterV1Beta2SpecMountsScaleIoSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsScaleIoSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsScaleIoSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsScaleIoSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsScaleIoSecretRef(obj: ClusterV1Beta2SpecMountsScaleIoSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecMountsSecretItems
+ */
+export interface ClusterV1Beta2SpecMountsSecretItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecMountsSecretItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsSecretItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsSecretItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsSecretItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsSecretItems(obj: ClusterV1Beta2SpecMountsSecretItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secretRef specifies the secret to use for obtaining the StorageOS API
+ * credentials.  If not specified, default values will be attempted.
+ *
+ * @schema ClusterV1Beta2SpecMountsStorageosSecretRef
+ */
+export interface ClusterV1Beta2SpecMountsStorageosSecretRef {
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsStorageosSecretRef#name
+   */
+  readonly name?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsStorageosSecretRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsStorageosSecretRef(obj: ClusterV1Beta2SpecMountsStorageosSecretRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Type is the patch type to apply: "json", "merge", or "strategic".
+ *
+ * @schema ClusterV1Beta2SpecPatchesPatchType
+ */
+export enum ClusterV1Beta2SpecPatchesPatchType {
+  /** json */
+  JSON = "json",
+  /** strategic */
+  STRATEGIC = "strategic",
+  /** merge */
+  MERGE = "merge",
+}
+
+/**
+ * Standard object's metadata.
+ * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata {
+  /**
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata#finalizers
+   */
+  readonly finalizers?: string[];
+
+  /**
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata#name
+   */
+  readonly name?: string;
+
+  /**
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'finalizers': obj.finalizers?.map(y => y),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec defines the desired characteristics of a volume requested by a pod author.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec {
+  /**
+   * accessModes contains the desired access modes the volume should have.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#accessModes
+   */
+  readonly accessModes?: string[];
+
+  /**
+   * dataSource field can be used to specify either:
+   * * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)
+   * * An existing PVC (PersistentVolumeClaim)
+   * If the provisioner or an external controller can support the specified data source,
+   * it will create a new volume based on the contents of the specified data source.
+   * When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,
+   * and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.
+   * If the namespace is specified, then dataSourceRef will not be copied to dataSource.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#dataSource
+   */
+  readonly dataSource?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource;
+
+  /**
+   * dataSourceRef specifies the object from which to populate the volume with data, if a non-empty
+   * volume is desired. This may be any object from a non-empty API group (non
+   * core object) or a PersistentVolumeClaim object.
+   * When this field is specified, volume binding will only succeed if the type of
+   * the specified object matches some installed volume populator or dynamic
+   * provisioner.
+   * This field will replace the functionality of the dataSource field and as such
+   * if both fields are non-empty, they must have the same value. For backwards
+   * compatibility, when namespace isn't specified in dataSourceRef,
+   * both fields (dataSource and dataSourceRef) will be set to the same
+   * value automatically if one of them is empty and the other is non-empty.
+   * When namespace is specified in dataSourceRef,
+   * dataSource isn't set to the same value and must be empty.
+   * There are three important differences between dataSource and dataSourceRef:
+   * * While dataSource only allows two specific types of objects, dataSourceRef
+   * allows any non-core object, as well as PersistentVolumeClaim objects.
+   * * While dataSource ignores disallowed values (dropping them), dataSourceRef
+   * preserves all values, and generates an error if a disallowed value is
+   * specified.
+   * * While dataSource only allows local objects, dataSourceRef allows objects
+   * in any namespaces.
+   * (Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.
+   * (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#dataSourceRef
+   */
+  readonly dataSourceRef?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef;
+
+  /**
+   * resources represents the minimum resources the volume should have.
+   * If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+   * that are lower than previous value but must still be higher than capacity recorded in the
+   * status field of the claim.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#resources
+   */
+  readonly resources?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources;
+
+  /**
+   * selector is a label query over volumes to consider for binding.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#selector
+   */
+  readonly selector?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector;
+
+  /**
+   * storageClassName is the name of the StorageClass required by the claim.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#storageClassName
+   */
+  readonly storageClassName?: string;
+
+  /**
+   * volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.
+   * If specified, the CSI driver will create or update the volume with the attributes defined
+   * in the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,
+   * it can be changed after the claim is created. An empty string or nil value indicates that no
+   * VolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,
+   * this field can be reset to its previous value (including nil) to cancel the modification.
+   * If the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be
+   * set to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource
+   * exists.
+   * More info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#volumeAttributesClassName
+   */
+  readonly volumeAttributesClassName?: string;
+
+  /**
+   * volumeMode defines what type of volume is required by the claim.
+   * Value of Filesystem is implied when not included in claim spec.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#volumeMode
+   */
+  readonly volumeMode?: string;
+
+  /**
+   * volumeName is the binding reference to the PersistentVolume backing this claim.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec#volumeName
+   */
+  readonly volumeName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'accessModes': obj.accessModes?.map(y => y),
+    'dataSource': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource(obj.dataSource),
+    'dataSourceRef': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef(obj.dataSourceRef),
+    'resources': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources(obj.resources),
+    'selector': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector(obj.selector),
+    'storageClassName': obj.storageClassName,
+    'volumeAttributesClassName': obj.volumeAttributesClassName,
+    'volumeMode': obj.volumeMode,
+    'volumeName': obj.volumeName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * status represents the current information/status of a persistent volume claim.
+ * Read-only.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus {
+  /**
+   * accessModes contains the actual access modes the volume backing the PVC has.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#accessModes
+   */
+  readonly accessModes?: string[];
+
+  /**
+   * allocatedResourceStatuses stores status of resource being resized for the given PVC.
+   * Key names follow standard Kubernetes label syntax. Valid values are either:
+   * * Un-prefixed keys:
+   * - storage - the capacity of the volume.
+   * * Custom resources must use implementation-defined prefixed names such as "example.com/my-custom-resource"
+   * Apart from above values - keys that are unprefixed or have kubernetes.io prefix are considered
+   * reserved and hence may not be used.
+   *
+   * ClaimResourceStatus can be in any of following states:
+   * - ControllerResizeInProgress:
+   * State set when resize controller starts resizing the volume in control-plane.
+   * - ControllerResizeFailed:
+   * State set when resize has failed in resize controller with a terminal error.
+   * - NodeResizePending:
+   * State set when resize controller has finished resizing the volume but further resizing of
+   * volume is needed on the node.
+   * - NodeResizeInProgress:
+   * State set when kubelet starts resizing the volume.
+   * - NodeResizeFailed:
+   * State set when resizing has failed in kubelet with a terminal error. Transient errors don't set
+   * NodeResizeFailed.
+   * For example: if expanding a PVC for more capacity - this field can be one of the following states:
+   * - pvc.status.allocatedResourceStatus['storage'] = "ControllerResizeInProgress"
+   * - pvc.status.allocatedResourceStatus['storage'] = "ControllerResizeFailed"
+   * - pvc.status.allocatedResourceStatus['storage'] = "NodeResizePending"
+   * - pvc.status.allocatedResourceStatus['storage'] = "NodeResizeInProgress"
+   * - pvc.status.allocatedResourceStatus['storage'] = "NodeResizeFailed"
+   * When this field is not set, it means that no resize operation is in progress for the given PVC.
+   *
+   * A controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus
+   * should ignore the update for the purpose it was designed. For example - a controller that
+   * only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid
+   * resources associated with PVC.
+   *
+   * This is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#allocatedResourceStatuses
+   */
+  readonly allocatedResourceStatuses?: { [key: string]: string };
+
+  /**
+   * allocatedResources tracks the resources allocated to a PVC including its capacity.
+   * Key names follow standard Kubernetes label syntax. Valid values are either:
+   * * Un-prefixed keys:
+   * - storage - the capacity of the volume.
+   * * Custom resources must use implementation-defined prefixed names such as "example.com/my-custom-resource"
+   * Apart from above values - keys that are unprefixed or have kubernetes.io prefix are considered
+   * reserved and hence may not be used.
+   *
+   * Capacity reported here may be larger than the actual capacity when a volume expansion operation
+   * is requested.
+   * For storage quota, the larger value from allocatedResources and PVC.spec.resources is used.
+   * If allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.
+   * If a volume expansion capacity request is lowered, allocatedResources is only
+   * lowered if there are no expansion operations in progress and if the actual volume capacity
+   * is equal or lower than the requested capacity.
+   *
+   * A controller that receives PVC update with previously unknown resourceName
+   * should ignore the update for the purpose it was designed. For example - a controller that
+   * only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid
+   * resources associated with PVC.
+   *
+   * This is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#allocatedResources
+   */
+  readonly allocatedResources?: { [key: string]: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources };
+
+  /**
+   * capacity represents the actual resources of the underlying volume.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#capacity
+   */
+  readonly capacity?: { [key: string]: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity };
+
+  /**
+   * conditions is the current Condition of persistent volume claim. If underlying persistent volume is being
+   * resized then the Condition will be set to 'Resizing'.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#conditions
+   */
+  readonly conditions?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions[];
+
+  /**
+   * currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.
+   * When unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#currentVolumeAttributesClassName
+   */
+  readonly currentVolumeAttributesClassName?: string;
+
+  /**
+   * ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.
+   * When this is unset, there is no ModifyVolume operation being attempted.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#modifyVolumeStatus
+   */
+  readonly modifyVolumeStatus?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus;
+
+  /**
+   * phase represents the current phase of PersistentVolumeClaim.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus#phase
+   */
+  readonly phase?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatus | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'accessModes': obj.accessModes?.map(y => y),
+    'allocatedResourceStatuses': ((obj.allocatedResourceStatuses) === undefined) ? undefined : (Object.entries(obj.allocatedResourceStatuses).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'allocatedResources': ((obj.allocatedResources) === undefined) ? undefined : (Object.entries(obj.allocatedResources).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'capacity': ((obj.capacity) === undefined) ? undefined : (Object.entries(obj.capacity).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'conditions': obj.conditions?.map(y => toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions(y)),
+    'currentVolumeAttributesClassName': obj.currentVolumeAttributesClassName,
+    'modifyVolumeStatus': toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus(obj.modifyVolumeStatus),
+    'phase': obj.phase,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DefragJob defines the etcd defragmentation job configuration.
+ *
+ * @schema ClusterV1Beta2SpecStorageEtcdDefragJob
+ */
+export interface ClusterV1Beta2SpecStorageEtcdDefragJob {
+  /**
+   * Enabled enables the etcd defragmentation job.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdDefragJob#enabled
+   */
+  readonly enabled: boolean;
+
+  /**
+   * Image defines the etcd defragmentation job image.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdDefragJob#image
+   */
+  readonly image: string;
+
+  /**
+   * Rule defines the etcd defragmentation job defrag-rule.
+   * For more information check: https://github.com/ahrtr/etcd-defrag/tree/main?tab=readme-ov-file#defragmentation-rule
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdDefragJob#rule
+   */
+  readonly rule: string;
+
+  /**
+   * Schedule defines the etcd defragmentation job schedule.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdDefragJob#schedule
+   */
+  readonly schedule: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageEtcdDefragJob' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageEtcdDefragJob(obj: ClusterV1Beta2SpecStorageEtcdDefragJob | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+    'image': obj.image,
+    'rule': obj.rule,
+    'schedule': obj.schedule,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Persistence defines the persistence configuration.
+ *
+ * @schema ClusterV1Beta2SpecStorageEtcdPersistence
+ */
+export interface ClusterV1Beta2SpecStorageEtcdPersistence {
+  /**
+   * Size defines the size of the volume. Default: 1Gi
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdPersistence#size
+   */
+  readonly size?: ClusterV1Beta2SpecStorageEtcdPersistenceSize;
+
+  /**
+   * StorageClass defines the storage class to be used. If empty, the default storage class is used.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdPersistence#storageClass
+   */
+  readonly storageClass?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageEtcdPersistence' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageEtcdPersistence(obj: ClusterV1Beta2SpecStorageEtcdPersistence | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'size': obj.size?.value,
+    'storageClass': obj.storageClass,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resources defines the compute resource requirements for the etcd container.
+ *
+ * @schema ClusterV1Beta2SpecStorageEtcdResources
+ */
+export interface ClusterV1Beta2SpecStorageEtcdResources {
+  /**
+   * Claims lists the names of resources, defined in spec.resourceClaims,
+   * that are used by this container.
+   *
+   * This field depends on the
+   * DynamicResourceAllocation feature gate.
+   *
+   * This field is immutable. It can only be set for containers.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdResources#claims
+   */
+  readonly claims?: ClusterV1Beta2SpecStorageEtcdResourcesClaims[];
+
+  /**
+   * Limits describes the maximum amount of compute resources allowed.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdResources#limits
+   */
+  readonly limits?: { [key: string]: ClusterV1Beta2SpecStorageEtcdResourcesLimits };
+
+  /**
+   * Requests describes the minimum amount of compute resources required.
+   * If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+   * otherwise to an implementation-defined value. Requests cannot exceed Limits.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdResources#requests
+   */
+  readonly requests?: { [key: string]: ClusterV1Beta2SpecStorageEtcdResourcesRequests };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageEtcdResources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageEtcdResources(obj: ClusterV1Beta2SpecStorageEtcdResources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'claims': obj.claims?.map(y => toJson_ClusterV1Beta2SpecStorageEtcdResourcesClaims(y)),
+    'limits': ((obj.limits) === undefined) ? undefined : (Object.entries(obj.limits).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'requests': ((obj.requests) === undefined) ? undefined : (Object.entries(obj.requests).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Persistence defines the persistence configuration for the embedded NATS JetStream store.
+ *
+ * @schema ClusterV1Beta2SpecStorageNatsPersistence
+ */
+export interface ClusterV1Beta2SpecStorageNatsPersistence {
+  /**
+   * Size defines the size of the volume. Default: 1Gi
+   *
+   * @schema ClusterV1Beta2SpecStorageNatsPersistence#size
+   */
+  readonly size?: ClusterV1Beta2SpecStorageNatsPersistenceSize;
+
+  /**
+   * StorageClass defines the storage class to be used. If empty, the default storage class is used.
+   *
+   * @schema ClusterV1Beta2SpecStorageNatsPersistence#storageClass
+   */
+  readonly storageClass?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageNatsPersistence' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageNatsPersistence(obj: ClusterV1Beta2SpecStorageNatsPersistence | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'size': obj.size?.value,
+    'storageClass': obj.storageClass,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions
+ */
+export interface ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions(obj: ClusterV1Beta2SpecTopologySpreadConstraintsLabelSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef
+ */
+export interface ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef {
+  /**
+   * Version of the schema the FieldPath is written in terms of, defaults to "v1".
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * Path of the field to select in the specified API version.
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef#fieldPath
+   */
+  readonly fieldPath: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef(obj: ClusterV1Beta2SpecManifestsDownwardApiItemsFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selects a resource of the container: only resources limits and requests
+ * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef
+ */
+export interface ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef {
+  /**
+   * Container name: required for volumes, optional for env vars
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef#containerName
+   */
+  readonly containerName?: string;
+
+  /**
+   * Specifies the output format of the exposed resources, defaults to "1"
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef#divisor
+   */
+  readonly divisor?: ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor;
+
+  /**
+   * Required: resource to select
+   *
+   * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef#resource
+   */
+  readonly resource: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef(obj: ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'containerName': obj.containerName,
+    'divisor': obj.divisor?.value,
+    'resource': obj.resource,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * May contain labels and annotations that will be copied into the PVC
+ * when creating it. No other fields are allowed and will be rejected during
+ * validation.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata {
+  /**
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata#finalizers
+   */
+  readonly finalizers?: string[];
+
+  /**
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata#name
+   */
+  readonly name?: string;
+
+  /**
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'finalizers': obj.finalizers?.map(y => y),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The specification for the PersistentVolumeClaim. The entire content is
+ * copied unchanged into the PVC that gets created from this
+ * template. The same fields as in a PersistentVolumeClaim
+ * are also valid here.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec {
+  /**
+   * accessModes contains the desired access modes the volume should have.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#accessModes
+   */
+  readonly accessModes?: string[];
+
+  /**
+   * dataSource field can be used to specify either:
+   * * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)
+   * * An existing PVC (PersistentVolumeClaim)
+   * If the provisioner or an external controller can support the specified data source,
+   * it will create a new volume based on the contents of the specified data source.
+   * When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,
+   * and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.
+   * If the namespace is specified, then dataSourceRef will not be copied to dataSource.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#dataSource
+   */
+  readonly dataSource?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource;
+
+  /**
+   * dataSourceRef specifies the object from which to populate the volume with data, if a non-empty
+   * volume is desired. This may be any object from a non-empty API group (non
+   * core object) or a PersistentVolumeClaim object.
+   * When this field is specified, volume binding will only succeed if the type of
+   * the specified object matches some installed volume populator or dynamic
+   * provisioner.
+   * This field will replace the functionality of the dataSource field and as such
+   * if both fields are non-empty, they must have the same value. For backwards
+   * compatibility, when namespace isn't specified in dataSourceRef,
+   * both fields (dataSource and dataSourceRef) will be set to the same
+   * value automatically if one of them is empty and the other is non-empty.
+   * When namespace is specified in dataSourceRef,
+   * dataSource isn't set to the same value and must be empty.
+   * There are three important differences between dataSource and dataSourceRef:
+   * * While dataSource only allows two specific types of objects, dataSourceRef
+   * allows any non-core object, as well as PersistentVolumeClaim objects.
+   * * While dataSource ignores disallowed values (dropping them), dataSourceRef
+   * preserves all values, and generates an error if a disallowed value is
+   * specified.
+   * * While dataSource only allows local objects, dataSourceRef allows objects
+   * in any namespaces.
+   * (Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.
+   * (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#dataSourceRef
+   */
+  readonly dataSourceRef?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef;
+
+  /**
+   * resources represents the minimum resources the volume should have.
+   * If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+   * that are lower than previous value but must still be higher than capacity recorded in the
+   * status field of the claim.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#resources
+   */
+  readonly resources?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources;
+
+  /**
+   * selector is a label query over volumes to consider for binding.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#selector
+   */
+  readonly selector?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector;
+
+  /**
+   * storageClassName is the name of the StorageClass required by the claim.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#storageClassName
+   */
+  readonly storageClassName?: string;
+
+  /**
+   * volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.
+   * If specified, the CSI driver will create or update the volume with the attributes defined
+   * in the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,
+   * it can be changed after the claim is created. An empty string or nil value indicates that no
+   * VolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,
+   * this field can be reset to its previous value (including nil) to cancel the modification.
+   * If the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be
+   * set to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource
+   * exists.
+   * More info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#volumeAttributesClassName
+   */
+  readonly volumeAttributesClassName?: string;
+
+  /**
+   * volumeMode defines what type of volume is required by the claim.
+   * Value of Filesystem is implied when not included in claim spec.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#volumeMode
+   */
+  readonly volumeMode?: string;
+
+  /**
+   * volumeName is the binding reference to the PersistentVolume backing this claim.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec#volumeName
+   */
+  readonly volumeName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'accessModes': obj.accessModes?.map(y => y),
+    'dataSource': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource(obj.dataSource),
+    'dataSourceRef': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef(obj.dataSourceRef),
+    'resources': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources(obj.resources),
+    'selector': toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector(obj.selector),
+    'storageClassName': obj.storageClassName,
+    'volumeAttributesClassName': obj.volumeAttributesClassName,
+    'volumeMode': obj.volumeMode,
+    'volumeName': obj.volumeName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
+ * of ClusterTrustBundle objects in an auto-updating file.
+ *
+ * Alpha, gated by the ClusterTrustBundleProjection feature gate.
+ *
+ * ClusterTrustBundle objects can either be selected by name, or by the
+ * combination of signer name and a label selector.
+ *
+ * Kubelet performs aggressive normalization of the PEM contents written
+ * into the pod filesystem.  Esoteric PEM features such as inter-block
+ * comments and block headers are stripped.  Certificates are deduplicated.
+ * The ordering of certificates within the file is arbitrary, and Kubelet
+ * may change the order over time.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle {
+  /**
+   * Select all ClusterTrustBundles that match this label selector.  Only has
+   * effect if signerName is set.  Mutually-exclusive with name.  If unset,
+   * interpreted as "match nothing".  If set but empty, interpreted as "match
+   * everything".
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle#labelSelector
+   */
+  readonly labelSelector?: ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector;
+
+  /**
+   * Select a single ClusterTrustBundle by object name.  Mutually-exclusive
+   * with signerName and labelSelector.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle#name
+   */
+  readonly name?: string;
+
+  /**
+   * If true, don't block pod startup if the referenced ClusterTrustBundle(s)
+   * aren't available.  If using name, then the named ClusterTrustBundle is
+   * allowed not to exist.  If using signerName, then the combination of
+   * signerName and labelSelector is allowed to match zero
+   * ClusterTrustBundles.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle#optional
+   */
+  readonly optional?: boolean;
+
+  /**
+   * Relative path from the volume root to write the bundle.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle#path
+   */
+  readonly path: string;
+
+  /**
+   * Select all ClusterTrustBundles that match this signer name.
+   * Mutually-exclusive with name.  The contents of all selected
+   * ClusterTrustBundles will be unified and deduplicated.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle#signerName
+   */
+  readonly signerName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle(obj: ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundle | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'labelSelector': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector(obj.labelSelector),
+    'name': obj.name,
+    'optional': obj.optional,
+    'path': obj.path,
+    'signerName': obj.signerName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configMap information about the configMap data to project
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap {
+  /**
+   * items if unspecified, each key-value pair in the Data field of the referenced
+   * ConfigMap will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the ConfigMap,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap#items
+   */
+  readonly items?: ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems[];
+
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap#name
+   */
+  readonly name?: string;
+
+  /**
+   * optional specify whether the ConfigMap or its keys must be defined
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap#optional
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap(obj: ClusterV1Beta2SpecManifestsProjectedSourcesConfigMap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems(y)),
+    'name': obj.name,
+    'optional': obj.optional,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * downwardAPI information about the downwardAPI data to project
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi {
+  /**
+   * Items is a list of DownwardAPIVolume file
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi#items
+   */
+  readonly items?: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi(obj: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Projects an auto-rotating credential bundle (private key and certificate
+ * chain) that the pod can use either as a TLS client or server.
+ *
+ * Kubelet generates a private key and uses it to send a
+ * PodCertificateRequest to the named signer.  Once the signer approves the
+ * request and issues a certificate chain, Kubelet writes the key and
+ * certificate chain to the pod filesystem.  The pod does not start until
+ * certificates have been issued for each podCertificate projected volume
+ * source in its spec.
+ *
+ * Kubelet will begin trying to rotate the certificate at the time indicated
+ * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+ * timestamp.
+ *
+ * Kubelet can write a single file, indicated by the credentialBundlePath
+ * field, or separate files, indicated by the keyPath and
+ * certificateChainPath fields.
+ *
+ * The credential bundle is a single file in PEM format.  The first PEM
+ * entry is the private key (in PKCS#8 format), and the remaining PEM
+ * entries are the certificate chain issued by the signer (typically,
+ * signers will return their certificate chain in leaf-to-root order).
+ *
+ * Prefer using the credential bundle format, since your application code
+ * can read it atomically.  If you use keyPath and certificateChainPath,
+ * your application must make two separate file reads. If these coincide
+ * with a certificate rotation, it is possible that the private key and leaf
+ * certificate you read may not correspond to each other.  Your application
+ * will need to check for this condition, and re-read until they are
+ * consistent.
+ *
+ * The named signer controls chooses the format of the certificate it
+ * issues; consult the signer implementation's documentation to learn how to
+ * use the certificates it issues.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate {
+  /**
+   * Write the certificate chain at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate#certificateChainPath
+   */
+  readonly certificateChainPath?: string;
+
+  /**
+   * Write the credential bundle at this path in the projected volume.
+   *
+   * The credential bundle is a single file that contains multiple PEM blocks.
+   * The first PEM block is a PRIVATE KEY block, containing a PKCS#8 private
+   * key.
+   *
+   * The remaining blocks are CERTIFICATE blocks, containing the issued
+   * certificate chain from the signer (leaf and any intermediates).
+   *
+   * Using credentialBundlePath lets your Pod's application code make a single
+   * atomic read that retrieves a consistent key and certificate chain.  If you
+   * project them to separate files, your application code will need to
+   * additionally check that the leaf certificate was issued to the key.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate#credentialBundlePath
+   */
+  readonly credentialBundlePath?: string;
+
+  /**
+   * Write the key at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate#keyPath
+   */
+  readonly keyPath?: string;
+
+  /**
+   * The type of keypair Kubelet will generate for the pod.
+   *
+   * Valid values are "RSA3072", "RSA4096", "ECDSAP256", "ECDSAP384",
+   * "ECDSAP521", and "ED25519".
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate#keyType
+   */
+  readonly keyType: string;
+
+  /**
+   * maxExpirationSeconds is the maximum lifetime permitted for the
+   * certificate.
+   *
+   * Kubelet copies this value verbatim into the PodCertificateRequests it
+   * generates for this projection.
+   *
+   * If omitted, kube-apiserver will set it to 86400(24 hours). kube-apiserver
+   * will reject values shorter than 3600 (1 hour).  The maximum allowable
+   * value is 7862400 (91 days).
+   *
+   * The signer implementation is then free to issue a certificate with any
+   * lifetime *shorter* than MaxExpirationSeconds, but no shorter than 3600
+   * seconds (1 hour).  This constraint is enforced by kube-apiserver.
+   * `kubernetes.io` signers will never issue certificates with a lifetime
+   * longer than 24 hours.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate#maxExpirationSeconds
+   */
+  readonly maxExpirationSeconds?: number;
+
+  /**
+   * Kubelet's generated CSRs will be addressed to this signer.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate#signerName
+   */
+  readonly signerName: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate(obj: ClusterV1Beta2SpecManifestsProjectedSourcesPodCertificate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateChainPath': obj.certificateChainPath,
+    'credentialBundlePath': obj.credentialBundlePath,
+    'keyPath': obj.keyPath,
+    'keyType': obj.keyType,
+    'maxExpirationSeconds': obj.maxExpirationSeconds,
+    'signerName': obj.signerName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secret information about the secret data to project
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecret
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesSecret {
+  /**
+   * items if unspecified, each key-value pair in the Data field of the referenced
+   * Secret will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the Secret,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecret#items
+   */
+  readonly items?: ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems[];
+
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecret#name
+   */
+  readonly name?: string;
+
+  /**
+   * optional field specify whether the Secret or its key must be defined
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecret#optional
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesSecret' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesSecret(obj: ClusterV1Beta2SpecManifestsProjectedSourcesSecret | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems(y)),
+    'name': obj.name,
+    'optional': obj.optional,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * serviceAccountToken is information about the serviceAccountToken data to project
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken {
+  /**
+   * audience is the intended audience of the token. A recipient of a token
+   * must identify itself with an identifier specified in the audience of the
+   * token, and otherwise should reject the token. The audience defaults to the
+   * identifier of the apiserver.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken#audience
+   */
+  readonly audience?: string;
+
+  /**
+   * expirationSeconds is the requested duration of validity of the service
+   * account token. As the token approaches expiration, the kubelet volume
+   * plugin will proactively rotate the service account token. The kubelet will
+   * start trying to rotate the token if the token is older than 80 percent of
+   * its time to live or if the token is older than 24 hours.Defaults to 1 hour
+   * and must be at least 10 minutes.
+   *
+   * @default 1 hour
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken#expirationSeconds
+   */
+  readonly expirationSeconds?: number;
+
+  /**
+   * path is the path relative to the mount point of the file to project the
+   * token into.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken(obj: ClusterV1Beta2SpecManifestsProjectedSourcesServiceAccountToken | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'audience': obj.audience,
+    'expirationSeconds': obj.expirationSeconds,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef
+ */
+export interface ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef {
+  /**
+   * Version of the schema the FieldPath is written in terms of, defaults to "v1".
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * Path of the field to select in the specified API version.
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef#fieldPath
+   */
+  readonly fieldPath: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef(obj: ClusterV1Beta2SpecMountsDownwardApiItemsFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selects a resource of the container: only resources limits and requests
+ * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef
+ */
+export interface ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef {
+  /**
+   * Container name: required for volumes, optional for env vars
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef#containerName
+   */
+  readonly containerName?: string;
+
+  /**
+   * Specifies the output format of the exposed resources, defaults to "1"
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef#divisor
+   */
+  readonly divisor?: ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor;
+
+  /**
+   * Required: resource to select
+   *
+   * @schema ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef#resource
+   */
+  readonly resource: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef(obj: ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'containerName': obj.containerName,
+    'divisor': obj.divisor?.value,
+    'resource': obj.resource,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * May contain labels and annotations that will be copied into the PVC
+ * when creating it. No other fields are allowed and will be rejected during
+ * validation.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata {
+  /**
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata#annotations
+   */
+  readonly annotations?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata#finalizers
+   */
+  readonly finalizers?: string[];
+
+  /**
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata#labels
+   */
+  readonly labels?: { [key: string]: string };
+
+  /**
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata#name
+   */
+  readonly name?: string;
+
+  /**
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateMetadata | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'annotations': ((obj.annotations) === undefined) ? undefined : (Object.entries(obj.annotations).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'finalizers': obj.finalizers?.map(y => y),
+    'labels': ((obj.labels) === undefined) ? undefined : (Object.entries(obj.labels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The specification for the PersistentVolumeClaim. The entire content is
+ * copied unchanged into the PVC that gets created from this
+ * template. The same fields as in a PersistentVolumeClaim
+ * are also valid here.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec {
+  /**
+   * accessModes contains the desired access modes the volume should have.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#accessModes
+   */
+  readonly accessModes?: string[];
+
+  /**
+   * dataSource field can be used to specify either:
+   * * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)
+   * * An existing PVC (PersistentVolumeClaim)
+   * If the provisioner or an external controller can support the specified data source,
+   * it will create a new volume based on the contents of the specified data source.
+   * When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,
+   * and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.
+   * If the namespace is specified, then dataSourceRef will not be copied to dataSource.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#dataSource
+   */
+  readonly dataSource?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource;
+
+  /**
+   * dataSourceRef specifies the object from which to populate the volume with data, if a non-empty
+   * volume is desired. This may be any object from a non-empty API group (non
+   * core object) or a PersistentVolumeClaim object.
+   * When this field is specified, volume binding will only succeed if the type of
+   * the specified object matches some installed volume populator or dynamic
+   * provisioner.
+   * This field will replace the functionality of the dataSource field and as such
+   * if both fields are non-empty, they must have the same value. For backwards
+   * compatibility, when namespace isn't specified in dataSourceRef,
+   * both fields (dataSource and dataSourceRef) will be set to the same
+   * value automatically if one of them is empty and the other is non-empty.
+   * When namespace is specified in dataSourceRef,
+   * dataSource isn't set to the same value and must be empty.
+   * There are three important differences between dataSource and dataSourceRef:
+   * * While dataSource only allows two specific types of objects, dataSourceRef
+   * allows any non-core object, as well as PersistentVolumeClaim objects.
+   * * While dataSource ignores disallowed values (dropping them), dataSourceRef
+   * preserves all values, and generates an error if a disallowed value is
+   * specified.
+   * * While dataSource only allows local objects, dataSourceRef allows objects
+   * in any namespaces.
+   * (Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.
+   * (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#dataSourceRef
+   */
+  readonly dataSourceRef?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef;
+
+  /**
+   * resources represents the minimum resources the volume should have.
+   * If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+   * that are lower than previous value but must still be higher than capacity recorded in the
+   * status field of the claim.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#resources
+   */
+  readonly resources?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources;
+
+  /**
+   * selector is a label query over volumes to consider for binding.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#selector
+   */
+  readonly selector?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector;
+
+  /**
+   * storageClassName is the name of the StorageClass required by the claim.
+   * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#storageClassName
+   */
+  readonly storageClassName?: string;
+
+  /**
+   * volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.
+   * If specified, the CSI driver will create or update the volume with the attributes defined
+   * in the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,
+   * it can be changed after the claim is created. An empty string or nil value indicates that no
+   * VolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,
+   * this field can be reset to its previous value (including nil) to cancel the modification.
+   * If the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be
+   * set to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource
+   * exists.
+   * More info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#volumeAttributesClassName
+   */
+  readonly volumeAttributesClassName?: string;
+
+  /**
+   * volumeMode defines what type of volume is required by the claim.
+   * Value of Filesystem is implied when not included in claim spec.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#volumeMode
+   */
+  readonly volumeMode?: string;
+
+  /**
+   * volumeName is the binding reference to the PersistentVolume backing this claim.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec#volumeName
+   */
+  readonly volumeName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'accessModes': obj.accessModes?.map(y => y),
+    'dataSource': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource(obj.dataSource),
+    'dataSourceRef': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef(obj.dataSourceRef),
+    'resources': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources(obj.resources),
+    'selector': toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector(obj.selector),
+    'storageClassName': obj.storageClassName,
+    'volumeAttributesClassName': obj.volumeAttributesClassName,
+    'volumeMode': obj.volumeMode,
+    'volumeName': obj.volumeName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field
+ * of ClusterTrustBundle objects in an auto-updating file.
+ *
+ * Alpha, gated by the ClusterTrustBundleProjection feature gate.
+ *
+ * ClusterTrustBundle objects can either be selected by name, or by the
+ * combination of signer name and a label selector.
+ *
+ * Kubelet performs aggressive normalization of the PEM contents written
+ * into the pod filesystem.  Esoteric PEM features such as inter-block
+ * comments and block headers are stripped.  Certificates are deduplicated.
+ * The ordering of certificates within the file is arbitrary, and Kubelet
+ * may change the order over time.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle {
+  /**
+   * Select all ClusterTrustBundles that match this label selector.  Only has
+   * effect if signerName is set.  Mutually-exclusive with name.  If unset,
+   * interpreted as "match nothing".  If set but empty, interpreted as "match
+   * everything".
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle#labelSelector
+   */
+  readonly labelSelector?: ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector;
+
+  /**
+   * Select a single ClusterTrustBundle by object name.  Mutually-exclusive
+   * with signerName and labelSelector.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle#name
+   */
+  readonly name?: string;
+
+  /**
+   * If true, don't block pod startup if the referenced ClusterTrustBundle(s)
+   * aren't available.  If using name, then the named ClusterTrustBundle is
+   * allowed not to exist.  If using signerName, then the combination of
+   * signerName and labelSelector is allowed to match zero
+   * ClusterTrustBundles.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle#optional
+   */
+  readonly optional?: boolean;
+
+  /**
+   * Relative path from the volume root to write the bundle.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle#path
+   */
+  readonly path: string;
+
+  /**
+   * Select all ClusterTrustBundles that match this signer name.
+   * Mutually-exclusive with name.  The contents of all selected
+   * ClusterTrustBundles will be unified and deduplicated.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle#signerName
+   */
+  readonly signerName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle(obj: ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundle | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'labelSelector': toJson_ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector(obj.labelSelector),
+    'name': obj.name,
+    'optional': obj.optional,
+    'path': obj.path,
+    'signerName': obj.signerName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * configMap information about the configMap data to project
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMap
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesConfigMap {
+  /**
+   * items if unspecified, each key-value pair in the Data field of the referenced
+   * ConfigMap will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the ConfigMap,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMap#items
+   */
+  readonly items?: ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems[];
+
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMap#name
+   */
+  readonly name?: string;
+
+  /**
+   * optional specify whether the ConfigMap or its keys must be defined
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMap#optional
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesConfigMap' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesConfigMap(obj: ClusterV1Beta2SpecMountsProjectedSourcesConfigMap | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems(y)),
+    'name': obj.name,
+    'optional': obj.optional,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * downwardAPI information about the downwardAPI data to project
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi {
+  /**
+   * Items is a list of DownwardAPIVolume file
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi#items
+   */
+  readonly items?: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi(obj: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApi | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Projects an auto-rotating credential bundle (private key and certificate
+ * chain) that the pod can use either as a TLS client or server.
+ *
+ * Kubelet generates a private key and uses it to send a
+ * PodCertificateRequest to the named signer.  Once the signer approves the
+ * request and issues a certificate chain, Kubelet writes the key and
+ * certificate chain to the pod filesystem.  The pod does not start until
+ * certificates have been issued for each podCertificate projected volume
+ * source in its spec.
+ *
+ * Kubelet will begin trying to rotate the certificate at the time indicated
+ * by the signer using the PodCertificateRequest.Status.BeginRefreshAt
+ * timestamp.
+ *
+ * Kubelet can write a single file, indicated by the credentialBundlePath
+ * field, or separate files, indicated by the keyPath and
+ * certificateChainPath fields.
+ *
+ * The credential bundle is a single file in PEM format.  The first PEM
+ * entry is the private key (in PKCS#8 format), and the remaining PEM
+ * entries are the certificate chain issued by the signer (typically,
+ * signers will return their certificate chain in leaf-to-root order).
+ *
+ * Prefer using the credential bundle format, since your application code
+ * can read it atomically.  If you use keyPath and certificateChainPath,
+ * your application must make two separate file reads. If these coincide
+ * with a certificate rotation, it is possible that the private key and leaf
+ * certificate you read may not correspond to each other.  Your application
+ * will need to check for this condition, and re-read until they are
+ * consistent.
+ *
+ * The named signer controls chooses the format of the certificate it
+ * issues; consult the signer implementation's documentation to learn how to
+ * use the certificates it issues.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate {
+  /**
+   * Write the certificate chain at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate#certificateChainPath
+   */
+  readonly certificateChainPath?: string;
+
+  /**
+   * Write the credential bundle at this path in the projected volume.
+   *
+   * The credential bundle is a single file that contains multiple PEM blocks.
+   * The first PEM block is a PRIVATE KEY block, containing a PKCS#8 private
+   * key.
+   *
+   * The remaining blocks are CERTIFICATE blocks, containing the issued
+   * certificate chain from the signer (leaf and any intermediates).
+   *
+   * Using credentialBundlePath lets your Pod's application code make a single
+   * atomic read that retrieves a consistent key and certificate chain.  If you
+   * project them to separate files, your application code will need to
+   * additionally check that the leaf certificate was issued to the key.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate#credentialBundlePath
+   */
+  readonly credentialBundlePath?: string;
+
+  /**
+   * Write the key at this path in the projected volume.
+   *
+   * Most applications should use credentialBundlePath.  When using keyPath
+   * and certificateChainPath, your application needs to check that the key
+   * and leaf certificate are consistent, because it is possible to read the
+   * files mid-rotation.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate#keyPath
+   */
+  readonly keyPath?: string;
+
+  /**
+   * The type of keypair Kubelet will generate for the pod.
+   *
+   * Valid values are "RSA3072", "RSA4096", "ECDSAP256", "ECDSAP384",
+   * "ECDSAP521", and "ED25519".
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate#keyType
+   */
+  readonly keyType: string;
+
+  /**
+   * maxExpirationSeconds is the maximum lifetime permitted for the
+   * certificate.
+   *
+   * Kubelet copies this value verbatim into the PodCertificateRequests it
+   * generates for this projection.
+   *
+   * If omitted, kube-apiserver will set it to 86400(24 hours). kube-apiserver
+   * will reject values shorter than 3600 (1 hour).  The maximum allowable
+   * value is 7862400 (91 days).
+   *
+   * The signer implementation is then free to issue a certificate with any
+   * lifetime *shorter* than MaxExpirationSeconds, but no shorter than 3600
+   * seconds (1 hour).  This constraint is enforced by kube-apiserver.
+   * `kubernetes.io` signers will never issue certificates with a lifetime
+   * longer than 24 hours.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate#maxExpirationSeconds
+   */
+  readonly maxExpirationSeconds?: number;
+
+  /**
+   * Kubelet's generated CSRs will be addressed to this signer.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate#signerName
+   */
+  readonly signerName: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate(obj: ClusterV1Beta2SpecMountsProjectedSourcesPodCertificate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'certificateChainPath': obj.certificateChainPath,
+    'credentialBundlePath': obj.credentialBundlePath,
+    'keyPath': obj.keyPath,
+    'keyType': obj.keyType,
+    'maxExpirationSeconds': obj.maxExpirationSeconds,
+    'signerName': obj.signerName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * secret information about the secret data to project
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecret
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesSecret {
+  /**
+   * items if unspecified, each key-value pair in the Data field of the referenced
+   * Secret will be projected into the volume as a file whose name is the
+   * key and content is the value. If specified, the listed keys will be
+   * projected into the specified paths, and unlisted keys will not be
+   * present. If a key is specified which is not present in the Secret,
+   * the volume setup will error unless it is marked optional. Paths must be
+   * relative and may not contain the '..' path or start with '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecret#items
+   */
+  readonly items?: ClusterV1Beta2SpecMountsProjectedSourcesSecretItems[];
+
+  /**
+   * Name of the referent.
+   * This field is effectively required, but due to backwards compatibility is
+   * allowed to be empty. Instances of this type with an empty value here are
+   * almost certainly wrong.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecret#name
+   */
+  readonly name?: string;
+
+  /**
+   * optional field specify whether the Secret or its key must be defined
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecret#optional
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesSecret' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesSecret(obj: ClusterV1Beta2SpecMountsProjectedSourcesSecret | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'items': obj.items?.map(y => toJson_ClusterV1Beta2SpecMountsProjectedSourcesSecretItems(y)),
+    'name': obj.name,
+    'optional': obj.optional,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * serviceAccountToken is information about the serviceAccountToken data to project
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken {
+  /**
+   * audience is the intended audience of the token. A recipient of a token
+   * must identify itself with an identifier specified in the audience of the
+   * token, and otherwise should reject the token. The audience defaults to the
+   * identifier of the apiserver.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken#audience
+   */
+  readonly audience?: string;
+
+  /**
+   * expirationSeconds is the requested duration of validity of the service
+   * account token. As the token approaches expiration, the kubelet volume
+   * plugin will proactively rotate the service account token. The kubelet will
+   * start trying to rotate the token if the token is older than 80 percent of
+   * its time to live or if the token is older than 24 hours.Defaults to 1 hour
+   * and must be at least 10 minutes.
+   *
+   * @default 1 hour
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken#expirationSeconds
+   */
+  readonly expirationSeconds?: number;
+
+  /**
+   * path is the path relative to the mount point of the file to project the
+   * token into.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken(obj: ClusterV1Beta2SpecMountsProjectedSourcesServiceAccountToken | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'audience': obj.audience,
+    'expirationSeconds': obj.expirationSeconds,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * dataSource field can be used to specify either:
+ * * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)
+ * * An existing PVC (PersistentVolumeClaim)
+ * If the provisioner or an external controller can support the specified data source,
+ * it will create a new volume based on the contents of the specified data source.
+ * When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,
+ * and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.
+ * If the namespace is specified, then dataSourceRef will not be copied to dataSource.
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource {
+  /**
+   * APIGroup is the group for the resource being referenced.
+   * If APIGroup is not specified, the specified Kind must be in the core API group.
+   * For any other third-party types, APIGroup is required.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource#apiGroup
+   */
+  readonly apiGroup?: string;
+
+  /**
+   * Kind is the type of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource#kind
+   */
+  readonly kind: string;
+
+  /**
+   * Name is the name of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSource | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * dataSourceRef specifies the object from which to populate the volume with data, if a non-empty
+ * volume is desired. This may be any object from a non-empty API group (non
+ * core object) or a PersistentVolumeClaim object.
+ * When this field is specified, volume binding will only succeed if the type of
+ * the specified object matches some installed volume populator or dynamic
+ * provisioner.
+ * This field will replace the functionality of the dataSource field and as such
+ * if both fields are non-empty, they must have the same value. For backwards
+ * compatibility, when namespace isn't specified in dataSourceRef,
+ * both fields (dataSource and dataSourceRef) will be set to the same
+ * value automatically if one of them is empty and the other is non-empty.
+ * When namespace is specified in dataSourceRef,
+ * dataSource isn't set to the same value and must be empty.
+ * There are three important differences between dataSource and dataSourceRef:
+ * * While dataSource only allows two specific types of objects, dataSourceRef
+ * allows any non-core object, as well as PersistentVolumeClaim objects.
+ * * While dataSource ignores disallowed values (dropping them), dataSourceRef
+ * preserves all values, and generates an error if a disallowed value is
+ * specified.
+ * * While dataSource only allows local objects, dataSourceRef allows objects
+ * in any namespaces.
+ * (Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.
+ * (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef {
+  /**
+   * APIGroup is the group for the resource being referenced.
+   * If APIGroup is not specified, the specified Kind must be in the core API group.
+   * For any other third-party types, APIGroup is required.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef#apiGroup
+   */
+  readonly apiGroup?: string;
+
+  /**
+   * Kind is the type of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * Name is the name of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace is the namespace of resource being referenced
+   * Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.
+   * (Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecDataSourceRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * resources represents the minimum resources the volume should have.
+ * If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+ * that are lower than previous value but must still be higher than capacity recorded in the
+ * status field of the claim.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources {
+  /**
+   * Limits describes the maximum amount of compute resources allowed.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources#limits
+   */
+  readonly limits?: { [key: string]: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits };
+
+  /**
+   * Requests describes the minimum amount of compute resources required.
+   * If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+   * otherwise to an implementation-defined value. Requests cannot exceed Limits.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources#requests
+   */
+  readonly requests?: { [key: string]: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'limits': ((obj.limits) === undefined) ? undefined : (Object.entries(obj.limits).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'requests': ((obj.requests) === undefined) ? undefined : (Object.entries(obj.requests).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is a label query over volumes to consider for binding.
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources
+ */
+export class ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources {
+  public static fromNumber(value: number): ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusAllocatedResources(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity
+ */
+export class ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity {
+  public static fromNumber(value: number): ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusCapacity(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * PersistentVolumeClaimCondition contains details about state of pvc
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions {
+  /**
+   * lastProbeTime is the time we probed the condition.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions#lastProbeTime
+   */
+  readonly lastProbeTime?: Date;
+
+  /**
+   * lastTransitionTime is the time the condition transitioned from one status to another.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions#lastTransitionTime
+   */
+  readonly lastTransitionTime?: Date;
+
+  /**
+   * message is the human-readable message indicating details about last transition.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions#message
+   */
+  readonly message?: string;
+
+  /**
+   * reason is a unique, this should be a short, machine understandable string that gives the reason
+   * for condition's last transition. If it reports "Resizing" that means the underlying
+   * persistent volume is being resized.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions#reason
+   */
+  readonly reason?: string;
+
+  /**
+   * Status is the status of the condition.
+   * Can be True, False, Unknown.
+   * More info: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#:~:text=state%20of%20pvc-,conditions.status,-(string)%2C%20required
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * Type is the type of the condition.
+   * More info: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#:~:text=set%20to%20%27ResizeStarted%27.-,PersistentVolumeClaimCondition,-contains%20details%20about
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'lastProbeTime': obj.lastProbeTime?.toISOString(),
+    'lastTransitionTime': obj.lastTransitionTime?.toISOString(),
+    'message': obj.message,
+    'reason': obj.reason,
+    'status': obj.status,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.
+ * When this is unset, there is no ModifyVolume operation being attempted.
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus {
+  /**
+   * status is the status of the ControllerModifyVolume operation. It can be in any of following states:
+   * - Pending
+   * Pending indicates that the PersistentVolumeClaim cannot be modified due to unmet requirements, such as
+   * the specified VolumeAttributesClass not existing.
+   * - InProgress
+   * InProgress indicates that the volume is being modified.
+   * - Infeasible
+   * Infeasible indicates that the request has been rejected as invalid by the CSI driver. To
+   * resolve the error, a valid VolumeAttributesClass needs to be specified.
+   * Note: New statuses can be added in the future. Consumers should check for unknown statuses and fail appropriately.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus#status
+   */
+  readonly status: string;
+
+  /**
+   * targetVolumeAttributesClassName is the name of the VolumeAttributesClass the PVC currently being reconciled
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus#targetVolumeAttributesClassName
+   */
+  readonly targetVolumeAttributesClassName?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimStatusModifyVolumeStatus | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'targetVolumeAttributesClassName': obj.targetVolumeAttributesClassName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Size defines the size of the volume. Default: 1Gi
+ *
+ * @schema ClusterV1Beta2SpecStorageEtcdPersistenceSize
+ */
+export class ClusterV1Beta2SpecStorageEtcdPersistenceSize {
+  public static fromNumber(value: number): ClusterV1Beta2SpecStorageEtcdPersistenceSize {
+    return new ClusterV1Beta2SpecStorageEtcdPersistenceSize(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecStorageEtcdPersistenceSize {
+    return new ClusterV1Beta2SpecStorageEtcdPersistenceSize(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * ResourceClaim references one entry in PodSpec.ResourceClaims.
+ *
+ * @schema ClusterV1Beta2SpecStorageEtcdResourcesClaims
+ */
+export interface ClusterV1Beta2SpecStorageEtcdResourcesClaims {
+  /**
+   * Name must match the name of one entry in pod.spec.resourceClaims of
+   * the Pod where this field is used. It makes that resource available
+   * inside a container.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdResourcesClaims#name
+   */
+  readonly name: string;
+
+  /**
+   * Request is the name chosen for a request in the referenced claim.
+   * If empty, everything from the claim is made available, otherwise
+   * only the result of this request.
+   *
+   * @schema ClusterV1Beta2SpecStorageEtcdResourcesClaims#request
+   */
+  readonly request?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecStorageEtcdResourcesClaims' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecStorageEtcdResourcesClaims(obj: ClusterV1Beta2SpecStorageEtcdResourcesClaims | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'request': obj.request,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecStorageEtcdResourcesLimits
+ */
+export class ClusterV1Beta2SpecStorageEtcdResourcesLimits {
+  public static fromNumber(value: number): ClusterV1Beta2SpecStorageEtcdResourcesLimits {
+    return new ClusterV1Beta2SpecStorageEtcdResourcesLimits(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecStorageEtcdResourcesLimits {
+    return new ClusterV1Beta2SpecStorageEtcdResourcesLimits(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * @schema ClusterV1Beta2SpecStorageEtcdResourcesRequests
+ */
+export class ClusterV1Beta2SpecStorageEtcdResourcesRequests {
+  public static fromNumber(value: number): ClusterV1Beta2SpecStorageEtcdResourcesRequests {
+    return new ClusterV1Beta2SpecStorageEtcdResourcesRequests(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecStorageEtcdResourcesRequests {
+    return new ClusterV1Beta2SpecStorageEtcdResourcesRequests(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * Size defines the size of the volume. Default: 1Gi
+ *
+ * @schema ClusterV1Beta2SpecStorageNatsPersistenceSize
+ */
+export class ClusterV1Beta2SpecStorageNatsPersistenceSize {
+  public static fromNumber(value: number): ClusterV1Beta2SpecStorageNatsPersistenceSize {
+    return new ClusterV1Beta2SpecStorageNatsPersistenceSize(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecStorageNatsPersistenceSize {
+    return new ClusterV1Beta2SpecStorageNatsPersistenceSize(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * Specifies the output format of the exposed resources, defaults to "1"
+ *
+ * @schema ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor
+ */
+export class ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor {
+  public static fromNumber(value: number): ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecManifestsDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * dataSource field can be used to specify either:
+ * * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)
+ * * An existing PVC (PersistentVolumeClaim)
+ * If the provisioner or an external controller can support the specified data source,
+ * it will create a new volume based on the contents of the specified data source.
+ * When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,
+ * and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.
+ * If the namespace is specified, then dataSourceRef will not be copied to dataSource.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource {
+  /**
+   * APIGroup is the group for the resource being referenced.
+   * If APIGroup is not specified, the specified Kind must be in the core API group.
+   * For any other third-party types, APIGroup is required.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource#apiGroup
+   */
+  readonly apiGroup?: string;
+
+  /**
+   * Kind is the type of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource#kind
+   */
+  readonly kind: string;
+
+  /**
+   * Name is the name of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSource | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * dataSourceRef specifies the object from which to populate the volume with data, if a non-empty
+ * volume is desired. This may be any object from a non-empty API group (non
+ * core object) or a PersistentVolumeClaim object.
+ * When this field is specified, volume binding will only succeed if the type of
+ * the specified object matches some installed volume populator or dynamic
+ * provisioner.
+ * This field will replace the functionality of the dataSource field and as such
+ * if both fields are non-empty, they must have the same value. For backwards
+ * compatibility, when namespace isn't specified in dataSourceRef,
+ * both fields (dataSource and dataSourceRef) will be set to the same
+ * value automatically if one of them is empty and the other is non-empty.
+ * When namespace is specified in dataSourceRef,
+ * dataSource isn't set to the same value and must be empty.
+ * There are three important differences between dataSource and dataSourceRef:
+ * * While dataSource only allows two specific types of objects, dataSourceRef
+ * allows any non-core object, as well as PersistentVolumeClaim objects.
+ * * While dataSource ignores disallowed values (dropping them), dataSourceRef
+ * preserves all values, and generates an error if a disallowed value is
+ * specified.
+ * * While dataSource only allows local objects, dataSourceRef allows objects
+ * in any namespaces.
+ * (Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.
+ * (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef {
+  /**
+   * APIGroup is the group for the resource being referenced.
+   * If APIGroup is not specified, the specified Kind must be in the core API group.
+   * For any other third-party types, APIGroup is required.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef#apiGroup
+   */
+  readonly apiGroup?: string;
+
+  /**
+   * Kind is the type of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * Name is the name of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace is the namespace of resource being referenced
+   * Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.
+   * (Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecDataSourceRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * resources represents the minimum resources the volume should have.
+ * If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+ * that are lower than previous value but must still be higher than capacity recorded in the
+ * status field of the claim.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources {
+  /**
+   * Limits describes the maximum amount of compute resources allowed.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources#limits
+   */
+  readonly limits?: { [key: string]: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits };
+
+  /**
+   * Requests describes the minimum amount of compute resources required.
+   * If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+   * otherwise to an implementation-defined value. Requests cannot exceed Limits.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources#requests
+   */
+  readonly requests?: { [key: string]: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'limits': ((obj.limits) === undefined) ? undefined : (Object.entries(obj.limits).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'requests': ((obj.requests) === undefined) ? undefined : (Object.entries(obj.requests).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is a label query over volumes to consider for binding.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Select all ClusterTrustBundles that match this label selector.  Only has
+ * effect if signerName is set.  Mutually-exclusive with name.  If unset,
+ * interpreted as "match nothing".  If set but empty, interpreted as "match
+ * everything".
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector#matchExpressions
+   */
+  readonly matchExpressions?: ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector(obj: ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems(obj: ClusterV1Beta2SpecManifestsProjectedSourcesConfigMapItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DownwardAPIVolumeFile represents information to create the file containing the pod field
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems {
+  /**
+   * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems#fieldRef
+   */
+  readonly fieldRef?: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef;
+
+  /**
+   * Optional: mode bits used to set permissions on this file, must be an octal value
+   * between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * Required: Path is  the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems#path
+   */
+  readonly path: string;
+
+  /**
+   * Selects a resource of the container: only resources limits and requests
+   * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems#resourceFieldRef
+   */
+  readonly resourceFieldRef?: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems(obj: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fieldRef': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef(obj.fieldRef),
+    'mode': obj.mode,
+    'path': obj.path,
+    'resourceFieldRef': toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef(obj.resourceFieldRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems(obj: ClusterV1Beta2SpecManifestsProjectedSourcesSecretItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Specifies the output format of the exposed resources, defaults to "1"
+ *
+ * @schema ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor
+ */
+export class ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor {
+  public static fromNumber(value: number): ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecMountsDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * dataSource field can be used to specify either:
+ * * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)
+ * * An existing PVC (PersistentVolumeClaim)
+ * If the provisioner or an external controller can support the specified data source,
+ * it will create a new volume based on the contents of the specified data source.
+ * When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,
+ * and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.
+ * If the namespace is specified, then dataSourceRef will not be copied to dataSource.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource {
+  /**
+   * APIGroup is the group for the resource being referenced.
+   * If APIGroup is not specified, the specified Kind must be in the core API group.
+   * For any other third-party types, APIGroup is required.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource#apiGroup
+   */
+  readonly apiGroup?: string;
+
+  /**
+   * Kind is the type of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource#kind
+   */
+  readonly kind: string;
+
+  /**
+   * Name is the name of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSource | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * dataSourceRef specifies the object from which to populate the volume with data, if a non-empty
+ * volume is desired. This may be any object from a non-empty API group (non
+ * core object) or a PersistentVolumeClaim object.
+ * When this field is specified, volume binding will only succeed if the type of
+ * the specified object matches some installed volume populator or dynamic
+ * provisioner.
+ * This field will replace the functionality of the dataSource field and as such
+ * if both fields are non-empty, they must have the same value. For backwards
+ * compatibility, when namespace isn't specified in dataSourceRef,
+ * both fields (dataSource and dataSourceRef) will be set to the same
+ * value automatically if one of them is empty and the other is non-empty.
+ * When namespace is specified in dataSourceRef,
+ * dataSource isn't set to the same value and must be empty.
+ * There are three important differences between dataSource and dataSourceRef:
+ * * While dataSource only allows two specific types of objects, dataSourceRef
+ * allows any non-core object, as well as PersistentVolumeClaim objects.
+ * * While dataSource ignores disallowed values (dropping them), dataSourceRef
+ * preserves all values, and generates an error if a disallowed value is
+ * specified.
+ * * While dataSource only allows local objects, dataSourceRef allows objects
+ * in any namespaces.
+ * (Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.
+ * (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef {
+  /**
+   * APIGroup is the group for the resource being referenced.
+   * If APIGroup is not specified, the specified Kind must be in the core API group.
+   * For any other third-party types, APIGroup is required.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef#apiGroup
+   */
+  readonly apiGroup?: string;
+
+  /**
+   * Kind is the type of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * Name is the name of resource being referenced
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace is the namespace of resource being referenced
+   * Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.
+   * (Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef#namespace
+   */
+  readonly namespace?: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecDataSourceRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiGroup': obj.apiGroup,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * resources represents the minimum resources the volume should have.
+ * If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+ * that are lower than previous value but must still be higher than capacity recorded in the
+ * status field of the claim.
+ * More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources {
+  /**
+   * Limits describes the maximum amount of compute resources allowed.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources#limits
+   */
+  readonly limits?: { [key: string]: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits };
+
+  /**
+   * Requests describes the minimum amount of compute resources required.
+   * If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+   * otherwise to an implementation-defined value. Requests cannot exceed Limits.
+   * More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources#requests
+   */
+  readonly requests?: { [key: string]: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResources | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'limits': ((obj.limits) === undefined) ? undefined : (Object.entries(obj.limits).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+    'requests': ((obj.requests) === undefined) ? undefined : (Object.entries(obj.requests).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1]?.value }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is a label query over volumes to consider for binding.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Select all ClusterTrustBundles that match this label selector.  Only has
+ * effect if signerName is set.  Mutually-exclusive with name.  If unset,
+ * interpreted as "match nothing".  If set but empty, interpreted as "match
+ * everything".
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector#matchExpressions
+   */
+  readonly matchExpressions?: ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector(obj: ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems(obj: ClusterV1Beta2SpecMountsProjectedSourcesConfigMapItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DownwardAPIVolumeFile represents information to create the file containing the pod field
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems {
+  /**
+   * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems#fieldRef
+   */
+  readonly fieldRef?: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef;
+
+  /**
+   * Optional: mode bits used to set permissions on this file, must be an octal value
+   * between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * Required: Path is  the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems#path
+   */
+  readonly path: string;
+
+  /**
+   * Selects a resource of the container: only resources limits and requests
+   * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems#resourceFieldRef
+   */
+  readonly resourceFieldRef?: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems(obj: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'fieldRef': toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef(obj.fieldRef),
+    'mode': obj.mode,
+    'path': obj.path,
+    'resourceFieldRef': toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef(obj.resourceFieldRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Maps a string key to a path within a volume.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecretItems
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesSecretItems {
+  /**
+   * key is the key to project.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecretItems#key
+   */
+  readonly key: string;
+
+  /**
+   * mode is Optional: mode bits used to set permissions on this file.
+   * Must be an octal value between 0000 and 0777 or a decimal value between 0 and 511.
+   * YAML accepts both octal and decimal values, JSON requires decimal values for mode bits.
+   * If not specified, the volume defaultMode will be used.
+   * This might be in conflict with other options that affect the file
+   * mode, like fsGroup, and the result can be other mode bits set.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecretItems#mode
+   */
+  readonly mode?: number;
+
+  /**
+   * path is the relative path of the file to map the key to.
+   * May not be an absolute path.
+   * May not contain the path element '..'.
+   * May not start with the string '..'.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesSecretItems#path
+   */
+  readonly path: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesSecretItems' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesSecretItems(obj: ClusterV1Beta2SpecMountsProjectedSourcesSecretItems | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'mode': obj.mode,
+    'path': obj.path,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits
+ */
+export class ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits {
+  public static fromNumber(value: number): ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesLimits(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests
+ */
+export class ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests {
+  public static fromNumber(value: number): ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests {
+    return new ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions
+ */
+export interface ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions(obj: ClusterV1Beta2SpecPersistencePersistentVolumeClaimSpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits
+ */
+export class ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits {
+  public static fromNumber(value: number): ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits {
+    return new ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits {
+    return new ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesLimits(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests
+ */
+export class ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests {
+  public static fromNumber(value: number): ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests {
+    return new ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests {
+    return new ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecResourcesRequests(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions
+ */
+export interface ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions(obj: ClusterV1Beta2SpecManifestsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions(obj: ClusterV1Beta2SpecManifestsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef {
+  /**
+   * Version of the schema the FieldPath is written in terms of, defaults to "v1".
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * Path of the field to select in the specified API version.
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef#fieldPath
+   */
+  readonly fieldPath: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef(obj: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selects a resource of the container: only resources limits and requests
+ * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef
+ */
+export interface ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef {
+  /**
+   * Container name: required for volumes, optional for env vars
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef#containerName
+   */
+  readonly containerName?: string;
+
+  /**
+   * Specifies the output format of the exposed resources, defaults to "1"
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef#divisor
+   */
+  readonly divisor?: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor;
+
+  /**
+   * Required: resource to select
+   *
+   * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef#resource
+   */
+  readonly resource: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef(obj: ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'containerName': obj.containerName,
+    'divisor': obj.divisor?.value,
+    'resource': obj.resource,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits
+ */
+export class ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits {
+  public static fromNumber(value: number): ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits {
+    return new ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits {
+    return new ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesLimits(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests
+ */
+export class ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests {
+  public static fromNumber(value: number): ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests {
+    return new ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests {
+    return new ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecResourcesRequests(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions
+ */
+export interface ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions(obj: ClusterV1Beta2SpecMountsEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions(obj: ClusterV1Beta2SpecMountsProjectedSourcesClusterTrustBundleLabelSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef {
+  /**
+   * Version of the schema the FieldPath is written in terms of, defaults to "v1".
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * Path of the field to select in the specified API version.
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef#fieldPath
+   */
+  readonly fieldPath: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef(obj: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selects a resource of the container: only resources limits and requests
+ * (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef
+ */
+export interface ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef {
+  /**
+   * Container name: required for volumes, optional for env vars
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef#containerName
+   */
+  readonly containerName?: string;
+
+  /**
+   * Specifies the output format of the exposed resources, defaults to "1"
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef#divisor
+   */
+  readonly divisor?: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor;
+
+  /**
+   * Required: resource to select
+   *
+   * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef#resource
+   */
+  readonly resource: string;
+}
+
+/**
+ * Converts an object of type 'ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef(obj: ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'containerName': obj.containerName,
+    'divisor': obj.divisor?.value,
+    'resource': obj.resource,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Specifies the output format of the exposed resources, defaults to "1"
+ *
+ * @schema ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor
+ */
+export class ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor {
+  public static fromNumber(value: number): ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecManifestsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * Specifies the output format of the exposed resources, defaults to "1"
+ *
+ * @schema ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor
+ */
+export class ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor {
+  public static fromNumber(value: number): ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  public static fromString(value: string): ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor {
+    return new ClusterV1Beta2SpecMountsProjectedSourcesDownwardApiItemsResourceFieldRefDivisor(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+
+/**
  * JoinTokenRequest is the Schema for the join token request API
  *
  * @schema JoinTokenRequest
@@ -10176,6 +21766,151 @@ export function toJson_JoinTokenRequestSpecClusterRef(obj: JoinTokenRequestSpecC
  * @schema JoinTokenRequestSpecRole
  */
 export enum JoinTokenRequestSpecRole {
+  /** worker */
+  WORKER = "worker",
+  /** controller */
+  CONTROLLER = "controller",
+}
+
+
+/**
+ * JoinTokenRequest is the Schema for the join token request API
+ *
+ * @schema JoinTokenRequestV1Beta2
+ */
+export class JoinTokenRequestV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "JoinTokenRequestV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'k0smotron.io/v1beta2',
+    kind: 'JoinTokenRequest',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "JoinTokenRequestV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: JoinTokenRequestV1Beta2Props = {}): any {
+    return {
+      ...JoinTokenRequestV1Beta2.GVK,
+      ...toJson_JoinTokenRequestV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "JoinTokenRequestV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: JoinTokenRequestV1Beta2Props = {}) {
+    super(scope, id, {
+      ...JoinTokenRequestV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...JoinTokenRequestV1Beta2.GVK,
+      ...toJson_JoinTokenRequestV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * JoinTokenRequest is the Schema for the join token request API
+ *
+ * @schema JoinTokenRequestV1Beta2
+ */
+export interface JoinTokenRequestV1Beta2Props {
+  /**
+   * @schema JoinTokenRequestV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * JoinTokenRequestSpec defines the desired state of K0smotronJoinTokenRequest
+   *
+   * @schema JoinTokenRequestV1Beta2#spec
+   */
+  readonly spec?: JoinTokenRequestV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'JoinTokenRequestV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_JoinTokenRequestV1Beta2Props(obj: JoinTokenRequestV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_JoinTokenRequestV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * JoinTokenRequestSpec defines the desired state of K0smotronJoinTokenRequest
+ *
+ * @schema JoinTokenRequestV1Beta2Spec
+ */
+export interface JoinTokenRequestV1Beta2Spec {
+  /**
+   * clusterName is the name of the k0smotron Cluster this object belongs to.
+   *
+   * @schema JoinTokenRequestV1Beta2Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * Expiration time of the token. Format 1.5h, 2h45m or 300ms.
+   *
+   * @schema JoinTokenRequestV1Beta2Spec#expiry
+   */
+  readonly expiry?: string;
+
+  /**
+   * Role of the node for which the token is requested (worker or controller).
+   *
+   * @schema JoinTokenRequestV1Beta2Spec#role
+   */
+  readonly role?: JoinTokenRequestV1Beta2SpecRole;
+}
+
+/**
+ * Converts an object of type 'JoinTokenRequestV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_JoinTokenRequestV1Beta2Spec(obj: JoinTokenRequestV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'expiry': obj.expiry,
+    'role': obj.role,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Role of the node for which the token is requested (worker or controller).
+ *
+ * @schema JoinTokenRequestV1Beta2SpecRole
+ */
+export enum JoinTokenRequestV1Beta2SpecRole {
   /** worker */
   WORKER = "worker",
   /** controller */
