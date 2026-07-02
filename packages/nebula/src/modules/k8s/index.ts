@@ -130,12 +130,30 @@ export type {
   MemberRemoteWriteConfig,
 } from "./prometheus-operator";
 
-export { ArgoCd, ArgoCdClusterSyncSetup, ArgoCdClusterSync } from "./argocd";
+export {
+  ArgoCd,
+  ArgoCdClusterSyncSetup,
+  ArgoCdClusterSync,
+  ArgoCdAppTier,
+  CAPI_IGNORE_DIFFERENCES,
+  ARGOCD_IN_CLUSTER_SERVER,
+} from "./argocd";
 export type {
   ArgoCdConfig,
   ArgoCdProjectConfig,
   ArgoCdProjectDestination,
   ArgoCdClusterSyncConfig,
+  ArgoCdAppTierConfig,
+  ArgoCdAppTierDiscovery,
+  ArgoCdAppTierRegistryDiscovery,
+  ArgoCdAppTierAutoDiscovery,
+  ArgoCdAppTierClustersDiscovery,
+  ArgoCdAppTierClusterAppConfig,
+  ArgoCdAppTierModule,
+  ArgoCdAppTierPluginConfig,
+  ArgoCdAppTierProjectConfig,
+  ArgoCdAppTierSyncPolicyOverrides,
+  ArgoCdSyncPolicyPreset,
   DexConfig,
   DexConnector,
   DexGithubConfig,

@@ -30,6 +30,7 @@ import {
   IngressNginx,
   ExternalDns,
   AwsEbsCsiDriver,
+  ArgoCdAppTier,
 } from "../src/modules/k8s";
 
 const app = new App();
@@ -146,6 +147,60 @@ new AwsWorkloadCluster(mgmt, "workload", {
       spot: true,
       nodeLabels: { "nucon.io/pool": "burst" },
     },
+  },
+});
+
+// ===========================================================================
+// GitOps tier — app-of-apps Applications ArgoCD reconciles from the repo
+// ===========================================================================
+const gitops = new Chart(app, "aws-gitops");
+
+// The meta tier: ArgoCD self-management + the app-of-apps parents, with the
+// AppProject. `meta` preset = no pruning + Delete=false (never let ArgoCD
+// prune/delete the platform out from under itself).
+new ArgoCdAppTier(gitops, "argocd-apps", {
+  repoUrl: "https://git.example.com/platform/gitops.git",
+  targetRevision: "main",
+  pathPrefix: "aws",
+  project: "platform",
+  createProject: { description: "Example AWS platform" },
+  syncPolicyPreset: "meta",
+  discovery: {
+    mode: "registry",
+    modules: [
+      { mod: "argocd", path: "meta/argocd" },
+      { mod: "argocd-apps", path: "meta/argocd-apps" },
+      // Child app-of-apps parents prune stale child Applications.
+      { mod: "infra-apps", path: "infra", syncPolicyPreset: "service" },
+      // Cluster tiers: selfHeal only — never auto-delete a cluster Application.
+      {
+        mod: "clusters-apps",
+        path: "clusters",
+        syncPolicyPreset: "service",
+        syncPolicy: { prune: false },
+      },
+    ],
+  },
+});
+
+// The infra tier: one Application per module, ordered by sync waves.
+new ArgoCdAppTier(gitops, "infra", {
+  repoUrl: "https://git.example.com/platform/gitops.git",
+  targetRevision: "main",
+  pathPrefix: "aws",
+  project: "platform",
+  namePrefix: "infra-",
+  syncPolicyPreset: "meta",
+  discovery: {
+    mode: "registry",
+    dir: "infra",
+    modules: [
+      { mod: "crossplane", wave: -2 },
+      { mod: "cert-manager", wave: -2 },
+      { mod: "cluster-api-operator", wave: -1 },
+      { mod: "cluster-api", wave: 1 },
+      { mod: "longhorn", wave: 3 },
+    ],
   },
 });
 

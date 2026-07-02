@@ -1050,3 +1050,23 @@ export {
   ArgoCdClusterSync,
 } from "./argocd-cluster-sync";
 export type { ArgoCdClusterSyncConfig } from "./argocd-cluster-sync";
+
+// Re-export the app-of-apps tier factory
+export {
+  ArgoCdAppTier,
+  CAPI_IGNORE_DIFFERENCES,
+  ARGOCD_IN_CLUSTER_SERVER,
+} from "./app-tier";
+export type {
+  ArgoCdAppTierConfig,
+  ArgoCdAppTierDiscovery,
+  ArgoCdAppTierRegistryDiscovery,
+  ArgoCdAppTierAutoDiscovery,
+  ArgoCdAppTierClustersDiscovery,
+  ArgoCdAppTierClusterAppConfig,
+  ArgoCdAppTierModule,
+  ArgoCdAppTierPluginConfig,
+  ArgoCdAppTierProjectConfig,
+  ArgoCdAppTierSyncPolicyOverrides,
+  ArgoCdSyncPolicyPreset,
+} from "./app-tier";
