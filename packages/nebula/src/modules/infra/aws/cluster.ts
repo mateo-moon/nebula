@@ -260,7 +260,26 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
           }
         : { type: "emptyDir" };
     new K0smotronControlPlane(this, "control-plane", {
-      metadata: { name: controlPlaneName, namespace },
+      metadata: {
+        name: controlPlaneName,
+        namespace,
+        // k0smotron v2.x dropped spec.service.{annotations,labels,...} from its
+        // internal v1beta2 API; the controller reads Service annotations ONLY
+        // from this JSON-encoded CR annotation (see k0smotron
+        // api/k0smotron.io/v1beta1/k0smotroncluster_service_annotations.go and
+        // the Service builder's GetServiceAnnotations(kmc.Annotations)). The
+        // spec field below is kept for forward-compat, but without this
+        // annotation the LB Service renders with NO annotations — e.g. an AWS
+        // NLB silently defaults to scheme "internal".
+        ...(this.config.controlPlaneServiceAnnotations
+          ? {
+              annotations: {
+                "k0smotron.io/conversion-dropped-service.annotations":
+                  JSON.stringify(this.config.controlPlaneServiceAnnotations),
+              },
+            }
+          : {}),
+      },
       spec: {
         version: k0sControlPlaneVersion,
         k0SConfig: {
