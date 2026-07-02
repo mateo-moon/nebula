@@ -230,7 +230,10 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
         typeof this.config.kubernetesProvider === "object"
           ? this.config.kubernetesProvider
           : {};
-      const rbac = kubeOpts.rbac ?? {};
+      // OPT-IN: defaulting rbac on would silently add a DeploymentRuntimeConfig
+      // to every existing consumer (SA rename → provider pod rotation). Pass
+      // rbac: {} (read-only) or { secrets: 'read-write' } to enable.
+      const rbac = kubeOpts.rbac ?? false;
 
       if (rbac !== false) {
         // InjectedIdentity = the provider pod's OWN ServiceAccount is the

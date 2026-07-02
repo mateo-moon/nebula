@@ -371,7 +371,9 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
           ? { ...destination, namespace: entry.namespace }
           : destination,
         preset: entry.syncPolicyPreset ?? this.config.syncPolicyPreset,
-        overrides: entry.syncPolicy ?? this.config.syncPolicy,
+        // Per-field merge: an entry overriding one field must not silently
+        // discard the tier-level overrides for the others.
+        overrides: { ...this.config.syncPolicy, ...entry.syncPolicy },
         extraIgnoreDifferences: entry.extraIgnoreDifferences,
       });
     }
@@ -427,7 +429,10 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
               discovery.serviceSyncPolicyPreset ??
               this.config.syncPolicyPreset ??
               "service",
-            overrides: discovery.serviceSyncPolicy ?? this.config.syncPolicy,
+            overrides: {
+              ...this.config.syncPolicy,
+              ...discovery.serviceSyncPolicy,
+            },
           });
         }
       }
