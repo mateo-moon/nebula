@@ -228,7 +228,18 @@ export function emitAwsClusterCr(
       // to a key pair literally named "default" (which won't exist), failing
       // every instance launch. "" means "no SSH key pair".
       sshKeyName: opts.sshKeyName ?? "",
-      controlPlaneLoadBalancer: {
+      // With loadBalancerType DISABLED (hosted-CP workload clusters: k0smotron
+      // exposes the API from the mgmt cluster) CAPA's validation webhook
+      // REJECTS listener/ingress sub-fields — live-observed:
+      // 'spec.controlPlaneLoadBalancer.additionalListeners: Invalid value'
+      // denied the whole AWSCluster, so the VPC was never created. Emit the
+      // bare type and nothing else in that case; the konnectivity listener +
+      // rules below apply only to the standalone-CP NLB path.
+      controlPlaneLoadBalancer:
+        opts.loadBalancerType ===
+        AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.DISABLED
+          ? { loadBalancerType: opts.loadBalancerType }
+          : {
         loadBalancerType: opts.loadBalancerType,
         ...(opts.loadBalancerScheme
           ? { scheme: opts.loadBalancerScheme }
