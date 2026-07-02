@@ -51,6 +51,9 @@ export * as k0smotronBootstrap from "./bootstrap.cluster.x-k8s.io";
 // k0smotron Core
 export * as k0smotron from "./k0smotron.io";
 
+// k0rdent / KCM (cluster-management substrate)
+export * as k0rdent from "./k0rdent.mirantis.com";
+
 // CloudNativePG
 export * as cnpg from "./postgresql.cnpg.io";
 

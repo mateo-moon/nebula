@@ -124,6 +124,19 @@ imports:
   # k0smotron Core CRDs (v2.0.2 — now under config/crd/)
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/crd/k0smotron.io_clusters.yaml
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/crd/k0smotron.io_jointokenrequests.yaml
+  # k0rdent / KCM CRDs (open k0rdent v1.10.0, group k0rdent.mirantis.com) — the
+  # cluster-management substrate. Only the CRs nebula emits are imported:
+  # Management (singleton providers config), ClusterTemplate/ClusterDeployment
+  # (cluster provisioning), Credential (CAPA identity wrapper),
+  # ServiceTemplate/MultiClusterService (Sveltos add-on delivery). The CAPA
+  # identity CRDs (AWSClusterStaticIdentity/ControllerIdentity) are already
+  # imported above under the CAPA section. Raw CRDs (no Helm templating).
+  - https://raw.githubusercontent.com/k0rdent/kcm/v1.10.0/templates/provider/kcm/templates/crds/k0rdent.mirantis.com_managements.yaml
+  - https://raw.githubusercontent.com/k0rdent/kcm/v1.10.0/templates/provider/kcm/templates/crds/k0rdent.mirantis.com_clustertemplates.yaml
+  - https://raw.githubusercontent.com/k0rdent/kcm/v1.10.0/templates/provider/kcm/templates/crds/k0rdent.mirantis.com_clusterdeployments.yaml
+  - https://raw.githubusercontent.com/k0rdent/kcm/v1.10.0/templates/provider/kcm/templates/crds/k0rdent.mirantis.com_credentials.yaml
+  - https://raw.githubusercontent.com/k0rdent/kcm/v1.10.0/templates/provider/kcm/templates/crds/k0rdent.mirantis.com_servicetemplates.yaml
+  - https://raw.githubusercontent.com/k0rdent/kcm/v1.10.0/templates/provider/kcm/templates/crds/k0rdent.mirantis.com_multiclusterservices.yaml
   # Karmada CRDs (v1.16.0) - Policy APIs
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_propagationpolicies.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/policy/policy.karmada.io_clusterpropagationpolicies.yaml
