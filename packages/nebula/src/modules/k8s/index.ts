@@ -3,7 +3,12 @@
  */
 
 export { Crossplane } from "./crossplane";
-export type { CrossplaneConfig, ArgoCdProviderOptions } from "./crossplane";
+export type {
+  CrossplaneConfig,
+  ArgoCdProviderOptions,
+  KubernetesProviderOptions,
+  KubernetesProviderRbacOptions,
+} from "./crossplane";
 
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
