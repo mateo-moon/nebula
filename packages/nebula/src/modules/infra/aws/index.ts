@@ -22,6 +22,9 @@ export type {
   AwsK0sClusterConfig,
   AwsK0sControlPlaneOptions,
 } from "./k0s-cluster";
+// AWS (CAPA) infrastructure adapter for the provider-agnostic K0sCluster base.
+export { AwsK0sProvider } from "./k0s-provider";
+export type { AwsMachineSpec, AwsK0sProviderConfig } from "./k0s-provider";
 
 export interface AwsRoute53ZoneConfig {
   /** DNS name of the hosted zone (e.g. "aws.nuconstruct.xyz") */
