@@ -17,7 +17,7 @@ import {
   K0SmotronControlPlaneSpecPersistence,
   K0SmotronControlPlaneSpecPersistencePersistentVolumeClaimSpecResourcesRequests,
 } from "#imports/controlplane.cluster.x-k8s.io";
-import { K0sWorkerConfigTemplate } from "#imports/bootstrap.cluster.x-k8s.io";
+import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
 import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType } from "#imports/infrastructure.cluster.x-k8s.io";
 
 export interface AwsWorkloadClusterWorkers {
@@ -355,14 +355,20 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
       }
       k0sWorkerArgs.push(...(pool.k0sArgs ?? []));
 
-      new K0sWorkerConfigTemplate(this, `worker-config${opts.idSuffix}`, {
+      // v1beta2 REQUIRED: k0smotron's v1beta2 storage schema renamed
+      // preStartCommands -> preK0sCommands and declares no conversion for the
+      // old field — applying the v1beta1 shape fails server-side apply with
+      // '.spec.template.spec.preStartCommands: field not declared in schema'
+      // (live-observed: all worker bootstrap templates rejected, workers never
+      // provisioned).
+      new K0sWorkerConfigTemplateV1Beta2(this, `worker-config${opts.idSuffix}`, {
         metadata: { name: opts.workerConfigName, namespace },
         spec: {
           template: {
             spec: {
               version: k0sWorkerVersion,
               ...(k0sWorkerArgs.length ? { args: k0sWorkerArgs } : {}),
-              preStartCommands: [
+              preK0SCommands: [
                 ...DEFAULT_PRESTART_COMMANDS,
                 ...(pool.extraPreStartCommands ?? []),
               ],
@@ -388,7 +394,7 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
                 : {}),
               bootstrap: {
                 configRef: {
-                  apiVersion: "bootstrap.cluster.x-k8s.io/v1beta1",
+                  apiVersion: "bootstrap.cluster.x-k8s.io/v1beta2",
                   kind: "K0sWorkerConfigTemplate",
                   name: opts.workerConfigName,
                 },
