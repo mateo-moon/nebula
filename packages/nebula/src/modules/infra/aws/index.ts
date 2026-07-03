@@ -10,11 +10,6 @@ export type { NodeIngressRuleSpec, SpotSelection } from "./_shared";
 export type { AwsIamConfig } from "./iam";
 export { S3Bucket } from "./s3";
 export type { S3BucketConfig } from "./s3";
-export { AwsWorkloadCluster } from "./cluster";
-export type {
-  AwsWorkloadClusterConfig,
-  AwsWorkloadClusterWorkers,
-} from "./cluster";
 export { AwsK0sCluster } from "./k0s-cluster";
 // Re-export so consumers can set controlPlaneLoadBalancerScheme without a deep import.
 export { AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme } from "#imports/infrastructure.cluster.x-k8s.io";
@@ -86,7 +81,7 @@ export interface AwsConfig {
  */
 export class Aws extends BaseConstruct<AwsConfig> {
   public readonly iam?: AwsIam;
-  /** AWS name of the node instance profile (pass to AwsWorkloadCluster) */
+  /** AWS name of the node instance profile (pass to AwsK0sProvider.iamInstanceProfile) */
   public readonly instanceProfileName?: string;
 
   constructor(scope: Construct, id: string, config: AwsConfig) {
