@@ -12,13 +12,26 @@ export type {
 } from "./crossplane";
 
 // k0rdent / KCM — cluster-management substrate
-export { Kcm, Management, Credential, ClusterDeployment } from "./k0rdent";
+export {
+  Kcm,
+  Management,
+  Credential,
+  ClusterDeployment,
+  ClusterTemplate,
+  ServiceTemplate,
+  MultiClusterService,
+} from "./k0rdent";
 export type {
   KcmConfig,
   ManagementConfig,
   ManagementProvider,
   CredentialConfig,
   ClusterDeploymentConfig,
+  ClusterTemplateConfig,
+  ServiceTemplateConfig,
+  FluxSourceRef,
+  MultiClusterServiceConfig,
+  MultiClusterServiceEntry,
 } from "./k0rdent";
 
 export { CertManager } from "./cert-manager";

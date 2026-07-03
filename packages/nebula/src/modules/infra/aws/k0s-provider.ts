@@ -11,6 +11,7 @@ import {
 import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
+  AwsClusterV1Beta2SpecIdentityRefKind,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 import type {
   CapiInfraRef,
@@ -78,6 +79,14 @@ export interface AwsK0sProviderConfig {
    * Applies to control-plane nodes only; workers never expose their role to pods.
    */
   imdsPodAccess?: boolean;
+  /**
+   * CAPA identity the AWSCluster reconciles with. Set when generating a k0rdent
+   * ClusterTemplate chart whose AWSCluster must adopt the `Credential`'s
+   * identity (k0rdent injects it as `.Values.clusterIdentity`); the chart
+   * generator templatizes these into `{{ .Values.clusterIdentity.* }}`. Omitted
+   * for a direct/standalone cluster (CAPA uses its controller default).
+   */
+  identityRef?: { kind: AwsClusterV1Beta2SpecIdentityRefKind; name: string };
 }
 
 /**
@@ -117,6 +126,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       secondaryCidrBlocks: this.config.secondaryCidrBlocks,
       subnets: this.config.subnets,
       additionalNodeIngressRules: this.config.additionalNodeIngressRules,
+      ...(this.config.identityRef ? { identityRef: this.config.identityRef } : {}),
     });
   }
 

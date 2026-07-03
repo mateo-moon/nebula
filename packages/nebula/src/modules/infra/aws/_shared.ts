@@ -5,6 +5,7 @@ import {
   AwsClusterV1Beta2,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
+  AwsClusterV1Beta2SpecIdentityRefKind,
   AwsClusterV1Beta2SpecNetworkAdditionalControlPlaneIngressRulesProtocol as IngressProtocol,
   AwsClusterV1Beta2SpecNetworkAdditionalNodeIngressRulesProtocol as NodeIngressProtocol,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerAdditionalListenersProtocol as LbListenerProtocol,
@@ -212,6 +213,17 @@ export function emitAwsClusterCr(
      * (intra-cluster only).
      */
     additionalNodeIngressRules?: NodeIngressRuleSpec[];
+    /**
+     * CAPA identity the AWSCluster reconciles with. Set when a k0rdent
+     * `Credential` (via `ClusterDeployment.spec.credential`) must flow into CAPA:
+     * k0rdent resolves the Credential to a ClusterIdentity, and the AWSCluster's
+     * `identityRef` selects it. Omitted = CAPA uses its controller default
+     * (`AWSClusterControllerIdentity/default`).
+     */
+    identityRef?: {
+      kind: AwsClusterV1Beta2SpecIdentityRefKind;
+      name: string;
+    };
   },
 ): AwsClusterV1Beta2 {
   // SG rules that gate node-to-node + NLB traffic must cover EVERY CIDR a node can
@@ -224,6 +236,7 @@ export function emitAwsClusterCr(
     metadata: { name: opts.clusterName, namespace: opts.namespace },
     spec: {
       region: opts.region,
+      ...(opts.identityRef ? { identityRef: opts.identityRef } : {}),
       // Always emit sshKeyName: "" when unset — omitting it makes CAPA fall back
       // to a key pair literally named "default" (which won't exist), failing
       // every instance launch. "" means "no SSH key pair".

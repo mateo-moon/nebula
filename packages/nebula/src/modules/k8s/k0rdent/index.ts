@@ -107,3 +107,12 @@ export { Credential } from "./credential";
 export type { CredentialConfig } from "./credential";
 export { ClusterDeployment } from "./cluster-deployment";
 export type { ClusterDeploymentConfig } from "./cluster-deployment";
+export { ClusterTemplate } from "./cluster-template";
+export type { ClusterTemplateConfig } from "./cluster-template";
+export { ServiceTemplate } from "./service-template";
+export type { ServiceTemplateConfig, FluxSourceRef } from "./service-template";
+export { MultiClusterService } from "./multi-cluster-service";
+export type {
+  MultiClusterServiceConfig,
+  MultiClusterServiceEntry,
+} from "./multi-cluster-service";
