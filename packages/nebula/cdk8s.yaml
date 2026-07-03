@@ -13,6 +13,11 @@ imports:
   # Kubernetes Provider CRDs (for managing arbitrary K8s resources via Crossplane)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-kubernetes/v0.17.0/package/crds/kubernetes.crossplane.io_objects.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-kubernetes/v0.17.0/package/crds/kubernetes.crossplane.io_providerconfigs.yaml
+  # Helm Provider CRDs (provider-helm v1.3.0 — install-as-code for the KCM/k0rdent
+  # Helm release; Crossplane owns the release lifecycle). Classic helm.crossplane.io
+  # group (matches how provider-kubernetes uses kubernetes.crossplane.io).
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-helm/v1.3.0/package/crds/helm.crossplane.io_releases.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-helm/v1.3.0/package/crds/helm.crossplane.io_providerconfigs.yaml
   # TODO: Cloudflare Provider CRDs (uncomment when provider is available)
   # - https://raw.githubusercontent.com/cdloh/provider-cloudflare/main/package/crds/cloudflare.upbound.io_providerconfigs.yaml
   # - https://raw.githubusercontent.com/cdloh/provider-cloudflare/main/package/crds/dns.cloudflare.upbound.io_records.yaml

@@ -20,6 +20,10 @@ import {
   ProviderConfig as KubeProviderConfig,
   ProviderConfigSpecCredentialsSource as KubeCredentialsSource,
 } from "#imports/kubernetes.crossplane.io";
+import {
+  ProviderConfigV1Beta1 as HelmProviderConfig,
+  ProviderConfigV1Beta1SpecCredentialsSource as HelmCredentialsSource,
+} from "#imports/helm.crossplane.io";
 import { HelmModule } from "../../../core";
 import { ArgoCdClusterSyncSetup } from "../argocd/argocd-cluster-sync";
 import { KarmadaCredentialSyncSetup } from "../karmada/credential-sync";
@@ -99,6 +103,30 @@ export interface KubernetesProviderOptions {
   rbac?: false | KubernetesProviderRbacOptions;
 }
 
+export interface HelmProviderOptions {
+  /** provider-helm package version (defaults to v1.3.0) */
+  version?: string;
+  /** ProviderConfig name (defaults to helm-provider-config) */
+  providerConfigName?: string;
+  /**
+   * Create the ProviderConfig (InjectedIdentity). Disable to apply it in a later
+   * sync wave than the provider package (its CRD is only established once the
+   * provider installs).
+   * @default true
+   */
+  installProviderConfig?: boolean;
+  /**
+   * Bind provider-helm's ServiceAccount to `cluster-admin`. provider-helm
+   * installs the KCM/k0rdent chart, which creates cluster-scoped CRDs,
+   * ClusterRoles, and webhooks — Crossplane's rbac-manager only grants providers
+   * their own CRDs, so without this the KCM install fails on RBAC. Pin the SA
+   * name via a DeploymentRuntimeConfig and bind it to the built-in cluster-admin
+   * ClusterRole. Set false only if you bind broad RBAC yourself.
+   * @default true
+   */
+  clusterAdmin?: boolean;
+}
+
 export interface CrossplaneConfig {
   /** Namespace for Crossplane (defaults to crossplane-system) */
   namespace?: string;
@@ -112,6 +140,13 @@ export interface CrossplaneConfig {
   argoCdProvider?: false | ArgoCdProviderOptions;
   /** Install Kubernetes provider - pass false to disable, true for defaults, or options to configure */
   kubernetesProvider?: boolean | KubernetesProviderOptions;
+  /**
+   * Install the Helm provider (provider-helm) — install-as-code for the
+   * KCM/k0rdent Helm release. Pass false to disable, true for defaults, or
+   * options to configure. Default: NOT installed (opt-in) so existing consumers
+   * are unaffected.
+   */
+  helmProvider?: boolean | HelmProviderOptions;
 }
 
 export class Crossplane extends HelmModule<CrossplaneConfig> {
@@ -124,6 +159,10 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
   public readonly kubernetesProviderRuntimeConfig?: ApiObject;
   public readonly kubernetesProviderClusterRole?: ApiObject;
   public readonly kubernetesProviderClusterRoleBinding?: ApiObject;
+  public readonly helmProvider?: Provider;
+  public readonly helmProviderConfig?: HelmProviderConfig;
+  public readonly helmProviderRuntimeConfig?: ApiObject;
+  public readonly helmProviderClusterRoleBinding?: ApiObject;
   public readonly argoCdClusterSyncSetup?: ArgoCdClusterSyncSetup;
   public readonly karmadaCredentialSyncSetup?: KarmadaCredentialSyncSetup;
   public readonly functionPatchAndTransform: FunctionV1Beta1;
@@ -347,6 +386,80 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
         this.karmadaCredentialSyncSetup = new KarmadaCredentialSyncSetup(
           this,
           "karmada-credential-sync-setup",
+        );
+      }
+    }
+
+    // Install Helm Provider (provider-helm) — install-as-code for the KCM release.
+    // Opt-in (default off) so existing consumers are unaffected.
+    if (
+      this.config.helmProvider === true ||
+      typeof this.config.helmProvider === "object"
+    ) {
+      const helmOpts =
+        typeof this.config.helmProvider === "object"
+          ? this.config.helmProvider
+          : {};
+      const clusterAdmin = helmOpts.clusterAdmin !== false;
+      const saName = "provider-helm";
+
+      if (clusterAdmin) {
+        // Pin the provider pod's SA name so the ClusterRoleBinding can target it
+        // (crossplane's rbac-manager only grants providers their own CRDs).
+        this.helmProviderRuntimeConfig = new ApiObject(
+          this,
+          "provider-helm-runtime-config",
+          {
+            apiVersion: "pkg.crossplane.io/v1beta1",
+            kind: "DeploymentRuntimeConfig",
+            metadata: { name: "provider-helm" },
+            spec: { serviceAccountTemplate: { metadata: { name: saName } } },
+          },
+        );
+
+        // KCM installs cluster-scoped CRDs/RBAC/webhooks → provider-helm needs
+        // cluster-admin. Bind its SA to the built-in cluster-admin ClusterRole.
+        this.helmProviderClusterRoleBinding = new ApiObject(
+          this,
+          "provider-helm-cluster-admin",
+          {
+            apiVersion: "rbac.authorization.k8s.io/v1",
+            kind: "ClusterRoleBinding",
+            metadata: { name: "crossplane-provider-helm-cluster-admin" },
+            roleRef: {
+              apiGroup: "rbac.authorization.k8s.io",
+              kind: "ClusterRole",
+              name: "cluster-admin",
+            },
+            subjects: [
+              { kind: "ServiceAccount", name: saName, namespace: this.namespaceName },
+            ],
+          },
+        );
+      }
+
+      this.helmProvider = new Provider(this, "provider-helm", {
+        metadata: { name: "provider-helm" },
+        spec: {
+          package: `xpkg.upbound.io/crossplane-contrib/provider-helm:${helmOpts.version ?? "v1.3.0"}`,
+          ...(clusterAdmin
+            ? { runtimeConfigRef: { name: "provider-helm" } }
+            : {}),
+        },
+      });
+
+      if (helmOpts.installProviderConfig !== false) {
+        this.helmProviderConfig = new HelmProviderConfig(
+          this,
+          "provider-config-helm",
+          {
+            metadata: {
+              name: helmOpts.providerConfigName ?? "helm-provider-config",
+            },
+            spec: {
+              credentials: { source: HelmCredentialsSource.INJECTED_IDENTITY },
+            },
+          },
         );
       }
     }

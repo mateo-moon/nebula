@@ -8,7 +8,18 @@ export type {
   ArgoCdProviderOptions,
   KubernetesProviderOptions,
   KubernetesProviderRbacOptions,
+  HelmProviderOptions,
 } from "./crossplane";
+
+// k0rdent / KCM — cluster-management substrate
+export { Kcm, Management, Credential, ClusterDeployment } from "./k0rdent";
+export type {
+  KcmConfig,
+  ManagementConfig,
+  ManagementProvider,
+  CredentialConfig,
+  ClusterDeploymentConfig,
+} from "./k0rdent";
 
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
