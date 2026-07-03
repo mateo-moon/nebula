@@ -137,7 +137,7 @@ export interface AwsK0sClusterConfig {
    * CNI for the embedded k0s ClusterConfig (`spec.network.provider`). Defaults to
    * `"kuberouter"` (k0s's built-in CNI). Set to `"custom"` to make k0s install NO
    * CNI, so a CNI is deployed separately (e.g. the `Calico` module owns pod
-   * networking + the encrypted node mesh) — mirrors {@link AwsWorkloadCluster}.
+   * networking + the encrypted node mesh).
    * **Immutable at cluster creation**: switching the CNI on a running cluster is a
    * disruptive pod re-IP migration, so pick this on a FRESH bootstrap.
    */
@@ -163,8 +163,7 @@ export interface AwsK0sClusterConfig {
  * own EC2 nodes). This is the **vendor-free management cluster**: no EKS, no
  * managed control plane.
  *
- * Differs from {@link AwsWorkloadCluster} (which uses a k0smotron *hosted*
- * control plane) in two ways:
+ * Uses a **standalone** k0smotron control plane (not hosted):
  *  - control plane is `K0sControlPlane` (runs on the cluster's nodes), so it is
  *    self-contained and persistent — it can host other clusters' control planes.
  *  - the AWSCluster's control-plane LoadBalancer is **enabled** (an NLB) for a
