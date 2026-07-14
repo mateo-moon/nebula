@@ -12,10 +12,12 @@ import {
 } from "./_shared";
 import { MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
 import {
-  K0smotronControlPlane,
-  K0SmotronControlPlaneSpecServiceType,
-  K0SmotronControlPlaneSpecPersistence,
-  K0SmotronControlPlaneSpecPersistencePersistentVolumeClaimSpecResourcesRequests,
+  K0smotronControlPlaneV1Beta2,
+  K0SmotronControlPlaneV1Beta2SpecServiceType,
+  K0SmotronControlPlaneV1Beta2SpecPersistence,
+  K0SmotronControlPlaneV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests,
+  K0SmotronControlPlaneV1Beta2SpecPatches,
+  K0SmotronControlPlaneV1Beta2SpecPatchesPatchType,
 } from "#imports/controlplane.cluster.x-k8s.io";
 import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
 import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType } from "#imports/infrastructure.cluster.x-k8s.io";
@@ -148,8 +150,15 @@ export interface AwsWorkloadClusterConfig {
    * in the MANAGEMENT cluster (k0smotron hosts the control plane), so it uses the
    * management cluster's LB — not AWS. Default "LoadBalancer".
    */
-  controlPlaneServiceType?: K0SmotronControlPlaneSpecServiceType;
-  /** Annotations for the control-plane Service (management-cluster LB specifics) */
+  controlPlaneServiceType?: K0SmotronControlPlaneV1Beta2SpecServiceType;
+  /**
+   * Annotations for the control-plane Service (management-cluster LB specifics,
+   * e.g. an AWS NLB scheme). k0smotron v2's v1beta2 `spec.service` cannot carry
+   * annotations, so these are injected via `spec.patches` — a merge patch on the
+   * generated `Service` (matched by Kind + `app.kubernetes.io/component:
+   * control-plane`). Without this the AWS Load Balancer Controller defaults the
+   * NLB to scheme "internal", so workers in another VPC cannot reach the CP.
+   */
   controlPlaneServiceAnnotations?: Record<string, string>;
   /**
    * Persistence for the k0smotron hosted control-plane etcd. Default 'emptyDir'
@@ -233,7 +242,7 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
 
     // 3. K0smotronControlPlane (hosted in the management cluster)
     const cpPersistence = this.config.controlPlanePersistence;
-    const persistence: K0SmotronControlPlaneSpecPersistence =
+    const persistence: K0SmotronControlPlaneV1Beta2SpecPersistence =
       cpPersistence?.type === "pvc"
         ? {
             type: "pvc",
@@ -250,7 +259,7 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
                   // emitted correctly.
                   requests: {
                     storage:
-                      K0SmotronControlPlaneSpecPersistencePersistentVolumeClaimSpecResourcesRequests.fromString(
+                      K0SmotronControlPlaneV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests.fromString(
                         cpPersistence.size ?? "5Gi",
                       ),
                   },
@@ -259,26 +268,35 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
             },
           }
         : { type: "emptyDir" };
-    new K0smotronControlPlane(this, "control-plane", {
+    // k0smotron v2's v1beta2 K0smotronControlPlane.spec.service only carries
+    // {type,apiPort,konnectivityPort} — there is no place for Service
+    // annotations. The supported mechanism is spec.patches: a patch applied to
+    // a generated resource, matched by Kind + app.kubernetes.io/component label,
+    // after generation and before apply (docs.k0smotron.io/stable/
+    // generated-resources). We merge-patch the control-plane Service's metadata
+    // so the AWS Load Balancer Controller sees the annotations (e.g. an
+    // internet-facing NLB scheme) — otherwise the NLB silently defaults to
+    // "internal" and workers in another VPC cannot reach the hosted CP.
+    const servicePatches: K0SmotronControlPlaneV1Beta2SpecPatches[] = this.config
+      .controlPlaneServiceAnnotations
+      ? [
+          {
+            target: { kind: "Service", component: "control-plane" },
+            patch: {
+              type: K0SmotronControlPlaneV1Beta2SpecPatchesPatchType.MERGE,
+              content: JSON.stringify({
+                metadata: {
+                  annotations: this.config.controlPlaneServiceAnnotations,
+                },
+              }),
+            },
+          },
+        ]
+      : [];
+    new K0smotronControlPlaneV1Beta2(this, "control-plane", {
       metadata: {
         name: controlPlaneName,
         namespace,
-        // k0smotron v2.x dropped spec.service.{annotations,labels,...} from its
-        // internal v1beta2 API; the controller reads Service annotations ONLY
-        // from this JSON-encoded CR annotation (see k0smotron
-        // api/k0smotron.io/v1beta1/k0smotroncluster_service_annotations.go and
-        // the Service builder's GetServiceAnnotations(kmc.Annotations)). The
-        // spec field below is kept for forward-compat, but without this
-        // annotation the LB Service renders with NO annotations — e.g. an AWS
-        // NLB silently defaults to scheme "internal".
-        ...(this.config.controlPlaneServiceAnnotations
-          ? {
-              annotations: {
-                "k0smotron.io/conversion-dropped-service.annotations":
-                  JSON.stringify(this.config.controlPlaneServiceAnnotations),
-              },
-            }
-          : {}),
       },
       spec: {
         version: k0sControlPlaneVersion,
@@ -297,11 +315,9 @@ export class AwsWorkloadCluster extends BaseConstruct<AwsWorkloadClusterConfig> 
         service: {
           type:
             this.config.controlPlaneServiceType ??
-            K0SmotronControlPlaneSpecServiceType.LOAD_BALANCER,
-          ...(this.config.controlPlaneServiceAnnotations
-            ? { annotations: this.config.controlPlaneServiceAnnotations }
-            : {}),
+            K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
         },
+        ...(servicePatches.length ? { patches: servicePatches } : {}),
       },
     });
 
