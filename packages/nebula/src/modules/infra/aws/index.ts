@@ -10,6 +10,27 @@ export type { NodeIngressRuleSpec, SpotSelection } from "./_shared";
 export type { AwsIamConfig } from "./iam";
 export { S3Bucket } from "./s3";
 export type { S3BucketConfig } from "./s3";
+export { ReplicatedObjectStore } from "./replicated-object-store";
+export type { ReplicatedObjectStoreConfig } from "./replicated-object-store";
+export {
+  S3BatchReplication,
+  S3BatchReplicationSetup,
+  S3_BATCH_REPLICATION_COMPOSITION_NAME,
+} from "./s3-batch-replication";
+export type { S3BatchReplicationConfig } from "./s3-batch-replication";
+export {
+  S3ReplicationCanary,
+  S3ReplicationCanarySetup,
+  S3_REPLICATION_CANARY_API_GROUP,
+  S3_REPLICATION_CANARY_API_VERSION,
+  S3_REPLICATION_CANARY_KIND,
+  S3_REPLICATION_CANARY_PLURAL,
+  S3_REPLICATION_CANARY_COMPOSITION,
+} from "./s3-replication-canary";
+export type {
+  S3ReplicationCanaryConfig,
+  S3ReplicationCanarySetupConfig,
+} from "./s3-replication-canary";
 export { AwsWorkloadCluster } from "./cluster";
 export type {
   AwsWorkloadClusterConfig,
