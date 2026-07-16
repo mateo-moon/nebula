@@ -237,6 +237,9 @@ export type {
   AwsEbsCsiDriverStorageClassConfig,
 } from "./aws-ebs-csi-driver";
 
+export { CsiSnapshotController } from "./csi-snapshot-controller";
+export type { CsiSnapshotControllerConfig } from "./csi-snapshot-controller";
+
 export { Piraeus } from "./piraeus";
 export type {
   PiraeusConfig,
@@ -257,3 +260,28 @@ export type { CalicoConfig } from "./calico";
 
 export { Platform } from "./platform";
 export type { PlatformConfig } from "./platform";
+
+export {
+  PvcAutoresizer,
+  PVC_AUTORESIZER_NAMESPACE,
+  PVC_AUTORESIZER_RELEASE,
+  PVC_AUTORESIZER_CHART_VERSION,
+  PVC_AUTORESIZER_CHART_REPOSITORY,
+  PVC_AUTORESIZER_PROMETHEUS_URL,
+} from "./pvc-autoresizer";
+export type { PvcAutoresizerConfig } from "./pvc-autoresizer";
+
+export {
+  StorageCanarySetup,
+  StorageCanary,
+  STORAGE_CANARY_API_GROUP,
+  STORAGE_CANARY_API_VERSION,
+  STORAGE_CANARY_KIND,
+  STORAGE_CANARY_PLURAL,
+  STORAGE_CANARY_COMPOSITION,
+  STORAGE_CANARY_NAMESPACE,
+} from "./storage-canary";
+export type {
+  StorageCanarySetupConfig,
+  StorageCanaryConfig,
+} from "./storage-canary";
