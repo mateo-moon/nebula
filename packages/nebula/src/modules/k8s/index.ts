@@ -270,18 +270,3 @@ export {
   PVC_AUTORESIZER_PROMETHEUS_URL,
 } from "./pvc-autoresizer";
 export type { PvcAutoresizerConfig } from "./pvc-autoresizer";
-
-export {
-  StorageVerificationSetup,
-  StorageVerification,
-  STORAGE_VERIFICATION_API_GROUP,
-  STORAGE_VERIFICATION_API_VERSION,
-  STORAGE_VERIFICATION_KIND,
-  STORAGE_VERIFICATION_PLURAL,
-  STORAGE_VERIFICATION_COMPOSITION,
-  STORAGE_VERIFICATION_NAMESPACE,
-} from "./storage-verification";
-export type {
-  StorageVerificationSetupConfig,
-  StorageVerificationConfig,
-} from "./storage-verification";
