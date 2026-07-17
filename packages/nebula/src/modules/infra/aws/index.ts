@@ -19,18 +19,18 @@ export {
 } from "./s3-batch-replication";
 export type { S3BatchReplicationConfig } from "./s3-batch-replication";
 export {
-  S3ReplicationCanary,
-  S3ReplicationCanarySetup,
-  S3_REPLICATION_CANARY_API_GROUP,
-  S3_REPLICATION_CANARY_API_VERSION,
-  S3_REPLICATION_CANARY_KIND,
-  S3_REPLICATION_CANARY_PLURAL,
-  S3_REPLICATION_CANARY_COMPOSITION,
-} from "./s3-replication-canary";
+  S3ReplicationVerification,
+  S3ReplicationVerificationSetup,
+  S3_REPLICATION_VERIFICATION_API_GROUP,
+  S3_REPLICATION_VERIFICATION_API_VERSION,
+  S3_REPLICATION_VERIFICATION_KIND,
+  S3_REPLICATION_VERIFICATION_PLURAL,
+  S3_REPLICATION_VERIFICATION_COMPOSITION,
+} from "./s3-replication-verification";
 export type {
-  S3ReplicationCanaryConfig,
-  S3ReplicationCanarySetupConfig,
-} from "./s3-replication-canary";
+  S3ReplicationVerificationConfig,
+  S3ReplicationVerificationSetupConfig,
+} from "./s3-replication-verification";
 export { AwsWorkloadCluster } from "./cluster";
 export type {
   AwsWorkloadClusterConfig,

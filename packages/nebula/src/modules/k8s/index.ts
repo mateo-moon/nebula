@@ -272,16 +272,16 @@ export {
 export type { PvcAutoresizerConfig } from "./pvc-autoresizer";
 
 export {
-  StorageCanarySetup,
-  StorageCanary,
-  STORAGE_CANARY_API_GROUP,
-  STORAGE_CANARY_API_VERSION,
-  STORAGE_CANARY_KIND,
-  STORAGE_CANARY_PLURAL,
-  STORAGE_CANARY_COMPOSITION,
-  STORAGE_CANARY_NAMESPACE,
-} from "./storage-canary";
+  StorageVerificationSetup,
+  StorageVerification,
+  STORAGE_VERIFICATION_API_GROUP,
+  STORAGE_VERIFICATION_API_VERSION,
+  STORAGE_VERIFICATION_KIND,
+  STORAGE_VERIFICATION_PLURAL,
+  STORAGE_VERIFICATION_COMPOSITION,
+  STORAGE_VERIFICATION_NAMESPACE,
+} from "./storage-verification";
 export type {
-  StorageCanarySetupConfig,
-  StorageCanaryConfig,
-} from "./storage-canary";
+  StorageVerificationSetupConfig,
+  StorageVerificationConfig,
+} from "./storage-verification";
