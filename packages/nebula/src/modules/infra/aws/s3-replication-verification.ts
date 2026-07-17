@@ -9,9 +9,9 @@
  * without permission to create it and requires the replica's SHA-256 checksum
  * and Object Lock fields.
  *
- * Instantiate `S3ReplicationCanarySetup` once per management cluster and one
- * `S3ReplicationCanary` for each replicated object store. Each XR is immutable;
- * create a new name and revision to exercise the live rule again.
+ * Instantiate `S3ReplicationVerificationSetup` once per management cluster and
+ * one `S3ReplicationVerification` for each replicated object store. Each XR is
+ * immutable; create a new name and revision to exercise the live rule again.
  */
 import * as crypto from "crypto";
 import { ApiObject } from "cdk8s";
@@ -24,21 +24,23 @@ import {
 } from "#imports/apiextensions.crossplane.io";
 import { syncWave } from "../../../core";
 
-export const S3_REPLICATION_CANARY_API_GROUP = "nebula.io";
-export const S3_REPLICATION_CANARY_API_VERSION =
-  `${S3_REPLICATION_CANARY_API_GROUP}/v1alpha1`;
-export const S3_REPLICATION_CANARY_KIND = "XS3ReplicationCanary";
-export const S3_REPLICATION_CANARY_PLURAL = "xs3replicationcanaries";
-export const S3_REPLICATION_CANARY_COMPOSITION = "s3-replication-canary";
+export const S3_REPLICATION_VERIFICATION_API_GROUP = "nebula.io";
+export const S3_REPLICATION_VERIFICATION_API_VERSION =
+  `${S3_REPLICATION_VERIFICATION_API_GROUP}/v1alpha1`;
+export const S3_REPLICATION_VERIFICATION_KIND = "XS3ReplicationVerification";
+export const S3_REPLICATION_VERIFICATION_PLURAL =
+  "xs3replicationverifications";
+export const S3_REPLICATION_VERIFICATION_COMPOSITION =
+  "s3-replication-verification";
 
-export interface S3ReplicationCanarySetupConfig {
+export interface S3ReplicationVerificationSetupConfig {
   /** Installed function-go-templating Function name. */
   functionGoTemplatingName?: string;
-  /** Composition name (default: s3-replication-canary). */
+  /** Composition name (default: s3-replication-verification). */
   compositionName?: string;
 }
 
-export interface S3ReplicationCanaryConfig {
+export interface S3ReplicationVerificationConfig {
   /** Stable DNS-safe XR name. */
   name: string;
   /** Source bucket and region. */
@@ -53,9 +55,9 @@ export interface S3ReplicationCanaryConfig {
   minimumObjectLockDays: number;
   /** Git-controlled DNS-label revision for this immutable run. */
   revision: string;
-  /** Canary payload. Defaults to a deterministic name/revision string. */
+  /** Verification payload. Defaults to a deterministic name/revision string. */
   content?: string;
-  /** S3 object key prefix (default: _nebula/replication-canary). */
+  /** S3 object key prefix (default: _nebula/replication-verification). */
   keyPrefix?: string;
   /** provider-aws ProviderConfig name (default: default). */
   awsProviderConfigName?: string;
@@ -64,19 +66,19 @@ export interface S3ReplicationCanaryConfig {
 }
 
 /** Installs the shared XRD and Composition. */
-export class S3ReplicationCanarySetup extends Construct {
+export class S3ReplicationVerificationSetup extends Construct {
   public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
 
   constructor(
     scope: Construct,
     id: string,
-    config: S3ReplicationCanarySetupConfig = {},
+    config: S3ReplicationVerificationSetupConfig = {},
   ) {
     super(scope, id);
 
     const compositionName =
-      config.compositionName ?? S3_REPLICATION_CANARY_COMPOSITION;
+      config.compositionName ?? S3_REPLICATION_VERIFICATION_COMPOSITION;
 
     this.xrd = this.createXrd(compositionName);
     this.composition = this.createComposition(
@@ -101,14 +103,14 @@ export class S3ReplicationCanarySetup extends Construct {
 
     return new CompositeResourceDefinitionV2(this, "xrd", {
       metadata: {
-        name: `${S3_REPLICATION_CANARY_PLURAL}.${S3_REPLICATION_CANARY_API_GROUP}`,
+        name: `${S3_REPLICATION_VERIFICATION_PLURAL}.${S3_REPLICATION_VERIFICATION_API_GROUP}`,
         annotations: syncWave(-10),
       },
       spec: {
-        group: S3_REPLICATION_CANARY_API_GROUP,
+        group: S3_REPLICATION_VERIFICATION_API_GROUP,
         names: {
-          kind: S3_REPLICATION_CANARY_KIND,
-          plural: S3_REPLICATION_CANARY_PLURAL,
+          kind: S3_REPLICATION_VERIFICATION_KIND,
+          plural: S3_REPLICATION_VERIFICATION_PLURAL,
         },
         scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
         defaultCompositionRef: { name: compositionName },
@@ -192,7 +194,7 @@ export class S3ReplicationCanarySetup extends Construct {
                         rule:
                           "self.sourceBucketName == oldSelf.sourceBucketName && self.sourceRegion == oldSelf.sourceRegion && self.destinationBucketName == oldSelf.destinationBucketName && self.destinationRegion == oldSelf.destinationRegion && self.replicationRuleId == oldSelf.replicationRuleId && self.minimumObjectLockDays == oldSelf.minimumObjectLockDays && self.revision == oldSelf.revision && self.key == oldSelf.key && self.content == oldSelf.content && self.expectedChecksumSha256 == oldSelf.expectedChecksumSha256 && self.awsProviderConfigName == oldSelf.awsProviderConfigName",
                         message:
-                          "S3 replication canary inputs are immutable; create a new XR name and revision for a new run",
+                          "S3 replication verification inputs are immutable; create a new XR name and revision for a new run",
                       },
                       {
                         rule: "self.sourceBucketName != self.destinationBucketName",
@@ -237,24 +239,24 @@ export class S3ReplicationCanarySetup extends Construct {
         annotations: syncWave(-5),
         labels: {
           "crossplane.io/xrd":
-            `${S3_REPLICATION_CANARY_PLURAL}.${S3_REPLICATION_CANARY_API_GROUP}`,
+            `${S3_REPLICATION_VERIFICATION_PLURAL}.${S3_REPLICATION_VERIFICATION_API_GROUP}`,
         },
       },
       spec: {
         compositeTypeRef: {
-          apiVersion: S3_REPLICATION_CANARY_API_VERSION,
-          kind: S3_REPLICATION_CANARY_KIND,
+          apiVersion: S3_REPLICATION_VERIFICATION_API_VERSION,
+          kind: S3_REPLICATION_VERIFICATION_KIND,
         },
         mode: CompositionSpecMode.PIPELINE,
         pipeline: [
           {
-            step: "run-s3-replication-canary",
+            step: "run-s3-replication-verification",
             functionRef: { name: functionName },
             input: {
               apiVersion: "gotemplating.fn.crossplane.io/v1beta1",
               kind: "GoTemplate",
               source: "Inline",
-              inline: { template: S3_REPLICATION_CANARY_TEMPLATE },
+              inline: { template: S3_REPLICATION_VERIFICATION_TEMPLATE },
             },
           },
         ],
@@ -264,20 +266,24 @@ export class S3ReplicationCanarySetup extends Construct {
 }
 
 /** Creates one continuously reconciled S3 replication acceptance XR. */
-export class S3ReplicationCanary extends Construct {
+export class S3ReplicationVerification extends Construct {
   public readonly xr: ApiObject;
   public readonly key: string;
   public readonly expectedChecksumSha256: string;
 
-  constructor(scope: Construct, id: string, config: S3ReplicationCanaryConfig) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: S3ReplicationVerificationConfig,
+  ) {
     super(scope, id);
 
     this.validateConfig(config);
 
     const content =
       config.content ??
-      `nebula replication canary ${config.name} ${config.revision}\n`;
-    const prefix = (config.keyPrefix ?? "_nebula/replication-canary").replace(
+      `nebula replication verification ${config.name} ${config.revision}\n`;
+    const prefix = (config.keyPrefix ?? "_nebula/replication-verification").replace(
       /\/+$/,
       "",
     );
@@ -288,8 +294,8 @@ export class S3ReplicationCanary extends Construct {
       .digest("base64");
 
     this.xr = new ApiObject(this, "xr", {
-      apiVersion: S3_REPLICATION_CANARY_API_VERSION,
-      kind: S3_REPLICATION_CANARY_KIND,
+      apiVersion: S3_REPLICATION_VERIFICATION_API_VERSION,
+      kind: S3_REPLICATION_VERIFICATION_KIND,
       metadata: {
         name: config.name,
         annotations: syncWave(config.syncWave ?? 5),
@@ -310,7 +316,7 @@ export class S3ReplicationCanary extends Construct {
     });
   }
 
-  private validateConfig(config: S3ReplicationCanaryConfig): void {
+  private validateConfig(config: S3ReplicationVerificationConfig): void {
     const dnsName = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
     const bucketName = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])$/;
     const region = /^[a-z]{2}(?:-gov)?-[a-z]+-[0-9]+$/;
@@ -318,7 +324,7 @@ export class S3ReplicationCanary extends Construct {
 
     if (config.name.length > 63 || !dnsName.test(config.name)) {
       throw new Error(
-        "S3ReplicationCanary name must be a lower-case DNS label of at most 63 characters",
+        "S3ReplicationVerification name must be a lower-case DNS label of at most 63 characters",
       );
     }
     for (const [field, value] of [
@@ -381,7 +387,7 @@ export class S3ReplicationCanary extends Construct {
   }
 }
 
-const S3_REPLICATION_CANARY_TEMPLATE = String.raw`
+const S3_REPLICATION_VERIFICATION_TEMPLATE = String.raw`
 {{- $xr := .observed.composite.resource -}}
 {{- $spec := $xr.spec -}}
 {{- $resources := default (dict) .observed.resources -}}
@@ -390,8 +396,8 @@ const S3_REPLICATION_CANARY_TEMPLATE = String.raw`
 {{- $revisionName := ($spec.revision | trunc 14 | trimSuffix "-") -}}
 {{- $sourceName := printf "%s-%s-%s-source" $baseName $revisionName $runHash -}}
 {{- $destinationName := printf "%s-%s-%s-replica" $baseName $revisionName $runHash -}}
-{{- $sourceResourceName := printf "canary-source-%s" $runHash -}}
-{{- $destinationResourceName := printf "canary-destination-%s" $runHash -}}
+{{- $sourceResourceName := printf "verification-source-%s" $runHash -}}
+{{- $destinationResourceName := printf "verification-destination-%s" $runHash -}}
 
 {{- $replicationReady := false -}}
 {{- $replicationObserver := index $resources "replication-configuration-observer" -}}
