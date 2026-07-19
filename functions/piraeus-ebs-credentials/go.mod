@@ -1,4 +1,4 @@
-module github.com/mateo-moon/nebula/functions/piraeus-node-storage
+module github.com/mateo-moon/nebula/functions/piraeus-ebs-credentials
 
 go 1.25.11
 
