@@ -699,7 +699,7 @@ spec:
           {
             storage_pool_name: .payload.body.pool,
             provider_kind: "EBS_INIT",
-            props: {"StorDriver/Ebs/Remote": .payload.body.remote}
+            props: {"StorDriver/EBS/Remote": .payload.body.remote}
           }
       - action: OBSERVE
         method: GET
@@ -707,7 +707,7 @@ spec:
       - action: UPDATE
         method: PUT
         url: .payload.baseUrl + "/v1/nodes/" + (.payload.body.node | @uri) + "/storage-pools/" + (.payload.body.pool | @uri)
-        body: '{override_props: {"StorDriver/Ebs/Remote": .payload.body.remote}}'
+        body: '{override_props: {"StorDriver/EBS/Remote": .payload.body.remote}}'
       - action: REMOVE
         method: DELETE
         url: .payload.baseUrl + "/v1/nodes/" + (.payload.body.node | @uri) + "/storage-pools/" + (.payload.body.pool | @uri)
@@ -717,7 +717,7 @@ spec:
         (.response.body | if type == "string" then fromjson else . end) as $body |
         $body.storage_pool_name == .payload.body.pool and
         $body.provider_kind == "EBS_INIT" and
-        $body.props["StorDriver/Ebs/Remote"] == .payload.body.remote
+        $body.props["StorDriver/EBS/Remote"] == .payload.body.remote
     isRemovedCheck:
       type: CUSTOM
       logic: .response.statusCode == 404

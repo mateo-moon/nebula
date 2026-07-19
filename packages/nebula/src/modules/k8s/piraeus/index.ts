@@ -122,9 +122,42 @@ export interface PiraeusConfig {
   kubeletPath?: string;
   /** Use host networking for LINSTOR satellites (defaults to true; set false when CNI provides cross-node routing) */
   hostNetwork?: boolean;
+  /**
+   * Allow the controller to launch local special satellites for storage
+   * providers such as EBS_TARGET and remote SPDK. The controller keeps a
+   * read-only root filesystem; only its configuration directory becomes
+   * writable, with linstor.toml mounted back from the ConfigMap read-only.
+   */
+  enableSpecialSatellites?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
   advertiseIP?: string;
 }
+
+const SPECIAL_SATELLITE_CONTROLLER_PATCH = String.raw`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linstor-controller
+spec:
+  template:
+    spec:
+      containers:
+        - name: linstor-controller
+          volumeMounts:
+            - $patch: replace
+            - name: var-log-linstor-controller
+              mountPath: /var/log/linstor-controller
+            - name: etc-linstor-writable
+              mountPath: /etc/linstor
+            - name: etc-linstor
+              mountPath: /etc/linstor/linstor.toml
+              subPath: linstor.toml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: etc-linstor-writable
+          emptyDir: {}
+`;
 
 export class Piraeus extends BaseConstruct<PiraeusConfig> {
   public readonly storageClassName: string;
@@ -184,6 +217,21 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
     const clusterSpec: Record<string, unknown> = {
       ...(masterPassphraseSecret
         ? { linstorPassphraseSecret: masterPassphraseSecret }
+        : {}),
+      ...(this.config.enableSpecialSatellites
+        ? {
+            patches: [
+              {
+                target: {
+                  group: "apps",
+                  version: "v1",
+                  kind: "Deployment",
+                  name: "linstor-controller",
+                },
+                patch: SPECIAL_SATELLITE_CONTROLLER_PATCH,
+              },
+            ],
+          }
         : {}),
     };
 
