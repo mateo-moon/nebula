@@ -241,7 +241,7 @@ export { CsiSnapshotController } from "./csi-snapshot-controller";
 export type { CsiSnapshotControllerConfig } from "./csi-snapshot-controller";
 
 export { Piraeus } from "./piraeus";
-export { PiraeusEbs } from "./piraeus/ebs";
+export { PiraeusNodeStorage } from "./piraeus/node-storage";
 export type {
   PiraeusConfig,
   PiraeusEncryptionConfig,
@@ -250,7 +250,7 @@ export type {
   PiraeusReplicationConfig,
   PiraeusSatelliteConfig,
 } from "./piraeus";
-export type { PiraeusEbsConfig } from "./piraeus/ebs";
+export type { PiraeusNodeStorageConfig } from "./piraeus/node-storage";
 
 export { WireGuardMesh } from "./wireguard-mesh";
 export type { WireGuardMeshConfig, WireGuardPeer } from "./wireguard-mesh";
