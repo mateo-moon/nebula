@@ -71,6 +71,10 @@ export interface K0sControlPlaneOptions<M> {
 export interface EmitInfraClusterCtx {
   clusterName: string;
   namespace: string;
+  /** CNI selected in the k0s ClusterConfig, so cloud providers can open its node-to-node transport. */
+  networkProvider: "kuberouter" | "calico" | "custom";
+  /** Bundled Calico transport settings (only meaningful for networkProvider="calico"). */
+  calico: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
 }
 
 /**
@@ -227,7 +231,12 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
 
     // 2. Infra cluster CR (AWSCluster/…) — CAPA owns the VPC/subnets/SGs and the
     //    control-plane load balancer.
-    provider.emitInfraCluster(this, { clusterName, namespace });
+    provider.emitInfraCluster(this, {
+      clusterName,
+      namespace,
+      networkProvider,
+      calico,
+    });
 
     // 3. Control-plane infra machine template (hash-named by the provider).
     const cpRef = provider.emitMachineTemplate(this, "control-plane-template", {
