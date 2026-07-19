@@ -8,9 +8,7 @@
  * Kubernetes block volumes cannot be shrunk.
  *
  * The construct installs the pinned upstream Helm chart with secure pod
- * defaults, two replicas spread across nodes, a PodDisruptionBudget, a
- * PodMonitor, and alerts for degraded metrics, failed resizing, and exhausted
- * limits.
+ * defaults, two replicas spread across nodes, and a PodDisruptionBudget.
  */
 import { ApiObject, Helm } from "cdk8s";
 import { Construct } from "constructs";
@@ -40,10 +38,6 @@ export interface PvcAutoresizerConfig {
   watchNamespaces?: readonly string[];
   /** Reconciliation interval passed to pvc-autoresizer. */
   interval?: string;
-  /** Namespace in which the PodMonitor and PrometheusRule are created. */
-  monitoringNamespace?: string;
-  /** PodMonitor scrape interval. */
-  podMonitorInterval?: string;
   /** Namespace sync wave. The controller resources follow in the normal wave. */
   namespaceSyncWave?: number;
 }
@@ -51,15 +45,12 @@ export interface PvcAutoresizerConfig {
 export class PvcAutoresizer extends HelmModule<PvcAutoresizerConfig> {
   public readonly namespace: ApiObject;
   public readonly helm: Helm;
-  public readonly prometheusRule: ApiObject;
 
   constructor(scope: Construct, id: string, config: PvcAutoresizerConfig = {}) {
     super(scope, id, config);
 
     const namespace = this.config.namespace ?? PVC_AUTORESIZER_NAMESPACE;
     const releaseName = this.config.releaseName ?? PVC_AUTORESIZER_RELEASE;
-    const monitoringNamespace =
-      this.config.monitoringNamespace ?? "monitoring";
 
     this.namespace = new ApiObject(this, "namespace", {
       apiVersion: "v1",
@@ -76,9 +67,6 @@ export class PvcAutoresizer extends HelmModule<PvcAutoresizerConfig> {
       releaseName,
       repo: PVC_AUTORESIZER_CHART_REPOSITORY,
       version: this.config.version ?? PVC_AUTORESIZER_CHART_VERSION,
-      // cdk8s renders without API discovery; the target cluster already has
-      // the Prometheus Operator CRD installed by its monitoring stack.
-      helmFlags: ["--api-versions=monitoring.coreos.com/v1/PodMonitor"],
       defaultValues: {
         controller: {
           replicas: 2,
@@ -124,67 +112,7 @@ export class PvcAutoresizer extends HelmModule<PvcAutoresizerConfig> {
         // path in the management cluster.
         webhook: { pvcMutatingWebhook: { enabled: false } },
         "cert-manager": { enabled: false },
-        podMonitor: {
-          enabled: true,
-          namespace: monitoringNamespace,
-          interval: this.config.podMonitorInterval ?? "30s",
-        },
-      },
-    });
-
-    this.prometheusRule = new ApiObject(this, "alerts", {
-      apiVersion: "monitoring.coreos.com/v1",
-      kind: "PrometheusRule",
-      metadata: {
-        name: releaseName,
-        namespace: monitoringNamespace,
-      },
-      spec: {
-        groups: [
-          {
-            name: releaseName,
-            rules: [
-              {
-                alert: "PvcAutoresizerMetricsClientErrors",
-                expr:
-                  "increase(pvcautoresizer_metrics_client_fail_total[15m]) > 0",
-                for: "2m",
-                labels: { severity: "warning" },
-                annotations: {
-                  summary:
-                    "PVC autoresizer cannot read volume usage metrics",
-                  description:
-                    "Automatic expansion is degraded; the existing KubePersistentVolumeFillingUp alert remains the fallback.",
-                },
-              },
-              {
-                alert: "PvcAutoresizerResizeFailed",
-                expr:
-                  "increase(pvcautoresizer_failed_resize_total[15m]) > 0",
-                for: "2m",
-                labels: { severity: "warning" },
-                annotations: {
-                  summary: "Automatic PVC expansion failed",
-                  description:
-                    "Inspect pvc-autoresizer events and the affected PVC/CSI resizer state.",
-                },
-              },
-              {
-                alert: "PvcAutoresizerStorageLimitReached",
-                expr:
-                  "increase(pvcautoresizer_limit_reached_total[15m]) > 0",
-                for: "2m",
-                labels: { severity: "warning" },
-                annotations: {
-                  summary:
-                    "An automatically managed PVC reached its storage limit",
-                  description:
-                    "Capacity can no longer grow without reviewing and raising the PVC storage_limit.",
-                },
-              },
-            ],
-          },
-        ],
+        podMonitor: { enabled: false },
       },
     });
   }
