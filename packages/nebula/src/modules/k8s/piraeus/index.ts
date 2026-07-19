@@ -132,6 +132,12 @@ export interface PiraeusConfig {
    * stay stable across controller reschedules.
    */
   enableSpecialSatellites?: boolean;
+  /**
+   * Disable CSI storage-capacity tracking on the driver. Required for EBS
+   * pools: they are elastic and report zero capacity, so the scheduler would
+   * reject every WaitForFirstConsumer pod with "not enough free storage".
+   */
+  disableCsiStorageCapacity?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
   advertiseIP?: string;
 }
@@ -222,25 +228,41 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
     const masterPassphraseSecret =
       this.config.masterPassphraseSecret ??
       (this.config.encryption ? "linstor-passphrase" : undefined);
+    const clusterPatches: Array<Record<string, unknown>> = [];
+    if (this.config.enableSpecialSatellites) {
+      clusterPatches.push({
+        target: {
+          group: "apps",
+          version: "v1",
+          kind: "Deployment",
+          name: "linstor-controller",
+        },
+        patch: SPECIAL_SATELLITE_CONTROLLER_PATCH,
+      });
+    }
+    if (this.config.disableCsiStorageCapacity) {
+      clusterPatches.push({
+        target: {
+          group: "storage.k8s.io",
+          version: "v1",
+          kind: "CSIDriver",
+          name: "linstor.csi.linbit.com",
+        },
+        patch: [
+          "apiVersion: storage.k8s.io/v1",
+          "kind: CSIDriver",
+          "metadata:",
+          "  name: linstor.csi.linbit.com",
+          "spec:",
+          "  storageCapacity: false",
+        ].join("\n"),
+      });
+    }
     const clusterSpec: Record<string, unknown> = {
       ...(masterPassphraseSecret
         ? { linstorPassphraseSecret: masterPassphraseSecret }
         : {}),
-      ...(this.config.enableSpecialSatellites
-        ? {
-            patches: [
-              {
-                target: {
-                  group: "apps",
-                  version: "v1",
-                  kind: "Deployment",
-                  name: "linstor-controller",
-                },
-                patch: SPECIAL_SATELLITE_CONTROLLER_PATCH,
-              },
-            ],
-          }
-        : {}),
+      ...(clusterPatches.length ? { patches: clusterPatches } : {}),
     };
 
     // k0s (and similar distros) use a non-standard kubelet path
