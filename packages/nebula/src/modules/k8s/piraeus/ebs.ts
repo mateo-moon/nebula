@@ -625,6 +625,7 @@ spec:
       logic: |
         (.response.body | if type == "string" then fromjson else . end) as $body |
         $body.name == .payload.body.name and
+        $body.connection_status == "ONLINE" and
         $body.props["Aux/topology/topology.kubernetes.io/region"] == .payload.body.region and
         $body.props["Aux/topology/topology.kubernetes.io/zone"] == .payload.body.zone
     isRemovedCheck:
