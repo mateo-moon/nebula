@@ -6,8 +6,9 @@
  *  - "aws-management": runs on the management cluster (GKE / BYO). Installs the
  *    Crossplane AWS provider, the AWS primitives that sit beside the cluster
  *    (node IAM instance profile + Route53 zone + SOPS KMS key), the Cluster API
- *    operator with CAPA + k0smotron, and the AWSWorkloadCluster definition.
- *    CAPA owns the cluster VPC/subnets/SGs; k0smotron hosts the control plane.
+ *    operator with CAPA + k0smotron, and the K0sCluster definition. CAPA owns
+ *    the cluster VPC/subnets/SGs; k0s runs a standalone control plane on the
+ *    cluster's own EC2 nodes.
  *
  *  - "aws-workload": the portable in-cluster stack applied to the workload
  *    cluster (Calico CNI, Longhorn storage, cert-manager, ingress-nginx,
@@ -20,7 +21,8 @@
  */
 import { App, Chart } from "cdk8s";
 import { AwsProvider } from "../src/modules/providers";
-import { Aws, AwsWorkloadCluster } from "../src/modules/infra/aws";
+import { Aws, AwsK0sProvider } from "../src/modules/infra/aws";
+import { K0sCluster } from "../src/modules/infra/k0s";
 import {
   Crossplane,
   ClusterApiOperator,
@@ -76,65 +78,47 @@ new ClusterApiOperator(mgmt, "capi", {
 });
 
 // The workload cluster: self-managed k0s on EC2, CAPA owns networking.
-new AwsWorkloadCluster(mgmt, "workload", {
+// The workload cluster: self-managed standalone-CP k0s on EC2, CAPA owns
+// networking. The provider-agnostic K0sCluster + the AWS (CAPA) adapter is the
+// single, reusable way nebula defines a cluster (a future GcpK0sProvider slots
+// into the same base).
+new K0sCluster(mgmt, "workload", {
   name: "nucon-aws",
-  region,
   k8sVersion: "v1.31.8",
-  sshKeyName: "nucon-aws", // a pre-existing EC2 key pair
-  iamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
-  // Spread subnets/NAT gateways across 3 AZs (one NAT + Elastic IP per AZ).
-  availabilityZoneUsageLimit: 3,
-  // Ethereum P2P: the node SG only allows intra-cluster traffic by default,
-  // so open the P2P ports to the internet on every node.
-  additionalNodeIngressRules: [
-    {
-      description: "Ethereum execution P2P (TCP)",
-      protocol: "tcp",
-      fromPort: 30303,
-      toPort: 30303,
-      cidrBlocks: ["0.0.0.0/0"],
-    },
-    {
-      description: "Ethereum execution P2P (UDP discovery)",
-      protocol: "udp",
-      fromPort: 30303,
-      toPort: 30303,
-      cidrBlocks: ["0.0.0.0/0"],
-    },
-    {
-      description: "Ethereum consensus P2P (TCP)",
-      protocol: "tcp",
-      fromPort: 9000,
-      toPort: 9000,
-      cidrBlocks: ["0.0.0.0/0"],
-    },
-    {
-      description: "Ethereum consensus P2P (UDP discovery)",
-      protocol: "udp",
-      fromPort: 9000,
-      toPort: 9000,
-      cidrBlocks: ["0.0.0.0/0"],
-    },
-  ],
-  // Default pool: general-purpose on-demand workers.
-  workers: {
+  // k0s installs NO CNI ("custom") so Calico owns pod networking + the encrypted
+  // node mesh (installed on the workload cluster below).
+  networkProvider: "custom",
+  controlPlane: {
     replicas: 3,
-    instanceType: "m6i.xlarge",
-    rootVolumeSizeGiB: 100,
-    // Recommended: a region-specific Ubuntu 22.04 AMI (k0s is installed via cloud-init).
-    ami: { id: "ami-0123456789abcdef0" },
+    machine: {
+      instanceType: "m6i.large",
+      rootVolumeSizeGiB: 100,
+      ami: { id: "ami-0123456789abcdef0" },
+    },
   },
-  // Named pools: each renders its own AWSMachineTemplate (hash-rotated name) +
+  // Worker pools: each renders its own AWSMachineTemplate (hash-rotated name) +
   // K0sWorkerConfigTemplate + MachineDeployment "<cluster>-<pool>".
   workerPools: {
+    // Default pool: general-purpose on-demand workers.
+    default: {
+      replicas: 3,
+      machine: {
+        instanceType: "m6i.xlarge",
+        rootVolumeSizeGiB: 100,
+        // Recommended: a region-specific Ubuntu 22.04 AMI (k0s via cloud-init).
+        ami: { id: "ami-0123456789abcdef0" },
+      },
+    },
     // Dedicated Ethereum-node pool: labeled + tainted (only tolerating pods
     // land here) and running on Spot capped below the on-demand price.
     ethereum: {
       replicas: 2,
-      instanceType: "m6i.2xlarge",
-      rootVolumeSizeGiB: 500,
-      ami: { id: "ami-0123456789abcdef0" },
-      spot: { maxPrice: "0.30" },
+      machine: {
+        instanceType: "m6i.2xlarge",
+        rootVolumeSizeGiB: 500,
+        ami: { id: "ami-0123456789abcdef0" },
+        spot: { maxPrice: "0.30" },
+      },
       nodeLabels: { "nucon.io/pool": "ethereum" },
       taints: [{ key: "nucon.io/ethereum", value: "true", effect: "NoSchedule" }],
       // Extra raw `k0s worker` args, appended after --labels/--taints.
@@ -143,12 +127,54 @@ new AwsWorkloadCluster(mgmt, "workload", {
     // Burst pool: plain Spot (empty spotMarketOptions = capped at on-demand).
     burst: {
       replicas: 1,
-      instanceType: "m6i.large",
-      ami: { id: "ami-0123456789abcdef0" },
-      spot: true,
+      machine: {
+        instanceType: "m6i.large",
+        ami: { id: "ami-0123456789abcdef0" },
+        spot: true,
+      },
       nodeLabels: { "nucon.io/pool": "burst" },
     },
   },
+  // AWS (CAPA) infrastructure adapter — cluster-level infra config lives here.
+  provider: new AwsK0sProvider({
+    region,
+    sshKeyName: "nucon-aws", // a pre-existing EC2 key pair
+    iamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
+    // Spread subnets/NAT gateways across 3 AZs (one NAT + Elastic IP per AZ).
+    availabilityZoneUsageLimit: 3,
+    // Ethereum P2P: the node SG only allows intra-cluster traffic by default,
+    // so open the P2P ports to the internet on every node.
+    additionalNodeIngressRules: [
+      {
+        description: "Ethereum execution P2P (TCP)",
+        protocol: "tcp",
+        fromPort: 30303,
+        toPort: 30303,
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "Ethereum execution P2P (UDP discovery)",
+        protocol: "udp",
+        fromPort: 30303,
+        toPort: 30303,
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "Ethereum consensus P2P (TCP)",
+        protocol: "tcp",
+        fromPort: 9000,
+        toPort: 9000,
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "Ethereum consensus P2P (UDP discovery)",
+        protocol: "udp",
+        fromPort: 9000,
+        toPort: 9000,
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+    ],
+  }),
 });
 
 // ===========================================================================

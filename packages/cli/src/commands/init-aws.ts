@@ -550,7 +550,7 @@ function genInfraClusterApiOperator(): string {
  * the bootstrap (Kind's CAPA) created. References the aws-capa-credentials Secret.
  *
  * NOTE: directory \`cluster-api-operator\` (the OPERATOR), distinct from
- * \`cluster-api\` (the AwsK0sCluster CRs). Do not merge them.
+ * \`cluster-api\` (the K0sCluster CRs). Do not merge them.
  */
 import { App, Chart } from "cdk8s";
 import { ClusterApiOperator } from "nebula-cdk8s";
@@ -599,24 +599,30 @@ function genInfraClusterApi(): string {
  * CAPA adopts the AWS resources the bootstrap created rather than recreating them.
  */
 import { App, Chart } from "cdk8s";
-import { AwsK0sCluster } from "nebula-cdk8s";
+import { K0sCluster, AwsK0sProvider } from "nebula-cdk8s";
 import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme } from "nebula-cdk8s";
 import { config } from "../../config";
 
 const app = new App();
 const chart = new Chart(app, "cluster-api");
 
-new AwsK0sCluster(chart, "mgmt", {
+// Provider-agnostic standalone k0s cluster; the AWS adapter (CAPA) supplies the
+// infra CRs. This is the single, reusable way nebula defines a cluster.
+new K0sCluster(chart, "mgmt", {
   name: config.aws.clusterName,
-  region: config.aws.region,
-  // Internet-facing so the API is reachable for reconciliation; mTLS guards it.
-  controlPlaneLoadBalancerScheme:
-    AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING,
   controlPlane: {
     replicas: config.aws.cpReplicas,
-    instanceType: config.aws.instanceType,
-    ami: { id: config.aws.amiId },
+    machine: {
+      instanceType: config.aws.instanceType,
+      ami: { id: config.aws.amiId },
+    },
   },
+  provider: new AwsK0sProvider({
+    region: config.aws.region,
+    // Internet-facing so the API is reachable for reconciliation; mTLS guards it.
+    controlPlaneLoadBalancerScheme:
+      AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING,
+  }),
 });
 
 app.synth();
