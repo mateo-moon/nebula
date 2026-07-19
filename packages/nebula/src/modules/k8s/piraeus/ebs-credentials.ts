@@ -1,9 +1,11 @@
 /**
- * Typed credential bridge for LINSTOR's native AWS EBS integration.
+ * Credential bridge for LINSTOR's native AWS EBS integration.
  *
  * provider-aws authenticates through workload identity. The XCR creates only a
  * least-privilege IAM user/access key and publishes the resulting connection
  * Secret for LINSTOR. Storage lifecycle remains owned by LINSTOR/Piraeus.
+ * Composition runs on the pre-installed patch-and-transform function; no
+ * custom function image is involved.
  */
 import { ApiObject } from "cdk8s";
 import { Construct } from "constructs";
@@ -18,16 +20,14 @@ import {
 export interface PiraeusEbsCredentialsConfig {
   /** AWS region in which LINSTOR may manage EBS volumes */
   region: string;
-  /** Immutable Crossplane Function package reference */
-  functionPackage: string;
   /** Dedicated IAM user name */
   iamUserName: string;
   /** Name of the XR instance (defaults to "piraeus-ebs-credentials") */
   name?: string;
   /** Workload-identity-authenticated provider-aws ProviderConfig */
   awsProviderConfigRef?: string;
-  /** Names of image pull Secrets (in the Crossplane install namespace) for the Function package */
-  packagePullSecrets?: readonly string[];
+  /** Installed patch-and-transform Function (default "function-patch-and-transform", installed by the Crossplane module) */
+  functionRef?: string;
   /** Secret written by the provider-aws AccessKey resource */
   credentialSecret?: {
     /** Defaults to "linstor-ebs-aws-credentials" */
@@ -39,8 +39,24 @@ export interface PiraeusEbsCredentialsConfig {
   tags?: Readonly<Record<string, string>>;
 }
 
+const EBS_ACTIONS = [
+  "ec2:AttachVolume",
+  "ec2:CreateSnapshot",
+  "ec2:CreateTags",
+  "ec2:CreateVolume",
+  "ec2:DeleteSnapshot",
+  "ec2:DeleteTags",
+  "ec2:DeleteVolume",
+  "ec2:DescribeAvailabilityZones",
+  "ec2:DescribeInstances",
+  "ec2:DescribeSnapshots",
+  "ec2:DescribeVolumes",
+  "ec2:DescribeVolumesModifications",
+  "ec2:DetachVolume",
+  "ec2:ModifyVolume",
+] as const;
+
 export class PiraeusEbsCredentials extends BaseConstruct<PiraeusEbsCredentialsConfig> {
-  public readonly compositionFunction: ApiObject;
   public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
   public readonly instance: ApiObject;
@@ -58,34 +74,36 @@ export class PiraeusEbsCredentials extends BaseConstruct<PiraeusEbsCredentialsCo
     if (!this.config.iamUserName) {
       throw new Error("PiraeusEbsCredentials: iamUserName must not be empty");
     }
-    if (!this.config.functionPackage) {
-      throw new Error(
-        "PiraeusEbsCredentials: functionPackage must not be empty",
-      );
-    }
 
-    const functionName = "function-piraeus-ebs-credentials";
+    const functionName =
+      this.config.functionRef ?? "function-patch-and-transform";
     const xrName = this.config.name ?? "piraeus-ebs-credentials";
     const credentialSecretName =
       this.config.credentialSecret?.name ?? "linstor-ebs-aws-credentials";
     const credentialSecretNamespace =
       this.config.credentialSecret?.namespace ?? "crossplane-system";
-
-    this.compositionFunction = new ApiObject(this, "function", {
-      apiVersion: "pkg.crossplane.io/v1",
-      kind: "Function",
-      metadata: { name: functionName, annotations: syncWave(-12) },
-      spec: {
-        package: this.config.functionPackage,
-        ...(this.config.packagePullSecrets?.length
-          ? {
-              packagePullSecrets: this.config.packagePullSecrets.map(
-                (name) => ({ name }),
-              ),
-            }
-          : {}),
-      },
+    const resourceTags = {
+      ManagedBy: "crossplane",
+      Purpose: "piraeus-linstor-ebs",
+      ...this.config.tags,
+    };
+    // %s is replaced with spec.region by a string Format patch.
+    const policyDocumentFmt = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "LinstorEbs",
+          Effect: "Allow",
+          Action: EBS_ACTIONS,
+          Resource: "*",
+          Condition: { StringEquals: { "aws:RequestedRegion": "%s" } },
+        },
+      ],
     });
+    const providerConfigRefPatch = {
+      fromFieldPath: "spec.awsProviderConfigRef",
+      toFieldPath: "spec.providerConfigRef.name",
+    };
 
     this.xrd = new CompositeResourceDefinitionV2(this, "xrd", {
       metadata: {
@@ -177,6 +195,132 @@ export class PiraeusEbsCredentials extends BaseConstruct<PiraeusEbsCredentialsCo
           {
             step: "provision-piraeus-ebs-credentials",
             functionRef: { name: functionName },
+            input: {
+              apiVersion: "pt.fn.crossplane.io/v1beta1",
+              kind: "Resources",
+              resources: [
+                {
+                  name: "iam-user",
+                  base: {
+                    apiVersion: "iam.aws.upbound.io/v1beta1",
+                    kind: "User",
+                    spec: {
+                      deletionPolicy: "Delete",
+                      forProvider: {
+                        forceDestroy: true,
+                        path: "/piraeus/",
+                        tags: resourceTags,
+                      },
+                      providerConfigRef: { name: "default" },
+                    },
+                  },
+                  patches: [
+                    {
+                      fromFieldPath: "spec.iamUserName",
+                      toFieldPath:
+                        'metadata.annotations[crossplane.io/external-name]',
+                    },
+                    providerConfigRefPatch,
+                  ],
+                },
+                {
+                  name: "iam-policy",
+                  base: {
+                    apiVersion: "iam.aws.upbound.io/v1beta1",
+                    kind: "Policy",
+                    spec: {
+                      deletionPolicy: "Delete",
+                      forProvider: {
+                        path: "/piraeus/",
+                        policy: "",
+                        tags: resourceTags,
+                      },
+                      providerConfigRef: { name: "default" },
+                    },
+                  },
+                  patches: [
+                    {
+                      fromFieldPath: "spec.iamUserName",
+                      toFieldPath:
+                        'metadata.annotations[crossplane.io/external-name]',
+                      transforms: [
+                        {
+                          type: "string",
+                          string: { type: "Format", fmt: "%s-policy" },
+                        },
+                      ],
+                    },
+                    {
+                      fromFieldPath: "spec.region",
+                      toFieldPath: "spec.forProvider.policy",
+                      transforms: [
+                        {
+                          type: "string",
+                          string: { type: "Format", fmt: policyDocumentFmt },
+                        },
+                      ],
+                    },
+                    providerConfigRefPatch,
+                  ],
+                },
+                {
+                  name: "iam-policy-attachment",
+                  base: {
+                    apiVersion: "iam.aws.upbound.io/v1beta1",
+                    kind: "UserPolicyAttachment",
+                    spec: {
+                      deletionPolicy: "Delete",
+                      forProvider: {
+                        policyArnSelector: { matchControllerRef: true },
+                        userSelector: { matchControllerRef: true },
+                      },
+                      providerConfigRef: { name: "default" },
+                    },
+                  },
+                  patches: [providerConfigRefPatch],
+                },
+                {
+                  name: "iam-access-key",
+                  base: {
+                    apiVersion: "iam.aws.upbound.io/v1beta1",
+                    kind: "AccessKey",
+                    spec: {
+                      deletionPolicy: "Delete",
+                      forProvider: {
+                        status: "Active",
+                        userSelector: { matchControllerRef: true },
+                      },
+                      providerConfigRef: { name: "default" },
+                      writeConnectionSecretToRef: {
+                        name: credentialSecretName,
+                        namespace: credentialSecretNamespace,
+                      },
+                    },
+                  },
+                  patches: [
+                    {
+                      fromFieldPath: "spec.credentialSecretName",
+                      toFieldPath: "spec.writeConnectionSecretToRef.name",
+                    },
+                    {
+                      fromFieldPath: "spec.credentialSecretNamespace",
+                      toFieldPath: "spec.writeConnectionSecretToRef.namespace",
+                    },
+                    providerConfigRefPatch,
+                    {
+                      type: "ToCompositeFieldPath",
+                      fromFieldPath: "spec.writeConnectionSecretToRef.name",
+                      toFieldPath: "status.credentialSecretRef.name",
+                    },
+                    {
+                      type: "ToCompositeFieldPath",
+                      fromFieldPath: "spec.writeConnectionSecretToRef.namespace",
+                      toFieldPath: "status.credentialSecretRef.namespace",
+                    },
+                  ],
+                },
+              ],
+            },
           },
         ],
       },
