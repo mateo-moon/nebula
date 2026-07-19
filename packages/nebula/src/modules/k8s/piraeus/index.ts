@@ -125,8 +125,9 @@ export interface PiraeusConfig {
   /**
    * Allow the controller to launch local special satellites for storage
    * providers such as EBS_TARGET and remote SPDK. The controller keeps a
-   * read-only root filesystem; only its configuration directory becomes
-   * writable, with linstor.toml mounted back from the ConfigMap read-only.
+   * read-only root filesystem; only its configuration and generated DRBD
+   * configuration directories become writable, with linstor.toml mounted
+   * back from the ConfigMap read-only.
    */
   enableSpecialSatellites?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
@@ -152,10 +153,14 @@ spec:
               mountPath: /etc/linstor/linstor.toml
               subPath: linstor.toml
               readOnly: true
+            - name: var-lib-linstor-d
+              mountPath: /var/lib/linstor.d
             - name: tmp
               mountPath: /tmp
       volumes:
         - name: etc-linstor-writable
+          emptyDir: {}
+        - name: var-lib-linstor-d
           emptyDir: {}
 `;
 
