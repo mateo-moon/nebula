@@ -545,7 +545,7 @@ spec:
           "region": "{{ $spec.region }}",
           "availability_zone": "{{ $zone }}",
           "access_key": "{{ $accessKeyId }}",
-          "secret_key": "{{ printf "{{ %s:%s:secret }}" $spec.credentialSecretName $spec.credentialSecretNamespace }}"
+          "secret_key": "{{ printf "{{ %s:%s:attribute.secret }}" $spec.credentialSecretName $spec.credentialSecretNamespace }}"
         }
     mappings:
       - action: CREATE
