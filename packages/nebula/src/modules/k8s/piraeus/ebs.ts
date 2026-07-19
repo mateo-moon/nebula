@@ -418,9 +418,13 @@ spec:
 {{ $accessKeyId = . }}
 {{ end }}{{ end }}{{ end }}
 {{ end }}
-{{ with .connectionDetails }}{{ with (index . "secret") }}
+{{ with .connectionDetails }}
+{{ with (index . "attribute.secret") }}
+{{ $accessKeySecret = . }}
+{{ else }}{{ with (index . "secret") }}
 {{ $accessKeySecret = . }}
 {{ end }}{{ end }}
+{{ end }}
 {{ end }}
 {{ end }}
 
