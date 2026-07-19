@@ -96,8 +96,6 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
     const name = this.config.name ?? "piraeus-ebs";
     const httpProviderConfigRef =
       this.config.httpProviderConfigRef ?? "linstor-http";
-    const kubernetesProviderConfigRef =
-      this.config.kubernetesProviderConfigRef ?? "kubernetes-provider-config";
     const credentialSecretName =
       this.config.credentialSecretName ?? "linstor-ebs-aws-credentials";
     const credentialSecretNamespace =
@@ -240,7 +238,6 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
                       "iamUserName",
                       "awsProviderConfigRef",
                       "httpProviderConfigRef",
-                      "kubernetesProviderConfigRef",
                       "credentialSecretName",
                       "credentialSecretNamespace",
                       "passphraseSecretName",
@@ -329,7 +326,12 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
         awsProviderConfigRef:
           this.config.awsProviderConfigRef ?? "default",
         httpProviderConfigRef,
-        kubernetesProviderConfigRef,
+        ...(this.config.kubernetesProviderConfigRef
+          ? {
+              kubernetesProviderConfigRef:
+                this.config.kubernetesProviderConfigRef,
+            }
+          : {}),
         credentialSecretName,
         credentialSecretNamespace,
         passphraseSecretName,
@@ -351,6 +353,7 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
 const PIRAEUS_EBS_TEMPLATE = String.raw`
 {{ $xr := .observed.composite.resource }}
 {{ $spec := $xr.spec }}
+{{ $kubernetesProviderConfigRef := default "kubernetes-provider-config" $spec.kubernetesProviderConfigRef }}
 ---
 apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
 kind: ExtraResources
@@ -658,7 +661,7 @@ spec:
   deletionPolicy: Orphan
   managementPolicies: [Observe, Update]
   providerConfigRef:
-    name: {{ $spec.kubernetesProviderConfigRef }}
+    name: {{ $kubernetesProviderConfigRef }}
   forProvider:
     manifest:
       apiVersion: v1
