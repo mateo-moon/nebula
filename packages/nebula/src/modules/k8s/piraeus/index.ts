@@ -127,7 +127,9 @@ export interface PiraeusConfig {
    * providers such as EBS_TARGET and remote SPDK. The controller keeps a
    * read-only root filesystem; only its configuration and generated DRBD
    * configuration directories become writable, with linstor.toml mounted
-   * back from the ConfigMap read-only.
+   * back from the ConfigMap read-only. The pod hostname is pinned because
+   * special satellites authenticate with the controller's uname, which must
+   * stay stable across controller reschedules.
    */
   enableSpecialSatellites?: boolean;
   /** Shell command that outputs the default satellite's replication IP (runs in sidecar with hostNetwork) */
@@ -141,6 +143,7 @@ metadata:
 spec:
   template:
     spec:
+      hostname: linstor-controller
       containers:
         - name: linstor-controller
           volumeMounts:
