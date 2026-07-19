@@ -178,6 +178,10 @@ export function emitAwsClusterCr(
      */
     loadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
     vpcCidr: string;
+    /** CNI selected in the k0s ClusterConfig. Used to emit matching AWS SG rules. */
+    networkProvider?: "kuberouter" | "calico" | "custom";
+    /** Bundled Calico transport settings (only used when networkProvider="calico"). */
+    calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
     /**
      * Cap the number of AZs CAPA spreads subnets across. CAPA creates one NAT
      * gateway (and thus one Elastic IP) per AZ, so on EIP-constrained accounts set
@@ -304,6 +308,51 @@ export function emitAwsClusterCr(
               }
             : {}),
         },
+        // CAPA's Calico defaults only allow BGP (TCP 179) and IP-in-IP
+        // (protocol 4). k0s defaults its bundled Calico to VXLAN and can enable
+        // WireGuard, so those defaults silently drop all cross-node pod traffic
+        // on AWS. Make the selected transport explicit; CAPA applies these
+        // source-SG rules to both control-plane and worker node groups.
+        ...(opts.networkProvider === "calico"
+          ? {
+              cni: {
+                cniIngressRules: [
+                  {
+                    description: "bgp (calico)",
+                    protocol: "tcp",
+                    fromPort: 179,
+                    toPort: 179,
+                  },
+                  {
+                    description: "IP-in-IP (calico)",
+                    protocol: "4",
+                    fromPort: -1,
+                    toPort: 65535,
+                  },
+                  ...((opts.calico?.mode ?? "vxlan") === "vxlan"
+                    ? [
+                        {
+                          description: "VXLAN (calico)",
+                          protocol: "udp",
+                          fromPort: 4789,
+                          toPort: 4789,
+                        },
+                      ]
+                    : []),
+                  ...(opts.calico?.wireguard
+                    ? [
+                        {
+                          description: "WireGuard (calico)",
+                          protocol: "udp",
+                          fromPort: 51820,
+                          toPort: 51820,
+                        },
+                      ]
+                    : []),
+                ],
+              },
+            }
+          : {}),
         // Explicit subnets (existing 1a + added AZs): CAPA adopts existing ones by
         // AZ+CIDR and creates the rest. Required to grow AZs on a LIVE cluster, since
         // availabilityZoneUsageLimit only auto-derives subnets at VPC creation.
