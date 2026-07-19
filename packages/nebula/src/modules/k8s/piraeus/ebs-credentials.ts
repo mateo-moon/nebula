@@ -26,6 +26,8 @@ export interface PiraeusEbsCredentialsConfig {
   name?: string;
   /** Workload-identity-authenticated provider-aws ProviderConfig */
   awsProviderConfigRef?: string;
+  /** Names of image pull Secrets (in the Crossplane install namespace) for the Function package */
+  packagePullSecrets?: readonly string[];
   /** Secret written by the provider-aws AccessKey resource */
   credentialSecret?: {
     /** Defaults to "linstor-ebs-aws-credentials" */
@@ -73,7 +75,16 @@ export class PiraeusEbsCredentials extends BaseConstruct<PiraeusEbsCredentialsCo
       apiVersion: "pkg.crossplane.io/v1",
       kind: "Function",
       metadata: { name: functionName, annotations: syncWave(-12) },
-      spec: { package: this.config.functionPackage },
+      spec: {
+        package: this.config.functionPackage,
+        ...(this.config.packagePullSecrets?.length
+          ? {
+              packagePullSecrets: this.config.packagePullSecrets.map(
+                (name) => ({ name }),
+              ),
+            }
+          : {}),
+      },
     });
 
     this.xrd = new CompositeResourceDefinitionV2(this, "xrd", {
