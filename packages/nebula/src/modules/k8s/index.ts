@@ -237,14 +237,20 @@ export type {
   AwsEbsCsiDriverStorageClassConfig,
 } from "./aws-ebs-csi-driver";
 
+export { CsiSnapshotController } from "./csi-snapshot-controller";
+export type { CsiSnapshotControllerConfig } from "./csi-snapshot-controller";
+
 export { Piraeus } from "./piraeus";
+export { PiraeusEbs } from "./piraeus/ebs";
 export type {
   PiraeusConfig,
   PiraeusEncryptionConfig,
   PiraeusStoragePoolConfig,
+  PiraeusStorageClassConfig,
   PiraeusReplicationConfig,
   PiraeusSatelliteConfig,
 } from "./piraeus";
+export type { PiraeusEbsConfig } from "./piraeus/ebs";
 
 export { WireGuardMesh } from "./wireguard-mesh";
 export type { WireGuardMeshConfig, WireGuardPeer } from "./wireguard-mesh";
@@ -257,3 +263,13 @@ export type { CalicoConfig } from "./calico";
 
 export { Platform } from "./platform";
 export type { PlatformConfig } from "./platform";
+
+export {
+  PvcAutoresizer,
+  PVC_AUTORESIZER_NAMESPACE,
+  PVC_AUTORESIZER_RELEASE,
+  PVC_AUTORESIZER_CHART_VERSION,
+  PVC_AUTORESIZER_CHART_REPOSITORY,
+  PVC_AUTORESIZER_PROMETHEUS_URL,
+} from "./pvc-autoresizer";
+export type { PvcAutoresizerConfig } from "./pvc-autoresizer";

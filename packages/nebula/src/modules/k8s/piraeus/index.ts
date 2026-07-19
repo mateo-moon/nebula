@@ -67,6 +67,28 @@ export interface PiraeusSatelliteConfig {
   advertiseIP?: string;
 }
 
+/** LINSTOR CSI StorageClass configuration */
+export interface PiraeusStorageClassConfig {
+  /** StorageClass name (defaults to storageClassName, then "linstor-encrypted") */
+  name?: string;
+  /** Mark this StorageClass as the cluster default */
+  isDefault?: boolean;
+  /** Additional StorageClass annotations */
+  annotations?: Record<string, string>;
+  /** LINSTOR storage pool used by the class */
+  storagePool?: string;
+  /** LINSTOR resource group used by the class (defaults to the class name) */
+  resourceGroup?: string;
+  /** Reclaim policy (defaults to Retain) */
+  reclaimPolicy?: "Delete" | "Retain";
+  /** Volume binding mode (defaults to WaitForFirstConsumer) */
+  volumeBindingMode?: "Immediate" | "WaitForFirstConsumer";
+  /** Allow PVC expansion (defaults to true) */
+  allowVolumeExpansion?: boolean;
+  /** Extra LINSTOR CSI parameters, merged over the generated defaults */
+  parameters?: Record<string, string>;
+}
+
 export interface PiraeusConfig {
   /**
    * Namespace (must be "piraeus-datastore", the default).
@@ -76,12 +98,20 @@ export interface PiraeusConfig {
    * cannot currently be changed without breaking the deployment.
    */
   namespace?: string;
-  /** Piraeus Operator version (defaults to "v2.10.4") */
+  /** Piraeus Operator version (defaults to "v2.10.7") */
   operatorVersion?: string;
-  /** Encrypted StorageClass name (defaults to "linstor-encrypted") */
+  /** StorageClass name (legacy shorthand; defaults to "linstor-encrypted") */
   storageClassName?: string;
+  /** StorageClass configuration */
+  storageClass?: PiraeusStorageClassConfig;
   /** LUKS encryption configuration */
   encryption?: PiraeusEncryptionConfig;
+  /**
+   * Existing LINSTOR master-passphrase Secret. This unlocks encrypted LINSTOR
+   * database fields (for example EBS remote credentials) without implicitly
+   * enabling the LUKS volume layer.
+   */
+  masterPassphraseSecret?: string;
   /** Storage pool configuration (default, applies to nodes not matched by additionalSatellites) */
   storagePool?: PiraeusStoragePoolConfig;
   /** Additional satellite configurations for nodes with different device paths */
@@ -117,9 +147,14 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           "DRBD sidecar wiring.",
       );
     }
-    const operatorVersion = this.config.operatorVersion ?? "v2.10.4";
-    this.storageClassName = this.config.storageClassName ?? "linstor-encrypted";
-    const poolName = this.config.storagePool?.name ?? "lvm-thin";
+    const operatorVersion = this.config.operatorVersion ?? "v2.10.7";
+    const storageClass = this.config.storageClass ?? {};
+    this.storageClassName =
+      storageClass.name ?? this.config.storageClassName ?? "linstor-encrypted";
+    const poolName =
+      storageClass.storagePool ??
+      this.config.storagePool?.name ??
+      "lvm-thin";
     const placementCount = this.config.replication?.placementCount ?? 1;
 
     // --- Piraeus Operator (includes the piraeus-datastore Namespace) ---
@@ -143,9 +178,12 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
 
     const kubeletPath = this.config.kubeletPath;
     const useHostNetwork = this.config.hostNetwork ?? true;
+    const masterPassphraseSecret =
+      this.config.masterPassphraseSecret ??
+      (this.config.encryption ? "linstor-passphrase" : undefined);
     const clusterSpec: Record<string, unknown> = {
-      ...(this.config.encryption
-        ? { linstorPassphraseSecret: "linstor-passphrase" }
+      ...(masterPassphraseSecret
+        ? { linstorPassphraseSecret: masterPassphraseSecret }
         : {}),
     };
 
@@ -318,17 +356,32 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
       });
     }
 
-    // --- Encrypted StorageClass ---
+    // --- LINSTOR CSI StorageClass ---
+
+    const storageClassAnnotations = {
+      ...storageClass.annotations,
+      ...(storageClass.isDefault
+        ? { "storageclass.kubernetes.io/is-default-class": "true" }
+        : {}),
+    };
 
     new KubeStorageClass(this, "storage-class", {
-      metadata: { name: this.storageClassName },
+      metadata: {
+        name: this.storageClassName,
+        ...(Object.keys(storageClassAnnotations).length > 0
+          ? { annotations: storageClassAnnotations }
+          : {}),
+      },
       provisioner: "linstor.csi.linbit.com",
-      allowVolumeExpansion: true,
-      reclaimPolicy: "Retain",
-      volumeBindingMode: "WaitForFirstConsumer",
+      allowVolumeExpansion: storageClass.allowVolumeExpansion ?? true,
+      reclaimPolicy: storageClass.reclaimPolicy ?? "Retain",
+      volumeBindingMode:
+        storageClass.volumeBindingMode ?? "WaitForFirstConsumer",
       parameters: {
         "linstor.csi.linbit.com/storagePool": poolName,
         "linstor.csi.linbit.com/placementCount": String(placementCount),
+        "linstor.csi.linbit.com/resourceGroup":
+          storageClass.resourceGroup ?? this.storageClassName,
         "linstor.csi.linbit.com/layerList": this.config.encryption
           ? "drbd luks storage"
           : "drbd storage",
@@ -336,6 +389,7 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           ? { "linstor.csi.linbit.com/encryption": "true" }
           : {}),
         "csi.storage.k8s.io/fstype": "ext4",
+        ...storageClass.parameters,
       },
     });
   }
