@@ -16,7 +16,7 @@
  * ```
  */
 import { Construct } from "constructs";
-import { Include, ApiObject } from "cdk8s";
+import { Include, ApiObject, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { KubeStorageClass } from "cdk8s-plus-33/lib/imports/k8s";
 import { BaseConstruct } from "../../../core";
@@ -100,6 +100,12 @@ export interface PiraeusConfig {
   namespace?: string;
   /** Piraeus Operator version (defaults to "v2.10.7") */
   operatorVersion?: string;
+  /**
+   * Pin the LINSTOR server (controller + satellite) image tag, overriding the
+   * operator's default. Image-config keys merge in lexical order, so the
+   * override key sorts after the upstream "0_"-prefixed defaults.
+   */
+  linstorVersion?: string;
   /** StorageClass name (legacy shorthand; defaults to "linstor-encrypted") */
   storageClassName?: string;
   /** StorageClass configuration */
@@ -206,9 +212,36 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
 
     // --- Piraeus Operator (includes the piraeus-datastore Namespace) ---
 
-    new Include(this, "piraeus-operator", {
+    const operatorInclude = new Include(this, "piraeus-operator", {
       url: `https://github.com/piraeusdatastore/piraeus-operator/releases/download/${operatorVersion}/manifest.yaml`,
     });
+
+    if (this.config.linstorVersion) {
+      const imageConfig = operatorInclude.apiObjects.find(
+        (o) =>
+          o.kind === "ConfigMap" &&
+          o.name === "piraeus-operator-image-config",
+      );
+      if (!imageConfig) {
+        throw new Error(
+          "Piraeus: piraeus-operator-image-config ConfigMap not found in the operator manifest",
+        );
+      }
+      imageConfig.addJsonPatch(
+        JsonPatch.add("/data/z_linstor_version_override.yaml", [
+          "---",
+          "base: quay.io/piraeusdatastore",
+          "components:",
+          "  linstor-controller:",
+          `    tag: ${this.config.linstorVersion}`,
+          "    image: piraeus-server",
+          "  linstor-satellite:",
+          `    tag: ${this.config.linstorVersion}`,
+          "    image: piraeus-server",
+          "",
+        ].join("\n")),
+      );
+    }
 
     // --- LINSTOR Passphrase Secret ---
 
