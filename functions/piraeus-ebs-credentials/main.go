@@ -1,4 +1,4 @@
-// Package main implements the Piraeus node-storage Composition Function.
+// Package main implements the Piraeus EBS-credential Composition Function.
 package main
 
 import (
@@ -30,6 +30,6 @@ func (c *cli) Run() error {
 }
 
 func main() {
-	ctx := kong.Parse(&cli{}, kong.Description("Compose AWS node disks into Piraeus storage pools."))
+	ctx := kong.Parse(&cli{}, kong.Description("Provision a least-privilege static AWS credential for LINSTOR EBS remotes."))
 	ctx.FatalIfErrorf(ctx.Run())
 }
