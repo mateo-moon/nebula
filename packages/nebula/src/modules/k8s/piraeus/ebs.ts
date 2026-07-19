@@ -36,6 +36,8 @@ export interface PiraeusEbsConfig {
   awsProviderConfigRef?: string;
   /** provider-http ProviderConfig name (defaults to "linstor-http") */
   httpProviderConfigRef?: string;
+  /** provider-kubernetes ProviderConfig used to reconcile AWS node topology labels */
+  kubernetesProviderConfigRef?: string;
   /** Dedicated AWS IAM user name (defaults to "linstor-ebs") */
   iamUserName?: string;
   /** Intermediate AccessKey connection Secret name */
@@ -52,6 +54,10 @@ export interface PiraeusEbsConfig {
   crossplaneNamespace?: string;
   /** Crossplane core ServiceAccount used to fetch ExtraResources */
   crossplaneServiceAccountName?: string;
+  /** Namespace of the provider-kubernetes ServiceAccount */
+  kubernetesProviderNamespace?: string;
+  /** provider-kubernetes ServiceAccount used to reconcile Node labels */
+  kubernetesProviderServiceAccountName?: string;
 }
 
 /**
@@ -67,6 +73,8 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
   public readonly httpProviderConfig: HttpProviderConfig;
   public readonly nodeReaderRole: ApiObject;
   public readonly nodeReaderBinding: ApiObject;
+  public readonly nodeTopologyWriterRole: ApiObject;
+  public readonly nodeTopologyWriterBinding: ApiObject;
   public readonly xrd: CompositeResourceDefinitionV2;
   public readonly composition: Composition;
   public readonly instance: ApiObject;
@@ -88,6 +96,8 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
     const name = this.config.name ?? "piraeus-ebs";
     const httpProviderConfigRef =
       this.config.httpProviderConfigRef ?? "linstor-http";
+    const kubernetesProviderConfigRef =
+      this.config.kubernetesProviderConfigRef ?? "kubernetes-provider-config";
     const credentialSecretName =
       this.config.credentialSecretName ?? "linstor-ebs-aws-credentials";
     const credentialSecretNamespace =
@@ -100,6 +110,10 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
       this.config.crossplaneNamespace ?? "crossplane-system";
     const crossplaneServiceAccountName =
       this.config.crossplaneServiceAccountName ?? "crossplane";
+    const kubernetesProviderNamespace =
+      this.config.kubernetesProviderNamespace ?? crossplaneNamespace;
+    const kubernetesProviderServiceAccountName =
+      this.config.kubernetesProviderServiceAccountName ?? "provider-kubernetes";
 
     // function-go-templating asks Crossplane core to fetch Linux Nodes as
     // ExtraResources. Crossplane deliberately has no blanket access to arbitrary
@@ -134,6 +148,50 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
             kind: "ServiceAccount",
             name: crossplaneServiceAccountName,
             namespace: crossplaneNamespace,
+          },
+        ],
+      },
+    );
+
+    // AWS topology is encoded in every CAPA Node's providerID even when the
+    // providerless k0s kubelet does not add the standard region/zone labels.
+    // The Composition reconciles only those two labels through
+    // provider-kubernetes. Keep that provider's permission scoped to Nodes and
+    // to the verbs needed to observe and patch an existing object.
+    this.nodeTopologyWriterRole = new ApiObject(
+      this,
+      "provider-kubernetes-node-topology-writer",
+      {
+        apiVersion: "rbac.authorization.k8s.io/v1",
+        kind: "ClusterRole",
+        metadata: { name: "piraeus-ebs-node-topology-writer" },
+        rules: [
+          {
+            apiGroups: [""],
+            resources: ["nodes"],
+            verbs: ["get", "list", "watch", "update", "patch"],
+          },
+        ],
+      },
+    );
+
+    this.nodeTopologyWriterBinding = new ApiObject(
+      this,
+      "provider-kubernetes-node-topology-writer-binding",
+      {
+        apiVersion: "rbac.authorization.k8s.io/v1",
+        kind: "ClusterRoleBinding",
+        metadata: { name: "piraeus-ebs-node-topology-writer" },
+        roleRef: {
+          apiGroup: "rbac.authorization.k8s.io",
+          kind: "ClusterRole",
+          name: "piraeus-ebs-node-topology-writer",
+        },
+        subjects: [
+          {
+            kind: "ServiceAccount",
+            name: kubernetesProviderServiceAccountName,
+            namespace: kubernetesProviderNamespace,
           },
         ],
       },
@@ -182,6 +240,7 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
                       "iamUserName",
                       "awsProviderConfigRef",
                       "httpProviderConfigRef",
+                      "kubernetesProviderConfigRef",
                       "credentialSecretName",
                       "credentialSecretNamespace",
                       "passphraseSecretName",
@@ -202,6 +261,10 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
                       iamUserName: { type: "string", minLength: 1 },
                       awsProviderConfigRef: { type: "string", minLength: 1 },
                       httpProviderConfigRef: { type: "string", minLength: 1 },
+                      kubernetesProviderConfigRef: {
+                        type: "string",
+                        minLength: 1,
+                      },
                       credentialSecretName: { type: "string", minLength: 1 },
                       credentialSecretNamespace: {
                         type: "string",
@@ -266,6 +329,7 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
         awsProviderConfigRef:
           this.config.awsProviderConfigRef ?? "default",
         httpProviderConfigRef,
+        kubernetesProviderConfigRef,
         credentialSecretName,
         credentialSecretNamespace,
         passphraseSecretName,
@@ -498,8 +562,9 @@ spec:
     expectedResponseCheck:
       type: CUSTOM
       logic: |
+        (.response.body | if type == "string" then fromjson else . end) as $body |
         .payload.body as $desired |
-        any(.response.body[];
+        any($body[];
           .remote_name == $desired.remote_name and
           .endpoint == $desired.endpoint and
           .region == $desired.region and
@@ -507,8 +572,9 @@ spec:
     isRemovedCheck:
       type: CUSTOM
       logic: |
+        (.response.body | if type == "string" then fromjson else . end) as $body |
         .payload.body.remote_name as $name |
-        ([.response.body[] | select(.remote_name == $name)] | length) == 0
+        ([$body[] | select(.remote_name == $name)] | length) == 0
   providerConfigRef:
     name: {{ $spec.httpProviderConfigRef }}
 ---
@@ -554,9 +620,10 @@ spec:
     expectedResponseCheck:
       type: CUSTOM
       logic: |
-        .response.body.name == .payload.body.name and
-        .response.body.props["Aux/topology/topology.kubernetes.io/region"] == .payload.body.region and
-        .response.body.props["Aux/topology/topology.kubernetes.io/zone"] == .payload.body.zone
+        (.response.body | if type == "string" then fromjson else . end) as $body |
+        $body.name == .payload.body.name and
+        $body.props["Aux/topology/topology.kubernetes.io/region"] == .payload.body.region and
+        $body.props["Aux/topology/topology.kubernetes.io/zone"] == .payload.body.zone
     isRemovedCheck:
       type: CUSTOM
       logic: .response.statusCode == 404
@@ -569,10 +636,38 @@ spec:
 {{ range .items }}
 {{ $node := .resource }}
 {{ $nodeName := $node.metadata.name }}
-{{ $zone := index $node.metadata.labels "topology.kubernetes.io/zone" }}
+{{ $zone := default "" (index $node.metadata.labels "topology.kubernetes.io/zone") }}
+{{ $providerID := default "" $node.spec.providerID }}
+{{ if and (eq $zone "") (hasPrefix "aws:///" $providerID) }}
+{{ $providerParts := splitList "/" (trimPrefix "aws:///" $providerID) }}
+{{ if gt (len $providerParts) 0 }}
+{{ $zone = index $providerParts 0 }}
+{{ end }}
+{{ end }}
 {{ if and $zone (has $zone $spec.availabilityZones) }}
 {{ $remoteName := printf "ebs-rem-%s" $zone }}
 {{ $nodeKey := printf "%s-%s" (trunc 36 $nodeName | trimSuffix "-") (sha256sum $nodeName | trunc 8) }}
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: {{ printf "piraeus-topology-%s" $nodeKey }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: {{ printf "topology-%s" $nodeKey }}
+spec:
+  deletionPolicy: Orphan
+  managementPolicies: [Observe, Update]
+  providerConfigRef:
+    name: {{ $spec.kubernetesProviderConfigRef }}
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Node
+      metadata:
+        name: {{ $nodeName }}
+        labels:
+          topology.kubernetes.io/region: {{ $spec.region }}
+          topology.kubernetes.io/zone: {{ $zone }}
 ---
 apiVersion: http.crossplane.io/v1alpha2
 kind: Request
@@ -616,9 +711,10 @@ spec:
     expectedResponseCheck:
       type: CUSTOM
       logic: |
-        .response.body.storage_pool_name == .payload.body.pool and
-        .response.body.provider_kind == "EBS_INIT" and
-        .response.body.props["StorDriver/Ebs/Remote"] == .payload.body.remote
+        (.response.body | if type == "string" then fromjson else . end) as $body |
+        $body.storage_pool_name == .payload.body.pool and
+        $body.provider_kind == "EBS_INIT" and
+        $body.props["StorDriver/Ebs/Remote"] == .payload.body.remote
     isRemovedCheck:
       type: CUSTOM
       logic: .response.statusCode == 404
