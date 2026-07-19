@@ -244,6 +244,8 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
         this.config.controlPlaneLoadBalancerScheme ??
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
       vpcCidr,
+      networkProvider,
+      calico,
       availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
       secondaryCidrBlocks: this.config.secondaryCidrBlocks,
       subnets: this.config.subnets,

@@ -113,6 +113,8 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
         this.config.controlPlaneLoadBalancerScheme ??
         AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
       vpcCidr: this.config.vpcCidr ?? "10.0.0.0/16",
+      networkProvider: ctx.networkProvider,
+      calico: ctx.calico,
       availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
       secondaryCidrBlocks: this.config.secondaryCidrBlocks,
       subnets: this.config.subnets,
