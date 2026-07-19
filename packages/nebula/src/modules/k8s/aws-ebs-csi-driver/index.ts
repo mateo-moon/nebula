@@ -35,13 +35,6 @@ export interface AwsEbsCsiDriverStorageClassConfig {
   /** StorageClass name (defaults to gp3) */
   name?: string;
   /**
-   * Additional metadata annotations for the StorageClass. This is useful for
-   * declarative integrations such as opting the class into a PVC autoresizer.
-   * When `isDefault` is true, the default-class annotation is merged over this
-   * map so the explicit boolean remains authoritative.
-   */
-  annotations?: Record<string, string>;
-  /**
    * Mark this StorageClass as the cluster DEFAULT via the
    * `storageclass.kubernetes.io/is-default-class` annotation.
    * @default false
@@ -147,18 +140,16 @@ export class AwsEbsCsiDriver extends HelmModule<AwsEbsCsiDriverConfig> {
     if (this.config.storageClass !== false) {
       const sc = this.config.storageClass ?? {};
       this.storageClassName = sc.name ?? "gp3";
-      const annotations = {
-        ...sc.annotations,
-        ...(sc.isDefault
-          ? {
-              "storageclass.kubernetes.io/is-default-class": "true",
-            }
-          : {}),
-      };
       new KubeStorageClass(this, "storage-class", {
         metadata: {
           name: this.storageClassName,
-          ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
+          ...(sc.isDefault
+            ? {
+                annotations: {
+                  "storageclass.kubernetes.io/is-default-class": "true",
+                },
+              }
+            : {}),
         },
         provisioner: "ebs.csi.aws.com",
         allowVolumeExpansion: sc.allowVolumeExpansion ?? true,
