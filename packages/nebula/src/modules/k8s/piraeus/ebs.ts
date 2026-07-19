@@ -29,7 +29,7 @@ export interface PiraeusEbsConfig {
   /** AWS region containing the Kubernetes nodes and EBS volumes */
   region: string;
   /** Availability zones in which LINSTOR may provision replicated EBS volumes */
-  availabilityZones: string[];
+  availabilityZones: readonly string[];
   /** Name of the XR instance (defaults to "piraeus-ebs") */
   name?: string;
   /** Workload-identity-authenticated Crossplane AWS ProviderConfig */
