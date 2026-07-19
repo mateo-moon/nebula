@@ -193,7 +193,10 @@ export class PiraeusEbs extends BaseConstruct<PiraeusEbsConfig> {
                       availabilityZones: {
                         type: "array",
                         minItems: 1,
-                        uniqueItems: true,
+                        // Kubernetes structural schemas forbid
+                        // `uniqueItems: true`; a set list provides the same
+                        // uniqueness guarantee without quadratic validation.
+                        "x-kubernetes-list-type": "set",
                         items: { type: "string", minLength: 1 },
                       },
                       iamUserName: { type: "string", minLength: 1 },
