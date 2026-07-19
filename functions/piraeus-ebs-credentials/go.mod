@@ -5,7 +5,6 @@ go 1.25.11
 require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/crossplane/function-sdk-go v0.6.2
-	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
 )
 
@@ -78,6 +77,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	k8s.io/api v0.35.3 // indirect
 	k8s.io/apiextensions-apiserver v0.35.3 // indirect
 	k8s.io/client-go v0.35.3 // indirect
 	k8s.io/code-generator v0.35.3 // indirect
