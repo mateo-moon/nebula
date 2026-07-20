@@ -106,6 +106,10 @@ export interface PiraeusConfig {
    * override key sorts after the upstream "0_"-prefixed defaults.
    */
   linstorVersion?: string;
+  /** Registry/org of the LINSTOR server image used with linstorVersion (defaults to "quay.io/piraeusdatastore") */
+  linstorImageBase?: string;
+  /** LINSTOR server image name used with linstorVersion (defaults to "piraeus-server") */
+  linstorImageName?: string;
   /** StorageClass name (legacy shorthand; defaults to "linstor-encrypted") */
   storageClassName?: string;
   /** StorageClass configuration */
@@ -227,17 +231,19 @@ export class Piraeus extends BaseConstruct<PiraeusConfig> {
           "Piraeus: piraeus-operator-image-config ConfigMap not found in the operator manifest",
         );
       }
+      const imageBase = this.config.linstorImageBase ?? "quay.io/piraeusdatastore";
+      const imageName = this.config.linstorImageName ?? "piraeus-server";
       imageConfig.addJsonPatch(
         JsonPatch.add("/data/z_linstor_version_override.yaml", [
           "---",
-          "base: quay.io/piraeusdatastore",
+          `base: ${imageBase}`,
           "components:",
           "  linstor-controller:",
           `    tag: ${this.config.linstorVersion}`,
-          "    image: piraeus-server",
+          `    image: ${imageName}`,
           "  linstor-satellite:",
           `    tag: ${this.config.linstorVersion}`,
-          "    image: piraeus-server",
+          `    image: ${imageName}`,
           "",
         ].join("\n")),
       );
