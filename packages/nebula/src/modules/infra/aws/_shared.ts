@@ -245,6 +245,10 @@ export function emitAwsClusterCr(
           ? { loadBalancerType: opts.loadBalancerType }
           : {
         loadBalancerType: opts.loadBalancerType,
+        // CAPA normally defaults this to false for NLBs. Emit it explicitly: a
+        // control-plane target can itself be an API client, and AWS NLB target
+        // hairpinning is unsupported while client-IP preservation is enabled.
+        preserveClientIp: false,
         ...(opts.loadBalancerScheme
           ? { scheme: opts.loadBalancerScheme }
           : {}),

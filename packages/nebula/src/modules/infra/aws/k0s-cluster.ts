@@ -155,6 +155,21 @@ export interface AwsK0sClusterConfig {
     mode?: "vxlan" | "ipip" | "bird";
     mtu?: number;
   };
+  /**
+   * Keep node and pod traffic to the Kubernetes API on the node-local/private
+   * path instead of hairpinning through the control-plane NLB. k0smotron uses
+   * this setting as the signal to add the CAPI endpoint only to the API server
+   * certificate SANs and NOT copy it to `spec.api.externalAddress`; k0s can then
+   * reconcile `default/kubernetes` to the private controller addresses.
+   *
+   * Enabled by default. EnvoyProxy supports linux/arm64 and linux/amd64. Set
+   * `enabled: false` only when the external load balancer is intentionally the
+   * in-cluster API path and its network supports target hairpinning.
+   */
+  nodeLocalLoadBalancing?: {
+    enabled?: boolean;
+    type?: "EnvoyProxy" | "Traefik";
+  };
 }
 
 /**
@@ -191,6 +206,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const cp = this.config.controlPlane ?? {};
     const networkProvider = this.config.networkProvider ?? "kuberouter";
     const calico = this.config.calico ?? {};
+    const nodeLocalLoadBalancing = this.config.nodeLocalLoadBalancing ?? {};
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
 
@@ -291,6 +307,15 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
             spec: {
               network: {
                 provider: networkProvider,
+                // k0smotron v2 checks this field before enriching the config. If
+                // enabled it leaves api.externalAddress unset (while adding the
+                // CAPI/NLB hostname to the serving-cert SANs), so the external
+                // endpoint remains usable by bootstrap/operator clients without
+                // becoming the backing endpoint of kubernetes.default.svc.
+                nodeLocalLoadBalancing: {
+                  enabled: nodeLocalLoadBalancing.enabled ?? true,
+                  type: nodeLocalLoadBalancing.type ?? "EnvoyProxy",
+                },
                 // k0s-bundled Calico tuning (only meaningful for provider=calico):
                 // vxlan overlay (no BGP) + optional wireguard node-mesh encryption.
                 ...(networkProvider === "calico"
