@@ -249,6 +249,15 @@ export function emitAwsClusterCr(
         // control-plane target can itself be an API client, and AWS NLB target
         // hairpinning is unsupported while client-IP preservation is enabled.
         preserveClientIp: false,
+        // MANDATORY on a multi-AZ control plane: an NLB has one node per AZ and,
+        // with cross-zone OFF (the AWS default), each AZ's node only forwards to
+        // the target in its OWN AZ. Both listeners here — 6443 (API) and 8132
+        // (konnectivity, below) — then reach only a 1/N slice of the control-plane
+        // targets, so the konnectivity agent<->server tunnels that carry every
+        // apiserver->pod call (admission webhooks, logs, exec) land unevenly and a
+        // large fraction (~50% on 3 AZs) time out. Enable cross-zone so every NLB
+        // node forwards to all healthy targets.
+        crossZoneLoadBalancing: true,
         ...(opts.loadBalancerScheme
           ? { scheme: opts.loadBalancerScheme }
           : {}),
