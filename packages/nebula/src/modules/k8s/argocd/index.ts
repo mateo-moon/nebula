@@ -725,7 +725,7 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
               args: [
                 `set -e
 echo "Installing dependencies in $(pwd)..." >&2
-pnpm install 2>&1 >&2`,
+pnpm install >&2 2>&1`,
               ],
             },
             generate: {
