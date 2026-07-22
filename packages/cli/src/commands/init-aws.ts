@@ -586,6 +586,7 @@ const chart = new Chart(app, "node-iam");
 new Aws(chart, "aws", {
   name: config.aws.clusterName,
   region: config.aws.region,
+  instanceProfileName: \`\${config.aws.clusterName}-node-profile\`,
 });
 
 app.synth();
@@ -619,6 +620,7 @@ new K0sCluster(chart, "mgmt", {
   },
   provider: new AwsK0sProvider({
     region: config.aws.region,
+    iamInstanceProfile: \`\${config.aws.clusterName}-node-profile\`,
     // Internet-facing so the API is reachable for reconciliation; mTLS guards it.
     controlPlaneLoadBalancerScheme:
       AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING,
