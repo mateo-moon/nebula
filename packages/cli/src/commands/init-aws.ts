@@ -13,7 +13,7 @@ import type { InitOptions } from "./init";
 
 // ── Packaging pins (single source so package.json and pnpm-workspace agree) ──────
 // nebula-cdk8s + @nebula/cli come from this branch; switch to `main` after merge.
-const NEBULA_BRANCH = "feat/aws-vendor-free-bootstrap";
+const NEBULA_BRANCH = "feat/standalone-cp-bootstrap";
 // The cdk8s-cli fork commit. MUST match the allowBuilds tarball URL below, or
 // pnpm 11 silently skips its build and `cdk8s synth` fails.
 const CDK8S_CLI_COMMIT = "ef8da23a33eecab4fe7cfcbcee911c374e20ca6f";
