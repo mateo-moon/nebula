@@ -359,8 +359,9 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             : {}),
         },
         // Expose the sidecar gRPC store + a ServiceMonitor so Thanos Query can
-        // discover it (releaseName "prometheus" → service
-        // "prometheus-kube-prometheus-stack-thanos-discovery").
+        // discover it. kube-prometheus-stack's fullname truncates to
+        // "kube-prometheus", so releaseName "prometheus" → service
+        // "prometheus-kube-prometheus-thanos-discovery" (NOT "...-stack-...").
         ...(thanosEnabled
           ? {
               thanosService: { enabled: true },
@@ -758,8 +759,9 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           stores: [
             // Local Prometheus Thanos sidecar. kube-prometheus-stack (releaseName
             // "prometheus" + thanosService.enabled) exposes the sidecar gRPC store
-            // as service "prometheus-kube-prometheus-stack-thanos-discovery:10901".
-            `dnssrv+_grpc._tcp.prometheus-kube-prometheus-stack-thanos-discovery.${namespaceName}.svc.cluster.local`,
+            // as service "prometheus-kube-prometheus-thanos-discovery:10901" (the
+            // chart's fullname truncates to "kube-prometheus" — no "-stack-").
+            `dnssrv+_grpc._tcp.prometheus-kube-prometheus-thanos-discovery.${namespaceName}.svc.cluster.local`,
             // Cross-cluster stores (e.g. another cluster's sidecar/store gRPC).
             // NOTE: do NOT add the local thanos-storegateway here — the bitnami
             // chart auto-injects it when storegateway.enabled. Adding it explicitly
