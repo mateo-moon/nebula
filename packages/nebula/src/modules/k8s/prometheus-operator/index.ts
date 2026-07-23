@@ -774,6 +774,14 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             annotations: componentSaAnnotations,
           },
         },
+        query: {
+          // Bitnami's default resourcesPreset ("micro", 192Mi) is far too small
+          // for the fan-out merge under real dashboard load; give query room.
+          resources: {
+            requests: { cpu: "100m", memory: "256Mi" },
+            limits: { memory: "1Gi" },
+          },
+        },
         queryFrontend: { enabled: true, tolerations: defaultTolerations },
         storegateway: {
           enabled: true,
@@ -782,6 +790,15 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             enabled: true,
             storageClass: storageClassName,
             size: "10Gi",
+          },
+          // The in-memory index cache alone is ~250Mi, so Bitnami's default
+          // "micro" preset (192Mi limit) OOM-crashloops the moment a query
+          // touches S3 blocks — the store then drops out of Thanos Query and
+          // ALL long-term/recent metrics disappear. Size for the cache + the
+          // per-query series working set.
+          resources: {
+            requests: { cpu: "100m", memory: "1Gi" },
+            limits: { memory: "2Gi" },
           },
           serviceAccount: {
             create: true,
@@ -796,6 +813,12 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             enabled: true,
             storageClass: storageClassName,
             size: "10Gi",
+          },
+          // Compaction (esp. vertical/downsampling) is memory-heavy; the 192Mi
+          // "micro" preset OOMs it. Give it headroom so blocks keep compacting.
+          resources: {
+            requests: { cpu: "100m", memory: "1Gi" },
+            limits: { memory: "2Gi" },
           },
           serviceAccount: {
             create: true,
