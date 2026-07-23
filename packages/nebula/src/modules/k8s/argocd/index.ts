@@ -742,9 +742,14 @@ if [ ! -f "$ENTRY" ]; then
   echo "ERROR: Entry file not found: $ENTRY" >&2
   exit 1
 fi
-echo "Running cdk8s synth for $ENTRY..." >&2
+echo "Synthesizing $ENTRY..." >&2
 rm -rf dist
-npx cdk8s synth --app "npx tsx $ENTRY" >&2
+# Run the entry directly with tsx — each module calls app.synth() which writes
+# to dist/ (App outdir defaults to "dist", enforced via CDK8S_OUTDIR). This
+# avoids the cdk8s-cli wrapper, whose git-tarball install has a fragile
+# "npx tsc --build || true" prepare step that silently ships no lib/ on a cold
+# cmp install, breaking synth for every app after a repo-server restart.
+CDK8S_OUTDIR=dist npx tsx "$ENTRY" >&2
 for f in $(find dist -name "*.yaml" -type f | sort); do
   echo "---"
   cat "$f"
