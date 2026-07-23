@@ -100,18 +100,26 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
   constructor(private readonly config: AwsK0sProviderConfig) {}
 
   emitInfraCluster(scope: Construct, ctx: EmitInfraClusterCtx): void {
+    // Hosted control plane (k0smotron on a management cluster) → k0smotron
+    // exposes the API, so CAPA must NOT front it: emit loadBalancerType DISABLED
+    // (the AWSCluster CR then omits every controlPlaneLoadBalancer sub-field,
+    // which CAPA's webhook requires). Standalone control plane → CAPA fronts the
+    // API with an NLB (default INTERNAL, or the configured scheme).
     emitAwsClusterCr(scope, {
       clusterName: ctx.clusterName,
       namespace: ctx.namespace,
       region: this.config.region,
       sshKeyName: this.config.sshKeyName,
-      // Standalone control plane on the cluster's own nodes → CAPA fronts the API
-      // with an NLB (default INTERNAL). No hosted control plane, so no DISABLED.
-      loadBalancerType:
-        AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.NLB,
-      loadBalancerScheme:
-        this.config.controlPlaneLoadBalancerScheme ??
-        AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
+      loadBalancerType: ctx.hostedControlPlane
+        ? AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.DISABLED
+        : AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType.NLB,
+      ...(ctx.hostedControlPlane
+        ? {}
+        : {
+            loadBalancerScheme:
+              this.config.controlPlaneLoadBalancerScheme ??
+              AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
+          }),
       vpcCidr: this.config.vpcCidr ?? "10.0.0.0/16",
       networkProvider: ctx.networkProvider,
       calico: ctx.calico,
