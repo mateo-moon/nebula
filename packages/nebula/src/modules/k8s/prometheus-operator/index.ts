@@ -773,8 +773,6 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             name: "thanos-query",
             annotations: componentSaAnnotations,
           },
-        },
-        query: {
           // Bitnami's default resourcesPreset ("micro", 192Mi) is far too small
           // for the fan-out merge under real dashboard load; give query room.
           resources: {
