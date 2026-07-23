@@ -30,12 +30,24 @@ export interface CertManagerConfig {
   /** Create ClusterIssuers (defaults to true) */
   createClusterIssuers?: boolean;
   /**
-   * Use external recursive DNS servers for HTTP-01 ACME challenge self-checks.
-   * This is useful for GKE clusters where internal DNS may not resolve newly
-   * created domains immediately.
+   * Use external recursive DNS servers for HTTP-01 ACME challenge self-checks
+   * (sets `--acme-http01-solver-nameservers`). Useful for split-horizon clusters
+   * (e.g. GKE, whose metadata DNS can SERVFAIL on freshly created domains).
+   *
+   * Leave this FALSE when the in-cluster resolver reaches the zone's
+   * authoritative servers (e.g. AWS external-dns → Route53): public recursive
+   * resolvers lag when a zone is freshly created/recreated and will SERVFAIL the
+   * self-check for hours, whereas the in-cluster path resolves authoritatively.
    * @default true
    */
   useExternalDnsForAcme?: boolean;
+  /**
+   * Recursive nameservers used for the HTTP-01 self-check when
+   * {@link useExternalDnsForAcme} is true. Override to avoid hardcoding a single
+   * public provider.
+   * @default ["8.8.8.8:53", "8.8.4.4:53"]
+   */
+  acmeHttp01SolverNameservers?: string[];
   /**
    * IngressClassName used by the Let's Encrypt HTTP-01 solvers.
    * @default "nginx"
@@ -61,6 +73,10 @@ export class CertManager extends HelmModule<CertManagerConfig> {
     // Use external DNS servers for ACME HTTP-01 challenge self-checks by default.
     // GKE's internal DNS (via metadata server) can return SERVFAIL for newly created domains.
     const useExternalDns = this.config.useExternalDnsForAcme !== false;
+    const acmeSolverNameservers = this.config.acmeHttp01SolverNameservers ?? [
+      "8.8.8.8:53",
+      "8.8.4.4:53",
+    ];
     const acmeIngressClassName = this.config.acmeIngressClassName ?? "nginx";
 
     const defaultValues: Record<string, unknown> = {
@@ -70,7 +86,9 @@ export class CertManager extends HelmModule<CertManagerConfig> {
       cainjector: {},
       startupapicheck: {},
       ...(useExternalDns && {
-        extraArgs: ["--acme-http01-solver-nameservers=8.8.8.8:53,8.8.4.4:53"],
+        extraArgs: [
+          `--acme-http01-solver-nameservers=${acmeSolverNameservers.join(",")}`,
+        ],
       }),
     };
 
