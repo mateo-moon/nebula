@@ -75,6 +75,14 @@ export interface EmitInfraClusterCtx {
   networkProvider: "kuberouter" | "calico" | "custom";
   /** Bundled Calico transport settings (only meaningful for networkProvider="calico"). */
   calico: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
+  /**
+   * Whether the control plane is HOSTED (k0smotron pods on a management cluster)
+   * rather than standalone (on this cluster's own machines). When true the
+   * provider must NOT front the API with its own load balancer — k0smotron
+   * exposes it — e.g. `AwsK0sProvider` emits its `AWSCluster` with
+   * `loadBalancerType: DISABLED`. Standalone {@link K0sCluster} passes false.
+   */
+  hostedControlPlane: boolean;
 }
 
 /**
@@ -154,7 +162,7 @@ export const DEFAULT_PRESTART_COMMANDS: readonly string[] = [
 ];
 
 /** Render `k0s worker` --labels/--taints args from a pool's labels/taints. */
-function renderK0sWorkerArgs<M>(pool: K0sWorkerPool<M>): string[] {
+export function renderK0sWorkerArgs<M>(pool: K0sWorkerPool<M>): string[] {
   const args: string[] = [];
   if (pool.nodeLabels && Object.keys(pool.nodeLabels).length > 0) {
     args.push(
@@ -236,6 +244,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
       namespace,
       networkProvider,
       calico,
+      hostedControlPlane: false,
     });
 
     // 3. Control-plane infra machine template (hash-named by the provider).
