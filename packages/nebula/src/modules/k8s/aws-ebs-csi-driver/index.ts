@@ -72,6 +72,15 @@ export interface AwsEbsCsiDriverConfig {
    */
   clusterName?: string;
   /**
+   * Kubelet root path, mapped to the chart's `node.kubeletPath` (drives the
+   * driver's registration/plugin/kubelet hostPath mounts). Defaults to the
+   * chart default `/var/lib/kubelet`; k0s uses `/var/lib/k0s/kubelet`. Since
+   * this construct targets self-managed k0s clusters, set this to the k0s path
+   * or the node driver fails to register (no CSINode topology → provisioning
+   * errors with "no topology key found for node").
+   */
+  kubeletPath?: string;
+  /**
    * gp3 StorageClass rendered next to the driver. Created by default; pass
    * `false` to skip it, or an object to customize name/default-class/etc.
    * @default {}
@@ -115,6 +124,11 @@ export class AwsEbsCsiDriver extends HelmModule<AwsEbsCsiDriverConfig> {
         },
       },
       node: {
+        // k0s (and similar distros) use a non-standard kubelet root; without
+        // this the node driver's registration hostPath does not exist.
+        ...(this.config.kubeletPath
+          ? { kubeletPath: this.config.kubeletPath }
+          : {}),
         serviceAccount: {
           create: true,
           name: "ebs-csi-node-sa",
