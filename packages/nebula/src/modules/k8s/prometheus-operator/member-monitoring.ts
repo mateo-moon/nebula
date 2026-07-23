@@ -153,10 +153,13 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
               // the hub rejects them "400 out of order sample"
               // (PrometheusRemoteStorageFailures). Hub-evaluated rules are
               // canonical; this also trims remote-write traffic.
+              // ALERTS/ALERTS_FOR_STATE (the synthetic alert-state series)
+              // collide the same way: the hub's rule evaluation over this
+              // spoke's raw series emits its own ALERTS{cluster=<spoke>,...}.
               writeRelabelConfigs: [
                 {
                   sourceLabels: ["__name__"],
-                  regex: ".+:.+",
+                  regex: ".+:.+|ALERTS|ALERTS_FOR_STATE",
                   action: "drop",
                 },
               ],
