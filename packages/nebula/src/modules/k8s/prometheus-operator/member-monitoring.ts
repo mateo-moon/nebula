@@ -144,6 +144,22 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
                 username: { name: rwSecretName, key: "username" },
                 password: { name: rwSecretName, key: "password" },
               },
+              // Ship RAW series only — drop recording-rule outputs (":" in the
+              // name by convention). The central hub runs the same kube-
+              // prometheus-stack rules and evaluates them over this spoke's
+              // remote-written raw series, producing IDENTICAL label sets
+              // (cluster/env/prometheus_replica come from the inputs) with
+              // fresher timestamps — so spoke-shipped rule outputs collide and
+              // the hub rejects them "400 out of order sample"
+              // (PrometheusRemoteStorageFailures). Hub-evaluated rules are
+              // canonical; this also trims remote-write traffic.
+              writeRelabelConfigs: [
+                {
+                  sourceLabels: ["__name__"],
+                  regex: ".+:.+",
+                  action: "drop",
+                },
+              ],
             },
           ],
         },
