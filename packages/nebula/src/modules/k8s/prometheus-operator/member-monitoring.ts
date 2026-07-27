@@ -156,10 +156,15 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
               // ALERTS/ALERTS_FOR_STATE (the synthetic alert-state series)
               // collide the same way: the hub's rule evaluation over this
               // spoke's raw series emits its own ALERTS{cluster=<spoke>,...}.
+              // prometheus_notifications_alertmanagers_discovered is dropped
+              // because a spoke has no Alertmanager BY DESIGN — shipping it
+              // makes the hub's PrometheusNotConnectedToAlertmanagers rule
+              // fire a permanent false positive per spoke.
               writeRelabelConfigs: [
                 {
                   sourceLabels: ["__name__"],
-                  regex: ".+:.+|ALERTS|ALERTS_FOR_STATE",
+                  regex:
+                    ".+:.+|ALERTS|ALERTS_FOR_STATE|prometheus_notifications_alertmanagers_discovered",
                   action: "drop",
                 },
               ],
