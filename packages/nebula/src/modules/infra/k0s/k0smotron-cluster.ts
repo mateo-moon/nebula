@@ -2,7 +2,10 @@ import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { ClusterV1Beta2, MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
 import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
-import { K0SmotronControlPlaneV1Beta2SpecServiceType } from "#imports/controlplane.cluster.x-k8s.io";
+import {
+  K0SmotronControlPlaneV1Beta2SpecServiceType,
+  type K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints,
+} from "#imports/controlplane.cluster.x-k8s.io";
 import {
   DEFAULT_PRESTART_COMMANDS,
   renderK0sWorkerArgs,
@@ -22,6 +25,13 @@ export interface K0smotronClusterControlPlane {
   serviceType?: K0SmotronControlPlaneV1Beta2SpecServiceType;
   /** API Service annotations (hosting-cluster LB specifics, e.g. AWS NLB scheme). */
   serviceAnnotations?: Record<string, string>;
+  /** Requests/limits for the CP pods (scheduler-honest sizing on the hosting cluster). */
+  resources?: {
+    requests?: Record<string, string>;
+    limits?: Record<string, string>;
+  };
+  /** topologySpreadConstraints for the CP pods (e.g. one hosted CP per hosting node). */
+  topologySpreadConstraints?: K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints[];
 }
 
 export interface K0smotronClusterConfig<M> {
@@ -115,6 +125,8 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       persistence: this.config.controlPlane?.persistence,
       serviceType: this.config.controlPlane?.serviceType,
       serviceAnnotations: this.config.controlPlane?.serviceAnnotations,
+      resources: this.config.controlPlane?.resources,
+      topologySpreadConstraints: this.config.controlPlane?.topologySpreadConstraints,
     });
 
     // 4. Worker pools — per pool: infra machine template (provider) +
