@@ -7,7 +7,40 @@ import {
   K0SmotronControlPlaneV1Beta2SpecPersistencePersistentVolumeClaimSpecResourcesRequests,
   K0SmotronControlPlaneV1Beta2SpecPatches,
   K0SmotronControlPlaneV1Beta2SpecPatchesPatchType,
+  K0SmotronControlPlaneV1Beta2SpecResources,
+  K0SmotronControlPlaneV1Beta2SpecResourcesLimits,
+  K0SmotronControlPlaneV1Beta2SpecResourcesRequests,
+  type K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints,
 } from "#imports/controlplane.cluster.x-k8s.io";
+
+/** The generated Quantity wrappers serialize via `.value` — bare strings render null. */
+function toQuantities(resources: {
+  requests?: Record<string, string>;
+  limits?: Record<string, string>;
+}): K0SmotronControlPlaneV1Beta2SpecResources {
+  return {
+    ...(resources.requests
+      ? {
+          requests: Object.fromEntries(
+            Object.entries(resources.requests).map(([k, v]) => [
+              k,
+              K0SmotronControlPlaneV1Beta2SpecResourcesRequests.fromString(v),
+            ]),
+          ),
+        }
+      : {}),
+    ...(resources.limits
+      ? {
+          limits: Object.fromEntries(
+            Object.entries(resources.limits).map(([k, v]) => [
+              k,
+              K0SmotronControlPlaneV1Beta2SpecResourcesLimits.fromString(v),
+            ]),
+          ),
+        }
+      : {}),
+  };
+}
 
 /** Hosted-etcd persistence for the k0smotron control plane. */
 export type K0smotronControlPlanePersistence =
@@ -50,6 +83,20 @@ export interface K0smotronControlPlaneConfig {
    * NLB to "internal" and workers in another VPC cannot reach the CP.
    */
   serviceAnnotations?: Record<string, string>;
+  /**
+   * Requests/limits for the CP (kmc-*) pods. Without requests the scheduler
+   * bin-packs multiple hosted CPs onto one hosting node and saturates it.
+   */
+  resources?: {
+    requests?: Record<string, string>;
+    limits?: Record<string, string>;
+  };
+  /**
+   * topologySpreadConstraints for the CP pods — e.g. spread all
+   * `app.kubernetes.io/component: control-plane` pods across hostnames so two
+   * workload clusters' CPs never share a hosting node.
+   */
+  topologySpreadConstraints?: K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints[];
 }
 
 /**
@@ -142,6 +189,10 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
         },
         ...(servicePatches.length ? { patches: servicePatches } : {}),
+        ...(this.config.resources ? { resources: toQuantities(this.config.resources) } : {}),
+        ...(this.config.topologySpreadConstraints
+          ? { topologySpreadConstraints: this.config.topologySpreadConstraints }
+          : {}),
       },
     });
   }
