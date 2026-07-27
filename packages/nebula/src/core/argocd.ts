@@ -13,6 +13,14 @@ export const ARGOCD_SYNC_OPTIONS_ANNOTATION = "argocd.argoproj.io/sync-options";
 export const ARGOCD_SYNC_WAVE_ANNOTATION = "argocd.argoproj.io/sync-wave";
 
 /**
+ * Application annotation scoping manifest-cache invalidation to the listed
+ * paths (semicolon-separated; leading `/` = repo-root-relative, else relative
+ * to `spec.source.path`). Without it every new revision re-renders every app.
+ */
+export const ARGOCD_MANIFEST_GENERATE_PATHS_ANNOTATION =
+  "argocd.argoproj.io/manifest-generate-paths";
+
+/**
  * Annotation telling Argo CD not to prune/delete the resource when it is
  * removed from the desired state (`Delete=false`). Apply on resources whose
  * lifecycle should outlive the Application that created them.

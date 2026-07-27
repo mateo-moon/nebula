@@ -26,6 +26,9 @@ ENV PNPM_HOME="/tmp/bin" \
     npm_config_store_dir="/tmp/pnpm-store" \
     NPM_CONFIG_CACHE="/tmp/.npm" \
     COREPACK_HOME="/tmp/.corepack" \
+    HELM_CACHE_HOME="/tmp/.cache/helm" \
+    HELM_CONFIG_HOME="/tmp/.config/helm" \
+    HELM_DATA_HOME="/tmp/.local/share/helm" \
     HOME="/tmp"
 
 USER 999

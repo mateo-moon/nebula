@@ -73,7 +73,11 @@ import {
   AppProjectSpecDestinations,
   AppProjectSpecClusterResourceWhitelist,
 } from "#imports/argoproj.io";
-import { ARGOCD_SYNC_WAVE_ANNOTATION, BaseConstruct } from "../../../core";
+import {
+  ARGOCD_MANIFEST_GENERATE_PATHS_ANNOTATION,
+  ARGOCD_SYNC_WAVE_ANNOTATION,
+  BaseConstruct,
+} from "../../../core";
 
 /**
  * Known CAPI runtime drift, ignored during diffing: controllers populate
@@ -176,6 +180,13 @@ export interface ArgoCdAppTierModule {
   extraIgnoreDifferences?: ApplicationSpecIgnoreDifferences[];
   /** Extra labels on the Application */
   labels?: Record<string, string>;
+  /**
+   * Extra manifest-generate-paths entries for this Application (verbatim
+   * ArgoCD semantics: leading `/` = repo-root-relative, else relative to the
+   * app's source path). Required for every out-of-directory file the module
+   * reads at synth time. Only emitted when the tier sets sharedGeneratePaths.
+   */
+  extraGeneratePaths?: string[];
 }
 
 export interface ArgoCdAppTierRegistryDiscovery {
@@ -194,6 +205,8 @@ export interface ArgoCdAppTierAutoDiscovery {
   dir: string;
   /** Repo directory the modules live under (defaults to basename(dir)) — per-module path is `${pathDir}/${mod}` */
   pathDir?: string;
+  /** Per-module extra manifest-generate-paths, keyed by module directory name. */
+  extraGeneratePaths?: Record<string, string[]>;
 }
 
 /** The special CAPI-definition Application of a `clusters` discovery tier. */
@@ -241,6 +254,8 @@ export interface ArgoCdAppTierClustersDiscovery {
   serviceSyncPolicyPreset?: ArgoCdSyncPolicyPreset;
   /** Per-app sync policy overrides for the service Applications */
   serviceSyncPolicy?: ArgoCdAppTierSyncPolicyOverrides;
+  /** Per-app extra manifest-generate-paths, keyed by `<cluster>/<module>`. */
+  extraGeneratePaths?: Record<string, string[]>;
 }
 
 export type ArgoCdAppTierDiscovery =
@@ -276,6 +291,20 @@ export interface ArgoCdAppTierConfig {
   syncPolicy?: ArgoCdAppTierSyncPolicyOverrides;
   /** Retry policy (defaults to limit 10, backoff 10s x2 capped at 3m) */
   retry?: ApplicationSpecSyncPolicyRetry;
+  /**
+   * Repo-root-relative paths (a leading '/' is added when missing) whose
+   * change must re-render EVERY Application of the tier — the shared inputs
+   * of the CMP render (lockfile, tsconfig, shared config, sops files). When
+   * set, every Application gets `argocd.argoproj.io/manifest-generate-paths`
+   * = `.;<shared…>[;<extras…>]` so a commit only re-renders the apps whose
+   * listed paths changed; when unset no annotation is emitted and every
+   * commit re-renders every app.
+   *
+   * UNDER-INVALIDATION WARNING: any file a module reads outside its own
+   * directory and this list MUST appear in its extraGeneratePaths, or its
+   * manifests go stale until a hard refresh / repo-server cache expiry.
+   */
+  sharedGeneratePaths?: string[];
   /** How the tier's Applications are derived */
   discovery: ArgoCdAppTierDiscovery;
 }
@@ -375,6 +404,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
         // discard the tier-level overrides for the others.
         overrides: { ...this.config.syncPolicy, ...entry.syncPolicy },
         extraIgnoreDifferences: entry.extraIgnoreDifferences,
+        extraGeneratePaths: entry.extraGeneratePaths,
       });
     }
   }
@@ -388,6 +418,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
         destination: this.defaultDestination,
         preset: this.config.syncPolicyPreset,
         overrides: this.config.syncPolicy,
+        extraGeneratePaths: discovery.extraGeneratePaths?.[mod],
       });
     }
   }
@@ -416,6 +447,8 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
             preset: discovery.clusterApp.syncPolicyPreset ?? "capi",
             overrides: discovery.clusterApp.syncPolicy,
             extraIgnoreDifferences: discovery.clusterApp.extraIgnoreDifferences,
+            extraGeneratePaths:
+              discovery.extraGeneratePaths?.[`${cluster}/${mod}`],
           });
         } else {
           // In-cluster service → the workload cluster itself, via the ArgoCD
@@ -433,10 +466,25 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
               ...this.config.syncPolicy,
               ...discovery.serviceSyncPolicy,
             },
+            extraGeneratePaths:
+              discovery.extraGeneratePaths?.[`${cluster}/${mod}`],
           });
         }
       }
     }
+  }
+
+  /**
+   * Compose the manifest-generate-paths value: the app's own source path
+   * first (also covers subdir add/remove for the app-of-apps parents whose
+   * path is a whole tier directory), then the tier-shared inputs, then the
+   * app's extras. Returns undefined when the tier doesn't opt in.
+   */
+  private buildGeneratePaths(extra?: string[]): string | undefined {
+    const shared = this.config.sharedGeneratePaths;
+    if (!shared) return undefined;
+    const anchored = shared.map((p) => (p.startsWith("/") ? p : `/${p}`));
+    return [".", ...anchored, ...(extra ?? [])].join(";");
   }
 
   private createApplication(app: {
@@ -448,6 +496,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
     preset?: ArgoCdSyncPolicyPreset;
     overrides?: ArgoCdAppTierSyncPolicyOverrides;
     extraIgnoreDifferences?: ApplicationSpecIgnoreDifferences[];
+    extraGeneratePaths?: string[];
   }): void {
     const preset = app.preset ?? "service";
     const ignoreDifferences = [
@@ -457,6 +506,15 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
     const path = this.config.pathPrefix
       ? `${this.config.pathPrefix}/${app.path}`
       : app.path;
+    const generatePaths = this.buildGeneratePaths(app.extraGeneratePaths);
+    const annotations = {
+      ...(app.wave !== undefined
+        ? { [ARGOCD_SYNC_WAVE_ANNOTATION]: String(app.wave) }
+        : {}),
+      ...(generatePaths
+        ? { [ARGOCD_MANIFEST_GENERATE_PATHS_ANNOTATION]: generatePaths }
+        : {}),
+    };
 
     this.applications.push(
       new Application(this, app.name, {
@@ -464,9 +522,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
           name: app.name,
           namespace: this.argoCdNamespace,
           ...(app.labels ? { labels: app.labels } : {}),
-          ...(app.wave !== undefined
-            ? { annotations: { [ARGOCD_SYNC_WAVE_ANNOTATION]: String(app.wave) } }
-            : {}),
+          ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
         },
         spec: {
           project: this.projectName,
