@@ -57,6 +57,13 @@ export interface KubernetesProviderRbacOptions {
    * @default 'read-only'
    */
   secrets?: "read-only" | "read-write";
+  /**
+   * Additional read-only (get/list/watch) rules for resources Compositions
+   * observe via provider-kubernetes Observe Objects — e.g. Eip MRs for the
+   * eip-dns-record Composition. The rbac-manager only grants the provider its
+   * OWN CRDs, so anything else it observes must be listed here.
+   */
+  extraReadRules?: Array<{ apiGroups: string[]; resources: string[] }>;
 }
 
 export interface KubernetesProviderOptions {
@@ -280,6 +287,11 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
                 resources: ["events"],
                 verbs: ["create", "update", "patch"],
               },
+              ...(rbac.extraReadRules ?? []).map((r) => ({
+                apiGroups: r.apiGroups,
+                resources: r.resources,
+                verbs: ["get", "list", "watch"],
+              })),
             ],
           },
         );

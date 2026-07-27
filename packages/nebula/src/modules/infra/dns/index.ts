@@ -327,3 +327,6 @@ export class Dns extends BaseConstruct<DnsConfig> {
 
 export { ManagedZoneSpecDeletionPolicy } from '#imports/dns.gcp.upbound.io';
 export { ZoneSpecDeletionPolicy as Route53ZoneSpecDeletionPolicy } from '#imports/route53.aws.upbound.io';
+
+export { EipDnsRecordSetup, EipDnsRecord } from "./eip-record";
+export type { EipDnsRecordConfig } from "./eip-record";
