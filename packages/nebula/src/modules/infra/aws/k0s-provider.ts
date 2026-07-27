@@ -33,6 +33,16 @@ export interface AwsMachineSpec {
   spot?: SpotSelection;
   /** Assign a public IP (default false — nodes live in private subnets behind NAT). */
   publicIp?: boolean;
+  /**
+   * Emit IMDSv2 (hop limit 2) on THIS pool's machine template so pod-networked
+   * controllers scheduled here (e.g. a keyless EBS CSI controller, external-dns,
+   * or the AWS LB controller on a HOSTED-control-plane cluster, which has no
+   * control-plane machines to carry the cluster-level `imdsPodAccess`) can reach
+   * IMDS and authenticate via the node instance profile. Only set this on pools
+   * whose node role is scoped accordingly — every pod on the pool can assume the
+   * node role through IMDS.
+   */
+  imdsPodAccess?: boolean;
 }
 
 /** Cluster-level AWS configuration for {@link AwsK0sProvider}. */
@@ -143,8 +153,13 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       m.instanceType ?? (isControlPlane ? "t4g.large" : "m6i.large");
     const rootVolumeSizeGiB = m.rootVolumeSizeGiB ?? 80;
     const rootVolumeType = m.rootVolumeType ?? "gp3";
-    // Keyless IMDS on control-plane nodes only; workers never expose their role.
-    const imdsPodAccess = isControlPlane ? this.config.imdsPodAccess : undefined;
+    // Keyless IMDS: cluster-level `imdsPodAccess` applies to the control plane
+    // (mgmt pattern); workers keep the EC2 default (hop limit 1) unless the pool
+    // opts in via its machine spec (hosted-CP clusters have no CP machines, so
+    // pool-level opt-in is the only way their controllers get instance-profile auth).
+    const imdsPodAccess = isControlPlane
+      ? this.config.imdsPodAccess
+      : m.imdsPodAccess;
     // Control-plane nodes are never public and never spot; those only apply to
     // worker pools.
     const publicIp = isControlPlane ? false : (m.publicIp ?? false);
@@ -173,6 +188,9 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
           rootVolumeType,
           ami: m.ami ?? null,
           spot: spot ?? false,
+          // Only present when opted in, so existing pools' hashes (and thus
+          // their machine templates) stay stable.
+          ...(imdsPodAccess ? { imdsPodAccess: true } : {}),
         };
     const hash = crypto
       .createHash("sha256")
