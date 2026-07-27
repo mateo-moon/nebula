@@ -142,6 +142,8 @@ export interface NebulaPluginConfig {
     requests?: { memory?: string; cpu?: string };
     limits?: { memory?: string; cpu?: string };
   };
+  /** ARGOCD_EXEC_TIMEOUT for the cmp sidecar (default "5m"). */
+  execTimeout?: string;
 }
 
 export interface ArgoCdConfig {
@@ -723,9 +725,15 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
             init: {
               command: ["/bin/sh", "-c"],
               args: [
+                // ArgoCD runs init before EVERY generate, in a throwaway
+                // extraction of the repo — so this must be cheap when warm.
+                // --frozen-lockfile skips resolution (and fails loudly on a
+                // package.json/lockfile mismatch); --prefer-offline skips
+                // registry revalidation when the pnpm store already has the
+                // tarballs.
                 `set -e
 echo "Installing dependencies in $(pwd)..." >&2
-pnpm install >&2 2>&1`,
+pnpm install --frozen-lockfile --prefer-offline >&2 2>&1`,
               ],
             },
             generate: {
@@ -774,7 +782,9 @@ done
       name: string;
       value?: string;
       valueFrom?: unknown;
-    }> = [{ name: "ARGOCD_EXEC_TIMEOUT", value: "5m" }];
+    }> = [
+      { name: "ARGOCD_EXEC_TIMEOUT", value: pluginConfig.execTimeout ?? "5m" },
+    ];
 
     // Add GCP credentials if using secret-based auth (not Workload Identity)
     if (pluginConfig.gcpCredentialsSecret) {
