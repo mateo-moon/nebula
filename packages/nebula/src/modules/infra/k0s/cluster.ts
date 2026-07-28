@@ -131,12 +131,18 @@ export interface K0sClusterConfig<M> {
   /** Service CIDR (default "10.96.0.0/12"). */
   serviceCidr?: string;
   /**
-   * CNI for the embedded k0s ClusterConfig. Default "kuberouter" (k0s built-in).
-   * "custom" makes k0s install NO CNI so a CNI is deployed separately (e.g. the
-   * `Calico` module). Immutable at cluster creation.
+   * CNI for the embedded k0s ClusterConfig. Default "calico" (k0s's bundled
+   * Calico), so the cluster self-bootstraps with a CNI up before any pod
+   * schedules — no separate CNI deploy to sequence. "custom" makes k0s install
+   * NO CNI so a CNI is deployed separately (e.g. the `Calico` module).
+   * Immutable at cluster creation.
    */
   networkProvider?: "kuberouter" | "calico" | "custom";
-  /** k0s-bundled Calico settings (only meaningful when networkProvider="calico"). */
+  /**
+   * k0s-bundled Calico settings (only meaningful when networkProvider="calico").
+   * Defaults: `mode: "vxlan"`, `wireguard: true` (encrypted node-to-node pod
+   * traffic).
+   */
   calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
   /**
    * Configure the kube-apiserver as an OIDC issuer for IRSA/WebIdentity.
@@ -206,8 +212,16 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
     const k0sVersion = `${k8sVersion}+k0s.0`;
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
-    const networkProvider = this.config.networkProvider ?? "kuberouter";
-    const calico = this.config.calico ?? {};
+    const networkProvider = this.config.networkProvider ?? "calico";
+    // Resolve the Calico defaults ONCE: the same values feed the k0s
+    // ClusterConfig below AND the provider's node-to-node SG rules, which would
+    // otherwise miss WireGuard's UDP 51820 whenever the caller relies on the
+    // default (silently dropping all cross-node pod traffic).
+    const calico = {
+      mode: this.config.calico?.mode ?? "vxlan",
+      wireguard: this.config.calico?.wireguard ?? true,
+      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
+    };
     const cp = this.config.controlPlane;
     const provider = this.config.provider;
 
@@ -274,15 +288,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
             spec: {
               network: {
                 provider: networkProvider,
-                ...(networkProvider === "calico"
-                  ? {
-                      calico: {
-                        mode: calico.mode ?? "vxlan",
-                        wireguard: calico.wireguard ?? false,
-                        ...(calico.mtu ? { mtu: calico.mtu } : {}),
-                      },
-                    }
-                  : {}),
+                ...(networkProvider === "calico" ? { calico } : {}),
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
