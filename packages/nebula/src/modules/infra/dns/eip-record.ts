@@ -115,7 +115,9 @@ export class EipDnsRecordSetup extends Construct {
     const recordTemplate = `
 {{- if .observed.resources }}
 {{- $eip := index .observed.resources "eip" }}
-{{- if and $eip $eip.resource $eip.resource.status $eip.resource.status.atProvider $eip.resource.status.atProvider.publicIp }}
+{{- if and $eip $eip.resource $eip.resource.status $eip.resource.status.atProvider $eip.resource.status.atProvider.manifest }}
+{{- $obs := $eip.resource.status.atProvider.manifest }}
+{{- if and $obs.status $obs.status.atProvider $obs.status.atProvider.publicIp }}
 apiVersion: route53.aws.upbound.io/v1beta2
 kind: Record
 metadata:
@@ -130,9 +132,10 @@ spec:
     ttl: {{ .observed.composite.resource.spec.ttl }}
     allowOverwrite: true
     records:
-      - {{ $eip.resource.status.atProvider.publicIp }}
+      - {{ $obs.status.atProvider.publicIp }}
   providerConfigRef:
     name: {{ .observed.composite.resource.spec.awsProviderConfigName }}
+{{- end }}
 {{- end }}
 {{- end }}
 `.trim();
