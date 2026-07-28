@@ -166,7 +166,7 @@ spec:
                       forProvider: {
                         manifest: {
                           apiVersion: "ec2.aws.upbound.io/v1beta1",
-                          kind: "Eip",
+                          kind: "EIP",
                           metadata: { name: "placeholder" },
                         },
                       },
