@@ -113,6 +113,7 @@ export class EipDnsRecordSetup extends Construct {
     // allowOverwrite adopts a pre-existing rrset (e.g. one previously managed
     // as a static Record) instead of failing "already exists".
     const recordTemplate = `
+{{- if .observed.resources }}
 {{- $eip := index .observed.resources "eip" }}
 {{- if and $eip $eip.resource $eip.resource.status $eip.resource.status.atProvider $eip.resource.status.atProvider.publicIp }}
 apiVersion: route53.aws.upbound.io/v1beta2
@@ -132,6 +133,7 @@ spec:
       - {{ $eip.resource.status.atProvider.publicIp }}
   providerConfigRef:
     name: {{ .observed.composite.resource.spec.awsProviderConfigName }}
+{{- end }}
 {{- end }}
 `.trim();
 
