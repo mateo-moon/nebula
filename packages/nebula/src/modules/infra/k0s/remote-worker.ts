@@ -207,7 +207,10 @@ export class RemoteWorkerSetup extends Construct {
                 {
                   name: "pooled-machine",
                   base: {
-                    apiVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
+                    // v1beta2 = the storage version. Composing the non-storage
+                    // version makes every read-back a converted object that
+                    // never matches what was applied (permanent drift).
+                    apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
                     kind: "PooledRemoteMachine",
                     metadata: { name: "placeholder", namespace: "default" },
                     spec: {
