@@ -61,7 +61,7 @@ export type AwsProviderFamily =
 export interface AwsProviderConfig {
   /** Provider name prefix (default: 'provider-aws') */
   name?: string;
-  /** Provider version (default: 'v2.6.0', matching the imported CRDs) */
+  /** Provider version (default: 'v2.6.2'; CRD imports generated at v2.6.0 — patch releases keep the schema) */
   version?: string;
   /** ProviderConfig name (default: 'default') */
   providerConfigName?: string;
@@ -103,7 +103,7 @@ export class AwsProvider extends Construct {
     super(scope, id);
 
     const providerNamePrefix = config.name ?? "provider-aws";
-    const providerVersion = config.version ?? "v2.6.0";
+    const providerVersion = config.version ?? "v2.6.2";
     const providerConfigName = config.providerConfigName ?? "default";
 
     // Default families needed for the infra/aws module (networking + IAM)
