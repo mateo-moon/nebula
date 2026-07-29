@@ -164,6 +164,11 @@ export class ArgoCdClusterSyncSetup extends Construct {
 
   private createComposition(): Composition {
     const secretTemplate = `
+{{- $obj := "" -}}
+{{- if .observed.resources -}}
+{{- $obj = index .observed.resources "kubeconfig-secret" -}}
+{{- end -}}
+{{- $rendered := and $obj $obj.resource $obj.resource.status $obj.resource.status.atProvider $obj.resource.status.atProvider.manifest -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -173,10 +178,9 @@ metadata:
     argocd.argoproj.io/secret-type: cluster
   annotations:
     gotemplating.fn.crossplane.io/composition-resource-name: argocd-cluster-secret
+    gotemplating.fn.crossplane.io/ready: "{{ if $rendered }}True{{ else }}False{{ end }}"
 type: Opaque
-{{- if .observed.resources }}
-{{- $obj := index .observed.resources "kubeconfig-secret" }}
-{{- if and $obj $obj.resource $obj.resource.status $obj.resource.status.atProvider $obj.resource.status.atProvider.manifest }}
+{{- if $rendered }}
 {{- $secretData := $obj.resource.status.atProvider.manifest.data }}
 {{- $kubeconfigB64 := index $secretData (.observed.composite.resource.spec.sourceSecretKey) }}
 {{- $kubeconfigYaml := $kubeconfigB64 | b64dec }}
@@ -195,7 +199,6 @@ stringData:
   server: {{ $serverUrl }}
   config: |
     {"tlsClientConfig":{"insecure":{{ $insecure }}{{- if not $insecure }},"caData":"{{ index $cluster "certificate-authority-data" }}"{{- end }},"certData":"{{ index $user "client-certificate-data" }}","keyData":"{{ index $user "client-key-data" }}"}}
-{{- end }}
 {{- end }}
 `.trim();
 
