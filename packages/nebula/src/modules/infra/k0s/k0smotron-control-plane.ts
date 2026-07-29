@@ -66,6 +66,21 @@ export interface K0smotronControlPlaneConfig {
   podCidr?: string;
   /** Service CIDR (default "10.96.0.0/12"). */
   serviceCidr?: string;
+  /**
+   * CNI the hosted control plane installs into the WORKLOAD cluster. Default
+   * "calico" (k0s's bundled Calico): the CP's manifest applier writes it to the
+   * child API, so workers go Ready without waiting on a separate CNI deploy.
+   * "custom" installs NO CNI — workers stay NotReady until one is deployed into
+   * the workload cluster (e.g. the `Calico` module).
+   * **Immutable at cluster creation** — k0s only supports changing the CNI
+   * provider through a full cluster redeployment.
+   */
+  networkProvider?: "kuberouter" | "calico" | "custom";
+  /**
+   * k0s-bundled Calico settings (only emitted when networkProvider="calico").
+   * Defaults: `mode: "vxlan"`, `wireguard: true`.
+   */
+  calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
   /** Hosted-etcd persistence (default emptyDir). */
   persistence?: K0smotronControlPlanePersistence;
   /**
@@ -122,6 +137,12 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
     const version = `${k8sVersion}+k0s.0`;
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
+    const networkProvider = this.config.networkProvider ?? "calico";
+    const calico = {
+      mode: this.config.calico?.mode ?? "vxlan",
+      wireguard: this.config.calico?.wireguard ?? true,
+      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
+    };
 
     const cpPersistence = this.config.persistence;
     const persistence: K0SmotronControlPlaneV1Beta2SpecPersistence =
@@ -174,9 +195,12 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
           kind: "ClusterConfig",
           spec: {
             network: {
-              // CNI is installed separately (e.g. the Calico module) into the
-              // workload cluster; k0s installs no CNI.
-              provider: "custom",
+              // k0smotron merges this config untouched, and the CP pod runs a
+              // full k0s controller — so a bundled CNI ("calico"/"kuberouter")
+              // is applied to the child API by the CP's manifest applier.
+              // "custom" installs none, leaving the CNI to a separate deploy.
+              provider: networkProvider,
+              ...(networkProvider === "calico" ? { calico } : {}),
               podCIDR: podCidr,
               serviceCIDR: serviceCidr,
             },
