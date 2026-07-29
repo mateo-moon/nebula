@@ -120,6 +120,16 @@ export interface ClusterApiOperatorAwsConfig {
    * @default false
    */
   keyless?: boolean;
+  /**
+   * Enable CAPA's ExternalResourceGC feature gate: on cluster deletion, CAPA
+   * garbage-collects the AWS resources workload-cluster controllers created in
+   * the cluster's VPC (LB-controller NLBs/target groups, CCM security groups)
+   * that otherwise orphan and block the VPC teardown with DependencyViolation
+   * — observed live on the stage rebuild (leaked ingress NLB + two k8s-traffic
+   * SGs needed hand deletion before the IGW would detach).
+   * @default false
+   */
+  externalResourceGC?: boolean;
 }
 
 export interface ClusterApiOperatorConfig {
@@ -250,6 +260,9 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
           name: awsSecretName,
           namespace: awsSecretNamespace,
         },
+        ...(this.config.aws.externalResourceGC
+          ? { manager: { featureGates: { ExternalResourceGC: true } } }
+          : {}),
       };
     }
 
