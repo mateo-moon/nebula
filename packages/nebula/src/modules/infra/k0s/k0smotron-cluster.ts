@@ -2,6 +2,7 @@ import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { ClusterV1Beta2, MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
 import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
+import { K0sCalicoConfig, resolveK0sCalico } from "./calico";
 import {
   K0SmotronControlPlaneV1Beta2SpecServiceType,
   type K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints,
@@ -57,7 +58,7 @@ export interface K0smotronClusterConfig<M> {
    * k0s-bundled Calico settings (only meaningful when networkProvider="calico").
    * Defaults: `mode: "vxlan"`, `wireguard: true`.
    */
-  calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
+  calico?: K0sCalicoConfig;
   /** Hosted control plane (K0smotronControlPlane pods on the hosting cluster). */
   controlPlane?: K0smotronClusterControlPlane;
   /** Worker pools keyed by pool name (each a MachineDeployment). */
@@ -94,11 +95,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
     const networkProvider = this.config.networkProvider ?? "calico";
     // Resolved once so the worker SG rules the provider emits match the
     // transport the hosted CP actually configures (WireGuard needs UDP 51820).
-    const calico = {
-      mode: this.config.calico?.mode ?? "vxlan",
-      wireguard: this.config.calico?.wireguard ?? true,
-      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
-    };
+    const calico = resolveK0sCalico(this.config.calico);
     const provider = this.config.provider;
 
     const clusterName = name;
@@ -145,7 +142,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       podCidr,
       serviceCidr,
       networkProvider,
-      calico,
+      calico: this.config.calico,
       persistence: this.config.controlPlane?.persistence,
       serviceType: this.config.controlPlane?.serviceType,
       serviceAnnotations: this.config.controlPlane?.serviceAnnotations,

@@ -1,5 +1,6 @@
 import { Construct } from "constructs";
 import { JsonPatch } from "cdk8s";
+import { ResolvedK0sCalico } from "../k0s/calico";
 import { ClusterV1Beta2 } from "#imports/cluster.x-k8s.io";
 import {
   AwsClusterV1Beta2,
@@ -181,7 +182,7 @@ export function emitAwsClusterCr(
     /** CNI selected in the k0s ClusterConfig. Used to emit matching AWS SG rules. */
     networkProvider?: "kuberouter" | "calico" | "custom";
     /** Bundled Calico transport settings (only used when networkProvider="calico"). */
-    calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
+    calico?: ResolvedK0sCalico;
     /**
      * Cap the number of AZs CAPA spreads subnets across. CAPA creates one NAT
      * gateway (and thus one Elastic IP) per AZ, so on EIP-constrained accounts set
@@ -324,31 +325,47 @@ export function emitAwsClusterCr(
         // CAPA's Calico defaults only allow BGP (TCP 179) and IP-in-IP
         // (protocol 4). k0s defaults its bundled Calico to VXLAN and can enable
         // WireGuard, so those defaults silently drop all cross-node pod traffic
-        // on AWS. Make the selected transport explicit; CAPA applies these
-        // source-SG rules to both control-plane and worker node groups.
+        // on AWS. Emit rules for the transport actually selected, and ONLY that
+        // one — BGP and IP-in-IP are unused in vxlan mode.
+        //
+        // These are SOURCE-SG rules: CAPA gives them no CIDR field, so they only
+        // match traffic from an ENI in the same security group, i.e. inside the
+        // VPC. A cluster whose nodes advertise PUBLIC addresses (Calico
+        // autodetecting an EIP) sees all node-to-node traffic arrive via the
+        // internet gateway from a public source, where these never match — such
+        // a cluster must open the transport with CIDR-based
+        // `additionalNodeIngressRules` instead.
         ...(opts.networkProvider === "calico"
           ? {
               cni: {
                 cniIngressRules: [
-                  {
-                    description: "bgp (calico)",
-                    protocol: "tcp",
-                    fromPort: 179,
-                    toPort: 179,
-                  },
-                  {
-                    description: "IP-in-IP (calico)",
-                    protocol: "4",
-                    fromPort: -1,
-                    toPort: 65535,
-                  },
-                  ...((opts.calico?.mode ?? "vxlan") === "vxlan"
+                  ...(opts.calico?.mode === "bird"
+                    ? [
+                        {
+                          description: "bgp (calico)",
+                          protocol: "tcp",
+                          fromPort: 179,
+                          toPort: 179,
+                        },
+                      ]
+                    : []),
+                  ...(opts.calico?.mode === "ipip"
+                    ? [
+                        {
+                          description: "IP-in-IP (calico)",
+                          protocol: "4",
+                          fromPort: -1,
+                          toPort: 65535,
+                        },
+                      ]
+                    : []),
+                  ...(opts.calico?.mode === "vxlan"
                     ? [
                         {
                           description: "VXLAN (calico)",
                           protocol: "udp",
-                          fromPort: 4789,
-                          toPort: 4789,
+                          fromPort: opts.calico.vxlanPort,
+                          toPort: opts.calico.vxlanPort,
                         },
                       ]
                     : []),

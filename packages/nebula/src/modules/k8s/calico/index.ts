@@ -1,6 +1,18 @@
 /**
  * Calico - CNI with WireGuard encryption for cross-node pod networking.
  *
+ * FOR NON-k0s / BYO CLUSTERS. On a k0s cluster prefer `networkProvider:"calico"`
+ * on `K0sCluster` / `K0smotronCluster` / `AwsK0sCluster`: the bundled CNI is up
+ * before the first pod schedules, so there is no separate Application to
+ * sequence, and it is configured through {@link K0sCalicoConfig} rather than an
+ * Installation CR. Running this module on a cluster whose k0s already manages
+ * Calico gives you two controllers fighting over the same objects — k0s
+ * stack-applies its manifests with prune, and the operator tries to take
+ * ownership of them. Use `networkProvider:"custom"` if you deploy this.
+ *
+ * The CNI provider is immutable after cluster creation, so this choice cannot
+ * be changed later without recreating the cluster.
+ *
  * Deploys the tigera-operator Helm chart which manages Calico components.
  * Optionally enables WireGuard encryption for pod-to-pod traffic, replacing
  * the need for manual WireGuard mesh tunnels in hybrid clusters.
