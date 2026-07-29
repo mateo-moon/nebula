@@ -194,6 +194,18 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
       },
     );
 
+    // Derives XR Ready from composed-resource readiness. Without it, XRs from
+    // go-templating pipelines never leave Ready=False, which ArgoCD health
+    // renders as a permanently Degraded application (observed on the
+    // cluster-sync and eip-record XRs).
+    new FunctionV1Beta1(this, "function-auto-ready", {
+      metadata: { name: "function-auto-ready" },
+      spec: {
+        package:
+          "xpkg.upbound.io/crossplane-contrib/function-auto-ready:v0.4.2",
+      },
+    });
+
     // Install ArgoCD Provider if not explicitly disabled
     if (this.config.argoCdProvider !== false) {
       const opts = this.config.argoCdProvider ?? {};
