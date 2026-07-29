@@ -72,6 +72,26 @@ export class RemoteWorkerSetup extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    // Crossplane composes the PooledRemoteMachine DIRECTLY (no provider), so
+    // its own service account needs RBAC on the kind. The rbac-manager
+    // aggregates any ClusterRole carrying this label into crossplane's role —
+    // without it every compose attempt is denied at apply time.
+    new ApiObject(this, "crossplane-rbac", {
+      apiVersion: "rbac.authorization.k8s.io/v1",
+      kind: "ClusterRole",
+      metadata: {
+        name: "crossplane:aggregate:remote-worker",
+        labels: { "rbac.crossplane.io/aggregate-to-crossplane": "true" },
+      },
+      rules: [
+        {
+          apiGroups: ["infrastructure.cluster.x-k8s.io"],
+          resources: ["pooledremotemachines", "pooledremotemachines/status"],
+          verbs: ["get", "list", "watch", "create", "update", "patch", "delete"],
+        },
+      ],
+    });
+
     this.xrd = new CompositeResourceDefinitionV2(this, "xrd", {
       metadata: {
         name: "xremoteworkers.nebula.io",
