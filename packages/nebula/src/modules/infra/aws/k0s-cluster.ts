@@ -135,9 +135,10 @@ export interface AwsK0sClusterConfig {
   controlPlaneLoadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
   /**
    * CNI for the embedded k0s ClusterConfig (`spec.network.provider`). Defaults to
-   * `"kuberouter"` (k0s's built-in CNI). Set to `"custom"` to make k0s install NO
-   * CNI, so a CNI is deployed separately (e.g. the `Calico` module owns pod
-   * networking + the encrypted node mesh).
+   * `"calico"` (k0s's bundled Calico), so the cluster self-bootstraps with a CNI
+   * up before any pod schedules. Set to `"custom"` to make k0s install NO CNI, so
+   * a CNI is deployed separately (e.g. the `Calico` module owns pod networking +
+   * the encrypted node mesh).
    * **Immutable at cluster creation**: switching the CNI on a running cluster is a
    * disruptive pod re-IP migration, so pick this on a FRESH bootstrap.
    */
@@ -145,10 +146,10 @@ export interface AwsK0sClusterConfig {
   /**
    * k0s-bundled Calico settings, emitted into `spec.network.calico` ONLY when
    * `networkProvider` is `"calico"`. Defaults to `mode: "vxlan"` (no BGP — works
-   * on any L2/L3 underlay incl. AWS). `wireguard: true` enables encrypted
+   * on any L2/L3 underlay incl. AWS) and `wireguard: true` (encrypted
    * node-to-node pod traffic — inert on a single node, active once there are
-   * multiple nodes. Set it at create so it's already in the cluster's k0s config
-   * when you scale (changing the k0sConfigSpec later rolls the control plane).
+   * multiple nodes). Both are baked in at create, since changing the
+   * k0sConfigSpec later rolls the control plane.
    */
   calico?: {
     wireguard?: boolean;
@@ -204,8 +205,16 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const vpcCidr = this.config.vpcCidr ?? "10.0.0.0/16";
     const cp = this.config.controlPlane ?? {};
-    const networkProvider = this.config.networkProvider ?? "kuberouter";
-    const calico = this.config.calico ?? {};
+    const networkProvider = this.config.networkProvider ?? "calico";
+    // Resolve the Calico defaults ONCE: the same values feed the k0s
+    // ClusterConfig below AND the CAPA cniIngressRules, which would otherwise
+    // miss WireGuard's UDP 51820 whenever the caller relies on the default
+    // (silently dropping all cross-node pod traffic).
+    const calico = {
+      mode: this.config.calico?.mode ?? "vxlan",
+      wireguard: this.config.calico?.wireguard ?? true,
+      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
+    };
     const nodeLocalLoadBalancing = this.config.nodeLocalLoadBalancing ?? {};
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
@@ -299,8 +308,8 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
           // so the real control plane matches the CAPI clusterNetwork above.
           // Without this, k0s falls back to its own defaults whenever a caller
           // overrides podCidr/serviceCidr. The CNI is selected by `networkProvider`
-          // ("kuberouter" default; "custom" makes k0s install NO CNI so the Calico
-          // module owns networking + the encrypted node mesh).
+          // ("calico" default — bundled, WireGuard on; "custom" makes k0s install
+          // NO CNI so the Calico module owns networking + the encrypted node mesh).
           k0S: {
             apiVersion: "k0s.k0sproject.io/v1beta1",
             kind: "ClusterConfig",
@@ -317,16 +326,8 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
                   type: nodeLocalLoadBalancing.type ?? "EnvoyProxy",
                 },
                 // k0s-bundled Calico tuning (only meaningful for provider=calico):
-                // vxlan overlay (no BGP) + optional wireguard node-mesh encryption.
-                ...(networkProvider === "calico"
-                  ? {
-                      calico: {
-                        mode: calico.mode ?? "vxlan",
-                        wireguard: calico.wireguard ?? false,
-                        ...(calico.mtu ? { mtu: calico.mtu } : {}),
-                      },
-                    }
-                  : {}),
+                // vxlan overlay (no BGP) + wireguard node-mesh encryption.
+                ...(networkProvider === "calico" ? { calico } : {}),
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },

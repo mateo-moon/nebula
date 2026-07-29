@@ -45,6 +45,19 @@ export interface K0smotronClusterConfig<M> {
   podCidr?: string;
   /** Service CIDR (default "10.96.0.0/12"). */
   serviceCidr?: string;
+  /**
+   * CNI for the workload cluster. Default "calico" (k0s's bundled Calico,
+   * installed into the child cluster by the hosted CP). "custom" installs no CNI
+   * — workers stay NotReady until one is deployed separately (e.g. the `Calico`
+   * module), which also makes convergence depend on that deploy landing.
+   * **Immutable at cluster creation** (k0s: CNI changes need a full redeploy).
+   */
+  networkProvider?: "kuberouter" | "calico" | "custom";
+  /**
+   * k0s-bundled Calico settings (only meaningful when networkProvider="calico").
+   * Defaults: `mode: "vxlan"`, `wireguard: true`.
+   */
+  calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
   /** Hosted control plane (K0smotronControlPlane pods on the hosting cluster). */
   controlPlane?: K0smotronClusterControlPlane;
   /** Worker pools keyed by pool name (each a MachineDeployment). */
@@ -64,8 +77,9 @@ export interface K0smotronClusterConfig<M> {
  * the workers carry a {@link K0sInfraProvider} `M`. The provider is told the CP is
  * hosted (`hostedControlPlane: true`) so it emits its infra cluster with the API
  * load balancer DISABLED — k0smotron exposes the API via a Service on the hosting
- * cluster, not via the workers' infra provider. CNI is "custom" (installed
- * separately into the workload cluster, e.g. the `Calico` module).
+ * cluster, not via the workers' infra provider. CNI defaults to k0s's bundled
+ * Calico (WireGuard on), installed into the workload cluster by the hosted CP;
+ * `networkProvider: "custom"` opts out and leaves it to a separate deploy.
  */
 export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>> {
   constructor(scope: Construct, id: string, config: K0smotronClusterConfig<M>) {
@@ -77,6 +91,14 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
     const k0sVersion = `${k8sVersion}+k0s.0`;
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
+    const networkProvider = this.config.networkProvider ?? "calico";
+    // Resolved once so the worker SG rules the provider emits match the
+    // transport the hosted CP actually configures (WireGuard needs UDP 51820).
+    const calico = {
+      mode: this.config.calico?.mode ?? "vxlan",
+      wireguard: this.config.calico?.wireguard ?? true,
+      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
+    };
     const provider = this.config.provider;
 
     const clusterName = name;
@@ -105,13 +127,13 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
     });
 
     // 2. Infra cluster CR (AWSCluster/…) — CAPA owns the VPC/subnets/SGs; the API
-    //    load balancer is DISABLED (k0smotron exposes the API). networkProvider is
-    //    "custom" (a CNI is installed separately into the workload cluster).
+    //    load balancer is DISABLED (k0smotron exposes the API). networkProvider
+    //    is passed through so the provider opens the CNI's node-to-node transport.
     provider.emitInfraCluster(this, {
       clusterName,
       namespace,
-      networkProvider: "custom",
-      calico: {},
+      networkProvider,
+      calico,
       hostedControlPlane: true,
     });
 
@@ -122,6 +144,8 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       k8sVersion,
       podCidr,
       serviceCidr,
+      networkProvider,
+      calico,
       persistence: this.config.controlPlane?.persistence,
       serviceType: this.config.controlPlane?.serviceType,
       serviceAnnotations: this.config.controlPlane?.serviceAnnotations,

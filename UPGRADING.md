@@ -31,6 +31,20 @@ landed alongside these changes; the items below are the **behavior-changing** on
 - **`confidential-containers` `tdx` shim default is now `false`** (was `true`).
   Intel TDX now opts in explicitly; AMD SEV-SNP remains the default. Callers that
   passed a `shims` object without an explicit `tdx` no longer pull `qemu-tdx`.
+- **k0s CNI now defaults to bundled Calico with WireGuard.** `K0sCluster`,
+  `AwsK0sCluster`, `K0smotronCluster` and `K0smotronControlPlane` default
+  `networkProvider` to `"calico"` (was `"kuberouter"` on the standalone-CP
+  constructs, hardcoded `"custom"` on the k0smotron ones) and `calico.wireguard`
+  to `true` (was `false`). A cluster therefore self-bootstraps with an encrypted
+  CNI before any pod schedules, and the AWS adapter opens the matching
+  `cniIngressRules` (UDP 4789 + 51820) — previously a caller relying on the
+  wireguard default got the k0s setting without the SG rule.
+  **The CNI provider is immutable after cluster creation** (k0s only supports
+  changing it via full redeployment), so any EXISTING cluster that relied on the
+  old defaults must pin them explicitly — `networkProvider: "kuberouter"`, or
+  `"custom"` where a separate CNI (e.g. the `Calico` Helm module) owns pod
+  networking — BEFORE re-rendering its manifests.
+
 - **AWS management-cluster NLB is internal by default.** `AwsK0sCluster` now
   defaults `controlPlaneLoadBalancerScheme` to `INTERNAL`, so the k0s API is not
   exposed to the internet (mTLS still guards it). Set it to
