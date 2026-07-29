@@ -258,7 +258,11 @@ stringData:
                       fromFieldPath: "spec.kubeProviderConfigName",
                       toFieldPath: "spec.providerConfigRef.name",
                     },
-                  ],
+                    {
+            step: "auto-ready",
+            functionRef: { name: "function-auto-ready" },
+          },
+        ],
                 },
               ],
             },
