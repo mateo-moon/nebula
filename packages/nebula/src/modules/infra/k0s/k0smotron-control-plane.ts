@@ -1,6 +1,11 @@
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import {
+  K0sCalicoConfig,
+  resolveK0sCalico,
+  renderK0sCalicoSpec,
+} from "./calico";
+import {
   K0smotronControlPlaneV1Beta2,
   K0SmotronControlPlaneV1Beta2SpecServiceType,
   K0SmotronControlPlaneV1Beta2SpecPersistence,
@@ -80,7 +85,7 @@ export interface K0smotronControlPlaneConfig {
    * k0s-bundled Calico settings (only emitted when networkProvider="calico").
    * Defaults: `mode: "vxlan"`, `wireguard: true`.
    */
-  calico?: { wireguard?: boolean; mode?: "vxlan" | "ipip" | "bird"; mtu?: number };
+  calico?: K0sCalicoConfig;
   /** Hosted-etcd persistence (default emptyDir). */
   persistence?: K0smotronControlPlanePersistence;
   /**
@@ -138,11 +143,7 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const networkProvider = this.config.networkProvider ?? "calico";
-    const calico = {
-      mode: this.config.calico?.mode ?? "vxlan",
-      wireguard: this.config.calico?.wireguard ?? true,
-      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
-    };
+    const calico = renderK0sCalicoSpec(resolveK0sCalico(this.config.calico));
 
     const cpPersistence = this.config.persistence;
     const persistence: K0SmotronControlPlaneV1Beta2SpecPersistence =
