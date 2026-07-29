@@ -3,6 +3,11 @@ import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
 import {
+  K0sCalicoConfig,
+  resolveK0sCalico,
+  renderK0sCalicoSpec,
+} from "../k0s/calico";
+import {
   DEFAULT_PRESTART_COMMANDS,
   emitClusterCr,
   emitAwsClusterCr,
@@ -151,11 +156,7 @@ export interface AwsK0sClusterConfig {
    * multiple nodes). Both are baked in at create, since changing the
    * k0sConfigSpec later rolls the control plane.
    */
-  calico?: {
-    wireguard?: boolean;
-    mode?: "vxlan" | "ipip" | "bird";
-    mtu?: number;
-  };
+  calico?: K0sCalicoConfig;
   /**
    * Keep node and pod traffic to the Kubernetes API on the node-local/private
    * path instead of hairpinning through the control-plane NLB. k0smotron uses
@@ -210,11 +211,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     // ClusterConfig below AND the CAPA cniIngressRules, which would otherwise
     // miss WireGuard's UDP 51820 whenever the caller relies on the default
     // (silently dropping all cross-node pod traffic).
-    const calico = {
-      mode: this.config.calico?.mode ?? "vxlan",
-      wireguard: this.config.calico?.wireguard ?? true,
-      ...(this.config.calico?.mtu ? { mtu: this.config.calico.mtu } : {}),
-    };
+    const calico = resolveK0sCalico(this.config.calico);
     const nodeLocalLoadBalancing = this.config.nodeLocalLoadBalancing ?? {};
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
@@ -327,7 +324,9 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
                 },
                 // k0s-bundled Calico tuning (only meaningful for provider=calico):
                 // vxlan overlay (no BGP) + wireguard node-mesh encryption.
-                ...(networkProvider === "calico" ? { calico } : {}),
+                ...(networkProvider === "calico"
+                  ? { calico: renderK0sCalicoSpec(calico) }
+                  : {}),
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
