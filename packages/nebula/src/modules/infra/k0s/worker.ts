@@ -361,6 +361,12 @@ export class WorkerSetup extends Construct {
                     kind: "EIPAssociation",
                     metadata: { name: "placeholder" },
                     spec: {
+                      // No LateInitialize: it captures the observed publicIp
+                      // (association) / device state into spec, and a recreate
+                      // after severance then sends publicIp AND allocationId -
+                      // "may specify public IP or allocation id, but not both"
+                      // (observed live). Same guard the git-era followers had.
+                      managementPolicies: ["Observe", "Create", "Update", "Delete"],
                       forProvider: {
                         region: "placeholder",
                         allowReassociation: true,
@@ -433,6 +439,12 @@ export class WorkerSetup extends Construct {
                     kind: "VolumeAttachment",
                     metadata: { name: "placeholder" },
                     spec: {
+                      // No LateInitialize: it captures the observed publicIp
+                      // (association) / device state into spec, and a recreate
+                      // after severance then sends publicIp AND allocationId -
+                      // "may specify public IP or allocation id, but not both"
+                      // (observed live). Same guard the git-era followers had.
+                      managementPolicies: ["Observe", "Create", "Update", "Delete"],
                       forProvider: {
                         region: "placeholder",
                         deviceName: "placeholder",
