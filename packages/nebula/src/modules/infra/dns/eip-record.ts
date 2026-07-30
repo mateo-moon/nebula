@@ -34,6 +34,10 @@ export interface EipDnsRecordConfig {
   zoneMrName: string;
   /** Record TTL in seconds (default 60). */
   ttl?: number;
+  /** Multivalue-answer set identifier: multiple XRs may then serve the SAME
+   *  dnsName (one record set per XR, Route53 answers with all healthy sets) —
+   *  e.g. one record per ingress node EIP. Omit for a plain single A record. */
+  setIdentifier?: string;
   /** provider-aws ProviderConfig name (default "default"). */
   awsProviderConfigName?: string;
   /** provider-kubernetes ProviderConfig name (default "kubernetes-provider-config"). */
@@ -90,6 +94,11 @@ export class EipDnsRecordSetup extends Construct {
                         description: "Zone managed-resource name (zoneIdRef)",
                       },
                       ttl: { type: "integer", description: "Record TTL" },
+                      setIdentifier: {
+                        type: "string",
+                        description:
+                          "Multivalue-answer set id (same dnsName across XRs)",
+                      },
                       awsProviderConfigName: {
                         type: "string",
                         description: "provider-aws ProviderConfig name",
@@ -131,6 +140,10 @@ spec:
     type: A
     ttl: {{ .observed.composite.resource.spec.ttl }}
     allowOverwrite: true
+{{- with .observed.composite.resource.spec.setIdentifier }}
+    setIdentifier: {{ . }}
+    multivalueAnswerRoutingPolicy: true
+{{- end }}
     records:
       - {{ $obs.status.atProvider.publicIp }}
   providerConfigRef:
@@ -227,6 +240,7 @@ export class EipDnsRecord extends Construct {
         dnsName: config.dnsName,
         zoneMrName: config.zoneMrName,
         ttl: config.ttl ?? 60,
+        ...(config.setIdentifier ? { setIdentifier: config.setIdentifier } : {}),
         awsProviderConfigName: config.awsProviderConfigName ?? "default",
         kubeProviderConfigName:
           config.kubeProviderConfigName ?? "kubernetes-provider-config",
