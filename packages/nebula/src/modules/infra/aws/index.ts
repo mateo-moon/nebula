@@ -155,3 +155,6 @@ export class Aws extends BaseConstruct<AwsConfig> {
     }
   }
 }
+
+export { DualStackSubnetSetup, DualStackSubnet } from "./dualstack-subnet";
+export type { DualStackSubnetConfig } from "./dualstack-subnet";

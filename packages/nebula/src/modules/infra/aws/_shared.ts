@@ -54,6 +54,8 @@ export interface NodeIngressRuleSpec {
   toPort: number;
   /** Source CIDR blocks (e.g. ["0.0.0.0/0"] for public P2P ports). */
   cidrBlocks: string[];
+  /** IPv6 source ranges (e.g. "::/0"); combinable with cidrBlocks. */
+  ipv6CidrBlocks?: string[];
 }
 
 /**
@@ -467,6 +469,7 @@ export function emitAwsClusterCr(
                   fromPort: r.fromPort,
                   toPort: r.toPort,
                   cidrBlocks: r.cidrBlocks,
+                  ipv6CidrBlocks: r.ipv6CidrBlocks,
                 }),
               ),
             }
