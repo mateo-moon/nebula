@@ -259,6 +259,14 @@ export { ImagePullSecret } from "./image-pull-secret";
 export type { ImagePullSecretConfig } from "./image-pull-secret";
 
 export { Calico } from "./calico";
+export {
+  CrossplaneObservability,
+  kubeStateMetricsValues,
+} from "./crossplane-observability";
+export type {
+  CrossplaneObservabilityOptions,
+  CrossplaneWatchedKind,
+} from "./crossplane-observability";
 export type { CalicoConfig } from "./calico";
 
 export { Platform } from "./platform";
