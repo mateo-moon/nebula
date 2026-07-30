@@ -259,6 +259,18 @@ export { ImagePullSecret } from "./image-pull-secret";
 export type { ImagePullSecretConfig } from "./image-pull-secret";
 
 export { Calico } from "./calico";
+export { CorednsV6Face } from "./coredns-v6-face";
+export type { CorednsV6FaceOptions } from "./coredns-v6-face";
+export {
+  meshAddress,
+  meshMonitorValues,
+  KEEP_METRICS_PATH,
+  MeshKubeProxyServiceMonitor,
+} from "./mesh-scrape";
+export type {
+  MeshFamily,
+  MeshKubeProxyServiceMonitorOptions,
+} from "./mesh-scrape";
 export {
   CrossplaneObservability,
   kubeStateMetricsValues,
