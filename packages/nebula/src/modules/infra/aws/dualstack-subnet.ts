@@ -171,6 +171,15 @@ export class DualStackSubnetSetup extends Construct {
                     },
                   },
                   patches: [
+                    // Deterministic MR name (== the XR name) so git-side
+                    // resources can reference the subnet with a plain
+                    // subnetIdRef {name} — composed resources otherwise get
+                    // generated names no static manifest can point at.
+                    {
+                      type: "FromCompositeFieldPath",
+                      fromFieldPath: "metadata.name",
+                      toFieldPath: "metadata.name",
+                    },
                     // The runtime-derived piece: the VPC's Amazon-assigned /56
                     // narrowed to this subnet's /64. Required-policy gates the
                     // subnet until the VPC reports its block.
