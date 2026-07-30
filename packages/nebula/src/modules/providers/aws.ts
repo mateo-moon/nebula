@@ -118,6 +118,21 @@ export class AwsProvider extends Construct {
     const tokenFile = tokenPath.split("/").pop() || "token";
     const tokenMountDir = tokenPath.slice(0, tokenPath.length - tokenFile.length - 1);
 
+    // The FAMILY package must move in lockstep with the service providers:
+    // Crossplane auto-installs it as a dependency (named
+    // upbound-provider-family-aws) and its resolver REFUSES to upgrade an
+    // existing dependency to satisfy a new constraint — observed live:
+    // "existing package provider-family-aws@v2.6.0 is incompatible with
+    // constraint v2.6.2", every service provider Healthy=False. Managing it
+    // explicitly (same object name the auto-install used) makes version bumps
+    // atomic across family + services.
+    new CpProvider(this, "family", {
+      metadata: { name: "upbound-provider-family-aws" },
+      spec: {
+        package: `xpkg.upbound.io/upbound/provider-family-aws:${providerVersion}`,
+      },
+    });
+
     // Create a Provider for each family (shared loop body — see providers/_shared).
     for (const family of families) {
       let runtimeConfigRef: string | undefined;
