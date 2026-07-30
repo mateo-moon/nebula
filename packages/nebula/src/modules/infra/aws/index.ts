@@ -157,11 +157,11 @@ export class Aws extends BaseConstruct<AwsConfig> {
 }
 
 export { DualStackSubnetSetup, DualStackSubnet } from "./dualstack-subnet";
-export { WorkerFleet } from "./worker-fleet";
+export { AwsWorkerFleet } from "./worker-fleet";
 export type {
-  WorkerFleetOptions,
-  WorkerFleetRegion,
-  WorkerFleetNode,
-  WorkerFleetPort,
+  AwsWorkerFleetOptions,
+  AwsWorkerFleetRegion,
+  AwsWorkerFleetNode,
+  AwsWorkerFleetPort,
 } from "./worker-fleet";
 export type { DualStackSubnetConfig } from "./dualstack-subnet";
