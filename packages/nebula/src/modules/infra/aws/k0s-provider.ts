@@ -47,6 +47,8 @@ export interface AwsMachineSpec {
 
 /** Cluster-level AWS configuration for {@link AwsK0sProvider}. */
 export interface AwsK0sProviderConfig {
+  /** Amazon-provided IPv6 GUA block on the VPC (dual-stack subnets). */
+  ipv6?: boolean;
   /** AWS region. */
   region: string;
   /** VPC CIDR CAPA will create (default "10.0.0.0/16"). */
@@ -132,6 +134,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
           }),
       vpcCidr: this.config.vpcCidr ?? "10.0.0.0/16",
       networkProvider: ctx.networkProvider,
+      ipv6: this.config.ipv6,
       calico: ctx.calico,
       availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
       secondaryCidrBlocks: this.config.secondaryCidrBlocks,

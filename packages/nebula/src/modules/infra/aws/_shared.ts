@@ -179,6 +179,8 @@ export function emitAwsClusterCr(
      */
     loadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
     vpcCidr: string;
+    /** Request an Amazon-provided IPv6 GUA block on the VPC (dual-stack subnets). */
+    ipv6?: boolean;
     /** CNI selected in the k0s ClusterConfig. Used to emit matching AWS SG rules. */
     networkProvider?: "kuberouter" | "calico" | "custom";
     /** Bundled Calico transport settings (only used when networkProvider="calico"). */
@@ -314,6 +316,12 @@ export function emitAwsClusterCr(
       network: {
         vpc: {
           cidrBlock: opts.vpcCidr,
+          // Amazon-provided IPv6 GUA block for the VPC. Unlike public IPv4
+          // (1:1 NAT at the IGW - the instance never carries the address),
+          // IPv6 addresses are configured ON the instance interface and are
+          // globally routable, so self-detecting components (kubelet, Calico)
+          // find a real public address with no alias/node-ip emulation.
+          ...(opts.ipv6 ? { ipv6: {} } : {}),
           // One NAT gateway/EIP per AZ — cap AZs on EIP-constrained accounts.
           ...(opts.availabilityZoneUsageLimit
             ? {
