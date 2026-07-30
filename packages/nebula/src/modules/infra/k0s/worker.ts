@@ -527,8 +527,12 @@ export class Worker extends Construct {
       kind: "XWorker",
       metadata: { name: id },
       spec: {
-        compositionRef: {
-          name: config.dataVolumeName ? "worker" : "worker-basic",
+        // v2 XRD: machinery fields nest under spec.crossplane — a top-level
+        // compositionRef is silently pruned by the structural schema.
+        crossplane: {
+          compositionRef: {
+            name: config.dataVolumeName ? "worker" : "worker-basic",
+          },
         },
         eipName: config.eipName,
         instanceName: config.instanceName,
