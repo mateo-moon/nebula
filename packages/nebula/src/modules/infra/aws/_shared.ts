@@ -385,6 +385,17 @@ export function emitAwsClusterCr(
                           fromPort: 51820,
                           toPort: 51820,
                         },
+                        // Felix runs the IPv6 WireGuard tunnel on its own port
+                        // (wireguardListeningPortV6, default 51821). Without it
+                        // a dual-stack cluster's v6 handshakes silently drop:
+                        // wg-v6.cali up, peers configured, 100% packet loss
+                        // (observed on the cicd dual-stack experiment).
+                        {
+                          description: "WireGuard v6 (calico)",
+                          protocol: "udp",
+                          fromPort: 51821,
+                          toPort: 51821,
+                        },
                       ]
                     : []),
                 ],
