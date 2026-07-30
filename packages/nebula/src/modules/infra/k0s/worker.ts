@@ -237,25 +237,11 @@ export class WorkerSetup extends Construct {
       },
     });
 
-    this.composition = new Composition(this, "composition", {
-      metadata: {
-        name: "worker",
-        annotations: { [ARGOCD_SYNC_WAVE_ANNOTATION]: "-5" },
-      },
-      spec: {
-        compositeTypeRef: {
-          apiVersion: "nebula.io/v1alpha1",
-          kind: "XWorker",
-        },
-        mode: CompositionSpecMode.PIPELINE,
-        pipeline: [
-          {
-            step: "patch-and-transform",
-            functionRef: { name: "function-patch-and-transform" },
-            input: {
-              apiVersion: "pt.fn.crossplane.io/v1beta1",
-              kind: "Resources",
-              resources: [
+    // Two variants: a Required-skipped composed resource keeps the XR in
+    // Ready=False/Creating forever (observed live on every data-less node),
+    // so nodes without a data volume SELECT a composition without the volume
+    // pair instead of skipping it at patch time.
+    const baseResources: object[] = [
                 {
                   name: "eip",
                   base: observeBase("EIP"),
@@ -296,27 +282,6 @@ export class WorkerSetup extends Construct {
                       fromFieldPath:
                         "status.atProvider.manifest.status.atProvider.id",
                       toFieldPath: "status.instanceId",
-                    },
-                  ],
-                },
-                {
-                  name: "data-volume",
-                  base: observeBase("EBSVolume"),
-                  patches: [
-                    // Required gates the whole Object: a node without a data
-                    // volume composes no observer (and so no attachment).
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.dataVolumeName",
-                      toFieldPath: "spec.forProvider.manifest.metadata.name",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    providerConfigPatch,
-                    {
-                      type: "ToCompositeFieldPath",
-                      fromFieldPath:
-                        "status.atProvider.manifest.status.atProvider.id",
-                      toFieldPath: "status.volumeId",
                     },
                   ],
                 },
@@ -438,6 +403,29 @@ export class WorkerSetup extends Construct {
                     },
                   ],
                 },
+    ];
+    const volumeResources: object[] = [
+                {
+                  name: "data-volume",
+                  base: observeBase("EBSVolume"),
+                  patches: [
+                    // Required gates the whole Object: a node without a data
+                    // volume composes no observer (and so no attachment).
+                    {
+                      type: "FromCompositeFieldPath",
+                      fromFieldPath: "spec.dataVolumeName",
+                      toFieldPath: "spec.forProvider.manifest.metadata.name",
+                      policy: { fromFieldPath: "Required" },
+                    },
+                    providerConfigPatch,
+                    {
+                      type: "ToCompositeFieldPath",
+                      fromFieldPath:
+                        "status.atProvider.manifest.status.atProvider.id",
+                      toFieldPath: "status.volumeId",
+                    },
+                  ],
+                },
                 {
                   name: "volume-attachment",
                   base: {
@@ -489,16 +477,41 @@ export class WorkerSetup extends Construct {
                     },
                   ],
                 },
-              ],
+    ];
+    const mkComposition = (id: string, name: string, resources: object[]) =>
+      new Composition(this, id, {
+        metadata: {
+          name,
+          annotations: { [ARGOCD_SYNC_WAVE_ANNOTATION]: "-5" },
+        },
+        spec: {
+          compositeTypeRef: {
+            apiVersion: "nebula.io/v1alpha1",
+            kind: "XWorker",
+          },
+          mode: CompositionSpecMode.PIPELINE,
+          pipeline: [
+            {
+              step: "patch-and-transform",
+              functionRef: { name: "function-patch-and-transform" },
+              input: {
+                apiVersion: "pt.fn.crossplane.io/v1beta1",
+                kind: "Resources",
+                resources,
+              },
             },
-          },
-          {
-            step: "auto-ready",
-            functionRef: { name: "function-auto-ready" },
-          },
-        ],
-      },
-    });
+            {
+              step: "auto-ready",
+              functionRef: { name: "function-auto-ready" },
+            },
+          ],
+        },
+      });
+    this.composition = mkComposition("composition", "worker", [
+      ...baseResources,
+      ...volumeResources,
+    ]);
+    mkComposition("composition-basic", "worker-basic", baseResources);
   }
 }
 
@@ -514,6 +527,9 @@ export class Worker extends Construct {
       kind: "XWorker",
       metadata: { name: id },
       spec: {
+        compositionRef: {
+          name: config.dataVolumeName ? "worker" : "worker-basic",
+        },
         eipName: config.eipName,
         instanceName: config.instanceName,
         region: config.region,
