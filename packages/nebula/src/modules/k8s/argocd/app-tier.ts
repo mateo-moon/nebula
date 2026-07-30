@@ -261,10 +261,59 @@ export interface ArgoCdAppTierClustersDiscovery {
   extraGeneratePaths?: Record<string, string[]>;
 }
 
+export interface ArgoCdAppTierClusterDirsDiscovery {
+  /**
+   * ONE-level walker for a clusters tree where every cluster owns its own
+   * Applications: each `dir/<name>/` (which must carry an index.ts tier of
+   * its own) becomes a single app-of-apps Application `<name><suffix>`
+   * rendered from that directory, targeting the management cluster. The
+   * recursion rule this encodes: discovery never descends past a directory
+   * that has its own owner.
+   */
+  mode: "cluster-dirs";
+  /** Filesystem directory to scan at synth time */
+  dir: string;
+  /** Repo directory the tree lives under (defaults to basename(dir)) */
+  pathDir?: string;
+  /** Application name suffix appended to the directory name (default "-apps") */
+  suffix?: string;
+}
+
+export interface ArgoCdAppTierSingleClusterDiscovery {
+  /**
+   * The per-cluster service walk, rooted at ONE cluster's own directory:
+   * every subdirectory of `dir` becomes `<clusterName>-<module>` with
+   * destination `{ name: clusterName }`; with `clusterApp` set, the
+   * `<clusterApp.subdir>` subdirectory is instead rendered as
+   * `cluster-<clusterName>` targeting the management cluster (`capi`
+   * preset). This is the "clusters" mode inner loop, owned by the cluster
+   * itself (see ArgoCdAppTierClusterDirsDiscovery).
+   */
+  mode: "cluster";
+  /** ArgoCD cluster-secret name services deploy to (and the name prefix). */
+  clusterName: string;
+  /** Filesystem directory to scan at synth time (the cluster's own dir) */
+  dir: string;
+  /** Repo directory the tree lives under (defaults to basename(dir)) */
+  pathDir?: string;
+  /** Value of the `nebula/tier` label (defaults like the clusters mode). */
+  tier?: string;
+  /** Render the CAPI-definition Application (defaults to off) */
+  clusterApp?: ArgoCdAppTierClusterAppConfig;
+  /** Sync policy preset for the service Applications (defaults to 'service') */
+  serviceSyncPolicyPreset?: ArgoCdSyncPolicyPreset;
+  /** Per-app sync policy overrides for the service Applications */
+  serviceSyncPolicy?: ArgoCdAppTierSyncPolicyOverrides;
+  /** Per-app extra manifest-generate-paths, keyed by `<module>`. */
+  extraGeneratePaths?: Record<string, string[]>;
+}
+
 export type ArgoCdAppTierDiscovery =
   | ArgoCdAppTierRegistryDiscovery
   | ArgoCdAppTierAutoDiscovery
-  | ArgoCdAppTierClustersDiscovery;
+  | ArgoCdAppTierClustersDiscovery
+  | ArgoCdAppTierClusterDirsDiscovery
+  | ArgoCdAppTierSingleClusterDiscovery;
 
 export interface ArgoCdAppTierConfig {
   /** Git repository URL every Application sources */
@@ -385,6 +434,12 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
       case "clusters":
         this.createClusterApps(discovery);
         break;
+      case "cluster-dirs":
+        this.createClusterDirApps(discovery);
+        break;
+      case "cluster":
+        this.createSingleClusterApps(discovery);
+        break;
     }
   }
 
@@ -423,6 +478,71 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
         overrides: this.config.syncPolicy,
         extraGeneratePaths: discovery.extraGeneratePaths?.[mod],
       });
+    }
+  }
+
+  private createClusterDirApps(
+    discovery: ArgoCdAppTierClusterDirsDiscovery,
+  ): void {
+    const pathDir = discovery.pathDir ?? basename(discovery.dir);
+    const suffix = discovery.suffix ?? "-apps";
+    for (const cluster of listDirs(discovery.dir)) {
+      this.createApplication({
+        name: `${cluster}${suffix}`,
+        path: `${pathDir}/${cluster}`,
+        labels: { "nebula/tier": "meta", "nebula/env": cluster },
+        destination: {
+          server: ARGOCD_IN_CLUSTER_SERVER,
+          namespace: this.argoCdNamespace,
+        },
+        preset: this.config.syncPolicyPreset ?? "service",
+        overrides: this.config.syncPolicy,
+      });
+    }
+  }
+
+  private createSingleClusterApps(
+    discovery: ArgoCdAppTierSingleClusterDiscovery,
+  ): void {
+    const pathDir = discovery.pathDir ?? basename(discovery.dir);
+    const cluster = discovery.clusterName;
+    const tier = discovery.tier ?? (discovery.clusterApp ? "cluster" : "workload");
+    const clusterSubdir = discovery.clusterApp
+      ? (discovery.clusterApp.subdir ?? "cluster")
+      : undefined;
+    const labels = { "nebula/tier": tier, "nebula/env": cluster };
+    for (const mod of listDirs(discovery.dir)) {
+      if (discovery.clusterApp && mod === clusterSubdir) {
+        this.createApplication({
+          name: `${discovery.clusterApp.namePrefix ?? "cluster-"}${cluster}`,
+          path: `${pathDir}/${mod}`,
+          labels,
+          destination: discovery.clusterApp.destination ?? {
+            server: ARGOCD_IN_CLUSTER_SERVER,
+            namespace: "default",
+          },
+          preset: discovery.clusterApp.syncPolicyPreset ?? "capi",
+          overrides: discovery.clusterApp.syncPolicy,
+          extraIgnoreDifferences: discovery.clusterApp.extraIgnoreDifferences,
+          extraGeneratePaths: discovery.extraGeneratePaths?.[mod],
+        });
+      } else {
+        this.createApplication({
+          name: `${cluster}-${mod}`,
+          path: `${pathDir}/${mod}`,
+          labels,
+          destination: { name: cluster },
+          preset:
+            discovery.serviceSyncPolicyPreset ??
+            this.config.syncPolicyPreset ??
+            "service",
+          overrides: {
+            ...this.config.syncPolicy,
+            ...discovery.serviceSyncPolicy,
+          },
+          extraGeneratePaths: discovery.extraGeneratePaths?.[mod],
+        });
+      }
     }
   }
 
