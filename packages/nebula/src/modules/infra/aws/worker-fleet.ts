@@ -44,13 +44,13 @@ import {
   RolePolicyAttachment,
 } from "#imports/iam.aws.upbound.io";
 
-export interface WorkerFleetPort {
+export interface AwsWorkerFleetPort {
   port: number;
   protocol: string;
   description: string;
 }
 
-export interface WorkerFleetOptions {
+export interface AwsWorkerFleetOptions {
   /** Resource-name prefix, e.g. "stage" — regions become `<prefix>-<geo>-…`. */
   namePrefix: string;
   /** CAPI cluster name (Machine.clusterName + cluster label + elb tag). */
@@ -90,10 +90,10 @@ export interface WorkerFleetOptions {
    * whose WireGuard is broken. No plaintext exporters (9100/10249): scraped
    * over the WireGuard mesh instead.
    */
-  openPorts?: WorkerFleetPort[];
+  openPorts?: AwsWorkerFleetPort[];
 }
 
-export interface WorkerFleetRegion {
+export interface AwsWorkerFleetRegion {
   /** Short geo tag, e.g. "eu" — used in resource names and node labels. */
   geo: string;
   region: string;
@@ -101,10 +101,10 @@ export interface WorkerFleetRegion {
   vpcCidr: string;
   subnetCidr: string;
   /** Extra publicly open ports (e.g. chain P2P where tool-nodes live). */
-  extraOpenPorts?: WorkerFleetPort[];
+  extraOpenPorts?: AwsWorkerFleetPort[];
 }
 
-export interface WorkerFleetNode {
+export interface AwsWorkerFleetNode {
   /** Node name — hostname AND k8s node name AND MR name. */
   name: string;
   ami: string;
@@ -131,7 +131,7 @@ export interface WorkerFleetNode {
   iamProfile?: string;
 }
 
-const DEFAULT_OPEN_PORTS: WorkerFleetPort[] = [
+const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
   { port: 51820, protocol: "udp", description: "calico WireGuard (Noise-authenticated)" },
   { port: 10250, protocol: "tcp", description: "kubelet (TLS, authn/authz)" },
   { port: 22, protocol: "tcp", description: "sshd (key-only; RemoteMachine provisioning)" },
@@ -141,11 +141,11 @@ const DEFAULT_OPEN_PORTS: WorkerFleetPort[] = [
  * The fleet: shared options + emitters for IAM, EIPs, region networks and
  * nodes. Emits nothing by itself — call the methods from the cluster app.
  */
-export class WorkerFleet extends Construct {
+export class AwsWorkerFleet extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    private readonly options: WorkerFleetOptions,
+    private readonly options: AwsWorkerFleetOptions,
   ) {
     super(scope, id);
   }
@@ -158,7 +158,7 @@ export class WorkerFleet extends Construct {
     return { name: this.options.providerConfigName ?? "default" };
   }
 
-  private prefix(region: WorkerFleetRegion) {
+  private prefix(region: AwsWorkerFleetRegion) {
     return `${this.options.namePrefix}-${region.geo}`;
   }
 
@@ -253,7 +253,7 @@ export class WorkerFleet extends Construct {
    * never implies the other family — found live as 100% WG-v6 loss with
    * perfect peers); 51821 is Felix's v6-only WireGuard port.
    */
-  addRegion(cfg: WorkerFleetRegion): string {
+  addRegion(cfg: AwsWorkerFleetRegion): string {
     const p = this.prefix(cfg);
     new Vpc(this, `${p}-vpc`, {
       metadata: { name: `${p}-vpc` },
@@ -427,7 +427,7 @@ export class WorkerFleet extends Construct {
     return p;
   }
 
-  private userData(node: WorkerFleetNode): string {
+  private userData(node: AwsWorkerFleetNode): string {
     const o = this.options;
     // Data volume -> LVM VG. create-if-absent ONLY: on instance replacement
     // the volume re-attaches carrying its data — vgcreate on a populated PV
@@ -497,7 +497,7 @@ ${lvmSection}`;
   /** One node: Instance (+ optional data EBSVolume) + adoption plumbing.
    *  The EIPAssociation and VolumeAttachment followers are composed by the
    *  Worker XR with instance-id-derived names — never declared here. */
-  addNode(region: WorkerFleetRegion, node: WorkerFleetNode, iamProfile: string) {
+  addNode(region: AwsWorkerFleetRegion, node: AwsWorkerFleetNode, iamProfile: string) {
     const o = this.options;
     const p = this.prefix(region);
     const dataVolumeMrName = node.dataVolumeGi
