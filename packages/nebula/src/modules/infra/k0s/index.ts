@@ -12,8 +12,9 @@
  */
 export { resolveK0sCalico, renderK0sCalicoSpec } from "./calico";
 export type { K0sCalicoConfig, ResolvedK0sCalico } from "./calico";
-export { RemoteWorkerSetup, RemoteWorker } from "./remote-worker";
-export type { RemoteWorkerConfig } from "./remote-worker";
+export { WorkerSetup, Worker } from "./worker";
+export type { WorkerConfig } from "./worker";
+export { SshK0sProvider } from "./ssh-provider";
 export { K0sCluster, renderK0sWorkerArgs } from "./cluster";
 export type {
   K0sClusterConfig,
