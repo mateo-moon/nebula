@@ -14,9 +14,9 @@
  * entrance; egress goes straight out — no NAT gateways). Subnets are the
  * composed dual-stack kind: the v6 /64 derives from the Vpc's OBSERVED
  * Amazon-provided GUA assignment (runtime state, never in git). Node identity
- * is v6-primary: kubelet gets --node-ip=<GUA>,<private-v4>, so cross-region
- * traffic rides WireGuard-v6 between on-link GUAs while v4 stays plain
- * intra-VPC private addressing.
+ * carries both families: kubelet gets the plain private v4 and the on-link
+ * GUA (order per nodeIpOrder); cross-region traffic rides WireGuard-v6
+ * between GUAs while v4 stays plain intra-VPC private addressing.
  *
  * Storage: one gp3 EBS volume per data-bearing node, consumed as an LVM VG
  * for OpenEBS LocalPV-LVM. Growth is git-driven: bump the EBSVolume size, the
@@ -69,6 +69,15 @@ export interface AwsWorkerFleetOptions {
   tagDomain: string;
   /** Purpose tag value for fleet EIPs and instances, e.g. "stage-worker". */
   eipPurpose: string;
+  /**
+   * kubelet --node-ip family order (default "v4-first": hostNetwork pods and
+   * probe targets keep conventional v4 identity; the GUA stays secondary for
+   * calico's v6 autodetection and WG-v6). "v6-first" makes the GUA primary -
+   * metrics-server and other InternalIP[0] dialers then reach cross-region
+   * nodes over v6, at the cost of every hostNetwork daemon needing dual-stack
+   * binds (a v4-only 0.0.0.0 wildcard refuses probes aimed at the GUA).
+   */
+  nodeIpOrder?: "v4-first" | "v6-first";
   /** v6 ClusterIP of the CoreDNS v6 face (kubelet --cluster-dns). Omit to
    *  keep the k0s default (v4 kube-dns) — cross-region pods then depend on
    *  cross-region v4 pod routing, which private node identity does not have. */
@@ -630,7 +639,11 @@ ${lvmSection}`;
         // Commands are executed through the node's shell (SSH exec), so the
         // $(cat ...) substitutes there — the address never appears in git.
         args: [
-          `--kubelet-extra-args="--node-ip=$(cat /run/node-ip6),$(cat /run/node-ip) ${dnsArg}--node-labels=${labelArg}${taintArg}"`,
+          `--kubelet-extra-args="--node-ip=${
+            o.nodeIpOrder === "v6-first"
+              ? "$(cat /run/node-ip6),$(cat /run/node-ip)"
+              : "$(cat /run/node-ip),$(cat /run/node-ip6)"
+          } ${dnsArg}--node-labels=${labelArg}${taintArg}"`,
         ],
       },
     });
