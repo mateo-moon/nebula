@@ -59,6 +59,13 @@ export interface K0smotronClusterConfig<M> {
    * Defaults: `mode: "vxlan"`, `wireguard: true`.
    */
   calico?: K0sCalicoConfig;
+  /**
+   * Dual-stack: adds an IPv6 pod/service CIDR pair to the k0s network config.
+   * With an on-link IPv6 GUA on the nodes (AwsK0sProviderConfig.ipv6), the
+   * cluster's node identity can be a real public address with no NAT emulation.
+   * Per k0s docs, bundled Calico dual-stack requires mode "bird".
+   */
+  dualStack?: { ipv6PodCidr: string; ipv6ServiceCidr: string };
   /** Hosted control plane (K0smotronControlPlane pods on the hosting cluster). */
   controlPlane?: K0smotronClusterControlPlane;
   /** Worker pools keyed by pool name (each a MachineDeployment). */
@@ -143,6 +150,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       serviceCidr,
       networkProvider,
       calico: this.config.calico,
+      dualStack: this.config.dualStack,
       persistence: this.config.controlPlane?.persistence,
       serviceType: this.config.controlPlane?.serviceType,
       serviceAnnotations: this.config.controlPlane?.serviceAnnotations,
