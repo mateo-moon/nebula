@@ -88,7 +88,7 @@ export class DualStackSubnetSetup extends Construct {
                   status: {
                     type: "object",
                     properties: {
-                      vpcIpv6Cidr: { type: "string" },
+                      subnetIpv6Cidr: { type: "string" },
                     },
                   },
                 },
@@ -145,11 +145,30 @@ export class DualStackSubnetSetup extends Construct {
                       fromFieldPath: "spec.kubeProviderConfigName",
                       toFieldPath: "spec.providerConfigRef.name",
                     },
+                    // Transform HERE, not on the subnet patch: during v6
+                    // association the VPC reports ipv6CidrBlock as an EMPTY
+                    // string, which satisfies a Required policy (the field
+                    // exists) - observed live: "" persisted to XR status, the
+                    // subnet-side regexp fatally erroring on it, and the fatal
+                    // aborting the very patch that would refresh the status.
+                    // With the transform on the write side an empty value
+                    // fails BEFORE anything persists; the pipeline retries
+                    // until the VPC reports a real /56.
                     {
                       type: "ToCompositeFieldPath",
                       fromFieldPath:
                         "status.atProvider.manifest.status.atProvider.ipv6CidrBlock",
-                      toFieldPath: "status.vpcIpv6Cidr",
+                      toFieldPath: "status.subnetIpv6Cidr",
+                      transforms: [
+                        {
+                          type: "string",
+                          string: {
+                            type: "Regexp",
+                            regexp: { match: "^(.+)/56$", group: 1 },
+                          },
+                        },
+                        { type: "string", string: { type: "Format", fmt: "%s/64" } },
+                      ],
                     },
                   ],
                 },
@@ -180,24 +199,14 @@ export class DualStackSubnetSetup extends Construct {
                       fromFieldPath: "metadata.name",
                       toFieldPath: "metadata.name",
                     },
-                    // The runtime-derived piece: the VPC's Amazon-assigned /56
-                    // narrowed to this subnet's /64. Required-policy gates the
-                    // subnet until the VPC reports its block.
+                    // Plain Required copy: the value only exists once the
+                    // write-side transform succeeded, so it is always a valid
+                    // /64 here.
                     {
                       type: "FromCompositeFieldPath",
-                      fromFieldPath: "status.vpcIpv6Cidr",
+                      fromFieldPath: "status.subnetIpv6Cidr",
                       toFieldPath: "spec.forProvider.ipv6CidrBlock",
                       policy: { fromFieldPath: "Required" },
-                      transforms: [
-                        {
-                          type: "string",
-                          string: {
-                            type: "Regexp",
-                            regexp: { match: "^(.*)/56$", group: 1 },
-                          },
-                        },
-                        { type: "string", string: { type: "Format", fmt: "%s/64" } },
-                      ],
                     },
                     {
                       type: "FromCompositeFieldPath",
