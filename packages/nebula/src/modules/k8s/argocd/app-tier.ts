@@ -238,6 +238,9 @@ export interface ArgoCdAppTierClustersDiscovery {
    * management cluster with the `capi` preset.
    */
   mode: "clusters";
+  /** Cluster directories to skip (e.g. a co-located registry-tier dir like
+   *  `clusters/mgmt` that owns its own Applications). */
+  exclude?: string[];
   /** Filesystem directory to scan at synth time */
   dir: string;
   /** Repo directory the tree lives under (defaults to basename(dir)) */
@@ -431,6 +434,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
       : undefined;
 
     for (const cluster of listDirs(discovery.dir)) {
+      if (discovery.exclude?.includes(cluster)) continue;
       const labels = { "nebula/tier": tier, "nebula/env": cluster };
       for (const mod of listDirs(join(discovery.dir, cluster))) {
         if (discovery.clusterApp && mod === clusterSubdir) {
