@@ -3,7 +3,7 @@
  * Cluster API (CAPA), with no EKS. The Kind cluster only bootstraps; the standalone
  * k0s control plane is self-contained, so the platform is redeployed onto the new
  * cluster and Kind is discarded. With --gitops-dir, ArgoCD on the management
- * cluster inherits the platform (incl. infra/cluster-api) from git, so the cluster
+ * cluster inherits the platform (incl. the cluster-api module) from git, so the cluster
  * owns its own lifecycle and Kind — the bootstrap scaffold — is simply deleted.
  *
  * All shell execution is no-shell (run/kubectl → execFileSync, argv only). AWS
@@ -482,9 +482,20 @@ async function setupIrsa(
 }
 
 /**
- * Synth one in-repo cdk8s module (`<mod>/index.ts`, e.g. `infra/crossplane`) to a
- * per-module dir and assert it left no unresolved `ref+` secrets. This is the same
- * machinery ArgoCD's nebula-cmp sidecar runs — the bootstrap just applies the
+ * Platform-fundamentals directory inside the gitops repo. The recursive-
+ * ownership layout keeps them under `clusters/mgmt/*`; pre-restructure
+ * scaffolds used `infra/*` — detect so both bootstrap unchanged.
+ */
+function platformDir(gitopsDir: string): string {
+  return fs.existsSync(path.join(gitopsDir, "clusters", "mgmt"))
+    ? "clusters/mgmt"
+    : "infra";
+}
+
+/**
+ * Synth one in-repo cdk8s module (`<mod>/index.ts`, e.g. `clusters/mgmt/crossplane`)
+ * to a per-module dir and assert it left no unresolved `ref+` secrets. This is the
+ * same machinery ArgoCD's nebula-cmp sidecar runs — the bootstrap just applies the
  * modules imperatively first so the management cluster exists.
  */
 function synthRepoModule(
@@ -548,19 +559,21 @@ async function applyRepoModule(
 }
 
 /**
- * Install the platform on a cluster by applying the repo's `infra/*` modules in
- * dependency order. Used ONLY for Kind (the minimum to run CAPA and create the
- * management cluster); on the management cluster ArgoCD installs the platform.
- * Per-module applies mean cross-module ordering is ours: CRD/controller modules
- * (crossplane, cert-manager) before the things that need them.
+ * Install the platform on a cluster by applying the repo's platform modules
+ * (`clusters/mgmt/*`) in dependency order. Used ONLY for Kind (the minimum to
+ * run CAPA and create the management cluster); on the management cluster
+ * ArgoCD installs the platform. Per-module applies mean cross-module ordering
+ * is ours: CRD/controller modules (crossplane, cert-manager) before the things
+ * that need them.
  */
 async function deployPlatform(
   gitopsDir: string,
   clusterName: string,
   kubeconfig?: string,
 ): Promise<void> {
+  const platform = platformDir(gitopsDir);
   // Kind has no instance profile, so the credential-mode-aware modules
-  // (infra/providers, infra/cluster-api-operator) must render SECRET creds here —
+  // (providers, cluster-api-operator) must render SECRET creds here —
   // Crossplane provider-aws reads `aws-creds` and CAPA reads `aws-capa-credentials`
   // (both seeded by setupAwsCredentials). On the management cluster these same
   // modules default to keyless (instance profile). Only those two modules read the
@@ -568,9 +581,9 @@ async function deployPlatform(
   // function.
   const opts = { kubeconfig, extraEnv: { NEBULA_AWS_CREDS_MODE: "secret" } };
   // Crossplane controller + the Provider CRD the provider CRs depend on.
-  await applyRepoModule(gitopsDir, "infra/crossplane", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/crossplane`, clusterName, opts);
   // cert-manager — its webhook must be up before the CAPA operator's Certificate.
-  await applyRepoModule(gitopsDir, "infra/cert-manager", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/cert-manager`, clusterName, opts);
   log("   Waiting for cert-manager webhook...");
   kubectl(
     ["-n", "cert-manager", "rollout", "status", "deploy/cert-manager-webhook", "--timeout=240s"],
@@ -578,19 +591,19 @@ async function deployPlatform(
   );
   // Crossplane provider-aws (ec2/iam/route53/kms) — wait until Healthy before the
   // node-IAM module (which manages IAM via provider-aws-iam).
-  await applyRepoModule(gitopsDir, "infra/providers", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/providers`, clusterName, opts);
   log("   Waiting for Crossplane providers...");
   await waitForProviders(300, kubeconfig);
   // Re-apply: the ProviderConfig's CRD (providerconfigs.aws.upbound.io) only
   // registers once the provider is Healthy, so the first apply skipped it. Now the
   // CRD exists, this lands the ProviderConfig the IAM/CR modules reference.
-  await applyRepoModule(gitopsDir, "infra/providers", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/providers`, clusterName, opts);
   // CAPA operator — cert-manager is up, so its Certificate is admitted first pass.
   // One idempotent re-apply as a safety net for webhook/CRD timing.
-  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
-  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/cluster-api-operator`, clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/cluster-api-operator`, clusterName, opts);
   // Node IAM (role + instance profile CAPA requires before launching machines).
-  await applyRepoModule(gitopsDir, "infra/node-iam", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/node-iam`, clusterName, opts);
   await waitForProviders(300, kubeconfig);
 }
 
@@ -599,7 +612,7 @@ async function deployCluster(
   gitopsDir: string,
   clusterName: string,
 ): Promise<void> {
-  await applyRepoModule(gitopsDir, "infra/cluster-api", clusterName);
+  await applyRepoModule(gitopsDir, `${platformDir(gitopsDir)}/cluster-api`, clusterName);
 }
 
 /** Wait until the CAPI cluster's control plane is ready and its kubeconfig secret exists. */
@@ -894,7 +907,7 @@ async function verifyPivot(kubeconfig: string, clusterName: string): Promise<voi
  * Cluster graph, so the SAME CA is reused), pausing the source and unpausing the
  * target. Runs ONCE at bootstrap; steady state is then 100% git/ArgoCD.
  *
- * MUST complete BEFORE ArgoCD reconciles infra/cluster-api — otherwise the mgmt
+ * MUST complete BEFORE ArgoCD reconciles the cluster-api module — otherwise the mgmt
  * k0smotron reconciles the (un-adopted) K0sControlPlane spec and bootstraps the
  * duplicate. The move target therefore gets its providers installed here
  * (cert-manager + cluster-api-operator), but NO Cluster/K0sControlPlane CRs and NO
@@ -920,15 +933,16 @@ async function pivotToMgmt(
   //    before the move (pausing only sets Cluster.spec.paused; it does not stop a
   //    target controller that already has objects to reconcile).
   const opts = { kubeconfig: mgmtKubeconfig, ageKeyFile };
+  const platform = platformDir(gitopsDir);
   log("   Installing cert-manager on mgmt (move-target prereq)...");
-  await applyRepoModule(gitopsDir, "infra/cert-manager", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/cert-manager`, clusterName, opts);
   kubectl(
     ["-n", "cert-manager", "rollout", "status", "deploy/cert-manager-webhook", "--timeout=240s"],
     { kubeconfig: mgmtKubeconfig },
   );
   log("   Installing cluster-api-operator (CAPA + k0smotron) on mgmt...");
-  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
-  await applyRepoModule(gitopsDir, "infra/cluster-api-operator", clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/cluster-api-operator`, clusterName, opts);
+  await applyRepoModule(gitopsDir, `${platform}/cluster-api-operator`, clusterName, opts);
   log("   Waiting for the CAPA/k0s CRDs + providers on mgmt...");
   await waitForCrds(CAPI_CLUSTER_CRDS, 600, mgmtKubeconfig);
   await waitForCapiProvidersReady(600, mgmtKubeconfig);
@@ -970,12 +984,12 @@ async function pivotToMgmt(
  * performs the one-time {@link pivotToMgmt} (clusterctl move Kind → mgmt) so the
  * management cluster adopts its own control plane, and only THEN installs ArgoCD +
  * the app-of-apps and syncs the root app, so ArgoCD reconciles the platform — incl.
- * the now-adopted infra/cluster-api — from git thereafter. Mirrors the GCP deployToGke
+ * the now-adopted cluster-api module — from git thereafter. Mirrors the GCP deployToGke
  * handoff (Crossplane before ArgoCD). In KEYLESS mode the provider authenticates via
  * the node instance profile (`type: none`) with NO AWS keys baked on mgmt; in secret
  * mode the caller must bake `aws-creds`/`aws-capa-credentials` on mgmt FIRST.
- * `gitopsDir` is a checked-out `aws/`-style layout (infra/crossplane, infra/providers,
- * infra/node-iam, infra/cluster-api-operator, meta/argocd, meta/argocd-apps); deps are
+ * `gitopsDir` is a checked-out `aws/`-style layout (the platform modules under
+ * clusters/mgmt/* — or infra/* pre-restructure — plus meta/argocd*); deps are
  * installed if missing.
  */
 async function deployGitopsHandoff(
@@ -1017,18 +1031,19 @@ async function deployGitopsHandoff(
   // Phase 1: install Crossplane + provider-aws on the management cluster first —
   // mirrors the GCP deployToGke handoff (Crossplane before ArgoCD) and de-risks the
   // provider by bringing it up imperatively before ArgoCD reconciles node-iam /
-  // cluster-api against it. In keyless mode infra/providers renders the `type: none`
+  // cluster-api against it. In keyless mode the providers module renders the `type: none`
   // ProviderConfig (instance-profile auth, no keys on mgmt); in secret mode it
   // renders `type: secret` and the caller baked aws-creds on mgmt first.
   log(`   Phase 1: installing Crossplane + provider-aws (${mode}) on mgmt...`);
-  await applyRepoModule(gitopsDir, "infra/crossplane", clusterName, { kubeconfig, ageKeyFile });
-  await applyRepoModule(gitopsDir, "infra/providers", clusterName, { kubeconfig, ageKeyFile });
+  const platform = platformDir(gitopsDir);
+  await applyRepoModule(gitopsDir, `${platform}/crossplane`, clusterName, { kubeconfig, ageKeyFile });
+  await applyRepoModule(gitopsDir, `${platform}/providers`, clusterName, { kubeconfig, ageKeyFile });
   log("   Waiting for Crossplane providers to be healthy...");
   await waitForProviders(300, kubeconfig);
   // Re-apply providers: the ProviderConfig's CRD (providerconfigs.aws.upbound.io)
   // only registers once the provider is Healthy, so the first apply skipped the
   // ProviderConfig. Land it now (mirrors the Kind-stage double-apply).
-  await applyRepoModule(gitopsDir, "infra/providers", clusterName, { kubeconfig, ageKeyFile });
+  await applyRepoModule(gitopsDir, `${platform}/providers`, clusterName, { kubeconfig, ageKeyFile });
 
   // REAL auth probe — fail fast, locally. waitForProviders only checks the provider
   // PACKAGE's Healthy condition (it makes no AWS API call), so a genuine auth failure
@@ -1040,7 +1055,7 @@ async function deployGitopsHandoff(
   // keyless mode: IMDS hop 2 + the controller inline policy). If auth is broken they
   // never reach Ready and this throws here.
   log(`   Verifying mgmt AWS auth (${mode}) by applying node IAM on mgmt...`);
-  await applyRepoModule(gitopsDir, "infra/node-iam", clusterName, { kubeconfig, ageKeyFile });
+  await applyRepoModule(gitopsDir, `${platform}/node-iam`, clusterName, { kubeconfig, ageKeyFile });
   await waitForManagedReady(NODE_IAM_KINDS, 300, kubeconfig);
 
   // Phase 1.5: PIVOT — clusterctl move Kind → mgmt. MUST run BEFORE ArgoCD so the
@@ -1052,8 +1067,8 @@ async function deployGitopsHandoff(
   await pivotToMgmt(gitopsDir, kindName, kubeconfig, clusterName, ageKeyFile);
 
   // Phase 2: install ArgoCD + the root app-of-apps. ArgoCD then reconciles the full
-  // platform (infra/*) and apps/* onto the management cluster from git — including
-  // cert-manager, the CAPA operator, node IAM, and infra/cluster-api, which now
+  // platform (clusters/mgmt/*) onto the management cluster from git — including
+  // cert-manager, the CAPA operator, node IAM, and cluster-api, which now
   // server-side-applies onto the MOVED Cluster/K0sControlPlane (same names) → adopts,
   // no duplicate CP.
   log("   Phase 2: installing ArgoCD (with Crossplane already present)...");
@@ -1224,7 +1239,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   // create the IAM OIDC provider + provider role, so the keyless Crossplane provider
   // can assume the role via WebIdentity. Must precede the handoff (its auth probe
   // exercises WebIdentity). The cluster was created with the matching OIDC issuer
-  // flag (infra/cluster-api oidcIssuer). CAPA stays keyless via the instance profile.
+  // flag (cluster-api oidcIssuer). CAPA stays keyless via the instance profile.
   if (keyless) {
     if (!oidc) {
       throw new Error(
@@ -1236,7 +1251,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   }
 
   // Step 6: Hand off to ArgoCD. Installs Crossplane + provider-aws and ArgoCD on
-  // mgmt, then ArgoCD reconciles the full platform (infra/*) and all apps (apps/*)
+  // mgmt, then ArgoCD reconciles the full platform (clusters/mgmt/*)
   // from git, including the cluster's own CAPI definition (it adopts the AWS
   // resources Kind's CAPA created). In KEYLESS mode no AWS credentials are baked on
   // mgmt — Crossplane and CAPA authenticate via the node instance profile (whose
@@ -1266,7 +1281,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
   log("   ArgoCD now reconciles the whole platform and all apps from git — including");
-  log("   infra/cluster-api, so the management cluster owns its own CAPI lifecycle.");
+  log("   the cluster-api module, so the management cluster owns its own CAPI lifecycle.");
   if (!kindDeleted) {
     log("   Kind was only the bootstrap scaffold — delete it once ArgoCD is green:");
     log(`     kind delete cluster --name ${kindName}`);
