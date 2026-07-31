@@ -11,18 +11,20 @@
  *    values fragment for the kube-prometheus-stack chart, since ksm config is
  *    chart-side, not a CR).
  * 2. Two PodMonitors scrape the controllers — core crossplane serves metrics
- *    on 8081, packages (providers + functions, labeled
- *    pkg.crossplane.io/revision) on 8080. Two monitors because a catch-all
- *    selector on one port leaves half the pods as permanently-down targets
- *    (observed: TargetDown crossplane-system).
+ *    on 8080 (8081 is readyz and 404s /metrics), providers (labeled
+ *    pkg.crossplane.io/provider) also on 8080. Providers only, NOT the
+ *    pkg.crossplane.io/revision catch-all: composition functions carry that
+ *    label too but serve gRPC with no metrics endpoint — matching them
+ *    leaves permanently-down targets (observed: TargetDown crossplane-system
+ *    for all three function pods).
  * 3. A PrometheusRule alerting on Synced=False, on provider silence, and on
  *    the scrape itself going blind.
  *
- * The silence rule guards on lifetime reconcile activity: a provider whose
- * counter never moved is IDLE (installed with zero MRs of its kinds), not
- * wedged — alerting on it is noise (observed live: provider-aws-kms with no
- * KMS MRs paged as "silent"). A provider that HAS reconciled real work and
- * then flatlines is the wedge.
+ * The silence rule guards on RECENT reconcile activity: only a provider that
+ * did real work in the hour before the silent window is a wedge candidate. A
+ * lifetime floor is not enough — an idle provider (zero MRs of its kinds)
+ * slowly accrues ProviderConfig checks, crosses any lifetime threshold, and
+ * then pages forever (observed live: provider-aws-kms, twice).
  */
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
@@ -45,9 +47,9 @@ export interface CrossplaneObservabilityOptions {
   notSyncedFor?: string;
   /** How long a provider may show zero reconcile rate (default "15m"). */
   silentFor?: string;
-  /** Lifetime reconcile floor below which a flatlined provider counts as
-   *  idle, not wedged (default 100). */
-  minLifetimeReconciles?: number;
+  /** Reconciles in the hour preceding the silent window below which a
+   *  flatlined provider counts as idle, not wedged (default 50). */
+  minRecentReconciles?: number;
 }
 
 /**
@@ -112,7 +114,7 @@ export class CrossplaneObservability extends Construct {
     super(scope, id);
     const ns = options.namespace;
     const xns = options.crossplaneNamespace ?? "crossplane-system";
-    const floor = options.minLifetimeReconciles ?? 100;
+    const floor = options.minRecentReconciles ?? 50;
 
     new ApiObject(this, "crossplane-core-podmonitor", {
       apiVersion: "monitoring.coreos.com/v1",
@@ -121,7 +123,7 @@ export class CrossplaneObservability extends Construct {
       spec: {
         namespaceSelector: { matchNames: [xns] },
         selector: { matchLabels: { app: "crossplane" } },
-        podMetricsEndpoints: [{ targetPort: 8081, path: "/metrics" }],
+        podMetricsEndpoints: [{ targetPort: 8080, path: "/metrics" }],
       },
     });
     new ApiObject(this, "crossplane-packages-podmonitor", {
@@ -132,7 +134,7 @@ export class CrossplaneObservability extends Construct {
         namespaceSelector: { matchNames: [xns] },
         selector: {
           matchExpressions: [
-            { key: "pkg.crossplane.io/revision", operator: "Exists" },
+            { key: "pkg.crossplane.io/provider", operator: "Exists" },
           ],
         },
         podMetricsEndpoints: [{ targetPort: 8080, path: "/metrics" }],
@@ -159,10 +161,11 @@ export class CrossplaneObservability extends Construct {
                 },
               },
               {
-                // The lifetime-activity floor keeps idle providers (installed
-                // with zero MRs of their kinds) from paging as "silent".
+                // Recent-activity guard: pages only when a provider that was
+                // actively reconciling flatlines. A lifetime floor false-fires
+                // once an idle provider's slow drip crosses it.
                 alert: "CrossplaneProviderSilent",
-                expr: `sum by (pod) (rate(controller_runtime_reconcile_total{namespace="${xns}"}[10m])) == 0 and on (pod) sum by (pod) (controller_runtime_reconcile_total{namespace="${xns}"}) > ${floor}`,
+                expr: `sum by (pod) (rate(controller_runtime_reconcile_total{namespace="${xns}"}[10m])) == 0 and on (pod) sum by (pod) (increase(controller_runtime_reconcile_total{namespace="${xns}"}[1h] offset 10m)) > ${floor}`,
                 for: options.silentFor ?? "15m",
                 labels: { severity: "critical" },
                 annotations: {
