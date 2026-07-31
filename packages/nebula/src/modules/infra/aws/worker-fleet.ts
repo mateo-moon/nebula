@@ -619,10 +619,17 @@ ${lvmSection}`;
     const labelArg = Object.entries(labels)
       .map(([k, v]) => `${k}=${v}`)
       .join(",");
-    const taintArg = node.taints?.length
-      ? ` --register-with-taints=${node.taints.join(",")}`
-      : "";
-    const dnsArg = o.clusterDns ? `--cluster-dns=${o.clusterDns} ` : "";
+    const kubeletArgs = [
+      `--node-ip=${
+        o.nodeIpOrder === "v6-first"
+          ? "$(cat /run/node-ip6),$(cat /run/node-ip)"
+          : "$(cat /run/node-ip),$(cat /run/node-ip6)"
+      }`,
+      ...(o.clusterDns ? [`--cluster-dns=${o.clusterDns}`] : []),
+      ...(node.taints?.length
+        ? [`--register-with-taints=${node.taints.join(",")}`]
+        : []),
+    ].join(" ");
     new ApiObject(this, `${node.name}-worker-config-template`, {
       apiVersion: "bootstrap.cluster.x-k8s.io/v1beta2",
       kind: "K0sWorkerConfigTemplate",
@@ -650,12 +657,18 @@ ${lvmSection}`;
             // Commands are executed through the node's shell (SSH exec), so
             // the $(cat ...) substitutes there — the address never appears
             // in git.
+            //
+            // Labels go through k0s's own --labels flag (StringSlice —
+            // repeats ACCUMULATE), never through kubelet-extra-args'
+            // --node-labels: k0s resolves that collision in favor of the
+            // extra args and silently DROPS its injected
+            // k0smotron.io/machine-name label — without which the
+            // ProviderIDController cannot match randomly-suffixed
+            // MachineSet machines to their host-named nodes, and MHC
+            // remediation churns the machine forever (observed live).
             args: [
-              `--kubelet-extra-args="--node-ip=${
-                o.nodeIpOrder === "v6-first"
-                  ? "$(cat /run/node-ip6),$(cat /run/node-ip)"
-                  : "$(cat /run/node-ip),$(cat /run/node-ip6)"
-              } ${dnsArg}--node-labels=${labelArg}${taintArg}"`,
+              `--labels=${labelArg}`,
+              `--kubelet-extra-args="${kubeletArgs}"`,
             ],
           },
         },
