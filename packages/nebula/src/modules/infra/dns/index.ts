@@ -51,6 +51,8 @@ export type {
   DnsHetznerCompositionConfig,
   DnsZoneHetznerConfig,
 } from './hetzner-composition';
+export { HetznerDnsRecord } from './hetzner-record';
+export type { HetznerDnsRecordConfig } from './hetzner-record';
 
 export interface DnsZoneConfig {
   /** Zone name (used as resource name) */
