@@ -1,10 +1,23 @@
 /**
  * `nebula init --provider aws` — scaffold the `aws/` GitOps subtree.
  *
- * Generates the single-source-of-truth repo the thin AWS bootstrap and ArgoCD both
- * consume: config.ts + meta/{argocd,argocd-apps} + the full infra/* platform +
- * an apps/ placeholder + the pnpm packaging (github refs + pnpm-11 allowBuilds) +
- * SOPS/age scaffolding. Mirrors the proven layout in DevOps/aws.
+ * Generates the single-source-of-truth repo the thin AWS bootstrap and ArgoCD
+ * both consume, in the RECURSIVE-OWNERSHIP layout: every directory level is
+ * owned by exactly one index.ts, and discovery never descends past a directory
+ * that has its own owner.
+ *
+ *   config.ts                      shared configuration (the single source)
+ *   meta/argocd                    ArgoCD itself
+ *   meta/argocd-apps               the root tier: argocd, argocd-apps, clusters-apps
+ *   clusters/index.ts              ONE-level walker: each clusters/<name>/ dir
+ *                                  becomes an app-of-apps `<name>-apps`
+ *   clusters/mgmt/index.ts         the management cluster: a dependency-ordered
+ *                                  REGISTRY tier over its module directories
+ *   clusters/mgmt/<module>/        the platform fundamentals (6 modules)
+ *
+ * Adding a workload cluster = adding a `clusters/<name>/` directory with its
+ * own index.ts — no registry edits anywhere else. Mirrors the proven layout in
+ * DevOps/aws.
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -81,20 +94,33 @@ export async function initAws(
     genMetaArgocdApps(),
   );
 
-  // Infra (the full platform — 6 modules)
-  writeFile(path.join(outputDir, "infra/index.ts"), genInfraIndex());
-  writeFile(path.join(outputDir, "infra/crossplane/index.ts"), genInfraCrossplane());
-  writeFile(path.join(outputDir, "infra/cert-manager/index.ts"), genInfraCertManager());
-  writeFile(path.join(outputDir, "infra/providers/index.ts"), genInfraProviders());
+  // Clusters: the walker + the management cluster's registry + its modules
+  writeFile(path.join(outputDir, "clusters/index.ts"), genClustersIndex());
+  writeFile(path.join(outputDir, "clusters/mgmt/index.ts"), genMgmtIndex());
   writeFile(
-    path.join(outputDir, "infra/cluster-api-operator/index.ts"),
-    genInfraClusterApiOperator(),
+    path.join(outputDir, "clusters/mgmt/crossplane/index.ts"),
+    genMgmtCrossplane(),
   );
-  writeFile(path.join(outputDir, "infra/node-iam/index.ts"), genInfraNodeIam());
-  writeFile(path.join(outputDir, "infra/cluster-api/index.ts"), genInfraClusterApi());
-
-  // Apps (user workloads/modules)
-  writeFile(path.join(outputDir, "apps/index.ts"), genAppsIndex());
+  writeFile(
+    path.join(outputDir, "clusters/mgmt/cert-manager/index.ts"),
+    genMgmtCertManager(),
+  );
+  writeFile(
+    path.join(outputDir, "clusters/mgmt/providers/index.ts"),
+    genMgmtProviders(),
+  );
+  writeFile(
+    path.join(outputDir, "clusters/mgmt/cluster-api-operator/index.ts"),
+    genMgmtClusterApiOperator(),
+  );
+  writeFile(
+    path.join(outputDir, "clusters/mgmt/node-iam/index.ts"),
+    genMgmtNodeIam(),
+  );
+  writeFile(
+    path.join(outputDir, "clusters/mgmt/cluster-api/index.ts"),
+    genMgmtClusterApi(),
+  );
 
   console.log(
     chalk.green(`
@@ -135,6 +161,20 @@ export const config = {
      * "knownhosts: key is unknown". Appended to ArgoCD's known_hosts defaults.
      */
     knownHosts: ${JSON.stringify(c.knownHosts)},
+    /**
+     * manifest-generate-paths shared by every Application: a commit only
+     * re-renders apps whose watched paths changed. Modules read only their own
+     * directory, these files and .secrets — any other out-of-dir read needs an
+     * extraGeneratePaths entry on its tier.
+     */
+    sharedGeneratePaths: [
+      "/${c.pathPrefix}/config.ts",
+      "/${c.pathPrefix}/package.json",
+      "/${c.pathPrefix}/pnpm-lock.yaml",
+      "/${c.pathPrefix}/pnpm-workspace.yaml",
+      "/${c.pathPrefix}/tsconfig.json",
+      "/${c.pathPrefix}/.secrets",
+    ] as string[],
   },
 
   /** AWS management cluster. */
@@ -330,158 +370,153 @@ function genMetaArgocdApps(): string {
   return `/**
  * meta/argocd-apps — the app-of-apps that drives the GitOps handoff.
  *
- * The bootstrap applies this once and syncs the \`argocd-apps\` Application; ArgoCD
- * then self-heals everything from git. Each Application uses the \`nebula-v1.0\`
- * ConfigManagementPlugin, which runs \`cdk8s synth\` on the in-repo TypeScript.
+ * The bootstrap applies this once and syncs the \`argocd-apps\` Application;
+ * ArgoCD then self-heals everything from git. Each Application uses the
+ * \`nebula-v1.0\` ConfigManagementPlugin, which runs \`cdk8s synth\` on the
+ * in-repo TypeScript at its \`path\`.
+ *
+ * Rendered via the nebula ArgoCdAppTier factory. Three roots, recursive
+ * ownership below them: \`clusters-apps\` renders clusters/index.ts, which owns
+ * one app-of-apps per cluster directory, and each cluster's own index.ts owns
+ * its Applications. Sync-policy presets:
+ *  - \`meta\`    (no prune + Delete=false) — ArgoCD self-management: never
+ *               prune/delete the platform out from under itself.
+ *  - \`service\` + { prune: false }        — the clusters walker: a mistaken
+ *               directory rename/removal must never cascade-delete a cluster.
  */
 import { App, Chart } from "cdk8s";
-import { argoproj } from "nebula-cdk8s/imports";
+import { ArgoCdAppTier } from "nebula-cdk8s";
 import { config } from "../../config";
-
-const { AppProject, Application } = argoproj;
 
 const app = new App();
 const chart = new Chart(app, "argocd-apps");
 
-const NS = "argocd";
-const { repoUrl, targetRevision, pathPrefix } = config.git;
-const plugin = { name: "nebula-v1.0", env: [{ name: "ENTRY_FILE", value: "index.ts" }] };
-const dest = { server: "https://kubernetes.default.svc", namespace: NS };
-
-// ArgoCD self-management — never prune/delete the platform out from under itself.
-const metaSyncPolicy = {
-  automated: { selfHeal: true, prune: false },
-  retry: { limit: 10, backoff: { duration: "10s", factor: 2, maxDuration: "3m" } },
-  syncOptions: [
-    "CreateNamespace=true",
-    "ServerSideApply=true",
-    "SkipDryRunOnMissingResource=true",
-    "RespectIgnoreDifferences=true",
-    "Delete=false",
-  ],
-};
-
-// App-of-apps parents — prune stale child Applications when removed from code.
-const appOfAppsSyncPolicy = {
-  automated: { selfHeal: true, prune: true },
-  retry: { limit: 10, backoff: { duration: "10s", factor: 2, maxDuration: "3m" } },
-  syncOptions: [
-    "CreateNamespace=true",
-    "ServerSideApply=true",
-    "SkipDryRunOnMissingResource=true",
-    "RespectIgnoreDifferences=true",
-  ],
-};
-
-new AppProject(chart, "project", {
-  metadata: { name: config.argoProject, namespace: NS },
-  spec: {
+new ArgoCdAppTier(chart, "tier", {
+  repoUrl: config.git.repoUrl,
+  targetRevision: config.git.targetRevision,
+  pathPrefix: config.git.pathPrefix,
+  sharedGeneratePaths: config.git.sharedGeneratePaths,
+  project: config.argoProject,
+  createProject: {
     description: "AWS — infrastructure and platform services",
-    sourceRepos: ["*"],
-    destinations: [{ namespace: "*", server: "*" }],
-    clusterResourceWhitelist: [{ group: "*", kind: "*" }],
+  },
+  syncPolicyPreset: "meta",
+  discovery: {
+    mode: "registry",
+    modules: [
+      // ArgoCD self-management + the app-of-apps self-reference.
+      { mod: "argocd", path: "meta/argocd" },
+      { mod: "argocd-apps", path: "meta/argocd-apps" },
+      // clusters/*: ONE app-of-apps per cluster via the cluster-dirs walker
+      // (each cluster's own index.ts). See clusters/index.ts.
+      {
+        mod: "clusters-apps",
+        path: "clusters",
+        syncPolicyPreset: "service",
+        syncPolicy: { prune: false },
+      },
+    ],
   },
 });
-
-/** Helper: an Application sourcing a path in this repo via the nebula plugin. */
-function nebulaApp(
-  id: string,
-  modPath: string,
-  syncPolicy: Record<string, unknown>,
-): void {
-  new Application(chart, id, {
-    metadata: { name: id, namespace: NS },
-    spec: {
-      project: config.argoProject,
-      source: { repoUrl, targetRevision, path: \`\${pathPrefix}/\${modPath}\`, plugin },
-      destination: dest,
-      syncPolicy,
-    },
-  });
-}
-
-// ArgoCD self-management + the app-of-apps self-reference (meta sync policy).
-nebulaApp("argocd", "meta/argocd", metaSyncPolicy);
-nebulaApp("argocd-apps", "meta/argocd-apps", metaSyncPolicy);
-
-// Infra app-of-apps: the full platform (prune child apps).
-nebulaApp("infra-apps", "infra", appOfAppsSyncPolicy);
-
-// Apps app-of-apps: additional user workloads/modules under apps/* (prune child apps).
-nebulaApp("apps-apps", "apps", appOfAppsSyncPolicy);
 
 app.synth();
 `;
 }
 
-function genInfraIndex(): string {
+function genClustersIndex(): string {
   return `/**
- * infra/index.ts — app-of-apps for the platform. Emits one ArgoCD Application per
- * infra module so ArgoCD reconciles them from git. Synced by \`infra-apps\`.
+ * clusters/index.ts — ONE-level walker over the clusters tree: every
+ * \`clusters/<name>/\` is a cluster owning its own Applications through its own
+ * index.ts, and this tier emits exactly one app-of-apps \`<name>-apps\` per
+ * cluster, rendered from that directory. The recursion rule: discovery never
+ * descends past a directory that has its own owner — what a cluster contains
+ * (a dependency-ordered registry for mgmt, a service walk for workload
+ * clusters) is that cluster's business. Synced by \`clusters-apps\` in
+ * meta/argocd-apps. Adding a cluster = adding a directory; no registry edits.
  */
 import { App, Chart } from "cdk8s";
-import { argoproj } from "nebula-cdk8s/imports";
+import { ArgoCdAppTier } from "nebula-cdk8s";
 import { config } from "../config";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 
-const { Application } = argoproj;
+const here = dirname(fileURLToPath(import.meta.url));
 
 const app = new App();
-const chart = new Chart(app, "infra");
+const chart = new Chart(app, "clusters");
 
-const NS = "argocd";
-const { repoUrl, targetRevision, pathPrefix } = config.git;
-const plugin = { name: "nebula-v1.0", env: [{ name: "ENTRY_FILE", value: "index.ts" }] };
+new ArgoCdAppTier(chart, "tier", {
+  repoUrl: config.git.repoUrl,
+  targetRevision: config.git.targetRevision,
+  pathPrefix: config.git.pathPrefix,
+  sharedGeneratePaths: config.git.sharedGeneratePaths,
+  project: config.argoProject,
+  syncPolicyPreset: "service",
+  // Cluster deletion is never an accident to automate: removing a cluster
+  // directory must not cascade-prune its app tree.
+  syncPolicy: { prune: false },
+  discovery: { mode: "cluster-dirs", dir: here },
+});
 
-const syncPolicy = {
-  automated: { selfHeal: true, prune: false },
-  retry: { limit: 10, backoff: { duration: "10s", factor: 2, maxDuration: "3m" } },
-  syncOptions: [
-    "CreateNamespace=true",
-    "ServerSideApply=true",
-    "SkipDryRunOnMissingResource=true",
-    "RespectIgnoreDifferences=true",
-    // Never prune/delete infra resources (Crossplane/providers/the cluster) via ArgoCD.
-    "Delete=false",
-  ],
-};
+app.synth();
+`;
+}
 
-// The full platform, in dependency order. Sync-waves make ArgoCD's first sync on a
-// bare management cluster deterministic: controllers (crossplane, cert-manager)
-// before the things that need them, then node-iam, then the cluster itself.
-// \`cluster-api\` is the management cluster's own CAPI definition — reconciling it
-// here is how the cluster inherits its own lifecycle from git.
-const modules: { mod: string; wave: number }[] = [
+function genMgmtIndex(): string {
+  return `/**
+ * clusters/mgmt — everything that runs ON (or is reconciled BY) the management
+ * cluster, as one dependency-ordered registry tier (Applications \`mgmt-<mod>\`).
+ *
+ * ArgoCD retries until healthy, but since ArgoCD (not the bootstrap) installs
+ * this onto a bare management cluster, explicit sync-waves make the first sync
+ * deterministic: CRDs/controllers (crossplane, cert-manager) before the things
+ * that need them (providers, the CAPI operator), then node-iam, then the
+ * cluster itself — \`cluster-api\` is the management cluster's own CAPI
+ * definition; reconciling it here is how the cluster inherits its own
+ * lifecycle from git.
+ *
+ * Add operational apps below the fundamentals with
+ * \`syncPolicyPreset: "service"\` (prune stale resources) — one line per app,
+ * module directory next to the others. Emitted as the \`mgmt-apps\`
+ * app-of-apps by the clusters/index.ts walker.
+ */
+import { App, Chart } from "cdk8s";
+import { ArgoCdAppTier, type ArgoCdAppTierModule } from "nebula-cdk8s";
+import { config } from "../../config";
+
+const app = new App();
+const chart = new Chart(app, "mgmt");
+
+const modules: ArgoCdAppTierModule[] = [
+  // --- fundamentals (dependency-ordered, \`meta\` preset: never pruned) -------
   { mod: "crossplane", wave: -2 },
   { mod: "cert-manager", wave: -2 },
   { mod: "providers", wave: -1 },
   { mod: "cluster-api-operator", wave: -1 },
   { mod: "node-iam", wave: 0 },
   { mod: "cluster-api", wave: 1 },
+  // --- operational apps (\`service\` preset: prune stale resources) -----------
+  // { mod: "monitoring", syncPolicyPreset: "service" },
 ];
 
-for (const { mod, wave } of modules) {
-  new Application(chart, \`infra-\${mod}\`, {
-    metadata: {
-      name: \`infra-\${mod}\`,
-      namespace: NS,
-      annotations: { "argocd.argoproj.io/sync-wave": String(wave) },
-    },
-    spec: {
-      project: config.argoProject,
-      source: { repoUrl, targetRevision, path: \`\${pathPrefix}/infra/\${mod}\`, plugin },
-      destination: { server: "https://kubernetes.default.svc", namespace: NS },
-      syncPolicy,
-    },
-  });
-}
+new ArgoCdAppTier(chart, "tier", {
+  repoUrl: config.git.repoUrl,
+  targetRevision: config.git.targetRevision,
+  pathPrefix: config.git.pathPrefix,
+  sharedGeneratePaths: config.git.sharedGeneratePaths,
+  project: config.argoProject,
+  namePrefix: "mgmt-",
+  syncPolicyPreset: "meta",
+  discovery: { mode: "registry", dir: "clusters/mgmt", modules },
+});
 
 app.synth();
 `;
 }
 
-function genInfraCrossplane(): string {
+function genMgmtCrossplane(): string {
   return `/**
- * infra/crossplane — Crossplane control plane on the management cluster.
+ * clusters/mgmt/crossplane — Crossplane control plane on the management cluster.
  */
 import { App, Chart } from "cdk8s";
 import { Crossplane } from "nebula-cdk8s";
@@ -498,14 +533,15 @@ app.synth();
 `;
 }
 
-function genInfraCertManager(): string {
+function genMgmtCertManager(): string {
   return `/**
- * infra/cert-manager — cert-manager on the management cluster. Required by the
- * cluster-api-operator (its webhook serving cert is issued by cert-manager).
+ * clusters/mgmt/cert-manager — cert-manager on the management cluster. Required
+ * by the cluster-api-operator (its webhook serving cert is issued by
+ * cert-manager).
  */
 import { App, Chart } from "cdk8s";
 import { CertManager } from "nebula-cdk8s";
-import { config } from "../../config";
+import { config } from "../../../config";
 
 const app = new App();
 const chart = new Chart(app, "cert-manager");
@@ -519,11 +555,12 @@ app.synth();
 `;
 }
 
-function genInfraProviders(): string {
+function genMgmtProviders(): string {
   return `/**
- * infra/providers — the Crossplane AWS provider on the management cluster.
- * Credentials come from the aws-creds Secret in crossplane-system (created by the
- * bootstrap; rotate to a long-lived IAM user key for steady-state).
+ * clusters/mgmt/providers — the Crossplane AWS provider on the management
+ * cluster. Credentials come from the aws-creds Secret in crossplane-system
+ * (created by the bootstrap; rotate to a long-lived IAM user key for
+ * steady-state).
  */
 import { App, Chart } from "cdk8s";
 import { AwsProvider } from "nebula-cdk8s";
@@ -543,18 +580,19 @@ app.synth();
 `;
 }
 
-function genInfraClusterApiOperator(): string {
+function genMgmtClusterApiOperator(): string {
   return `/**
- * infra/cluster-api-operator — Cluster API operator (CAPA + k0smotron) on the
- * management cluster, so it runs its OWN Cluster API and adopts the AWS resources
- * the bootstrap (Kind's CAPA) created. References the aws-capa-credentials Secret.
+ * clusters/mgmt/cluster-api-operator — Cluster API operator (CAPA + k0smotron)
+ * on the management cluster, so it runs its OWN Cluster API and adopts the AWS
+ * resources the bootstrap (Kind's CAPA) created. References the
+ * aws-capa-credentials Secret.
  *
  * NOTE: directory \`cluster-api-operator\` (the OPERATOR), distinct from
  * \`cluster-api\` (the K0sCluster CRs). Do not merge them.
  */
 import { App, Chart } from "cdk8s";
 import { ClusterApiOperator } from "nebula-cdk8s";
-import { config } from "../../config";
+import { config } from "../../../config";
 
 const app = new App();
 const chart = new Chart(app, "cluster-api-operator");
@@ -571,14 +609,15 @@ app.synth();
 `;
 }
 
-function genInfraNodeIam(): string {
+function genMgmtNodeIam(): string {
   return `/**
- * infra/node-iam — the CAPA node IAM (role + instance profile) the EC2 instances
- * assume. CAPA requires the instance profile to pre-exist before launching machines.
+ * clusters/mgmt/node-iam — the CAPA node IAM (role + instance profile) the EC2
+ * instances assume. CAPA requires the instance profile to pre-exist before
+ * launching machines.
  */
 import { App, Chart } from "cdk8s";
 import { Aws } from "nebula-cdk8s";
-import { config } from "../../config";
+import { config } from "../../../config";
 
 const app = new App();
 const chart = new Chart(app, "node-iam");
@@ -593,16 +632,17 @@ app.synth();
 `;
 }
 
-function genInfraClusterApi(): string {
+function genMgmtClusterApi(): string {
   return `/**
- * infra/cluster-api — the management cluster's own CAPI definition (the cluster
- * CRs). Reconciling this from git is what makes Kind disposable: the cluster's own
- * CAPA adopts the AWS resources the bootstrap created rather than recreating them.
+ * clusters/mgmt/cluster-api — the management cluster's own CAPI definition (the
+ * cluster CRs). Reconciling this from git is what makes Kind disposable: the
+ * cluster's own CAPA adopts the AWS resources the bootstrap created rather
+ * than recreating them.
  */
 import { App, Chart } from "cdk8s";
 import { K0sCluster, AwsK0sProvider } from "nebula-cdk8s";
 import { AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme } from "nebula-cdk8s";
-import { config } from "../../config";
+import { config } from "../../../config";
 
 const app = new App();
 const chart = new Chart(app, "cluster-api");
@@ -626,64 +666,6 @@ new K0sCluster(chart, "mgmt", {
       AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNET_HYPHEN_FACING,
   }),
 });
-
-app.synth();
-`;
-}
-
-function genAppsIndex(): string {
-  return `/**
- * apps/index.ts — app-of-apps for additional workloads / modules.
- *
- * Drop a cdk8s module at \`apps/<name>/index.ts\` and ArgoCD installs it (synthed by
- * the nebula-cmp plugin, same as infra/*). Subdirectories are discovered
- * automatically — you do NOT need to edit this file to add an app.
- */
-import { App, Chart } from "cdk8s";
-import { argoproj } from "nebula-cdk8s/imports";
-import { config } from "../config";
-import { readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
-
-const { Application } = argoproj;
-const here = dirname(fileURLToPath(import.meta.url));
-
-const app = new App();
-const chart = new Chart(app, "apps");
-
-const NS = "argocd";
-const { repoUrl, targetRevision, pathPrefix } = config.git;
-const plugin = { name: "nebula-v1.0", env: [{ name: "ENTRY_FILE", value: "index.ts" }] };
-
-const syncPolicy = {
-  automated: { selfHeal: true, prune: true },
-  retry: { limit: 10, backoff: { duration: "10s", factor: 2, maxDuration: "3m" } },
-  syncOptions: [
-    "CreateNamespace=true",
-    "ServerSideApply=true",
-    "SkipDryRunOnMissingResource=true",
-    "RespectIgnoreDifferences=true",
-  ],
-};
-
-// Each subdirectory of apps/ becomes an ArgoCD Application. (Empty until you add one.)
-const mods = readdirSync(here, { withFileTypes: true })
-  .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
-  .map((e) => e.name)
-  .sort();
-
-for (const mod of mods) {
-  new Application(chart, \`app-\${mod}\`, {
-    metadata: { name: \`app-\${mod}\`, namespace: NS },
-    spec: {
-      project: config.argoProject,
-      source: { repoUrl, targetRevision, path: \`\${pathPrefix}/apps/\${mod}\`, plugin },
-      destination: { server: "https://kubernetes.default.svc", namespace: NS },
-      syncPolicy,
-    },
-  });
-}
 
 app.synth();
 `;
