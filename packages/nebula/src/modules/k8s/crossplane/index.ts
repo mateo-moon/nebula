@@ -104,6 +104,15 @@ export interface KubernetesProviderOptions {
    * @default {} (read-only secrets)
    */
   rbac?: false | KubernetesProviderRbacOptions;
+  /**
+   * Drift-check poll interval for every Object of this provider (`--poll`,
+   * provider default 10m). Observe Objects are read-through caches of what
+   * they reference — at 10m a composition consuming an observed value (e.g.
+   * an instance id) can act on data ~10m+backoff stale after a replacement.
+   * "1m" bounds that window. (The alpha `spec.watch` field would make it
+   * real-time; revisit when the watches gate graduates.)
+   */
+  pollInterval?: string;
 }
 
 export interface CrossplaneConfig {
@@ -254,6 +263,49 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
       // rbac: {} (read-only) or { secrets: 'read-write' } to enable.
       const rbac = kubeOpts.rbac ?? false;
 
+      // The DRC carries the SA pin (rbac) and/or the --poll override; emit it
+      // when either is requested. Containers merge by name with the default
+      // package-runtime container; `selector: {}` is schema-required filler.
+      if (rbac !== false || kubeOpts.pollInterval) {
+        this.kubernetesProviderRuntimeConfig = new ApiObject(
+          this,
+          "provider-kubernetes-runtime-config",
+          {
+            apiVersion: "pkg.crossplane.io/v1beta1",
+            kind: "DeploymentRuntimeConfig",
+            metadata: { name: "provider-kubernetes" },
+            spec: {
+              ...(rbac !== false
+                ? {
+                    serviceAccountTemplate: {
+                      metadata: { name: "provider-kubernetes" },
+                    },
+                  }
+                : {}),
+              ...(kubeOpts.pollInterval
+                ? {
+                    deploymentTemplate: {
+                      spec: {
+                        selector: {},
+                        template: {
+                          spec: {
+                            containers: [
+                              {
+                                name: "package-runtime",
+                                args: [`--poll=${kubeOpts.pollInterval}`],
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  }
+                : {}),
+            },
+          },
+        );
+      }
+
       if (rbac !== false) {
         // InjectedIdentity = the provider pod's OWN ServiceAccount is the
         // identity, and crossplane's rbac-manager only grants providers access
@@ -267,19 +319,6 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
           (rbac.secrets ?? "read-only") === "read-write"
             ? ["get", "list", "watch", "create", "update", "patch", "delete"]
             : ["get", "list", "watch"];
-
-        this.kubernetesProviderRuntimeConfig = new ApiObject(
-          this,
-          "provider-kubernetes-runtime-config",
-          {
-            apiVersion: "pkg.crossplane.io/v1beta1",
-            kind: "DeploymentRuntimeConfig",
-            metadata: { name: "provider-kubernetes" },
-            spec: {
-              serviceAccountTemplate: { metadata: { name: saName } },
-            },
-          },
-        );
 
         this.kubernetesProviderClusterRole = new ApiObject(
           this,
