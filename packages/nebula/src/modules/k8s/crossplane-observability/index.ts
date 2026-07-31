@@ -20,11 +20,13 @@
  * 3. A PrometheusRule alerting on Synced=False, on provider silence, and on
  *    the scrape itself going blind.
  *
- * The silence rule guards on RECENT reconcile activity: only a provider that
- * did real work in the hour before the silent window is a wedge candidate. A
- * lifetime floor is not enough — an idle provider (zero MRs of its kinds)
- * slowly accrues ProviderConfig checks, crosses any lifetime threshold, and
- * then pages forever (observed live: provider-aws-kms, twice).
+ * The silence rule's rate window must OUTLAST the providers' resync interval:
+ * a zero-MR provider's only activity is an hourly resync burst (observed:
+ * provider-aws-kms, +519 reconciles at :42 every hour, flat between), so any
+ * shorter window reads the gaps as silence and the alert flaps hourly. With a
+ * 70m window an idle provider never reads silent, the lifetime floor excludes
+ * never-active pods, and a genuinely wedged provider — which stops resyncing
+ * too — fires ~85m after its last activity and stays firing.
  */
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
@@ -47,9 +49,14 @@ export interface CrossplaneObservabilityOptions {
   notSyncedFor?: string;
   /** How long a provider may show zero reconcile rate (default "15m"). */
   silentFor?: string;
-  /** Reconciles in the hour preceding the silent window below which a
-   *  flatlined provider counts as idle, not wedged (default 50). */
-  minRecentReconciles?: number;
+  /** Rate window for the silence check (default "70m"). MUST exceed the
+   *  providers' resync interval: a zero-MR provider's only activity is its
+   *  hourly resync burst, so any shorter window reads the gap between
+   *  bursts as silence and flaps every hour. */
+  silentWindow?: string;
+  /** Lifetime reconcile floor below which a flatlined pod counts as
+   *  never-active, not wedged (default 100). */
+  minLifetimeReconciles?: number;
 }
 
 /**
@@ -114,7 +121,8 @@ export class CrossplaneObservability extends Construct {
     super(scope, id);
     const ns = options.namespace;
     const xns = options.crossplaneNamespace ?? "crossplane-system";
-    const floor = options.minRecentReconciles ?? 50;
+    const floor = options.minLifetimeReconciles ?? 100;
+    const window = options.silentWindow ?? "70m";
 
     new ApiObject(this, "crossplane-core-podmonitor", {
       apiVersion: "monitoring.coreos.com/v1",
@@ -161,11 +169,12 @@ export class CrossplaneObservability extends Construct {
                 },
               },
               {
-                // Recent-activity guard: pages only when a provider that was
-                // actively reconciling flatlines. A lifetime floor false-fires
-                // once an idle provider's slow drip crosses it.
+                // The window outlasts the hourly resync (see silentWindow), so
+                // an idle provider's burst/gap cycle never reads as silence; a
+                // recent-activity offset guard is wrong here - it drains away
+                // ~1h into a REAL wedge and un-fires the alert.
                 alert: "CrossplaneProviderSilent",
-                expr: `sum by (pod) (rate(controller_runtime_reconcile_total{namespace="${xns}"}[10m])) == 0 and on (pod) sum by (pod) (increase(controller_runtime_reconcile_total{namespace="${xns}"}[1h] offset 10m)) > ${floor}`,
+                expr: `sum by (pod) (rate(controller_runtime_reconcile_total{namespace="${xns}"}[${window}])) == 0 and on (pod) sum by (pod) (controller_runtime_reconcile_total{namespace="${xns}"}) > ${floor}`,
                 for: options.silentFor ?? "15m",
                 labels: { severity: "critical" },
                 annotations: {
