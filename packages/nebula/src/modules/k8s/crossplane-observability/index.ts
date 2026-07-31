@@ -57,6 +57,11 @@ export interface CrossplaneObservabilityOptions {
   /** Lifetime reconcile floor below which a flatlined pod counts as
    *  never-active, not wedged (default 100). */
   minLifetimeReconciles?: number;
+  /** Which halves to render (default "all"). In a hub/spoke split the
+   *  PodMonitors live with the Prometheus that scrapes crossplane (the
+   *  spoke) while the PrometheusRule lives where alerts are evaluated
+   *  against an Alertmanager (the hub, over remote-written series). */
+  emit?: "monitors" | "rules" | "all";
 }
 
 /**
@@ -123,31 +128,35 @@ export class CrossplaneObservability extends Construct {
     const xns = options.crossplaneNamespace ?? "crossplane-system";
     const floor = options.minLifetimeReconciles ?? 100;
     const window = options.silentWindow ?? "70m";
+    const emit = options.emit ?? "all";
 
-    new ApiObject(this, "crossplane-core-podmonitor", {
-      apiVersion: "monitoring.coreos.com/v1",
-      kind: "PodMonitor",
-      metadata: { name: "crossplane-core", namespace: ns },
-      spec: {
-        namespaceSelector: { matchNames: [xns] },
-        selector: { matchLabels: { app: "crossplane" } },
-        podMetricsEndpoints: [{ targetPort: 8080, path: "/metrics" }],
-      },
-    });
-    new ApiObject(this, "crossplane-packages-podmonitor", {
-      apiVersion: "monitoring.coreos.com/v1",
-      kind: "PodMonitor",
-      metadata: { name: "crossplane-packages", namespace: ns },
-      spec: {
-        namespaceSelector: { matchNames: [xns] },
-        selector: {
-          matchExpressions: [
-            { key: "pkg.crossplane.io/provider", operator: "Exists" },
-          ],
+    if (emit !== "rules") {
+      new ApiObject(this, "crossplane-core-podmonitor", {
+        apiVersion: "monitoring.coreos.com/v1",
+        kind: "PodMonitor",
+        metadata: { name: "crossplane-core", namespace: ns },
+        spec: {
+          namespaceSelector: { matchNames: [xns] },
+          selector: { matchLabels: { app: "crossplane" } },
+          podMetricsEndpoints: [{ targetPort: 8080, path: "/metrics" }],
         },
-        podMetricsEndpoints: [{ targetPort: 8080, path: "/metrics" }],
-      },
-    });
+      });
+      new ApiObject(this, "crossplane-packages-podmonitor", {
+        apiVersion: "monitoring.coreos.com/v1",
+        kind: "PodMonitor",
+        metadata: { name: "crossplane-packages", namespace: ns },
+        spec: {
+          namespaceSelector: { matchNames: [xns] },
+          selector: {
+            matchExpressions: [
+              { key: "pkg.crossplane.io/provider", operator: "Exists" },
+            ],
+          },
+          podMetricsEndpoints: [{ targetPort: 8080, path: "/metrics" }],
+        },
+      });
+    }
+    if (emit === "monitors") return;
     new ApiObject(this, "crossplane-convergence-rules", {
       apiVersion: "monitoring.coreos.com/v1",
       kind: "PrometheusRule",
