@@ -5,10 +5,11 @@
  * EIPAssociation/VolumeAttachment followers).
  *
  * A node is NOT a CAPI machine: each is a 1:1 Crossplane resource group
- * (Instance + Eip + optional data EBSVolume) adopted as a CAPI Machine via
- * k0smotron's RemoteMachine provider. No token, no address and no k0s install
- * logic lives in git: userData is only host identity + storage + the
- * provisioner's SSH key.
+ * (Instance + Eip + optional data EBSVolume) adopted via a per-node
+ * MachineDeployment (replicas 1) over k0smotron's pooled RemoteMachine
+ * provider — the owner an MHC needs to actually remediate. No token, no
+ * address and no k0s install logic lives in git: userData is only host
+ * identity + storage + the provisioner's SSH key.
  *
  * Regions are public-subnet + IGW only (nodes carry EIPs for the SSH
  * entrance; egress goes straight out — no NAT gateways). Subnets are the
@@ -585,12 +586,17 @@ ${lvmSection}`;
 
     // --- CAPI adoption -----------------------------------------------------
     // Worker (nebula) observes this node's Eip + Instance and publishes a
-    // PooledRemoteMachine into a POOL OF ONE plus the follower MRs. The three
-    // objects below are fully static; k0smotron fills the RemoteMachine's
-    // connection details from the pool at reservation, and CAPI adopts the
-    // RemoteMachine + K0sWorkerConfig (which is why the composition cannot
-    // own them: adoption and composition both demand the controller
-    // ownerReference).
+    // PooledRemoteMachine into a POOL OF ONE plus the follower MRs. The
+    // adoption is a per-node MachineDeployment (replicas 1) over
+    // RemoteMachineTemplate + K0sWorkerConfigTemplate — NOT a standalone
+    // Machine: an MHC can only mark those OwnerRemediated and nothing acts
+    // (observed live: dead spot hosts sat NotReady for hours). With an owning
+    // MachineSet, remediation deletes the Machine and the replacement claims
+    // the (Crossplane-self-healed) host from the pool — fresh objects also
+    // mean fresh workqueue backoff, so provisioning retries immediately.
+    // maxSurge MUST stay 0: a surge Machine would wait forever on the
+    // single-entry pool. Template content changes do not roll existing
+    // machines — delete the Machine to re-provision (same as before).
     new Worker(this, node.name, {
       eipName: node.eipName ?? node.name,
       instanceName: node.name,
@@ -598,11 +604,11 @@ ${lvmSection}`;
       dataVolumeName: dataVolumeMrName,
       sshSecretName: o.sshSecretName,
     });
-    new ApiObject(this, `${node.name}-remote-machine`, {
+    new ApiObject(this, `${node.name}-remote-machine-template`, {
       apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
-      kind: "RemoteMachine",
+      kind: "RemoteMachineTemplate",
       metadata: { name: node.name, namespace: this.ns },
-      spec: { pool: node.name },
+      spec: { template: { spec: { pool: node.name } } },
     });
     const labels = {
       ...node.nodeLabels,
@@ -617,61 +623,87 @@ ${lvmSection}`;
       ? ` --register-with-taints=${node.taints.join(",")}`
       : "";
     const dnsArg = o.clusterDns ? `--cluster-dns=${o.clusterDns} ` : "";
-    new ApiObject(this, `${node.name}-worker-config`, {
+    new ApiObject(this, `${node.name}-worker-config-template`, {
       apiVersion: "bootstrap.cluster.x-k8s.io/v1beta2",
-      kind: "K0sWorkerConfig",
+      kind: "K0sWorkerConfigTemplate",
       metadata: { name: node.name, namespace: this.ns },
       spec: {
-        version: o.k0sVersion,
-        // hostnamectl in userData already set the node name; without this
-        // the bootstrap provider would override the hostname with the
-        // Machine name.
-        useSystemHostname: true,
-        // The node's own addresses, read at provision time: the on-link GUA
-        // (primary — cross-region identity, WG-v6) and the plain private v4
-        // (intra-VPC only). The EIP is NOT an identity: it remains only the
-        // SSH provisioning entrance and, where named, the P2P endpoint. The
-        // GUA is delivered by RA/DHCPv6 — bounded wait, then record it.
-        preK0sCommands: [
-          `sh -c 'TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300"); curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 > /run/node-ip'`,
-          `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/{print \\$2; exit}" | cut -d/ -f1); [ -n "$IP6" ] && break; sleep 2; done; echo "$IP6" > /run/node-ip6'`,
-        ],
-        // Commands are executed through the node's shell (SSH exec), so the
-        // $(cat ...) substitutes there — the address never appears in git.
-        args: [
-          `--kubelet-extra-args="--node-ip=${
-            o.nodeIpOrder === "v6-first"
-              ? "$(cat /run/node-ip6),$(cat /run/node-ip)"
-              : "$(cat /run/node-ip),$(cat /run/node-ip6)"
-          } ${dnsArg}--node-labels=${labelArg}${taintArg}"`,
-        ],
+        template: {
+          spec: {
+            version: o.k0sVersion,
+            // hostnamectl in userData already set the node name; without this
+            // the bootstrap provider would override the hostname with the
+            // (now randomly-suffixed) Machine name — node names must stay
+            // host-derived or every remediation would break the LVM PV
+            // node affinity.
+            useSystemHostname: true,
+            // The node's own addresses, read at provision time: the on-link
+            // GUA (cross-region identity, WG-v6) and the plain private v4
+            // (intra-VPC only). The EIP is NOT an identity: it remains only
+            // the SSH provisioning entrance and, where named, the P2P
+            // endpoint. The GUA is delivered by RA/DHCPv6 — bounded wait,
+            // then record it.
+            preK0sCommands: [
+              `sh -c 'TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300"); curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 > /run/node-ip'`,
+              `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/{print \\$2; exit}" | cut -d/ -f1); [ -n "$IP6" ] && break; sleep 2; done; echo "$IP6" > /run/node-ip6'`,
+            ],
+            // Commands are executed through the node's shell (SSH exec), so
+            // the $(cat ...) substitutes there — the address never appears
+            // in git.
+            args: [
+              `--kubelet-extra-args="--node-ip=${
+                o.nodeIpOrder === "v6-first"
+                  ? "$(cat /run/node-ip6),$(cat /run/node-ip)"
+                  : "$(cat /run/node-ip),$(cat /run/node-ip6)"
+              } ${dnsArg}--node-labels=${labelArg}${taintArg}"`,
+            ],
+          },
+        },
       },
     });
-    new ApiObject(this, `${node.name}-machine`, {
+    const nodeLabelKey = `${o.tagDomain}/node`;
+    new ApiObject(this, `${node.name}-machine-deployment`, {
       apiVersion: "cluster.x-k8s.io/v1beta2",
-      kind: "Machine",
+      kind: "MachineDeployment",
       metadata: {
         name: node.name,
         namespace: this.ns,
-        labels: {
-          "cluster.x-k8s.io/cluster-name": o.clusterName,
-          ...(node.spot ? { [`${o.tagDomain}/spot`]: "true" } : {}),
-        },
+        labels: { "cluster.x-k8s.io/cluster-name": o.clusterName },
       },
       spec: {
         clusterName: o.clusterName,
-        version: o.k0sVersion.split("+")[0],
-        bootstrap: {
-          configRef: {
-            apiGroup: "bootstrap.cluster.x-k8s.io",
-            kind: "K0sWorkerConfig",
-            name: node.name,
+        replicas: 1,
+        selector: { matchLabels: { [nodeLabelKey]: node.name } },
+        rollout: {
+          strategy: {
+            type: "RollingUpdate",
+            rollingUpdate: { maxSurge: 0, maxUnavailable: 1 },
           },
         },
-        infrastructureRef: {
-          apiGroup: "infrastructure.cluster.x-k8s.io",
-          kind: "RemoteMachine",
-          name: node.name,
+        template: {
+          metadata: {
+            labels: {
+              [nodeLabelKey]: node.name,
+              "cluster.x-k8s.io/cluster-name": o.clusterName,
+              ...(node.spot ? { [`${o.tagDomain}/spot`]: "true" } : {}),
+            },
+          },
+          spec: {
+            clusterName: o.clusterName,
+            version: o.k0sVersion.split("+")[0],
+            bootstrap: {
+              configRef: {
+                apiGroup: "bootstrap.cluster.x-k8s.io",
+                kind: "K0sWorkerConfigTemplate",
+                name: node.name,
+              },
+            },
+            infrastructureRef: {
+              apiGroup: "infrastructure.cluster.x-k8s.io",
+              kind: "RemoteMachineTemplate",
+              name: node.name,
+            },
+          },
         },
       },
     });
