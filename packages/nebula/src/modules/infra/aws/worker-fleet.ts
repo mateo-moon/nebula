@@ -544,7 +544,13 @@ ${lvmSection}`;
         // No LateInitialize: it captured the first instance's ENI into spec,
         // and after a replacement the provider refuses the resulting "update"
         // forever — wedging reconciliation while the node runs fine.
-        managementPolicies: ["Observe", "Create", "Update", "Delete"],
+        // No Update either: every meaningful Instance change (userData, type,
+        // AMI) requires replacement, which upjet refuses — so Update can only
+        // ever produce the same permanent refusal wedge (observed live:
+        // user_data drift after adoption). Replacement is done by DELETING
+        // the MR/Machine; userDataReplaceOnChange below is inert under this
+        // policy and kept only to document intent for the create path.
+        managementPolicies: ["Observe", "Create", "Delete"],
         forProvider: {
           region: region.region,
           ami: node.ami,
