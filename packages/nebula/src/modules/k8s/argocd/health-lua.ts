@@ -101,6 +101,46 @@ end
 return { status = "Progressing", message = "waiting for Ready" }
 `;
 
+/**
+ * Every upbound kind the estate runs, as EXACT `group/Kind` entries. Exact
+ * keys win ArgoCD's FIRST override lookup; wildcard-vs-wildcard resolution
+ * (ours vs the bundled `*.upbound.io/*`) iterates an unordered map — observed
+ * live: the running controller kept picking the bundled Lua for Instances
+ * (sticky-LastAsyncOperation Degraded) while `argocd admin settings
+ * resource-overrides health` picked ours. The wildcard stays as the
+ * catch-all for kinds this list misses; future families are pre-listed
+ * (entries for absent CRDs are inert).
+ */
+const UPBOUND_EXACT_KINDS = [
+  "ec2.aws.upbound.io/EBSVolume",
+  "ec2.aws.upbound.io/EIP",
+  "ec2.aws.upbound.io/EIPAssociation",
+  "ec2.aws.upbound.io/Instance",
+  "ec2.aws.upbound.io/InternetGateway",
+  "ec2.aws.upbound.io/NATGateway",
+  "ec2.aws.upbound.io/Route",
+  "ec2.aws.upbound.io/RouteTable",
+  "ec2.aws.upbound.io/RouteTableAssociation",
+  "ec2.aws.upbound.io/SecurityGroup",
+  "ec2.aws.upbound.io/SecurityGroupEgressRule",
+  "ec2.aws.upbound.io/SecurityGroupIngressRule",
+  "ec2.aws.upbound.io/SecurityGroupRule",
+  "ec2.aws.upbound.io/Subnet",
+  "ec2.aws.upbound.io/VPC",
+  "ec2.aws.upbound.io/VolumeAttachment",
+  "iam.aws.upbound.io/InstanceProfile",
+  "iam.aws.upbound.io/Policy",
+  "iam.aws.upbound.io/Role",
+  "iam.aws.upbound.io/RolePolicyAttachment",
+  "route53.aws.upbound.io/Record",
+  "route53.aws.upbound.io/Zone",
+  "s3.aws.upbound.io/Bucket",
+  "kms.aws.upbound.io/Key",
+  "kms.aws.upbound.io/Alias",
+  "servicequotas.aws.upbound.io/ServiceQuota",
+  "dlm.aws.upbound.io/LifecyclePolicy",
+];
+
 /** Drop-in for {@link ArgoCdConfig.resourceHealthChecks}. */
 export const CAPI_CROSSPLANE_HEALTH_LUA: Record<string, string> = {
   "cluster.x-k8s.io/MachineHealthCheck": MHC_HEALTH_LUA,
@@ -108,4 +148,7 @@ export const CAPI_CROSSPLANE_HEALTH_LUA: Record<string, string> = {
   "cluster.x-k8s.io/MachineDeployment": CAPI_AVAILABLE_HEALTH_LUA,
   "cluster.x-k8s.io/Machine": CAPI_AVAILABLE_HEALTH_LUA,
   "*.aws.upbound.io/*": UPBOUND_MR_HEALTH_LUA,
+  ...Object.fromEntries(
+    UPBOUND_EXACT_KINDS.map((k) => [k, UPBOUND_MR_HEALTH_LUA]),
+  ),
 };

@@ -41,7 +41,7 @@ program
   // aws (init --provider aws)
   .option('--cluster-name <name>', 'Management cluster name (aws; default mgmt)')
   .option('--instance-type <type>', 'Control-plane EC2 instance type (aws; default t4g.large)')
-  .option('--ami-id <ami>', 'Ubuntu 22.04 AMI in the region (aws; required for bootstrap)')
+  .option('--ami-id <ami>', 'Ubuntu 22.04 AMI in the region (aws; scaffolds config.ts aws.amiId — bootstrap reads config.ts, never flags)')
   .option('--cp-replicas <n>', 'HA control-plane node count (aws; default 3)', (v: string) => parseInt(v, 10))
   .option('--target-revision <ref>', 'Git branch/tag ArgoCD tracks (aws; default main)')
   .option('--path-prefix <prefix>', 'Subtree path inside the repo (aws; default aws)')
