@@ -43,6 +43,26 @@ export interface AwsK0sControlPlaneOptions {
   /** Extra k0s controller args */
   extraArgs?: string[];
   /**
+   * PIN the control-plane AWSMachineTemplate name to
+   * `<name>-control-plane-<revision>` instead of deriving it from the spec
+   * hash. This is the roll guard: with a pin set, editing the machine spec
+   * alone renders a changed template under the SAME name, which CAPA's
+   * immutability webhook REJECTS — the Application goes SyncError (loud) and
+   * no machine moves. Rolling the control plane becomes an explicit two-step:
+   * change the spec AND the revision together, in a maintenance window.
+   *
+   * Why this exists: k0smotron replaces ALL control-plane machines at once on
+   * an infrastructureRef repoint (observed live under updateStrategy InPlace,
+   * 2026-08-01) and places replacements without preserving the one-per-AZ
+   * spread — on a self-managed cluster that is a full outage, taking every
+   * hosted child control plane down with it. Until that behavior is guarded
+   * upstream, an accidental roll must be impossible.
+   *
+   * To adopt on a live cluster with zero churn, set the revision to the live
+   * template's hash suffix (kubectl get awsmachinetemplate).
+   */
+  machineTemplateRevision?: string;
+  /**
    * AMI selection. Recommend setting `id` to a region-specific Ubuntu 22.04 AMI
    * (k0s is installed via cloud-init). Falls back to CAPA's image lookup.
    */
@@ -240,7 +260,12 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       .update(JSON.stringify(cpTemplateSpec))
       .digest("hex")
       .slice(0, 8);
-    const cpMachineTemplateName = `${name}-control-plane-${cpTemplateHash}`;
+    // A pinned revision overrides the hash (see machineTemplateRevision: the
+    // k0smotron all-at-once-roll guard); spec edits without a revision bump
+    // then fail loudly on CAPA's template immutability instead of rolling.
+    const cpMachineTemplateName = `${name}-control-plane-${
+      cp.machineTemplateRevision ?? cpTemplateHash
+    }`;
 
     // 1. Cluster-API Cluster
     emitClusterCr(this, {
