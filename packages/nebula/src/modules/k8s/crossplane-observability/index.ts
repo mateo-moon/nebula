@@ -219,9 +219,14 @@ export class CrossplaneObservability extends Construct {
                 // external-name is one provider restart away from forgetting
                 // its external and creating a clone. Empty-label matcher
                 // covers both ksm behaviors for a missing annotation (series
-                // skipped vs emitted label-less).
+                // skipped vs emitted label-less). Association/attachment
+                // kinds are excluded: their Create binds EXISTING identities
+                // (re-create converges, nothing duplicates), and follower MRs
+                // deliberately run without LateInitialize, so async creates
+                // legitimately leave them annotation-less (observed live on
+                // spot-remediated EIPAssociation followers).
                 alert: "CrossplaneExternalNameMissing",
-                expr: 'kube_customresource_crossplane_condition{type="Ready"} == 1 unless on (cluster, customresource_kind, name) kube_customresource_crossplane_external_name{external_name!=""}',
+                expr: 'kube_customresource_crossplane_condition{type="Ready", customresource_kind!~".*Association|.*Attachment"} == 1 unless on (cluster, customresource_kind, name) kube_customresource_crossplane_external_name{external_name!=""}',
                 for: "15m",
                 labels: { severity: "critical" },
                 annotations: {
