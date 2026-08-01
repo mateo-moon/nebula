@@ -77,6 +77,12 @@ export class S3Bucket extends Construct {
               "s3:PutObject",
               "s3:DeleteObject",
               "s3:AbortMultipartUpload",
+              // Tempo lists object tagging as required; it is also the standard
+              // set Loki/Mimir expect. Omitting it only appears to work where
+              // the node role already carries a broad s3:* from
+              // controllerPolicies, and breaks the moment that is tightened.
+              "s3:GetObjectTagging",
+              "s3:PutObjectTagging",
             ],
             Resource: `${arn}/*`,
           },
