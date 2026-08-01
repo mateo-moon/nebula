@@ -243,6 +243,7 @@ function readAwsRepoConfig(gitopsDir: string): {
   clusterName: string;
   keyless: boolean;
   oidc?: OidcConfig;
+  git: { repoUrl?: string; knownHosts?: string };
 } {
   // Run a throwaway reader IN the repo dir so `import "./config"` resolves exactly
   // like the cdk8s modules do (tsx -e has ESM eval quirks; a real file does not).
@@ -265,6 +266,7 @@ function readAwsRepoConfig(gitopsDir: string): {
   let cfg: {
     aws?: { region?: string; clusterName?: string; keyless?: boolean };
     oidc?: OidcConfig;
+    git?: { repoUrl?: string; knownHosts?: string };
   } = {};
   try {
     cfg = JSON.parse(out.slice(start, end + 1));
@@ -281,7 +283,100 @@ function readAwsRepoConfig(gitopsDir: string): {
     clusterName: cfg.aws.clusterName,
     keyless: cfg.aws.keyless === true,
     oidc: cfg.oidc,
+    git: cfg.git ?? {},
   };
+}
+
+/**
+ * Read-only preflight: catch the from-zero failures that otherwise surface an
+ * hour into the bootstrap — a wrong AWS profile, a git host ArgoCD cannot
+ * verify, and account quotas that block the very first EIP or instance.
+ * Never mutates AWS.
+ */
+function preflightAws(
+  region: string,
+  profile: string | undefined,
+  git: { repoUrl?: string; knownHosts?: string },
+  oidc?: OidcConfig,
+): void {
+  const awsq = (args: string[]) =>
+    run(
+      "aws",
+      [...args, "--region", region, ...(profile ? ["--profile", profile] : []), "--output", "json"],
+      { silent: true },
+    );
+
+  // 1. Identity: fail a wrong-profile run before anything is created; fill the
+  //    keyless OIDC accountId so config.ts need not repeat what STS knows.
+  const identity = JSON.parse(awsq(["sts", "get-caller-identity"]));
+  const callerAccount: string = identity.Account;
+  log(`   AWS identity:      ${identity.Arn}`);
+  if (oidc) {
+    if (!oidc.accountId) oidc.accountId = callerAccount;
+    else if (oidc.accountId !== callerAccount) {
+      throw new Error(
+        `config.ts oidc.accountId=${oidc.accountId} but the AWS profile resolves to ` +
+          `account ${callerAccount} — wrong profile or stale config.`,
+      );
+    }
+  }
+
+  // 2. Git host key: without git.knownHosts ArgoCD's repo-server cannot verify
+  //    the SSH remote and the handoff dies late. Scan now, hand over the line.
+  const repoUrl = git.repoUrl ?? "";
+  const ssh = repoUrl.match(/^(?:ssh:\/\/)?git@([^/:]+)(?::(\d+))?[/:]/);
+  if (ssh && !git.knownHosts) {
+    const [, host, port] = ssh;
+    let scanned = "";
+    try {
+      scanned = run(
+        "ssh-keyscan",
+        ["-t", "ed25519", ...(port ? ["-p", port] : []), host],
+        { silent: true },
+      ).trim();
+    } catch {
+      // offline — the instruction below still stands
+    }
+    throw new Error(
+      `config.ts git.knownHosts is empty but ${repoUrl} is an SSH remote — ArgoCD ` +
+        `will not be able to clone.` +
+        (scanned
+          ? ` Add this to config.ts git.knownHosts:\n${scanned}`
+          : ` Run: ssh-keyscan ${port ? `-p ${port} ` : ""}${host}`),
+    );
+  }
+
+  // 3. Quotas (read-only; skipped with a warning if the service-quotas API is
+  //    not readable): a fresh 3-AZ mgmt needs NAT EIPs and on-demand vCPU
+  //    headroom on day one — quota approval is an async human-time wait, so
+  //    it must fail HERE, not an hour in.
+  const quotaLink = (code: string) =>
+    `https://${region}.console.aws.amazon.com/servicequotas/home/services/ec2/quotas/${code}`;
+  try {
+    const eipQuota = JSON.parse(
+      awsq(["service-quotas", "get-service-quota", "--service-code", "ec2", "--quota-code", "L-0263D0A3"]),
+    ).Quota.Value;
+    const eipsInUse = JSON.parse(awsq(["ec2", "describe-addresses"])).Addresses.length;
+    const vcpuQuota = JSON.parse(
+      awsq(["service-quotas", "get-service-quota", "--service-code", "ec2", "--quota-code", "L-1216C47A"]),
+    ).Quota.Value;
+    log(`   Quotas (${region}): EIPs ${eipsInUse}/${eipQuota} used, on-demand vCPUs ${vcpuQuota}`);
+    if (eipQuota - eipsInUse < 3) {
+      throw new Error(
+        `Fewer than 3 free EIPs in ${region} (${eipsInUse}/${eipQuota} used) — request ` +
+          `an increase first: ${quotaLink("L-0263D0A3")}`,
+      );
+    }
+    if (vcpuQuota < 16) {
+      throw new Error(
+        `On-demand vCPU quota ${vcpuQuota} < 16 in ${region} — a fresh management ` +
+          `cluster cannot launch: ${quotaLink("L-1216C47A")}`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof Error && /free EIPs|vCPU quota/.test(e.message)) throw e;
+    log(`   ⚠️  Quota preflight skipped (service-quotas not readable with this profile)`);
+  }
 }
 
 /** The coarse controller permission set (shared with AwsIam's node-role inline policy). */
@@ -1182,7 +1277,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   }
 
   ensureRepoDeps(gitopsDir);
-  const { region, clusterName, keyless, oidc } = readAwsRepoConfig(gitopsDir);
+  const { region, clusterName, keyless, oidc, git } = readAwsRepoConfig(gitopsDir);
 
   log("");
   log("🚀 Nebula AWS Bootstrap (thin — ArgoCD reconciles the platform from git)");
@@ -1194,6 +1289,8 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log(
     `   Credential mode:   ${keyless ? "KEYLESS (node instance profile / IMDS)" : "secret (static keys baked on mgmt)"}`,
   );
+
+  preflightAws(region, options.awsProfile, git, oidc);
 
   // Step 1: Kind bootstrap cluster (ephemeral — only runs CAPA to create mgmt).
   if (!options.skipKind) await createKindCluster(kindName);
