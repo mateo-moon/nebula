@@ -136,6 +136,7 @@ export {
   ArgoCdClusterSync,
   ArgoCdAppTier,
   CAPI_IGNORE_DIFFERENCES,
+  CAPI_CROSSPLANE_HEALTH_LUA,
   ARGOCD_IN_CLUSTER_SERVER,
 } from "./argocd";
 export type {

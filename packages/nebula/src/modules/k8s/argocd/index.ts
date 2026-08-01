@@ -289,6 +289,12 @@ export interface ArgoCdConfig {
   tolerations?: Toleration[];
   /** Extra data to add to the argocd-secret (e.g., OIDC clientID, clientSecret) */
   extraSecretData?: Record<string, string>;
+  /** Health-assessment Lua overrides, keyed `<group>/<Kind>` (glob patterns
+   *  allowed, e.g. "*.aws.upbound.io/*"). Rendered through the
+   *  `resource.customizations` BLOB — the only key form that accepts
+   *  wildcards. See {@link CAPI_CROSSPLANE_HEALTH_LUA} for the shipped
+   *  CAPI+Crossplane truth pack. */
+  resourceHealthChecks?: Record<string, string>;
 }
 
 /**
@@ -484,6 +490,27 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
         // Flatten cm
         configs["cm"] = flattenKeys(cm);
       }
+    }
+
+    // Health-assessment Lua overrides via the resource.customizations BLOB
+    // (single string value under an already-flat cm key — safe post-flatten;
+    // the dotted per-key form cannot carry wildcard group/kind patterns).
+    if (this.config.resourceHealthChecks) {
+      if (!chartValues["configs"]) chartValues["configs"] = {};
+      const configs = chartValues["configs"] as Record<string, unknown>;
+      if (!configs["cm"]) configs["cm"] = {};
+      const cm = configs["cm"] as Record<string, unknown>;
+      // literal block scalars + no folding: Lua must land verbatim (folded
+      // style would join lines, which is only accidentally-valid Lua).
+      cm["resource.customizations"] = yaml.stringify(
+        Object.fromEntries(
+          Object.entries(this.config.resourceHealthChecks).map(([k, lua]) => [
+            k,
+            { "health.lua": lua.trim() + "\n" },
+          ]),
+        ),
+        { blockQuote: "literal", lineWidth: 0 },
+      );
     }
 
     // Append extra SSH known_hosts (self-hosted git servers) to ArgoCD's
@@ -1058,6 +1085,9 @@ kubectl create secret generic ${credentialsSecretName} \\
     bootstrapJob.node.addDependency(bootstrapRoleBinding);
   }
 }
+
+// Re-export the truthful CAPI+Crossplane health Lua pack
+export { CAPI_CROSSPLANE_HEALTH_LUA } from "./health-lua";
 
 // Re-export ArgoCD cluster sync constructs
 export {
