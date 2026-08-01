@@ -55,6 +55,10 @@ const CONTROLLER_POLICY_DOCUMENT = JSON.stringify({
         "ssm:GetParameter",
         "ssm:GetParameters",
         "tag:GetResources",
+        // servicequotas family (quota raises as code) and dlm family (EBS
+        // snapshot lifecycle) 403 without these.
+        "servicequotas:*",
+        "dlm:*",
       ],
     },
   ],

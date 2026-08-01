@@ -8,6 +8,7 @@ import {
   ResolvedK0sCalico,
   resolveK0sCalico,
   renderK0sCalicoSpec,
+  renderK0sCalicoImages,
 } from "./calico";
 
 /**
@@ -296,6 +297,9 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
+              ...(networkProvider === "calico"
+                ? renderK0sCalicoImages(calico)
+                : {}),
               ...(this.config.oidcIssuer
                 ? {
                     api: {

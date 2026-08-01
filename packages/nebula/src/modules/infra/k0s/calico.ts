@@ -44,6 +44,16 @@ export interface K0sCalicoConfig {
   envVars?: Record<string, string>;
   /** Host path for the flex-volume driver. */
   flexVolumeDriverPath?: string;
+  /**
+   * Pin the bundled Calico image version (k0s `spec.images.calico`, the
+   * k0sproject builds on quay.io) — e.g. "v3.31.5-0" for the wg6
+   * tunnel-address allocation fix (calico#10599, fixed upstream v3.31.0).
+   * Renders OUTSIDE network.calico (a ClusterConfig-spec sibling), so the
+   * constructs emit it via {@link renderK0sCalicoImages}. CAUTION: on a
+   * standalone K0sControlPlane any k0sConfigSpec change ROLLS the CP
+   * machines; on a hosted CP it only restarts the CP pod.
+   */
+  imageVersion?: string;
 }
 
 /**
@@ -101,5 +111,30 @@ export function renderK0sCalicoSpec(c: ResolvedK0sCalico): Record<string, unknow
     ...(s.flexVolumeDriverPath
       ? { flexVolumeDriverPath: s.flexVolumeDriverPath }
       : {}),
+  };
+}
+
+/**
+ * Render the `spec.images` fragment for a Calico image pin (empty object when
+ * unset — spreads to nothing, leaving existing clusters' k0sConfigSpec
+ * byte-identical). The k0sproject builds keep k0s's bundled-manifest
+ * compatibility exactly; all three repos publish the same tag.
+ */
+export function renderK0sCalicoImages(
+  c: ResolvedK0sCalico,
+): Record<string, unknown> {
+  const v = c.config.imageVersion;
+  if (!v) return {};
+  return {
+    images: {
+      calico: {
+        cni: { image: "quay.io/k0sproject/calico-cni", version: v },
+        node: { image: "quay.io/k0sproject/calico-node", version: v },
+        kubecontrollers: {
+          image: "quay.io/k0sproject/calico-kube-controllers",
+          version: v,
+        },
+      },
+    },
   };
 }

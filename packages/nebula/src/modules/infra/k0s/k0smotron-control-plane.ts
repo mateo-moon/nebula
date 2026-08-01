@@ -4,6 +4,7 @@ import {
   K0sCalicoConfig,
   resolveK0sCalico,
   renderK0sCalicoSpec,
+  renderK0sCalicoImages,
 } from "./calico";
 import {
   K0smotronControlPlaneV1Beta2,
@@ -150,7 +151,8 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const networkProvider = this.config.networkProvider ?? "calico";
-    const calico = renderK0sCalicoSpec(resolveK0sCalico(this.config.calico));
+    const resolvedCalico = resolveK0sCalico(this.config.calico);
+    const calico = renderK0sCalicoSpec(resolvedCalico);
 
     const cpPersistence = this.config.persistence;
     const persistence: K0SmotronControlPlaneV1Beta2SpecPersistence =
@@ -221,6 +223,9 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
                   }
                 : {}),
             },
+            ...(networkProvider === "calico"
+              ? renderK0sCalicoImages(resolvedCalico)
+              : {}),
           },
         },
         persistence,

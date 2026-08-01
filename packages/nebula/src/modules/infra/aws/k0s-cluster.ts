@@ -6,6 +6,7 @@ import {
   K0sCalicoConfig,
   resolveK0sCalico,
   renderK0sCalicoSpec,
+  renderK0sCalicoImages,
 } from "../k0s/calico";
 import {
   DEFAULT_PRESTART_COMMANDS,
@@ -355,6 +356,9 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
                 podCIDR: podCidr,
                 serviceCIDR: serviceCidr,
               },
+              ...(networkProvider === "calico"
+                ? renderK0sCalicoImages(calico)
+                : {}),
               // OIDC issuer for IRSA: point the apiserver's service-account issuer
               // at the public S3-hosted discovery so AWS STS can validate this
               // cluster's projected SA tokens. extraArgs is a map (single issuer).
