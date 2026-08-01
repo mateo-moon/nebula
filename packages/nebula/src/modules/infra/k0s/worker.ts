@@ -366,7 +366,12 @@ export class WorkerSetup extends Construct {
                       // after severance then sends publicIp AND allocationId -
                       // "may specify public IP or allocation id, but not both"
                       // (observed live). Same guard the git-era followers had.
-                      managementPolicies: ["Observe", "Create", "Update", "Delete"],
+                      // No Update either: instance_id/allocation_id changes all
+                      // require replacement, which upjet refuses — the follower
+                      // model replaces via the instance-id-derived NAME (new MR,
+                      // GC old), so Update can only ever wedge (observed live:
+                      // 7 followers Synced=False after instance churn).
+                      managementPolicies: ["Observe", "Create", "Delete"],
                       forProvider: {
                         region: "placeholder",
                         allowReassociation: true,
