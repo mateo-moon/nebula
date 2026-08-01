@@ -56,7 +56,9 @@ export type AwsProviderFamily =
   | "s3"
   | "elasticache"
   | "rds"
-  | "secretsmanager";
+  | "secretsmanager"
+  | "servicequotas"
+  | "dlm";
 
 export interface AwsProviderConfig {
   /** Provider name prefix (default: 'provider-aws') */
