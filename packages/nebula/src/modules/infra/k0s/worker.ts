@@ -444,12 +444,12 @@ export class WorkerSetup extends Construct {
                     kind: "VolumeAttachment",
                     metadata: { name: "placeholder" },
                     spec: {
-                      // No LateInitialize: it captures the observed publicIp
-                      // (association) / device state into spec, and a recreate
-                      // after severance then sends publicIp AND allocationId -
-                      // "may specify public IP or allocation id, but not both"
-                      // (observed live). Same guard the git-era followers had.
-                      managementPolicies: ["Observe", "Create", "Update", "Delete"],
+                      // Same policy shape as the eip-association follower:
+                      // every identity field (volume/instance/device) is
+                      // replacement-requiring, replacement happens via the
+                      // instance-id-derived NAME (new MR, GC old), so Update
+                      // and LateInitialize can only pollute spec or wedge.
+                      managementPolicies: ["Observe", "Create", "Delete"],
                       forProvider: {
                         region: "placeholder",
                         deviceName: "placeholder",

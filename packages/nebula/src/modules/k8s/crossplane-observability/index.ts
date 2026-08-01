@@ -6,10 +6,10 @@
  * (zombie instances), and MRs sit Synced=False for hours with nothing paging.
  * Observed live during a stage fleet rebuild; the pack has three layers:
  *
- * 1. kube-state-metrics customResourceState turns MR status conditions into
- *    a `crossplane_condition` metric ({@link kubeStateMetricsValues} — a
- *    values fragment for the kube-prometheus-stack chart, since ksm config is
- *    chart-side, not a CR).
+ * 1. kube-state-metrics customResourceState turns MR status conditions AND
+ *    the create/identity annotations into metrics ({@link
+ *    kubeStateMetricsValues} — a values fragment for the kube-prometheus-stack
+ *    chart, since ksm config is chart-side, not a CR).
  * 2. Two PodMonitors scrape the controllers — core crossplane serves metrics
  *    on 8080 (8081 is readyz and 404s /metrics), providers (labeled
  *    pkg.crossplane.io/provider) also on 8080. Providers only, NOT the
@@ -17,8 +17,9 @@
  *    label too but serve gRPC with no metrics endpoint — matching them
  *    leaves permanently-down targets (observed: TargetDown crossplane-system
  *    for all three function pods).
- * 3. A PrometheusRule alerting on Synced=False, on provider silence, and on
- *    the scrape itself going blind.
+ * 3. A PrometheusRule alerting on Synced=False, on the duplicate-create
+ *    precursors (Ready without external-name; stuck external-create-pending),
+ *    on provider silence, and on the scrape itself going blind.
  *
  * The silence rule's rate window must OUTLAST the providers' resync interval:
  * a zero-MR provider's only activity is an hourly resync burst (observed:
@@ -107,6 +108,41 @@ export function kubeStateMetricsValues(kinds: CrossplaneWatchedKind[]): object {
                     },
                   },
                 },
+                // External identity: an MR that is Ready without an
+                // external-name loses its external on the next provider
+                // restart and re-creates a duplicate (the leak class).
+                {
+                  name: "crossplane_external_name",
+                  help: "crossplane.io/external-name annotation (external_name label; absent/empty when unset)",
+                  each: {
+                    type: "Info",
+                    info: {
+                      path: ["metadata", "annotations"],
+                      labelsFromPath: {
+                        external_name: ["crossplane.io/external-name"],
+                      },
+                    },
+                  },
+                },
+                // The async-create audit trail as epoch gauges (ksm parses
+                // RFC3339 into seconds; nilIsZero → comparable 0 when absent):
+                // pending newer than both outcomes = crossplane refuses to
+                // reconcile until an operator resolves the create.
+                ...["pending", "succeeded", "failed"].map((phase) => ({
+                  name: `crossplane_external_create_${phase}`,
+                  help: `crossplane.io/external-create-${phase} annotation as epoch seconds (0 when absent)`,
+                  each: {
+                    type: "Gauge",
+                    gauge: {
+                      path: [
+                        "metadata",
+                        "annotations",
+                        `crossplane.io/external-create-${phase}`,
+                      ],
+                      nilIsZero: true,
+                    },
+                  },
+                })),
               ],
             })),
           },
@@ -175,6 +211,36 @@ export class CrossplaneObservability extends Construct {
                   summary: "MR {{ $labels.name }} Synced=False for 30m",
                   description:
                     "A Crossplane managed resource has failed to reconcile for 30 minutes - wedged update/delete or provider error. Inspect: kubectl describe {{ $labels.customresource_kind }} {{ $labels.name }}",
+                },
+              },
+              {
+                // The duplicate-create precursor (observed live: 38 leaked
+                // instances + 16 stray EIPs): a Ready MR without an
+                // external-name is one provider restart away from forgetting
+                // its external and creating a clone. Empty-label matcher
+                // covers both ksm behaviors for a missing annotation (series
+                // skipped vs emitted label-less).
+                alert: "CrossplaneExternalNameMissing",
+                expr: 'kube_customresource_crossplane_condition{type="Ready"} == 1 unless on (cluster, customresource_kind, name) kube_customresource_crossplane_external_name{external_name!=""}',
+                for: "15m",
+                labels: { severity: "critical" },
+                annotations: {
+                  summary:
+                    "MR {{ $labels.name }} is Ready without an external-name",
+                  description:
+                    "A Ready managed resource carries no crossplane.io/external-name: the next provider restart loses the external identity and CREATES A DUPLICATE (the instance-leak class). Re-adopt now: kubectl annotate {{ $labels.customresource_kind }} {{ $labels.name }} crossplane.io/external-name=<live id>.",
+                },
+              },
+              {
+                alert: "CrossplaneExternalCreateStuck",
+                expr: "(kube_customresource_crossplane_external_create_pending > on (cluster, customresource_kind, name) kube_customresource_crossplane_external_create_succeeded) and on (cluster, customresource_kind, name) (kube_customresource_crossplane_external_create_pending > on (cluster, customresource_kind, name) kube_customresource_crossplane_external_create_failed)",
+                for: "20m",
+                labels: { severity: "warning" },
+                annotations: {
+                  summary:
+                    "MR {{ $labels.name }} stuck in external-create-pending",
+                  description:
+                    "external-create-pending is newer than both -succeeded and -failed: the provider died mid-create and crossplane refuses to reconcile this MR until an operator verifies the external state and removes the crossplane.io/external-create-pending annotation.",
                 },
               },
               {

@@ -123,11 +123,21 @@ export interface AwsWorkerFleetNode {
   nodeLabels: Record<string, string>;
   /** Raw --register-with-taints entries, e.g. "workload=x:NoSchedule". */
   taints?: string[];
-  /** Data volume size in GiB (the LVM PV under OpenEBS). Omit: no volume. */
-  dataVolumeGi?: number;
-  /** Override the data-volume MR name (an MR rename is a volume REPLACEMENT —
-   *  days of chain resync). Defaults to `<name>-data`. */
-  dataVolumeMrName?: string;
+  /** Data volume (the LVM PV under OpenEBS). FAIL-CLOSED identity: presence
+   *  alone never creates anything — declare the existing volume's id
+   *  (adoption; the id is stable, doctrine-safe in git) or explicitly ask for
+   *  a fresh empty volume. Rules out the silent-recreation failure mode where
+   *  a lost adoption turns days of chain data into a blank disk.
+   *  mrName overrides the MR name (an MR rename is a volume REPLACEMENT —
+   *  days of chain resync); defaults to `<name>-data`. */
+  dataVolume?: { sizeGi: number; mrName?: string } & (
+    | { volumeId: string; createFresh?: never }
+    | { createFresh: true; volumeId?: never }
+  );
+  /** Existing EIP allocation to adopt as this node's Eip MR (external-name).
+   *  Stable id, safe in git — same pattern as dns adoptZoneId. Omit on a
+   *  fresh build: the Eip is allocated and its id then belongs in git. */
+  allocationId?: string;
   rootVolumeGi?: number;
   spot?: boolean;
   /** IMDS hop limit 2: pods on this node may use the node role (keyless AWS
@@ -174,20 +184,29 @@ export class AwsWorkerFleet extends Construct {
 
   /**
    * Allocate a node's stable EIP. Standalone so addresses exist ahead of the
-   * instances. OBSERVE/CREATE/DELETE only: the association is owned by the
-   * Worker composition, and Update/LateInitialize on the Eip itself would
-   * fight it — full management sees the runtime association as drift and
-   * DisassociateAddresses on every reconcile, while LateInitialize captures a
-   * then-current instance id that goes stale on replacement.
+   * instances. No Update: the association is owned by the Worker composition,
+   * and an updating Eip sees the runtime association as drift and
+   * DisassociateAddresses on every reconcile (observed live). LateInitialize
+   * IS on: upjet persists crossplane.io/external-name through the late-init
+   * step after an ASYNC create (crossplane#5918/upjet#531) — without it a
+   * provider restart forgets the allocation and AllocateAddress duplicates
+   * (observed live: 16 stray EIPs). The late-init'd instance field is inert
+   * with Update off. allocationId adopts an existing address (external-name).
    */
-  addEip(name: string, region: string) {
+  addEip(name: string, region: string, allocationId?: string) {
     new Eip(this, `${name}-eip`, {
-      metadata: { name },
+      metadata: {
+        name,
+        ...(allocationId
+          ? { annotations: { "crossplane.io/external-name": allocationId } }
+          : {}),
+      },
       spec: {
         managementPolicies: [
           EipSpecManagementPolicies.OBSERVE,
           EipSpecManagementPolicies.CREATE,
           EipSpecManagementPolicies.DELETE,
+          EipSpecManagementPolicies.LATE_INITIALIZE,
         ],
         forProvider: {
           region,
@@ -442,7 +461,7 @@ export class AwsWorkerFleet extends Construct {
     // Data volume -> LVM VG. create-if-absent ONLY: on instance replacement
     // the volume re-attaches carrying its data — vgcreate on a populated PV
     // would destroy exactly what this design preserves.
-    const lvmSection = node.dataVolumeGi
+    const lvmSection = node.dataVolume
       ? `
 ROOT_PART=$(findmnt -no SOURCE /)
 ROOT_DISK=/dev/$(lsblk -no PKNAME "$ROOT_PART")
@@ -510,20 +529,34 @@ ${lvmSection}`;
   addNode(region: AwsWorkerFleetRegion, node: AwsWorkerFleetNode, iamProfile: string) {
     const o = this.options;
     const p = this.prefix(region);
-    const dataVolumeMrName = node.dataVolumeGi
-      ? (node.dataVolumeMrName ?? `${node.name}-data`)
-      : undefined;
-    if (dataVolumeMrName) {
+    const dv = node.dataVolume;
+    const dataVolumeMrName = dv ? (dv.mrName ?? `${node.name}-data`) : undefined;
+    if (dv && dataVolumeMrName) {
       new ApiObject(this, `${node.name}-data-volume`, {
         apiVersion: "ec2.aws.upbound.io/v1beta1",
         kind: "EBSVolume",
-        metadata: { name: dataVolumeMrName },
+        metadata: {
+          name: dataVolumeMrName,
+          ...(dv.volumeId
+            ? { annotations: { "crossplane.io/external-name": dv.volumeId } }
+            : {}),
+        },
         spec: {
-          deletionPolicy: "Delete",
+          // Data outlives every k8s object: Orphan + no Delete policy means
+          // nothing Crossplane-side can destroy the volume; Create exists
+          // only under an explicit createFresh. Update stays (gp3 size growth
+          // is in-place; the on-node pvresize timer picks it up).
+          deletionPolicy: "Orphan",
+          managementPolicies: [
+            "Observe",
+            ...(dv.createFresh ? ["Create"] : []),
+            "Update",
+            "LateInitialize",
+          ],
           forProvider: {
             region: region.region,
             availabilityZone: region.az,
-            size: node.dataVolumeGi,
+            size: dv.sizeGi,
             type: "gp3",
             encrypted: true,
             tags: {
@@ -541,16 +574,20 @@ ${lvmSection}`;
       metadata: { name: node.name },
       spec: {
         deletionPolicy: "Delete",
-        // No LateInitialize: it captured the first instance's ENI into spec,
-        // and after a replacement the provider refuses the resulting "update"
-        // forever — wedging reconciliation while the node runs fine.
-        // No Update either: every meaningful Instance change (userData, type,
-        // AMI) requires replacement, which upjet refuses — so Update can only
-        // ever produce the same permanent refusal wedge (observed live:
-        // user_data drift after adoption). Replacement is done by DELETING
-        // the MR/Machine; userDataReplaceOnChange below is inert under this
-        // policy and kept only to document intent for the create path.
-        managementPolicies: ["Observe", "Create", "Delete"],
+        // No Update: every meaningful Instance change (userData, type, AMI)
+        // requires replacement, which upjet refuses — so Update can only
+        // ever produce a permanent refusal wedge (observed live: user_data
+        // drift after adoption, and the first instance's ENI late-init'd
+        // into spec). Replacement is done by DELETING the MR/Machine;
+        // userDataReplaceOnChange below is inert under this policy and kept
+        // only to document intent for the create path.
+        // LateInitialize IS required even with Update off: upjet persists
+        // crossplane.io/external-name through the late-init step after an
+        // ASYNC create (crossplane#5918/upjet#531) — without it a provider
+        // restart forgets the create and RunInstances a duplicate (observed
+        // live: 38 leaked instances across three regions). The late-init'd
+        // spec fields are inert because Update stays off.
+        managementPolicies: ["Observe", "Create", "Delete", "LateInitialize"],
         forProvider: {
           region: region.region,
           ami: node.ami,
