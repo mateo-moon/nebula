@@ -22,6 +22,7 @@ import {
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
+import { OBSERVE_POLICIES } from "../../../utils/crossplane-policies";
 
 export interface DualStackSubnetConfig {
   /** metadata.name of the Vpc managed resource to observe. */
@@ -124,7 +125,7 @@ export class DualStackSubnetSetup extends Construct {
                     apiVersion: "kubernetes.crossplane.io/v1alpha2",
                     kind: "Object",
                     spec: {
-                      managementPolicies: ["Observe"],
+                      managementPolicies: OBSERVE_POLICIES,
                       forProvider: {
                         manifest: {
                           apiVersion: "ec2.aws.upbound.io/v1beta1",
