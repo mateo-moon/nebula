@@ -120,6 +120,23 @@ export const CAPI_IGNORE_DIFFERENCES: ApplicationSpecIgnoreDifferences[] = [
     // AWSCluster's own LB is DISABLED for workload clusters).
     jqPathExpressions: [".spec.controlPlaneEndpoint"],
   },
+  {
+    group: "ec2.aws.upbound.io",
+    kind: "LaunchTemplate",
+    // Provider-written spec fields on the worker LaunchTemplates:
+    //   networkInterfaces — upjet resolves securityGroupRefs into
+    //     `securityGroups` INSIDE the array element. The array is atomic, so
+    //     server-side-apply cannot attribute that one field to the provider
+    //     and the whole list reads as drift (observed live: all 9 LTs
+    //     permanently OutOfSync right after the ASG lifecycle landed).
+    //   tags — crossplane stamps its own crossplane-kind/-name/-providerconfig
+    //     tags into spec; git never sets forProvider.tags (instance tagging
+    //     goes through tagSpecifications).
+    jqPathExpressions: [
+      ".spec.forProvider.networkInterfaces",
+      ".spec.forProvider.tags",
+    ],
+  },
 ];
 
 /** The in-cluster API server destination. */
