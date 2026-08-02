@@ -74,6 +74,17 @@ export interface AwsProviderConfig {
    * DNS and 'kms' for SOPS-KMS.
    */
   families?: AwsProviderFamily[];
+  /**
+   * Optional NodeAffinity for every family's controller pod, emitted via a
+   * per-family DeploymentRuntimeConfig (the crossplane-native scheduling
+   * surface). Motivation: a controller hard-killed mid-ASYNC-create leaks
+   * the created external — terraform's aws_instance sets no RunInstances
+   * idempotency token, so the only source-side lever is keeping controllers
+   * on nodes that do not starve (observed live: provider-aws-ec2 dying on a
+   * starved 2-vCPU node duplicated a spot recreate twice). Verbatim k8s
+   * NodeAffinity object.
+   */
+  runtimeNodeAffinity?: Record<string, unknown>;
 }
 
 /**
@@ -136,13 +147,17 @@ export class AwsProvider extends Construct {
     });
 
     // Create a Provider for each family (shared loop body — see providers/_shared).
+    const affinity = config.runtimeNodeAffinity;
     for (const family of families) {
       let runtimeConfigRef: string | undefined;
-      if (webIdentity) {
-        runtimeConfigRef = `${providerNamePrefix}-${family}-irsa`;
+      if (webIdentity || affinity) {
+        // Name stays `-irsa` for the webIdentity case (live objects keep their
+        // identity); affinity-only setups get a `-runtime` config.
+        runtimeConfigRef = `${providerNamePrefix}-${family}-${webIdentity ? "irsa" : "runtime"}`;
         // DeploymentRuntimeConfig: project an sts.amazonaws.com-audience SA token
-        // into the family's provider pod and set the region. `selector: {}` is
-        // required by the schema but overridden by Crossplane (validated live).
+        // into the family's provider pod and set the region (webIdentity), and/or
+        // pin the controller pod's scheduling (runtimeNodeAffinity). `selector: {}`
+        // is required by the schema but overridden by Crossplane (validated live).
         new ApiObject(this, `runtime-config-${family}`, {
           apiVersion: "pkg.crossplane.io/v1beta1",
           kind: "DeploymentRuntimeConfig",
@@ -153,38 +168,45 @@ export class AwsProvider extends Construct {
                 selector: {},
                 template: {
                   spec: {
-                    containers: [
-                      {
-                        name: "package-runtime",
-                        env: [
-                          { name: "AWS_REGION", value: webIdentity.region },
-                          { name: "AWS_STS_REGIONAL_ENDPOINTS", value: "regional" },
-                        ],
-                        volumeMounts: [
-                          {
-                            name: "aws-iam-token",
-                            mountPath: tokenMountDir,
-                            readOnly: true,
-                          },
-                        ],
-                      },
-                    ],
-                    volumes: [
-                      {
-                        name: "aws-iam-token",
-                        projected: {
-                          sources: [
+                    ...(affinity ? { affinity: { nodeAffinity: affinity } } : {}),
+                    // Token projection only for webIdentity; an affinity-only
+                    // config overrides nothing else in the pod.
+                    ...(webIdentity
+                      ? {
+                          containers: [
                             {
-                              serviceAccountToken: {
-                                audience: "sts.amazonaws.com",
-                                expirationSeconds: 86400,
-                                path: tokenFile,
+                              name: "package-runtime",
+                              env: [
+                                { name: "AWS_REGION", value: webIdentity.region },
+                                { name: "AWS_STS_REGIONAL_ENDPOINTS", value: "regional" },
+                              ],
+                              volumeMounts: [
+                                {
+                                  name: "aws-iam-token",
+                                  mountPath: tokenMountDir,
+                                  readOnly: true,
+                                },
+                              ],
+                            },
+                          ],
+                          volumes: [
+                            {
+                              name: "aws-iam-token",
+                              projected: {
+                                sources: [
+                                  {
+                                    serviceAccountToken: {
+                                      audience: "sts.amazonaws.com",
+                                      expirationSeconds: 86400,
+                                      path: tokenFile,
+                                    },
+                                  },
+                                ],
                               },
                             },
                           ],
-                        },
-                      },
-                    ],
+                        }
+                      : {}),
                   },
                 },
               },

@@ -119,6 +119,9 @@ export type {
   ExternalDnsCredentialsSecret,
 } from "./external-dns";
 
+export { AwsOrphanSweep } from "./aws-orphan-sweep";
+export type { AwsOrphanSweepConfig } from "./aws-orphan-sweep";
+
 export { PrometheusOperator, MemberMonitoring } from "./prometheus-operator";
 export type {
   PrometheusOperatorConfig,
