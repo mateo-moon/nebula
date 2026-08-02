@@ -42,8 +42,13 @@ const DLM_SERVICE_POLICY_ARN =
 const VALID_INTERVALS = [1, 2, 3, 4, 6, 8, 12, 24];
 
 export interface DlmSnapshotSchedule {
-  /** Policy name — also the DLM description, which AWS requires. */
+  /** Schedule id. The LifecyclePolicy MR is named `<config.name>-<name>`, so
+   *  this is also how an existing policy is adopted without churn. */
   name: string;
+  /** DLM policy description. AWS restricts these to `[0-9A-Za-z _-]` — no
+   *  punctuation. Defaults to the MR name, which is rarely what a human
+   *  reading the AWS console wants. */
+  description?: string;
   region: string;
   /**
    * Volumes carrying ALL of these tags are snapshotted. DLM matches key AND
@@ -68,6 +73,9 @@ export interface DlmSnapshotSchedule {
 export interface AwsDlmConfig {
   /** Resource-name prefix, e.g. "stage". */
   name: string;
+  /** Execution-role name (default `<name>-dlm-role`). Set it to adopt a role
+   *  that already exists — the MR keeps its name, so nothing is recreated. */
+  roleName?: string;
   schedules: DlmSnapshotSchedule[];
   /** Crossplane ProviderConfig (default "default"). */
   providerConfigRef?: string;
@@ -90,7 +98,7 @@ export class AwsDlm extends Construct {
     super(scope, id);
 
     const providerConfigRef = { name: config.providerConfigRef ?? "default" };
-    this.roleName = `${config.name}-dlm-role`;
+    this.roleName = config.roleName ?? `${config.name}-dlm-role`;
     const tags = { ...config.tags, "nebula.sh/role": "dlm" };
 
     // Deterministic AWS name via external-name, matching AwsIam: the policies
@@ -111,7 +119,10 @@ export class AwsDlm extends Construct {
     });
 
     new CpRolePolicyAttachment(this, "dlm-role-policy", {
-      metadata: { name: `${config.name}-dlm-policy` },
+      // Derived from the role, not the prefix, so adopting a role adopts its
+      // attachment too — a differently-named MR here would detach and
+      // reattach the policy on the live role.
+      metadata: { name: `${this.roleName}-service` },
       spec: {
         forProvider: {
           policyArn: DLM_SERVICE_POLICY_ARN,
@@ -129,6 +140,15 @@ export class AwsDlm extends Construct {
             `${VALID_INTERVALS.join(", ")} (got ${interval})`,
         );
       }
+      const description = s.description ?? `${config.name}-${s.name}`;
+      if (!/^[0-9A-Za-z _-]*$/.test(description)) {
+        // DLM rejects anything else, and the API error names the field but
+        // not the offending character.
+        throw new Error(
+          `DLM schedule "${s.name}": description must match [0-9A-Za-z _-] ` +
+            `(got "${description}")`,
+        );
+      }
       if (Object.keys(s.targetTags).length === 0) {
         // An empty target set matches every volume in the region, which is a
         // silent way to snapshot the entire estate on a schedule.
@@ -140,7 +160,7 @@ export class AwsDlm extends Construct {
         spec: {
           forProvider: {
             region: s.region,
-            description: `${config.name}-${s.name}`,
+            description,
             executionRoleArnRef: { name: this.roleName },
             state: "ENABLED",
             tags,
