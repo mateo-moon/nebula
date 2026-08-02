@@ -58,7 +58,8 @@ export type AwsProviderFamily =
   | "rds"
   | "secretsmanager"
   | "servicequotas"
-  | "dlm";
+  | "dlm"
+  | "autoscaling";
 
 export interface AwsProviderConfig {
   /** Provider name prefix (default: 'provider-aws') */

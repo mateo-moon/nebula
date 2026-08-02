@@ -52,8 +52,10 @@ import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
 export interface WorkerConfig {
   /** metadata.name of the Eip managed resource to observe (cluster-scoped). */
   eipName: string;
-  /** metadata.name of the Instance managed resource to observe. */
-  instanceName: string;
+  /** metadata.name of the Instance managed resource to observe. Omit for
+   *  self-assembled (ASG-lifecycle) nodes: no observer and no
+   *  instance-id-derived followers are composed. */
+  instanceName?: string;
   /** AWS region for the composed follower MRs (EIPAssociation/VolumeAttachment). */
   region: string;
   /** metadata.name of the data EBSVolume MR. Omit for nodes without one. */
@@ -149,7 +151,6 @@ export class WorkerSetup extends Construct {
                     type: "object",
                     required: [
                       "eipName",
-                      "instanceName",
                       "region",
                       "deviceName",
                       "pool",
@@ -271,10 +272,16 @@ export class WorkerSetup extends Construct {
                   name: "instance",
                   base: observeBase("Instance"),
                   patches: [
+                    // Required gates the whole observer: a self-assembled
+                    // (ASG-lifecycle) node has NO Instance MR — omitting
+                    // instanceName composes no observer, status.instanceId
+                    // never fills, and every instance-id-gated follower
+                    // self-gates out downstream.
                     {
                       type: "FromCompositeFieldPath",
                       fromFieldPath: "spec.instanceName",
                       toFieldPath: "spec.forProvider.manifest.metadata.name",
+                      policy: { fromFieldPath: "Required" },
                     },
                     providerConfigPatch,
                     {
@@ -552,7 +559,7 @@ export class Worker extends Construct {
           },
         },
         eipName: config.eipName,
-        instanceName: config.instanceName,
+        ...(config.instanceName ? { instanceName: config.instanceName } : {}),
         region: config.region,
         ...(config.dataVolumeName
           ? { dataVolumeName: config.dataVolumeName }
