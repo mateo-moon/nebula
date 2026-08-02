@@ -10,6 +10,8 @@ export type { NodeIngressRuleSpec, SpotSelection } from "./_shared";
 export type { AwsIamConfig } from "./iam";
 export { S3Bucket } from "./s3";
 export type { S3BucketConfig } from "./s3";
+export { AwsDlm } from "./dlm";
+export type { AwsDlmConfig, DlmSnapshotSchedule } from "./dlm";
 export { AwsK0sCluster } from "./k0s-cluster";
 // Re-export so consumers can set controlPlaneLoadBalancerScheme without a deep import.
 export { AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme } from "#imports/infrastructure.cluster.x-k8s.io";
