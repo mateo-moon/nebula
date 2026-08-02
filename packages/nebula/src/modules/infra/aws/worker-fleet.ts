@@ -756,12 +756,17 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
     new ApiObject(this, `${node.name}-asg`, {
       apiVersion: "autoscaling.aws.upbound.io/v1beta1",
       kind: "AutoscalingGroup",
-      metadata: { name: node.name },
+      metadata: {
+        name: node.name,
+        // upjet identifies the ASG by external-name (there is NO
+        // forProvider.name in the schema) — the annotation IS the AWS name.
+        // Explicit, though metadata.name would default it.
+        annotations: { "crossplane.io/external-name": node.name },
+      },
       spec: {
         deletionPolicy: "Delete",
         forProvider: {
           region: region.region,
-          name: node.name,
           minSize: 1,
           maxSize: 1,
           desiredCapacity: 1,
