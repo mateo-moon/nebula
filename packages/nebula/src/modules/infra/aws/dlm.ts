@@ -45,6 +45,16 @@ export interface DlmSnapshotSchedule {
   /** Schedule id. The LifecyclePolicy MR is named `<config.name>-<name>`, so
    *  this is also how an existing policy is adopted without churn. */
   name: string;
+  /**
+   * DLM's own name for the schedule (default: {@link name}).
+   *
+   * Distinct from the MR name because DLM stamps it onto every snapshot as
+   * `aws:dlm:lifecycle-schedule-name` and applies retention PER SCHEDULE
+   * NAME: renaming it strands the snapshots taken under the old name outside
+   * the retain count, so they are never pruned. Set this when adopting a
+   * policy whose schedule is already producing snapshots.
+   */
+  scheduleName?: string;
   /** DLM policy description. AWS restricts these to `[0-9A-Za-z _-]` — no
    *  punctuation. Defaults to the MR name, which is rarely what a human
    *  reading the AWS console wants. */
@@ -170,7 +180,7 @@ export class AwsDlm extends Construct {
               targetTags: s.targetTags,
               schedule: [
                 {
-                  name: s.name,
+                  name: s.scheduleName ?? s.name,
                   copyTags: s.copyTags ?? true,
                   createRule: {
                     interval,
