@@ -45,6 +45,7 @@ import {
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
+import { OBSERVE_POLICIES } from "../../../utils/crossplane-policies";
 
 export interface KarmadaCredentialSyncConfig {
   /** Human-readable cluster name */
@@ -222,7 +223,7 @@ spec:
                     apiVersion: "kubernetes.crossplane.io/v1alpha2",
                     kind: "Object",
                     spec: {
-                      managementPolicies: ["Observe"],
+                      managementPolicies: OBSERVE_POLICIES,
                       forProvider: {
                         manifest: {
                           apiVersion: "v1",

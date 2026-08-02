@@ -48,6 +48,10 @@ import {
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
+import {
+  FOLLOWER_POLICIES,
+  OBSERVE_POLICIES,
+} from "../../../utils/crossplane-policies";
 
 export interface WorkerConfig {
   /** metadata.name of the Eip managed resource to observe (cluster-scoped). */
@@ -83,7 +87,7 @@ const observeBase = (kind: string) => ({
   apiVersion: "kubernetes.crossplane.io/v1alpha2",
   kind: "Object",
   spec: {
-    managementPolicies: ["Observe"],
+    managementPolicies: OBSERVE_POLICIES,
     forProvider: {
       manifest: {
         apiVersion: "ec2.aws.upbound.io/v1beta1",
@@ -368,17 +372,7 @@ export class WorkerSetup extends Construct {
                     kind: "EIPAssociation",
                     metadata: { name: "placeholder" },
                     spec: {
-                      // No LateInitialize: it captures the observed publicIp
-                      // (association) / device state into spec, and a recreate
-                      // after severance then sends publicIp AND allocationId -
-                      // "may specify public IP or allocation id, but not both"
-                      // (observed live). Same guard the git-era followers had.
-                      // No Update either: instance_id/allocation_id changes all
-                      // require replacement, which upjet refuses — the follower
-                      // model replaces via the instance-id-derived NAME (new MR,
-                      // GC old), so Update can only ever wedge (observed live:
-                      // 7 followers Synced=False after instance churn).
-                      managementPolicies: ["Observe", "Create", "Delete"],
+                      managementPolicies: FOLLOWER_POLICIES,
                       forProvider: {
                         region: "placeholder",
                         allowReassociation: true,
@@ -451,12 +445,7 @@ export class WorkerSetup extends Construct {
                     kind: "VolumeAttachment",
                     metadata: { name: "placeholder" },
                     spec: {
-                      // Same policy shape as the eip-association follower:
-                      // every identity field (volume/instance/device) is
-                      // replacement-requiring, replacement happens via the
-                      // instance-id-derived NAME (new MR, GC old), so Update
-                      // and LateInitialize can only pollute spec or wedge.
-                      managementPolicies: ["Observe", "Create", "Delete"],
+                      managementPolicies: FOLLOWER_POLICIES,
                       forProvider: {
                         region: "placeholder",
                         deviceName: "placeholder",
