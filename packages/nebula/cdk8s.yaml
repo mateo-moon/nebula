@@ -65,6 +65,9 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/servicequotas.aws.upbound.io_servicequotas.yaml
   # AWS Provider CRDs - DLM (EBS snapshot lifecycle - kmc etcd backups)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/dlm.aws.upbound.io_lifecyclepolicies.yaml
+  # AWS Provider CRDs - name-keyed instance lifecycle (LT + size-1 ASG)
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ec2.aws.upbound.io_launchtemplates.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/autoscaling.aws.upbound.io_autoscalinggroups.yaml
   # cert-manager CRDs (using v1.18.0 - CRDs are backward compatible)
   - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-clusterissuers.yaml
   - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-issuers.yaml
