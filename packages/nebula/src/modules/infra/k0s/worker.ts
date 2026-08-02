@@ -380,6 +380,21 @@ export class WorkerSetup extends Construct {
                     },
                   },
                   patches: [
+                    // Gate on the SPEC field, not just status.instanceId:
+                    // once an asg-lifecycle node stops composing the Instance
+                    // observer, status.instanceId FREEZES at the last
+                    // observed (now-terminated) id — nothing is left to clear
+                    // it — so a status-only gate keeps composing followers
+                    // against a dead instance forever (observed live: 9
+                    // permanently Synced=False EIPAssociations that returned
+                    // seconds after deletion). Absent spec.instanceName =>
+                    // Required patch fails => the whole follower is skipped.
+                    {
+                      type: "FromCompositeFieldPath",
+                      fromFieldPath: "spec.instanceName",
+                      toFieldPath: "metadata.labels[\"k0s.nuconstruct.io/instance-mr\"]",
+                      policy: { fromFieldPath: "Required" },
+                    },
                     // Name from the observed instance id: replacement composes
                     // a fresh association and garbage-collects the stale one —
                     // never an in-place instance_id update for upjet to refuse.
@@ -453,6 +468,21 @@ export class WorkerSetup extends Construct {
                     },
                   },
                   patches: [
+                    // Gate on the SPEC field, not just status.instanceId:
+                    // once an asg-lifecycle node stops composing the Instance
+                    // observer, status.instanceId FREEZES at the last
+                    // observed (now-terminated) id — nothing is left to clear
+                    // it — so a status-only gate keeps composing followers
+                    // against a dead instance forever (observed live: 9
+                    // permanently Synced=False EIPAssociations that returned
+                    // seconds after deletion). Absent spec.instanceName =>
+                    // Required patch fails => the whole follower is skipped.
+                    {
+                      type: "FromCompositeFieldPath",
+                      fromFieldPath: "spec.instanceName",
+                      toFieldPath: "metadata.labels[\"k0s.nuconstruct.io/instance-mr\"]",
+                      policy: { fromFieldPath: "Required" },
+                    },
                     {
                       type: "CombineFromComposite",
                       combine: {
