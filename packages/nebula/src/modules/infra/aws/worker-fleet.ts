@@ -29,6 +29,11 @@ import { Worker } from "../k0s/worker";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { resolveSecrets } from "../../../utils/secrets";
 import {
+  OWNED_POLICIES,
+  asPolicies,
+  dataVolumePolicies,
+} from "../../../utils/crossplane-policies";
+import {
   Eip,
   EipSpecManagementPolicies,
   InternetGateway,
@@ -205,14 +210,12 @@ export class AwsWorkerFleet extends Construct {
 
   /**
    * Allocate a node's stable EIP. Standalone so addresses exist ahead of the
-   * instances. No Update: the association is owned by the Worker composition,
-   * and an updating Eip sees the runtime association as drift and
-   * DisassociateAddresses on every reconcile (observed live). LateInitialize
-   * IS on: upjet persists crossplane.io/external-name through the late-init
-   * step after an ASYNC create (crossplane#5918/upjet#531) — without it a
-   * provider restart forgets the allocation and AllocateAddress duplicates
-   * (observed live: 16 stray EIPs). The late-init'd instance field is inert
-   * with Update off. allocationId adopts an existing address (external-name).
+   * instances. OWNED_POLICIES also buys the EIP-specific guard that Update
+   * must stay off here: the association is owned by the Worker composition,
+   * so an updating Eip sees the runtime association as drift and
+   * DisassociateAddresses on every reconcile (observed live) — and dropping
+   * LateInitialize instead cost 16 stray EIPs. allocationId adopts an
+   * existing address (external-name).
    */
   addEip(name: string, region: string, allocationId?: string) {
     new Eip(this, `${name}-eip`, {
@@ -223,12 +226,8 @@ export class AwsWorkerFleet extends Construct {
           : {}),
       },
       spec: {
-        managementPolicies: [
-          EipSpecManagementPolicies.OBSERVE,
-          EipSpecManagementPolicies.CREATE,
-          EipSpecManagementPolicies.DELETE,
-          EipSpecManagementPolicies.LATE_INITIALIZE,
-        ],
+        managementPolicies:
+          asPolicies<EipSpecManagementPolicies>(OWNED_POLICIES),
         forProvider: {
           region,
           domain: "vpc",
@@ -627,17 +626,11 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
             : {}),
         },
         spec: {
-          // Data outlives every k8s object: Orphan + no Delete policy means
-          // nothing Crossplane-side can destroy the volume; Create exists
-          // only under an explicit createFresh. Update stays (gp3 size growth
-          // is in-place; the on-node pvresize timer picks it up).
+          // Orphan pairs with dataVolumePolicies' missing Delete: nothing
+          // Crossplane-side can destroy the volume. The on-node pvresize
+          // timer picks up the in-place gp3 growth Update allows.
           deletionPolicy: "Orphan",
-          managementPolicies: [
-            "Observe",
-            ...(dv.createFresh ? ["Create"] : []),
-            "Update",
-            "LateInitialize",
-          ],
+          managementPolicies: dataVolumePolicies(dv.createFresh),
           forProvider: {
             region: region.region,
             availabilityZone: region.az,
@@ -814,20 +807,10 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
       metadata: { name: node.name },
       spec: {
         deletionPolicy: "Delete",
-        // No Update: every meaningful Instance change (userData, type, AMI)
-        // requires replacement, which upjet refuses — so Update can only
-        // ever produce a permanent refusal wedge (observed live: user_data
-        // drift after adoption, and the first instance's ENI late-init'd
-        // into spec). Replacement is done by DELETING the MR/Machine;
-        // userDataReplaceOnChange below is inert under this policy and kept
-        // only to document intent for the create path.
-        // LateInitialize IS required even with Update off: upjet persists
-        // crossplane.io/external-name through the late-init step after an
-        // ASYNC create (crossplane#5918/upjet#531) — without it a provider
-        // restart forgets the create and RunInstances a duplicate (observed
-        // live: 38 leaked instances across three regions). The late-init'd
-        // spec fields are inert because Update stays off.
-        managementPolicies: ["Observe", "Create", "Delete", "LateInitialize"],
+        // Replacement is done by DELETING the MR/Machine, since OWNED_POLICIES
+        // keeps Update off; userDataReplaceOnChange below is inert under that
+        // policy and kept only to document intent for the create path.
+        managementPolicies: OWNED_POLICIES,
         forProvider: {
           region: region.region,
           ami: node.ami,
