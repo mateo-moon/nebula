@@ -2502,6 +2502,16738 @@ export enum InternetGatewaySpecInitProviderVpcIdSelectorPolicyResolve {
 
 
 /**
+ * LaunchTemplate is the Schema for the LaunchTemplates API. Provides an EC2 launch template resource. Can be used to create instances or auto scaling groups.
+Deprecated: This API version (v1beta1) has been deprecated in release v2.6.0.
+ *
+ * @schema LaunchTemplate
+ */
+export class LaunchTemplate extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "LaunchTemplate"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'ec2.aws.upbound.io/v1beta1',
+    kind: 'LaunchTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "LaunchTemplate".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: LaunchTemplateProps): any {
+    return {
+      ...LaunchTemplate.GVK,
+      ...toJson_LaunchTemplateProps(props),
+    };
+  }
+
+  /**
+   * Defines a "LaunchTemplate" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: LaunchTemplateProps) {
+    super(scope, id, {
+      ...LaunchTemplate.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...LaunchTemplate.GVK,
+      ...toJson_LaunchTemplateProps(resolved),
+    };
+  }
+}
+
+/**
+ * LaunchTemplate is the Schema for the LaunchTemplates API. Provides an EC2 launch template resource. Can be used to create instances or auto scaling groups.
+ * Deprecated: This API version (v1beta1) has been deprecated in release v2.6.0.
+ *
+ * @schema LaunchTemplate
+ */
+export interface LaunchTemplateProps {
+  /**
+   * @schema LaunchTemplate#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * LaunchTemplateSpec defines the desired state of LaunchTemplate
+   *
+   * @schema LaunchTemplate#spec
+   */
+  readonly spec: LaunchTemplateSpec;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateProps(obj: LaunchTemplateProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_LaunchTemplateSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LaunchTemplateSpec defines the desired state of LaunchTemplate
+ *
+ * @schema LaunchTemplateSpec
+ */
+export interface LaunchTemplateSpec {
+  /**
+   * DeletionPolicy specifies what will happen to the underlying external
+   * when this managed resource is deleted - either "Delete" or "Orphan" the
+   * external resource.
+   * This field is planned to be deprecated in favor of the ManagementPolicies
+   * field in a future release. Currently, both could be set independently and
+   * non-default values would be honored if the feature flag is enabled.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   *
+   * @schema LaunchTemplateSpec#deletionPolicy
+   */
+  readonly deletionPolicy?: LaunchTemplateSpecDeletionPolicy;
+
+  /**
+   * @schema LaunchTemplateSpec#forProvider
+   */
+  readonly forProvider: LaunchTemplateSpecForProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It will be honored
+   * unless the Management Policies feature flag is disabled.
+   * InitProvider holds the same fields as ForProvider, with the exception
+   * of Identifier and other resource reference fields. The fields that are
+   * in InitProvider are merged into ForProvider when the resource is created.
+   * The same fields are also added to the terraform ignore_changes hook, to
+   * avoid updating them after creation. This is useful for fields that are
+   * required on creation, but we do not desire to update them after creation,
+   * for example because of an external controller is managing them, like an
+   * autoscaler.
+   *
+   * @schema LaunchTemplateSpec#initProvider
+   */
+  readonly initProvider?: LaunchTemplateSpecInitProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It is on by default but can be opted out
+   * through a Crossplane feature flag.
+   * ManagementPolicies specify the array of actions Crossplane is allowed to
+   * take on the managed and external resources.
+   * This field is planned to replace the DeletionPolicy field in a future
+   * release. Currently, both could be set independently and non-default
+   * values would be honored if the feature flag is enabled. If both are
+   * custom, the DeletionPolicy field will be ignored.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   * and this one: https://github.com/crossplane/crossplane/blob/444267e84783136daa93568b364a5f01228cacbe/design/one-pager-ignore-changes.md
+   *
+   * @schema LaunchTemplateSpec#managementPolicies
+   */
+  readonly managementPolicies?: LaunchTemplateSpecManagementPolicies[];
+
+  /**
+   * ProviderConfigReference specifies how the provider that will be used to
+   * create, observe, update, and delete this managed resource should be
+   * configured.
+   *
+   * @schema LaunchTemplateSpec#providerConfigRef
+   */
+  readonly providerConfigRef?: LaunchTemplateSpecProviderConfigRef;
+
+  /**
+   * WriteConnectionSecretToReference specifies the namespace and name of a
+   * Secret to which any connection details for this managed resource should
+   * be written. Connection details frequently include the endpoint, username,
+   * and password required to connect to the managed resource.
+   *
+   * @schema LaunchTemplateSpec#writeConnectionSecretToRef
+   */
+  readonly writeConnectionSecretToRef?: LaunchTemplateSpecWriteConnectionSecretToRef;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpec(obj: LaunchTemplateSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deletionPolicy': obj.deletionPolicy,
+    'forProvider': toJson_LaunchTemplateSpecForProvider(obj.forProvider),
+    'initProvider': toJson_LaunchTemplateSpecInitProvider(obj.initProvider),
+    'managementPolicies': obj.managementPolicies?.map(y => y),
+    'providerConfigRef': toJson_LaunchTemplateSpecProviderConfigRef(obj.providerConfigRef),
+    'writeConnectionSecretToRef': toJson_LaunchTemplateSpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DeletionPolicy specifies what will happen to the underlying external
+ * when this managed resource is deleted - either "Delete" or "Orphan" the
+ * external resource.
+ * This field is planned to be deprecated in favor of the ManagementPolicies
+ * field in a future release. Currently, both could be set independently and
+ * non-default values would be honored if the feature flag is enabled.
+ * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+ *
+ * @schema LaunchTemplateSpecDeletionPolicy
+ */
+export enum LaunchTemplateSpecDeletionPolicy {
+  /** Orphan */
+  ORPHAN = "Orphan",
+  /** Delete */
+  DELETE = "Delete",
+}
+
+/**
+ * @schema LaunchTemplateSpecForProvider
+ */
+export interface LaunchTemplateSpecForProvider {
+  /**
+   * Specify volumes to attach to the instance besides the volumes specified by the AMI.
+   * See Block Devices below for details.
+   *
+   * @schema LaunchTemplateSpecForProvider#blockDeviceMappings
+   */
+  readonly blockDeviceMappings?: LaunchTemplateSpecForProviderBlockDeviceMappings[];
+
+  /**
+   * Targeting for EC2 capacity reservations. See Capacity Reservation Specification below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#capacityReservationSpecification
+   */
+  readonly capacityReservationSpecification?: LaunchTemplateSpecForProviderCapacityReservationSpecification[];
+
+  /**
+   * The CPU options for the instance. See CPU Options below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#cpuOptions
+   */
+  readonly cpuOptions?: LaunchTemplateSpecForProviderCpuOptions[];
+
+  /**
+   * Customize the credit specification of the instance. See Credit
+   * Specification below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#creditSpecification
+   */
+  readonly creditSpecification?: LaunchTemplateSpecForProviderCreditSpecification[];
+
+  /**
+   * Default Version of the launch template.
+   *
+   * @schema LaunchTemplateSpecForProvider#defaultVersion
+   */
+  readonly defaultVersion?: number;
+
+  /**
+   * Description of the launch template.
+   *
+   * @schema LaunchTemplateSpecForProvider#description
+   */
+  readonly description?: string;
+
+  /**
+   * If true, enables EC2 Instance Stop Protection.
+   *
+   * @schema LaunchTemplateSpecForProvider#disableApiStop
+   */
+  readonly disableApiStop?: boolean;
+
+  /**
+   * If true, enables EC2 Instance
+   * Termination Protection
+   *
+   * @schema LaunchTemplateSpecForProvider#disableApiTermination
+   */
+  readonly disableApiTermination?: boolean;
+
+  /**
+   * If true, the launched EC2 instance will be EBS-optimized.
+   *
+   * @schema LaunchTemplateSpecForProvider#ebsOptimized
+   */
+  readonly ebsOptimized?: string;
+
+  /**
+   * Enable Nitro Enclaves on launched instances. See Enclave Options below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#enclaveOptions
+   */
+  readonly enclaveOptions?: LaunchTemplateSpecForProviderEnclaveOptions[];
+
+  /**
+   * The hibernation options for the instance. See Hibernation Options below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#hibernationOptions
+   */
+  readonly hibernationOptions?: LaunchTemplateSpecForProviderHibernationOptions[];
+
+  /**
+   * The IAM Instance Profile to launch the instance with. See Instance Profile
+   * below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: LaunchTemplateSpecForProviderIamInstanceProfile[];
+
+  /**
+   * The AMI from which to launch the instance or use a Systems Manager parameter convention e.g. resolve:ssm:parameter-name. See docs for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#imageId
+   */
+  readonly imageId?: string;
+
+  /**
+   * Shutdown behavior for the instance. Can be stop or terminate.
+   * (Default: stop).
+   *
+   * @schema LaunchTemplateSpecForProvider#instanceInitiatedShutdownBehavior
+   */
+  readonly instanceInitiatedShutdownBehavior?: string;
+
+  /**
+   * The market (purchasing) option for the instance. See Market Options
+   * below for details.
+   *
+   * @schema LaunchTemplateSpecForProvider#instanceMarketOptions
+   */
+  readonly instanceMarketOptions?: LaunchTemplateSpecForProviderInstanceMarketOptions[];
+
+  /**
+   * The attribute requirements for the type of instance. If present then instance_type cannot be present.
+   *
+   * @schema LaunchTemplateSpecForProvider#instanceRequirements
+   */
+  readonly instanceRequirements?: LaunchTemplateSpecForProviderInstanceRequirements[];
+
+  /**
+   * The type of the instance. If present then instance_requirements cannot be present.
+   *
+   * @schema LaunchTemplateSpecForProvider#instanceType
+   */
+  readonly instanceType?: string;
+
+  /**
+   * The kernel ID.
+   *
+   * @schema LaunchTemplateSpecForProvider#kernelId
+   */
+  readonly kernelId?: string;
+
+  /**
+   * The key name to use for the instance.
+   *
+   * @schema LaunchTemplateSpecForProvider#keyName
+   */
+  readonly keyName?: string;
+
+  /**
+   * A list of license specifications to associate with. See License Specification below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#licenseSpecification
+   */
+  readonly licenseSpecification?: LaunchTemplateSpecForProviderLicenseSpecification[];
+
+  /**
+   * The maintenance options for the instance. See Maintenance Options below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#maintenanceOptions
+   */
+  readonly maintenanceOptions?: LaunchTemplateSpecForProviderMaintenanceOptions[];
+
+  /**
+   * Customize the metadata options for the instance. See Metadata Options below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#metadataOptions
+   */
+  readonly metadataOptions?: LaunchTemplateSpecForProviderMetadataOptions[];
+
+  /**
+   * The monitoring option for the instance. See Monitoring below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#monitoring
+   */
+  readonly monitoring?: LaunchTemplateSpecForProviderMonitoring[];
+
+  /**
+   * The name of the launch template.
+   *
+   * @schema LaunchTemplateSpecForProvider#name
+   */
+  readonly name?: string;
+
+  /**
+   * Customize network interfaces to be attached at instance boot time. See Network
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#networkInterfaces
+   */
+  readonly networkInterfaces?: LaunchTemplateSpecForProviderNetworkInterfaces[];
+
+  /**
+   * @schema LaunchTemplateSpecForProvider#networkPerformanceOptions
+   */
+  readonly networkPerformanceOptions?: LaunchTemplateSpecForProviderNetworkPerformanceOptions[];
+
+  /**
+   * The placement of the instance. See Placement below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#placement
+   */
+  readonly placement?: LaunchTemplateSpecForProviderPlacement[];
+
+  /**
+   * The options for the instance hostname. The default values are inherited from the subnet. See Private DNS Name Options below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#privateDnsNameOptions
+   */
+  readonly privateDnsNameOptions?: LaunchTemplateSpecForProviderPrivateDnsNameOptions[];
+
+  /**
+   * The ID of the RAM disk.
+   *
+   * @schema LaunchTemplateSpecForProvider#ramDiskId
+   */
+  readonly ramDiskId?: string;
+
+  /**
+   * Region where this resource will be managed. Defaults to the Region set in the provider configuration.
+   * Region is the region you'd like your resource to be created in.
+   *
+   * @default the Region set in the provider configuration.
+   * @schema LaunchTemplateSpecForProvider#region
+   */
+  readonly region: string;
+
+  /**
+   * Secondary interfaces to associate with instances launched from the template. See Secondary
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateSpecForProvider#secondaryInterfaces
+   */
+  readonly secondaryInterfaces?: LaunchTemplateSpecForProviderSecondaryInterfaces[];
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateSpecForProvider#securityGroupNameRefs
+   */
+  readonly securityGroupNameRefs?: LaunchTemplateSpecForProviderSecurityGroupNameRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateSpecForProvider#securityGroupNameSelector
+   */
+  readonly securityGroupNameSelector?: LaunchTemplateSpecForProviderSecurityGroupNameSelector;
+
+  /**
+   * A list of security group names to associate with. If you are creating Instances in a VPC, use
+   * vpc_security_group_ids instead.
+   *
+   * @schema LaunchTemplateSpecForProvider#securityGroupNames
+   */
+  readonly securityGroupNames?: string[];
+
+  /**
+   * The tags to apply to the resources during launch. See Tag Specifications below for more details. Default tags are currently not propagated to ASG created resources so you may wish to inject your default tags into this variable against the relevant child resource types created.
+   *
+   * @schema LaunchTemplateSpecForProvider#tagSpecifications
+   */
+  readonly tagSpecifications?: LaunchTemplateSpecForProviderTagSpecifications[];
+
+  /**
+   * Key-value map of resource tags.
+   *
+   * @schema LaunchTemplateSpecForProvider#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * Whether to update Default Version each update. Conflicts with default_version.
+   *
+   * @schema LaunchTemplateSpecForProvider#updateDefaultVersion
+   */
+  readonly updateDefaultVersion?: boolean;
+
+  /**
+   * The base64-encoded user data to provide when launching the instance.
+   *
+   * @schema LaunchTemplateSpecForProvider#userData
+   */
+  readonly userData?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateSpecForProvider#vpcSecurityGroupIdRefs
+   */
+  readonly vpcSecurityGroupIdRefs?: LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateSpecForProvider#vpcSecurityGroupIdSelector
+   */
+  readonly vpcSecurityGroupIdSelector?: LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector;
+
+  /**
+   * A list of security group IDs to associate with. Conflicts with network_interfaces.security_groups
+   *
+   * @schema LaunchTemplateSpecForProvider#vpcSecurityGroupIds
+   */
+  readonly vpcSecurityGroupIds?: string[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProvider(obj: LaunchTemplateSpecForProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDeviceMappings': obj.blockDeviceMappings?.map(y => toJson_LaunchTemplateSpecForProviderBlockDeviceMappings(y)),
+    'capacityReservationSpecification': obj.capacityReservationSpecification?.map(y => toJson_LaunchTemplateSpecForProviderCapacityReservationSpecification(y)),
+    'cpuOptions': obj.cpuOptions?.map(y => toJson_LaunchTemplateSpecForProviderCpuOptions(y)),
+    'creditSpecification': obj.creditSpecification?.map(y => toJson_LaunchTemplateSpecForProviderCreditSpecification(y)),
+    'defaultVersion': obj.defaultVersion,
+    'description': obj.description,
+    'disableApiStop': obj.disableApiStop,
+    'disableApiTermination': obj.disableApiTermination,
+    'ebsOptimized': obj.ebsOptimized,
+    'enclaveOptions': obj.enclaveOptions?.map(y => toJson_LaunchTemplateSpecForProviderEnclaveOptions(y)),
+    'hibernationOptions': obj.hibernationOptions?.map(y => toJson_LaunchTemplateSpecForProviderHibernationOptions(y)),
+    'iamInstanceProfile': obj.iamInstanceProfile?.map(y => toJson_LaunchTemplateSpecForProviderIamInstanceProfile(y)),
+    'imageId': obj.imageId,
+    'instanceInitiatedShutdownBehavior': obj.instanceInitiatedShutdownBehavior,
+    'instanceMarketOptions': obj.instanceMarketOptions?.map(y => toJson_LaunchTemplateSpecForProviderInstanceMarketOptions(y)),
+    'instanceRequirements': obj.instanceRequirements?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirements(y)),
+    'instanceType': obj.instanceType,
+    'kernelId': obj.kernelId,
+    'keyName': obj.keyName,
+    'licenseSpecification': obj.licenseSpecification?.map(y => toJson_LaunchTemplateSpecForProviderLicenseSpecification(y)),
+    'maintenanceOptions': obj.maintenanceOptions?.map(y => toJson_LaunchTemplateSpecForProviderMaintenanceOptions(y)),
+    'metadataOptions': obj.metadataOptions?.map(y => toJson_LaunchTemplateSpecForProviderMetadataOptions(y)),
+    'monitoring': obj.monitoring?.map(y => toJson_LaunchTemplateSpecForProviderMonitoring(y)),
+    'name': obj.name,
+    'networkInterfaces': obj.networkInterfaces?.map(y => toJson_LaunchTemplateSpecForProviderNetworkInterfaces(y)),
+    'networkPerformanceOptions': obj.networkPerformanceOptions?.map(y => toJson_LaunchTemplateSpecForProviderNetworkPerformanceOptions(y)),
+    'placement': obj.placement?.map(y => toJson_LaunchTemplateSpecForProviderPlacement(y)),
+    'privateDnsNameOptions': obj.privateDnsNameOptions?.map(y => toJson_LaunchTemplateSpecForProviderPrivateDnsNameOptions(y)),
+    'ramDiskId': obj.ramDiskId,
+    'region': obj.region,
+    'secondaryInterfaces': obj.secondaryInterfaces?.map(y => toJson_LaunchTemplateSpecForProviderSecondaryInterfaces(y)),
+    'securityGroupNameRefs': obj.securityGroupNameRefs?.map(y => toJson_LaunchTemplateSpecForProviderSecurityGroupNameRefs(y)),
+    'securityGroupNameSelector': toJson_LaunchTemplateSpecForProviderSecurityGroupNameSelector(obj.securityGroupNameSelector),
+    'securityGroupNames': obj.securityGroupNames?.map(y => y),
+    'tagSpecifications': obj.tagSpecifications?.map(y => toJson_LaunchTemplateSpecForProviderTagSpecifications(y)),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'updateDefaultVersion': obj.updateDefaultVersion,
+    'userData': obj.userData,
+    'vpcSecurityGroupIdRefs': obj.vpcSecurityGroupIdRefs?.map(y => toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs(y)),
+    'vpcSecurityGroupIdSelector': toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector(obj.vpcSecurityGroupIdSelector),
+    'vpcSecurityGroupIds': obj.vpcSecurityGroupIds?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * THIS IS A BETA FIELD. It will be honored
+ * unless the Management Policies feature flag is disabled.
+ * InitProvider holds the same fields as ForProvider, with the exception
+ * of Identifier and other resource reference fields. The fields that are
+ * in InitProvider are merged into ForProvider when the resource is created.
+ * The same fields are also added to the terraform ignore_changes hook, to
+ * avoid updating them after creation. This is useful for fields that are
+ * required on creation, but we do not desire to update them after creation,
+ * for example because of an external controller is managing them, like an
+ * autoscaler.
+ *
+ * @schema LaunchTemplateSpecInitProvider
+ */
+export interface LaunchTemplateSpecInitProvider {
+  /**
+   * Specify volumes to attach to the instance besides the volumes specified by the AMI.
+   * See Block Devices below for details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#blockDeviceMappings
+   */
+  readonly blockDeviceMappings?: LaunchTemplateSpecInitProviderBlockDeviceMappings[];
+
+  /**
+   * Targeting for EC2 capacity reservations. See Capacity Reservation Specification below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#capacityReservationSpecification
+   */
+  readonly capacityReservationSpecification?: LaunchTemplateSpecInitProviderCapacityReservationSpecification[];
+
+  /**
+   * The CPU options for the instance. See CPU Options below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#cpuOptions
+   */
+  readonly cpuOptions?: LaunchTemplateSpecInitProviderCpuOptions[];
+
+  /**
+   * Customize the credit specification of the instance. See Credit
+   * Specification below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#creditSpecification
+   */
+  readonly creditSpecification?: LaunchTemplateSpecInitProviderCreditSpecification[];
+
+  /**
+   * Default Version of the launch template.
+   *
+   * @schema LaunchTemplateSpecInitProvider#defaultVersion
+   */
+  readonly defaultVersion?: number;
+
+  /**
+   * Description of the launch template.
+   *
+   * @schema LaunchTemplateSpecInitProvider#description
+   */
+  readonly description?: string;
+
+  /**
+   * If true, enables EC2 Instance Stop Protection.
+   *
+   * @schema LaunchTemplateSpecInitProvider#disableApiStop
+   */
+  readonly disableApiStop?: boolean;
+
+  /**
+   * If true, enables EC2 Instance
+   * Termination Protection
+   *
+   * @schema LaunchTemplateSpecInitProvider#disableApiTermination
+   */
+  readonly disableApiTermination?: boolean;
+
+  /**
+   * If true, the launched EC2 instance will be EBS-optimized.
+   *
+   * @schema LaunchTemplateSpecInitProvider#ebsOptimized
+   */
+  readonly ebsOptimized?: string;
+
+  /**
+   * Enable Nitro Enclaves on launched instances. See Enclave Options below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#enclaveOptions
+   */
+  readonly enclaveOptions?: LaunchTemplateSpecInitProviderEnclaveOptions[];
+
+  /**
+   * The hibernation options for the instance. See Hibernation Options below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#hibernationOptions
+   */
+  readonly hibernationOptions?: LaunchTemplateSpecInitProviderHibernationOptions[];
+
+  /**
+   * The IAM Instance Profile to launch the instance with. See Instance Profile
+   * below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: LaunchTemplateSpecInitProviderIamInstanceProfile[];
+
+  /**
+   * The AMI from which to launch the instance or use a Systems Manager parameter convention e.g. resolve:ssm:parameter-name. See docs for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#imageId
+   */
+  readonly imageId?: string;
+
+  /**
+   * Shutdown behavior for the instance. Can be stop or terminate.
+   * (Default: stop).
+   *
+   * @schema LaunchTemplateSpecInitProvider#instanceInitiatedShutdownBehavior
+   */
+  readonly instanceInitiatedShutdownBehavior?: string;
+
+  /**
+   * The market (purchasing) option for the instance. See Market Options
+   * below for details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#instanceMarketOptions
+   */
+  readonly instanceMarketOptions?: LaunchTemplateSpecInitProviderInstanceMarketOptions[];
+
+  /**
+   * The attribute requirements for the type of instance. If present then instance_type cannot be present.
+   *
+   * @schema LaunchTemplateSpecInitProvider#instanceRequirements
+   */
+  readonly instanceRequirements?: LaunchTemplateSpecInitProviderInstanceRequirements[];
+
+  /**
+   * The type of the instance. If present then instance_requirements cannot be present.
+   *
+   * @schema LaunchTemplateSpecInitProvider#instanceType
+   */
+  readonly instanceType?: string;
+
+  /**
+   * The kernel ID.
+   *
+   * @schema LaunchTemplateSpecInitProvider#kernelId
+   */
+  readonly kernelId?: string;
+
+  /**
+   * The key name to use for the instance.
+   *
+   * @schema LaunchTemplateSpecInitProvider#keyName
+   */
+  readonly keyName?: string;
+
+  /**
+   * A list of license specifications to associate with. See License Specification below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#licenseSpecification
+   */
+  readonly licenseSpecification?: LaunchTemplateSpecInitProviderLicenseSpecification[];
+
+  /**
+   * The maintenance options for the instance. See Maintenance Options below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#maintenanceOptions
+   */
+  readonly maintenanceOptions?: LaunchTemplateSpecInitProviderMaintenanceOptions[];
+
+  /**
+   * Customize the metadata options for the instance. See Metadata Options below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#metadataOptions
+   */
+  readonly metadataOptions?: LaunchTemplateSpecInitProviderMetadataOptions[];
+
+  /**
+   * The monitoring option for the instance. See Monitoring below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#monitoring
+   */
+  readonly monitoring?: LaunchTemplateSpecInitProviderMonitoring[];
+
+  /**
+   * The name of the launch template.
+   *
+   * @schema LaunchTemplateSpecInitProvider#name
+   */
+  readonly name?: string;
+
+  /**
+   * Customize network interfaces to be attached at instance boot time. See Network
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#networkInterfaces
+   */
+  readonly networkInterfaces?: LaunchTemplateSpecInitProviderNetworkInterfaces[];
+
+  /**
+   * @schema LaunchTemplateSpecInitProvider#networkPerformanceOptions
+   */
+  readonly networkPerformanceOptions?: LaunchTemplateSpecInitProviderNetworkPerformanceOptions[];
+
+  /**
+   * The placement of the instance. See Placement below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#placement
+   */
+  readonly placement?: LaunchTemplateSpecInitProviderPlacement[];
+
+  /**
+   * The options for the instance hostname. The default values are inherited from the subnet. See Private DNS Name Options below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#privateDnsNameOptions
+   */
+  readonly privateDnsNameOptions?: LaunchTemplateSpecInitProviderPrivateDnsNameOptions[];
+
+  /**
+   * The ID of the RAM disk.
+   *
+   * @schema LaunchTemplateSpecInitProvider#ramDiskId
+   */
+  readonly ramDiskId?: string;
+
+  /**
+   * Secondary interfaces to associate with instances launched from the template. See Secondary
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateSpecInitProvider#secondaryInterfaces
+   */
+  readonly secondaryInterfaces?: LaunchTemplateSpecInitProviderSecondaryInterfaces[];
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateSpecInitProvider#securityGroupNameRefs
+   */
+  readonly securityGroupNameRefs?: LaunchTemplateSpecInitProviderSecurityGroupNameRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateSpecInitProvider#securityGroupNameSelector
+   */
+  readonly securityGroupNameSelector?: LaunchTemplateSpecInitProviderSecurityGroupNameSelector;
+
+  /**
+   * A list of security group names to associate with. If you are creating Instances in a VPC, use
+   * vpc_security_group_ids instead.
+   *
+   * @schema LaunchTemplateSpecInitProvider#securityGroupNames
+   */
+  readonly securityGroupNames?: string[];
+
+  /**
+   * The tags to apply to the resources during launch. See Tag Specifications below for more details. Default tags are currently not propagated to ASG created resources so you may wish to inject your default tags into this variable against the relevant child resource types created.
+   *
+   * @schema LaunchTemplateSpecInitProvider#tagSpecifications
+   */
+  readonly tagSpecifications?: LaunchTemplateSpecInitProviderTagSpecifications[];
+
+  /**
+   * Key-value map of resource tags.
+   *
+   * @schema LaunchTemplateSpecInitProvider#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * Whether to update Default Version each update. Conflicts with default_version.
+   *
+   * @schema LaunchTemplateSpecInitProvider#updateDefaultVersion
+   */
+  readonly updateDefaultVersion?: boolean;
+
+  /**
+   * The base64-encoded user data to provide when launching the instance.
+   *
+   * @schema LaunchTemplateSpecInitProvider#userData
+   */
+  readonly userData?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateSpecInitProvider#vpcSecurityGroupIdRefs
+   */
+  readonly vpcSecurityGroupIdRefs?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateSpecInitProvider#vpcSecurityGroupIdSelector
+   */
+  readonly vpcSecurityGroupIdSelector?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector;
+
+  /**
+   * A list of security group IDs to associate with. Conflicts with network_interfaces.security_groups
+   *
+   * @schema LaunchTemplateSpecInitProvider#vpcSecurityGroupIds
+   */
+  readonly vpcSecurityGroupIds?: string[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProvider(obj: LaunchTemplateSpecInitProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDeviceMappings': obj.blockDeviceMappings?.map(y => toJson_LaunchTemplateSpecInitProviderBlockDeviceMappings(y)),
+    'capacityReservationSpecification': obj.capacityReservationSpecification?.map(y => toJson_LaunchTemplateSpecInitProviderCapacityReservationSpecification(y)),
+    'cpuOptions': obj.cpuOptions?.map(y => toJson_LaunchTemplateSpecInitProviderCpuOptions(y)),
+    'creditSpecification': obj.creditSpecification?.map(y => toJson_LaunchTemplateSpecInitProviderCreditSpecification(y)),
+    'defaultVersion': obj.defaultVersion,
+    'description': obj.description,
+    'disableApiStop': obj.disableApiStop,
+    'disableApiTermination': obj.disableApiTermination,
+    'ebsOptimized': obj.ebsOptimized,
+    'enclaveOptions': obj.enclaveOptions?.map(y => toJson_LaunchTemplateSpecInitProviderEnclaveOptions(y)),
+    'hibernationOptions': obj.hibernationOptions?.map(y => toJson_LaunchTemplateSpecInitProviderHibernationOptions(y)),
+    'iamInstanceProfile': obj.iamInstanceProfile?.map(y => toJson_LaunchTemplateSpecInitProviderIamInstanceProfile(y)),
+    'imageId': obj.imageId,
+    'instanceInitiatedShutdownBehavior': obj.instanceInitiatedShutdownBehavior,
+    'instanceMarketOptions': obj.instanceMarketOptions?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceMarketOptions(y)),
+    'instanceRequirements': obj.instanceRequirements?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirements(y)),
+    'instanceType': obj.instanceType,
+    'kernelId': obj.kernelId,
+    'keyName': obj.keyName,
+    'licenseSpecification': obj.licenseSpecification?.map(y => toJson_LaunchTemplateSpecInitProviderLicenseSpecification(y)),
+    'maintenanceOptions': obj.maintenanceOptions?.map(y => toJson_LaunchTemplateSpecInitProviderMaintenanceOptions(y)),
+    'metadataOptions': obj.metadataOptions?.map(y => toJson_LaunchTemplateSpecInitProviderMetadataOptions(y)),
+    'monitoring': obj.monitoring?.map(y => toJson_LaunchTemplateSpecInitProviderMonitoring(y)),
+    'name': obj.name,
+    'networkInterfaces': obj.networkInterfaces?.map(y => toJson_LaunchTemplateSpecInitProviderNetworkInterfaces(y)),
+    'networkPerformanceOptions': obj.networkPerformanceOptions?.map(y => toJson_LaunchTemplateSpecInitProviderNetworkPerformanceOptions(y)),
+    'placement': obj.placement?.map(y => toJson_LaunchTemplateSpecInitProviderPlacement(y)),
+    'privateDnsNameOptions': obj.privateDnsNameOptions?.map(y => toJson_LaunchTemplateSpecInitProviderPrivateDnsNameOptions(y)),
+    'ramDiskId': obj.ramDiskId,
+    'secondaryInterfaces': obj.secondaryInterfaces?.map(y => toJson_LaunchTemplateSpecInitProviderSecondaryInterfaces(y)),
+    'securityGroupNameRefs': obj.securityGroupNameRefs?.map(y => toJson_LaunchTemplateSpecInitProviderSecurityGroupNameRefs(y)),
+    'securityGroupNameSelector': toJson_LaunchTemplateSpecInitProviderSecurityGroupNameSelector(obj.securityGroupNameSelector),
+    'securityGroupNames': obj.securityGroupNames?.map(y => y),
+    'tagSpecifications': obj.tagSpecifications?.map(y => toJson_LaunchTemplateSpecInitProviderTagSpecifications(y)),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'updateDefaultVersion': obj.updateDefaultVersion,
+    'userData': obj.userData,
+    'vpcSecurityGroupIdRefs': obj.vpcSecurityGroupIdRefs?.map(y => toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs(y)),
+    'vpcSecurityGroupIdSelector': toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector(obj.vpcSecurityGroupIdSelector),
+    'vpcSecurityGroupIds': obj.vpcSecurityGroupIds?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A ManagementAction represents an action that the Crossplane controllers
+ * can take on an external resource.
+ *
+ * @schema LaunchTemplateSpecManagementPolicies
+ */
+export enum LaunchTemplateSpecManagementPolicies {
+  /** Observe */
+  OBSERVE = "Observe",
+  /** Create */
+  CREATE = "Create",
+  /** Update */
+  UPDATE = "Update",
+  /** Delete */
+  DELETE = "Delete",
+  /** LateInitialize */
+  LATE_INITIALIZE = "LateInitialize",
+  /** * */
+  VALUE_ASTERISK = "*",
+}
+
+/**
+ * ProviderConfigReference specifies how the provider that will be used to
+ * create, observe, update, and delete this managed resource should be
+ * configured.
+ *
+ * @schema LaunchTemplateSpecProviderConfigRef
+ */
+export interface LaunchTemplateSpecProviderConfigRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecProviderConfigRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecProviderConfigRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecProviderConfigRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecProviderConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecProviderConfigRef(obj: LaunchTemplateSpecProviderConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecProviderConfigRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * WriteConnectionSecretToReference specifies the namespace and name of a
+ * Secret to which any connection details for this managed resource should
+ * be written. Connection details frequently include the endpoint, username,
+ * and password required to connect to the managed resource.
+ *
+ * @schema LaunchTemplateSpecWriteConnectionSecretToRef
+ */
+export interface LaunchTemplateSpecWriteConnectionSecretToRef {
+  /**
+   * Name of the secret.
+   *
+   * @schema LaunchTemplateSpecWriteConnectionSecretToRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace of the secret.
+   *
+   * @schema LaunchTemplateSpecWriteConnectionSecretToRef#namespace
+   */
+  readonly namespace: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecWriteConnectionSecretToRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecWriteConnectionSecretToRef(obj: LaunchTemplateSpecWriteConnectionSecretToRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappings
+ */
+export interface LaunchTemplateSpecForProviderBlockDeviceMappings {
+  /**
+   * The name of the device to mount.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappings#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Configure EBS volume properties.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappings#ebs
+   */
+  readonly ebs?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbs[];
+
+  /**
+   * Suppresses the specified device included in the AMI's block device mapping.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappings#noDevice
+   */
+  readonly noDevice?: string;
+
+  /**
+   * The Instance Store Device
+   * Name
+   * (e.g., "ephemeral0").
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappings#virtualName
+   */
+  readonly virtualName?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderBlockDeviceMappings' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderBlockDeviceMappings(obj: LaunchTemplateSpecForProviderBlockDeviceMappings | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'ebs': obj.ebs?.map(y => toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbs(y)),
+    'noDevice': obj.noDevice,
+    'virtualName': obj.virtualName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderCapacityReservationSpecification
+ */
+export interface LaunchTemplateSpecForProviderCapacityReservationSpecification {
+  /**
+   * Indicates the instance's Capacity Reservation preferences. Can be capacity-reservations-only, open or none. If capacity_reservation_id or capacity_reservation_resource_group_arn is specified in capacity_reservation_target block, either omit capacity_reservation_preference or set it to capacity-reservations-only.
+   *
+   * @schema LaunchTemplateSpecForProviderCapacityReservationSpecification#capacityReservationPreference
+   */
+  readonly capacityReservationPreference?: string;
+
+  /**
+   * Used to target a specific Capacity Reservation:
+   *
+   * @schema LaunchTemplateSpecForProviderCapacityReservationSpecification#capacityReservationTarget
+   */
+  readonly capacityReservationTarget?: LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderCapacityReservationSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderCapacityReservationSpecification(obj: LaunchTemplateSpecForProviderCapacityReservationSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationPreference': obj.capacityReservationPreference,
+    'capacityReservationTarget': obj.capacityReservationTarget?.map(y => toJson_LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderCpuOptions
+ */
+export interface LaunchTemplateSpecForProviderCpuOptions {
+  /**
+   * Indicates whether to enable the instance for AMD SEV-SNP. AMD SEV-SNP is supported with M6a, R6a, and C6a instance types only. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateSpecForProviderCpuOptions#amdSevSnp
+   */
+  readonly amdSevSnp?: string;
+
+  /**
+   * The number of CPU cores for the instance.
+   *
+   * @schema LaunchTemplateSpecForProviderCpuOptions#coreCount
+   */
+  readonly coreCount?: number;
+
+  /**
+   * Indicates whether to enable the instance for nested virtualization. Nested virtualization is supported on 8th generation Intel-based instance types (C8i, M8i, R8i, and their flex variants) only. When nested virtualization is enabled, Virtual Secure Mode (VSM) is automatically disabled for the instance. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateSpecForProviderCpuOptions#nestedVirtualization
+   */
+  readonly nestedVirtualization?: string;
+
+  /**
+   * The number of threads per CPU core.
+   * To disable Intel Hyper-Threading Technology for the instance, specify a value of 1.
+   * Otherwise, specify the default value of 2.
+   *
+   * @schema LaunchTemplateSpecForProviderCpuOptions#threadsPerCore
+   */
+  readonly threadsPerCore?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderCpuOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderCpuOptions(obj: LaunchTemplateSpecForProviderCpuOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'amdSevSnp': obj.amdSevSnp,
+    'coreCount': obj.coreCount,
+    'nestedVirtualization': obj.nestedVirtualization,
+    'threadsPerCore': obj.threadsPerCore,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderCreditSpecification
+ */
+export interface LaunchTemplateSpecForProviderCreditSpecification {
+  /**
+   * The credit option for CPU usage.
+   * Can be standard or unlimited.
+   * T3 instances are launched as unlimited by default.
+   * T2 instances are launched as standard by default.
+   *
+   * @schema LaunchTemplateSpecForProviderCreditSpecification#cpuCredits
+   */
+  readonly cpuCredits?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderCreditSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderCreditSpecification(obj: LaunchTemplateSpecForProviderCreditSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cpuCredits': obj.cpuCredits,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderEnclaveOptions
+ */
+export interface LaunchTemplateSpecForProviderEnclaveOptions {
+  /**
+   * If set to true, Nitro Enclaves will be enabled on the instance.
+   *
+   * @schema LaunchTemplateSpecForProviderEnclaveOptions#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderEnclaveOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderEnclaveOptions(obj: LaunchTemplateSpecForProviderEnclaveOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderHibernationOptions
+ */
+export interface LaunchTemplateSpecForProviderHibernationOptions {
+  /**
+   * If set to true, the launched EC2 instance will hibernation enabled.
+   *
+   * @schema LaunchTemplateSpecForProviderHibernationOptions#configured
+   */
+  readonly configured?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderHibernationOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderHibernationOptions(obj: LaunchTemplateSpecForProviderHibernationOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configured': obj.configured,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfile
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfile {
+  /**
+   * The Amazon Resource Name (ARN) of the instance profile. Conflicts with name.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfile#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfile#arnRef
+   */
+  readonly arnRef?: LaunchTemplateSpecForProviderIamInstanceProfileArnRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfile#arnSelector
+   */
+  readonly arnSelector?: LaunchTemplateSpecForProviderIamInstanceProfileArnSelector;
+
+  /**
+   * The name of the instance profile.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfile#name
+   */
+  readonly name?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfile#nameRef
+   */
+  readonly nameRef?: LaunchTemplateSpecForProviderIamInstanceProfileNameRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfile#nameSelector
+   */
+  readonly nameSelector?: LaunchTemplateSpecForProviderIamInstanceProfileNameSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfile' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfile(obj: LaunchTemplateSpecForProviderIamInstanceProfile | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'arnRef': toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnRef(obj.arnRef),
+    'arnSelector': toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnSelector(obj.arnSelector),
+    'name': obj.name,
+    'nameRef': toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameRef(obj.nameRef),
+    'nameSelector': toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameSelector(obj.nameSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceMarketOptions
+ */
+export interface LaunchTemplateSpecForProviderInstanceMarketOptions {
+  /**
+   * The market type. Can be spot.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptions#marketType
+   */
+  readonly marketType?: string;
+
+  /**
+   * The options for Spot Instance
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptions#spotOptions
+   */
+  readonly spotOptions?: LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceMarketOptions(obj: LaunchTemplateSpecForProviderInstanceMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'marketType': obj.marketType,
+    'spotOptions': obj.spotOptions?.map(y => toJson_LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirements
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirements {
+  /**
+   * Block describing the minimum and maximum number of accelerators (GPUs, FPGAs, or AWS Inferentia chips). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#acceleratorCount
+   */
+  readonly acceleratorCount?: LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount[];
+
+  /**
+   * List of accelerator manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#acceleratorManufacturers
+   */
+  readonly acceleratorManufacturers?: string[];
+
+  /**
+   * List of accelerator names. Default is any acclerator.
+   *
+   * @default any acclerator.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#acceleratorNames
+   */
+  readonly acceleratorNames?: string[];
+
+  /**
+   * Block describing the minimum and maximum total memory of the accelerators. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#acceleratorTotalMemoryMib
+   */
+  readonly acceleratorTotalMemoryMib?: LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib[];
+
+  /**
+   * List of accelerator types. Default is any accelerator type.
+   *
+   * @default any accelerator type.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#acceleratorTypes
+   */
+  readonly acceleratorTypes?: string[];
+
+  /**
+   * List of instance types to apply your specified attributes against. All other instance types are ignored, even if they match your specified attributes. You can use strings with one or more wild cards, represented by an asterisk (*), to allow an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are allowing the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are allowing all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is all instance types.
+   *
+   * @default all instance types.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#allowedInstanceTypes
+   */
+  readonly allowedInstanceTypes?: string[];
+
+  /**
+   * Indicate whether bare metal instace types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#bareMetal
+   */
+  readonly bareMetal?: string;
+
+  /**
+   * Block describing the minimum and maximum baseline EBS bandwidth, in Mbps. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#baselineEbsBandwidthMbps
+   */
+  readonly baselineEbsBandwidthMbps?: LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps[];
+
+  /**
+   * Indicate whether burstable performance instance types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#burstablePerformance
+   */
+  readonly burstablePerformance?: string;
+
+  /**
+   * List of CPU manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#cpuManufacturers
+   */
+  readonly cpuManufacturers?: string[];
+
+  /**
+   * List of instance types to exclude. You can use strings with one or more wild cards, represented by an asterisk (*), to exclude an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are excluding the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are excluding all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is no excluded instance types.
+   *
+   * @default no excluded instance types.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#excludedInstanceTypes
+   */
+  readonly excludedInstanceTypes?: string[];
+
+  /**
+   * List of instance generation names. Default is any generation.
+   *
+   * @default any generation.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#instanceGenerations
+   */
+  readonly instanceGenerations?: string[];
+
+  /**
+   * Indicate whether instance types with local storage volumes are included, excluded, or required. Default is included.
+   *
+   * @default included.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#localStorage
+   */
+  readonly localStorage?: string;
+
+  /**
+   * List of local storage type names. Default any storage type.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#localStorageTypes
+   */
+  readonly localStorageTypes?: string[];
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Conflicts with spot_max_price_percentage_over_lowest_price
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#maxSpotPriceAsPercentageOfOptimalOnDemandPrice
+   */
+  readonly maxSpotPriceAsPercentageOfOptimalOnDemandPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum amount of memory (GiB) per vCPU. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#memoryGibPerVcpu
+   */
+  readonly memoryGibPerVcpu?: LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu[];
+
+  /**
+   * Block describing the minimum and maximum amount of memory (MiB). Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#memoryMib
+   */
+  readonly memoryMib?: LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib[];
+
+  /**
+   * Block describing the minimum and maximum amount of network bandwidth, in gigabits per second (Gbps). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#networkBandwidthGbps
+   */
+  readonly networkBandwidthGbps?: LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps[];
+
+  /**
+   * Block describing the minimum and maximum number of network interfaces. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#networkInterfaceCount
+   */
+  readonly networkInterfaceCount?: LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount[];
+
+  /**
+   * The price protection threshold for On-Demand Instances. This is the maximum you’ll pay for an On-Demand Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 20.
+   *
+   * @default 20.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#onDemandMaxPricePercentageOverLowestPrice
+   */
+  readonly onDemandMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Indicate whether instance types must support On-Demand Instance Hibernation, either true or false. Default is false.
+   *
+   * @default false.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#requireHibernateSupport
+   */
+  readonly requireHibernateSupport?: boolean;
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   *
+   * @default 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#spotMaxPricePercentageOverLowestPrice
+   */
+  readonly spotMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum total local storage (GB). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#totalLocalStorageGb
+   */
+  readonly totalLocalStorageGb?: LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb[];
+
+  /**
+   * Block describing the minimum and maximum number of vCPUs. Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateSpecForProviderInstanceRequirements#vcpuCount
+   */
+  readonly vcpuCount?: LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirements' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirements(obj: LaunchTemplateSpecForProviderInstanceRequirements | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'acceleratorCount': obj.acceleratorCount?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount(y)),
+    'acceleratorManufacturers': obj.acceleratorManufacturers?.map(y => y),
+    'acceleratorNames': obj.acceleratorNames?.map(y => y),
+    'acceleratorTotalMemoryMib': obj.acceleratorTotalMemoryMib?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib(y)),
+    'acceleratorTypes': obj.acceleratorTypes?.map(y => y),
+    'allowedInstanceTypes': obj.allowedInstanceTypes?.map(y => y),
+    'bareMetal': obj.bareMetal,
+    'baselineEbsBandwidthMbps': obj.baselineEbsBandwidthMbps?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps(y)),
+    'burstablePerformance': obj.burstablePerformance,
+    'cpuManufacturers': obj.cpuManufacturers?.map(y => y),
+    'excludedInstanceTypes': obj.excludedInstanceTypes?.map(y => y),
+    'instanceGenerations': obj.instanceGenerations?.map(y => y),
+    'localStorage': obj.localStorage,
+    'localStorageTypes': obj.localStorageTypes?.map(y => y),
+    'maxSpotPriceAsPercentageOfOptimalOnDemandPrice': obj.maxSpotPriceAsPercentageOfOptimalOnDemandPrice,
+    'memoryGibPerVcpu': obj.memoryGibPerVcpu?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu(y)),
+    'memoryMib': obj.memoryMib?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib(y)),
+    'networkBandwidthGbps': obj.networkBandwidthGbps?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps(y)),
+    'networkInterfaceCount': obj.networkInterfaceCount?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount(y)),
+    'onDemandMaxPricePercentageOverLowestPrice': obj.onDemandMaxPricePercentageOverLowestPrice,
+    'requireHibernateSupport': obj.requireHibernateSupport,
+    'spotMaxPricePercentageOverLowestPrice': obj.spotMaxPricePercentageOverLowestPrice,
+    'totalLocalStorageGb': obj.totalLocalStorageGb?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb(y)),
+    'vcpuCount': obj.vcpuCount?.map(y => toJson_LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderLicenseSpecification
+ */
+export interface LaunchTemplateSpecForProviderLicenseSpecification {
+  /**
+   * ARN of the license configuration.
+   *
+   * @schema LaunchTemplateSpecForProviderLicenseSpecification#licenseConfigurationArn
+   */
+  readonly licenseConfigurationArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderLicenseSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderLicenseSpecification(obj: LaunchTemplateSpecForProviderLicenseSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'licenseConfigurationArn': obj.licenseConfigurationArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderMaintenanceOptions
+ */
+export interface LaunchTemplateSpecForProviderMaintenanceOptions {
+  /**
+   * Disables the automatic recovery behavior of your instance or sets it to default. Can be "default" or "disabled". See Recover your instance for more details.
+   *
+   * @schema LaunchTemplateSpecForProviderMaintenanceOptions#autoRecovery
+   */
+  readonly autoRecovery?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderMaintenanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderMaintenanceOptions(obj: LaunchTemplateSpecForProviderMaintenanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'autoRecovery': obj.autoRecovery,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderMetadataOptions
+ */
+export interface LaunchTemplateSpecForProviderMetadataOptions {
+  /**
+   * Whether the metadata service is available. Can be "enabled" or "disabled". (Default: "enabled").
+   *
+   * @schema LaunchTemplateSpecForProviderMetadataOptions#httpEndpoint
+   */
+  readonly httpEndpoint?: string;
+
+  /**
+   * Enables or disables the IPv6 endpoint for the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateSpecForProviderMetadataOptions#httpProtocolIpv6
+   */
+  readonly httpProtocolIpv6?: string;
+
+  /**
+   * The desired HTTP PUT response hop limit for instance metadata requests. The larger the number, the further instance metadata requests can travel. Can be an integer from 1 to 64. (Default: 1).
+   *
+   * @schema LaunchTemplateSpecForProviderMetadataOptions#httpPutResponseHopLimit
+   */
+  readonly httpPutResponseHopLimit?: number;
+
+  /**
+   * Whether or not the metadata service requires session tokens, also referred to as Instance Metadata Service Version 2 (IMDSv2). Can be "optional" or "required". (Default: "optional").
+   *
+   * @schema LaunchTemplateSpecForProviderMetadataOptions#httpTokens
+   */
+  readonly httpTokens?: string;
+
+  /**
+   * Enables or disables access to instance tags from the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateSpecForProviderMetadataOptions#instanceMetadataTags
+   */
+  readonly instanceMetadataTags?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderMetadataOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderMetadataOptions(obj: LaunchTemplateSpecForProviderMetadataOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpEndpoint': obj.httpEndpoint,
+    'httpProtocolIpv6': obj.httpProtocolIpv6,
+    'httpPutResponseHopLimit': obj.httpPutResponseHopLimit,
+    'httpTokens': obj.httpTokens,
+    'instanceMetadataTags': obj.instanceMetadataTags,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderMonitoring
+ */
+export interface LaunchTemplateSpecForProviderMonitoring {
+  /**
+   * If true, the launched EC2 instance will have detailed monitoring enabled.
+   *
+   * @schema LaunchTemplateSpecForProviderMonitoring#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderMonitoring' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderMonitoring(obj: LaunchTemplateSpecForProviderMonitoring | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderNetworkInterfaces
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfaces {
+  /**
+   * Associate a Carrier IP address with eth0 for a new network interface. Use this option when you launch an instance in a Wavelength Zone and want to associate a Carrier IP address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#associateCarrierIpAddress
+   */
+  readonly associateCarrierIpAddress?: string;
+
+  /**
+   * Associate a public ip address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#associatePublicIpAddress
+   */
+  readonly associatePublicIpAddress?: string;
+
+  /**
+   * The Connection Tracking Configuration for the network interface. See Amazon EC2 security group connection tracking
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#connectionTrackingSpecification
+   */
+  readonly connectionTrackingSpecification?: LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification[];
+
+  /**
+   * Whether the network interface should be destroyed on instance termination.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Description of the network interface.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#description
+   */
+  readonly description?: string;
+
+  /**
+   * The integer index of the network interface attachment.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Configuration for Elastic Network Adapter (ENA) Express settings. Applies to network interfaces that use the ena Express feature. See details below.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#enaSrdSpecification
+   */
+  readonly enaSrdSpecification?: LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification[];
+
+  /**
+   * The type of network interface. To create an Elastic Fabric Adapter (EFA), specify efa.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * The number of secondary private IPv4 addresses to assign to a network interface. Conflicts with ipv4_addresses
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv4AddressCount
+   */
+  readonly ipv4AddressCount?: number;
+
+  /**
+   * One or more private IPv4 addresses to associate. Conflicts with ipv4_address_count
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv4Addresses
+   */
+  readonly ipv4Addresses?: string[];
+
+  /**
+   * The number of IPv4 prefixes to be automatically assigned to the network interface. Conflicts with ipv4_prefixes
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv4PrefixCount
+   */
+  readonly ipv4PrefixCount?: number;
+
+  /**
+   * One or more IPv4 prefixes to be assigned to the network interface. Conflicts with ipv4_prefix_count
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv4Prefixes
+   */
+  readonly ipv4Prefixes?: string[];
+
+  /**
+   * The number of IPv6 addresses to assign to a network interface. Conflicts with ipv6_addresses
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv6AddressCount
+   */
+  readonly ipv6AddressCount?: number;
+
+  /**
+   * One or more specific IPv6 addresses from the IPv6 CIDR block range of your subnet. Conflicts with ipv6_address_count
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv6Addresses
+   */
+  readonly ipv6Addresses?: string[];
+
+  /**
+   * The number of IPv6 prefixes to be automatically assigned to the network interface. Conflicts with ipv6_prefixes
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv6PrefixCount
+   */
+  readonly ipv6PrefixCount?: number;
+
+  /**
+   * One or more IPv6 prefixes to be assigned to the network interface. Conflicts with ipv6_prefix_count
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#ipv6Prefixes
+   */
+  readonly ipv6Prefixes?: string[];
+
+  /**
+   * The index of the network card. Some instance types support multiple network cards. The primary network interface must be assigned to network card index 0. The default is network card index 0.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * The ID of the network interface to attach.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#networkInterfaceId
+   */
+  readonly networkInterfaceId?: string;
+
+  /**
+   * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#networkInterfaceIdRef
+   */
+  readonly networkInterfaceIdRef?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef;
+
+  /**
+   * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#networkInterfaceIdSelector
+   */
+  readonly networkInterfaceIdSelector?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector;
+
+  /**
+   * Whether the first IPv6 GUA will be made the primary IPv6 address.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#primaryIpv6
+   */
+  readonly primaryIpv6?: string;
+
+  /**
+   * The primary private IPv4 address.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#privateIpAddress
+   */
+  readonly privateIpAddress?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#securityGroupRefs
+   */
+  readonly securityGroupRefs?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#securityGroupSelector
+   */
+  readonly securityGroupSelector?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector;
+
+  /**
+   * A list of security group IDs to associate.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#securityGroups
+   */
+  readonly securityGroups?: string[];
+
+  /**
+   * The VPC Subnet ID to associate.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#subnetId
+   */
+  readonly subnetId?: string;
+
+  /**
+   * Reference to a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#subnetIdRef
+   */
+  readonly subnetIdRef?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef;
+
+  /**
+   * Selector for a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfaces#subnetIdSelector
+   */
+  readonly subnetIdSelector?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfaces(obj: LaunchTemplateSpecForProviderNetworkInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'associateCarrierIpAddress': obj.associateCarrierIpAddress,
+    'associatePublicIpAddress': obj.associatePublicIpAddress,
+    'connectionTrackingSpecification': obj.connectionTrackingSpecification?.map(y => toJson_LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification(y)),
+    'deleteOnTermination': obj.deleteOnTermination,
+    'description': obj.description,
+    'deviceIndex': obj.deviceIndex,
+    'enaSrdSpecification': obj.enaSrdSpecification?.map(y => toJson_LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification(y)),
+    'interfaceType': obj.interfaceType,
+    'ipv4AddressCount': obj.ipv4AddressCount,
+    'ipv4Addresses': obj.ipv4Addresses?.map(y => y),
+    'ipv4PrefixCount': obj.ipv4PrefixCount,
+    'ipv4Prefixes': obj.ipv4Prefixes?.map(y => y),
+    'ipv6AddressCount': obj.ipv6AddressCount,
+    'ipv6Addresses': obj.ipv6Addresses?.map(y => y),
+    'ipv6PrefixCount': obj.ipv6PrefixCount,
+    'ipv6Prefixes': obj.ipv6Prefixes?.map(y => y),
+    'networkCardIndex': obj.networkCardIndex,
+    'networkInterfaceId': obj.networkInterfaceId,
+    'networkInterfaceIdRef': toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef(obj.networkInterfaceIdRef),
+    'networkInterfaceIdSelector': toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector(obj.networkInterfaceIdSelector),
+    'primaryIpv6': obj.primaryIpv6,
+    'privateIpAddress': obj.privateIpAddress,
+    'securityGroupRefs': obj.securityGroupRefs?.map(y => toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs(y)),
+    'securityGroupSelector': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector(obj.securityGroupSelector),
+    'securityGroups': obj.securityGroups?.map(y => y),
+    'subnetId': obj.subnetId,
+    'subnetIdRef': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef(obj.subnetIdRef),
+    'subnetIdSelector': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector(obj.subnetIdSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderNetworkPerformanceOptions
+ */
+export interface LaunchTemplateSpecForProviderNetworkPerformanceOptions {
+  /**
+   * Specify the bandwidth weighting option to boost the associated type of baseline bandwidth. Valid values: default, vpc-1, ebs-1. Default value is default. Setting vpc-1 boosts networking baseline bandwidth and reduces EBS baseline bandwidth. Setting ebs-1 boosts EBS baseline bandwidth and reduces networking baseline bandwidth. Only supported on select instance types. See AWS Documentation for more information.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkPerformanceOptions#bandwidthWeighting
+   */
+  readonly bandwidthWeighting?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkPerformanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkPerformanceOptions(obj: LaunchTemplateSpecForProviderNetworkPerformanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bandwidthWeighting': obj.bandwidthWeighting,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderPlacement
+ */
+export interface LaunchTemplateSpecForProviderPlacement {
+  /**
+   * The affinity setting for an instance on a Dedicated Host.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#affinity
+   */
+  readonly affinity?: string;
+
+  /**
+   * The Availability Zone for the instance.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#availabilityZone
+   */
+  readonly availabilityZone?: string;
+
+  /**
+   * The ID of the placement group for the instance. Conflicts with group_name.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#groupId
+   */
+  readonly groupId?: string;
+
+  /**
+   * The name of the placement group for the instance. Conflicts with group_id.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#groupName
+   */
+  readonly groupName?: string;
+
+  /**
+   * The ID of the Dedicated Host for the instance.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#hostId
+   */
+  readonly hostId?: string;
+
+  /**
+   * The ARN of the Host Resource Group in which to launch instances.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#hostResourceGroupArn
+   */
+  readonly hostResourceGroupArn?: string;
+
+  /**
+   * The number of the partition the instance should launch in. Valid only if the placement group strategy is set to partition.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#partitionNumber
+   */
+  readonly partitionNumber?: number;
+
+  /**
+   * Reserved for future use.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#spreadDomain
+   */
+  readonly spreadDomain?: string;
+
+  /**
+   * The tenancy of the instance (if the instance is running in a VPC). Can be default, dedicated, or host.
+   *
+   * @schema LaunchTemplateSpecForProviderPlacement#tenancy
+   */
+  readonly tenancy?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderPlacement' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderPlacement(obj: LaunchTemplateSpecForProviderPlacement | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'affinity': obj.affinity,
+    'availabilityZone': obj.availabilityZone,
+    'groupId': obj.groupId,
+    'groupName': obj.groupName,
+    'hostId': obj.hostId,
+    'hostResourceGroupArn': obj.hostResourceGroupArn,
+    'partitionNumber': obj.partitionNumber,
+    'spreadDomain': obj.spreadDomain,
+    'tenancy': obj.tenancy,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderPrivateDnsNameOptions
+ */
+export interface LaunchTemplateSpecForProviderPrivateDnsNameOptions {
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+   *
+   * @schema LaunchTemplateSpecForProviderPrivateDnsNameOptions#enableResourceNameDnsARecord
+   */
+  readonly enableResourceNameDnsARecord?: boolean;
+
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+   *
+   * @schema LaunchTemplateSpecForProviderPrivateDnsNameOptions#enableResourceNameDnsAaaaRecord
+   */
+  readonly enableResourceNameDnsAaaaRecord?: boolean;
+
+  /**
+   * The type of hostname for Amazon EC2 instances. For IPv4 only subnets, an instance DNS name must be based on the instance IPv4 address. For IPv6 native subnets, an instance DNS name must be based on the instance ID. For dual-stack subnets, you can specify whether DNS names use the instance IPv4 address or the instance ID. Valid values: ip-name and resource-name.
+   *
+   * @schema LaunchTemplateSpecForProviderPrivateDnsNameOptions#hostnameType
+   */
+  readonly hostnameType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderPrivateDnsNameOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderPrivateDnsNameOptions(obj: LaunchTemplateSpecForProviderPrivateDnsNameOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableResourceNameDnsARecord': obj.enableResourceNameDnsARecord,
+    'enableResourceNameDnsAaaaRecord': obj.enableResourceNameDnsAaaaRecord,
+    'hostnameType': obj.hostnameType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderSecondaryInterfaces
+ */
+export interface LaunchTemplateSpecForProviderSecondaryInterfaces {
+  /**
+   * Whether the secondary interface is deleted when the instance is terminated. The only supported value is true.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: boolean;
+
+  /**
+   * Device index for the secondary interface attachment.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Type of secondary interface. The only supported value is: secondary.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * Index of the network card.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * Number of private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#privateIpAddressCount
+   */
+  readonly privateIpAddressCount?: number;
+
+  /**
+   * Private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#privateIpAddresses
+   */
+  readonly privateIpAddresses?: string[];
+
+  /**
+   * ID of the secondary subnet.
+   *
+   * @schema LaunchTemplateSpecForProviderSecondaryInterfaces#secondarySubnetId
+   */
+  readonly secondarySubnetId?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderSecondaryInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderSecondaryInterfaces(obj: LaunchTemplateSpecForProviderSecondaryInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'deviceIndex': obj.deviceIndex,
+    'interfaceType': obj.interfaceType,
+    'networkCardIndex': obj.networkCardIndex,
+    'privateIpAddressCount': obj.privateIpAddressCount,
+    'privateIpAddresses': obj.privateIpAddresses?.map(y => y),
+    'secondarySubnetId': obj.secondarySubnetId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefs
+ */
+export interface LaunchTemplateSpecForProviderSecurityGroupNameRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefs#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderSecurityGroupNameRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderSecurityGroupNameRefs(obj: LaunchTemplateSpecForProviderSecurityGroupNameRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelector
+ */
+export interface LaunchTemplateSpecForProviderSecurityGroupNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderSecurityGroupNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderSecurityGroupNameSelector(obj: LaunchTemplateSpecForProviderSecurityGroupNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderTagSpecifications
+ */
+export interface LaunchTemplateSpecForProviderTagSpecifications {
+  /**
+   * The type of resource to tag.
+   *
+   * @schema LaunchTemplateSpecForProviderTagSpecifications#resourceType
+   */
+  readonly resourceType?: string;
+
+  /**
+   * A map of tags to assign to the resource.
+   *
+   * @schema LaunchTemplateSpecForProviderTagSpecifications#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderTagSpecifications' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderTagSpecifications(obj: LaunchTemplateSpecForProviderTagSpecifications | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resourceType': obj.resourceType,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs
+ */
+export interface LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs(obj: LaunchTemplateSpecForProviderVpcSecurityGroupIdRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector
+ */
+export interface LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector(obj: LaunchTemplateSpecForProviderVpcSecurityGroupIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappings
+ */
+export interface LaunchTemplateSpecInitProviderBlockDeviceMappings {
+  /**
+   * The name of the device to mount.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappings#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Configure EBS volume properties.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappings#ebs
+   */
+  readonly ebs?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs[];
+
+  /**
+   * Suppresses the specified device included in the AMI's block device mapping.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappings#noDevice
+   */
+  readonly noDevice?: string;
+
+  /**
+   * The Instance Store Device
+   * Name
+   * (e.g., "ephemeral0").
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappings#virtualName
+   */
+  readonly virtualName?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderBlockDeviceMappings' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderBlockDeviceMappings(obj: LaunchTemplateSpecInitProviderBlockDeviceMappings | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'ebs': obj.ebs?.map(y => toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs(y)),
+    'noDevice': obj.noDevice,
+    'virtualName': obj.virtualName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderCapacityReservationSpecification
+ */
+export interface LaunchTemplateSpecInitProviderCapacityReservationSpecification {
+  /**
+   * Indicates the instance's Capacity Reservation preferences. Can be capacity-reservations-only, open or none. If capacity_reservation_id or capacity_reservation_resource_group_arn is specified in capacity_reservation_target block, either omit capacity_reservation_preference or set it to capacity-reservations-only.
+   *
+   * @schema LaunchTemplateSpecInitProviderCapacityReservationSpecification#capacityReservationPreference
+   */
+  readonly capacityReservationPreference?: string;
+
+  /**
+   * Used to target a specific Capacity Reservation:
+   *
+   * @schema LaunchTemplateSpecInitProviderCapacityReservationSpecification#capacityReservationTarget
+   */
+  readonly capacityReservationTarget?: LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderCapacityReservationSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderCapacityReservationSpecification(obj: LaunchTemplateSpecInitProviderCapacityReservationSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationPreference': obj.capacityReservationPreference,
+    'capacityReservationTarget': obj.capacityReservationTarget?.map(y => toJson_LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderCpuOptions
+ */
+export interface LaunchTemplateSpecInitProviderCpuOptions {
+  /**
+   * Indicates whether to enable the instance for AMD SEV-SNP. AMD SEV-SNP is supported with M6a, R6a, and C6a instance types only. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateSpecInitProviderCpuOptions#amdSevSnp
+   */
+  readonly amdSevSnp?: string;
+
+  /**
+   * The number of CPU cores for the instance.
+   *
+   * @schema LaunchTemplateSpecInitProviderCpuOptions#coreCount
+   */
+  readonly coreCount?: number;
+
+  /**
+   * Indicates whether to enable the instance for nested virtualization. Nested virtualization is supported on 8th generation Intel-based instance types (C8i, M8i, R8i, and their flex variants) only. When nested virtualization is enabled, Virtual Secure Mode (VSM) is automatically disabled for the instance. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateSpecInitProviderCpuOptions#nestedVirtualization
+   */
+  readonly nestedVirtualization?: string;
+
+  /**
+   * The number of threads per CPU core.
+   * To disable Intel Hyper-Threading Technology for the instance, specify a value of 1.
+   * Otherwise, specify the default value of 2.
+   *
+   * @schema LaunchTemplateSpecInitProviderCpuOptions#threadsPerCore
+   */
+  readonly threadsPerCore?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderCpuOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderCpuOptions(obj: LaunchTemplateSpecInitProviderCpuOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'amdSevSnp': obj.amdSevSnp,
+    'coreCount': obj.coreCount,
+    'nestedVirtualization': obj.nestedVirtualization,
+    'threadsPerCore': obj.threadsPerCore,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderCreditSpecification
+ */
+export interface LaunchTemplateSpecInitProviderCreditSpecification {
+  /**
+   * The credit option for CPU usage.
+   * Can be standard or unlimited.
+   * T3 instances are launched as unlimited by default.
+   * T2 instances are launched as standard by default.
+   *
+   * @schema LaunchTemplateSpecInitProviderCreditSpecification#cpuCredits
+   */
+  readonly cpuCredits?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderCreditSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderCreditSpecification(obj: LaunchTemplateSpecInitProviderCreditSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cpuCredits': obj.cpuCredits,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderEnclaveOptions
+ */
+export interface LaunchTemplateSpecInitProviderEnclaveOptions {
+  /**
+   * If set to true, Nitro Enclaves will be enabled on the instance.
+   *
+   * @schema LaunchTemplateSpecInitProviderEnclaveOptions#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderEnclaveOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderEnclaveOptions(obj: LaunchTemplateSpecInitProviderEnclaveOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderHibernationOptions
+ */
+export interface LaunchTemplateSpecInitProviderHibernationOptions {
+  /**
+   * If set to true, the launched EC2 instance will hibernation enabled.
+   *
+   * @schema LaunchTemplateSpecInitProviderHibernationOptions#configured
+   */
+  readonly configured?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderHibernationOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderHibernationOptions(obj: LaunchTemplateSpecInitProviderHibernationOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configured': obj.configured,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfile
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfile {
+  /**
+   * The Amazon Resource Name (ARN) of the instance profile. Conflicts with name.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfile#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfile#arnRef
+   */
+  readonly arnRef?: LaunchTemplateSpecInitProviderIamInstanceProfileArnRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfile#arnSelector
+   */
+  readonly arnSelector?: LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector;
+
+  /**
+   * The name of the instance profile.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfile#name
+   */
+  readonly name?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfile#nameRef
+   */
+  readonly nameRef?: LaunchTemplateSpecInitProviderIamInstanceProfileNameRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfile#nameSelector
+   */
+  readonly nameSelector?: LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfile' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfile(obj: LaunchTemplateSpecInitProviderIamInstanceProfile | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'arnRef': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnRef(obj.arnRef),
+    'arnSelector': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector(obj.arnSelector),
+    'name': obj.name,
+    'nameRef': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameRef(obj.nameRef),
+    'nameSelector': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector(obj.nameSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceMarketOptions
+ */
+export interface LaunchTemplateSpecInitProviderInstanceMarketOptions {
+  /**
+   * The market type. Can be spot.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptions#marketType
+   */
+  readonly marketType?: string;
+
+  /**
+   * The options for Spot Instance
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptions#spotOptions
+   */
+  readonly spotOptions?: LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceMarketOptions(obj: LaunchTemplateSpecInitProviderInstanceMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'marketType': obj.marketType,
+    'spotOptions': obj.spotOptions?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirements
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirements {
+  /**
+   * Block describing the minimum and maximum number of accelerators (GPUs, FPGAs, or AWS Inferentia chips). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#acceleratorCount
+   */
+  readonly acceleratorCount?: LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount[];
+
+  /**
+   * List of accelerator manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#acceleratorManufacturers
+   */
+  readonly acceleratorManufacturers?: string[];
+
+  /**
+   * List of accelerator names. Default is any acclerator.
+   *
+   * @default any acclerator.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#acceleratorNames
+   */
+  readonly acceleratorNames?: string[];
+
+  /**
+   * Block describing the minimum and maximum total memory of the accelerators. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#acceleratorTotalMemoryMib
+   */
+  readonly acceleratorTotalMemoryMib?: LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib[];
+
+  /**
+   * List of accelerator types. Default is any accelerator type.
+   *
+   * @default any accelerator type.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#acceleratorTypes
+   */
+  readonly acceleratorTypes?: string[];
+
+  /**
+   * List of instance types to apply your specified attributes against. All other instance types are ignored, even if they match your specified attributes. You can use strings with one or more wild cards, represented by an asterisk (*), to allow an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are allowing the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are allowing all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is all instance types.
+   *
+   * @default all instance types.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#allowedInstanceTypes
+   */
+  readonly allowedInstanceTypes?: string[];
+
+  /**
+   * Indicate whether bare metal instace types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#bareMetal
+   */
+  readonly bareMetal?: string;
+
+  /**
+   * Block describing the minimum and maximum baseline EBS bandwidth, in Mbps. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#baselineEbsBandwidthMbps
+   */
+  readonly baselineEbsBandwidthMbps?: LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps[];
+
+  /**
+   * Indicate whether burstable performance instance types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#burstablePerformance
+   */
+  readonly burstablePerformance?: string;
+
+  /**
+   * List of CPU manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#cpuManufacturers
+   */
+  readonly cpuManufacturers?: string[];
+
+  /**
+   * List of instance types to exclude. You can use strings with one or more wild cards, represented by an asterisk (*), to exclude an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are excluding the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are excluding all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is no excluded instance types.
+   *
+   * @default no excluded instance types.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#excludedInstanceTypes
+   */
+  readonly excludedInstanceTypes?: string[];
+
+  /**
+   * List of instance generation names. Default is any generation.
+   *
+   * @default any generation.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#instanceGenerations
+   */
+  readonly instanceGenerations?: string[];
+
+  /**
+   * Indicate whether instance types with local storage volumes are included, excluded, or required. Default is included.
+   *
+   * @default included.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#localStorage
+   */
+  readonly localStorage?: string;
+
+  /**
+   * List of local storage type names. Default any storage type.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#localStorageTypes
+   */
+  readonly localStorageTypes?: string[];
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Conflicts with spot_max_price_percentage_over_lowest_price
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#maxSpotPriceAsPercentageOfOptimalOnDemandPrice
+   */
+  readonly maxSpotPriceAsPercentageOfOptimalOnDemandPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum amount of memory (GiB) per vCPU. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#memoryGibPerVcpu
+   */
+  readonly memoryGibPerVcpu?: LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu[];
+
+  /**
+   * Block describing the minimum and maximum amount of memory (MiB). Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#memoryMib
+   */
+  readonly memoryMib?: LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib[];
+
+  /**
+   * Block describing the minimum and maximum amount of network bandwidth, in gigabits per second (Gbps). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#networkBandwidthGbps
+   */
+  readonly networkBandwidthGbps?: LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps[];
+
+  /**
+   * Block describing the minimum and maximum number of network interfaces. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#networkInterfaceCount
+   */
+  readonly networkInterfaceCount?: LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount[];
+
+  /**
+   * The price protection threshold for On-Demand Instances. This is the maximum you’ll pay for an On-Demand Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 20.
+   *
+   * @default 20.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#onDemandMaxPricePercentageOverLowestPrice
+   */
+  readonly onDemandMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Indicate whether instance types must support On-Demand Instance Hibernation, either true or false. Default is false.
+   *
+   * @default false.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#requireHibernateSupport
+   */
+  readonly requireHibernateSupport?: boolean;
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   *
+   * @default 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#spotMaxPricePercentageOverLowestPrice
+   */
+  readonly spotMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum total local storage (GB). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#totalLocalStorageGb
+   */
+  readonly totalLocalStorageGb?: LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb[];
+
+  /**
+   * Block describing the minimum and maximum number of vCPUs. Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirements#vcpuCount
+   */
+  readonly vcpuCount?: LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirements' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirements(obj: LaunchTemplateSpecInitProviderInstanceRequirements | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'acceleratorCount': obj.acceleratorCount?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount(y)),
+    'acceleratorManufacturers': obj.acceleratorManufacturers?.map(y => y),
+    'acceleratorNames': obj.acceleratorNames?.map(y => y),
+    'acceleratorTotalMemoryMib': obj.acceleratorTotalMemoryMib?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib(y)),
+    'acceleratorTypes': obj.acceleratorTypes?.map(y => y),
+    'allowedInstanceTypes': obj.allowedInstanceTypes?.map(y => y),
+    'bareMetal': obj.bareMetal,
+    'baselineEbsBandwidthMbps': obj.baselineEbsBandwidthMbps?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps(y)),
+    'burstablePerformance': obj.burstablePerformance,
+    'cpuManufacturers': obj.cpuManufacturers?.map(y => y),
+    'excludedInstanceTypes': obj.excludedInstanceTypes?.map(y => y),
+    'instanceGenerations': obj.instanceGenerations?.map(y => y),
+    'localStorage': obj.localStorage,
+    'localStorageTypes': obj.localStorageTypes?.map(y => y),
+    'maxSpotPriceAsPercentageOfOptimalOnDemandPrice': obj.maxSpotPriceAsPercentageOfOptimalOnDemandPrice,
+    'memoryGibPerVcpu': obj.memoryGibPerVcpu?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu(y)),
+    'memoryMib': obj.memoryMib?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib(y)),
+    'networkBandwidthGbps': obj.networkBandwidthGbps?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps(y)),
+    'networkInterfaceCount': obj.networkInterfaceCount?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount(y)),
+    'onDemandMaxPricePercentageOverLowestPrice': obj.onDemandMaxPricePercentageOverLowestPrice,
+    'requireHibernateSupport': obj.requireHibernateSupport,
+    'spotMaxPricePercentageOverLowestPrice': obj.spotMaxPricePercentageOverLowestPrice,
+    'totalLocalStorageGb': obj.totalLocalStorageGb?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb(y)),
+    'vcpuCount': obj.vcpuCount?.map(y => toJson_LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderLicenseSpecification
+ */
+export interface LaunchTemplateSpecInitProviderLicenseSpecification {
+  /**
+   * ARN of the license configuration.
+   *
+   * @schema LaunchTemplateSpecInitProviderLicenseSpecification#licenseConfigurationArn
+   */
+  readonly licenseConfigurationArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderLicenseSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderLicenseSpecification(obj: LaunchTemplateSpecInitProviderLicenseSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'licenseConfigurationArn': obj.licenseConfigurationArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderMaintenanceOptions
+ */
+export interface LaunchTemplateSpecInitProviderMaintenanceOptions {
+  /**
+   * Disables the automatic recovery behavior of your instance or sets it to default. Can be "default" or "disabled". See Recover your instance for more details.
+   *
+   * @schema LaunchTemplateSpecInitProviderMaintenanceOptions#autoRecovery
+   */
+  readonly autoRecovery?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderMaintenanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderMaintenanceOptions(obj: LaunchTemplateSpecInitProviderMaintenanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'autoRecovery': obj.autoRecovery,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderMetadataOptions
+ */
+export interface LaunchTemplateSpecInitProviderMetadataOptions {
+  /**
+   * Whether the metadata service is available. Can be "enabled" or "disabled". (Default: "enabled").
+   *
+   * @schema LaunchTemplateSpecInitProviderMetadataOptions#httpEndpoint
+   */
+  readonly httpEndpoint?: string;
+
+  /**
+   * Enables or disables the IPv6 endpoint for the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateSpecInitProviderMetadataOptions#httpProtocolIpv6
+   */
+  readonly httpProtocolIpv6?: string;
+
+  /**
+   * The desired HTTP PUT response hop limit for instance metadata requests. The larger the number, the further instance metadata requests can travel. Can be an integer from 1 to 64. (Default: 1).
+   *
+   * @schema LaunchTemplateSpecInitProviderMetadataOptions#httpPutResponseHopLimit
+   */
+  readonly httpPutResponseHopLimit?: number;
+
+  /**
+   * Whether or not the metadata service requires session tokens, also referred to as Instance Metadata Service Version 2 (IMDSv2). Can be "optional" or "required". (Default: "optional").
+   *
+   * @schema LaunchTemplateSpecInitProviderMetadataOptions#httpTokens
+   */
+  readonly httpTokens?: string;
+
+  /**
+   * Enables or disables access to instance tags from the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateSpecInitProviderMetadataOptions#instanceMetadataTags
+   */
+  readonly instanceMetadataTags?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderMetadataOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderMetadataOptions(obj: LaunchTemplateSpecInitProviderMetadataOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpEndpoint': obj.httpEndpoint,
+    'httpProtocolIpv6': obj.httpProtocolIpv6,
+    'httpPutResponseHopLimit': obj.httpPutResponseHopLimit,
+    'httpTokens': obj.httpTokens,
+    'instanceMetadataTags': obj.instanceMetadataTags,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderMonitoring
+ */
+export interface LaunchTemplateSpecInitProviderMonitoring {
+  /**
+   * If true, the launched EC2 instance will have detailed monitoring enabled.
+   *
+   * @schema LaunchTemplateSpecInitProviderMonitoring#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderMonitoring' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderMonitoring(obj: LaunchTemplateSpecInitProviderMonitoring | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfaces
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfaces {
+  /**
+   * Associate a Carrier IP address with eth0 for a new network interface. Use this option when you launch an instance in a Wavelength Zone and want to associate a Carrier IP address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#associateCarrierIpAddress
+   */
+  readonly associateCarrierIpAddress?: string;
+
+  /**
+   * Associate a public ip address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#associatePublicIpAddress
+   */
+  readonly associatePublicIpAddress?: string;
+
+  /**
+   * The Connection Tracking Configuration for the network interface. See Amazon EC2 security group connection tracking
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#connectionTrackingSpecification
+   */
+  readonly connectionTrackingSpecification?: LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification[];
+
+  /**
+   * Whether the network interface should be destroyed on instance termination.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Description of the network interface.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#description
+   */
+  readonly description?: string;
+
+  /**
+   * The integer index of the network interface attachment.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Configuration for Elastic Network Adapter (ENA) Express settings. Applies to network interfaces that use the ena Express feature. See details below.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#enaSrdSpecification
+   */
+  readonly enaSrdSpecification?: LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification[];
+
+  /**
+   * The type of network interface. To create an Elastic Fabric Adapter (EFA), specify efa.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * The number of secondary private IPv4 addresses to assign to a network interface. Conflicts with ipv4_addresses
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv4AddressCount
+   */
+  readonly ipv4AddressCount?: number;
+
+  /**
+   * One or more private IPv4 addresses to associate. Conflicts with ipv4_address_count
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv4Addresses
+   */
+  readonly ipv4Addresses?: string[];
+
+  /**
+   * The number of IPv4 prefixes to be automatically assigned to the network interface. Conflicts with ipv4_prefixes
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv4PrefixCount
+   */
+  readonly ipv4PrefixCount?: number;
+
+  /**
+   * One or more IPv4 prefixes to be assigned to the network interface. Conflicts with ipv4_prefix_count
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv4Prefixes
+   */
+  readonly ipv4Prefixes?: string[];
+
+  /**
+   * The number of IPv6 addresses to assign to a network interface. Conflicts with ipv6_addresses
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv6AddressCount
+   */
+  readonly ipv6AddressCount?: number;
+
+  /**
+   * One or more specific IPv6 addresses from the IPv6 CIDR block range of your subnet. Conflicts with ipv6_address_count
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv6Addresses
+   */
+  readonly ipv6Addresses?: string[];
+
+  /**
+   * The number of IPv6 prefixes to be automatically assigned to the network interface. Conflicts with ipv6_prefixes
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv6PrefixCount
+   */
+  readonly ipv6PrefixCount?: number;
+
+  /**
+   * One or more IPv6 prefixes to be assigned to the network interface. Conflicts with ipv6_prefix_count
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#ipv6Prefixes
+   */
+  readonly ipv6Prefixes?: string[];
+
+  /**
+   * The index of the network card. Some instance types support multiple network cards. The primary network interface must be assigned to network card index 0. The default is network card index 0.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * The ID of the network interface to attach.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#networkInterfaceId
+   */
+  readonly networkInterfaceId?: string;
+
+  /**
+   * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#networkInterfaceIdRef
+   */
+  readonly networkInterfaceIdRef?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef;
+
+  /**
+   * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#networkInterfaceIdSelector
+   */
+  readonly networkInterfaceIdSelector?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector;
+
+  /**
+   * Whether the first IPv6 GUA will be made the primary IPv6 address.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#primaryIpv6
+   */
+  readonly primaryIpv6?: string;
+
+  /**
+   * The primary private IPv4 address.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#privateIpAddress
+   */
+  readonly privateIpAddress?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#securityGroupRefs
+   */
+  readonly securityGroupRefs?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#securityGroupSelector
+   */
+  readonly securityGroupSelector?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector;
+
+  /**
+   * A list of security group IDs to associate.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#securityGroups
+   */
+  readonly securityGroups?: string[];
+
+  /**
+   * The VPC Subnet ID to associate.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#subnetId
+   */
+  readonly subnetId?: string;
+
+  /**
+   * Reference to a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#subnetIdRef
+   */
+  readonly subnetIdRef?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef;
+
+  /**
+   * Selector for a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfaces#subnetIdSelector
+   */
+  readonly subnetIdSelector?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfaces(obj: LaunchTemplateSpecInitProviderNetworkInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'associateCarrierIpAddress': obj.associateCarrierIpAddress,
+    'associatePublicIpAddress': obj.associatePublicIpAddress,
+    'connectionTrackingSpecification': obj.connectionTrackingSpecification?.map(y => toJson_LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification(y)),
+    'deleteOnTermination': obj.deleteOnTermination,
+    'description': obj.description,
+    'deviceIndex': obj.deviceIndex,
+    'enaSrdSpecification': obj.enaSrdSpecification?.map(y => toJson_LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification(y)),
+    'interfaceType': obj.interfaceType,
+    'ipv4AddressCount': obj.ipv4AddressCount,
+    'ipv4Addresses': obj.ipv4Addresses?.map(y => y),
+    'ipv4PrefixCount': obj.ipv4PrefixCount,
+    'ipv4Prefixes': obj.ipv4Prefixes?.map(y => y),
+    'ipv6AddressCount': obj.ipv6AddressCount,
+    'ipv6Addresses': obj.ipv6Addresses?.map(y => y),
+    'ipv6PrefixCount': obj.ipv6PrefixCount,
+    'ipv6Prefixes': obj.ipv6Prefixes?.map(y => y),
+    'networkCardIndex': obj.networkCardIndex,
+    'networkInterfaceId': obj.networkInterfaceId,
+    'networkInterfaceIdRef': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef(obj.networkInterfaceIdRef),
+    'networkInterfaceIdSelector': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector(obj.networkInterfaceIdSelector),
+    'primaryIpv6': obj.primaryIpv6,
+    'privateIpAddress': obj.privateIpAddress,
+    'securityGroupRefs': obj.securityGroupRefs?.map(y => toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs(y)),
+    'securityGroupSelector': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector(obj.securityGroupSelector),
+    'securityGroups': obj.securityGroups?.map(y => y),
+    'subnetId': obj.subnetId,
+    'subnetIdRef': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef(obj.subnetIdRef),
+    'subnetIdSelector': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector(obj.subnetIdSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderNetworkPerformanceOptions
+ */
+export interface LaunchTemplateSpecInitProviderNetworkPerformanceOptions {
+  /**
+   * Specify the bandwidth weighting option to boost the associated type of baseline bandwidth. Valid values: default, vpc-1, ebs-1. Default value is default. Setting vpc-1 boosts networking baseline bandwidth and reduces EBS baseline bandwidth. Setting ebs-1 boosts EBS baseline bandwidth and reduces networking baseline bandwidth. Only supported on select instance types. See AWS Documentation for more information.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkPerformanceOptions#bandwidthWeighting
+   */
+  readonly bandwidthWeighting?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkPerformanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkPerformanceOptions(obj: LaunchTemplateSpecInitProviderNetworkPerformanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bandwidthWeighting': obj.bandwidthWeighting,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderPlacement
+ */
+export interface LaunchTemplateSpecInitProviderPlacement {
+  /**
+   * The affinity setting for an instance on a Dedicated Host.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#affinity
+   */
+  readonly affinity?: string;
+
+  /**
+   * The Availability Zone for the instance.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#availabilityZone
+   */
+  readonly availabilityZone?: string;
+
+  /**
+   * The ID of the placement group for the instance. Conflicts with group_name.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#groupId
+   */
+  readonly groupId?: string;
+
+  /**
+   * The name of the placement group for the instance. Conflicts with group_id.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#groupName
+   */
+  readonly groupName?: string;
+
+  /**
+   * The ID of the Dedicated Host for the instance.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#hostId
+   */
+  readonly hostId?: string;
+
+  /**
+   * The ARN of the Host Resource Group in which to launch instances.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#hostResourceGroupArn
+   */
+  readonly hostResourceGroupArn?: string;
+
+  /**
+   * The number of the partition the instance should launch in. Valid only if the placement group strategy is set to partition.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#partitionNumber
+   */
+  readonly partitionNumber?: number;
+
+  /**
+   * Reserved for future use.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#spreadDomain
+   */
+  readonly spreadDomain?: string;
+
+  /**
+   * The tenancy of the instance (if the instance is running in a VPC). Can be default, dedicated, or host.
+   *
+   * @schema LaunchTemplateSpecInitProviderPlacement#tenancy
+   */
+  readonly tenancy?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderPlacement' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderPlacement(obj: LaunchTemplateSpecInitProviderPlacement | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'affinity': obj.affinity,
+    'availabilityZone': obj.availabilityZone,
+    'groupId': obj.groupId,
+    'groupName': obj.groupName,
+    'hostId': obj.hostId,
+    'hostResourceGroupArn': obj.hostResourceGroupArn,
+    'partitionNumber': obj.partitionNumber,
+    'spreadDomain': obj.spreadDomain,
+    'tenancy': obj.tenancy,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderPrivateDnsNameOptions
+ */
+export interface LaunchTemplateSpecInitProviderPrivateDnsNameOptions {
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+   *
+   * @schema LaunchTemplateSpecInitProviderPrivateDnsNameOptions#enableResourceNameDnsARecord
+   */
+  readonly enableResourceNameDnsARecord?: boolean;
+
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+   *
+   * @schema LaunchTemplateSpecInitProviderPrivateDnsNameOptions#enableResourceNameDnsAaaaRecord
+   */
+  readonly enableResourceNameDnsAaaaRecord?: boolean;
+
+  /**
+   * The type of hostname for Amazon EC2 instances. For IPv4 only subnets, an instance DNS name must be based on the instance IPv4 address. For IPv6 native subnets, an instance DNS name must be based on the instance ID. For dual-stack subnets, you can specify whether DNS names use the instance IPv4 address or the instance ID. Valid values: ip-name and resource-name.
+   *
+   * @schema LaunchTemplateSpecInitProviderPrivateDnsNameOptions#hostnameType
+   */
+  readonly hostnameType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderPrivateDnsNameOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderPrivateDnsNameOptions(obj: LaunchTemplateSpecInitProviderPrivateDnsNameOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableResourceNameDnsARecord': obj.enableResourceNameDnsARecord,
+    'enableResourceNameDnsAaaaRecord': obj.enableResourceNameDnsAaaaRecord,
+    'hostnameType': obj.hostnameType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces
+ */
+export interface LaunchTemplateSpecInitProviderSecondaryInterfaces {
+  /**
+   * Whether the secondary interface is deleted when the instance is terminated. The only supported value is true.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: boolean;
+
+  /**
+   * Device index for the secondary interface attachment.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Type of secondary interface. The only supported value is: secondary.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * Index of the network card.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * Number of private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#privateIpAddressCount
+   */
+  readonly privateIpAddressCount?: number;
+
+  /**
+   * Private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#privateIpAddresses
+   */
+  readonly privateIpAddresses?: string[];
+
+  /**
+   * ID of the secondary subnet.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecondaryInterfaces#secondarySubnetId
+   */
+  readonly secondarySubnetId?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderSecondaryInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderSecondaryInterfaces(obj: LaunchTemplateSpecInitProviderSecondaryInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'deviceIndex': obj.deviceIndex,
+    'interfaceType': obj.interfaceType,
+    'networkCardIndex': obj.networkCardIndex,
+    'privateIpAddressCount': obj.privateIpAddressCount,
+    'privateIpAddresses': obj.privateIpAddresses?.map(y => y),
+    'secondarySubnetId': obj.secondarySubnetId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefs
+ */
+export interface LaunchTemplateSpecInitProviderSecurityGroupNameRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefs#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderSecurityGroupNameRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderSecurityGroupNameRefs(obj: LaunchTemplateSpecInitProviderSecurityGroupNameRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelector
+ */
+export interface LaunchTemplateSpecInitProviderSecurityGroupNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderSecurityGroupNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderSecurityGroupNameSelector(obj: LaunchTemplateSpecInitProviderSecurityGroupNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderTagSpecifications
+ */
+export interface LaunchTemplateSpecInitProviderTagSpecifications {
+  /**
+   * The type of resource to tag.
+   *
+   * @schema LaunchTemplateSpecInitProviderTagSpecifications#resourceType
+   */
+  readonly resourceType?: string;
+
+  /**
+   * A map of tags to assign to the resource.
+   *
+   * @schema LaunchTemplateSpecInitProviderTagSpecifications#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderTagSpecifications' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderTagSpecifications(obj: LaunchTemplateSpecInitProviderTagSpecifications | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resourceType': obj.resourceType,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs
+ */
+export interface LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs(obj: LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector
+ */
+export interface LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector(obj: LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecProviderConfigRefPolicy
+ */
+export interface LaunchTemplateSpecProviderConfigRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecProviderConfigRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecProviderConfigRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecProviderConfigRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecProviderConfigRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecProviderConfigRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecProviderConfigRefPolicy(obj: LaunchTemplateSpecProviderConfigRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs
+ */
+export interface LaunchTemplateSpecForProviderBlockDeviceMappingsEbs {
+  /**
+   * Whether the volume should be destroyed on instance termination.
+   * See Preserving Amazon EBS Volumes on Instance Termination for more information.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Enables EBS encryption on the volume.
+   * Cannot be used with snapshot_id.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#encrypted
+   */
+  readonly encrypted?: string;
+
+  /**
+   * The amount of provisioned IOPS.
+   * This must be set with a volume_type of "io1/io2/gp3".
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Identifier (key ID, key alias, key ARN, or alias ARN) of the customer managed KMS key to use for EBS encryption.
+   * encrypted must be set to true when this is set.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#kmsKeyId
+   */
+  readonly kmsKeyId?: string;
+
+  /**
+   * Reference to a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#kmsKeyIdRef
+   */
+  readonly kmsKeyIdRef?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef;
+
+  /**
+   * Selector for a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#kmsKeyIdSelector
+   */
+  readonly kmsKeyIdSelector?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector;
+
+  /**
+   * The Snapshot ID to mount.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#snapshotId
+   */
+  readonly snapshotId?: string;
+
+  /**
+   * The throughput to provision for a gp3 volume in MiB/s (specified as an integer, e.g., 500), with a maximum of 1,000 MiB/s.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * The volume initialization rate in MiB/s (specified as an integer, e.g. 100), with a minimum of 100 MiB/s and maximum of 300 MiB/s.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#volumeInitializationRate
+   */
+  readonly volumeInitializationRate?: number;
+
+  /**
+   * The size of the volume in gigabytes.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#volumeSize
+   */
+  readonly volumeSize?: number;
+
+  /**
+   * The volume type.
+   * Can be one of standard, gp2, gp3, io1, io2, sc1 or st1.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbs#volumeType
+   */
+  readonly volumeType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderBlockDeviceMappingsEbs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbs(obj: LaunchTemplateSpecForProviderBlockDeviceMappingsEbs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'encrypted': obj.encrypted,
+    'iops': obj.iops,
+    'kmsKeyId': obj.kmsKeyId,
+    'kmsKeyIdRef': toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj.kmsKeyIdRef),
+    'kmsKeyIdSelector': toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj.kmsKeyIdSelector),
+    'snapshotId': obj.snapshotId,
+    'throughput': obj.throughput,
+    'volumeInitializationRate': obj.volumeInitializationRate,
+    'volumeSize': obj.volumeSize,
+    'volumeType': obj.volumeType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget
+ */
+export interface LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget {
+  /**
+   * The ID of the Capacity Reservation in which to run the instance.
+   *
+   * @schema LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationId
+   */
+  readonly capacityReservationId?: string;
+
+  /**
+   * The ARN of the Capacity Reservation resource group in which to run the instance.
+   *
+   * @schema LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationResourceGroupArn
+   */
+  readonly capacityReservationResourceGroupArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget(obj: LaunchTemplateSpecForProviderCapacityReservationSpecificationCapacityReservationTarget | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationId': obj.capacityReservationId,
+    'capacityReservationResourceGroupArn': obj.capacityReservationResourceGroupArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRef
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileArnRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileArnRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnRef(obj: LaunchTemplateSpecForProviderIamInstanceProfileArnRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelector
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileArnSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileArnSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnSelector(obj: LaunchTemplateSpecForProviderIamInstanceProfileArnSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRef
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileNameRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileNameRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameRef(obj: LaunchTemplateSpecForProviderIamInstanceProfileNameRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelector
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameSelector(obj: LaunchTemplateSpecForProviderIamInstanceProfileNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions
+ */
+export interface LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions {
+  /**
+   * The required duration in minutes. This value must be a multiple of 60.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions#blockDurationMinutes
+   */
+  readonly blockDurationMinutes?: number;
+
+  /**
+   * The behavior when a Spot Instance is interrupted. Can be hibernate,
+   * stop, or terminate. (Default: terminate).
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions#instanceInterruptionBehavior
+   */
+  readonly instanceInterruptionBehavior?: string;
+
+  /**
+   * The maximum hourly price you're willing to pay for the Spot Instances.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+
+  /**
+   * The Spot Instance request type. Can be one-time, or persistent.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions#spotInstanceType
+   */
+  readonly spotInstanceType?: string;
+
+  /**
+   * The end date of the request.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions#validUntil
+   */
+  readonly validUntil?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions(obj: LaunchTemplateSpecForProviderInstanceMarketOptionsSpotOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDurationMinutes': obj.blockDurationMinutes,
+    'instanceInterruptionBehavior': obj.instanceInterruptionBehavior,
+    'maxPrice': obj.maxPrice,
+    'spotInstanceType': obj.spotInstanceType,
+    'validUntil': obj.validUntil,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount(obj: LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib(obj: LaunchTemplateSpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps(obj: LaunchTemplateSpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu(obj: LaunchTemplateSpecForProviderInstanceRequirementsMemoryGibPerVcpu | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib(obj: LaunchTemplateSpecForProviderInstanceRequirementsMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps(obj: LaunchTemplateSpecForProviderInstanceRequirementsNetworkBandwidthGbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount(obj: LaunchTemplateSpecForProviderInstanceRequirementsNetworkInterfaceCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb(obj: LaunchTemplateSpecForProviderInstanceRequirementsTotalLocalStorageGb | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount
+ */
+export interface LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount(obj: LaunchTemplateSpecForProviderInstanceRequirementsVcpuCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification {
+  /**
+   * Timeout (in seconds) for idle TCP connections in an established state. Min: 60 seconds. Max: 432000 seconds (5 days). Default: 432000 seconds. Recommended: Less than 432000 seconds.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification#tcpEstablishedTimeout
+   */
+  readonly tcpEstablishedTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows classified as streams which have seen more than one request-response transaction. Min: 60 seconds. Max: 180 seconds (3 minutes). Default: 180 seconds.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification#udpStreamTimeout
+   */
+  readonly udpStreamTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows that have seen traffic only in a single direction or a single request-response transaction. Min: 30 seconds. Max: 60 seconds. Default: 30 seconds.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification#udpTimeout
+   */
+  readonly udpTimeout?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification(obj: LaunchTemplateSpecForProviderNetworkInterfacesConnectionTrackingSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'tcpEstablishedTimeout': obj.tcpEstablishedTimeout,
+    'udpStreamTimeout': obj.udpStreamTimeout,
+    'udpTimeout': obj.udpTimeout,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification {
+  /**
+   * Whether to enable ENA Express. ENA Express uses AWS Scalable Reliable Datagram (SRD) technology to improve the performance of TCP traffic.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification#enaSrdEnabled
+   */
+  readonly enaSrdEnabled?: boolean;
+
+  /**
+   * Configuration for ENA Express UDP optimization. See details below.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification#enaSrdUdpSpecification
+   */
+  readonly enaSrdUdpSpecification?: LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification(obj: LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdEnabled': obj.enaSrdEnabled,
+    'enaSrdUdpSpecification': obj.enaSrdUdpSpecification?.map(y => toJson_LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef(obj: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector(obj: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs(obj: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector(obj: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef(obj: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector(obj: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy
+ */
+export interface LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy(obj: LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy(obj: LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy
+ */
+export interface LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy(obj: LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy(obj: LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs
+ */
+export interface LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs {
+  /**
+   * Whether the volume should be destroyed on instance termination.
+   * See Preserving Amazon EBS Volumes on Instance Termination for more information.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Enables EBS encryption on the volume.
+   * Cannot be used with snapshot_id.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#encrypted
+   */
+  readonly encrypted?: string;
+
+  /**
+   * The amount of provisioned IOPS.
+   * This must be set with a volume_type of "io1/io2/gp3".
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Identifier (key ID, key alias, key ARN, or alias ARN) of the customer managed KMS key to use for EBS encryption.
+   * encrypted must be set to true when this is set.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#kmsKeyId
+   */
+  readonly kmsKeyId?: string;
+
+  /**
+   * Reference to a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#kmsKeyIdRef
+   */
+  readonly kmsKeyIdRef?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef;
+
+  /**
+   * Selector for a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#kmsKeyIdSelector
+   */
+  readonly kmsKeyIdSelector?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector;
+
+  /**
+   * The Snapshot ID to mount.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#snapshotId
+   */
+  readonly snapshotId?: string;
+
+  /**
+   * The throughput to provision for a gp3 volume in MiB/s (specified as an integer, e.g., 500), with a maximum of 1,000 MiB/s.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * The volume initialization rate in MiB/s (specified as an integer, e.g. 100), with a minimum of 100 MiB/s and maximum of 300 MiB/s.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#volumeInitializationRate
+   */
+  readonly volumeInitializationRate?: number;
+
+  /**
+   * The size of the volume in gigabytes.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#volumeSize
+   */
+  readonly volumeSize?: number;
+
+  /**
+   * The volume type.
+   * Can be one of standard, gp2, gp3, io1, io2, sc1 or st1.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs#volumeType
+   */
+  readonly volumeType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs(obj: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'encrypted': obj.encrypted,
+    'iops': obj.iops,
+    'kmsKeyId': obj.kmsKeyId,
+    'kmsKeyIdRef': toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj.kmsKeyIdRef),
+    'kmsKeyIdSelector': toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj.kmsKeyIdSelector),
+    'snapshotId': obj.snapshotId,
+    'throughput': obj.throughput,
+    'volumeInitializationRate': obj.volumeInitializationRate,
+    'volumeSize': obj.volumeSize,
+    'volumeType': obj.volumeType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget
+ */
+export interface LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget {
+  /**
+   * The ID of the Capacity Reservation in which to run the instance.
+   *
+   * @schema LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationId
+   */
+  readonly capacityReservationId?: string;
+
+  /**
+   * The ARN of the Capacity Reservation resource group in which to run the instance.
+   *
+   * @schema LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationResourceGroupArn
+   */
+  readonly capacityReservationResourceGroupArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget(obj: LaunchTemplateSpecInitProviderCapacityReservationSpecificationCapacityReservationTarget | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationId': obj.capacityReservationId,
+    'capacityReservationResourceGroupArn': obj.capacityReservationResourceGroupArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRef
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileArnRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileArnRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnRef(obj: LaunchTemplateSpecInitProviderIamInstanceProfileArnRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector(obj: LaunchTemplateSpecInitProviderIamInstanceProfileArnSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRef
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileNameRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileNameRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameRef(obj: LaunchTemplateSpecInitProviderIamInstanceProfileNameRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector(obj: LaunchTemplateSpecInitProviderIamInstanceProfileNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions
+ */
+export interface LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions {
+  /**
+   * The required duration in minutes. This value must be a multiple of 60.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions#blockDurationMinutes
+   */
+  readonly blockDurationMinutes?: number;
+
+  /**
+   * The behavior when a Spot Instance is interrupted. Can be hibernate,
+   * stop, or terminate. (Default: terminate).
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions#instanceInterruptionBehavior
+   */
+  readonly instanceInterruptionBehavior?: string;
+
+  /**
+   * The maximum hourly price you're willing to pay for the Spot Instances.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+
+  /**
+   * The Spot Instance request type. Can be one-time, or persistent.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions#spotInstanceType
+   */
+  readonly spotInstanceType?: string;
+
+  /**
+   * The end date of the request.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions#validUntil
+   */
+  readonly validUntil?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions(obj: LaunchTemplateSpecInitProviderInstanceMarketOptionsSpotOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDurationMinutes': obj.blockDurationMinutes,
+    'instanceInterruptionBehavior': obj.instanceInterruptionBehavior,
+    'maxPrice': obj.maxPrice,
+    'spotInstanceType': obj.spotInstanceType,
+    'validUntil': obj.validUntil,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount(obj: LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib(obj: LaunchTemplateSpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps(obj: LaunchTemplateSpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu(obj: LaunchTemplateSpecInitProviderInstanceRequirementsMemoryGibPerVcpu | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib(obj: LaunchTemplateSpecInitProviderInstanceRequirementsMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps(obj: LaunchTemplateSpecInitProviderInstanceRequirementsNetworkBandwidthGbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount(obj: LaunchTemplateSpecInitProviderInstanceRequirementsNetworkInterfaceCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb(obj: LaunchTemplateSpecInitProviderInstanceRequirementsTotalLocalStorageGb | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount
+ */
+export interface LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount(obj: LaunchTemplateSpecInitProviderInstanceRequirementsVcpuCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification {
+  /**
+   * Timeout (in seconds) for idle TCP connections in an established state. Min: 60 seconds. Max: 432000 seconds (5 days). Default: 432000 seconds. Recommended: Less than 432000 seconds.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification#tcpEstablishedTimeout
+   */
+  readonly tcpEstablishedTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows classified as streams which have seen more than one request-response transaction. Min: 60 seconds. Max: 180 seconds (3 minutes). Default: 180 seconds.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification#udpStreamTimeout
+   */
+  readonly udpStreamTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows that have seen traffic only in a single direction or a single request-response transaction. Min: 30 seconds. Max: 60 seconds. Default: 30 seconds.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification#udpTimeout
+   */
+  readonly udpTimeout?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification(obj: LaunchTemplateSpecInitProviderNetworkInterfacesConnectionTrackingSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'tcpEstablishedTimeout': obj.tcpEstablishedTimeout,
+    'udpStreamTimeout': obj.udpStreamTimeout,
+    'udpTimeout': obj.udpTimeout,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification {
+  /**
+   * Whether to enable ENA Express. ENA Express uses AWS Scalable Reliable Datagram (SRD) technology to improve the performance of TCP traffic.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification#enaSrdEnabled
+   */
+  readonly enaSrdEnabled?: boolean;
+
+  /**
+   * Configuration for ENA Express UDP optimization. See details below.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification#enaSrdUdpSpecification
+   */
+  readonly enaSrdUdpSpecification?: LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification(obj: LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdEnabled': obj.enaSrdEnabled,
+    'enaSrdUdpSpecification': obj.enaSrdUdpSpecification?.map(y => toJson_LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef(obj: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector(obj: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy
+ */
+export interface LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy(obj: LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy(obj: LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy
+ */
+export interface LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy(obj: LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy(obj: LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecProviderConfigRefPolicyResolution
+ */
+export enum LaunchTemplateSpecProviderConfigRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecProviderConfigRefPolicyResolve
+ */
+export enum LaunchTemplateSpecProviderConfigRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Reference to a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef
+ */
+export interface LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector
+ */
+export interface LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy(obj: LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy(obj: LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy(obj: LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy(obj: LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification {
+  /**
+   * Whether to enable UDP traffic optimization through ENA Express. Requires ena_srd_enabled to be true.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification#enaSrdUdpEnabled
+   */
+  readonly enaSrdUdpEnabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(obj: LaunchTemplateSpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdUdpEnabled': obj.enaSrdUdpEnabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj: LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy(obj: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj: LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy(obj: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy(obj: LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderSecurityGroupNameRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderSecurityGroupNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderVpcSecurityGroupIdRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderVpcSecurityGroupIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Reference to a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef
+ */
+export interface LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector
+ */
+export interface LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy(obj: LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy(obj: LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy(obj: LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy(obj: LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification {
+  /**
+   * Whether to enable UDP traffic optimization through ENA Express. Requires ena_srd_enabled to be true.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification#enaSrdUdpEnabled
+   */
+  readonly enaSrdUdpEnabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(obj: LaunchTemplateSpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdUdpEnabled': obj.enaSrdUdpEnabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj: LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy(obj: LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderSecurityGroupNameRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderSecurityGroupNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderVpcSecurityGroupIdRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderVpcSecurityGroupIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy
+ */
+export interface LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj: LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileArnRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileArnSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileNameRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderIamInstanceProfileNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy
+ */
+export interface LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy
+ */
+export interface LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj: LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileArnRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileArnSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileNameRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderIamInstanceProfileNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateSpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+
+/**
+ * LaunchTemplate is the Schema for the LaunchTemplates API. Provides an EC2 launch template resource. Can be used to create instances or auto scaling groups.
+ *
+ * @schema LaunchTemplateV1Beta2
+ */
+export class LaunchTemplateV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "LaunchTemplateV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'ec2.aws.upbound.io/v1beta2',
+    kind: 'LaunchTemplate',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "LaunchTemplateV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: LaunchTemplateV1Beta2Props): any {
+    return {
+      ...LaunchTemplateV1Beta2.GVK,
+      ...toJson_LaunchTemplateV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "LaunchTemplateV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: LaunchTemplateV1Beta2Props) {
+    super(scope, id, {
+      ...LaunchTemplateV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...LaunchTemplateV1Beta2.GVK,
+      ...toJson_LaunchTemplateV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * LaunchTemplate is the Schema for the LaunchTemplates API. Provides an EC2 launch template resource. Can be used to create instances or auto scaling groups.
+ *
+ * @schema LaunchTemplateV1Beta2
+ */
+export interface LaunchTemplateV1Beta2Props {
+  /**
+   * @schema LaunchTemplateV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * LaunchTemplateSpec defines the desired state of LaunchTemplate
+   *
+   * @schema LaunchTemplateV1Beta2#spec
+   */
+  readonly spec: LaunchTemplateV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2Props(obj: LaunchTemplateV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_LaunchTemplateV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * LaunchTemplateSpec defines the desired state of LaunchTemplate
+ *
+ * @schema LaunchTemplateV1Beta2Spec
+ */
+export interface LaunchTemplateV1Beta2Spec {
+  /**
+   * DeletionPolicy specifies what will happen to the underlying external
+   * when this managed resource is deleted - either "Delete" or "Orphan" the
+   * external resource.
+   * This field is planned to be deprecated in favor of the ManagementPolicies
+   * field in a future release. Currently, both could be set independently and
+   * non-default values would be honored if the feature flag is enabled.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   *
+   * @schema LaunchTemplateV1Beta2Spec#deletionPolicy
+   */
+  readonly deletionPolicy?: LaunchTemplateV1Beta2SpecDeletionPolicy;
+
+  /**
+   * @schema LaunchTemplateV1Beta2Spec#forProvider
+   */
+  readonly forProvider: LaunchTemplateV1Beta2SpecForProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It will be honored
+   * unless the Management Policies feature flag is disabled.
+   * InitProvider holds the same fields as ForProvider, with the exception
+   * of Identifier and other resource reference fields. The fields that are
+   * in InitProvider are merged into ForProvider when the resource is created.
+   * The same fields are also added to the terraform ignore_changes hook, to
+   * avoid updating them after creation. This is useful for fields that are
+   * required on creation, but we do not desire to update them after creation,
+   * for example because of an external controller is managing them, like an
+   * autoscaler.
+   *
+   * @schema LaunchTemplateV1Beta2Spec#initProvider
+   */
+  readonly initProvider?: LaunchTemplateV1Beta2SpecInitProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It is on by default but can be opted out
+   * through a Crossplane feature flag.
+   * ManagementPolicies specify the array of actions Crossplane is allowed to
+   * take on the managed and external resources.
+   * This field is planned to replace the DeletionPolicy field in a future
+   * release. Currently, both could be set independently and non-default
+   * values would be honored if the feature flag is enabled. If both are
+   * custom, the DeletionPolicy field will be ignored.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   * and this one: https://github.com/crossplane/crossplane/blob/444267e84783136daa93568b364a5f01228cacbe/design/one-pager-ignore-changes.md
+   *
+   * @schema LaunchTemplateV1Beta2Spec#managementPolicies
+   */
+  readonly managementPolicies?: LaunchTemplateV1Beta2SpecManagementPolicies[];
+
+  /**
+   * ProviderConfigReference specifies how the provider that will be used to
+   * create, observe, update, and delete this managed resource should be
+   * configured.
+   *
+   * @schema LaunchTemplateV1Beta2Spec#providerConfigRef
+   */
+  readonly providerConfigRef?: LaunchTemplateV1Beta2SpecProviderConfigRef;
+
+  /**
+   * WriteConnectionSecretToReference specifies the namespace and name of a
+   * Secret to which any connection details for this managed resource should
+   * be written. Connection details frequently include the endpoint, username,
+   * and password required to connect to the managed resource.
+   *
+   * @schema LaunchTemplateV1Beta2Spec#writeConnectionSecretToRef
+   */
+  readonly writeConnectionSecretToRef?: LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2Spec(obj: LaunchTemplateV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deletionPolicy': obj.deletionPolicy,
+    'forProvider': toJson_LaunchTemplateV1Beta2SpecForProvider(obj.forProvider),
+    'initProvider': toJson_LaunchTemplateV1Beta2SpecInitProvider(obj.initProvider),
+    'managementPolicies': obj.managementPolicies?.map(y => y),
+    'providerConfigRef': toJson_LaunchTemplateV1Beta2SpecProviderConfigRef(obj.providerConfigRef),
+    'writeConnectionSecretToRef': toJson_LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DeletionPolicy specifies what will happen to the underlying external
+ * when this managed resource is deleted - either "Delete" or "Orphan" the
+ * external resource.
+ * This field is planned to be deprecated in favor of the ManagementPolicies
+ * field in a future release. Currently, both could be set independently and
+ * non-default values would be honored if the feature flag is enabled.
+ * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+ *
+ * @schema LaunchTemplateV1Beta2SpecDeletionPolicy
+ */
+export enum LaunchTemplateV1Beta2SpecDeletionPolicy {
+  /** Orphan */
+  ORPHAN = "Orphan",
+  /** Delete */
+  DELETE = "Delete",
+}
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProvider
+ */
+export interface LaunchTemplateV1Beta2SpecForProvider {
+  /**
+   * Specify volumes to attach to the instance besides the volumes specified by the AMI.
+   * See Block Devices below for details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#blockDeviceMappings
+   */
+  readonly blockDeviceMappings?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings[];
+
+  /**
+   * Targeting for EC2 capacity reservations. See Capacity Reservation Specification below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#capacityReservationSpecification
+   */
+  readonly capacityReservationSpecification?: LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification;
+
+  /**
+   * The CPU options for the instance. See CPU Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#cpuOptions
+   */
+  readonly cpuOptions?: LaunchTemplateV1Beta2SpecForProviderCpuOptions;
+
+  /**
+   * Customize the credit specification of the instance. See Credit
+   * Specification below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#creditSpecification
+   */
+  readonly creditSpecification?: LaunchTemplateV1Beta2SpecForProviderCreditSpecification;
+
+  /**
+   * Default Version of the launch template.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#defaultVersion
+   */
+  readonly defaultVersion?: number;
+
+  /**
+   * Description of the launch template.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#description
+   */
+  readonly description?: string;
+
+  /**
+   * If true, enables EC2 Instance Stop Protection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#disableApiStop
+   */
+  readonly disableApiStop?: boolean;
+
+  /**
+   * If true, enables EC2 Instance
+   * Termination Protection
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#disableApiTermination
+   */
+  readonly disableApiTermination?: boolean;
+
+  /**
+   * If true, the launched EC2 instance will be EBS-optimized.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#ebsOptimized
+   */
+  readonly ebsOptimized?: string;
+
+  /**
+   * Enable Nitro Enclaves on launched instances. See Enclave Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#enclaveOptions
+   */
+  readonly enclaveOptions?: LaunchTemplateV1Beta2SpecForProviderEnclaveOptions;
+
+  /**
+   * The hibernation options for the instance. See Hibernation Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#hibernationOptions
+   */
+  readonly hibernationOptions?: LaunchTemplateV1Beta2SpecForProviderHibernationOptions;
+
+  /**
+   * The IAM Instance Profile to launch the instance with. See Instance Profile
+   * below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile;
+
+  /**
+   * The AMI from which to launch the instance or use a Systems Manager parameter convention e.g. resolve:ssm:parameter-name. See docs for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#imageId
+   */
+  readonly imageId?: string;
+
+  /**
+   * Shutdown behavior for the instance. Can be stop or terminate.
+   * (Default: stop).
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#instanceInitiatedShutdownBehavior
+   */
+  readonly instanceInitiatedShutdownBehavior?: string;
+
+  /**
+   * The market (purchasing) option for the instance. See Market Options
+   * below for details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#instanceMarketOptions
+   */
+  readonly instanceMarketOptions?: LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions;
+
+  /**
+   * The attribute requirements for the type of instance. If present then instance_type cannot be present.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#instanceRequirements
+   */
+  readonly instanceRequirements?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirements;
+
+  /**
+   * The type of the instance. If present then instance_requirements cannot be present.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#instanceType
+   */
+  readonly instanceType?: string;
+
+  /**
+   * The kernel ID.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#kernelId
+   */
+  readonly kernelId?: string;
+
+  /**
+   * The key name to use for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#keyName
+   */
+  readonly keyName?: string;
+
+  /**
+   * A list of license specifications to associate with. See License Specification below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#licenseSpecification
+   */
+  readonly licenseSpecification?: LaunchTemplateV1Beta2SpecForProviderLicenseSpecification[];
+
+  /**
+   * The maintenance options for the instance. See Maintenance Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#maintenanceOptions
+   */
+  readonly maintenanceOptions?: LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions;
+
+  /**
+   * Customize the metadata options for the instance. See Metadata Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#metadataOptions
+   */
+  readonly metadataOptions?: LaunchTemplateV1Beta2SpecForProviderMetadataOptions;
+
+  /**
+   * The monitoring option for the instance. See Monitoring below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#monitoring
+   */
+  readonly monitoring?: LaunchTemplateV1Beta2SpecForProviderMonitoring;
+
+  /**
+   * The name of the launch template.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#name
+   */
+  readonly name?: string;
+
+  /**
+   * Customize network interfaces to be attached at instance boot time. See Network
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#networkInterfaces
+   */
+  readonly networkInterfaces?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces[];
+
+  /**
+   * @schema LaunchTemplateV1Beta2SpecForProvider#networkPerformanceOptions
+   */
+  readonly networkPerformanceOptions?: LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions;
+
+  /**
+   * The placement of the instance. See Placement below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#placement
+   */
+  readonly placement?: LaunchTemplateV1Beta2SpecForProviderPlacement;
+
+  /**
+   * The options for the instance hostname. The default values are inherited from the subnet. See Private DNS Name Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#privateDnsNameOptions
+   */
+  readonly privateDnsNameOptions?: LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions;
+
+  /**
+   * The ID of the RAM disk.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#ramDiskId
+   */
+  readonly ramDiskId?: string;
+
+  /**
+   * Region where this resource will be managed. Defaults to the Region set in the provider configuration.
+   * Region is the region you'd like your resource to be created in.
+   *
+   * @default the Region set in the provider configuration.
+   * @schema LaunchTemplateV1Beta2SpecForProvider#region
+   */
+  readonly region: string;
+
+  /**
+   * Secondary interfaces to associate with instances launched from the template. See Secondary
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#secondaryInterfaces
+   */
+  readonly secondaryInterfaces?: LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces[];
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#securityGroupNameRefs
+   */
+  readonly securityGroupNameRefs?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#securityGroupNameSelector
+   */
+  readonly securityGroupNameSelector?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector;
+
+  /**
+   * A list of security group names to associate with. If you are creating Instances in a VPC, use
+   * vpc_security_group_ids instead.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#securityGroupNames
+   */
+  readonly securityGroupNames?: string[];
+
+  /**
+   * The tags to apply to the resources during launch. See Tag Specifications below for more details. Default tags are currently not propagated to ASG created resources so you may wish to inject your default tags into this variable against the relevant child resource types created.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#tagSpecifications
+   */
+  readonly tagSpecifications?: LaunchTemplateV1Beta2SpecForProviderTagSpecifications[];
+
+  /**
+   * Key-value map of resource tags.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * Whether to update Default Version each update. Conflicts with default_version.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#updateDefaultVersion
+   */
+  readonly updateDefaultVersion?: boolean;
+
+  /**
+   * The base64-encoded user data to provide when launching the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#userData
+   */
+  readonly userData?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#vpcSecurityGroupIdRefs
+   */
+  readonly vpcSecurityGroupIdRefs?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#vpcSecurityGroupIdSelector
+   */
+  readonly vpcSecurityGroupIdSelector?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector;
+
+  /**
+   * A list of security group IDs to associate with. Conflicts with network_interfaces.security_groups
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProvider#vpcSecurityGroupIds
+   */
+  readonly vpcSecurityGroupIds?: string[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProvider(obj: LaunchTemplateV1Beta2SpecForProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDeviceMappings': obj.blockDeviceMappings?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings(y)),
+    'capacityReservationSpecification': toJson_LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification(obj.capacityReservationSpecification),
+    'cpuOptions': toJson_LaunchTemplateV1Beta2SpecForProviderCpuOptions(obj.cpuOptions),
+    'creditSpecification': toJson_LaunchTemplateV1Beta2SpecForProviderCreditSpecification(obj.creditSpecification),
+    'defaultVersion': obj.defaultVersion,
+    'description': obj.description,
+    'disableApiStop': obj.disableApiStop,
+    'disableApiTermination': obj.disableApiTermination,
+    'ebsOptimized': obj.ebsOptimized,
+    'enclaveOptions': toJson_LaunchTemplateV1Beta2SpecForProviderEnclaveOptions(obj.enclaveOptions),
+    'hibernationOptions': toJson_LaunchTemplateV1Beta2SpecForProviderHibernationOptions(obj.hibernationOptions),
+    'iamInstanceProfile': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile(obj.iamInstanceProfile),
+    'imageId': obj.imageId,
+    'instanceInitiatedShutdownBehavior': obj.instanceInitiatedShutdownBehavior,
+    'instanceMarketOptions': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions(obj.instanceMarketOptions),
+    'instanceRequirements': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirements(obj.instanceRequirements),
+    'instanceType': obj.instanceType,
+    'kernelId': obj.kernelId,
+    'keyName': obj.keyName,
+    'licenseSpecification': obj.licenseSpecification?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderLicenseSpecification(y)),
+    'maintenanceOptions': toJson_LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions(obj.maintenanceOptions),
+    'metadataOptions': toJson_LaunchTemplateV1Beta2SpecForProviderMetadataOptions(obj.metadataOptions),
+    'monitoring': toJson_LaunchTemplateV1Beta2SpecForProviderMonitoring(obj.monitoring),
+    'name': obj.name,
+    'networkInterfaces': obj.networkInterfaces?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces(y)),
+    'networkPerformanceOptions': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions(obj.networkPerformanceOptions),
+    'placement': toJson_LaunchTemplateV1Beta2SpecForProviderPlacement(obj.placement),
+    'privateDnsNameOptions': toJson_LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions(obj.privateDnsNameOptions),
+    'ramDiskId': obj.ramDiskId,
+    'region': obj.region,
+    'secondaryInterfaces': obj.secondaryInterfaces?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces(y)),
+    'securityGroupNameRefs': obj.securityGroupNameRefs?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs(y)),
+    'securityGroupNameSelector': toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector(obj.securityGroupNameSelector),
+    'securityGroupNames': obj.securityGroupNames?.map(y => y),
+    'tagSpecifications': obj.tagSpecifications?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderTagSpecifications(y)),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'updateDefaultVersion': obj.updateDefaultVersion,
+    'userData': obj.userData,
+    'vpcSecurityGroupIdRefs': obj.vpcSecurityGroupIdRefs?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs(y)),
+    'vpcSecurityGroupIdSelector': toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector(obj.vpcSecurityGroupIdSelector),
+    'vpcSecurityGroupIds': obj.vpcSecurityGroupIds?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * THIS IS A BETA FIELD. It will be honored
+ * unless the Management Policies feature flag is disabled.
+ * InitProvider holds the same fields as ForProvider, with the exception
+ * of Identifier and other resource reference fields. The fields that are
+ * in InitProvider are merged into ForProvider when the resource is created.
+ * The same fields are also added to the terraform ignore_changes hook, to
+ * avoid updating them after creation. This is useful for fields that are
+ * required on creation, but we do not desire to update them after creation,
+ * for example because of an external controller is managing them, like an
+ * autoscaler.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProvider
+ */
+export interface LaunchTemplateV1Beta2SpecInitProvider {
+  /**
+   * Specify volumes to attach to the instance besides the volumes specified by the AMI.
+   * See Block Devices below for details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#blockDeviceMappings
+   */
+  readonly blockDeviceMappings?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings[];
+
+  /**
+   * Targeting for EC2 capacity reservations. See Capacity Reservation Specification below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#capacityReservationSpecification
+   */
+  readonly capacityReservationSpecification?: LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification;
+
+  /**
+   * The CPU options for the instance. See CPU Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#cpuOptions
+   */
+  readonly cpuOptions?: LaunchTemplateV1Beta2SpecInitProviderCpuOptions;
+
+  /**
+   * Customize the credit specification of the instance. See Credit
+   * Specification below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#creditSpecification
+   */
+  readonly creditSpecification?: LaunchTemplateV1Beta2SpecInitProviderCreditSpecification;
+
+  /**
+   * Default Version of the launch template.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#defaultVersion
+   */
+  readonly defaultVersion?: number;
+
+  /**
+   * Description of the launch template.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#description
+   */
+  readonly description?: string;
+
+  /**
+   * If true, enables EC2 Instance Stop Protection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#disableApiStop
+   */
+  readonly disableApiStop?: boolean;
+
+  /**
+   * If true, enables EC2 Instance
+   * Termination Protection
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#disableApiTermination
+   */
+  readonly disableApiTermination?: boolean;
+
+  /**
+   * If true, the launched EC2 instance will be EBS-optimized.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#ebsOptimized
+   */
+  readonly ebsOptimized?: string;
+
+  /**
+   * Enable Nitro Enclaves on launched instances. See Enclave Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#enclaveOptions
+   */
+  readonly enclaveOptions?: LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions;
+
+  /**
+   * The hibernation options for the instance. See Hibernation Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#hibernationOptions
+   */
+  readonly hibernationOptions?: LaunchTemplateV1Beta2SpecInitProviderHibernationOptions;
+
+  /**
+   * The IAM Instance Profile to launch the instance with. See Instance Profile
+   * below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#iamInstanceProfile
+   */
+  readonly iamInstanceProfile?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile;
+
+  /**
+   * The AMI from which to launch the instance or use a Systems Manager parameter convention e.g. resolve:ssm:parameter-name. See docs for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#imageId
+   */
+  readonly imageId?: string;
+
+  /**
+   * Shutdown behavior for the instance. Can be stop or terminate.
+   * (Default: stop).
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#instanceInitiatedShutdownBehavior
+   */
+  readonly instanceInitiatedShutdownBehavior?: string;
+
+  /**
+   * The market (purchasing) option for the instance. See Market Options
+   * below for details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#instanceMarketOptions
+   */
+  readonly instanceMarketOptions?: LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions;
+
+  /**
+   * The attribute requirements for the type of instance. If present then instance_type cannot be present.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#instanceRequirements
+   */
+  readonly instanceRequirements?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements;
+
+  /**
+   * The type of the instance. If present then instance_requirements cannot be present.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#instanceType
+   */
+  readonly instanceType?: string;
+
+  /**
+   * The kernel ID.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#kernelId
+   */
+  readonly kernelId?: string;
+
+  /**
+   * The key name to use for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#keyName
+   */
+  readonly keyName?: string;
+
+  /**
+   * A list of license specifications to associate with. See License Specification below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#licenseSpecification
+   */
+  readonly licenseSpecification?: LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification[];
+
+  /**
+   * The maintenance options for the instance. See Maintenance Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#maintenanceOptions
+   */
+  readonly maintenanceOptions?: LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions;
+
+  /**
+   * Customize the metadata options for the instance. See Metadata Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#metadataOptions
+   */
+  readonly metadataOptions?: LaunchTemplateV1Beta2SpecInitProviderMetadataOptions;
+
+  /**
+   * The monitoring option for the instance. See Monitoring below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#monitoring
+   */
+  readonly monitoring?: LaunchTemplateV1Beta2SpecInitProviderMonitoring;
+
+  /**
+   * The name of the launch template.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#name
+   */
+  readonly name?: string;
+
+  /**
+   * Customize network interfaces to be attached at instance boot time. See Network
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#networkInterfaces
+   */
+  readonly networkInterfaces?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces[];
+
+  /**
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#networkPerformanceOptions
+   */
+  readonly networkPerformanceOptions?: LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions;
+
+  /**
+   * The placement of the instance. See Placement below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#placement
+   */
+  readonly placement?: LaunchTemplateV1Beta2SpecInitProviderPlacement;
+
+  /**
+   * The options for the instance hostname. The default values are inherited from the subnet. See Private DNS Name Options below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#privateDnsNameOptions
+   */
+  readonly privateDnsNameOptions?: LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions;
+
+  /**
+   * The ID of the RAM disk.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#ramDiskId
+   */
+  readonly ramDiskId?: string;
+
+  /**
+   * Secondary interfaces to associate with instances launched from the template. See Secondary
+   * Interfaces below for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#secondaryInterfaces
+   */
+  readonly secondaryInterfaces?: LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces[];
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#securityGroupNameRefs
+   */
+  readonly securityGroupNameRefs?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#securityGroupNameSelector
+   */
+  readonly securityGroupNameSelector?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector;
+
+  /**
+   * A list of security group names to associate with. If you are creating Instances in a VPC, use
+   * vpc_security_group_ids instead.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#securityGroupNames
+   */
+  readonly securityGroupNames?: string[];
+
+  /**
+   * The tags to apply to the resources during launch. See Tag Specifications below for more details. Default tags are currently not propagated to ASG created resources so you may wish to inject your default tags into this variable against the relevant child resource types created.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#tagSpecifications
+   */
+  readonly tagSpecifications?: LaunchTemplateV1Beta2SpecInitProviderTagSpecifications[];
+
+  /**
+   * Key-value map of resource tags.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * Whether to update Default Version each update. Conflicts with default_version.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#updateDefaultVersion
+   */
+  readonly updateDefaultVersion?: boolean;
+
+  /**
+   * The base64-encoded user data to provide when launching the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#userData
+   */
+  readonly userData?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#vpcSecurityGroupIdRefs
+   */
+  readonly vpcSecurityGroupIdRefs?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#vpcSecurityGroupIdSelector
+   */
+  readonly vpcSecurityGroupIdSelector?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector;
+
+  /**
+   * A list of security group IDs to associate with. Conflicts with network_interfaces.security_groups
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProvider#vpcSecurityGroupIds
+   */
+  readonly vpcSecurityGroupIds?: string[];
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProvider(obj: LaunchTemplateV1Beta2SpecInitProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDeviceMappings': obj.blockDeviceMappings?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings(y)),
+    'capacityReservationSpecification': toJson_LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification(obj.capacityReservationSpecification),
+    'cpuOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderCpuOptions(obj.cpuOptions),
+    'creditSpecification': toJson_LaunchTemplateV1Beta2SpecInitProviderCreditSpecification(obj.creditSpecification),
+    'defaultVersion': obj.defaultVersion,
+    'description': obj.description,
+    'disableApiStop': obj.disableApiStop,
+    'disableApiTermination': obj.disableApiTermination,
+    'ebsOptimized': obj.ebsOptimized,
+    'enclaveOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions(obj.enclaveOptions),
+    'hibernationOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderHibernationOptions(obj.hibernationOptions),
+    'iamInstanceProfile': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile(obj.iamInstanceProfile),
+    'imageId': obj.imageId,
+    'instanceInitiatedShutdownBehavior': obj.instanceInitiatedShutdownBehavior,
+    'instanceMarketOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions(obj.instanceMarketOptions),
+    'instanceRequirements': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements(obj.instanceRequirements),
+    'instanceType': obj.instanceType,
+    'kernelId': obj.kernelId,
+    'keyName': obj.keyName,
+    'licenseSpecification': obj.licenseSpecification?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification(y)),
+    'maintenanceOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions(obj.maintenanceOptions),
+    'metadataOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderMetadataOptions(obj.metadataOptions),
+    'monitoring': toJson_LaunchTemplateV1Beta2SpecInitProviderMonitoring(obj.monitoring),
+    'name': obj.name,
+    'networkInterfaces': obj.networkInterfaces?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces(y)),
+    'networkPerformanceOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions(obj.networkPerformanceOptions),
+    'placement': toJson_LaunchTemplateV1Beta2SpecInitProviderPlacement(obj.placement),
+    'privateDnsNameOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions(obj.privateDnsNameOptions),
+    'ramDiskId': obj.ramDiskId,
+    'secondaryInterfaces': obj.secondaryInterfaces?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces(y)),
+    'securityGroupNameRefs': obj.securityGroupNameRefs?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs(y)),
+    'securityGroupNameSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector(obj.securityGroupNameSelector),
+    'securityGroupNames': obj.securityGroupNames?.map(y => y),
+    'tagSpecifications': obj.tagSpecifications?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderTagSpecifications(y)),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'updateDefaultVersion': obj.updateDefaultVersion,
+    'userData': obj.userData,
+    'vpcSecurityGroupIdRefs': obj.vpcSecurityGroupIdRefs?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs(y)),
+    'vpcSecurityGroupIdSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector(obj.vpcSecurityGroupIdSelector),
+    'vpcSecurityGroupIds': obj.vpcSecurityGroupIds?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A ManagementAction represents an action that the Crossplane controllers
+ * can take on an external resource.
+ *
+ * @schema LaunchTemplateV1Beta2SpecManagementPolicies
+ */
+export enum LaunchTemplateV1Beta2SpecManagementPolicies {
+  /** Observe */
+  OBSERVE = "Observe",
+  /** Create */
+  CREATE = "Create",
+  /** Update */
+  UPDATE = "Update",
+  /** Delete */
+  DELETE = "Delete",
+  /** LateInitialize */
+  LATE_INITIALIZE = "LateInitialize",
+  /** * */
+  VALUE_ASTERISK = "*",
+}
+
+/**
+ * ProviderConfigReference specifies how the provider that will be used to
+ * create, observe, update, and delete this managed resource should be
+ * configured.
+ *
+ * @schema LaunchTemplateV1Beta2SpecProviderConfigRef
+ */
+export interface LaunchTemplateV1Beta2SpecProviderConfigRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecProviderConfigRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecProviderConfigRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecProviderConfigRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecProviderConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecProviderConfigRef(obj: LaunchTemplateV1Beta2SpecProviderConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecProviderConfigRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * WriteConnectionSecretToReference specifies the namespace and name of a
+ * Secret to which any connection details for this managed resource should
+ * be written. Connection details frequently include the endpoint, username,
+ * and password required to connect to the managed resource.
+ *
+ * @schema LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef
+ */
+export interface LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef {
+  /**
+   * Name of the secret.
+   *
+   * @schema LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace of the secret.
+   *
+   * @schema LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef#namespace
+   */
+  readonly namespace: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef(obj: LaunchTemplateV1Beta2SpecWriteConnectionSecretToRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings {
+  /**
+   * The name of the device to mount.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Configure EBS volume properties.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings#ebs
+   */
+  readonly ebs?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs;
+
+  /**
+   * Suppresses the specified device included in the AMI's block device mapping.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings#noDevice
+   */
+  readonly noDevice?: string;
+
+  /**
+   * The Instance Store Device
+   * Name
+   * (e.g., "ephemeral0").
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings#virtualName
+   */
+  readonly virtualName?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings(obj: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappings | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'ebs': toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs(obj.ebs),
+    'noDevice': obj.noDevice,
+    'virtualName': obj.virtualName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Targeting for EC2 capacity reservations. See Capacity Reservation Specification below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification {
+  /**
+   * Indicates the instance's Capacity Reservation preferences. Can be capacity-reservations-only, open or none. If capacity_reservation_id or capacity_reservation_resource_group_arn is specified in capacity_reservation_target block, either omit capacity_reservation_preference or set it to capacity-reservations-only.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification#capacityReservationPreference
+   */
+  readonly capacityReservationPreference?: string;
+
+  /**
+   * Used to target a specific Capacity Reservation:
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification#capacityReservationTarget
+   */
+  readonly capacityReservationTarget?: LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification(obj: LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationPreference': obj.capacityReservationPreference,
+    'capacityReservationTarget': toJson_LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget(obj.capacityReservationTarget),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The CPU options for the instance. See CPU Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderCpuOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderCpuOptions {
+  /**
+   * Indicates whether to enable the instance for AMD SEV-SNP. AMD SEV-SNP is supported with M6a, R6a, and C6a instance types only. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCpuOptions#amdSevSnp
+   */
+  readonly amdSevSnp?: string;
+
+  /**
+   * The number of CPU cores for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCpuOptions#coreCount
+   */
+  readonly coreCount?: number;
+
+  /**
+   * Indicates whether to enable the instance for nested virtualization. Nested virtualization is supported on 8th generation Intel-based instance types (C8i, M8i, R8i, and their flex variants) only. When nested virtualization is enabled, Virtual Secure Mode (VSM) is automatically disabled for the instance. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCpuOptions#nestedVirtualization
+   */
+  readonly nestedVirtualization?: string;
+
+  /**
+   * The number of threads per CPU core.
+   * To disable Intel Hyper-Threading Technology for the instance, specify a value of 1.
+   * Otherwise, specify the default value of 2.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCpuOptions#threadsPerCore
+   */
+  readonly threadsPerCore?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderCpuOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderCpuOptions(obj: LaunchTemplateV1Beta2SpecForProviderCpuOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'amdSevSnp': obj.amdSevSnp,
+    'coreCount': obj.coreCount,
+    'nestedVirtualization': obj.nestedVirtualization,
+    'threadsPerCore': obj.threadsPerCore,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Customize the credit specification of the instance. See Credit
+ * Specification below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderCreditSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderCreditSpecification {
+  /**
+   * The credit option for CPU usage.
+   * Can be standard or unlimited.
+   * T3 instances are launched as unlimited by default.
+   * T2 instances are launched as standard by default.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCreditSpecification#cpuCredits
+   */
+  readonly cpuCredits?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderCreditSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderCreditSpecification(obj: LaunchTemplateV1Beta2SpecForProviderCreditSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cpuCredits': obj.cpuCredits,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Enable Nitro Enclaves on launched instances. See Enclave Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderEnclaveOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderEnclaveOptions {
+  /**
+   * If set to true, Nitro Enclaves will be enabled on the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderEnclaveOptions#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderEnclaveOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderEnclaveOptions(obj: LaunchTemplateV1Beta2SpecForProviderEnclaveOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The hibernation options for the instance. See Hibernation Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderHibernationOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderHibernationOptions {
+  /**
+   * If set to true, the launched EC2 instance will hibernation enabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderHibernationOptions#configured
+   */
+  readonly configured?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderHibernationOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderHibernationOptions(obj: LaunchTemplateV1Beta2SpecForProviderHibernationOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configured': obj.configured,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The IAM Instance Profile to launch the instance with. See Instance Profile
+ * below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile {
+  /**
+   * The Amazon Resource Name (ARN) of the instance profile. Conflicts with name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile#arnRef
+   */
+  readonly arnRef?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile#arnSelector
+   */
+  readonly arnSelector?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector;
+
+  /**
+   * The name of the instance profile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile#name
+   */
+  readonly name?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile#nameRef
+   */
+  readonly nameRef?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile#nameSelector
+   */
+  readonly nameSelector?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfile | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'arnRef': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef(obj.arnRef),
+    'arnSelector': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector(obj.arnSelector),
+    'name': obj.name,
+    'nameRef': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef(obj.nameRef),
+    'nameSelector': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector(obj.nameSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The market (purchasing) option for the instance. See Market Options
+ * below for details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions {
+  /**
+   * The market type. Can be spot.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions#marketType
+   */
+  readonly marketType?: string;
+
+  /**
+   * The options for Spot Instance
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions#spotOptions
+   */
+  readonly spotOptions?: LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions(obj: LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'marketType': obj.marketType,
+    'spotOptions': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions(obj.spotOptions),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The attribute requirements for the type of instance. If present then instance_type cannot be present.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirements {
+  /**
+   * Block describing the minimum and maximum number of accelerators (GPUs, FPGAs, or AWS Inferentia chips). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#acceleratorCount
+   */
+  readonly acceleratorCount?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount;
+
+  /**
+   * List of accelerator manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#acceleratorManufacturers
+   */
+  readonly acceleratorManufacturers?: string[];
+
+  /**
+   * List of accelerator names. Default is any acclerator.
+   *
+   * @default any acclerator.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#acceleratorNames
+   */
+  readonly acceleratorNames?: string[];
+
+  /**
+   * Block describing the minimum and maximum total memory of the accelerators. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#acceleratorTotalMemoryMib
+   */
+  readonly acceleratorTotalMemoryMib?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib;
+
+  /**
+   * List of accelerator types. Default is any accelerator type.
+   *
+   * @default any accelerator type.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#acceleratorTypes
+   */
+  readonly acceleratorTypes?: string[];
+
+  /**
+   * List of instance types to apply your specified attributes against. All other instance types are ignored, even if they match your specified attributes. You can use strings with one or more wild cards, represented by an asterisk (*), to allow an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are allowing the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are allowing all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is all instance types.
+   *
+   * @default all instance types.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#allowedInstanceTypes
+   */
+  readonly allowedInstanceTypes?: string[];
+
+  /**
+   * Indicate whether bare metal instace types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#bareMetal
+   */
+  readonly bareMetal?: string;
+
+  /**
+   * Block describing the minimum and maximum baseline EBS bandwidth, in Mbps. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#baselineEbsBandwidthMbps
+   */
+  readonly baselineEbsBandwidthMbps?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps;
+
+  /**
+   * Indicate whether burstable performance instance types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#burstablePerformance
+   */
+  readonly burstablePerformance?: string;
+
+  /**
+   * List of CPU manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#cpuManufacturers
+   */
+  readonly cpuManufacturers?: string[];
+
+  /**
+   * List of instance types to exclude. You can use strings with one or more wild cards, represented by an asterisk (*), to exclude an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are excluding the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are excluding all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is no excluded instance types.
+   *
+   * @default no excluded instance types.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#excludedInstanceTypes
+   */
+  readonly excludedInstanceTypes?: string[];
+
+  /**
+   * List of instance generation names. Default is any generation.
+   *
+   * @default any generation.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#instanceGenerations
+   */
+  readonly instanceGenerations?: string[];
+
+  /**
+   * Indicate whether instance types with local storage volumes are included, excluded, or required. Default is included.
+   *
+   * @default included.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#localStorage
+   */
+  readonly localStorage?: string;
+
+  /**
+   * List of local storage type names. Default any storage type.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#localStorageTypes
+   */
+  readonly localStorageTypes?: string[];
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Conflicts with spot_max_price_percentage_over_lowest_price
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#maxSpotPriceAsPercentageOfOptimalOnDemandPrice
+   */
+  readonly maxSpotPriceAsPercentageOfOptimalOnDemandPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum amount of memory (GiB) per vCPU. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#memoryGibPerVcpu
+   */
+  readonly memoryGibPerVcpu?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu;
+
+  /**
+   * Block describing the minimum and maximum amount of memory (MiB). Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#memoryMib
+   */
+  readonly memoryMib?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib;
+
+  /**
+   * Block describing the minimum and maximum amount of network bandwidth, in gigabits per second (Gbps). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#networkBandwidthGbps
+   */
+  readonly networkBandwidthGbps?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps;
+
+  /**
+   * Block describing the minimum and maximum number of network interfaces. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#networkInterfaceCount
+   */
+  readonly networkInterfaceCount?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount;
+
+  /**
+   * The price protection threshold for On-Demand Instances. This is the maximum you’ll pay for an On-Demand Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 20.
+   *
+   * @default 20.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#onDemandMaxPricePercentageOverLowestPrice
+   */
+  readonly onDemandMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Indicate whether instance types must support On-Demand Instance Hibernation, either true or false. Default is false.
+   *
+   * @default false.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#requireHibernateSupport
+   */
+  readonly requireHibernateSupport?: boolean;
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   *
+   * @default 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#spotMaxPricePercentageOverLowestPrice
+   */
+  readonly spotMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum total local storage (GB). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#totalLocalStorageGb
+   */
+  readonly totalLocalStorageGb?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb;
+
+  /**
+   * Block describing the minimum and maximum number of vCPUs. Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirements#vcpuCount
+   */
+  readonly vcpuCount?: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirements' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirements(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirements | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'acceleratorCount': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount(obj.acceleratorCount),
+    'acceleratorManufacturers': obj.acceleratorManufacturers?.map(y => y),
+    'acceleratorNames': obj.acceleratorNames?.map(y => y),
+    'acceleratorTotalMemoryMib': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib(obj.acceleratorTotalMemoryMib),
+    'acceleratorTypes': obj.acceleratorTypes?.map(y => y),
+    'allowedInstanceTypes': obj.allowedInstanceTypes?.map(y => y),
+    'bareMetal': obj.bareMetal,
+    'baselineEbsBandwidthMbps': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps(obj.baselineEbsBandwidthMbps),
+    'burstablePerformance': obj.burstablePerformance,
+    'cpuManufacturers': obj.cpuManufacturers?.map(y => y),
+    'excludedInstanceTypes': obj.excludedInstanceTypes?.map(y => y),
+    'instanceGenerations': obj.instanceGenerations?.map(y => y),
+    'localStorage': obj.localStorage,
+    'localStorageTypes': obj.localStorageTypes?.map(y => y),
+    'maxSpotPriceAsPercentageOfOptimalOnDemandPrice': obj.maxSpotPriceAsPercentageOfOptimalOnDemandPrice,
+    'memoryGibPerVcpu': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu(obj.memoryGibPerVcpu),
+    'memoryMib': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib(obj.memoryMib),
+    'networkBandwidthGbps': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps(obj.networkBandwidthGbps),
+    'networkInterfaceCount': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount(obj.networkInterfaceCount),
+    'onDemandMaxPricePercentageOverLowestPrice': obj.onDemandMaxPricePercentageOverLowestPrice,
+    'requireHibernateSupport': obj.requireHibernateSupport,
+    'spotMaxPricePercentageOverLowestPrice': obj.spotMaxPricePercentageOverLowestPrice,
+    'totalLocalStorageGb': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb(obj.totalLocalStorageGb),
+    'vcpuCount': toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount(obj.vcpuCount),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProviderLicenseSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderLicenseSpecification {
+  /**
+   * ARN of the license configuration.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderLicenseSpecification#licenseConfigurationArn
+   */
+  readonly licenseConfigurationArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderLicenseSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderLicenseSpecification(obj: LaunchTemplateV1Beta2SpecForProviderLicenseSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'licenseConfigurationArn': obj.licenseConfigurationArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The maintenance options for the instance. See Maintenance Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions {
+  /**
+   * Disables the automatic recovery behavior of your instance or sets it to default. Can be "default" or "disabled". See Recover your instance for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions#autoRecovery
+   */
+  readonly autoRecovery?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions(obj: LaunchTemplateV1Beta2SpecForProviderMaintenanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'autoRecovery': obj.autoRecovery,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Customize the metadata options for the instance. See Metadata Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderMetadataOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderMetadataOptions {
+  /**
+   * Whether the metadata service is available. Can be "enabled" or "disabled". (Default: "enabled").
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMetadataOptions#httpEndpoint
+   */
+  readonly httpEndpoint?: string;
+
+  /**
+   * Enables or disables the IPv6 endpoint for the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMetadataOptions#httpProtocolIpv6
+   */
+  readonly httpProtocolIpv6?: string;
+
+  /**
+   * The desired HTTP PUT response hop limit for instance metadata requests. The larger the number, the further instance metadata requests can travel. Can be an integer from 1 to 64. (Default: 1).
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMetadataOptions#httpPutResponseHopLimit
+   */
+  readonly httpPutResponseHopLimit?: number;
+
+  /**
+   * Whether or not the metadata service requires session tokens, also referred to as Instance Metadata Service Version 2 (IMDSv2). Can be "optional" or "required". (Default: "optional").
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMetadataOptions#httpTokens
+   */
+  readonly httpTokens?: string;
+
+  /**
+   * Enables or disables access to instance tags from the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMetadataOptions#instanceMetadataTags
+   */
+  readonly instanceMetadataTags?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderMetadataOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderMetadataOptions(obj: LaunchTemplateV1Beta2SpecForProviderMetadataOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpEndpoint': obj.httpEndpoint,
+    'httpProtocolIpv6': obj.httpProtocolIpv6,
+    'httpPutResponseHopLimit': obj.httpPutResponseHopLimit,
+    'httpTokens': obj.httpTokens,
+    'instanceMetadataTags': obj.instanceMetadataTags,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The monitoring option for the instance. See Monitoring below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderMonitoring
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderMonitoring {
+  /**
+   * If true, the launched EC2 instance will have detailed monitoring enabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderMonitoring#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderMonitoring' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderMonitoring(obj: LaunchTemplateV1Beta2SpecForProviderMonitoring | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces {
+  /**
+   * Associate a Carrier IP address with eth0 for a new network interface. Use this option when you launch an instance in a Wavelength Zone and want to associate a Carrier IP address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#associateCarrierIpAddress
+   */
+  readonly associateCarrierIpAddress?: string;
+
+  /**
+   * Associate a public ip address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#associatePublicIpAddress
+   */
+  readonly associatePublicIpAddress?: string;
+
+  /**
+   * The Connection Tracking Configuration for the network interface. See Amazon EC2 security group connection tracking
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#connectionTrackingSpecification
+   */
+  readonly connectionTrackingSpecification?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification;
+
+  /**
+   * Whether the network interface should be destroyed on instance termination.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Description of the network interface.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#description
+   */
+  readonly description?: string;
+
+  /**
+   * The integer index of the network interface attachment.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Configuration for Elastic Network Adapter (ENA) Express settings. Applies to network interfaces that use the ena Express feature. See details below.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#enaSrdSpecification
+   */
+  readonly enaSrdSpecification?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification;
+
+  /**
+   * The type of network interface. To create an Elastic Fabric Adapter (EFA), specify efa.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * The number of secondary private IPv4 addresses to assign to a network interface. Conflicts with ipv4_addresses
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv4AddressCount
+   */
+  readonly ipv4AddressCount?: number;
+
+  /**
+   * One or more private IPv4 addresses to associate. Conflicts with ipv4_address_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv4Addresses
+   */
+  readonly ipv4Addresses?: string[];
+
+  /**
+   * The number of IPv4 prefixes to be automatically assigned to the network interface. Conflicts with ipv4_prefixes
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv4PrefixCount
+   */
+  readonly ipv4PrefixCount?: number;
+
+  /**
+   * One or more IPv4 prefixes to be assigned to the network interface. Conflicts with ipv4_prefix_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv4Prefixes
+   */
+  readonly ipv4Prefixes?: string[];
+
+  /**
+   * The number of IPv6 addresses to assign to a network interface. Conflicts with ipv6_addresses
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv6AddressCount
+   */
+  readonly ipv6AddressCount?: number;
+
+  /**
+   * One or more specific IPv6 addresses from the IPv6 CIDR block range of your subnet. Conflicts with ipv6_address_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv6Addresses
+   */
+  readonly ipv6Addresses?: string[];
+
+  /**
+   * The number of IPv6 prefixes to be automatically assigned to the network interface. Conflicts with ipv6_prefixes
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv6PrefixCount
+   */
+  readonly ipv6PrefixCount?: number;
+
+  /**
+   * One or more IPv6 prefixes to be assigned to the network interface. Conflicts with ipv6_prefix_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#ipv6Prefixes
+   */
+  readonly ipv6Prefixes?: string[];
+
+  /**
+   * The index of the network card. Some instance types support multiple network cards. The primary network interface must be assigned to network card index 0. The default is network card index 0.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * The ID of the network interface to attach.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#networkInterfaceId
+   */
+  readonly networkInterfaceId?: string;
+
+  /**
+   * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#networkInterfaceIdRef
+   */
+  readonly networkInterfaceIdRef?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef;
+
+  /**
+   * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#networkInterfaceIdSelector
+   */
+  readonly networkInterfaceIdSelector?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector;
+
+  /**
+   * Whether the first IPv6 GUA will be made the primary IPv6 address.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#primaryIpv6
+   */
+  readonly primaryIpv6?: string;
+
+  /**
+   * The primary private IPv4 address.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#privateIpAddress
+   */
+  readonly privateIpAddress?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#securityGroupRefs
+   */
+  readonly securityGroupRefs?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#securityGroupSelector
+   */
+  readonly securityGroupSelector?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector;
+
+  /**
+   * A list of security group IDs to associate.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#securityGroups
+   */
+  readonly securityGroups?: string[];
+
+  /**
+   * The VPC Subnet ID to associate.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#subnetId
+   */
+  readonly subnetId?: string;
+
+  /**
+   * Reference to a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#subnetIdRef
+   */
+  readonly subnetIdRef?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef;
+
+  /**
+   * Selector for a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces#subnetIdSelector
+   */
+  readonly subnetIdSelector?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'associateCarrierIpAddress': obj.associateCarrierIpAddress,
+    'associatePublicIpAddress': obj.associatePublicIpAddress,
+    'connectionTrackingSpecification': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification(obj.connectionTrackingSpecification),
+    'deleteOnTermination': obj.deleteOnTermination,
+    'description': obj.description,
+    'deviceIndex': obj.deviceIndex,
+    'enaSrdSpecification': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification(obj.enaSrdSpecification),
+    'interfaceType': obj.interfaceType,
+    'ipv4AddressCount': obj.ipv4AddressCount,
+    'ipv4Addresses': obj.ipv4Addresses?.map(y => y),
+    'ipv4PrefixCount': obj.ipv4PrefixCount,
+    'ipv4Prefixes': obj.ipv4Prefixes?.map(y => y),
+    'ipv6AddressCount': obj.ipv6AddressCount,
+    'ipv6Addresses': obj.ipv6Addresses?.map(y => y),
+    'ipv6PrefixCount': obj.ipv6PrefixCount,
+    'ipv6Prefixes': obj.ipv6Prefixes?.map(y => y),
+    'networkCardIndex': obj.networkCardIndex,
+    'networkInterfaceId': obj.networkInterfaceId,
+    'networkInterfaceIdRef': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef(obj.networkInterfaceIdRef),
+    'networkInterfaceIdSelector': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector(obj.networkInterfaceIdSelector),
+    'primaryIpv6': obj.primaryIpv6,
+    'privateIpAddress': obj.privateIpAddress,
+    'securityGroupRefs': obj.securityGroupRefs?.map(y => toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs(y)),
+    'securityGroupSelector': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector(obj.securityGroupSelector),
+    'securityGroups': obj.securityGroups?.map(y => y),
+    'subnetId': obj.subnetId,
+    'subnetIdRef': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef(obj.subnetIdRef),
+    'subnetIdSelector': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector(obj.subnetIdSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions {
+  /**
+   * Specify the bandwidth weighting option to boost the associated type of baseline bandwidth. Valid values: default, vpc-1, ebs-1. Default value is default. Setting vpc-1 boosts networking baseline bandwidth and reduces EBS baseline bandwidth. Setting ebs-1 boosts EBS baseline bandwidth and reduces networking baseline bandwidth. Only supported on select instance types. See AWS Documentation for more information.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions#bandwidthWeighting
+   */
+  readonly bandwidthWeighting?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions(obj: LaunchTemplateV1Beta2SpecForProviderNetworkPerformanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bandwidthWeighting': obj.bandwidthWeighting,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The placement of the instance. See Placement below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderPlacement
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderPlacement {
+  /**
+   * The affinity setting for an instance on a Dedicated Host.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#affinity
+   */
+  readonly affinity?: string;
+
+  /**
+   * The Availability Zone for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#availabilityZone
+   */
+  readonly availabilityZone?: string;
+
+  /**
+   * The ID of the placement group for the instance. Conflicts with group_name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#groupId
+   */
+  readonly groupId?: string;
+
+  /**
+   * The name of the placement group for the instance. Conflicts with group_id.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#groupName
+   */
+  readonly groupName?: string;
+
+  /**
+   * The ID of the Dedicated Host for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#hostId
+   */
+  readonly hostId?: string;
+
+  /**
+   * The ARN of the Host Resource Group in which to launch instances.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#hostResourceGroupArn
+   */
+  readonly hostResourceGroupArn?: string;
+
+  /**
+   * The number of the partition the instance should launch in. Valid only if the placement group strategy is set to partition.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#partitionNumber
+   */
+  readonly partitionNumber?: number;
+
+  /**
+   * Reserved for future use.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#spreadDomain
+   */
+  readonly spreadDomain?: string;
+
+  /**
+   * The tenancy of the instance (if the instance is running in a VPC). Can be default, dedicated, or host.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPlacement#tenancy
+   */
+  readonly tenancy?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderPlacement' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderPlacement(obj: LaunchTemplateV1Beta2SpecForProviderPlacement | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'affinity': obj.affinity,
+    'availabilityZone': obj.availabilityZone,
+    'groupId': obj.groupId,
+    'groupName': obj.groupName,
+    'hostId': obj.hostId,
+    'hostResourceGroupArn': obj.hostResourceGroupArn,
+    'partitionNumber': obj.partitionNumber,
+    'spreadDomain': obj.spreadDomain,
+    'tenancy': obj.tenancy,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The options for the instance hostname. The default values are inherited from the subnet. See Private DNS Name Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions {
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions#enableResourceNameDnsARecord
+   */
+  readonly enableResourceNameDnsARecord?: boolean;
+
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions#enableResourceNameDnsAaaaRecord
+   */
+  readonly enableResourceNameDnsAaaaRecord?: boolean;
+
+  /**
+   * The type of hostname for Amazon EC2 instances. For IPv4 only subnets, an instance DNS name must be based on the instance IPv4 address. For IPv6 native subnets, an instance DNS name must be based on the instance ID. For dual-stack subnets, you can specify whether DNS names use the instance IPv4 address or the instance ID. Valid values: ip-name and resource-name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions#hostnameType
+   */
+  readonly hostnameType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions(obj: LaunchTemplateV1Beta2SpecForProviderPrivateDnsNameOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableResourceNameDnsARecord': obj.enableResourceNameDnsARecord,
+    'enableResourceNameDnsAaaaRecord': obj.enableResourceNameDnsAaaaRecord,
+    'hostnameType': obj.hostnameType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces {
+  /**
+   * Whether the secondary interface is deleted when the instance is terminated. The only supported value is true.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: boolean;
+
+  /**
+   * Device index for the secondary interface attachment.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Type of secondary interface. The only supported value is: secondary.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * Index of the network card.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * Number of private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#privateIpAddressCount
+   */
+  readonly privateIpAddressCount?: number;
+
+  /**
+   * Private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#privateIpAddresses
+   */
+  readonly privateIpAddresses?: string[];
+
+  /**
+   * ID of the secondary subnet.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces#secondarySubnetId
+   */
+  readonly secondarySubnetId?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces(obj: LaunchTemplateV1Beta2SpecForProviderSecondaryInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'deviceIndex': obj.deviceIndex,
+    'interfaceType': obj.interfaceType,
+    'networkCardIndex': obj.networkCardIndex,
+    'privateIpAddressCount': obj.privateIpAddressCount,
+    'privateIpAddresses': obj.privateIpAddresses?.map(y => y),
+    'secondarySubnetId': obj.secondarySubnetId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs(obj: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector(obj: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecForProviderTagSpecifications
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderTagSpecifications {
+  /**
+   * The type of resource to tag.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderTagSpecifications#resourceType
+   */
+  readonly resourceType?: string;
+
+  /**
+   * A map of tags to assign to the resource.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderTagSpecifications#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderTagSpecifications' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderTagSpecifications(obj: LaunchTemplateV1Beta2SpecForProviderTagSpecifications | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resourceType': obj.resourceType,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs(obj: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector(obj: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings {
+  /**
+   * The name of the device to mount.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings#deviceName
+   */
+  readonly deviceName?: string;
+
+  /**
+   * Configure EBS volume properties.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings#ebs
+   */
+  readonly ebs?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs;
+
+  /**
+   * Suppresses the specified device included in the AMI's block device mapping.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings#noDevice
+   */
+  readonly noDevice?: string;
+
+  /**
+   * The Instance Store Device
+   * Name
+   * (e.g., "ephemeral0").
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings#virtualName
+   */
+  readonly virtualName?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings(obj: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappings | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deviceName': obj.deviceName,
+    'ebs': toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs(obj.ebs),
+    'noDevice': obj.noDevice,
+    'virtualName': obj.virtualName,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Targeting for EC2 capacity reservations. See Capacity Reservation Specification below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification {
+  /**
+   * Indicates the instance's Capacity Reservation preferences. Can be capacity-reservations-only, open or none. If capacity_reservation_id or capacity_reservation_resource_group_arn is specified in capacity_reservation_target block, either omit capacity_reservation_preference or set it to capacity-reservations-only.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification#capacityReservationPreference
+   */
+  readonly capacityReservationPreference?: string;
+
+  /**
+   * Used to target a specific Capacity Reservation:
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification#capacityReservationTarget
+   */
+  readonly capacityReservationTarget?: LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification(obj: LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationPreference': obj.capacityReservationPreference,
+    'capacityReservationTarget': toJson_LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget(obj.capacityReservationTarget),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The CPU options for the instance. See CPU Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderCpuOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderCpuOptions {
+  /**
+   * Indicates whether to enable the instance for AMD SEV-SNP. AMD SEV-SNP is supported with M6a, R6a, and C6a instance types only. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCpuOptions#amdSevSnp
+   */
+  readonly amdSevSnp?: string;
+
+  /**
+   * The number of CPU cores for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCpuOptions#coreCount
+   */
+  readonly coreCount?: number;
+
+  /**
+   * Indicates whether to enable the instance for nested virtualization. Nested virtualization is supported on 8th generation Intel-based instance types (C8i, M8i, R8i, and their flex variants) only. When nested virtualization is enabled, Virtual Secure Mode (VSM) is automatically disabled for the instance. Valid values are enabled and disabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCpuOptions#nestedVirtualization
+   */
+  readonly nestedVirtualization?: string;
+
+  /**
+   * The number of threads per CPU core.
+   * To disable Intel Hyper-Threading Technology for the instance, specify a value of 1.
+   * Otherwise, specify the default value of 2.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCpuOptions#threadsPerCore
+   */
+  readonly threadsPerCore?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderCpuOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderCpuOptions(obj: LaunchTemplateV1Beta2SpecInitProviderCpuOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'amdSevSnp': obj.amdSevSnp,
+    'coreCount': obj.coreCount,
+    'nestedVirtualization': obj.nestedVirtualization,
+    'threadsPerCore': obj.threadsPerCore,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Customize the credit specification of the instance. See Credit
+ * Specification below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderCreditSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderCreditSpecification {
+  /**
+   * The credit option for CPU usage.
+   * Can be standard or unlimited.
+   * T3 instances are launched as unlimited by default.
+   * T2 instances are launched as standard by default.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCreditSpecification#cpuCredits
+   */
+  readonly cpuCredits?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderCreditSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderCreditSpecification(obj: LaunchTemplateV1Beta2SpecInitProviderCreditSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'cpuCredits': obj.cpuCredits,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Enable Nitro Enclaves on launched instances. See Enclave Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions {
+  /**
+   * If set to true, Nitro Enclaves will be enabled on the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions(obj: LaunchTemplateV1Beta2SpecInitProviderEnclaveOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The hibernation options for the instance. See Hibernation Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderHibernationOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderHibernationOptions {
+  /**
+   * If set to true, the launched EC2 instance will hibernation enabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderHibernationOptions#configured
+   */
+  readonly configured?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderHibernationOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderHibernationOptions(obj: LaunchTemplateV1Beta2SpecInitProviderHibernationOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'configured': obj.configured,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The IAM Instance Profile to launch the instance with. See Instance Profile
+ * below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile {
+  /**
+   * The Amazon Resource Name (ARN) of the instance profile. Conflicts with name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile#arn
+   */
+  readonly arn?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile#arnRef
+   */
+  readonly arnRef?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate arn.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile#arnSelector
+   */
+  readonly arnSelector?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector;
+
+  /**
+   * The name of the instance profile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile#name
+   */
+  readonly name?: string;
+
+  /**
+   * Reference to a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile#nameRef
+   */
+  readonly nameRef?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef;
+
+  /**
+   * Selector for a InstanceProfile in iam to populate name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile#nameSelector
+   */
+  readonly nameSelector?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfile | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'arn': obj.arn,
+    'arnRef': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef(obj.arnRef),
+    'arnSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector(obj.arnSelector),
+    'name': obj.name,
+    'nameRef': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef(obj.nameRef),
+    'nameSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector(obj.nameSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The market (purchasing) option for the instance. See Market Options
+ * below for details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions {
+  /**
+   * The market type. Can be spot.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions#marketType
+   */
+  readonly marketType?: string;
+
+  /**
+   * The options for Spot Instance
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions#spotOptions
+   */
+  readonly spotOptions?: LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'marketType': obj.marketType,
+    'spotOptions': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions(obj.spotOptions),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The attribute requirements for the type of instance. If present then instance_type cannot be present.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements {
+  /**
+   * Block describing the minimum and maximum number of accelerators (GPUs, FPGAs, or AWS Inferentia chips). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#acceleratorCount
+   */
+  readonly acceleratorCount?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount;
+
+  /**
+   * List of accelerator manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#acceleratorManufacturers
+   */
+  readonly acceleratorManufacturers?: string[];
+
+  /**
+   * List of accelerator names. Default is any acclerator.
+   *
+   * @default any acclerator.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#acceleratorNames
+   */
+  readonly acceleratorNames?: string[];
+
+  /**
+   * Block describing the minimum and maximum total memory of the accelerators. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#acceleratorTotalMemoryMib
+   */
+  readonly acceleratorTotalMemoryMib?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib;
+
+  /**
+   * List of accelerator types. Default is any accelerator type.
+   *
+   * @default any accelerator type.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#acceleratorTypes
+   */
+  readonly acceleratorTypes?: string[];
+
+  /**
+   * List of instance types to apply your specified attributes against. All other instance types are ignored, even if they match your specified attributes. You can use strings with one or more wild cards, represented by an asterisk (*), to allow an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are allowing the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are allowing all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is all instance types.
+   *
+   * @default all instance types.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#allowedInstanceTypes
+   */
+  readonly allowedInstanceTypes?: string[];
+
+  /**
+   * Indicate whether bare metal instace types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#bareMetal
+   */
+  readonly bareMetal?: string;
+
+  /**
+   * Block describing the minimum and maximum baseline EBS bandwidth, in Mbps. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#baselineEbsBandwidthMbps
+   */
+  readonly baselineEbsBandwidthMbps?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps;
+
+  /**
+   * Indicate whether burstable performance instance types should be included, excluded, or required. Default is excluded.
+   *
+   * @default excluded.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#burstablePerformance
+   */
+  readonly burstablePerformance?: string;
+
+  /**
+   * List of CPU manufacturer names. Default is any manufacturer.
+   *
+   * @default any manufacturer.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#cpuManufacturers
+   */
+  readonly cpuManufacturers?: string[];
+
+  /**
+   * List of instance types to exclude. You can use strings with one or more wild cards, represented by an asterisk (*), to exclude an instance type, size, or generation. The following are examples: m5.8xlarge, c5*.*, m5a.*, r*, *3*. For example, if you specify c5*, you are excluding the entire C5 instance family, which includes all C5a and C5n instance types. If you specify m5a.*, you are excluding all the M5a instance types, but not the M5n instance types. Maximum of 400 entries in the list; each entry is limited to 30 characters. Default is no excluded instance types.
+   *
+   * @default no excluded instance types.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#excludedInstanceTypes
+   */
+  readonly excludedInstanceTypes?: string[];
+
+  /**
+   * List of instance generation names. Default is any generation.
+   *
+   * @default any generation.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#instanceGenerations
+   */
+  readonly instanceGenerations?: string[];
+
+  /**
+   * Indicate whether instance types with local storage volumes are included, excluded, or required. Default is included.
+   *
+   * @default included.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#localStorage
+   */
+  readonly localStorage?: string;
+
+  /**
+   * List of local storage type names. Default any storage type.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#localStorageTypes
+   */
+  readonly localStorageTypes?: string[];
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Conflicts with spot_max_price_percentage_over_lowest_price
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#maxSpotPriceAsPercentageOfOptimalOnDemandPrice
+   */
+  readonly maxSpotPriceAsPercentageOfOptimalOnDemandPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum amount of memory (GiB) per vCPU. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#memoryGibPerVcpu
+   */
+  readonly memoryGibPerVcpu?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu;
+
+  /**
+   * Block describing the minimum and maximum amount of memory (MiB). Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#memoryMib
+   */
+  readonly memoryMib?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib;
+
+  /**
+   * Block describing the minimum and maximum amount of network bandwidth, in gigabits per second (Gbps). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#networkBandwidthGbps
+   */
+  readonly networkBandwidthGbps?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps;
+
+  /**
+   * Block describing the minimum and maximum number of network interfaces. Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#networkInterfaceCount
+   */
+  readonly networkInterfaceCount?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount;
+
+  /**
+   * The price protection threshold for On-Demand Instances. This is the maximum you’ll pay for an On-Demand Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 20.
+   *
+   * @default 20.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#onDemandMaxPricePercentageOverLowestPrice
+   */
+  readonly onDemandMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Indicate whether instance types must support On-Demand Instance Hibernation, either true or false. Default is false.
+   *
+   * @default false.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#requireHibernateSupport
+   */
+  readonly requireHibernateSupport?: boolean;
+
+  /**
+   * The price protection threshold for Spot Instances. This is the maximum you’ll pay for a Spot Instance, expressed as a percentage higher than the cheapest M, C, or R instance type with your specified attributes. When Amazon EC2 Auto Scaling selects instance types with your attributes, we will exclude instance types whose price is higher than your threshold. The parameter accepts an integer, which Amazon EC2 Auto Scaling interprets as a percentage. To turn off price protection, specify a high value, such as 999999. Default is 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   *
+   * @default 100. Conflicts with max_spot_price_as_percentage_of_optimal_on_demand_price
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#spotMaxPricePercentageOverLowestPrice
+   */
+  readonly spotMaxPricePercentageOverLowestPrice?: number;
+
+  /**
+   * Block describing the minimum and maximum total local storage (GB). Default is no minimum or maximum.
+   *
+   * @default no minimum or maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#totalLocalStorageGb
+   */
+  readonly totalLocalStorageGb?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb;
+
+  /**
+   * Block describing the minimum and maximum number of vCPUs. Default is no maximum.
+   *
+   * @default no maximum.
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements#vcpuCount
+   */
+  readonly vcpuCount?: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirements | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'acceleratorCount': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount(obj.acceleratorCount),
+    'acceleratorManufacturers': obj.acceleratorManufacturers?.map(y => y),
+    'acceleratorNames': obj.acceleratorNames?.map(y => y),
+    'acceleratorTotalMemoryMib': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib(obj.acceleratorTotalMemoryMib),
+    'acceleratorTypes': obj.acceleratorTypes?.map(y => y),
+    'allowedInstanceTypes': obj.allowedInstanceTypes?.map(y => y),
+    'bareMetal': obj.bareMetal,
+    'baselineEbsBandwidthMbps': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps(obj.baselineEbsBandwidthMbps),
+    'burstablePerformance': obj.burstablePerformance,
+    'cpuManufacturers': obj.cpuManufacturers?.map(y => y),
+    'excludedInstanceTypes': obj.excludedInstanceTypes?.map(y => y),
+    'instanceGenerations': obj.instanceGenerations?.map(y => y),
+    'localStorage': obj.localStorage,
+    'localStorageTypes': obj.localStorageTypes?.map(y => y),
+    'maxSpotPriceAsPercentageOfOptimalOnDemandPrice': obj.maxSpotPriceAsPercentageOfOptimalOnDemandPrice,
+    'memoryGibPerVcpu': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu(obj.memoryGibPerVcpu),
+    'memoryMib': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib(obj.memoryMib),
+    'networkBandwidthGbps': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps(obj.networkBandwidthGbps),
+    'networkInterfaceCount': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount(obj.networkInterfaceCount),
+    'onDemandMaxPricePercentageOverLowestPrice': obj.onDemandMaxPricePercentageOverLowestPrice,
+    'requireHibernateSupport': obj.requireHibernateSupport,
+    'spotMaxPricePercentageOverLowestPrice': obj.spotMaxPricePercentageOverLowestPrice,
+    'totalLocalStorageGb': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb(obj.totalLocalStorageGb),
+    'vcpuCount': toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount(obj.vcpuCount),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification {
+  /**
+   * ARN of the license configuration.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification#licenseConfigurationArn
+   */
+  readonly licenseConfigurationArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification(obj: LaunchTemplateV1Beta2SpecInitProviderLicenseSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'licenseConfigurationArn': obj.licenseConfigurationArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The maintenance options for the instance. See Maintenance Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions {
+  /**
+   * Disables the automatic recovery behavior of your instance or sets it to default. Can be "default" or "disabled". See Recover your instance for more details.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions#autoRecovery
+   */
+  readonly autoRecovery?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions(obj: LaunchTemplateV1Beta2SpecInitProviderMaintenanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'autoRecovery': obj.autoRecovery,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Customize the metadata options for the instance. See Metadata Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderMetadataOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderMetadataOptions {
+  /**
+   * Whether the metadata service is available. Can be "enabled" or "disabled". (Default: "enabled").
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMetadataOptions#httpEndpoint
+   */
+  readonly httpEndpoint?: string;
+
+  /**
+   * Enables or disables the IPv6 endpoint for the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMetadataOptions#httpProtocolIpv6
+   */
+  readonly httpProtocolIpv6?: string;
+
+  /**
+   * The desired HTTP PUT response hop limit for instance metadata requests. The larger the number, the further instance metadata requests can travel. Can be an integer from 1 to 64. (Default: 1).
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMetadataOptions#httpPutResponseHopLimit
+   */
+  readonly httpPutResponseHopLimit?: number;
+
+  /**
+   * Whether or not the metadata service requires session tokens, also referred to as Instance Metadata Service Version 2 (IMDSv2). Can be "optional" or "required". (Default: "optional").
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMetadataOptions#httpTokens
+   */
+  readonly httpTokens?: string;
+
+  /**
+   * Enables or disables access to instance tags from the instance metadata service. Can be "enabled" or "disabled".
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMetadataOptions#instanceMetadataTags
+   */
+  readonly instanceMetadataTags?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderMetadataOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderMetadataOptions(obj: LaunchTemplateV1Beta2SpecInitProviderMetadataOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'httpEndpoint': obj.httpEndpoint,
+    'httpProtocolIpv6': obj.httpProtocolIpv6,
+    'httpPutResponseHopLimit': obj.httpPutResponseHopLimit,
+    'httpTokens': obj.httpTokens,
+    'instanceMetadataTags': obj.instanceMetadataTags,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The monitoring option for the instance. See Monitoring below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderMonitoring
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderMonitoring {
+  /**
+   * If true, the launched EC2 instance will have detailed monitoring enabled.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderMonitoring#enabled
+   */
+  readonly enabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderMonitoring' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderMonitoring(obj: LaunchTemplateV1Beta2SpecInitProviderMonitoring | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enabled': obj.enabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces {
+  /**
+   * Associate a Carrier IP address with eth0 for a new network interface. Use this option when you launch an instance in a Wavelength Zone and want to associate a Carrier IP address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#associateCarrierIpAddress
+   */
+  readonly associateCarrierIpAddress?: string;
+
+  /**
+   * Associate a public ip address with the network interface. Boolean value, can be left unset.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#associatePublicIpAddress
+   */
+  readonly associatePublicIpAddress?: string;
+
+  /**
+   * The Connection Tracking Configuration for the network interface. See Amazon EC2 security group connection tracking
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#connectionTrackingSpecification
+   */
+  readonly connectionTrackingSpecification?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification;
+
+  /**
+   * Whether the network interface should be destroyed on instance termination.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Description of the network interface.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#description
+   */
+  readonly description?: string;
+
+  /**
+   * The integer index of the network interface attachment.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Configuration for Elastic Network Adapter (ENA) Express settings. Applies to network interfaces that use the ena Express feature. See details below.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#enaSrdSpecification
+   */
+  readonly enaSrdSpecification?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification;
+
+  /**
+   * The type of network interface. To create an Elastic Fabric Adapter (EFA), specify efa.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * The number of secondary private IPv4 addresses to assign to a network interface. Conflicts with ipv4_addresses
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv4AddressCount
+   */
+  readonly ipv4AddressCount?: number;
+
+  /**
+   * One or more private IPv4 addresses to associate. Conflicts with ipv4_address_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv4Addresses
+   */
+  readonly ipv4Addresses?: string[];
+
+  /**
+   * The number of IPv4 prefixes to be automatically assigned to the network interface. Conflicts with ipv4_prefixes
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv4PrefixCount
+   */
+  readonly ipv4PrefixCount?: number;
+
+  /**
+   * One or more IPv4 prefixes to be assigned to the network interface. Conflicts with ipv4_prefix_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv4Prefixes
+   */
+  readonly ipv4Prefixes?: string[];
+
+  /**
+   * The number of IPv6 addresses to assign to a network interface. Conflicts with ipv6_addresses
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv6AddressCount
+   */
+  readonly ipv6AddressCount?: number;
+
+  /**
+   * One or more specific IPv6 addresses from the IPv6 CIDR block range of your subnet. Conflicts with ipv6_address_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv6Addresses
+   */
+  readonly ipv6Addresses?: string[];
+
+  /**
+   * The number of IPv6 prefixes to be automatically assigned to the network interface. Conflicts with ipv6_prefixes
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv6PrefixCount
+   */
+  readonly ipv6PrefixCount?: number;
+
+  /**
+   * One or more IPv6 prefixes to be assigned to the network interface. Conflicts with ipv6_prefix_count
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#ipv6Prefixes
+   */
+  readonly ipv6Prefixes?: string[];
+
+  /**
+   * The index of the network card. Some instance types support multiple network cards. The primary network interface must be assigned to network card index 0. The default is network card index 0.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * The ID of the network interface to attach.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#networkInterfaceId
+   */
+  readonly networkInterfaceId?: string;
+
+  /**
+   * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#networkInterfaceIdRef
+   */
+  readonly networkInterfaceIdRef?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef;
+
+  /**
+   * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#networkInterfaceIdSelector
+   */
+  readonly networkInterfaceIdSelector?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector;
+
+  /**
+   * Whether the first IPv6 GUA will be made the primary IPv6 address.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#primaryIpv6
+   */
+  readonly primaryIpv6?: string;
+
+  /**
+   * The primary private IPv4 address.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#privateIpAddress
+   */
+  readonly privateIpAddress?: string;
+
+  /**
+   * References to SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#securityGroupRefs
+   */
+  readonly securityGroupRefs?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs[];
+
+  /**
+   * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#securityGroupSelector
+   */
+  readonly securityGroupSelector?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector;
+
+  /**
+   * A list of security group IDs to associate.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#securityGroups
+   */
+  readonly securityGroups?: string[];
+
+  /**
+   * The VPC Subnet ID to associate.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#subnetId
+   */
+  readonly subnetId?: string;
+
+  /**
+   * Reference to a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#subnetIdRef
+   */
+  readonly subnetIdRef?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef;
+
+  /**
+   * Selector for a Subnet in ec2 to populate subnetId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces#subnetIdSelector
+   */
+  readonly subnetIdSelector?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'associateCarrierIpAddress': obj.associateCarrierIpAddress,
+    'associatePublicIpAddress': obj.associatePublicIpAddress,
+    'connectionTrackingSpecification': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification(obj.connectionTrackingSpecification),
+    'deleteOnTermination': obj.deleteOnTermination,
+    'description': obj.description,
+    'deviceIndex': obj.deviceIndex,
+    'enaSrdSpecification': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification(obj.enaSrdSpecification),
+    'interfaceType': obj.interfaceType,
+    'ipv4AddressCount': obj.ipv4AddressCount,
+    'ipv4Addresses': obj.ipv4Addresses?.map(y => y),
+    'ipv4PrefixCount': obj.ipv4PrefixCount,
+    'ipv4Prefixes': obj.ipv4Prefixes?.map(y => y),
+    'ipv6AddressCount': obj.ipv6AddressCount,
+    'ipv6Addresses': obj.ipv6Addresses?.map(y => y),
+    'ipv6PrefixCount': obj.ipv6PrefixCount,
+    'ipv6Prefixes': obj.ipv6Prefixes?.map(y => y),
+    'networkCardIndex': obj.networkCardIndex,
+    'networkInterfaceId': obj.networkInterfaceId,
+    'networkInterfaceIdRef': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef(obj.networkInterfaceIdRef),
+    'networkInterfaceIdSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector(obj.networkInterfaceIdSelector),
+    'primaryIpv6': obj.primaryIpv6,
+    'privateIpAddress': obj.privateIpAddress,
+    'securityGroupRefs': obj.securityGroupRefs?.map(y => toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs(y)),
+    'securityGroupSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector(obj.securityGroupSelector),
+    'securityGroups': obj.securityGroups?.map(y => y),
+    'subnetId': obj.subnetId,
+    'subnetIdRef': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef(obj.subnetIdRef),
+    'subnetIdSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector(obj.subnetIdSelector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions {
+  /**
+   * Specify the bandwidth weighting option to boost the associated type of baseline bandwidth. Valid values: default, vpc-1, ebs-1. Default value is default. Setting vpc-1 boosts networking baseline bandwidth and reduces EBS baseline bandwidth. Setting ebs-1 boosts EBS baseline bandwidth and reduces networking baseline bandwidth. Only supported on select instance types. See AWS Documentation for more information.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions#bandwidthWeighting
+   */
+  readonly bandwidthWeighting?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkPerformanceOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'bandwidthWeighting': obj.bandwidthWeighting,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The placement of the instance. See Placement below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderPlacement {
+  /**
+   * The affinity setting for an instance on a Dedicated Host.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#affinity
+   */
+  readonly affinity?: string;
+
+  /**
+   * The Availability Zone for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#availabilityZone
+   */
+  readonly availabilityZone?: string;
+
+  /**
+   * The ID of the placement group for the instance. Conflicts with group_name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#groupId
+   */
+  readonly groupId?: string;
+
+  /**
+   * The name of the placement group for the instance. Conflicts with group_id.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#groupName
+   */
+  readonly groupName?: string;
+
+  /**
+   * The ID of the Dedicated Host for the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#hostId
+   */
+  readonly hostId?: string;
+
+  /**
+   * The ARN of the Host Resource Group in which to launch instances.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#hostResourceGroupArn
+   */
+  readonly hostResourceGroupArn?: string;
+
+  /**
+   * The number of the partition the instance should launch in. Valid only if the placement group strategy is set to partition.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#partitionNumber
+   */
+  readonly partitionNumber?: number;
+
+  /**
+   * Reserved for future use.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#spreadDomain
+   */
+  readonly spreadDomain?: string;
+
+  /**
+   * The tenancy of the instance (if the instance is running in a VPC). Can be default, dedicated, or host.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPlacement#tenancy
+   */
+  readonly tenancy?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderPlacement' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderPlacement(obj: LaunchTemplateV1Beta2SpecInitProviderPlacement | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'affinity': obj.affinity,
+    'availabilityZone': obj.availabilityZone,
+    'groupId': obj.groupId,
+    'groupName': obj.groupName,
+    'hostId': obj.hostId,
+    'hostResourceGroupArn': obj.hostResourceGroupArn,
+    'partitionNumber': obj.partitionNumber,
+    'spreadDomain': obj.spreadDomain,
+    'tenancy': obj.tenancy,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The options for the instance hostname. The default values are inherited from the subnet. See Private DNS Name Options below for more details.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions {
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS A records.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions#enableResourceNameDnsARecord
+   */
+  readonly enableResourceNameDnsARecord?: boolean;
+
+  /**
+   * Indicates whether to respond to DNS queries for instance hostnames with DNS AAAA records.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions#enableResourceNameDnsAaaaRecord
+   */
+  readonly enableResourceNameDnsAaaaRecord?: boolean;
+
+  /**
+   * The type of hostname for Amazon EC2 instances. For IPv4 only subnets, an instance DNS name must be based on the instance IPv4 address. For IPv6 native subnets, an instance DNS name must be based on the instance ID. For dual-stack subnets, you can specify whether DNS names use the instance IPv4 address or the instance ID. Valid values: ip-name and resource-name.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions#hostnameType
+   */
+  readonly hostnameType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions(obj: LaunchTemplateV1Beta2SpecInitProviderPrivateDnsNameOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enableResourceNameDnsARecord': obj.enableResourceNameDnsARecord,
+    'enableResourceNameDnsAaaaRecord': obj.enableResourceNameDnsAaaaRecord,
+    'hostnameType': obj.hostnameType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces {
+  /**
+   * Whether the secondary interface is deleted when the instance is terminated. The only supported value is true.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#deleteOnTermination
+   */
+  readonly deleteOnTermination?: boolean;
+
+  /**
+   * Device index for the secondary interface attachment.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#deviceIndex
+   */
+  readonly deviceIndex?: number;
+
+  /**
+   * Type of secondary interface. The only supported value is: secondary.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#interfaceType
+   */
+  readonly interfaceType?: string;
+
+  /**
+   * Index of the network card.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#networkCardIndex
+   */
+  readonly networkCardIndex?: number;
+
+  /**
+   * Number of private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#privateIpAddressCount
+   */
+  readonly privateIpAddressCount?: number;
+
+  /**
+   * Private IPv4 addresses to assign to the secondary interface.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#privateIpAddresses
+   */
+  readonly privateIpAddresses?: string[];
+
+  /**
+   * ID of the secondary subnet.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces#secondarySubnetId
+   */
+  readonly secondarySubnetId?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces(obj: LaunchTemplateV1Beta2SpecInitProviderSecondaryInterfaces | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'deviceIndex': obj.deviceIndex,
+    'interfaceType': obj.interfaceType,
+    'networkCardIndex': obj.networkCardIndex,
+    'privateIpAddressCount': obj.privateIpAddressCount,
+    'privateIpAddresses': obj.privateIpAddresses?.map(y => y),
+    'secondarySubnetId': obj.secondarySubnetId,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs(obj: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroupNames.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector(obj: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * @schema LaunchTemplateV1Beta2SpecInitProviderTagSpecifications
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderTagSpecifications {
+  /**
+   * The type of resource to tag.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderTagSpecifications#resourceType
+   */
+  readonly resourceType?: string;
+
+  /**
+   * A map of tags to assign to the resource.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderTagSpecifications#tags
+   */
+  readonly tags?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderTagSpecifications' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderTagSpecifications(obj: LaunchTemplateV1Beta2SpecInitProviderTagSpecifications | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resourceType': obj.resourceType,
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs(obj: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate vpcSecurityGroupIds.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector(obj: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecProviderConfigRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecProviderConfigRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecProviderConfigRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecProviderConfigRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecProviderConfigRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecProviderConfigRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecProviderConfigRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecProviderConfigRefPolicy(obj: LaunchTemplateV1Beta2SpecProviderConfigRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Configure EBS volume properties.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs {
+  /**
+   * Whether the volume should be destroyed on instance termination.
+   * See Preserving Amazon EBS Volumes on Instance Termination for more information.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Enables EBS encryption on the volume.
+   * Cannot be used with snapshot_id.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#encrypted
+   */
+  readonly encrypted?: string;
+
+  /**
+   * The amount of provisioned IOPS.
+   * This must be set with a volume_type of "io1/io2/gp3".
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Identifier (key ID, key alias, key ARN, or alias ARN) of the customer managed KMS key to use for EBS encryption.
+   * encrypted must be set to true when this is set.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#kmsKeyId
+   */
+  readonly kmsKeyId?: string;
+
+  /**
+   * Reference to a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#kmsKeyIdRef
+   */
+  readonly kmsKeyIdRef?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef;
+
+  /**
+   * Selector for a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#kmsKeyIdSelector
+   */
+  readonly kmsKeyIdSelector?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector;
+
+  /**
+   * The Snapshot ID to mount.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#snapshotId
+   */
+  readonly snapshotId?: string;
+
+  /**
+   * The throughput to provision for a gp3 volume in MiB/s (specified as an integer, e.g., 500), with a maximum of 1,000 MiB/s.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * The volume initialization rate in MiB/s (specified as an integer, e.g. 100), with a minimum of 100 MiB/s and maximum of 300 MiB/s.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#volumeInitializationRate
+   */
+  readonly volumeInitializationRate?: number;
+
+  /**
+   * The size of the volume in gigabytes.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#volumeSize
+   */
+  readonly volumeSize?: number;
+
+  /**
+   * The volume type.
+   * Can be one of standard, gp2, gp3, io1, io2, sc1 or st1.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs#volumeType
+   */
+  readonly volumeType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs(obj: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'encrypted': obj.encrypted,
+    'iops': obj.iops,
+    'kmsKeyId': obj.kmsKeyId,
+    'kmsKeyIdRef': toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj.kmsKeyIdRef),
+    'kmsKeyIdSelector': toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj.kmsKeyIdSelector),
+    'snapshotId': obj.snapshotId,
+    'throughput': obj.throughput,
+    'volumeInitializationRate': obj.volumeInitializationRate,
+    'volumeSize': obj.volumeSize,
+    'volumeType': obj.volumeType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Used to target a specific Capacity Reservation:
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget {
+  /**
+   * The ID of the Capacity Reservation in which to run the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationId
+   */
+  readonly capacityReservationId?: string;
+
+  /**
+   * The ARN of the Capacity Reservation resource group in which to run the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationResourceGroupArn
+   */
+  readonly capacityReservationResourceGroupArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget(obj: LaunchTemplateV1Beta2SpecForProviderCapacityReservationSpecificationCapacityReservationTarget | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationId': obj.capacityReservationId,
+    'capacityReservationResourceGroupArn': obj.capacityReservationResourceGroupArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The options for Spot Instance
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions {
+  /**
+   * The required duration in minutes. This value must be a multiple of 60.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions#blockDurationMinutes
+   */
+  readonly blockDurationMinutes?: number;
+
+  /**
+   * The behavior when a Spot Instance is interrupted. Can be hibernate,
+   * stop, or terminate. (Default: terminate).
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions#instanceInterruptionBehavior
+   */
+  readonly instanceInterruptionBehavior?: string;
+
+  /**
+   * The maximum hourly price you're willing to pay for the Spot Instances.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+
+  /**
+   * The Spot Instance request type. Can be one-time, or persistent.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions#spotInstanceType
+   */
+  readonly spotInstanceType?: string;
+
+  /**
+   * The end date of the request.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions#validUntil
+   */
+  readonly validUntil?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions(obj: LaunchTemplateV1Beta2SpecForProviderInstanceMarketOptionsSpotOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDurationMinutes': obj.blockDurationMinutes,
+    'instanceInterruptionBehavior': obj.instanceInterruptionBehavior,
+    'maxPrice': obj.maxPrice,
+    'spotInstanceType': obj.spotInstanceType,
+    'validUntil': obj.validUntil,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum number of accelerators (GPUs, FPGAs, or AWS Inferentia chips). Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum total memory of the accelerators. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsAcceleratorTotalMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum baseline EBS bandwidth, in Mbps. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsBaselineEbsBandwidthMbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum amount of memory (GiB) per vCPU. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryGibPerVcpu | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum amount of memory (MiB). Default is no maximum.
+ *
+ * @default no maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum amount of network bandwidth, in gigabits per second (Gbps). Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkBandwidthGbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum number of network interfaces. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsNetworkInterfaceCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum total local storage (GB). Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsTotalLocalStorageGb | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum number of vCPUs. Default is no maximum.
+ *
+ * @default no maximum.
+ * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount(obj: LaunchTemplateV1Beta2SpecForProviderInstanceRequirementsVcpuCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The Connection Tracking Configuration for the network interface. See Amazon EC2 security group connection tracking
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification {
+  /**
+   * Timeout (in seconds) for idle TCP connections in an established state. Min: 60 seconds. Max: 432000 seconds (5 days). Default: 432000 seconds. Recommended: Less than 432000 seconds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification#tcpEstablishedTimeout
+   */
+  readonly tcpEstablishedTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows classified as streams which have seen more than one request-response transaction. Min: 60 seconds. Max: 180 seconds (3 minutes). Default: 180 seconds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification#udpStreamTimeout
+   */
+  readonly udpStreamTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows that have seen traffic only in a single direction or a single request-response transaction. Min: 30 seconds. Max: 60 seconds. Default: 30 seconds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification#udpTimeout
+   */
+  readonly udpTimeout?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesConnectionTrackingSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'tcpEstablishedTimeout': obj.tcpEstablishedTimeout,
+    'udpStreamTimeout': obj.udpStreamTimeout,
+    'udpTimeout': obj.udpTimeout,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Configuration for Elastic Network Adapter (ENA) Express settings. Applies to network interfaces that use the ena Express feature. See details below.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification {
+  /**
+   * Whether to enable ENA Express. ENA Express uses AWS Scalable Reliable Datagram (SRD) technology to improve the performance of TCP traffic.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification#enaSrdEnabled
+   */
+  readonly enaSrdEnabled?: boolean;
+
+  /**
+   * Configuration for ENA Express UDP optimization. See details below.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification#enaSrdUdpSpecification
+   */
+  readonly enaSrdUdpSpecification?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdEnabled': obj.enaSrdEnabled,
+    'enaSrdUdpSpecification': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(obj.enaSrdUdpSpecification),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy(obj: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy(obj: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Configure EBS volume properties.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs {
+  /**
+   * Whether the volume should be destroyed on instance termination.
+   * See Preserving Amazon EBS Volumes on Instance Termination for more information.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#deleteOnTermination
+   */
+  readonly deleteOnTermination?: string;
+
+  /**
+   * Enables EBS encryption on the volume.
+   * Cannot be used with snapshot_id.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#encrypted
+   */
+  readonly encrypted?: string;
+
+  /**
+   * The amount of provisioned IOPS.
+   * This must be set with a volume_type of "io1/io2/gp3".
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#iops
+   */
+  readonly iops?: number;
+
+  /**
+   * Identifier (key ID, key alias, key ARN, or alias ARN) of the customer managed KMS key to use for EBS encryption.
+   * encrypted must be set to true when this is set.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#kmsKeyId
+   */
+  readonly kmsKeyId?: string;
+
+  /**
+   * Reference to a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#kmsKeyIdRef
+   */
+  readonly kmsKeyIdRef?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef;
+
+  /**
+   * Selector for a Key in kms to populate kmsKeyId.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#kmsKeyIdSelector
+   */
+  readonly kmsKeyIdSelector?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector;
+
+  /**
+   * The Snapshot ID to mount.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#snapshotId
+   */
+  readonly snapshotId?: string;
+
+  /**
+   * The throughput to provision for a gp3 volume in MiB/s (specified as an integer, e.g., 500), with a maximum of 1,000 MiB/s.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#throughput
+   */
+  readonly throughput?: number;
+
+  /**
+   * The volume initialization rate in MiB/s (specified as an integer, e.g. 100), with a minimum of 100 MiB/s and maximum of 300 MiB/s.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#volumeInitializationRate
+   */
+  readonly volumeInitializationRate?: number;
+
+  /**
+   * The size of the volume in gigabytes.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#volumeSize
+   */
+  readonly volumeSize?: number;
+
+  /**
+   * The volume type.
+   * Can be one of standard, gp2, gp3, io1, io2, sc1 or st1.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs#volumeType
+   */
+  readonly volumeType?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs(obj: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deleteOnTermination': obj.deleteOnTermination,
+    'encrypted': obj.encrypted,
+    'iops': obj.iops,
+    'kmsKeyId': obj.kmsKeyId,
+    'kmsKeyIdRef': toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj.kmsKeyIdRef),
+    'kmsKeyIdSelector': toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj.kmsKeyIdSelector),
+    'snapshotId': obj.snapshotId,
+    'throughput': obj.throughput,
+    'volumeInitializationRate': obj.volumeInitializationRate,
+    'volumeSize': obj.volumeSize,
+    'volumeType': obj.volumeType,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Used to target a specific Capacity Reservation:
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget {
+  /**
+   * The ID of the Capacity Reservation in which to run the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationId
+   */
+  readonly capacityReservationId?: string;
+
+  /**
+   * The ARN of the Capacity Reservation resource group in which to run the instance.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget#capacityReservationResourceGroupArn
+   */
+  readonly capacityReservationResourceGroupArn?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget(obj: LaunchTemplateV1Beta2SpecInitProviderCapacityReservationSpecificationCapacityReservationTarget | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'capacityReservationId': obj.capacityReservationId,
+    'capacityReservationResourceGroupArn': obj.capacityReservationResourceGroupArn,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate arn.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a InstanceProfile in iam to populate name.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The options for Spot Instance
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions {
+  /**
+   * The required duration in minutes. This value must be a multiple of 60.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions#blockDurationMinutes
+   */
+  readonly blockDurationMinutes?: number;
+
+  /**
+   * The behavior when a Spot Instance is interrupted. Can be hibernate,
+   * stop, or terminate. (Default: terminate).
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions#instanceInterruptionBehavior
+   */
+  readonly instanceInterruptionBehavior?: string;
+
+  /**
+   * The maximum hourly price you're willing to pay for the Spot Instances.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions#maxPrice
+   */
+  readonly maxPrice?: string;
+
+  /**
+   * The Spot Instance request type. Can be one-time, or persistent.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions#spotInstanceType
+   */
+  readonly spotInstanceType?: string;
+
+  /**
+   * The end date of the request.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions#validUntil
+   */
+  readonly validUntil?: string;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceMarketOptionsSpotOptions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'blockDurationMinutes': obj.blockDurationMinutes,
+    'instanceInterruptionBehavior': obj.instanceInterruptionBehavior,
+    'maxPrice': obj.maxPrice,
+    'spotInstanceType': obj.spotInstanceType,
+    'validUntil': obj.validUntil,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum number of accelerators (GPUs, FPGAs, or AWS Inferentia chips). Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum total memory of the accelerators. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsAcceleratorTotalMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum baseline EBS bandwidth, in Mbps. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsBaselineEbsBandwidthMbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum amount of memory (GiB) per vCPU. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryGibPerVcpu | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum amount of memory (MiB). Default is no maximum.
+ *
+ * @default no maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsMemoryMib | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum amount of network bandwidth, in gigabits per second (Gbps). Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkBandwidthGbps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum number of network interfaces. Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsNetworkInterfaceCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum total local storage (GB). Default is no minimum or maximum.
+ *
+ * @default no minimum or maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsTotalLocalStorageGb | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Block describing the minimum and maximum number of vCPUs. Default is no maximum.
+ *
+ * @default no maximum.
+ * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount {
+  /**
+   * Maximum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount#max
+   */
+  readonly max?: number;
+
+  /**
+   * Minimum.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount#min
+   */
+  readonly min?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount(obj: LaunchTemplateV1Beta2SpecInitProviderInstanceRequirementsVcpuCount | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'max': obj.max,
+    'min': obj.min,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * The Connection Tracking Configuration for the network interface. See Amazon EC2 security group connection tracking
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification {
+  /**
+   * Timeout (in seconds) for idle TCP connections in an established state. Min: 60 seconds. Max: 432000 seconds (5 days). Default: 432000 seconds. Recommended: Less than 432000 seconds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification#tcpEstablishedTimeout
+   */
+  readonly tcpEstablishedTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows classified as streams which have seen more than one request-response transaction. Min: 60 seconds. Max: 180 seconds (3 minutes). Default: 180 seconds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification#udpStreamTimeout
+   */
+  readonly udpStreamTimeout?: number;
+
+  /**
+   * Timeout (in seconds) for idle UDP flows that have seen traffic only in a single direction or a single request-response transaction. Min: 30 seconds. Max: 60 seconds. Default: 30 seconds.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification#udpTimeout
+   */
+  readonly udpTimeout?: number;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesConnectionTrackingSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'tcpEstablishedTimeout': obj.tcpEstablishedTimeout,
+    'udpStreamTimeout': obj.udpStreamTimeout,
+    'udpTimeout': obj.udpTimeout,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Configuration for Elastic Network Adapter (ENA) Express settings. Applies to network interfaces that use the ena Express feature. See details below.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification {
+  /**
+   * Whether to enable ENA Express. ENA Express uses AWS Scalable Reliable Datagram (SRD) technology to improve the performance of TCP traffic.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification#enaSrdEnabled
+   */
+  readonly enaSrdEnabled?: boolean;
+
+  /**
+   * Configuration for ENA Express UDP optimization. See details below.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification#enaSrdUdpSpecification
+   */
+  readonly enaSrdUdpSpecification?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdEnabled': obj.enaSrdEnabled,
+    'enaSrdUdpSpecification': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(obj.enaSrdUdpSpecification),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a NetworkInterface in ec2 to populate networkInterfaceId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A Reference to a named object.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefs | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a list of SecurityGroup in ec2 to populate securityGroups.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Reference to a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Subnet in ec2 to populate subnetId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecProviderConfigRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecProviderConfigRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecProviderConfigRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecProviderConfigRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Reference to a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Configuration for ENA Express UDP optimization. See details below.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification {
+  /**
+   * Whether to enable UDP traffic optimization through ENA Express. Requires ena_srd_enabled to be true.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification#enaSrdUdpEnabled
+   */
+  readonly enaSrdUdpEnabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdUdpEnabled': obj.enaSrdUdpEnabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderSecurityGroupNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderVpcSecurityGroupIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Reference to a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef(obj: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Selector for a Key in kms to populate kmsKeyId.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector {
+  /**
+   * MatchControllerRef ensures an object with the same controller reference
+   * as the selecting object is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchControllerRef
+   */
+  readonly matchControllerRef?: boolean;
+
+  /**
+   * MatchLabels ensures an object with matching labels is selected.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+
+  /**
+   * Policies for selection.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector#policy
+   */
+  readonly policy?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector(obj: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchControllerRef': obj.matchControllerRef,
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'policy': toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Configuration for ENA Express UDP optimization. See details below.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification {
+  /**
+   * Whether to enable UDP traffic optimization through ENA Express. Requires ena_srd_enabled to be true.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification#enaSrdUdpEnabled
+   */
+  readonly enaSrdUdpEnabled?: boolean;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesEnaSrdSpecificationEnaSrdUdpSpecification | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'enaSrdUdpEnabled': obj.enaSrdUdpEnabled,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderSecurityGroupNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderVpcSecurityGroupIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileArnSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderIamInstanceProfileNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderNetworkInterfacesSubnetIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Policies for referencing.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for selection.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy
+ */
+export interface LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolution
+   */
+  readonly resolution?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy#resolve
+   */
+  readonly resolve?: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy(obj: LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileArnSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderIamInstanceProfileNameSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesNetworkInterfaceIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupRefsPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSecurityGroupSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderNetworkInterfacesSubnetIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecForProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve
+ */
+export enum LaunchTemplateV1Beta2SpecInitProviderBlockDeviceMappingsEbsKmsKeyIdSelectorPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+
+/**
  * NATGateway is the Schema for the NATGateways API. Provides a resource to create a VPC NAT Gateway.
  *
  * @schema NATGateway
