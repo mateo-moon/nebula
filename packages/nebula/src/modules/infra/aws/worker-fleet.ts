@@ -41,6 +41,7 @@ import {
 } from "#imports/ec2.aws.upbound.io";
 import {
   InstanceProfile,
+  Policy,
   Role,
   RolePolicyAttachment,
 } from "#imports/iam.aws.upbound.io";
@@ -149,6 +150,20 @@ export interface AwsWorkerFleetNode {
   /** Instance profile override (e.g. the controller-policy profile on system
    *  nodes; everything else gets the fleet's SSM-only role). */
   iamProfile?: string;
+  /**
+   * Who owns the EC2 instance's lifecycle.
+   * "instance" (default): a per-node Instance MR — adoption model; carries
+   * the RunInstances duplicate class (a provider hard-killed mid-async-create
+   * records a WRONG outcome and the retry duplicates; no idempotency token
+   * reaches RunInstances through terraform — observed live 2026-08-02).
+   * "asg": a name-keyed LaunchTemplate + size-1 AutoscalingGroup — creation
+   * is idempotent AT AWS (a retry hits AlreadyExists, never a duplicate),
+   * spot capacity self-replaces without any control-plane involvement, and
+   * the node self-assembles its EIP + data volume at boot via the node role
+   * (no Instance MR, no follower MRs). Requires allocationId; a data volume
+   * must be an adopted volumeId (createFresh unsupported).
+   */
+  lifecycle?: "instance" | "asg";
 }
 
 const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
@@ -247,6 +262,48 @@ export class AwsWorkerFleet extends Construct {
       spec: {
         forProvider: {
           policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+          roleRef: { name: roleName },
+        },
+        providerConfigRef: this.pcRef,
+      },
+    });
+    // Boot self-assembly (asg-lifecycle nodes claim their EIP/data volume
+    // with their own role over IMDS). Associate/attach cannot be
+    // resource-scoped without per-call tag conditions the boot script cannot
+    // guarantee; the action list is the whole grant. Attached always —
+    // inert for instance-lifecycle nodes.
+    const selfAssemblyPolicyName = `${roleName}-self-assembly`;
+    new Policy(this, "worker-node-self-assembly-policy", {
+      metadata: { name: selfAssemblyPolicyName },
+      spec: {
+        forProvider: {
+          policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Sid: "NodeSelfAssembly",
+                Effect: "Allow",
+                Resource: "*",
+                Action: [
+                  "ec2:AssociateAddress",
+                  "ec2:DescribeAddresses",
+                  "ec2:AttachVolume",
+                  "ec2:DescribeVolumes",
+                  "ec2:DescribeInstances",
+                  "ec2:ModifyInstanceAttribute",
+                ],
+              },
+            ],
+          }),
+        },
+        providerConfigRef: this.pcRef,
+      },
+    });
+    new RolePolicyAttachment(this, "worker-node-self-assembly", {
+      metadata: { name: `${roleName}-self-assembly` },
+      spec: {
+        forProvider: {
+          policyArnRef: { name: selfAssemblyPolicyName },
           roleRef: { name: roleName },
         },
         providerConfigRef: this.pcRef,
@@ -456,7 +513,7 @@ export class AwsWorkerFleet extends Construct {
     return p;
   }
 
-  private userData(node: AwsWorkerFleetNode): string {
+  private userData(node: AwsWorkerFleetNode, region: AwsWorkerFleetRegion): string {
     const o = this.options;
     // Data volume -> LVM VG. create-if-absent ONLY: on instance replacement
     // the volume re-attaches carrying its data — vgcreate on a populated PV
@@ -519,8 +576,30 @@ chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 retry() { n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
 retry apt-get update -qq
-retry apt-get install -y -qq lvm2 curl
-${lvmSection}`;
+retry apt-get install -y -qq lvm2 curl${node.lifecycle === "asg" ? " awscli" : ""}
+${node.lifecycle === "asg" ? this.selfAssemblySection(node, region) : ""}${lvmSection}`;
+  }
+
+  /**
+   * asg-lifecycle boot self-assembly: the node claims its own identity with
+   * the node role over IMDS — EIP association FIRST (the provisioner's SSH
+   * entrance rides it), then source/dest-check off (parity with the Instance
+   * MR render), then the data volume. Every call retries: on replacement the
+   * EIP/volume may still be bound to the dying predecessor for a while.
+   */
+  private selfAssemblySection(
+    node: AwsWorkerFleetNode,
+    region: AwsWorkerFleetRegion,
+  ): string {
+    const r = region.region;
+    const vol = node.dataVolume && "volumeId" in node.dataVolume ? node.dataVolume.volumeId : undefined;
+    return `
+TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+retry aws ec2 associate-address --region ${r} --instance-id "$IID" --allocation-id ${node.allocationId} --allow-reassociation
+retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --no-source-dest-check
+${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume-id ${vol} --device /dev/sdf; do sleep 10; done` : ""}
+`;
   }
 
   /** One node: Instance (+ optional data EBSVolume) + adoption plumbing.
@@ -568,6 +647,151 @@ ${lvmSection}`;
         },
       });
     }
+    if (node.lifecycle === "asg") {
+      if (!node.allocationId)
+        throw new Error(`${node.name}: asg lifecycle requires allocationId`);
+      if (dv && !("volumeId" in dv && dv.volumeId))
+        throw new Error(
+          `${node.name}: asg lifecycle requires an adopted dataVolume.volumeId`,
+        );
+      this.addAsgNode(region, node, iamProfile);
+    } else {
+      this.addInstanceNode(region, node, iamProfile);
+    }
+
+    // --- CAPI adoption -----------------------------------------------------
+    // Worker (nebula) observes this node's Eip (+ Instance, when one exists)
+    // and publishes a PooledRemoteMachine into a POOL OF ONE plus any
+    // instance-id-derived follower MRs. asg-lifecycle nodes pass NO
+    // instanceName: the composition's Required gating then composes neither
+    // the Instance observer nor the followers — the node self-assembled its
+    // bindings at boot.
+    new Worker(this, node.name, {
+      eipName: node.eipName ?? node.name,
+      ...(node.lifecycle === "asg" ? {} : { instanceName: node.name }),
+      region: region.region,
+      ...(node.lifecycle === "asg" ? {} : { dataVolumeName: dataVolumeMrName }),
+      sshSecretName: o.sshSecretName,
+    });
+    this.addCapiAdoption(region, node);
+  }
+
+  /** name-keyed lifecycle: LaunchTemplate + size-1 AutoscalingGroup. Both are
+   *  idempotent at AWS under create retries (AlreadyExists, never a
+   *  duplicate) — the ASG's external-name IS its (git-chosen) name. */
+  private addAsgNode(
+    region: AwsWorkerFleetRegion,
+    node: AwsWorkerFleetNode,
+    iamProfile: string,
+  ) {
+    const o = this.options;
+    const p = this.prefix(region);
+    new ApiObject(this, `${node.name}-launch-template`, {
+      apiVersion: "ec2.aws.upbound.io/v1beta1",
+      kind: "LaunchTemplate",
+      metadata: { name: node.name },
+      spec: {
+        deletionPolicy: "Delete",
+        // Update IS on here (unlike the Instance MR): LT updates are
+        // versioned in-place — a userData/AMI change creates a new template
+        // version, applied by the ASG at the NEXT replacement (same
+        // delete-to-roll semantics as before). LateInitialize persists the
+        // nondeterministic lt-id external-name across async creates; a
+        // create retry that lost its response fails AlreadyExists on the
+        // unique name instead of duplicating.
+        managementPolicies: ["Observe", "Create", "Update", "Delete", "LateInitialize"],
+        forProvider: {
+          region: region.region,
+          name: node.name,
+          imageId: node.ami,
+          instanceType: node.instanceType,
+          updateDefaultVersion: true,
+          iamInstanceProfile: [{ name: node.iamProfile ?? iamProfile }],
+          networkInterfaces: [
+            {
+              // subnet comes from the ASG's vpcZoneIdentifier at launch.
+              associatePublicIpAddress: "true",
+              ipv6AddressCount: 1,
+              securityGroupRefs: [
+                { name: `${p}-sg`, policy: { resolve: "Always", resolution: "Required" } },
+              ],
+            },
+          ],
+          metadataOptions: [
+            {
+              httpTokens: "required",
+              ...(node.imdsPodAccess ? { httpPutResponseHopLimit: 2 } : {}),
+            },
+          ],
+          blockDeviceMappings: [
+            {
+              deviceName: "/dev/sda1",
+              ebs: [
+                {
+                  volumeSize: node.rootVolumeGi ?? 100,
+                  volumeType: "gp3",
+                  encrypted: "true",
+                },
+              ],
+            },
+          ],
+          ...(node.spot
+            ? { instanceMarketOptions: [{ marketType: "spot" }] }
+            : {}),
+          userData: Buffer.from(this.userData(node, region)).toString("base64"),
+          tagSpecifications: [
+            {
+              resourceType: "instance",
+              tags: {
+                Name: node.name,
+                [`${o.tagDomain}/geo`]: region.geo,
+                [`${o.tagDomain}/purpose`]: o.eipPurpose,
+              },
+            },
+          ],
+        },
+        providerConfigRef: this.pcRef,
+      },
+    });
+    new ApiObject(this, `${node.name}-asg`, {
+      apiVersion: "autoscaling.aws.upbound.io/v1beta1",
+      kind: "AutoscalingGroup",
+      metadata: { name: node.name },
+      spec: {
+        deletionPolicy: "Delete",
+        forProvider: {
+          region: region.region,
+          name: node.name,
+          minSize: 1,
+          maxSize: 1,
+          desiredCapacity: 1,
+          healthCheckType: "EC2",
+          // never block reconcile on capacity (spot may wait for a pool).
+          waitForCapacityTimeout: "0",
+          launchTemplate: [{ name: node.name, version: "$Latest" }],
+          vpcZoneIdentifierRefs: [
+            { name: `${p}-subnet`, policy: { resolve: "Always", resolution: "Required" } },
+          ],
+          tag: [
+            { key: "Name", value: node.name, propagateAtLaunch: true },
+            { key: `${o.tagDomain}/geo`, value: region.geo, propagateAtLaunch: true },
+            { key: `${o.tagDomain}/purpose`, value: o.eipPurpose, propagateAtLaunch: true },
+          ],
+        },
+        providerConfigRef: this.pcRef,
+      },
+    });
+  }
+
+  /** adoption-model lifecycle: the per-node Instance MR (see the duplicate-
+   *  class caveat on {@link AwsWorkerFleetNode.lifecycle}). */
+  private addInstanceNode(
+    region: AwsWorkerFleetRegion,
+    node: AwsWorkerFleetNode,
+    iamProfile: string,
+  ) {
+    const o = this.options;
+    const p = this.prefix(region);
     new ApiObject(this, `${node.name}-instance`, {
       apiVersion: "ec2.aws.upbound.io/v1beta2",
       kind: "Instance",
@@ -615,7 +839,7 @@ ${lvmSection}`;
             encrypted: true,
           },
           ...(node.spot ? { instanceMarketOptions: { marketType: "spot" } } : {}),
-          userData: this.userData(node),
+          userData: this.userData(node, region),
           userDataReplaceOnChange: true,
           tags: {
             Name: node.name,
@@ -627,26 +851,20 @@ ${lvmSection}`;
       },
     });
 
-    // --- CAPI adoption -----------------------------------------------------
-    // Worker (nebula) observes this node's Eip + Instance and publishes a
-    // PooledRemoteMachine into a POOL OF ONE plus the follower MRs. The
-    // adoption is a per-node MachineDeployment (replicas 1) over
-    // RemoteMachineTemplate + K0sWorkerConfigTemplate — NOT a standalone
-    // Machine: an MHC can only mark those OwnerRemediated and nothing acts
-    // (observed live: dead spot hosts sat NotReady for hours). With an owning
-    // MachineSet, remediation deletes the Machine and the replacement claims
-    // the (Crossplane-self-healed) host from the pool — fresh objects also
-    // mean fresh workqueue backoff, so provisioning retries immediately.
-    // maxSurge MUST stay 0: a surge Machine would wait forever on the
-    // single-entry pool. Template content changes do not roll existing
-    // machines — delete the Machine to re-provision (same as before).
-    new Worker(this, node.name, {
-      eipName: node.eipName ?? node.name,
-      instanceName: node.name,
-      region: region.region,
-      dataVolumeName: dataVolumeMrName,
-      sshSecretName: o.sshSecretName,
-    });
+  }
+
+  /**
+   * Per-node MachineDeployment (replicas 1) over RemoteMachineTemplate +
+   * K0sWorkerConfigTemplate — NOT a standalone Machine: an MHC can only mark
+   * those OwnerRemediated and nothing acts (observed live: dead spot hosts
+   * sat NotReady for hours). With an owning MachineSet, remediation deletes
+   * the Machine and the replacement claims the self-healed host from the
+   * pool. maxSurge MUST stay 0: a surge Machine would wait forever on the
+   * single-entry pool. Template content changes do not roll existing
+   * machines — delete the Machine to re-provision.
+   */
+  private addCapiAdoption(region: AwsWorkerFleetRegion, node: AwsWorkerFleetNode) {
+    const o = this.options;
     new ApiObject(this, `${node.name}-remote-machine-template`, {
       apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
       kind: "RemoteMachineTemplate",
