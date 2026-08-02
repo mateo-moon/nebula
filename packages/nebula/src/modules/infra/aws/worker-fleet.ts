@@ -131,7 +131,13 @@ export interface AwsWorkerFleetNode {
    *  a lost adoption turns days of chain data into a blank disk.
    *  mrName overrides the MR name (an MR rename is a volume REPLACEMENT —
    *  days of chain resync); defaults to `<name>-data`. */
-  dataVolume?: { sizeGi: number; mrName?: string } & (
+  dataVolume?: {
+    sizeGi: number;
+    mrName?: string;
+    /** Tag the volume for the DLM daily snapshot policy (default true — a
+     *  data volume exists because losing it costs days of resync). */
+    snapshot?: boolean;
+  } & (
     | { volumeId: string; createFresh?: never }
     | { createFresh: true; volumeId?: never }
   );
@@ -641,6 +647,11 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
             tags: {
               Name: `${node.name}-data`,
               [`${o.tagDomain}/node`]: node.name,
+              // Constant value on purpose: DLM targetTags match key AND value
+              // exactly, so the per-node tag above can never be a target.
+              ...(dv.snapshot === false
+                ? {}
+                : { [`${o.tagDomain}/backup`]: "daily" }),
             },
           },
           providerConfigRef: this.pcRef,
