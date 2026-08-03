@@ -42,6 +42,16 @@ export interface K0smotronClusterConfig<M> {
   namespace?: string;
   /** Kubernetes version (e.g. "v1.31.8"); the k0s variant is derived from it. */
   k8sVersion?: string;
+  /**
+   * Pin the WORKERS to an older Kubernetes version than the control plane.
+   * Kubernetes permits workers to trail the CP (kubelet may be several
+   * minors behind the apiserver), and a CP cannot be downgraded — so when a
+   * CP upgrade lands but the matching workers fail to join, this is the only
+   * way back to a converged, non-churning cluster: leave the CP where it is
+   * and hold the workers at the version that works.
+   * Omit for the normal case (workers follow the control plane).
+   */
+  workerK8sVersion?: string;
   /** Pod CIDR (default "10.244.0.0/16"). */
   podCidr?: string;
   /** Service CIDR (default "10.96.0.0/12"). */
@@ -97,6 +107,8 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
     const namespace = this.config.namespace ?? "default";
     const k8sVersion = this.config.k8sVersion ?? "v1.31.8";
     const k0sVersion = `${k8sVersion}+k0s.0`;
+    const workerK8sVersion = this.config.workerK8sVersion ?? k8sVersion;
+    const workerK0sVersion = `${workerK8sVersion}+k0s.0`;
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const networkProvider = this.config.networkProvider ?? "calico";
@@ -181,7 +193,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
         spec: {
           template: {
             spec: {
-              version: k0sVersion,
+              version: workerK0sVersion,
               ...(wargs.length ? { args: wargs } : {}),
               preK0SCommands: [
                 ...DEFAULT_PRESTART_COMMANDS,
@@ -203,7 +215,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
           template: {
             spec: {
               clusterName,
-              version: k8sVersion,
+              version: workerK8sVersion,
               ...(pool.failureDomain ? { failureDomain: pool.failureDomain } : {}),
               bootstrap: {
                 configRef: {
