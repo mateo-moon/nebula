@@ -1,15 +1,24 @@
 /**
  * Worker fleet — the git-side half of the ONE node unit for every cluster
  * node, in every region (pairs with the k0s {@link Worker} composition, which
- * derives the runtime bindings: pooled SSH inventory + instance-id-named
- * EIPAssociation/VolumeAttachment followers).
+ * turns the node's observed EIP into pooled SSH inventory).
  *
  * A node is NOT a CAPI machine: each is a 1:1 Crossplane resource group
- * (Instance + Eip + optional data EBSVolume) adopted via a per-node
- * MachineDeployment (replicas 1) over k0smotron's pooled RemoteMachine
- * provider — the owner an MHC needs to actually remediate. No token, no
- * address and no k0s install logic lives in git: userData is only host
- * identity + storage + the provisioner's SSH key.
+ * (LaunchTemplate + size-1 AutoscalingGroup + Eip + optional data EBSVolume)
+ * adopted via a per-node MachineDeployment (replicas 1) over k0smotron's
+ * pooled RemoteMachine provider — the owner an MHC needs to actually
+ * remediate. No token, no address and no k0s install logic lives in git:
+ * userData is only host identity + storage + the provisioner's SSH key.
+ *
+ * The EC2 instance is owned by a NAME-KEYED AutoscalingGroup, never a per-node
+ * Instance MR. Creation is then idempotent at AWS — a create retry hits
+ * AlreadyExists instead of launching a second instance, which is the whole
+ * RunInstances duplicate class (a provider hard-killed mid-async-create
+ * records a wrong outcome and the retry duplicates; no idempotency token
+ * reaches RunInstances through terraform — observed live 2026-08-02). Spot
+ * capacity also self-replaces with no control-plane involvement, and the node
+ * claims its own EIP and data volume at boot from the node role, so no
+ * follower MR is derived from an instance id.
  *
  * Regions are public-subnet + IGW only (nodes carry EIPs for the SSH
  * entrance; egress goes straight out — no NAT gateways). Subnets are the
@@ -161,20 +170,6 @@ export interface AwsWorkerFleetNode {
   /** Instance profile override (e.g. the controller-policy profile on system
    *  nodes; everything else gets the fleet's SSM-only role). */
   iamProfile?: string;
-  /**
-   * Who owns the EC2 instance's lifecycle.
-   * "instance" (default): a per-node Instance MR — adoption model; carries
-   * the RunInstances duplicate class (a provider hard-killed mid-async-create
-   * records a WRONG outcome and the retry duplicates; no idempotency token
-   * reaches RunInstances through terraform — observed live 2026-08-02).
-   * "asg": a name-keyed LaunchTemplate + size-1 AutoscalingGroup — creation
-   * is idempotent AT AWS (a retry hits AlreadyExists, never a duplicate),
-   * spot capacity self-replaces without any control-plane involvement, and
-   * the node self-assembles its EIP + data volume at boot via the node role
-   * (no Instance MR, no follower MRs). Requires allocationId; a data volume
-   * must be an adopted volumeId (createFresh unsupported).
-   */
-  lifecycle?: "instance" | "asg";
 }
 
 const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
@@ -272,11 +267,10 @@ export class AwsWorkerFleet extends Construct {
         providerConfigRef: this.pcRef,
       },
     });
-    // Boot self-assembly (asg-lifecycle nodes claim their EIP/data volume
-    // with their own role over IMDS). Associate/attach cannot be
-    // resource-scoped without per-call tag conditions the boot script cannot
-    // guarantee; the action list is the whole grant. Attached always —
-    // inert for instance-lifecycle nodes.
+    // Boot self-assembly: the node claims its EIP and data volume with its
+    // own role over IMDS. Associate/attach cannot be resource-scoped without
+    // per-call tag conditions the boot script cannot guarantee, so the action
+    // list is the whole grant.
     const selfAssemblyPolicyName = `${roleName}-self-assembly`;
     new Policy(this, "worker-node-self-assembly-policy", {
       metadata: { name: selfAssemblyPolicyName },
@@ -581,12 +575,12 @@ chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 retry() { n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
 retry apt-get update -qq
-retry apt-get install -y -qq lvm2 curl${node.lifecycle === "asg" ? " awscli" : ""}
-${node.lifecycle === "asg" ? this.selfAssemblySection(node, region) : ""}${lvmSection}`;
+retry apt-get install -y -qq lvm2 curl awscli
+${this.selfAssemblySection(node, region)}${lvmSection}`;
   }
 
   /**
-   * asg-lifecycle boot self-assembly: the node claims its own identity with
+   * Boot self-assembly: the node claims its own identity with
    * the node role over IMDS — EIP association FIRST (the provisioner's SSH
    * entrance rides it), then source/dest-check off (parity with the Instance
    * MR render), then the data volume. Every call retries: on replacement the
@@ -651,30 +645,21 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
         },
       });
     }
-    if (node.lifecycle === "asg") {
-      if (!node.allocationId)
-        throw new Error(`${node.name}: asg lifecycle requires allocationId`);
-      if (dv && !("volumeId" in dv && dv.volumeId))
-        throw new Error(
-          `${node.name}: asg lifecycle requires an adopted dataVolume.volumeId`,
-        );
-      this.addAsgNode(region, node, iamProfile);
-    } else {
-      this.addInstanceNode(region, node, iamProfile);
-    }
+    if (!node.allocationId)
+      throw new Error(`${node.name}: a worker node requires allocationId`);
+    if (dv && !("volumeId" in dv && dv.volumeId))
+      throw new Error(
+        `${node.name}: a worker node's dataVolume must be an adopted volumeId`,
+      );
+    this.addAsgNode(region, node, iamProfile);
 
     // --- CAPI adoption -----------------------------------------------------
-    // Worker (nebula) observes this node's Eip (+ Instance, when one exists)
-    // and publishes a PooledRemoteMachine into a POOL OF ONE plus any
-    // instance-id-derived follower MRs. asg-lifecycle nodes pass NO
-    // instanceName: the composition's Required gating then composes neither
-    // the Instance observer nor the followers — the node self-assembled its
-    // bindings at boot.
+    // Worker (nebula) observes this node's Eip for its public address and
+    // publishes a PooledRemoteMachine into a POOL OF ONE. Nothing else is
+    // derived from the control plane: the node claimed its EIP and data
+    // volume itself at boot, from the node role.
     new Worker(this, node.name, {
       eipName: node.eipName ?? node.name,
-      ...(node.lifecycle === "asg" ? {} : { instanceName: node.name }),
-      region: region.region,
-      ...(node.lifecycle === "asg" ? {} : { dataVolumeName: dataVolumeMrName }),
       sshSecretName: o.sshSecretName,
     });
     this.addCapiAdoption(region, node);
@@ -805,65 +790,6 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
     });
   }
 
-  /** adoption-model lifecycle: the per-node Instance MR (see the duplicate-
-   *  class caveat on {@link AwsWorkerFleetNode.lifecycle}). */
-  private addInstanceNode(
-    region: AwsWorkerFleetRegion,
-    node: AwsWorkerFleetNode,
-    iamProfile: string,
-  ) {
-    const o = this.options;
-    const p = this.prefix(region);
-    new ApiObject(this, `${node.name}-instance`, {
-      apiVersion: "ec2.aws.upbound.io/v1beta2",
-      kind: "Instance",
-      metadata: { name: node.name },
-      spec: {
-        deletionPolicy: "Delete",
-        // Replacement is done by DELETING the MR/Machine, since OWNED_POLICIES
-        // keeps Update off; userDataReplaceOnChange below is inert under that
-        // policy and kept only to document intent for the create path.
-        managementPolicies: OWNED_POLICIES,
-        forProvider: {
-          region: region.region,
-          ami: node.ami,
-          instanceType: node.instanceType,
-          // resolve Always: an AZ move replaces the subnet, and a frozen
-          // resolved id would wedge instance creation on the dead subnet.
-          subnetIdRef: { name: `${p}-subnet`, policy: { resolve: "Always", resolution: "Required" } },
-          vpcSecurityGroupIdRefs: [
-            { name: `${p}-sg`, policy: { resolve: "Always", resolution: "Required" } },
-          ],
-          iamInstanceProfile: node.iamProfile ?? iamProfile,
-          sourceDestCheck: false,
-          associatePublicIpAddress: true,
-          ipv6AddressCount: 1,
-          ...(node.imdsPodAccess
-            ? {
-                // Hop limit 2 exposes the node role to pods over IMDS —
-                // keyless AWS controllers. System nodes ONLY.
-                metadataOptions: { httpTokens: "required", httpPutResponseHopLimit: 2 },
-              }
-            : {}),
-          rootBlockDevice: {
-            volumeSize: node.rootVolumeGi ?? 100,
-            volumeType: "gp3",
-            encrypted: true,
-          },
-          ...(node.spot ? { instanceMarketOptions: { marketType: "spot" } } : {}),
-          userData: this.userData(node, region),
-          userDataReplaceOnChange: true,
-          tags: {
-            Name: node.name,
-            [`${o.tagDomain}/geo`]: region.geo,
-            [`${o.tagDomain}/purpose`]: o.eipPurpose,
-          },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-
-  }
 
   /**
    * Per-node MachineDeployment (replicas 1) over RemoteMachineTemplate +
