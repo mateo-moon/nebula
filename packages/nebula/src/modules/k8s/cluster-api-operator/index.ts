@@ -33,11 +33,18 @@ import {
  * `releases/latest`): k0smotron ships a PARALLEL v1.10.x **v1beta1** maintenance
  * line on the same dates as the v2.0.x **v1beta2** line, so a floating `latest`
  * can silently install v1beta1 components — the management cluster comes up on the
- * v1beta1 contract and `clusterctl move` (v1beta2) refuses it. v2.0.2 is the first
- * k0smotron line serving the CAPI v1beta2 contract (built against cluster-api
- * v1.11.4). Keep this in lockstep with the CAPI core / CAPA versions below.
+ * v1beta1 contract and `clusterctl move` (v1beta2) refuses it. v2.0.x is the
+ * k0smotron line serving the CAPI v1beta2 contract (verified in the release's
+ * own metadata.yaml: major 2 / minor 0 => contract v1beta2). Keep this in
+ * lockstep with the CAPI core / CAPA versions below.
+ *
+ * v2.0.4 (2026-07-22) over v2.0.2: a patch bump inside the same contract, so
+ * the provider CRs and CRDs are unchanged. Taken because v2.0.2 predates
+ * Kubernetes 1.35 and is the prime suspect for k0s 1.35 workers installing
+ * and starting but never registering (observed on cicd — no node appears and
+ * no auth attempt reaches the hosted CP).
  */
-const K0SMOTRON_VERSION = "v2.0.2";
+const K0SMOTRON_VERSION = "v2.0.4";
 const K0SMOTRON_RELEASES_BASE =
   `https://github.com/k0sproject/k0smotron/releases/download/${K0SMOTRON_VERSION}`;
 
