@@ -165,13 +165,19 @@ export interface K0sClusterConfig<M> {
 }
 
 /**
- * Default cloud-init preStartCommands (storage deps for Piraeus/LINSTOR),
- * shared by the control-plane and every worker pool.
+ * Default cloud-init preStartCommands, shared by the control-plane and every
+ * worker pool.
+ *
+ * Deliberately just the inotify limits. This used to also `apt-get install`
+ * linux-headers + lvm2 + thin-provisioning-tools + open-iscsi + cryptsetup and
+ * enable iscsid, for a Piraeus/LINSTOR stack that no longer exists anywhere in
+ * the estate — every node paid an archive fetch and a kernel-header install at
+ * boot for a DRBD transport nothing was going to use. A pool that genuinely
+ * needs host storage packages asks for them through `extraPreStartCommands`,
+ * where the reason is visible next to the cluster that has it.
  */
 export const DEFAULT_PRESTART_COMMANDS: readonly string[] = [
   "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
-  "apt-get update -qq && apt-get install -y -qq linux-headers-$(uname -r) lvm2 thin-provisioning-tools open-iscsi cryptsetup",
-  "systemctl enable --now iscsid || true",
 ];
 
 /**
@@ -209,10 +215,8 @@ export const NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
  * discard whatever the pool had set. A pool that already states `--node-ip`
  * is left alone.
  */
-export function withNodeIpArgs(args: string[], v6First = false): string[] {
-  const nodeIp = v6First
-    ? "--node-ip=$(cat /run/node-ip6),$(cat /run/node-ip)"
-    : "--node-ip=$(cat /run/node-ip),$(cat /run/node-ip6)";
+export function withNodeIpArgs(args: string[]): string[] {
+  const nodeIp = "--node-ip=$(cat /run/node-ip),$(cat /run/node-ip6)";
   const prefix = "--kubelet-extra-args=";
   const i = args.findIndex((a) => a.startsWith(prefix));
   if (i < 0) return [...args, `${prefix}"${nodeIp}"`];
