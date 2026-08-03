@@ -73,6 +73,19 @@ export interface MemberMonitoringConfig {
   /** Local Prometheus PVC size (defaults to 5Gi). */
   storageSize?: string;
   /**
+   * Back the local Prometheus with an emptyDir instead of a PVC, capped at
+   * {@link storageSize}.
+   *
+   * Set this on members whose only StorageClass is node-local. A node-local PV
+   * carries a nodeAffinity naming the node it was provisioned on; when that
+   * node is replaced the PV still names the dead one, the pod becomes
+   * unschedulable ("didn't match PersistentVolume's node affinity"), and the
+   * StatefulSet stays wedged until a human deletes the PVC — which is exactly
+   * what a member has nothing to lose from. Its history lives in the central
+   * sink; the local disk is a remote_write buffer.
+   */
+  ephemeralStorage?: boolean;
+  /**
    * External labels stamped on every series (and, by default, every Promtail
    * log stream) so this producer is distinguishable in the shared central
    * sink, e.g. { cluster: "dev-aws", env: "dev" }.
@@ -131,11 +144,13 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
       prometheus: {
         prometheusSpec: {
           retention,
-          storageSpec: {
-            volumeClaimTemplate: {
-              spec: { resources: { requests: { storage: storageSize } } },
-            },
-          },
+          storageSpec: this.config.ephemeralStorage
+            ? { emptyDir: { sizeLimit: storageSize } }
+            : {
+                volumeClaimTemplate: {
+                  spec: { resources: { requests: { storage: storageSize } } },
+                },
+              },
           externalLabels: this.config.externalLabels,
           remoteWrite: [
             {
