@@ -35,7 +35,7 @@
  * - `Worker` — an XR instance (one per node)
  *
  * Prerequisites: provider-kubernetes (ProviderConfig + RBAC to read
- * eips/instances/ebsvolumes.ec2.aws.upbound.io), function-patch-and-transform,
+ * eips.ec2.aws.upbound.io), function-patch-and-transform,
  * function-auto-ready, and Crossplane RBAC to manage
  * pooledremotemachines.infrastructure.cluster.x-k8s.io.
  */
@@ -48,24 +48,11 @@ import {
   CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 import { ARGOCD_SYNC_WAVE_ANNOTATION } from "../../../core";
-import {
-  FOLLOWER_POLICIES,
-  OBSERVE_POLICIES,
-} from "../../../utils/crossplane-policies";
+import { OBSERVE_POLICIES } from "../../../utils/crossplane-policies";
 
 export interface WorkerConfig {
   /** metadata.name of the Eip managed resource to observe (cluster-scoped). */
   eipName: string;
-  /** metadata.name of the Instance managed resource to observe. Omit for
-   *  self-assembled (ASG-lifecycle) nodes: no observer and no
-   *  instance-id-derived followers are composed. */
-  instanceName?: string;
-  /** AWS region for the composed follower MRs (EIPAssociation/VolumeAttachment). */
-  region: string;
-  /** metadata.name of the data EBSVolume MR. Omit for nodes without one. */
-  dataVolumeName?: string;
-  /** Device name for the data-volume attachment (default "/dev/sdf"). */
-  deviceName?: string;
   /** Pool name the git-side RemoteMachine reserves from (default: the XR id). */
   pool?: string;
   /** Namespace for the PooledRemoteMachine (default "default"). */
@@ -155,8 +142,6 @@ export class WorkerSetup extends Construct {
                     type: "object",
                     required: [
                       "eipName",
-                      "region",
-                      "deviceName",
                       "pool",
                       "namespace",
                       "sshSecretName",
@@ -169,23 +154,6 @@ export class WorkerSetup extends Construct {
                       eipName: {
                         type: "string",
                         description: "Eip managed-resource name to observe",
-                      },
-                      instanceName: {
-                        type: "string",
-                        description: "Instance managed-resource name to observe",
-                      },
-                      region: {
-                        type: "string",
-                        description: "AWS region for composed follower MRs",
-                      },
-                      dataVolumeName: {
-                        type: "string",
-                        description:
-                          "Data EBSVolume MR name (omit: no attachment composed)",
-                      },
-                      deviceName: {
-                        type: "string",
-                        description: "Data-volume attachment device name",
                       },
                       pool: {
                         type: "string",
@@ -224,14 +192,6 @@ export class WorkerSetup extends Construct {
                         type: "string",
                         description: "Allocation id observed from the Eip",
                       },
-                      instanceId: {
-                        type: "string",
-                        description: "Id observed from the Instance",
-                      },
-                      volumeId: {
-                        type: "string",
-                        description: "Id observed from the data EBSVolume",
-                      },
                     },
                   },
                 },
@@ -242,11 +202,7 @@ export class WorkerSetup extends Construct {
       },
     });
 
-    // Two variants: a Required-skipped composed resource keeps the XR in
-    // Ready=False/Creating forever (observed live on every data-less node),
-    // so nodes without a data volume SELECT a composition without the volume
-    // pair instead of skipping it at patch time.
-    const baseResources: object[] = [
+    const resources: object[] = [
                 {
                   name: "eip",
                   base: observeBase("EIP"),
@@ -272,30 +228,7 @@ export class WorkerSetup extends Construct {
                     },
                   ],
                 },
-                {
-                  name: "instance",
-                  base: observeBase("Instance"),
-                  patches: [
-                    // Required gates the whole observer: a self-assembled
-                    // (ASG-lifecycle) node has NO Instance MR — omitting
-                    // instanceName composes no observer, status.instanceId
-                    // never fills, and every instance-id-gated follower
-                    // self-gates out downstream.
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.instanceName",
-                      toFieldPath: "spec.forProvider.manifest.metadata.name",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    providerConfigPatch,
-                    {
-                      type: "ToCompositeFieldPath",
-                      fromFieldPath:
-                        "status.atProvider.manifest.status.atProvider.id",
-                      toFieldPath: "status.instanceId",
-                    },
-                  ],
-                },
+
                 {
                   name: "pooled-machine",
                   base: {
@@ -365,166 +298,10 @@ export class WorkerSetup extends Construct {
                     },
                   ],
                 },
-                {
-                  name: "eip-association",
-                  base: {
-                    apiVersion: "ec2.aws.upbound.io/v1beta1",
-                    kind: "EIPAssociation",
-                    metadata: { name: "placeholder" },
-                    spec: {
-                      managementPolicies: FOLLOWER_POLICIES,
-                      forProvider: {
-                        region: "placeholder",
-                        allowReassociation: true,
-                      },
-                    },
-                  },
-                  patches: [
-                    // Gate on the SPEC field, not just status.instanceId:
-                    // once an asg-lifecycle node stops composing the Instance
-                    // observer, status.instanceId FREEZES at the last
-                    // observed (now-terminated) id — nothing is left to clear
-                    // it — so a status-only gate keeps composing followers
-                    // against a dead instance forever (observed live: 9
-                    // permanently Synced=False EIPAssociations that returned
-                    // seconds after deletion). Absent spec.instanceName =>
-                    // Required patch fails => the whole follower is skipped.
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.instanceName",
-                      toFieldPath: "metadata.labels[\"k0s.nuconstruct.io/instance-mr\"]",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    // Name from the observed instance id: replacement composes
-                    // a fresh association and garbage-collects the stale one —
-                    // never an in-place instance_id update for upjet to refuse.
-                    {
-                      type: "CombineFromComposite",
-                      combine: {
-                        variables: [
-                          { fromFieldPath: "metadata.name" },
-                          { fromFieldPath: "status.instanceId" },
-                        ],
-                        strategy: "string",
-                        string: { fmt: "%s-%s" },
-                      },
-                      toFieldPath: "metadata.name",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.region",
-                      toFieldPath: "spec.forProvider.region",
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "status.allocationId",
-                      toFieldPath: "spec.forProvider.allocationId",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "status.instanceId",
-                      toFieldPath: "spec.forProvider.instanceId",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                  ],
-                },
     ];
-    const volumeResources: object[] = [
-                {
-                  name: "data-volume",
-                  base: observeBase("EBSVolume"),
-                  patches: [
-                    // Required gates the whole Object: a node without a data
-                    // volume composes no observer (and so no attachment).
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.dataVolumeName",
-                      toFieldPath: "spec.forProvider.manifest.metadata.name",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    providerConfigPatch,
-                    {
-                      type: "ToCompositeFieldPath",
-                      fromFieldPath:
-                        "status.atProvider.manifest.status.atProvider.id",
-                      toFieldPath: "status.volumeId",
-                    },
-                  ],
-                },
-                {
-                  name: "volume-attachment",
-                  base: {
-                    apiVersion: "ec2.aws.upbound.io/v1beta1",
-                    kind: "VolumeAttachment",
-                    metadata: { name: "placeholder" },
-                    spec: {
-                      managementPolicies: FOLLOWER_POLICIES,
-                      forProvider: {
-                        region: "placeholder",
-                        deviceName: "placeholder",
-                      },
-                    },
-                  },
-                  patches: [
-                    // Gate on the SPEC field, not just status.instanceId:
-                    // once an asg-lifecycle node stops composing the Instance
-                    // observer, status.instanceId FREEZES at the last
-                    // observed (now-terminated) id — nothing is left to clear
-                    // it — so a status-only gate keeps composing followers
-                    // against a dead instance forever (observed live: 9
-                    // permanently Synced=False EIPAssociations that returned
-                    // seconds after deletion). Absent spec.instanceName =>
-                    // Required patch fails => the whole follower is skipped.
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.instanceName",
-                      toFieldPath: "metadata.labels[\"k0s.nuconstruct.io/instance-mr\"]",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    {
-                      type: "CombineFromComposite",
-                      combine: {
-                        variables: [
-                          { fromFieldPath: "metadata.name" },
-                          { fromFieldPath: "status.instanceId" },
-                        ],
-                        strategy: "string",
-                        string: { fmt: "%s-data-%s" },
-                      },
-                      toFieldPath: "metadata.name",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.region",
-                      toFieldPath: "spec.forProvider.region",
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "spec.deviceName",
-                      toFieldPath: "spec.forProvider.deviceName",
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "status.volumeId",
-                      toFieldPath: "spec.forProvider.volumeId",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                    {
-                      type: "FromCompositeFieldPath",
-                      fromFieldPath: "status.instanceId",
-                      toFieldPath: "spec.forProvider.instanceId",
-                      policy: { fromFieldPath: "Required" },
-                    },
-                  ],
-                },
-    ];
-    const mkComposition = (id: string, name: string, resources: object[]) =>
-      new Composition(this, id, {
+    this.composition = new Composition(this, "composition", {
         metadata: {
-          name,
+          name: "worker",
           annotations: { [ARGOCD_SYNC_WAVE_ANNOTATION]: "-5" },
         },
         spec: {
@@ -549,12 +326,7 @@ export class WorkerSetup extends Construct {
             },
           ],
         },
-      });
-    this.composition = mkComposition("composition", "worker", [
-      ...baseResources,
-      ...volumeResources,
-    ]);
-    mkComposition("composition-basic", "worker-basic", baseResources);
+    });
   }
 }
 
@@ -572,18 +344,8 @@ export class Worker extends Construct {
       spec: {
         // v2 XRD: machinery fields nest under spec.crossplane — a top-level
         // compositionRef is silently pruned by the structural schema.
-        crossplane: {
-          compositionRef: {
-            name: config.dataVolumeName ? "worker" : "worker-basic",
-          },
-        },
+        crossplane: { compositionRef: { name: "worker" } },
         eipName: config.eipName,
-        ...(config.instanceName ? { instanceName: config.instanceName } : {}),
-        region: config.region,
-        ...(config.dataVolumeName
-          ? { dataVolumeName: config.dataVolumeName }
-          : {}),
-        deviceName: config.deviceName ?? "/dev/sdf",
         pool: config.pool ?? id,
         namespace: config.namespace ?? "default",
         sshSecretName: config.sshSecretName,
