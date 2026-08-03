@@ -54,6 +54,17 @@ const CONTROLLER_POLICY_DOCUMENT = JSON.stringify({
         "s3:*",
         "ssm:GetParameter",
         "ssm:GetParameters",
+        // Run-command access so an in-cluster pod on this role can read a
+        // node's journal (the nodes already carry
+        // AmazonSSMManagedInstanceCore). Without it, diagnosing a host that
+        // boots but never joins the cluster requires local AWS credentials —
+        // and the whole point of the keyless model is that the estate can
+        // debug and repair itself. No escalation in practice: this role
+        // already holds ec2:*/iam:*/elasticloadbalancing:*.
+        "ssm:DescribeInstanceInformation",
+        "ssm:SendCommand",
+        "ssm:GetCommandInvocation",
+        "ssm:ListCommandInvocations",
         "tag:GetResources",
         // servicequotas family (quota raises as code) and dlm family (EBS
         // snapshot lifecycle) 403 without these.
