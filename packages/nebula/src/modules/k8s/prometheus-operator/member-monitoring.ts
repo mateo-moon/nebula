@@ -144,13 +144,18 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
       prometheus: {
         prometheusSpec: {
           retention,
-          storageSpec: this.config.ephemeralStorage
-            ? { emptyDir: { sizeLimit: storageSize } }
+          // The emptyDir case is set on the wrapped module instead — a
+          // storageSpec merged in here would land ALONGSIDE the PVC template
+          // the module always emits, not replace it.
+          ...(this.config.ephemeralStorage
+            ? {}
             : {
-                volumeClaimTemplate: {
-                  spec: { resources: { requests: { storage: storageSize } } },
+                storageSpec: {
+                  volumeClaimTemplate: {
+                    spec: { resources: { requests: { storage: storageSize } } },
+                  },
                 },
-              },
+              }),
           externalLabels: this.config.externalLabels,
           remoteWrite: [
             {
@@ -204,6 +209,9 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
       ...(this.config.version ? { version: this.config.version } : {}),
       ...(this.config.storageClassName
         ? { storageClassName: this.config.storageClassName }
+        : {}),
+      ...(this.config.ephemeralStorage
+        ? { ephemeralStorage: { sizeLimit: storageSize } }
         : {}),
       ...(tolerations ? { tolerations } : {}),
       // No local Loki — logs go to the central sink (or nowhere).
