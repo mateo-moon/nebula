@@ -158,6 +158,12 @@ export interface PrometheusOperatorConfig {
   repository?: string;
   /** Storage class name for persistent volumes (defaults to standard) */
   storageClassName?: string;
+  /**
+   * Back Prometheus with an emptyDir of this size instead of a PVC. Mutually
+   * exclusive with the PVC template — a `spec.storage` carrying both leaves
+   * the reader guessing which one the operator honours.
+   */
+  ephemeralStorage?: { sizeLimit: string };
   /** Additional Helm values */
   values?: Record<string, unknown>;
   /** Loki configuration */
@@ -328,15 +334,19 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             ? { enableRemoteWriteReceiver: true }
             : {}),
           retention: thanosEnabled ? "24h" : "30d",
-          storageSpec: {
-            volumeClaimTemplate: {
-              spec: {
-                storageClassName: storageClassName,
-                accessModes: ["ReadWriteOnce"],
-                resources: { requests: { storage: thanosEnabled ? "20Gi" : "50Gi" } },
+          storageSpec: this.config.ephemeralStorage
+            ? { emptyDir: this.config.ephemeralStorage }
+            : {
+                volumeClaimTemplate: {
+                  spec: {
+                    storageClassName: storageClassName,
+                    accessModes: ["ReadWriteOnce"],
+                    resources: {
+                      requests: { storage: thanosEnabled ? "20Gi" : "50Gi" },
+                    },
+                  },
+                },
               },
-            },
-          },
           serviceMonitorSelectorNilUsesHelmValues: false,
           ruleSelectorNilUsesHelmValues: false,
           podMonitorSelectorNilUsesHelmValues: false,
