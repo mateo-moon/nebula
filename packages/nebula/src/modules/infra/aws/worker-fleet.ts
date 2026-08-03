@@ -721,22 +721,25 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
               ],
             },
           ],
-          // IMDS parity with the Instance-MR path: metadataOptions are set
-          // ONLY for imdsPodAccess nodes (required tokens + hop limit 2, the
-          // keyless-controller posture). Everywhere else the EC2 defaults
-          // apply — httpTokens OPTIONAL matters: with tokens required at hop
-          // limit 1 a POD cannot obtain a token, so anything needing instance
-          // metadata dies (observed live: ebs-csi-node crashlooping
-          // "all specified --metadata-sources are unavailable", chain-data
-          // PVCs unmountable). Hardening IMDS fleet-wide is a separate
-          // decision that must pair hop limit 2 or a metadata proxy.
-          ...(node.imdsPodAccess
-            ? {
-                metadataOptions: [
-                  { httpTokens: "required", httpPutResponseHopLimit: 2 },
-                ],
-              }
-            : {}),
+          // IMDS is set EXPLICITLY on every node, never omitted. Omitting it
+          // does NOT restore the default: LateInitialize writes the observed
+          // AWS value back into spec, so a template created with
+          // httpTokens=required keeps minting locked-down instances forever
+          // (observed live TWICE — ebs-csi-node crashlooping "all specified
+          // --metadata-sources are unavailable", chain-data PVCs unmountable
+          // on every node born from such a template). Removing a field from
+          // git only stops managing it; correcting AWS requires stating the
+          // value you want.
+          //   imdsPodAccess: IMDSv2 required + hop limit 2 — pods may reach
+          //     IMDS and assume the node role (keyless controllers).
+          //   everything else: hop limit 1 keeps the node role away from
+          //     pods, so tokens must stay OPTIONAL or in-pod metadata clients
+          //     (ebs-csi) cannot obtain one at all.
+          metadataOptions: [
+            node.imdsPodAccess
+              ? { httpEndpoint: "enabled", httpTokens: "required", httpPutResponseHopLimit: 2 }
+              : { httpEndpoint: "enabled", httpTokens: "optional", httpPutResponseHopLimit: 1 },
+          ],
           blockDeviceMappings: [
             {
               deviceName: "/dev/sda1",
