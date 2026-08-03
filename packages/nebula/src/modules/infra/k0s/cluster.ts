@@ -174,6 +174,55 @@ export const DEFAULT_PRESTART_COMMANDS: readonly string[] = [
   "systemctl enable --now iscsid || true",
 ];
 
+/**
+ * preK0sCommands recording the node's own addresses for `--node-ip`, keyed off
+ * the default-route interface so no metadata service is involved.
+ *
+ * Required on every DUAL-STACK worker from k0s 1.35 on. Given a dual-stack
+ * cluster and no explicit `--node-ip`, the worker resolves the kubelet's node
+ * NAME through DNS and demands one address of each family back
+ * (k0sproject/k0s#5840, pkg/component/worker/kubelet.go). Under Cluster API
+ * the node name is the Machine name, which is in no DNS zone, so the lookup
+ * returns nothing and k0s exits before the kubelet ever contacts the API
+ * server:
+ *
+ *   failed to detect node IPs for "cicd-amd64-sgxxq-nmfpt":
+ *   lookup cicd-amd64-sgxxq-nmfpt on 127.0.0.53:53: server misbehaving
+ *
+ * k0s 1.34 only logged that failure. Passing the addresses is upstream's own
+ * documented way out, and it is per-node without a per-node template: the
+ * substitutions run on the node, and `k0s install worker` bakes the resolved
+ * literals into the systemd unit.
+ *
+ * The v6 GUA arrives by RA/DHCPv6, so that read waits for it instead of
+ * assuming it has landed by the time cloud-init reaches this point.
+ */
+export const NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
+  `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1 > /run/node-ip'`,
+  `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/{print \\$2; exit}" | cut -d/ -f1); [ -n "$IP6" ] && break; sleep 2; done; echo "$IP6" > /run/node-ip6'`,
+];
+
+/**
+ * Add `--node-ip` (from {@link NODE_IP_DISCOVERY_COMMANDS}) to a worker's k0s
+ * args, folding it into an existing `--kubelet-extra-args` rather than adding
+ * a second one — k0s keeps only the last occurrence, so a naive append would
+ * discard whatever the pool had set. A pool that already states `--node-ip`
+ * is left alone.
+ */
+export function withNodeIpArgs(args: string[], v6First = false): string[] {
+  const nodeIp = v6First
+    ? "--node-ip=$(cat /run/node-ip6),$(cat /run/node-ip)"
+    : "--node-ip=$(cat /run/node-ip),$(cat /run/node-ip6)";
+  const prefix = "--kubelet-extra-args=";
+  const i = args.findIndex((a) => a.startsWith(prefix));
+  if (i < 0) return [...args, `${prefix}"${nodeIp}"`];
+  const existing = args[i].slice(prefix.length).replace(/^"|"$/g, "");
+  if (existing.includes("--node-ip=")) return args;
+  const merged = [...args];
+  merged[i] = `${prefix}"${nodeIp} ${existing}"`;
+  return merged;
+}
+
 /** Render `k0s worker` --labels/--taints args from a pool's labels/taints. */
 export function renderK0sWorkerArgs<M>(pool: K0sWorkerPool<M>): string[] {
   const args: string[] = [];
