@@ -9,7 +9,9 @@ import {
 } from "#imports/controlplane.cluster.x-k8s.io";
 import {
   DEFAULT_PRESTART_COMMANDS,
+  NODE_IP_DISCOVERY_COMMANDS,
   renderK0sWorkerArgs,
+  withNodeIpArgs,
   type K0sInfraProvider,
   type K0sWorkerPool,
 } from "./cluster";
@@ -187,7 +189,13 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       );
 
       const workerConfigName = `${name}-${poolName}-config`;
-      const wargs = renderK0sWorkerArgs(pool);
+      // Dual-stack workers must state their own --node-ip from k0s 1.35 on —
+      // see NODE_IP_DISCOVERY_COMMANDS for why name-based detection cannot
+      // work under Cluster API.
+      const dualStack = this.config.dualStack !== undefined;
+      const wargs = dualStack
+        ? withNodeIpArgs(renderK0sWorkerArgs(pool))
+        : renderK0sWorkerArgs(pool);
       new K0sWorkerConfigTemplateV1Beta2(this, `worker-config-${poolName}`, {
         metadata: { name: workerConfigName, namespace },
         spec: {
@@ -197,6 +205,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
               ...(wargs.length ? { args: wargs } : {}),
               preK0SCommands: [
                 ...DEFAULT_PRESTART_COMMANDS,
+                ...(dualStack ? NODE_IP_DISCOVERY_COMMANDS : []),
                 ...(pool.extraPreStartCommands ?? []),
               ],
             },
