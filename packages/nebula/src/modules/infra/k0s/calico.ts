@@ -45,15 +45,26 @@ export interface K0sCalicoConfig {
   /** Host path for the flex-volume driver. */
   flexVolumeDriverPath?: string;
   /**
-   * Pin the bundled Calico image version (k0s `spec.images.calico`, the
-   * k0sproject builds on quay.io) — e.g. "v3.31.5-0" for the wg6
-   * tunnel-address allocation fix (calico#10599, fixed upstream v3.31.0).
-   * Renders OUTSIDE network.calico (a ClusterConfig-spec sibling), so the
-   * constructs emit it via {@link renderK0sCalicoImages}. CAUTION: on a
-   * standalone K0sControlPlane any k0sConfigSpec change ROLLS the CP
-   * machines; on a hosted CP it only restarts the CP pod.
+   * Pin the bundled Calico image version (k0s `spec.images.calico`) — e.g.
+   * "v3.31.5" for the wg6 tunnel-address allocation fix (calico#10599, fixed
+   * upstream in v3.31.0). Renders OUTSIDE network.calico (a ClusterConfig-spec
+   * sibling), so the constructs emit it via {@link renderK0sCalicoImages}.
+   * CAUTION: on a standalone K0sControlPlane any k0sConfigSpec change ROLLS
+   * the CP machines; on a hosted CP it only restarts the CP pod.
    */
   imageVersion?: string;
+  /**
+   * Image repository set for the pin. Default "k0sproject" (quay.io, the
+   * images k0s ships with). Use "upstream" (docker.io/calico) when the
+   * k0sproject build of the wanted version is broken on an architecture in
+   * the fleet: v3.31.5-0's ARM64 calico-node ships felix with a STUBBED
+   * libbpf and panics on startup ("LIBBPF syscall stub") in the
+   * unconditional RemoveConnectTimeLoadBalancer path, crashlooping every
+   * arm64 node. The upstream images build libbpf on all published arches.
+   * Note the tag shapes differ: k0sproject appends a build suffix
+   * ("v3.31.5-0"), upstream does not ("v3.31.5").
+   */
+  imageRepos?: "k0sproject" | "upstream";
 }
 
 /**
@@ -125,13 +136,16 @@ export function renderK0sCalicoImages(
 ): Record<string, unknown> {
   const v = c.config.imageVersion;
   if (!v) return {};
+  const upstream = c.config.imageRepos === "upstream";
+  const repo = (name: string) =>
+    upstream ? `docker.io/calico/${name}` : `quay.io/k0sproject/calico-${name}`;
   return {
     images: {
       calico: {
-        cni: { image: "quay.io/k0sproject/calico-cni", version: v },
-        node: { image: "quay.io/k0sproject/calico-node", version: v },
+        cni: { image: repo("cni"), version: v },
+        node: { image: repo("node"), version: v },
         kubecontrollers: {
-          image: "quay.io/k0sproject/calico-kube-controllers",
+          image: repo("kube-controllers"),
           version: v,
         },
       },
