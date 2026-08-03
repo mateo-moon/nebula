@@ -22,29 +22,24 @@ export interface CalicoWg6RepairConfig {
   namespace?: string;
   /** How often to look (default every 5 minutes). */
   schedule?: string;
-  /** kubectl image used by the job. */
+  /**
+   * kubectl image used by the job. Must carry a POSIX shell; the script uses
+   * nothing else (no python, no jq) so any kubectl image will do.
+   */
   image?: string;
 }
 
 const SCRIPT = `set -eu
-BAD=$(kubectl get nodes -o json | python3 -c '
-import json,sys
-for n in json.load(sys.stdin)["items"]:
-    ready = any(c["type"]=="Ready" and c["status"]=="True" for c in n["status"].get("conditions",[]))
-    if ready and not n["metadata"].get("annotations",{}).get("projectcalico.org/IPv6WireguardInterfaceAddr"):
-        print(n["metadata"]["name"])
-' 2>/dev/null || true)
+BAD=$(kubectl get nodes --no-headers -o \\
+  'custom-columns=N:.metadata.name,W:.metadata.annotations.projectcalico\\.org/IPv6WireguardInterfaceAddr,R:.status.conditions[?(@.type=="Ready")].status' \\
+  | awk '$2 == "<none>" && $3 == "True" { print $1 }')
 [ -z "$BAD" ] && { echo "all Ready nodes have a wg6 address"; exit 0; }
 for NODE in $BAD; do
-  POD=$(kubectl get pods -n kube-system -l k8s-app=calico-node -o json \\
-    | python3 -c "
-import json,sys
-for p in json.load(sys.stdin)['items']:
-    if p['spec'].get('nodeName')=='$NODE': print(p['metadata']['name'])
-")
+  POD=$(kubectl get pods -n kube-system -l k8s-app=calico-node \\
+    --field-selector "spec.nodeName=$NODE" -o name)
   [ -z "$POD" ] && { echo "no calico-node pod on $NODE yet"; continue; }
   echo "wg6 missing on $NODE — restarting $POD (calico#10599 workaround)"
-  kubectl delete pod "$POD" -n kube-system --wait=false
+  kubectl delete "$POD" -n kube-system --wait=false
 done
 `;
 
@@ -100,7 +95,7 @@ export class CalicoWg6Repair extends Construct {
                 containers: [
                   {
                     name: "repair",
-                    image: config.image ?? "bitnami/kubectl:1.33",
+                    image: config.image ?? "alpine/kubectl:1.34.2",
                     command: ["sh", "-c", SCRIPT],
                     resources: {
                       requests: { cpu: "10m", memory: "32Mi" },
