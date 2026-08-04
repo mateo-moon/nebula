@@ -130,6 +130,19 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
       grafana: { enabled: false },
       alertmanager: { enabled: false },
 
+      // No cluster we build exposes a scrapeable controller-manager or
+      // scheduler: k0s runs both in-process bound to localhost, and a hosted-CP
+      // child runs them as k0smotron pods on the PARENT. The chart's
+      // ServiceMonitors select nothing and its KubeControllerManagerDown /
+      // KubeSchedulerDown rules then fire forever — two permanent CRITICALs per
+      // spoke (cicd from 2026-08-03, stage from 2026-07-29, unnoticed because a
+      // spoke's local alerts route nowhere). mgmt and the intra hub each set
+      // this by hand after rediscovering it; make it the default instead.
+      // kubeEtcd is NOT included: mgmt runs a real etcd, so that one is a
+      // per-cluster call.
+      kubeControllerManager: { enabled: false },
+      kubeScheduler: { enabled: false },
+
       // Admission webhook + TLS fully off (see the header for why all three
       // switches are required).
       prometheusOperator: {
