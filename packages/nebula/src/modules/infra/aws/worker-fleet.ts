@@ -37,6 +37,7 @@ import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { resolveSecrets } from "../../../utils/secrets";
+import { syncWave } from "../../../core";
 import {
   OWNED_POLICIES,
   asPolicies,
@@ -170,6 +171,29 @@ export interface AwsWorkerFleetNode {
   /** Instance profile override (e.g. the controller-policy profile on system
    *  nodes; everything else gets the fleet's SSM-only role). */
   iamProfile?: string;
+  /**
+   * ArgoCD sync-wave for this node's MachineDeployment — the ONLY ordering
+   * that exists between nodes.
+   *
+   * Each node is its own MachineDeployment of one, and CAPI coordinates
+   * nothing across them: a fleet-wide change (a k0s version bump) otherwise
+   * drains EVERY node simultaneously. Single-replica workloads with a
+   * PodDisruptionBudget then deadlock permanently — the pod cannot be evicted
+   * until a replacement is healthy, and no replacement can schedule because
+   * every node is cordoned at once (observed live 2026-08-04 on stage's
+   * 1.33 -> 1.34 hop: coredns and ebs-csi-controller held their drains open
+   * until a human deleted a pod).
+   *
+   * ArgoCD applies wave N only once wave N-1 is Healthy, so giving each node
+   * a distinct wave turns the fleet-wide change into a sequential roll. Leave
+   * unset to keep a node in the default wave 0 — which means it rolls with
+   * everything else, so either set it on ALL nodes of a fleet or none.
+   *
+   * Everything else this module emits stays in wave 0 and is therefore
+   * applied BEFORE any MachineDeployment moves, which is what lets the new
+   * K0sWorkerConfigTemplate be in place before the roll that consumes it.
+   */
+  rollWave?: number;
 }
 
 const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
@@ -881,6 +905,9 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
         name: node.name,
         namespace: this.ns,
         labels: { "cluster.x-k8s.io/cluster-name": o.clusterName },
+        ...(node.rollWave !== undefined
+          ? { annotations: syncWave(node.rollWave) }
+          : {}),
       },
       spec: {
         clusterName: o.clusterName,
