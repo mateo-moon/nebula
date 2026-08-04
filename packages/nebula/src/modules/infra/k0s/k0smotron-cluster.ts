@@ -230,8 +230,10 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
               // to fail over to while its node is the one being drained. See
               // the same field on the AWS worker fleet for the incident.
               // (v1beta1 spelling here; the fleet emits raw v1beta2, where the
-              // same knob is deletion.nodeDrainTimeoutSeconds.)
-              nodeDrainTimeout: "5m",
+              // same knob is deletion.nodeDrainTimeoutSeconds.) Write the
+              // CANONICAL Go duration: the apiserver stores seconds and renders
+              // them back as "5m0s", so "5m" reads as permanent ArgoCD drift.
+              nodeDrainTimeout: "5m0s",
               ...(pool.failureDomain ? { failureDomain: pool.failureDomain } : {}),
               bootstrap: {
                 configRef: {
