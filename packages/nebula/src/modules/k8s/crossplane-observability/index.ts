@@ -253,8 +253,24 @@ export class CrossplaneObservability extends Construct {
                 // an idle provider's burst/gap cycle never reads as silence; a
                 // recent-activity offset guard is wrong here - it drains away
                 // ~1h into a REAL wedge and un-fires the alert.
+                //
+                // Scoped to `managed/` controllers — the MANAGED-RESOURCE
+                // reconcilers — because those are the only ones whose silence
+                // means anything. Counting every controller made this fire on
+                // two providers that are silent BY DESIGN (observed live
+                // 2026-08-04, and once before):
+                //   - upbound-provider-family-aws has NO managed/ controller at
+                //     all, only crd-gate + providerconfig/*. It does its work at
+                //     startup and is then idle forever, but crd-gate alone
+                //     carried it past the lifetime-work floor.
+                //   - provider-aws-kms has managed/ controllers but the estate
+                //     holds zero KMS resources, so they never reconcile; again
+                //     only crd-gate cleared the floor.
+                // With this scope both fall below the floor by construction and
+                // can never fire, while a real reconciler that wedges still
+                // does — provider-aws-ec2 alone carries 510 managed/ reconciles.
                 alert: "CrossplaneProviderSilent",
-                expr: `sum by (pod) (rate(controller_runtime_reconcile_total{namespace="${xns}"}[${window}])) == 0 and on (pod) sum by (pod) (controller_runtime_reconcile_total{namespace="${xns}"}) > ${floor}`,
+                expr: `sum by (pod) (rate(controller_runtime_reconcile_total{namespace="${xns}",controller=~"managed/.*"}[${window}])) == 0 and on (pod) sum by (pod) (controller_runtime_reconcile_total{namespace="${xns}",controller=~"managed/.*"}) > ${floor}`,
                 for: options.silentFor ?? "15m",
                 labels: { severity: "critical" },
                 annotations: {
