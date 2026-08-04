@@ -55,6 +55,65 @@ const K0SMOTRON_FETCH_URLS = {
   bootstrap: `${K0SMOTRON_RELEASES_BASE}/bootstrap-components.yaml`,
 };
 
+/**
+ * CAPI core and CAPA both ship `resources: {}` — BestEffort QoS, cpu.shares 2,
+ * the weakest class the kernel has. On a saturated node they lose every CPU
+ * race, and their liveness probe is `/healthz` with the API default
+ * `timeoutSeconds: 1`: three missed seconds thirty seconds apart and the
+ * kubelet kills the process that serves CAPI's CONVERSION WEBHOOK. Everything
+ * that reads a MachineDeployment then fails, which is how a busy node becomes
+ * ArgoCD showing whole clusters `Unknown/Missing` (mgmt, 2026-08-04: 10
+ * restarts in 10h off one node at 114% CPU).
+ *
+ * Requests only, never limits: a CPU limit throttles a controller mid-reconcile
+ * and a memory limit turns a reconcile spike into an OOMKill.
+ */
+const DEFAULT_MANAGER_RESOURCES = {
+  requests: { cpu: "100m", memory: "128Mi" },
+};
+
+/** Probe timeout that survives a loaded node; the API default is 1s. */
+const DEFAULT_PROBE_TIMEOUT_SECONDS = 5;
+
+/** Provider CRs the chart renders; every one of them carries a manager. */
+const PROVIDER_KINDS = new Set([
+  "CoreProvider",
+  "InfrastructureProvider",
+  "BootstrapProvider",
+  "ControlPlaneProvider",
+  "AddonProvider",
+  "IPAMProvider",
+]);
+
+/**
+ * Widen both probes on a provider's manager. The chart templates `deployment`
+ * but not `patches`, so this rides `spec.patches` (strategic merge, targeted by
+ * kind+name) injected onto the rendered provider objects. NOT `manifestPatches`
+ * — that is an RFC 7396 merge patch, and a merge patch on `containers` REPLACES
+ * the list rather than merging into the container of that name.
+ */
+function probeTimeoutPatch(timeoutSeconds: number): Record<string, unknown> {
+  return {
+    // Existence-selector on kubebuilder's `control-plane` label. Every provider
+    // marks its manager Deployment with it (the VALUE differs — CAPA uses
+    // `capa-controller-manager`, CAPI core `controller-manager`) and nothing
+    // else does, so this cannot land on a sidecar Deployment and have the
+    // strategic merge INVENT an imageless container named `manager`.
+    target: { kind: "Deployment", labelSelector: "control-plane" },
+    patch: [
+      "spec:",
+      "  template:",
+      "    spec:",
+      "      containers:",
+      "        - name: manager",
+      "          livenessProbe:",
+      `            timeoutSeconds: ${timeoutSeconds}`,
+      "          readinessProbe:",
+      `            timeoutSeconds: ${timeoutSeconds}`,
+    ].join("\n"),
+  };
+}
+
 /** GCP IAM configuration for CAPG */
 export interface ClusterApiOperatorGcpConfig {
   /** GCP project ID */
@@ -173,6 +232,18 @@ export interface ClusterApiOperatorConfig {
   aws?: ClusterApiOperatorAwsConfig;
   /** Hetzner configuration for CAPH setup */
   hetzner?: ClusterApiOperatorHetznerConfig;
+  /**
+   * Resource requests for every provider's `manager` container, so none of them
+   * runs BestEffort. `false` leaves each provider's shipped resources alone.
+   * @default { requests: { cpu: '100m', memory: '128Mi' } }
+   */
+  managerResources?: { requests?: Record<string, string> } | false;
+  /**
+   * Liveness/readiness `timeoutSeconds` for every provider's manager. `false`
+   * keeps the Kubernetes default of 1s.
+   * @default 5
+   */
+  probeTimeoutSeconds?: number | false;
 }
 
 export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
@@ -321,6 +392,25 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
       };
     }
 
+    // Applied last so it reaches EVERY provider, including the GCP entry the
+    // block above rebuilds. `defaultValues.infrastructure` aliases
+    // `infrastructureProviders`, so one walk covers all four provider tiers.
+    const managerResources =
+      this.config.managerResources === false
+        ? undefined
+        : (this.config.managerResources ?? DEFAULT_MANAGER_RESOURCES);
+    if (managerResources) {
+      for (const tier of ["core", "controlPlane", "bootstrap", "infrastructure"]) {
+        for (const provider of Object.values(
+          (defaultValues[tier] ?? {}) as Record<string, Record<string, unknown>>,
+        )) {
+          provider.deployment = {
+            containers: [{ name: "manager", resources: managerResources }],
+          };
+        }
+      }
+    }
+
     this.helm = this.createHelmRelease({
       namespace: namespaceName,
       chart: "cluster-api-operator",
@@ -340,8 +430,13 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
     // so they are never tracked, re-created on sync, or shown in the UI.
     // Stripping the hook annotations converts them into normal ArgoCD-managed
     // resources that survive deletion and get recreated automatically.
+    const probeTimeout =
+      this.config.probeTimeoutSeconds === false
+        ? undefined
+        : (this.config.probeTimeoutSeconds ?? DEFAULT_PROBE_TIMEOUT_SECONDS);
     for (const child of this.helm.apiObjects) {
-      const annotations = child.toJson()?.metadata?.annotations;
+      const json = child.toJson();
+      const annotations = json?.metadata?.annotations;
       if (annotations?.["helm.sh/hook"]) {
         child.addJsonPatch(
           JsonPatch.remove("/metadata/annotations/helm.sh~1hook"),
@@ -350,6 +445,11 @@ export class ClusterApiOperator extends HelmModule<ClusterApiOperatorConfig> {
       if (annotations?.["helm.sh/hook-weight"]) {
         child.addJsonPatch(
           JsonPatch.remove("/metadata/annotations/helm.sh~1hook-weight"),
+        );
+      }
+      if (probeTimeout && PROVIDER_KINDS.has(json?.kind) && json?.spec) {
+        child.addJsonPatch(
+          JsonPatch.add("/spec/patches", [probeTimeoutPatch(probeTimeout)]),
         );
       }
     }
