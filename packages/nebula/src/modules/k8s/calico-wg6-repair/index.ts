@@ -83,8 +83,25 @@ export class CalicoWg6Repair extends Construct {
         failedJobsHistoryLimit: 3,
         jobTemplate: {
           spec: {
-            backoffLimit: 1,
+            backoffLimit: 3,
             activeDeadlineSeconds: 300,
+            // A pod evicted because its NODE went away is not a failed run.
+            // This job exists to react to node replacement, so it is running
+            // precisely when nodes are being drained — and with backoffLimit 1
+            // a single eviction burned the only retry and the deadline
+            // finished it off. The result was a KubeJobFailed for a job whose
+            // actual work takes three seconds, and because the failed Job is
+            // RETAINED by failedJobsHistoryLimit, kube_job_failed stays > 0 and
+            // the alert never clears on its own. Observed live 2026-08-04: two
+            // spot reclaims produced three permanent alerts.
+            podFailurePolicy: {
+              rules: [
+                {
+                  action: "Ignore",
+                  onPodConditions: [{ type: "DisruptionTarget" }],
+                },
+              ],
+            },
             template: {
               spec: {
                 serviceAccountName: name,
