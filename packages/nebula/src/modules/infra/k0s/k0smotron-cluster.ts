@@ -225,6 +225,13 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
             spec: {
               clusterName,
               version: workerK8sVersion,
+              // Bound the drain so a PodDisruptionBudget cannot hold a machine
+              // deletion open forever — a single-replica workload has nothing
+              // to fail over to while its node is the one being drained. See
+              // the same field on the AWS worker fleet for the incident.
+              // (v1beta1 spelling here; the fleet emits raw v1beta2, where the
+              // same knob is deletion.nodeDrainTimeoutSeconds.)
+              nodeDrainTimeout: "5m",
               ...(pool.failureDomain ? { failureDomain: pool.failureDomain } : {}),
               bootstrap: {
                 configRef: {

@@ -903,6 +903,21 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
           spec: {
             clusterName: o.clusterName,
             version: o.k0sVersion.split("+")[0],
+            // Bound the drain. Every node here is its own MachineDeployment of
+            // one, and nothing coordinates them, so a fleet-wide change (a k0s
+            // version bump) drains ALL of them at once. Single-replica
+            // workloads with a PodDisruptionBudget then deadlock permanently:
+            // the pod cannot be evicted until a replacement is healthy, and no
+            // replacement can schedule because every node is cordoned. Observed
+            // live 2026-08-04 on the 1.33 -> 1.34 hop — coredns and
+            // ebs-csi-controller, both pinned to the two system nodes, held
+            // their drains open indefinitely and needed a hand.
+            //
+            // A timeout turns that from a wedge into a bounded outage: the
+            // drain gives up, the machine deletes, the host re-provisions and
+            // comes back schedulable. It does NOT make the roll safe to do
+            // fleet-wide — see the ordering caveat in the runbook.
+            deletion: { nodeDrainTimeoutSeconds: 300 },
             bootstrap: {
               configRef: {
                 apiGroup: "bootstrap.cluster.x-k8s.io",
