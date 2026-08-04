@@ -55,6 +55,27 @@ export interface DeschedulerConfig {
     memory?: number;
     pods?: number;
   };
+  /**
+   * Drive LowNodeUtilization from ACTUAL usage (metrics-server) instead of pod
+   * requests. Requests are only a proxy for load, and a bad one wherever a
+   * large share of pods run BestEffort: mgmt measured 42/63/25% CPU by request
+   * against 15/37/11% actual, so a request-driven rebalance would chase a
+   * number nothing in the cluster experiences. `pods` is dropped from the
+   * thresholds in this mode — metrics report cpu and memory, not pod counts.
+   * @default false
+   */
+  useActualUsage?: boolean;
+  /**
+   * Never evict a pod with a PersistentVolumeClaim. `nodeFit` does not model
+   * volume topology, so without this the descheduler will happily evict a pod
+   * whose PV pins it to one AZ and get it rescheduled onto the node it just
+   * left — a restart bought for nothing (on mgmt that restart is a child
+   * cluster's etcd).
+   * @default true
+   */
+  ignorePvcPods?: boolean;
+  /** Cap evictions per node per run; bounds the churn of one pass. */
+  maxNoOfPodsToEvictPerNode?: number;
   /** Namespaces to exclude from descheduling */
   excludeNamespaces?: string[];
   /** Priority class name (defaults to system-cluster-critical) */
@@ -154,6 +175,8 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
       });
     }
 
+    const useActualUsage = this.config.useActualUsage === true;
+
     if (this.config.enableLowNodeUtilization !== false) {
       pluginConfig.push({
         name: "LowNodeUtilization",
@@ -161,13 +184,16 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
           thresholds: {
             cpu: lowThresholds.cpu,
             memory: lowThresholds.memory,
-            pods: lowThresholds.pods,
+            ...(useActualUsage ? {} : { pods: lowThresholds.pods }),
           },
           targetThresholds: {
             cpu: targetThresholds.cpu,
             memory: targetThresholds.memory,
-            pods: targetThresholds.pods,
+            ...(useActualUsage ? {} : { pods: targetThresholds.pods }),
           },
+          ...(useActualUsage
+            ? { metricsUtilization: { source: "KubernetesMetrics" } }
+            : {}),
           ...evictableNamespaceArgs,
         },
       });
@@ -208,8 +234,15 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
       });
     }
 
-    // Build descheduler policy
+    // Build descheduler policy. `metricsProviders` is what the chart keys the
+    // metrics.k8s.io RBAC rule off, so it must be set alongside the plugin arg.
     const deschedulerPolicy = {
+      ...(useActualUsage
+        ? { metricsProviders: [{ source: "KubernetesMetrics" }] }
+        : {}),
+      ...(this.config.maxNoOfPodsToEvictPerNode
+        ? { maxNoOfPodsToEvictPerNode: this.config.maxNoOfPodsToEvictPerNode }
+        : {}),
       profiles: [
         {
           name: "default",
@@ -227,22 +260,23 @@ export class Descheduler extends HelmModule<DeschedulerConfig> {
     };
 
     // Prepend a DefaultEvictor (eviction policy). Namespace exclusion itself is
-    // applied per-plugin via the args above, not here.
-    if (excludeNamespaces.length > 0) {
-      (deschedulerPolicy.profiles[0] as Record<string, unknown>).pluginConfig =
-        [
-          {
-            name: "DefaultEvictor",
-            args: {
-              evictSystemCriticalPods: false,
-              evictFailedBarePods: true,
-              evictLocalStoragePods: false,
-              nodeFit: true,
-            },
-          },
-          ...pluginConfig,
-        ];
-    }
+    // applied per-plugin via the args above, not here — which is why this is
+    // unconditional: these guards are what keep the evictor away from critical
+    // and stateful pods, and they must hold whether or not namespaces are
+    // excluded.
+    (deschedulerPolicy.profiles[0] as Record<string, unknown>).pluginConfig = [
+      {
+        name: "DefaultEvictor",
+        args: {
+          evictSystemCriticalPods: false,
+          evictFailedBarePods: true,
+          evictLocalStoragePods: false,
+          ignorePvcPods: this.config.ignorePvcPods !== false,
+          nodeFit: true,
+        },
+      },
+      ...pluginConfig,
+    ];
 
     // Portable by default (no vendor-specific tolerations). Add via config/values
     // where needed (e.g. GKE: components.gke.io/gke-managed-components).
