@@ -91,6 +91,23 @@ export interface CiliumConfig {
    *  where the default sits Pending under its own anti-affinity whenever a
    *  node is being replaced). */
   operatorReplicas?: number;
+  /**
+   * Hubble observability (defaults to FALSE — the chart defaults it on).
+   *
+   * Off because its auto-TLS generates `cilium-ca` and `hubble-server-certs`
+   * with FRESH random material on every render. Under GitOps that is a
+   * rendered-manifest diff on every single sync: permanently OutOfSync, and
+   * every sync rotates the CA out from under the running agents. Turn it on
+   * only alongside `hubble.tls.auto.method: cronJob|certmanager`, or with
+   * certs supplied out of band.
+   */
+  hubble?: boolean;
+  /**
+   * Run Envoy as its own DaemonSet (defaults to FALSE — the chart defaults it
+   * on). It exists for L7 policy, ingress and TLS interception, all of which
+   * need their own opt-in; without them it is a per-node pod doing nothing.
+   */
+  envoy?: boolean;
   /** Additional Helm values, deep-merged over the defaults above. */
   values?: Record<string, unknown>;
 }
@@ -104,6 +121,8 @@ export class Cilium extends HelmModule<CiliumConfig> {
     const namespace = this.config.namespace ?? "kube-system";
     const ipv6 = this.config.ipv6 ?? false;
     const mtu = this.config.mtu;
+    const hubble = this.config.hubble ?? false;
+    const envoy = this.config.envoy ?? false;
 
     // Fail closed on a sub-1280 MTU. This is not a preference: Linux removes
     // IPv6 from any interface below the v6 minimum, so the kernel strips it
@@ -156,6 +175,23 @@ export class Cilium extends HelmModule<CiliumConfig> {
         ...(this.config.operatorReplicas
           ? { operator: { replicas: this.config.operatorReplicas } }
           : {}),
+
+        hubble: { enabled: hubble },
+        envoy: { enabled: envoy },
+
+        // With Envoy off there is no TLS interception, so the chart's dedicated
+        // `cilium-secrets` namespace has nothing to hold — point the RBAC at
+        // kube-system and stop creating it.
+        //
+        // This is not only tidiness. ArgoCD v3.3.0 PANICS mid-sync on an
+        // application that introduces a namespace which does not exist yet
+        // ("Recovered from panic: runtime error: invalid memory address or nil
+        // pointer dereference" in the resources filter), leaving the app stuck
+        // at OperationState Error with nothing applied. Observed installing
+        // this chart on a live cluster.
+        ...(envoy
+          ? {}
+          : { tls: { secretsNamespace: { create: false, name: namespace } } }),
       },
       values: this.config.values,
     });
