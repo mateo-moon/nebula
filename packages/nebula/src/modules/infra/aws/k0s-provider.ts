@@ -90,6 +90,12 @@ export interface AwsK0sProviderConfig {
    * Applies to control-plane nodes only; workers never expose their role to pods.
    */
   imdsPodAccess?: boolean;
+  /**
+   * IMDSv2 `httpPutResponseHopLimit` for every machine template this provider
+   * renders that has `imdsPodAccess` on (default 2). **Cilium needs 3.**
+   * See the option of the same name in `_shared.ts` for the failure signature.
+   */
+  imdsHopLimit?: number;
 }
 
 /**
@@ -194,6 +200,12 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
           // Only present when opted in, so existing pools' hashes (and thus
           // their machine templates) stay stable.
           ...(imdsPodAccess ? { imdsPodAccess: true } : {}),
+          // MUST be in the hash: AWSMachineTemplate specs are immutable, so a
+          // hop-limit change that does not rename the template is silently
+          // never applied. Omitted at the default for hash stability.
+          ...(imdsPodAccess && this.config.imdsHopLimit
+            ? { imdsHopLimit: this.config.imdsHopLimit }
+            : {}),
         };
     const hash = crypto
       .createHash("sha256")
@@ -213,6 +225,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       rootVolumeType,
       ami: m.ami,
       ...(imdsPodAccess !== undefined ? { imdsPodAccess } : {}),
+      ...(this.config.imdsHopLimit ? { imdsHopLimit: this.config.imdsHopLimit } : {}),
       ...(spot !== undefined ? { spot } : {}),
     });
 

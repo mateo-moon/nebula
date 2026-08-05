@@ -522,6 +522,20 @@ export function emitAwsMachineTemplate(
      * instance role to every pod. See the field comment below.
      */
     imdsPodAccess?: boolean;
+    /**
+     * IMDSv2 `httpPutResponseHopLimit` when `imdsPodAccess` is on (default 2).
+     *
+     * The token PUT response is TTL-limited, so the limit must cover every hop
+     * between the requester and IMDS. 2 covers a pod one veth away, which is
+     * what Calico gives. **CILIUM NEEDS 3** — its datapath adds a hop, and at 2
+     * the symptom is brutal to read: a plain GET still returns 401 (so IMDS
+     * looks reachable), hostNetwork pods work fine, and only ordinary pods fail
+     * — with `no EC2 IMDS role found` from the AWS SDK, which reads like an IAM
+     * problem rather than a network one. Observed on intra: ebs-csi-controller
+     * and aws-load-balancer-controller both CrashLoopBackOff after the CNI
+     * switch, with volume attach/detach dead cluster-wide.
+     */
+    imdsHopLimit?: number;
   },
 ): AwsMachineTemplateV1Beta2 {
   return new AwsMachineTemplateV1Beta2(scope, id, {
@@ -557,7 +571,7 @@ export function emitAwsMachineTemplate(
                 instanceMetadataOptions: {
                   httpEndpoint: ImdsHttpEndpoint.ENABLED,
                   httpTokens: ImdsHttpTokens.REQUIRED,
-                  httpPutResponseHopLimit: 2,
+                  httpPutResponseHopLimit: opts.imdsHopLimit ?? 2,
                 },
               }
             : {}),
