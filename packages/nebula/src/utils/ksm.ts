@@ -24,6 +24,13 @@ import { deepmerge } from "deepmerge-ts";
  * ),
  * ```
  */
-export function mergeKsmValues(...fragments: object[]): object {
-  return fragments.reduce((acc, f) => deepmerge(acc, f), {} as object);
+export function mergeKsmValues(
+  ...fragments: object[]
+): Record<string, unknown> {
+  // Record<string, unknown>, not object: every consumer of this (a module's
+  // `values`) is typed that way, and `object` does not satisfy it.
+  return fragments.reduce(
+    (acc, f) => deepmerge(acc, f),
+    {} as Record<string, unknown>,
+  ) as Record<string, unknown>;
 }
