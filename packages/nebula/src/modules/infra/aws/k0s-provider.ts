@@ -96,6 +96,14 @@ export interface AwsK0sProviderConfig {
    * See the option of the same name in `_shared.ts` for the failure signature.
    */
   imdsHopLimit?: number;
+  /**
+   * Open a separately-installed CNI's node-to-node transport (use with
+   * `networkProvider: "custom"`). "cilium" emits WireGuard 51871 plus the
+   * cilium-health probes (tcp 4240 + ICMP) as SOURCE-SG rules, so they cover
+   * both address families — which CIDR-based rules cannot express, since the
+   * VPC's IPv6 GUA is runtime state.
+   */
+  cni?: "cilium";
 }
 
 /**
@@ -140,6 +148,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
           }),
       vpcCidr: this.config.vpcCidr ?? "10.0.0.0/16",
       networkProvider: ctx.networkProvider,
+      cni: this.config.cni,
       ipv6: this.config.ipv6,
       calico: ctx.calico,
       availabilityZoneUsageLimit: this.config.availabilityZoneUsageLimit,
