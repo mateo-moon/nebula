@@ -7,7 +7,7 @@
  * the mesh, and reconciles it with an edge-triggered loop that has no periodic
  * resync (absent in release-v3.31 and master alike). A missed allocation is
  * permanent until calico-node restarts, which is the entire reason the
- * `calico-wg6-repair` janitor exists. Cilium has no equivalent concept: the
+ * `calico-wg-repair` janitor exists. Cilium has no equivalent concept: the
  * node IP is the endpoint, the pod CIDRs are the AllowedIPs, and CiliumNode
  * carries a public KEY rather than an allocation — verified on a real
  * cross-region cluster, including through an unattended spot reclaim.
