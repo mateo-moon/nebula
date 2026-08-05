@@ -165,5 +165,6 @@ export type {
   AwsWorkerFleetRegion,
   AwsWorkerFleetNode,
   AwsWorkerFleetPort,
+  AwsWorkerFleetCni,
 } from "./worker-fleet";
 export type { DualStackSubnetConfig } from "./dualstack-subnet";

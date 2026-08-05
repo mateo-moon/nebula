@@ -38,6 +38,7 @@ import { Worker } from "../k0s/worker";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { resolveSecrets } from "../../../utils/secrets";
 import { syncWave } from "../../../core";
+import { CILIUM_WIREGUARD_PORT } from "../../k8s/cilium";
 import {
   OWNED_POLICIES,
   asPolicies,
@@ -65,6 +66,9 @@ export interface AwsWorkerFleetPort {
   port: number;
   protocol: string;
   description: string;
+  /** Emit only the ::/0 rule — for listeners that bind a single family, such
+   *  as Calico's separate v6 WireGuard socket. */
+  v6Only?: boolean;
 }
 
 export interface AwsWorkerFleetOptions {
@@ -115,9 +119,24 @@ export interface AwsWorkerFleetOptions {
    * Calico silently fall back to CLEARTEXT over the internet for any peer
    * whose WireGuard is broken. No plaintext exporters (9100/10249): scraped
    * over the WireGuard mesh instead.
+   *
+   * The CNI's own WireGuard ports are NOT part of this list — see
+   * {@link AwsWorkerFleetOptions.cni}.
    */
   openPorts?: AwsWorkerFleetPort[];
+  /**
+   * Which CNI holds the mesh, so the node security group opens ITS WireGuard
+   * ports. Default "calico" — the port sets do not overlap, and pointing this
+   * at the wrong one is a silent 100% cross-node loss.
+   *
+   * This does not install anything. It must agree with the cluster's
+   * `networkProvider` ("calico" for the k0s-bundled CNI, "custom" plus the
+   * Cilium module for "cilium").
+   */
+  cni?: AwsWorkerFleetCni;
 }
+
+export type AwsWorkerFleetCni = "calico" | "cilium";
 
 export interface AwsWorkerFleetRegion {
   /** Short geo tag, e.g. "eu" — used in resource names and node labels. */
@@ -197,10 +216,37 @@ export interface AwsWorkerFleetNode {
 }
 
 const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
-  { port: 51820, protocol: "udp", description: "calico WireGuard (Noise-authenticated)" },
   { port: 10250, protocol: "tcp", description: "kubelet (TLS, authn/authz)" },
   { port: 22, protocol: "tcp", description: "sshd (key-only; RemoteMachine provisioning)" },
 ];
+
+/**
+ * The mesh transport, appended to `openPorts` rather than part of it — a
+ * caller overriding the node ports must not be able to close the CNI's own
+ * tunnel out from under itself.
+ *
+ * Getting this wrong is SILENT: the WireGuard interface comes up, peers are
+ * configured, and every handshake is dropped with nothing in any log. Cilium
+ * listens on one port for both families; Calico runs a separate v6 socket.
+ */
+const CNI_MESH_PORTS: Record<AwsWorkerFleetCni, AwsWorkerFleetPort[]> = {
+  calico: [
+    { port: 51820, protocol: "udp", description: "calico WireGuard (Noise-authenticated)" },
+    {
+      port: 51821,
+      protocol: "udp",
+      description: "calico WireGuard v6 (Noise-authenticated)",
+      v6Only: true,
+    },
+  ],
+  cilium: [
+    {
+      port: CILIUM_WIREGUARD_PORT,
+      protocol: "udp",
+      description: "cilium WireGuard (Noise-authenticated)",
+    },
+  ],
+};
 
 /**
  * The fleet: shared options + emitters for IAM, EIPs, region networks and
@@ -465,7 +511,7 @@ export class AwsWorkerFleet extends Construct {
     const rules = [
       ...(this.options.openPorts ?? DEFAULT_OPEN_PORTS),
       ...(cfg.extraOpenPorts ?? []),
-      { port: 51821, protocol: "udp", description: "calico WireGuard v6 (Noise-authenticated)" },
+      ...CNI_MESH_PORTS[this.options.cni ?? "calico"],
     ];
     rules.forEach((r) => {
       (
@@ -474,7 +520,7 @@ export class AwsWorkerFleet extends Construct {
           ["any6", { cidrIpv6: "::/0" }],
         ] as const
       ).forEach(([suffix, cidr]) => {
-        if (r.port === 51821 && suffix === "any") return;
+        if (r.v6Only && suffix === "any") return;
         const n = `${p}-in-${r.protocol}-${r.port}-${suffix}`;
         new ApiObject(this, n, {
           apiVersion: "ec2.aws.upbound.io/v1beta1",
