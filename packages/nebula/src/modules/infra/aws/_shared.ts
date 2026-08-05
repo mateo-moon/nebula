@@ -185,6 +185,13 @@ export function emitAwsClusterCr(
     ipv6?: boolean;
     /** CNI selected in the k0s ClusterConfig. Used to emit matching AWS SG rules. */
     networkProvider?: "kuberouter" | "calico" | "custom";
+    /**
+     * Which CNI's node-to-node transport to open, when `networkProvider` is
+     * "custom" and the CNI is installed separately. "cilium" emits its
+     * WireGuard port plus the cilium-health probes as SOURCE-SG rules, which
+     * is what makes them work on BOTH address families.
+     */
+    cni?: "cilium";
     /** Bundled Calico transport settings (only used when networkProvider="calico"). */
     calico?: ResolvedK0sCalico;
     /**
@@ -345,6 +352,43 @@ export function emitAwsClusterCr(
         // internet gateway from a public source, where these never match — such
         // a cluster must open the transport with CIDR-based
         // `additionalNodeIngressRules` instead.
+        //
+        // The same mechanism serves Cilium, and MUST: these rules are the only
+        // way to express "both address families inside this VPC". A CIDR-based
+        // rule carries `cidrBlocks` (v4) or `ipv6CidrBlocks` separately, and
+        // the VPC's IPv6 GUA is Amazon-assigned runtime state that has no place
+        // in git — so on a dual-stack cluster the v6 half silently stays shut.
+        // Observed on cicd: v4 4240 returned 200 while v6 4240 was refused, and
+        // cilium-health (which needs BOTH families per node) sat at 1/4.
+        ...(opts.cni === "cilium"
+          ? {
+              cni: {
+                cniIngressRules: [
+                  {
+                    description: "WireGuard (cilium)",
+                    protocol: "udp",
+                    fromPort: 51871,
+                    toPort: 51871,
+                  },
+                  // cilium-health probes each peer over HTTP on 4240 and ICMP.
+                  // Without these the datapath is fine and cluster health is
+                  // permanently yellow, which is worse than either extreme.
+                  {
+                    description: "cilium-health node probe",
+                    protocol: "tcp",
+                    fromPort: 4240,
+                    toPort: 4240,
+                  },
+                  {
+                    description: "cilium-health ICMP probe",
+                    protocol: "icmp",
+                    fromPort: -1,
+                    toPort: -1,
+                  },
+                ],
+              },
+            }
+          : {}),
         ...(opts.networkProvider === "calico"
           ? {
               cni: {
