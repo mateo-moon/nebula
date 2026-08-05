@@ -61,10 +61,26 @@ const ANNOTATION: Record<CalicoWgFamily, string> = {
 // work takes three seconds, while stage's apiserver was returning 504s on
 // leases and node patches. A request timeout turns that into a fast, retried
 // failure instead of a 5-minute stall.
-const KUBECTL = "kubectl --request-timeout=30s";
+// NOT `kubectl --request-timeout=30s`. That flag BREAKS in-cluster config
+// discovery — kubectl stops finding KUBERNETES_SERVICE_HOST and falls back to
+// localhost:8080, which refuses instantly. Reproduced in the same pod, same
+// ServiceAccount, same image, with the flag as the only difference; flag
+// position makes no difference. It silently disabled this entire job from
+// 2026-08-04 (when the flag was added to bound the calls) until 2026-08-05.
+//
+// `timeout` from busybox bounds the whole invocation instead, retries
+// included, which is what was wanted anyway.
+const KUBECTL = "timeout 30 kubectl";
 
 function script(families: CalicoWgFamily[]): string {
+  // pipefail is load-bearing, not hygiene: every read is \`kubectl ... | awk\`,
+  // and without it awk's exit 0 masks kubectl's failure. The job then reports
+  // "no Ready nodes" and exits 0 — indistinguishable from a healthy cluster.
+  // That is exactly how the in-cluster-config breakage above stayed invisible
+  // for a day. A broken read must FAIL the job (backoffLimit retries it; the
+  // podFailurePolicy still exempts eviction).
   return `set -eu
+set -o pipefail
 for FAM in ${families.join(" ")}; do
   case "$FAM" in
     v4) ANN=${ANNOTATION.v4} ;;
