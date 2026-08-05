@@ -69,6 +69,10 @@ export interface AwsWorkerFleetPort {
   /** Emit only the ::/0 rule — for listeners that bind a single family, such
    *  as Calico's separate v6 WireGuard socket. */
   v6Only?: boolean;
+  /** Protocol for the ::/0 rule when it differs from the v4 one. ICMPv6 is
+   *  AWS protocol 58, NOT a v6 flavour of "icmp" (1) — an icmp rule does not
+   *  cover it, and the result is exactly half a working probe. */
+  protocolV6?: string;
 }
 
 export interface AwsWorkerFleetOptions {
@@ -249,6 +253,24 @@ const CNI_MESH_PORTS: Record<AwsWorkerFleetCni, AwsWorkerFleetPort[]> = {
       port: CILIUM_WIREGUARD_PORT,
       protocol: "udp",
       description: "cilium WireGuard (Noise-authenticated)",
+    },
+    // cilium-health's node probe. Unauthenticated, unlike everything else in
+    // the default set — but it serves exactly one path, /hello, with a
+    // zero-byte body (verified live; /v1beta/status and everything else 404).
+    // The one bit it leaks, "this host runs Cilium", is already implied by the
+    // WireGuard port beside it. On a mesh whose peers are cross-region over
+    // the public internet the alternative is no health signal at all, and this
+    // is the fleet where a silently half-dead mesh is the failure that hurts.
+    {
+      port: 4240,
+      protocol: "tcp",
+      description: "cilium-health node probe",
+    },
+    {
+      port: -1,
+      protocol: "icmp",
+      protocolV6: "58",
+      description: "cilium-health ICMP probe",
     },
   ],
 };
@@ -526,7 +548,8 @@ export class AwsWorkerFleet extends Construct {
         ] as const
       ).forEach(([suffix, cidr]) => {
         if (r.v6Only && suffix === "any") return;
-        const n = `${p}-in-${r.protocol}-${r.port}-${suffix}`;
+        const proto = suffix === "any6" ? (r.protocolV6 ?? r.protocol) : r.protocol;
+        const n = `${p}-in-${proto}-${r.port}-${suffix}`;
         new ApiObject(this, n, {
           apiVersion: "ec2.aws.upbound.io/v1beta1",
           kind: "SecurityGroupIngressRule",
@@ -535,7 +558,7 @@ export class AwsWorkerFleet extends Construct {
             forProvider: {
               region: cfg.region,
               securityGroupIdRef: { name: `${p}-sg` },
-              ipProtocol: r.protocol,
+              ipProtocol: proto,
               fromPort: r.port,
               toPort: r.port,
               ...cidr,
