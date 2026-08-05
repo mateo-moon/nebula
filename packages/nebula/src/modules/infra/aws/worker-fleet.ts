@@ -134,6 +134,11 @@ export interface AwsWorkerFleetOptions {
    * Cilium module for "cilium").
    */
   cni?: AwsWorkerFleetCni;
+  /**
+   * IMDSv2 `httpPutResponseHopLimit` for nodes with `imdsPodAccess` (default
+   * 2). Set 3 with `cni: "cilium"` — see the note at the render site.
+   */
+  imdsHopLimit?: number;
 }
 
 export type AwsWorkerFleetCni = "calico" | "cilium";
@@ -792,7 +797,16 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
           //     (ebs-csi) cannot obtain one at all.
           metadataOptions: [
             node.imdsPodAccess
-              ? { httpEndpoint: "enabled", httpTokens: "required", httpPutResponseHopLimit: 2 }
+              ? {
+                  httpEndpoint: "enabled",
+                  httpTokens: "required",
+                  // 2 covers a pod one veth away, which is what Calico gives.
+                  // CILIUM NEEDS 3 — its datapath adds a hop, and at 2 the
+                  // IMDSv2 token PUT fails for every pod-networked AWS
+                  // controller while a plain GET still returns 401 and
+                  // hostNetwork works fine, so it reads as an IAM fault.
+                  httpPutResponseHopLimit: this.options.imdsHopLimit ?? 2,
+                }
               : { httpEndpoint: "enabled", httpTokens: "optional", httpPutResponseHopLimit: 1 },
           ],
           blockDeviceMappings: [
