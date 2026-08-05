@@ -10,3 +10,4 @@ export {
   dataVolumePolicies,
   asPolicies,
 } from './crossplane-policies';
+export { mergeKsmValues } from './ksm';
