@@ -92,6 +92,19 @@ export interface CiliumConfig {
    *  node is being replaced). */
   operatorReplicas?: number;
   /**
+   * Connectivity health checking (defaults to true, as the chart does).
+   *
+   * Set FALSE where the probe cannot be made to work. cilium-health checks
+   * each peer with unauthenticated HTTP on 4240 plus ICMP, which on a fleet
+   * whose peers reach each other ACROSS THE PUBLIC INTERNET would mean opening
+   * both to 0.0.0.0/0 — and the node security-group posture there is that
+   * cryptographically authenticated protocols are open and unauthenticated
+   * ones are not exposed at all. Leaving the probe closed but enabled is the
+   * worst option: cluster health reads 1/N forever, and a permanently-yellow
+   * number is one nobody reads when it finally turns red.
+   */
+  healthChecking?: boolean;
+  /**
    * Hubble observability (defaults to FALSE — the chart defaults it on).
    *
    * Off because its auto-TLS generates `cilium-ca` and `hubble-server-certs`
@@ -176,6 +189,9 @@ export class Cilium extends HelmModule<CiliumConfig> {
           ? { operator: { replicas: this.config.operatorReplicas } }
           : {}),
 
+        ...(this.config.healthChecking === false
+          ? { healthChecking: false }
+          : {}),
         hubble: { enabled: hubble },
         envoy: { enabled: envoy },
 
