@@ -119,8 +119,16 @@ export type {
   ExternalDnsCredentialsSecret,
 } from "./external-dns";
 
-export { CalicoWg6Repair } from "./calico-wg6-repair";
-export type { CalicoWg6RepairConfig } from "./calico-wg6-repair";
+export {
+  CalicoWgRepair,
+  CalicoWgRepairAlerts,
+  calicoWireguardKsmValues,
+} from "./calico-wg-repair";
+export type {
+  CalicoWgRepairConfig,
+  CalicoWgRepairAlertsOptions,
+  CalicoWgFamily,
+} from "./calico-wg-repair";
 
 export { PrometheusOperator, MemberMonitoring } from "./prometheus-operator";
 export type {
