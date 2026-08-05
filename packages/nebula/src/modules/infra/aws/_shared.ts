@@ -111,15 +111,23 @@ export function toCapaB64(ini: string): string {
 }
 
 /**
- * Default cloud-init preStartCommands (storage deps for Piraeus/LINSTOR).
- * Shared by the workload-cluster worker config and the standalone
- * control-plane k0s config.
+ * Re-exported so this module keeps ONE source of truth with
+ * `modules/infra/k0s/cluster`.
+ *
+ * There used to be a second copy here, and it drifted: the k0s one was trimmed
+ * to just the inotify limits when Piraeus/LINSTOR were retired, while this one
+ * kept apt-installing linux-headers, thin-provisioning-tools, open-iscsi and
+ * cryptsetup — and enabling iscsid — on every node it rendered. Nothing in the
+ * estate has used a DRBD or iSCSI transport since; the only CSI drivers left
+ * are ebs.csi.aws.com and local.csi.openebs.io, and the LocalPV volume group
+ * is plain LVM with no thin pool. So those nodes paid an archive fetch and a
+ * kernel-header build at boot for a stack that was already gone.
+ *
+ * A pool that genuinely needs host storage packages asks via
+ * `extraPreStartCommands`, where the reason sits next to the cluster that has
+ * it.
  */
-export const DEFAULT_PRESTART_COMMANDS: readonly string[] = [
-  "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
-  "apt-get update -qq && apt-get install -y -qq linux-headers-$(uname -r) lvm2 thin-provisioning-tools open-iscsi cryptsetup",
-  "systemctl enable --now iscsid || true",
-];
+export { DEFAULT_PRESTART_COMMANDS } from "../k0s/cluster";
 
 /**
  * Emit the CAPI `Cluster` CR. Identical across both AWS cluster modules except
