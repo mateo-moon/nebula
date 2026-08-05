@@ -385,6 +385,19 @@ export function emitAwsClusterCr(
                     fromPort: -1,
                     toPort: -1,
                   },
+                  // ICMPv6 is a DIFFERENT AWS protocol (58), not a family of
+                  // "icmp" (1) — an icmp rule does not cover it. On a
+                  // dual-stack cluster that leaves exactly half the node probe
+                  // working: measured on cicd, HTTP 4240 answered 200 over both
+                  // families and ICMPv4 was 0% loss, while ICMPv6 was 100%
+                  // loss, holding every peer at Node 1/2 and cluster health at
+                  // 1/4. Harmless on single-stack, so it is emitted always.
+                  {
+                    description: "cilium-health ICMPv6 probe",
+                    protocol: "58",
+                    fromPort: -1,
+                    toPort: -1,
+                  },
                 ],
               },
             }
