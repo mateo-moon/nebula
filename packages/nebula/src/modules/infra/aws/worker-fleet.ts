@@ -224,6 +224,36 @@ export interface AwsWorkerFleetNode {
   rollWave?: number;
 }
 
+/**
+ * Cilium's datapath adds a hop between a pod and IMDS, so the IMDSv2 token PUT
+ * response dies at the default hop limit of 2 and EVERY pod-networked AWS
+ * controller loses its credentials — ebs-csi and the load-balancer controller
+ * CrashLoopBackOff, taking volume attach/detach down cluster-wide.
+ *
+ * Nothing about that failure points at networking: a plain GET still returns
+ * 401 so IMDS looks reachable, hostNetwork pods work fine, and the AWS SDK
+ * reports "no EC2 IMDS role found", which reads like an IAM problem. It cost
+ * two clusters before it was understood, and the second time both replicas
+ * happened to sit on the one node that had not been rolled yet.
+ *
+ * So it fails CLOSED at synth rather than at 03:00 in a crashloop.
+ */
+function assertCiliumImdsHopLimit(
+  cni: AwsWorkerFleetCni | undefined,
+  imdsHopLimit: number | undefined,
+  nodeName: string,
+): void {
+  if (cni !== "cilium") return;
+  if (imdsHopLimit !== undefined && imdsHopLimit >= 3) return;
+  throw new Error(
+    `${nodeName}: imdsPodAccess with cni "cilium" needs imdsHopLimit >= 3 ` +
+      `(got ${imdsHopLimit ?? 2}). Cilium adds a datapath hop, so at 2 the ` +
+      "IMDSv2 token PUT fails for every pod-networked AWS controller — " +
+      "ebs-csi and aws-load-balancer-controller crashloop with " +
+      '"no EC2 IMDS role found", which looks like an IAM fault, not a CNI one.',
+  );
+}
+
 const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
   { port: 10250, protocol: "tcp", description: "kubelet (TLS, authn/authz)" },
   { port: 22, protocol: "tcp", description: "sshd (key-only; RemoteMachine provisioning)" },
@@ -703,6 +733,13 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
    *  The EIPAssociation and VolumeAttachment followers are composed by the
    *  Worker XR with instance-id-derived names — never declared here. */
   addNode(region: AwsWorkerFleetRegion, node: AwsWorkerFleetNode, iamProfile: string) {
+    if (node.imdsPodAccess) {
+      assertCiliumImdsHopLimit(
+        this.options.cni,
+        this.options.imdsHopLimit,
+        node.name,
+      );
+    }
     const o = this.options;
     const p = this.prefix(region);
     const dv = node.dataVolume;
