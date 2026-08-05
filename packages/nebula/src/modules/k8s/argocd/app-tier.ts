@@ -153,6 +153,21 @@ export interface ArgoCdAppTierSyncPolicyOverrides {
   prune?: boolean;
   /** Include the `Delete=false` sync option (removing/cascading the Application cannot delete its resources). */
   deleteProtection?: boolean;
+  /**
+   * Emit `CreateNamespace=true` (default true).
+   *
+   * Set FALSE for an app that creates no namespace of its own and whose
+   * resources all land in namespaces that already exist — a CNI, for
+   * instance, which is cluster-scoped plus kube-system.
+   *
+   * This is not cosmetic. ArgoCD v3.3.0 PANICS mid-sync on such an app
+   * ("Recovered from panic: runtime error: invalid memory address or nil
+   * pointer dereference" at controller/sync.go:311, from getSyncTasks),
+   * leaving it at OperationState Error with NOTHING applied and retrying
+   * forever. Syncing the identical manifests with CreateNamespace=false
+   * succeeds immediately. Observed installing Cilium on two clusters.
+   */
+  createNamespace?: boolean;
 }
 
 export interface ArgoCdAppTierPluginConfig {
@@ -693,13 +708,14 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
     const prune = overrides?.prune ?? defaults.prune;
     const deleteProtection =
       overrides?.deleteProtection ?? defaults.deleteProtection;
+    const createNamespace = overrides?.createNamespace ?? true;
 
     return {
       // NEVER render `prune: false` — see the phantom-diff note on the class.
       automated: prune ? { selfHeal: true, prune: true } : { selfHeal: true },
       retry: this.retry,
       syncOptions: [
-        "CreateNamespace=true",
+        `CreateNamespace=${createNamespace}`,
         "ServerSideApply=true",
         "SkipDryRunOnMissingResource=true",
         "RespectIgnoreDifferences=true",
