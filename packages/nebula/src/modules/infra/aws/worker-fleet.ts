@@ -190,6 +190,13 @@ export interface AwsWorkerFleetNode {
   allocationId?: string;
   rootVolumeGi?: number;
   spot?: boolean;
+  /** Extra instance types this node may launch as, beyond {@link instanceType}.
+   *  Spot capacity is per (type, AZ) pool, so a single-type node rides one
+   *  pool and dies whenever that pool drains — the AZ cannot be diversified
+   *  here because a data volume is AZ-bound, which leaves the type as the only
+   *  axis. Renders a MixedInstancesPolicy over the same LaunchTemplate;
+   *  requires {@link spot} (on-demand has no allocation strategy to pick). */
+  altInstanceTypes?: string[];
   /** IMDS hop limit 2: pods on this node may use the node role (keyless AWS
    *  controllers). System nodes only. */
   imdsPodAccess?: boolean;
@@ -810,6 +817,13 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
   ) {
     const o = this.options;
     const p = this.prefix(region);
+    // Diversification is spot-only: instancesDistribution is the sole way to
+    // ask for spot under a MixedInstancesPolicy, so an on-demand node with
+    // altInstanceTypes would silently become spot. Ignore it instead.
+    const mixedTypes =
+      node.spot && node.altInstanceTypes?.length
+        ? [node.instanceType, ...node.altInstanceTypes]
+        : undefined;
     new ApiObject(this, `${node.name}-launch-template`, {
       apiVersion: "ec2.aws.upbound.io/v1beta1",
       kind: "LaunchTemplate",
@@ -881,7 +895,12 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
               ],
             },
           ],
-          ...(node.spot
+          // A MixedInstancesPolicy carries the spot request itself, and AWS
+          // REJECTS a launch template that also sets instanceMarketOptions
+          // ("incompatible with the mixed instances policy"). Diversified
+          // nodes therefore leave it off; instancesDistribution below is what
+          // makes them spot.
+          ...(node.spot && !mixedTypes
             ? { instanceMarketOptions: [{ marketType: "spot" }] }
             : {}),
           userData: Buffer.from(this.userData(node, region)).toString("base64"),
@@ -919,7 +938,34 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
           healthCheckType: "EC2",
           // never block reconcile on capacity (spot may wait for a pool).
           waitForCapacityTimeout: "0",
-          launchTemplate: [{ name: node.name, version: "$Latest" }],
+          ...(mixedTypes
+            ? {
+                mixedInstancesPolicy: [
+                  {
+                    launchTemplate: [
+                      {
+                        launchTemplateSpecification: [
+                          { launchTemplateName: node.name, version: "$Latest" },
+                        ],
+                        override: mixedTypes.map((instanceType) => ({ instanceType })),
+                      },
+                    ],
+                    // 100% spot above a zero on-demand base — the plain
+                    // instanceMarketOptions this replaces, restated.
+                    // price-capacity-optimized, not lowest-price: it weighs
+                    // pool depth as well as price, which is the whole point
+                    // of listing more than one type.
+                    instancesDistribution: [
+                      {
+                        onDemandBaseCapacity: 0,
+                        onDemandPercentageAboveBaseCapacity: 0,
+                        spotAllocationStrategy: "price-capacity-optimized",
+                      },
+                    ],
+                  },
+                ],
+              }
+            : { launchTemplate: [{ name: node.name, version: "$Latest" }] }),
           vpcZoneIdentifierRefs: [
             { name: `${p}-subnet`, policy: { resolve: "Always", resolution: "Required" } },
           ],
