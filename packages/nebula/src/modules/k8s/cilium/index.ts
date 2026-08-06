@@ -259,8 +259,16 @@ export class Cilium extends HelmModule<CiliumConfig> {
         // so it is set unconditionally: gating it on the agent monitor breaks
         // exactly the config that turns the agent monitor off and keeps the
         // operator's.
+        //
+        // `metricsService` is what renders the Service that carries the
+        // `metrics` port. The chart gates that Service on
+        // `serviceMonitor.enabled OR metricsService`, so turning the chart's
+        // monitor off to own it elsewhere also removes the port the owned
+        // monitor selects — the agent Service survives with only
+        // `envoy-metrics` on it and the replacement monitor matches nothing.
         prometheus: {
           enabled: metrics,
+          metricsService: metrics,
           serviceMonitor: { enabled: agentServiceMonitor, trustCRDsExist: true },
         },
         operator: {
@@ -269,6 +277,7 @@ export class Cilium extends HelmModule<CiliumConfig> {
             : {}),
           prometheus: {
             enabled: metrics,
+            metricsService: metrics,
             serviceMonitor: { enabled: operatorServiceMonitor },
           },
         },
