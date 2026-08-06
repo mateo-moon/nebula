@@ -1,45 +1,75 @@
 /**
- * Scrape host-network targets over the WireGuard mesh instead of the public
- * internet.
+ * Scrape host-network targets over the encrypted CNI mesh instead of the
+ * public internet.
  *
- * Calico gives each node a `wireguard.cali` / `wg-v6.cali` address from the
- * pod CIDR and publishes it on the Node object. An exporter bound to 0.0.0.0
- * in the host netns answers on it, and pod -> that address is tunnelled. So
- * retargeting the scrape there moves it onto the mesh — without moving the
- * exporter itself off the host network, which node_exporter does not support
- * (/proc/net is netns-scoped, so a pod-network exporter reports its own veth;
- * upstream closed this won't-fix and documents host network as the supported
- * configuration).
+ * Both supported CNIs give each node a host-netns address out of the pod CIDR.
+ * An exporter bound to 0.0.0.0 in the host netns answers on it, and pod -> that
+ * address is encapsulated and encrypted, so retargeting the scrape there moves
+ * it onto the mesh — without moving the exporter itself off the host network,
+ * which node_exporter does not support (/proc/net is netns-scoped, so a
+ * pod-network exporter reports its own veth; upstream closed this won't-fix and
+ * documents host network as the supported configuration).
+ *
+ * - Calico: the `wireguard.cali` / `wg-v6.cali` tunnel address, IPAM-allocated
+ *   per node per family.
+ * - Cilium: the `cilium_host` router address. NOT a tunnel address — it is
+ *   created by the agent at start rather than allocated, so the missing-address
+ *   failure class Calico has (edge-triggered allocator, no resync) is absent.
+ *   Reaching it needs no security-group rule the mesh does not already have:
+ *   the wire packet is the WireGuard UDP the peers already exchange.
+ *
+ * Cilium only publishes the address on the k8s Node when the agent is run with
+ * `annotateK8sNode: true` — nebula's Cilium module defaults it on for exactly
+ * this reason. The annotation is written at agent bootstrap, so enabling it
+ * does not backfill onto running agents.
  *
  * Requires `attachMetadata: { node: true }` on the monitor so node
  * annotations are available as relabel sources (Prometheus >= 2.37).
  *
- * Fail-visible by construction: a node whose WireGuard never came up has no
- * annotation, the regex does not match, `__address__` stays the discovered
- * address, and the scrape fails -> TargetDown. "WireGuard is broken on node
- * X" becomes an alert rather than a silent fallback to cleartext.
+ * Fail-visible by construction: a node with no annotation does not match the
+ * regex, `__address__` stays the discovered address, and the scrape fails ->
+ * TargetDown. "the mesh is broken on node X" becomes an alert rather than a
+ * silent fallback to cleartext.
  */
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 
 export type MeshFamily = "IPv6" | "IPv4";
+export type MeshCni = "calico" | "cilium";
 
-const WG_ADDR_LABEL: Record<MeshFamily, string> = {
-  IPv6: "__meta_kubernetes_node_annotation_projectcalico_org_IPv6WireguardInterfaceAddr",
-  IPv4: "__meta_kubernetes_node_annotation_projectcalico_org_IPv4WireguardInterfaceAddr",
+/** Which node annotation carries the mesh address. */
+export interface MeshTarget {
+  /** Address family (defaults to IPv6). */
+  family?: MeshFamily;
+  /** CNI publishing the address (defaults to calico). */
+  cni?: MeshCni;
+}
+
+const MESH_ADDR_LABEL: Record<MeshCni, Record<MeshFamily, string>> = {
+  calico: {
+    IPv6: "__meta_kubernetes_node_annotation_projectcalico_org_IPv6WireguardInterfaceAddr",
+    IPv4: "__meta_kubernetes_node_annotation_projectcalico_org_IPv4WireguardInterfaceAddr",
+  },
+  cilium: {
+    IPv6: "__meta_kubernetes_node_annotation_network_cilium_io_ipv6_cilium_host",
+    IPv4: "__meta_kubernetes_node_annotation_network_cilium_io_ipv4_cilium_host",
+  },
 };
 
-/** Relabeling that retargets `__address__` onto the node's WireGuard mesh
- *  address (default the v6 tunnel; v6 literals are bracketed). */
-export const meshAddress = (port: number, family: MeshFamily = "IPv6") => [
-  {
-    action: "replace",
-    sourceLabels: [WG_ADDR_LABEL[family]],
-    regex: "(.+)",
-    replacement: family === "IPv6" ? `[$1]:${port}` : `$1:${port}`,
-    targetLabel: "__address__",
-  },
-];
+/** Relabeling that retargets `__address__` onto the node's mesh address
+ *  (default the Calico v6 tunnel; v6 literals are bracketed). */
+export const meshAddress = (port: number, target: MeshTarget = {}) => {
+  const family = target.family ?? "IPv6";
+  return [
+    {
+      action: "replace",
+      sourceLabels: [MESH_ADDR_LABEL[target.cni ?? "calico"][family]],
+      regex: "(.+)",
+      replacement: family === "IPv6" ? `[$1]:${port}` : `$1:${port}`,
+      targetLabel: "__address__",
+    },
+  ];
+};
 
 /** kube-prometheus-stack's kubelet ServiceMonitor relabels the metrics path
  *  onto a label; preserve that when overriding the endpoint's relabelings. */
@@ -56,30 +86,30 @@ export const KEEP_METRICS_PATH = {
  * is owned by {@link MeshKubeProxyServiceMonitor} instead.
  */
 export function meshMonitorValues(
-  family: MeshFamily = "IPv6",
+  target: MeshTarget = {},
 ): Record<string, unknown> {
   return {
     "prometheus-node-exporter": {
       prometheus: {
         monitor: {
           attachMetadata: { node: true },
-          relabelings: meshAddress(9100, family),
+          relabelings: meshAddress(9100, target),
         },
       },
     },
     kubelet: {
       serviceMonitor: {
         attachMetadata: { node: true },
-        relabelings: [KEEP_METRICS_PATH, ...meshAddress(10250, family)],
-        cAdvisorRelabelings: [KEEP_METRICS_PATH, ...meshAddress(10250, family)],
-        probesRelabelings: [KEEP_METRICS_PATH, ...meshAddress(10250, family)],
+        relabelings: [KEEP_METRICS_PATH, ...meshAddress(10250, target)],
+        cAdvisorRelabelings: [KEEP_METRICS_PATH, ...meshAddress(10250, target)],
+        probesRelabelings: [KEEP_METRICS_PATH, ...meshAddress(10250, target)],
       },
     },
     kubeProxy: { serviceMonitor: { enabled: false } },
   };
 }
 
-export interface MeshKubeProxyServiceMonitorOptions {
+export interface MeshKubeProxyServiceMonitorOptions extends MeshTarget {
   /** monitoring namespace the CR lands in. */
   namespace: string;
   /** metadata.name of the ServiceMonitor. */
@@ -87,7 +117,6 @@ export interface MeshKubeProxyServiceMonitorOptions {
   /** kube-prometheus-stack release name (the chart's Service carries it in
    *  its labels; default "prometheus"). */
   releaseName?: string;
-  family?: MeshFamily;
 }
 
 /**
@@ -122,7 +151,7 @@ export class MeshKubeProxyServiceMonitor extends Construct {
             port: "http-metrics",
             bearerTokenFile:
               "/var/run/secrets/kubernetes.io/serviceaccount/token",
-            relabelings: meshAddress(10249, options.family ?? "IPv6"),
+            relabelings: meshAddress(10249, options),
           },
         ],
       },
