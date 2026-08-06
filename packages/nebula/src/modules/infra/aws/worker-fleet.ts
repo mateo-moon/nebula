@@ -897,12 +897,21 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
           ],
           // A MixedInstancesPolicy carries the spot request itself, and AWS
           // REJECTS a launch template that also sets instanceMarketOptions
-          // ("incompatible with the mixed instances policy"). Diversified
-          // nodes therefore leave it off; instancesDistribution below is what
-          // makes them spot.
-          ...(node.spot && !mixedTypes
-            ? { instanceMarketOptions: [{ marketType: "spot" }] }
-            : {}),
+          // ("Incompatible launch template ... Add a different launch template
+          // to the group"). instancesDistribution below is what makes a
+          // diversified node spot.
+          //   The empty list is deliberate and must not be simplified to
+          // omitting the key. This MR runs with LateInitialize, so an absent
+          // field is merely unmanaged: Crossplane writes the observed spot
+          // marketType straight back into spec and the ASG update keeps
+          // failing (observed live on both stage eu mainnet nodes). Clearing
+          // it requires STATING the empty value — same lesson as the IMDS
+          // block below.
+          ...(mixedTypes
+            ? { instanceMarketOptions: [] }
+            : node.spot
+              ? { instanceMarketOptions: [{ marketType: "spot" }] }
+              : {}),
           userData: Buffer.from(this.userData(node, region)).toString("base64"),
           tagSpecifications: [
             {
