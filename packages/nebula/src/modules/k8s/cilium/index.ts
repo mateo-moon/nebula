@@ -121,8 +121,15 @@ export interface CiliumConfig {
    * `MeshServiceMonitor`.
    */
   agentServiceMonitor?: boolean;
-  /** Chart-owned ServiceMonitor for the OPERATOR (defaults to true). It runs on
-   *  the pod network, so it never needs the mesh treatment. */
+  /**
+   * Chart-owned ServiceMonitor for the OPERATOR (defaults to true).
+   *
+   * The operator is hostNetwork too (`operator.hostNetwork` is a chart default,
+   * so it can reach the API server before the CNI is up), which means its 9963
+   * is behind the same closed node port as the agent's 9962 and it needs the
+   * same treatment. Measured, not assumed: with the chart's monitor only the
+   * replica sharing a node with Prometheus came up.
+   */
   operatorServiceMonitor?: boolean;
   /**
    * Hubble observability (defaults to FALSE — the chart defaults it on).
