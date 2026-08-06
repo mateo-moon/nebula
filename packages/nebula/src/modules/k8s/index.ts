@@ -279,12 +279,15 @@ export {
   meshAddress,
   meshMonitorValues,
   KEEP_METRICS_PATH,
+  NODE_FROM_POD,
+  MeshServiceMonitor,
   MeshKubeProxyServiceMonitor,
 } from "./mesh-scrape";
 export type {
   MeshFamily,
   MeshCni,
   MeshTarget,
+  MeshServiceMonitorOptions,
   MeshKubeProxyServiceMonitorOptions,
 } from "./mesh-scrape";
 export {
