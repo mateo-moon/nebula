@@ -105,16 +105,50 @@ export interface CiliumConfig {
    */
   healthChecking?: boolean;
   /**
+   * Prometheus metrics: agent on 9962, operator on 9963 (defaults to TRUE —
+   * the chart defaults the agent's endpoint off, which leaves the dataplane
+   * with no telemetry at all).
+   */
+  metrics?: boolean;
+  /**
+   * Chart-owned ServiceMonitor for the AGENT and for Hubble (defaults to true).
+   *
+   * Both are served by the hostNetwork agent, so where the node's ports are not
+   * reachable from the scraper the address has to be rewritten onto the mesh —
+   * and the chart's templates expose `relabelings` but not `attachMetadata`,
+   * without which the node annotation carrying that address is not a relabel
+   * source. Set false there and own the CRs with mesh-scrape's
+   * `MeshServiceMonitor`.
+   */
+  agentServiceMonitor?: boolean;
+  /** Chart-owned ServiceMonitor for the OPERATOR (defaults to true). It runs on
+   *  the pod network, so it never needs the mesh treatment. */
+  operatorServiceMonitor?: boolean;
+  /**
    * Hubble observability (defaults to FALSE — the chart defaults it on).
    *
-   * Off because its auto-TLS generates `cilium-ca` and `hubble-server-certs`
-   * with FRESH random material on every render. Under GitOps that is a
-   * rendered-manifest diff on every single sync: permanently OutOfSync, and
-   * every sync rotates the CA out from under the running agents. Turn it on
-   * only alongside `hubble.tls.auto.method: cronJob|certmanager`, or with
-   * certs supplied out of band.
+   * The chart's `helm` TLS method generates `cilium-ca` and
+   * `hubble-server-certs` with FRESH random material on every render: under
+   * GitOps that is a diff on every sync, permanently OutOfSync, and each sync
+   * rotates the CA out from under the running agents. {@link hubbleTlsMethod}
+   * therefore defaults to `cronJob` and does not offer `helm` at all.
    */
   hubble?: boolean;
+  /** Hubble metrics to export on 9965 (defaults to a flow/drop/dns/tcp set).
+   *  Empty disables the metrics server while leaving the observer on. */
+  hubbleMetrics?: string[];
+  /** hubble-relay, the cluster-wide flow aggregation API (defaults to false —
+   *  it is what `hubble observe` and the UI talk to, and neither is deployed
+   *  here; the metrics path does not need it). */
+  hubbleRelay?: boolean;
+  /** How Hubble's server certificates are produced (defaults to `cronJob`).
+   *  `helm` is not offered — see {@link hubble}. `certmanager` additionally
+   *  requires {@link hubbleTlsIssuerRef}; the chart fails the render without
+   *  it. */
+  hubbleTlsMethod?: "cronJob" | "certmanager";
+  /** Issuer for `hubbleTlsMethod: "certmanager"`, e.g.
+   *  `{ name: "cilium-ca", kind: "Issuer", group: "cert-manager.io" }`. */
+  hubbleTlsIssuerRef?: Record<string, unknown>;
   /**
    * Run Envoy as its own DaemonSet (defaults to FALSE — the chart defaults it
    * on). It exists for L7 policy, ingress and TLS interception, all of which
@@ -154,6 +188,14 @@ export class Cilium extends HelmModule<CiliumConfig> {
     const mtu = this.config.mtu;
     const hubble = this.config.hubble ?? false;
     const envoy = this.config.envoy ?? false;
+    const metrics = this.config.metrics ?? true;
+    const agentServiceMonitor =
+      metrics && (this.config.agentServiceMonitor ?? true);
+    const operatorServiceMonitor =
+      metrics && (this.config.operatorServiceMonitor ?? true);
+    const hubbleMetrics =
+      this.config.hubbleMetrics ??
+      (hubble ? ["dns", "drop", "tcp", "flow", "port-distribution", "icmp"] : []);
 
     // Fail closed on a sub-1280 MTU. This is not a preference: Linux removes
     // IPv6 from any interface below the v6 minimum, so the kernel strips it
@@ -205,14 +247,55 @@ export class Cilium extends HelmModule<CiliumConfig> {
         annotateK8sNode: this.config.annotateK8sNode ?? true,
 
         ...(mtu ? { MTU: mtu } : {}),
-        ...(this.config.operatorReplicas
-          ? { operator: { replicas: this.config.operatorReplicas } }
-          : {}),
 
         ...(this.config.healthChecking === false
           ? { healthChecking: false }
           : {}),
-        hubble: { enabled: hubble },
+
+        // `trustCRDsExist` is not optimism — the chart's validate.yaml does an
+        // API lookup for the ServiceMonitor CRD and hard-fails the render when
+        // it cannot reach a cluster, which is every GitOps render. It reads the
+        // AGENT's copy of the flag no matter which monitor tripped the check,
+        // so it is set unconditionally: gating it on the agent monitor breaks
+        // exactly the config that turns the agent monitor off and keeps the
+        // operator's.
+        prometheus: {
+          enabled: metrics,
+          serviceMonitor: { enabled: agentServiceMonitor, trustCRDsExist: true },
+        },
+        operator: {
+          ...(this.config.operatorReplicas
+            ? { replicas: this.config.operatorReplicas }
+            : {}),
+          prometheus: {
+            enabled: metrics,
+            serviceMonitor: { enabled: operatorServiceMonitor },
+          },
+        },
+
+        hubble: {
+          enabled: hubble,
+          relay: { enabled: this.config.hubbleRelay ?? false },
+          ...(hubble
+            ? {
+                tls: {
+                  auto: {
+                    method: this.config.hubbleTlsMethod ?? "cronJob",
+                    ...(this.config.hubbleTlsIssuerRef
+                      ? { certManagerIssuerRef: this.config.hubbleTlsIssuerRef }
+                      : {}),
+                  },
+                },
+                metrics: {
+                  enabled: hubbleMetrics,
+                  serviceMonitor: {
+                    enabled: agentServiceMonitor && hubbleMetrics.length > 0,
+                    trustCRDsExist: true,
+                  },
+                },
+              }
+            : {}),
+        },
         envoy: { enabled: envoy },
 
         // With Envoy off there is no TLS interception, so the chart's dedicated
