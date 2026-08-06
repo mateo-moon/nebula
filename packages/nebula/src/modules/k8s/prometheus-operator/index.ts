@@ -785,9 +785,11 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
           },
           // Bitnami's default resourcesPreset ("micro", 192Mi) is far too small
           // for the fan-out merge under real dashboard load; give query room.
+          // 2Gi, not 1Gi: at ~1M series across the hub's stores, 1Gi OOMs on
+          // startup fan-out and query-frontend's retries re-kill each new pod.
           resources: {
             requests: { cpu: "100m", memory: "256Mi" },
-            limits: { memory: "1Gi" },
+            limits: { memory: "2Gi" },
           },
         },
         queryFrontend: { enabled: true, tolerations: defaultTolerations },

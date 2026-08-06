@@ -142,7 +142,10 @@ export interface CiliumConfig {
    */
   hubble?: boolean;
   /** Hubble metrics to export on 9965 (defaults to a flow/drop/dns/tcp set).
-   *  Empty disables the metrics server while leaving the observer on. */
+   *  Empty disables the metrics server while leaving the observer on.
+   *  `port-distribution` is deliberately NOT in the default: it labels by
+   *  port, so any node talking to the internet (P2P, crawlers) mints a series
+   *  per peer port and grows without bound. */
   hubbleMetrics?: string[];
   /** hubble-relay, the cluster-wide flow aggregation API (defaults to false —
    *  it is what `hubble observe` and the UI talk to, and neither is deployed
@@ -201,8 +204,7 @@ export class Cilium extends HelmModule<CiliumConfig> {
     const operatorServiceMonitor =
       metrics && (this.config.operatorServiceMonitor ?? true);
     const hubbleMetrics =
-      this.config.hubbleMetrics ??
-      (hubble ? ["dns", "drop", "tcp", "flow", "port-distribution", "icmp"] : []);
+      this.config.hubbleMetrics ?? (hubble ? ["dns", "drop", "tcp", "flow", "icmp"] : []);
 
     // Fail closed on a sub-1280 MTU. This is not a preference: Linux removes
     // IPv6 from any interface below the v6 minimum, so the kernel strips it
