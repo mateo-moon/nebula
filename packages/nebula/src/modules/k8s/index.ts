@@ -283,6 +283,8 @@ export {
 } from "./mesh-scrape";
 export type {
   MeshFamily,
+  MeshCni,
+  MeshTarget,
   MeshKubeProxyServiceMonitorOptions,
 } from "./mesh-scrape";
 export {
