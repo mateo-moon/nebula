@@ -109,6 +109,90 @@ export function meshMonitorValues(
   };
 }
 
+export interface MeshServiceMonitorOptions extends MeshTarget {
+  /** Namespace the CR lands in. */
+  namespace: string;
+  /** metadata.name of the ServiceMonitor. */
+  name: string;
+  /** Labels selecting the Service whose endpoints are the host-network pods. */
+  selector: Record<string, string>;
+  /** Namespaces to search for that Service (default: the CR's own). */
+  serviceNamespaces?: string[];
+  /** Endpoint port NAME on the Service. */
+  port: string;
+  /** Port the exporter listens on in the host netns — what the mesh address is
+   *  rewritten to. Usually the Service's targetPort, not its port. */
+  targetPort: number;
+  path?: string;
+  scheme?: string;
+  interval?: string;
+  honorLabels?: boolean;
+  bearerTokenFile?: string;
+  jobLabel?: string;
+  targetLabels?: string[];
+  /** Relabelings applied BEFORE the address rewrite. */
+  relabelings?: unknown[];
+}
+
+/**
+ * A ServiceMonitor for a host-network exporter, scraped at the node's mesh
+ * address.
+ *
+ * Exists because `attachMetadata` is what makes node annotations available as
+ * relabel sources, and almost no upstream chart exposes it — kube-prometheus-
+ * stack's kube-proxy template and Cilium's own agent/Hubble templates all offer
+ * `relabelings` but not `attachMetadata`, which makes their monitors unusable
+ * here. Disable the chart's monitor and own the CR with this instead.
+ */
+export class MeshServiceMonitor extends Construct {
+  constructor(
+    scope: Construct,
+    id: string,
+    options: MeshServiceMonitorOptions,
+  ) {
+    super(scope, id);
+    new ApiObject(this, "servicemonitor", {
+      apiVersion: "monitoring.coreos.com/v1",
+      kind: "ServiceMonitor",
+      metadata: { name: options.name, namespace: options.namespace },
+      spec: {
+        ...(options.jobLabel ? { jobLabel: options.jobLabel } : {}),
+        ...(options.targetLabels ? { targetLabels: options.targetLabels } : {}),
+        namespaceSelector: {
+          matchNames: options.serviceNamespaces ?? [options.namespace],
+        },
+        selector: { matchLabels: options.selector },
+        attachMetadata: { node: true },
+        endpoints: [
+          {
+            port: options.port,
+            ...(options.path ? { path: options.path } : {}),
+            ...(options.scheme ? { scheme: options.scheme } : {}),
+            ...(options.interval ? { interval: options.interval } : {}),
+            ...(options.honorLabels ? { honorLabels: true } : {}),
+            ...(options.bearerTokenFile
+              ? { bearerTokenFile: options.bearerTokenFile }
+              : {}),
+            relabelings: [
+              ...(options.relabelings ?? []),
+              ...meshAddress(options.targetPort, options),
+            ],
+          },
+        ],
+      },
+    });
+  }
+}
+
+/** Copy the pod's node name onto a `node` label — what Cilium's own chart
+ *  monitors do, and what its dashboards select on. */
+export const NODE_FROM_POD = {
+  action: "replace",
+  replacement: "${1}",
+  sourceLabels: ["__meta_kubernetes_pod_node_name"],
+  targetLabel: "node",
+};
+
 export interface MeshKubeProxyServiceMonitorOptions extends MeshTarget {
   /** monitoring namespace the CR lands in. */
   namespace: string;
