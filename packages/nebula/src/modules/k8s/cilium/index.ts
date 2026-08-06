@@ -121,6 +121,24 @@ export interface CiliumConfig {
    * need their own opt-in; without them it is a per-node pod doing nothing.
    */
   envoy?: boolean;
+  /**
+   * Publish Cilium's node metadata as k8s Node annotations (defaults to TRUE;
+   * the chart defaults it off).
+   *
+   * `network.cilium.io/ipv{4,6}-cilium-host` is the only place a Prometheus
+   * scrape can learn the node's cilium_host address — the address lives on the
+   * CiliumNode CR, which service discovery cannot read. That address is what
+   * makes host-network exporters reachable at all where the node security group
+   * does not open their ports: it sits in the pod CIDR, so pod -> it is
+   * encapsulated and encrypted like any pod traffic. See the mesh-scrape
+   * module.
+   *
+   * The chart grants the matching `nodes/status: patch` RBAC itself. The
+   * annotation is written at agent bootstrap and the chart puts no config
+   * checksum on the DaemonSet, so flipping this does not backfill onto running
+   * agents — they have to be restarted.
+   */
+  annotateK8sNode?: boolean;
   /** Additional Helm values, deep-merged over the defaults above. */
   values?: Record<string, unknown>;
 }
@@ -183,6 +201,8 @@ export class Cilium extends HelmModule<CiliumConfig> {
         kubeProxyReplacement: this.config.kubeProxyReplacement
           ? "true"
           : "false",
+
+        annotateK8sNode: this.config.annotateK8sNode ?? true,
 
         ...(mtu ? { MTU: mtu } : {}),
         ...(this.config.operatorReplicas
