@@ -824,10 +824,24 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
       node.spot && node.altInstanceTypes?.length
         ? [node.instanceType, ...node.altInstanceTypes]
         : undefined;
+    // A diversified node gets its OWN launch template, never the plain-spot
+    // one it may be converted from. AWS says as much in the rejection it
+    // raises otherwise ("Add a different launch template to the group"), but
+    // the reason to obey it here is the provider: this MR late-initializes,
+    // and upjet reports instanceMarketOptions.marketType=spot on a template
+    // whose live default version has NO market options at all (verified
+    // against the AWS API — not lag; a forced re-observe reports the same).
+    // So on a converted template the field cannot be cleared and stay
+    // cleared: omitting it lets late-init put spot back, and rendering the
+    // empty list that does clear it is a zero-value the stored object drops,
+    // which is a diff that never closes and a resync every 5 minutes forever.
+    // A fresh name sidesteps the whole thing — nothing to observe, nothing to
+    // late-initialize, nothing to clear.
+    const ltName = mixedTypes ? `${node.name}-mixed` : node.name;
     new ApiObject(this, `${node.name}-launch-template`, {
       apiVersion: "ec2.aws.upbound.io/v1beta1",
       kind: "LaunchTemplate",
-      metadata: { name: node.name },
+      metadata: { name: ltName },
       spec: {
         deletionPolicy: "Delete",
         // Update IS on here (unlike the Instance MR): LT updates are
@@ -840,7 +854,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
         managementPolicies: ["Observe", "Create", "Update", "Delete", "LateInitialize"],
         forProvider: {
           region: region.region,
-          name: node.name,
+          name: ltName,
           imageId: node.ami,
           instanceType: node.instanceType,
           updateDefaultVersion: true,
@@ -896,22 +910,13 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
             },
           ],
           // A MixedInstancesPolicy carries the spot request itself, and AWS
-          // REJECTS a launch template that also sets instanceMarketOptions
-          // ("Incompatible launch template ... Add a different launch template
-          // to the group"). instancesDistribution below is what makes a
-          // diversified node spot.
-          //   The empty list is deliberate and must not be simplified to
-          // omitting the key. This MR runs with LateInitialize, so an absent
-          // field is merely unmanaged: Crossplane writes the observed spot
-          // marketType straight back into spec and the ASG update keeps
-          // failing (observed live on both stage eu mainnet nodes). Clearing
-          // it requires STATING the empty value — same lesson as the IMDS
-          // block below.
-          ...(mixedTypes
-            ? { instanceMarketOptions: [] }
-            : node.spot
-              ? { instanceMarketOptions: [{ marketType: "spot" }] }
-              : {}),
+          // rejects a launch template that also sets instanceMarketOptions.
+          // Safe to simply omit here BECAUSE a diversified node is on its own
+          // template (see ltName): there is no inherited spot value for
+          // late-initialization to restore.
+          ...(node.spot && !mixedTypes
+            ? { instanceMarketOptions: [{ marketType: "spot" }] }
+            : {}),
           userData: Buffer.from(this.userData(node, region)).toString("base64"),
           tagSpecifications: [
             {
@@ -954,7 +959,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
                     launchTemplate: [
                       {
                         launchTemplateSpecification: [
-                          { launchTemplateName: node.name, version: "$Latest" },
+                          { launchTemplateName: ltName, version: "$Latest" },
                         ],
                         override: mixedTypes.map((instanceType) => ({ instanceType })),
                       },
@@ -974,7 +979,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
                   },
                 ],
               }
-            : { launchTemplate: [{ name: node.name, version: "$Latest" }] }),
+            : { launchTemplate: [{ name: ltName, version: "$Latest" }] }),
           vpcZoneIdentifierRefs: [
             { name: `${p}-subnet`, policy: { resolve: "Always", resolution: "Required" } },
           ],
