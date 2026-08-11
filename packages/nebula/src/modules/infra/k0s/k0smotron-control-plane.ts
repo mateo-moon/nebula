@@ -233,10 +233,16 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             ...(networkProvider === "calico"
               ? renderK0sCalicoImages(resolvedCalico)
               : {}),
+            // MUST sit inside the k0s `spec` (sibling of network). One level
+            // up it lands at the ClusterConfig root and k0s hard-fails the CP
+            // with `unknown field "api"` — took the stage API down for 12
+            // minutes on 2026-08-11. k0smotron deep-merges its own
+            // externalAddress/sans into this same block and leaves extraArgs
+            // alone.
+            ...(this.config.apiExtraArgs
+              ? { api: { extraArgs: this.config.apiExtraArgs } }
+              : {}),
           },
-          ...(this.config.apiExtraArgs
-            ? { api: { extraArgs: this.config.apiExtraArgs } }
-            : {}),
         },
         persistence,
         service: {
