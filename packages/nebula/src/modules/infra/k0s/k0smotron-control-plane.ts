@@ -94,6 +94,13 @@ export interface K0smotronControlPlaneConfig {
    * Per k0s docs, bundled Calico dual-stack requires mode "bird".
    */
   dualStack?: { ipv6PodCidr: string; ipv6ServiceCidr: string };
+  /**
+   * kube-apiserver extra args (`k0sConfig.spec.api.extraArgs`), e.g. the OIDC
+   * flags. k0smotron owns externalAddress/port/sans on the same `api` block but
+   * passes extraArgs through untouched. Changing these restarts the kmc-* CP
+   * pod — a brief child-API outage, workloads unaffected.
+   */
+  apiExtraArgs?: Record<string, string>;
   /** Hosted-etcd persistence (default emptyDir). */
   persistence?: K0smotronControlPlanePersistence;
   /**
@@ -227,6 +234,9 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
               ? renderK0sCalicoImages(resolvedCalico)
               : {}),
           },
+          ...(this.config.apiExtraArgs
+            ? { api: { extraArgs: this.config.apiExtraArgs } }
+            : {}),
         },
         persistence,
         service: {
