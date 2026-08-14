@@ -291,6 +291,8 @@ export interface ArgoCdAppTierClustersDiscovery {
   serviceSyncPolicy?: ArgoCdAppTierSyncPolicyOverrides;
   /** Per-app extra manifest-generate-paths, keyed by `<cluster>/<module>`. */
   extraGeneratePaths?: Record<string, string[]>;
+  /** Per-app extra ignoreDifferences, keyed by `<cluster>/<module>`. */
+  extraIgnoreDifferences?: Record<string, ApplicationSpecIgnoreDifferences[]>;
 }
 
 export interface ArgoCdAppTierClusterDirsDiscovery {
@@ -338,6 +340,8 @@ export interface ArgoCdAppTierSingleClusterDiscovery {
   serviceSyncPolicy?: ArgoCdAppTierSyncPolicyOverrides;
   /** Per-app extra manifest-generate-paths, keyed by `<module>`. */
   extraGeneratePaths?: Record<string, string[]>;
+  /** Per-app extra ignoreDifferences, keyed by `<module>`. */
+  extraIgnoreDifferences?: Record<string, ApplicationSpecIgnoreDifferences[]>;
 }
 
 export type ArgoCdAppTierDiscovery =
@@ -572,6 +576,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
             ...this.config.syncPolicy,
             ...discovery.serviceSyncPolicy,
           },
+          extraIgnoreDifferences: discovery.extraIgnoreDifferences?.[mod],
           extraGeneratePaths: discovery.extraGeneratePaths?.[mod],
         });
       }
@@ -622,6 +627,8 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
               ...this.config.syncPolicy,
               ...discovery.serviceSyncPolicy,
             },
+            extraIgnoreDifferences:
+              discovery.extraIgnoreDifferences?.[`${cluster}/${mod}`],
             extraGeneratePaths:
               discovery.extraGeneratePaths?.[`${cluster}/${mod}`],
           });
