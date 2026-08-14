@@ -74,6 +74,7 @@ imports:
   - https://raw.githubusercontent.com/cert-manager/cert-manager/v1.18.0/deploy/crds/crd-certificates.yaml
   # Prometheus Operator CRDs
   - https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.75.0/jsonnet/prometheus-operator/servicemonitors-crd.json
+  - https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.75.0/jsonnet/prometheus-operator/podmonitors-crd.json
   # ArgoCD CRDs
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/appproject-crd.yaml
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.0/manifests/crds/application-crd.yaml
