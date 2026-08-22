@@ -86,6 +86,7 @@ imports:
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machines.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinesets.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinedeployments.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinehealthchecks.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api/v1.12.9/config/crd/bases/cluster.x-k8s.io_machinepools.yaml
   # Cluster API GCP Infrastructure Provider CRDs (v1.10.0)
   - https://raw.githubusercontent.com/kubernetes-sigs/cluster-api-provider-gcp/v1.10.0/config/crd/bases/infrastructure.cluster.x-k8s.io_gcpclusters.yaml
@@ -129,6 +130,7 @@ imports:
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_remoteclusters.yaml
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_remotemachines.yaml
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_remotemachinetemplates.yaml
+  - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/clusterapi/infrastructure/crd/bases/infrastructure.cluster.x-k8s.io_pooledremotemachines.yaml
   # k0smotron Core CRDs (v2.0.2 — now under config/crd/)
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/crd/k0smotron.io_clusters.yaml
   - https://raw.githubusercontent.com/k0sproject/k0smotron/v2.0.2/config/crd/k0smotron.io_jointokenrequests.yaml
