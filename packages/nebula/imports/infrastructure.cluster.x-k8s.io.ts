@@ -22032,6 +22032,480 @@ export function toJson_HetznerClusterTemplateSpecTemplateSpecSshKeysRobotRescueS
 
 
 /**
+ * PooledRemoteMachine represents a RemoteMachine that is part of a pool and can be reserved for use.
+ *
+ * @schema PooledRemoteMachine
+ */
+export class PooledRemoteMachine extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "PooledRemoteMachine"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta1',
+    kind: 'PooledRemoteMachine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "PooledRemoteMachine".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: PooledRemoteMachineProps = {}): any {
+    return {
+      ...PooledRemoteMachine.GVK,
+      ...toJson_PooledRemoteMachineProps(props),
+    };
+  }
+
+  /**
+   * Defines a "PooledRemoteMachine" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: PooledRemoteMachineProps = {}) {
+    super(scope, id, {
+      ...PooledRemoteMachine.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...PooledRemoteMachine.GVK,
+      ...toJson_PooledRemoteMachineProps(resolved),
+    };
+  }
+}
+
+/**
+ * PooledRemoteMachine represents a RemoteMachine that is part of a pool and can be reserved for use.
+ *
+ * @schema PooledRemoteMachine
+ */
+export interface PooledRemoteMachineProps {
+  /**
+   * @schema PooledRemoteMachine#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * PooledRemoteMachineSpec defines the desired state of PooledRemoteMachine
+   *
+   * @schema PooledRemoteMachine#spec
+   */
+  readonly spec?: PooledRemoteMachineSpec;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineProps(obj: PooledRemoteMachineProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_PooledRemoteMachineSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PooledRemoteMachineSpec defines the desired state of PooledRemoteMachine
+ *
+ * @schema PooledRemoteMachineSpec
+ */
+export interface PooledRemoteMachineSpec {
+  /**
+   * PooledMachineSpec defines the connection details and provisioning information for a machine in a pool.
+   *
+   * @schema PooledRemoteMachineSpec#machine
+   */
+  readonly machine: PooledRemoteMachineSpecMachine;
+
+  /**
+   * @schema PooledRemoteMachineSpec#pool
+   */
+  readonly pool: string;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineSpec(obj: PooledRemoteMachineSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'machine': toJson_PooledRemoteMachineSpecMachine(obj.machine),
+    'pool': obj.pool,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PooledMachineSpec defines the connection details and provisioning information for a machine in a pool.
+ *
+ * @schema PooledRemoteMachineSpecMachine
+ */
+export interface PooledRemoteMachineSpecMachine {
+  /**
+   * Address is the IP address or DNS name of the remote machine.
+   *
+   * @schema PooledRemoteMachineSpecMachine#address
+   */
+  readonly address: string;
+
+  /**
+   * CommandsAsScript indicates if the commands should be executed as a script.
+   * If true, the commands will be written to a file and executed as a script.
+   * If false, the commands will be executed one by one.
+   *
+   * @schema PooledRemoteMachineSpecMachine#commandsAsScript
+   */
+  readonly commandsAsScript?: boolean;
+
+  /**
+   * CleanUpCommands allow the user to run custom command for the clean up process of the machine.
+   *
+   * @schema PooledRemoteMachineSpecMachine#customCleanUpCommands
+   */
+  readonly customCleanUpCommands?: string[];
+
+  /**
+   * Port is the SSH port of the remote machine.
+   *
+   * @schema PooledRemoteMachineSpecMachine#port
+   */
+  readonly port?: number;
+
+  /**
+   * SSHKeyRef is a reference to a secret that contains the SSH private key.
+   * The key must be placed on the secret using the key "value".
+   *
+   * @schema PooledRemoteMachineSpecMachine#sshKeyRef
+   */
+  readonly sshKeyRef: PooledRemoteMachineSpecMachineSshKeyRef;
+
+  /**
+   * @schema PooledRemoteMachineSpecMachine#useSudo
+   */
+  readonly useSudo?: boolean;
+
+  /**
+   * User is the user to use when connecting to the remote machine.
+   *
+   * @schema PooledRemoteMachineSpecMachine#user
+   */
+  readonly user?: string;
+
+  /**
+   * WorkingDir is the directory to use as working directory when connecting to the remote machine.
+   *
+   * @schema PooledRemoteMachineSpecMachine#workingDir
+   */
+  readonly workingDir?: string;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineSpecMachine' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineSpecMachine(obj: PooledRemoteMachineSpecMachine | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'address': obj.address,
+    'commandsAsScript': obj.commandsAsScript,
+    'customCleanUpCommands': obj.customCleanUpCommands?.map(y => y),
+    'port': obj.port,
+    'sshKeyRef': toJson_PooledRemoteMachineSpecMachineSshKeyRef(obj.sshKeyRef),
+    'useSudo': obj.useSudo,
+    'user': obj.user,
+    'workingDir': obj.workingDir,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKeyRef is a reference to a secret that contains the SSH private key.
+ * The key must be placed on the secret using the key "value".
+ *
+ * @schema PooledRemoteMachineSpecMachineSshKeyRef
+ */
+export interface PooledRemoteMachineSpecMachineSshKeyRef {
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema PooledRemoteMachineSpecMachineSshKeyRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineSpecMachineSshKeyRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineSpecMachineSshKeyRef(obj: PooledRemoteMachineSpecMachineSshKeyRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * PooledRemoteMachine represents a RemoteMachine that is part of a pool and can be reserved for use.
+ *
+ * @schema PooledRemoteMachineV1Beta2
+ */
+export class PooledRemoteMachineV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "PooledRemoteMachineV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'infrastructure.cluster.x-k8s.io/v1beta2',
+    kind: 'PooledRemoteMachine',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "PooledRemoteMachineV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: PooledRemoteMachineV1Beta2Props = {}): any {
+    return {
+      ...PooledRemoteMachineV1Beta2.GVK,
+      ...toJson_PooledRemoteMachineV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "PooledRemoteMachineV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: PooledRemoteMachineV1Beta2Props = {}) {
+    super(scope, id, {
+      ...PooledRemoteMachineV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...PooledRemoteMachineV1Beta2.GVK,
+      ...toJson_PooledRemoteMachineV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * PooledRemoteMachine represents a RemoteMachine that is part of a pool and can be reserved for use.
+ *
+ * @schema PooledRemoteMachineV1Beta2
+ */
+export interface PooledRemoteMachineV1Beta2Props {
+  /**
+   * @schema PooledRemoteMachineV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * PooledRemoteMachineSpec defines the desired state of PooledRemoteMachine
+   *
+   * @schema PooledRemoteMachineV1Beta2#spec
+   */
+  readonly spec?: PooledRemoteMachineV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineV1Beta2Props(obj: PooledRemoteMachineV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_PooledRemoteMachineV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PooledRemoteMachineSpec defines the desired state of PooledRemoteMachine
+ *
+ * @schema PooledRemoteMachineV1Beta2Spec
+ */
+export interface PooledRemoteMachineV1Beta2Spec {
+  /**
+   * PooledMachineSpec defines the connection details and provisioning information for a machine in a pool.
+   *
+   * @schema PooledRemoteMachineV1Beta2Spec#machine
+   */
+  readonly machine: PooledRemoteMachineV1Beta2SpecMachine;
+
+  /**
+   * @schema PooledRemoteMachineV1Beta2Spec#pool
+   */
+  readonly pool: string;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineV1Beta2Spec(obj: PooledRemoteMachineV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'machine': toJson_PooledRemoteMachineV1Beta2SpecMachine(obj.machine),
+    'pool': obj.pool,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * PooledMachineSpec defines the connection details and provisioning information for a machine in a pool.
+ *
+ * @schema PooledRemoteMachineV1Beta2SpecMachine
+ */
+export interface PooledRemoteMachineV1Beta2SpecMachine {
+  /**
+   * Address is the IP address or DNS name of the remote machine.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#address
+   */
+  readonly address: string;
+
+  /**
+   * CleanUpCommands allow the user to run custom command for the clean up process of the machine.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#cleanUpCommands
+   */
+  readonly cleanUpCommands?: string[];
+
+  /**
+   * CommandsAsScript indicates if the commands should be executed as a script.
+   * If true, the commands will be written to a file and executed as a script.
+   * If false, the commands will be executed one by one.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#commandsAsScript
+   */
+  readonly commandsAsScript?: boolean;
+
+  /**
+   * Port is the SSH port of the remote machine.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#port
+   */
+  readonly port?: number;
+
+  /**
+   * SSHKeyRef is a reference to a secret that contains the SSH private key.
+   * The key must be placed on the secret using the key "value".
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#sshKeyRef
+   */
+  readonly sshKeyRef: PooledRemoteMachineV1Beta2SpecMachineSshKeyRef;
+
+  /**
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#useSudo
+   */
+  readonly useSudo?: boolean;
+
+  /**
+   * User is the user to use when connecting to the remote machine.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#user
+   */
+  readonly user?: string;
+
+  /**
+   * WorkingDir is the directory to use as working directory when connecting to the remote machine.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachine#workingDir
+   */
+  readonly workingDir?: string;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineV1Beta2SpecMachine' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineV1Beta2SpecMachine(obj: PooledRemoteMachineV1Beta2SpecMachine | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'address': obj.address,
+    'cleanUpCommands': obj.cleanUpCommands?.map(y => y),
+    'commandsAsScript': obj.commandsAsScript,
+    'port': obj.port,
+    'sshKeyRef': toJson_PooledRemoteMachineV1Beta2SpecMachineSshKeyRef(obj.sshKeyRef),
+    'useSudo': obj.useSudo,
+    'user': obj.user,
+    'workingDir': obj.workingDir,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * SSHKeyRef is a reference to a secret that contains the SSH private key.
+ * The key must be placed on the secret using the key "value".
+ *
+ * @schema PooledRemoteMachineV1Beta2SpecMachineSshKeyRef
+ */
+export interface PooledRemoteMachineV1Beta2SpecMachineSshKeyRef {
+  /**
+   * Name is the name of the secret.
+   *
+   * @schema PooledRemoteMachineV1Beta2SpecMachineSshKeyRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'PooledRemoteMachineV1Beta2SpecMachineSshKeyRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_PooledRemoteMachineV1Beta2SpecMachineSshKeyRef(obj: PooledRemoteMachineV1Beta2SpecMachineSshKeyRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
  * RemoteCluster is the Schema for the remoteclusters API
  *
  * @schema RemoteCluster
