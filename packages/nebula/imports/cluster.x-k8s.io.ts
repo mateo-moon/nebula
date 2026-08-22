@@ -12501,6 +12501,1883 @@ export enum MachineDeploymentV1Beta2SpecTemplateSpecTaintsPropagation {
 
 
 /**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+
+Deprecated: This type will be removed in one of the next releases.
+ *
+ * @schema MachineHealthCheck
+ */
+export class MachineHealthCheck extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineHealthCheck"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1alpha3',
+    kind: 'MachineHealthCheck',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineHealthCheck".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineHealthCheckProps = {}): any {
+    return {
+      ...MachineHealthCheck.GVK,
+      ...toJson_MachineHealthCheckProps(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineHealthCheck" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineHealthCheckProps = {}) {
+    super(scope, id, {
+      ...MachineHealthCheck.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineHealthCheck.GVK,
+      ...toJson_MachineHealthCheckProps(resolved),
+    };
+  }
+}
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+ *
+ * Deprecated: This type will be removed in one of the next releases.
+ *
+ * @schema MachineHealthCheck
+ */
+export interface MachineHealthCheckProps {
+  /**
+   * @schema MachineHealthCheck#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the specification of machine health check policy
+   *
+   * @schema MachineHealthCheck#spec
+   */
+  readonly spec?: MachineHealthCheckSpec;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckProps(obj: MachineHealthCheckProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineHealthCheckSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of machine health check policy
+ *
+ * @schema MachineHealthCheckSpec
+ */
+export interface MachineHealthCheckSpec {
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineHealthCheckSpec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+   * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
+   * "selector" are not healthy.
+   *
+   * @schema MachineHealthCheckSpec#maxUnhealthy
+   */
+  readonly maxUnhealthy?: MachineHealthCheckSpecMaxUnhealthy;
+
+  /**
+   * nodeStartupTimeout is the duration after which machines without a node will be considered to
+   * have failed and will be remediated.
+   *
+   * @schema MachineHealthCheckSpec#nodeStartupTimeout
+   */
+  readonly nodeStartupTimeout?: string;
+
+  /**
+   * remediationTemplate is a reference to a remediation template
+   * provided by an infrastructure provider.
+   *
+   * This field is completely optional, when filled, the MachineHealthCheck controller
+   * creates a new object from the template referenced and hands off remediation of the machine to
+   * a controller that lives outside of Cluster API.
+   *
+   * @schema MachineHealthCheckSpec#remediationTemplate
+   */
+  readonly remediationTemplate?: MachineHealthCheckSpecRemediationTemplate;
+
+  /**
+   * selector is the label selector to match machines whose health will be exercised
+   *
+   * @schema MachineHealthCheckSpec#selector
+   */
+  readonly selector: MachineHealthCheckSpecSelector;
+
+  /**
+   * unhealthyConditions contains a list of the conditions that determine
+   * whether a node is considered unhealthy.  The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the node is unhealthy.
+   *
+   * @schema MachineHealthCheckSpec#unhealthyConditions
+   */
+  readonly unhealthyConditions: MachineHealthCheckSpecUnhealthyConditions[];
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckSpec(obj: MachineHealthCheckSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'maxUnhealthy': obj.maxUnhealthy?.value,
+    'nodeStartupTimeout': obj.nodeStartupTimeout,
+    'remediationTemplate': toJson_MachineHealthCheckSpecRemediationTemplate(obj.remediationTemplate),
+    'selector': toJson_MachineHealthCheckSpecSelector(obj.selector),
+    'unhealthyConditions': obj.unhealthyConditions?.map(y => toJson_MachineHealthCheckSpecUnhealthyConditions(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+ * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
+ * "selector" are not healthy.
+ *
+ * @schema MachineHealthCheckSpecMaxUnhealthy
+ */
+export class MachineHealthCheckSpecMaxUnhealthy {
+  public static fromNumber(value: number): MachineHealthCheckSpecMaxUnhealthy {
+    return new MachineHealthCheckSpecMaxUnhealthy(value);
+  }
+  public static fromString(value: string): MachineHealthCheckSpecMaxUnhealthy {
+    return new MachineHealthCheckSpecMaxUnhealthy(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * remediationTemplate is a reference to a remediation template
+ * provided by an infrastructure provider.
+ *
+ * This field is completely optional, when filled, the MachineHealthCheck controller
+ * creates a new object from the template referenced and hands off remediation of the machine to
+ * a controller that lives outside of Cluster API.
+ *
+ * @schema MachineHealthCheckSpecRemediationTemplate
+ */
+export interface MachineHealthCheckSpecRemediationTemplate {
+  /**
+   * API version of the referent.
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * If referring to a piece of an object instead of an entire object, this string
+   * should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+   * For example, if the object reference is to a container within a pod, this would take on a value like:
+   * "spec.containers{name}" (where "name" refers to the name of the container that triggered
+   * the event) or if no container name is specified "spec.containers[2]" (container with
+   * index 2 in this pod). This syntax is chosen only to have some well-defined way of
+   * referencing a part of an object.
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#fieldPath
+   */
+  readonly fieldPath?: string;
+
+  /**
+   * Kind of the referent.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * Name of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#name
+   */
+  readonly name?: string;
+
+  /**
+   * Namespace of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#namespace
+   */
+  readonly namespace?: string;
+
+  /**
+   * Specific resourceVersion to which this reference is made, if any.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#resourceVersion
+   */
+  readonly resourceVersion?: string;
+
+  /**
+   * UID of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+   *
+   * @schema MachineHealthCheckSpecRemediationTemplate#uid
+   */
+  readonly uid?: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckSpecRemediationTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckSpecRemediationTemplate(obj: MachineHealthCheckSpecRemediationTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+    'resourceVersion': obj.resourceVersion,
+    'uid': obj.uid,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is the label selector to match machines whose health will be exercised
+ *
+ * @schema MachineHealthCheckSpecSelector
+ */
+export interface MachineHealthCheckSpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckSpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: MachineHealthCheckSpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckSpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckSpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckSpecSelector(obj: MachineHealthCheckSpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_MachineHealthCheckSpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyCondition represents a Node condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a node is considered unhealthy.
+ *
+ * @schema MachineHealthCheckSpecUnhealthyConditions
+ */
+export interface MachineHealthCheckSpecUnhealthyConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema MachineHealthCheckSpecUnhealthyConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * timeout is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "1h", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema MachineHealthCheckSpecUnhealthyConditions#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * type of Node condition
+   *
+   * @schema MachineHealthCheckSpecUnhealthyConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckSpecUnhealthyConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckSpecUnhealthyConditions(obj: MachineHealthCheckSpecUnhealthyConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema MachineHealthCheckSpecSelectorMatchExpressions
+ */
+export interface MachineHealthCheckSpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema MachineHealthCheckSpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema MachineHealthCheckSpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema MachineHealthCheckSpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckSpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckSpecSelectorMatchExpressions(obj: MachineHealthCheckSpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+
+Deprecated: This type will be removed in one of the next releases.
+ *
+ * @schema MachineHealthCheckV1Alpha4
+ */
+export class MachineHealthCheckV1Alpha4 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineHealthCheckV1Alpha4"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1alpha4',
+    kind: 'MachineHealthCheck',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineHealthCheckV1Alpha4".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineHealthCheckV1Alpha4Props = {}): any {
+    return {
+      ...MachineHealthCheckV1Alpha4.GVK,
+      ...toJson_MachineHealthCheckV1Alpha4Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineHealthCheckV1Alpha4" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineHealthCheckV1Alpha4Props = {}) {
+    super(scope, id, {
+      ...MachineHealthCheckV1Alpha4.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineHealthCheckV1Alpha4.GVK,
+      ...toJson_MachineHealthCheckV1Alpha4Props(resolved),
+    };
+  }
+}
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+ *
+ * Deprecated: This type will be removed in one of the next releases.
+ *
+ * @schema MachineHealthCheckV1Alpha4
+ */
+export interface MachineHealthCheckV1Alpha4Props {
+  /**
+   * @schema MachineHealthCheckV1Alpha4#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the specification of machine health check policy
+   *
+   * @schema MachineHealthCheckV1Alpha4#spec
+   */
+  readonly spec?: MachineHealthCheckV1Alpha4Spec;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Alpha4Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Alpha4Props(obj: MachineHealthCheckV1Alpha4Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineHealthCheckV1Alpha4Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of machine health check policy
+ *
+ * @schema MachineHealthCheckV1Alpha4Spec
+ */
+export interface MachineHealthCheckV1Alpha4Spec {
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+   * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
+   * "selector" are not healthy.
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#maxUnhealthy
+   */
+  readonly maxUnhealthy?: MachineHealthCheckV1Alpha4SpecMaxUnhealthy;
+
+  /**
+   * nodeStartupTimeout is the duration after which machines without a node will be considered to
+   * have failed and will be remediated.
+   * If not set, this value is defaulted to 10 minutes.
+   * If you wish to disable this feature, set the value explicitly to 0.
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#nodeStartupTimeout
+   */
+  readonly nodeStartupTimeout?: string;
+
+  /**
+   * remediationTemplate is a reference to a remediation template
+   * provided by an infrastructure provider.
+   *
+   * This field is completely optional, when filled, the MachineHealthCheck controller
+   * creates a new object from the template referenced and hands off remediation of the machine to
+   * a controller that lives outside of Cluster API.
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#remediationTemplate
+   */
+  readonly remediationTemplate?: MachineHealthCheckV1Alpha4SpecRemediationTemplate;
+
+  /**
+   * selector is the label selector to match machines whose health will be exercised
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#selector
+   */
+  readonly selector: MachineHealthCheckV1Alpha4SpecSelector;
+
+  /**
+   * unhealthyConditions contains a list of the conditions that determine
+   * whether a node is considered unhealthy.  The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the node is unhealthy.
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#unhealthyConditions
+   */
+  readonly unhealthyConditions: MachineHealthCheckV1Alpha4SpecUnhealthyConditions[];
+
+  /**
+   * unhealthyRange specifies the range of unhealthy machines allowed.
+   * Any further remediation is only allowed if the number of machines selected by "selector" as not healthy
+   * is within the range of "unhealthyRange". Takes precedence over maxUnhealthy.
+   * Eg. "[3-5]" - This means that remediation will be allowed only when:
+   * (a) there are at least 3 unhealthy machines (and)
+   * (b) there are at most 5 unhealthy machines
+   *
+   * @schema MachineHealthCheckV1Alpha4Spec#unhealthyRange
+   */
+  readonly unhealthyRange?: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Alpha4Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Alpha4Spec(obj: MachineHealthCheckV1Alpha4Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'maxUnhealthy': obj.maxUnhealthy?.value,
+    'nodeStartupTimeout': obj.nodeStartupTimeout,
+    'remediationTemplate': toJson_MachineHealthCheckV1Alpha4SpecRemediationTemplate(obj.remediationTemplate),
+    'selector': toJson_MachineHealthCheckV1Alpha4SpecSelector(obj.selector),
+    'unhealthyConditions': obj.unhealthyConditions?.map(y => toJson_MachineHealthCheckV1Alpha4SpecUnhealthyConditions(y)),
+    'unhealthyRange': obj.unhealthyRange,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+ * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
+ * "selector" are not healthy.
+ *
+ * @schema MachineHealthCheckV1Alpha4SpecMaxUnhealthy
+ */
+export class MachineHealthCheckV1Alpha4SpecMaxUnhealthy {
+  public static fromNumber(value: number): MachineHealthCheckV1Alpha4SpecMaxUnhealthy {
+    return new MachineHealthCheckV1Alpha4SpecMaxUnhealthy(value);
+  }
+  public static fromString(value: string): MachineHealthCheckV1Alpha4SpecMaxUnhealthy {
+    return new MachineHealthCheckV1Alpha4SpecMaxUnhealthy(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * remediationTemplate is a reference to a remediation template
+ * provided by an infrastructure provider.
+ *
+ * This field is completely optional, when filled, the MachineHealthCheck controller
+ * creates a new object from the template referenced and hands off remediation of the machine to
+ * a controller that lives outside of Cluster API.
+ *
+ * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate
+ */
+export interface MachineHealthCheckV1Alpha4SpecRemediationTemplate {
+  /**
+   * API version of the referent.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * If referring to a piece of an object instead of an entire object, this string
+   * should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+   * For example, if the object reference is to a container within a pod, this would take on a value like:
+   * "spec.containers{name}" (where "name" refers to the name of the container that triggered
+   * the event) or if no container name is specified "spec.containers[2]" (container with
+   * index 2 in this pod). This syntax is chosen only to have some well-defined way of
+   * referencing a part of an object.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#fieldPath
+   */
+  readonly fieldPath?: string;
+
+  /**
+   * Kind of the referent.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * Name of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#name
+   */
+  readonly name?: string;
+
+  /**
+   * Namespace of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#namespace
+   */
+  readonly namespace?: string;
+
+  /**
+   * Specific resourceVersion to which this reference is made, if any.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#resourceVersion
+   */
+  readonly resourceVersion?: string;
+
+  /**
+   * UID of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecRemediationTemplate#uid
+   */
+  readonly uid?: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Alpha4SpecRemediationTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Alpha4SpecRemediationTemplate(obj: MachineHealthCheckV1Alpha4SpecRemediationTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+    'resourceVersion': obj.resourceVersion,
+    'uid': obj.uid,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is the label selector to match machines whose health will be exercised
+ *
+ * @schema MachineHealthCheckV1Alpha4SpecSelector
+ */
+export interface MachineHealthCheckV1Alpha4SpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Alpha4SpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Alpha4SpecSelector(obj: MachineHealthCheckV1Alpha4SpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyCondition represents a Node condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a node is considered unhealthy.
+ *
+ * @schema MachineHealthCheckV1Alpha4SpecUnhealthyConditions
+ */
+export interface MachineHealthCheckV1Alpha4SpecUnhealthyConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecUnhealthyConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * timeout is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "1h", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecUnhealthyConditions#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * type of Node condition
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecUnhealthyConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Alpha4SpecUnhealthyConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Alpha4SpecUnhealthyConditions(obj: MachineHealthCheckV1Alpha4SpecUnhealthyConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions
+ */
+export interface MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions(obj: MachineHealthCheckV1Alpha4SpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+ *
+ * @schema MachineHealthCheckV1Beta1
+ */
+export class MachineHealthCheckV1Beta1 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineHealthCheckV1Beta1"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta1',
+    kind: 'MachineHealthCheck',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineHealthCheckV1Beta1".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineHealthCheckV1Beta1Props = {}): any {
+    return {
+      ...MachineHealthCheckV1Beta1.GVK,
+      ...toJson_MachineHealthCheckV1Beta1Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineHealthCheckV1Beta1" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineHealthCheckV1Beta1Props = {}) {
+    super(scope, id, {
+      ...MachineHealthCheckV1Beta1.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineHealthCheckV1Beta1.GVK,
+      ...toJson_MachineHealthCheckV1Beta1Props(resolved),
+    };
+  }
+}
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+ *
+ * @schema MachineHealthCheckV1Beta1
+ */
+export interface MachineHealthCheckV1Beta1Props {
+  /**
+   * @schema MachineHealthCheckV1Beta1#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the specification of machine health check policy
+   *
+   * @schema MachineHealthCheckV1Beta1#spec
+   */
+  readonly spec?: MachineHealthCheckV1Beta1Spec;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta1Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta1Props(obj: MachineHealthCheckV1Beta1Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineHealthCheckV1Beta1Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of machine health check policy
+ *
+ * @schema MachineHealthCheckV1Beta1Spec
+ */
+export interface MachineHealthCheckV1Beta1Spec {
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineHealthCheckV1Beta1Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+   * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
+   * "selector" are not healthy.
+   *
+   * Deprecated: This field is deprecated and is going to be removed in the next apiVersion. Please see https://github.com/kubernetes-sigs/cluster-api/issues/10722 for more details.
+   *
+   * @schema MachineHealthCheckV1Beta1Spec#maxUnhealthy
+   */
+  readonly maxUnhealthy?: MachineHealthCheckV1Beta1SpecMaxUnhealthy;
+
+  /**
+   * nodeStartupTimeout allows to set the maximum time for MachineHealthCheck
+   * to consider a Machine unhealthy if a corresponding Node isn't associated
+   * through a `Spec.ProviderID` field.
+   *
+   * The duration set in this field is compared to the greatest of:
+   * - Cluster's infrastructure ready condition timestamp (if and when available)
+   * - Control Plane's initialized condition timestamp (if and when available)
+   * - Machine's infrastructure ready condition timestamp (if and when available)
+   * - Machine's metadata creation timestamp
+   *
+   * Defaults to 10 minutes.
+   * If you wish to disable this feature, set the value explicitly to 0.
+   *
+   * @default 10 minutes.
+   * @schema MachineHealthCheckV1Beta1Spec#nodeStartupTimeout
+   */
+  readonly nodeStartupTimeout?: string;
+
+  /**
+   * remediationTemplate is a reference to a remediation template
+   * provided by an infrastructure provider.
+   *
+   * This field is completely optional, when filled, the MachineHealthCheck controller
+   * creates a new object from the template referenced and hands off remediation of the machine to
+   * a controller that lives outside of Cluster API.
+   *
+   * @schema MachineHealthCheckV1Beta1Spec#remediationTemplate
+   */
+  readonly remediationTemplate?: MachineHealthCheckV1Beta1SpecRemediationTemplate;
+
+  /**
+   * selector is a label selector to match machines whose health will be exercised
+   *
+   * @schema MachineHealthCheckV1Beta1Spec#selector
+   */
+  readonly selector: MachineHealthCheckV1Beta1SpecSelector;
+
+  /**
+   * unhealthyConditions contains a list of the conditions that determine
+   * whether a node is considered unhealthy.  The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the node is unhealthy.
+   *
+   * @schema MachineHealthCheckV1Beta1Spec#unhealthyConditions
+   */
+  readonly unhealthyConditions?: MachineHealthCheckV1Beta1SpecUnhealthyConditions[];
+
+  /**
+   * unhealthyRange specifies the range of unhealthy machines allowed.
+   * Any further remediation is only allowed if the number of machines selected by "selector" as not healthy
+   * is within the range of "unhealthyRange". Takes precedence over maxUnhealthy.
+   * Eg. "[3-5]" - This means that remediation will be allowed only when:
+   * (a) there are at least 3 unhealthy machines (and)
+   * (b) there are at most 5 unhealthy machines
+   *
+   * Deprecated: This field is deprecated and is going to be removed in the next apiVersion. Please see https://github.com/kubernetes-sigs/cluster-api/issues/10722 for more details.
+   *
+   * @schema MachineHealthCheckV1Beta1Spec#unhealthyRange
+   */
+  readonly unhealthyRange?: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta1Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta1Spec(obj: MachineHealthCheckV1Beta1Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clusterName': obj.clusterName,
+    'maxUnhealthy': obj.maxUnhealthy?.value,
+    'nodeStartupTimeout': obj.nodeStartupTimeout,
+    'remediationTemplate': toJson_MachineHealthCheckV1Beta1SpecRemediationTemplate(obj.remediationTemplate),
+    'selector': toJson_MachineHealthCheckV1Beta1SpecSelector(obj.selector),
+    'unhealthyConditions': obj.unhealthyConditions?.map(y => toJson_MachineHealthCheckV1Beta1SpecUnhealthyConditions(y)),
+    'unhealthyRange': obj.unhealthyRange,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * maxUnhealthy specifies the maximum number of unhealthy machines allowed.
+ * Any further remediation is only allowed if at most "maxUnhealthy" machines selected by
+ * "selector" are not healthy.
+ *
+ * Deprecated: This field is deprecated and is going to be removed in the next apiVersion. Please see https://github.com/kubernetes-sigs/cluster-api/issues/10722 for more details.
+ *
+ * @schema MachineHealthCheckV1Beta1SpecMaxUnhealthy
+ */
+export class MachineHealthCheckV1Beta1SpecMaxUnhealthy {
+  public static fromNumber(value: number): MachineHealthCheckV1Beta1SpecMaxUnhealthy {
+    return new MachineHealthCheckV1Beta1SpecMaxUnhealthy(value);
+  }
+  public static fromString(value: string): MachineHealthCheckV1Beta1SpecMaxUnhealthy {
+    return new MachineHealthCheckV1Beta1SpecMaxUnhealthy(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+/**
+ * remediationTemplate is a reference to a remediation template
+ * provided by an infrastructure provider.
+ *
+ * This field is completely optional, when filled, the MachineHealthCheck controller
+ * creates a new object from the template referenced and hands off remediation of the machine to
+ * a controller that lives outside of Cluster API.
+ *
+ * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate
+ */
+export interface MachineHealthCheckV1Beta1SpecRemediationTemplate {
+  /**
+   * API version of the referent.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#apiVersion
+   */
+  readonly apiVersion?: string;
+
+  /**
+   * If referring to a piece of an object instead of an entire object, this string
+   * should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+   * For example, if the object reference is to a container within a pod, this would take on a value like:
+   * "spec.containers{name}" (where "name" refers to the name of the container that triggered
+   * the event) or if no container name is specified "spec.containers[2]" (container with
+   * index 2 in this pod). This syntax is chosen only to have some well-defined way of
+   * referencing a part of an object.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#fieldPath
+   */
+  readonly fieldPath?: string;
+
+  /**
+   * Kind of the referent.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#kind
+   */
+  readonly kind?: string;
+
+  /**
+   * Name of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#name
+   */
+  readonly name?: string;
+
+  /**
+   * Namespace of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#namespace
+   */
+  readonly namespace?: string;
+
+  /**
+   * Specific resourceVersion to which this reference is made, if any.
+   * More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#resourceVersion
+   */
+  readonly resourceVersion?: string;
+
+  /**
+   * UID of the referent.
+   * More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+   *
+   * @schema MachineHealthCheckV1Beta1SpecRemediationTemplate#uid
+   */
+  readonly uid?: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta1SpecRemediationTemplate' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta1SpecRemediationTemplate(obj: MachineHealthCheckV1Beta1SpecRemediationTemplate | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'fieldPath': obj.fieldPath,
+    'kind': obj.kind,
+    'name': obj.name,
+    'namespace': obj.namespace,
+    'resourceVersion': obj.resourceVersion,
+    'uid': obj.uid,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is a label selector to match machines whose health will be exercised
+ *
+ * @schema MachineHealthCheckV1Beta1SpecSelector
+ */
+export interface MachineHealthCheckV1Beta1SpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: MachineHealthCheckV1Beta1SpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta1SpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta1SpecSelector(obj: MachineHealthCheckV1Beta1SpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_MachineHealthCheckV1Beta1SpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyCondition represents a Node condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a node is considered unhealthy.
+ *
+ * @schema MachineHealthCheckV1Beta1SpecUnhealthyConditions
+ */
+export interface MachineHealthCheckV1Beta1SpecUnhealthyConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecUnhealthyConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * timeout is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "1h", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecUnhealthyConditions#timeout
+   */
+  readonly timeout: string;
+
+  /**
+   * type of Node condition
+   *
+   * @schema MachineHealthCheckV1Beta1SpecUnhealthyConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta1SpecUnhealthyConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta1SpecUnhealthyConditions(obj: MachineHealthCheckV1Beta1SpecUnhealthyConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeout': obj.timeout,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema MachineHealthCheckV1Beta1SpecSelectorMatchExpressions
+ */
+export interface MachineHealthCheckV1Beta1SpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema MachineHealthCheckV1Beta1SpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta1SpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta1SpecSelectorMatchExpressions(obj: MachineHealthCheckV1Beta1SpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+ *
+ * @schema MachineHealthCheckV1Beta2
+ */
+export class MachineHealthCheckV1Beta2 extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "MachineHealthCheckV1Beta2"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'cluster.x-k8s.io/v1beta2',
+    kind: 'MachineHealthCheck',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "MachineHealthCheckV1Beta2".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: MachineHealthCheckV1Beta2Props): any {
+    return {
+      ...MachineHealthCheckV1Beta2.GVK,
+      ...toJson_MachineHealthCheckV1Beta2Props(props),
+    };
+  }
+
+  /**
+   * Defines a "MachineHealthCheckV1Beta2" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: MachineHealthCheckV1Beta2Props) {
+    super(scope, id, {
+      ...MachineHealthCheckV1Beta2.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...MachineHealthCheckV1Beta2.GVK,
+      ...toJson_MachineHealthCheckV1Beta2Props(resolved),
+    };
+  }
+}
+
+/**
+ * MachineHealthCheck is the Schema for the machinehealthchecks API.
+ *
+ * @schema MachineHealthCheckV1Beta2
+ */
+export interface MachineHealthCheckV1Beta2Props {
+  /**
+   * @schema MachineHealthCheckV1Beta2#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * spec is the specification of machine health check policy
+   *
+   * @schema MachineHealthCheckV1Beta2#spec
+   */
+  readonly spec: MachineHealthCheckV1Beta2Spec;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2Props' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2Props(obj: MachineHealthCheckV1Beta2Props | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_MachineHealthCheckV1Beta2Spec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * spec is the specification of machine health check policy
+ *
+ * @schema MachineHealthCheckV1Beta2Spec
+ */
+export interface MachineHealthCheckV1Beta2Spec {
+  /**
+   * checks are the checks that are used to evaluate if a Machine is healthy.
+   *
+   * Independent of this configuration the MachineHealthCheck controller will always
+   * flag Machines with `cluster.x-k8s.io/remediate-machine` annotation and
+   * Machines with deleted Nodes as unhealthy.
+   *
+   * Furthermore, if checks.nodeStartupTimeoutSeconds is not set it
+   * is defaulted to 10 minutes and evaluated accordingly.
+   *
+   * @schema MachineHealthCheckV1Beta2Spec#checks
+   */
+  readonly checks?: MachineHealthCheckV1Beta2SpecChecks;
+
+  /**
+   * clusterName is the name of the Cluster this object belongs to.
+   *
+   * @schema MachineHealthCheckV1Beta2Spec#clusterName
+   */
+  readonly clusterName: string;
+
+  /**
+   * remediation configures if and how remediations are triggered if a Machine is unhealthy.
+   *
+   * If remediation or remediation.triggerIf is not set,
+   * remediation will always be triggered for unhealthy Machines.
+   *
+   * If remediation or remediation.templateRef is not set,
+   * the OwnerRemediated condition will be set on unhealthy Machines to trigger remediation via
+   * the owner of the Machines, for example a MachineSet or a KubeadmControlPlane.
+   *
+   * @schema MachineHealthCheckV1Beta2Spec#remediation
+   */
+  readonly remediation?: MachineHealthCheckV1Beta2SpecRemediation;
+
+  /**
+   * selector is a label selector to match machines whose health will be exercised
+   *
+   * @schema MachineHealthCheckV1Beta2Spec#selector
+   */
+  readonly selector: MachineHealthCheckV1Beta2SpecSelector;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2Spec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2Spec(obj: MachineHealthCheckV1Beta2Spec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'checks': toJson_MachineHealthCheckV1Beta2SpecChecks(obj.checks),
+    'clusterName': obj.clusterName,
+    'remediation': toJson_MachineHealthCheckV1Beta2SpecRemediation(obj.remediation),
+    'selector': toJson_MachineHealthCheckV1Beta2SpecSelector(obj.selector),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * checks are the checks that are used to evaluate if a Machine is healthy.
+ *
+ * Independent of this configuration the MachineHealthCheck controller will always
+ * flag Machines with `cluster.x-k8s.io/remediate-machine` annotation and
+ * Machines with deleted Nodes as unhealthy.
+ *
+ * Furthermore, if checks.nodeStartupTimeoutSeconds is not set it
+ * is defaulted to 10 minutes and evaluated accordingly.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecChecks
+ */
+export interface MachineHealthCheckV1Beta2SpecChecks {
+  /**
+   * nodeStartupTimeoutSeconds allows to set the maximum time for MachineHealthCheck
+   * to consider a Machine unhealthy if a corresponding Node isn't associated
+   * through a `Spec.ProviderID` field.
+   *
+   * The duration set in this field is compared to the greatest of:
+   * - Cluster's infrastructure ready condition timestamp (if and when available)
+   * - Control Plane's initialized condition timestamp (if and when available)
+   * - Machine's infrastructure ready condition timestamp (if and when available)
+   * - Machine's metadata creation timestamp
+   *
+   * Defaults to 10 minutes.
+   * If you wish to disable this feature, set the value explicitly to 0.
+   *
+   * @default 10 minutes.
+   * @schema MachineHealthCheckV1Beta2SpecChecks#nodeStartupTimeoutSeconds
+   */
+  readonly nodeStartupTimeoutSeconds?: number;
+
+  /**
+   * unhealthyMachineConditions contains a list of the machine conditions that determine
+   * whether a machine is considered unhealthy.  The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the machine is unhealthy.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecks#unhealthyMachineConditions
+   */
+  readonly unhealthyMachineConditions?: MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions[];
+
+  /**
+   * unhealthyNodeConditions contains a list of conditions that determine
+   * whether a node is considered unhealthy. The conditions are combined in a
+   * logical OR, i.e. if any of the conditions is met, the node is unhealthy.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecks#unhealthyNodeConditions
+   */
+  readonly unhealthyNodeConditions?: MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions[];
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecChecks' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecChecks(obj: MachineHealthCheckV1Beta2SpecChecks | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'nodeStartupTimeoutSeconds': obj.nodeStartupTimeoutSeconds,
+    'unhealthyMachineConditions': obj.unhealthyMachineConditions?.map(y => toJson_MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions(y)),
+    'unhealthyNodeConditions': obj.unhealthyNodeConditions?.map(y => toJson_MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions(y)),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * remediation configures if and how remediations are triggered if a Machine is unhealthy.
+ *
+ * If remediation or remediation.triggerIf is not set,
+ * remediation will always be triggered for unhealthy Machines.
+ *
+ * If remediation or remediation.templateRef is not set,
+ * the OwnerRemediated condition will be set on unhealthy Machines to trigger remediation via
+ * the owner of the Machines, for example a MachineSet or a KubeadmControlPlane.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecRemediation
+ */
+export interface MachineHealthCheckV1Beta2SpecRemediation {
+  /**
+   * templateRef is a reference to a remediation template
+   * provided by an infrastructure provider.
+   *
+   * This field is completely optional, when filled, the MachineHealthCheck controller
+   * creates a new object from the template referenced and hands off remediation of the machine to
+   * a controller that lives outside of Cluster API.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediation#templateRef
+   */
+  readonly templateRef?: MachineHealthCheckV1Beta2SpecRemediationTemplateRef;
+
+  /**
+   * triggerIf configures if remediations are triggered.
+   * If this field is not set, remediations are always triggered.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediation#triggerIf
+   */
+  readonly triggerIf?: MachineHealthCheckV1Beta2SpecRemediationTriggerIf;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecRemediation' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecRemediation(obj: MachineHealthCheckV1Beta2SpecRemediation | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'templateRef': toJson_MachineHealthCheckV1Beta2SpecRemediationTemplateRef(obj.templateRef),
+    'triggerIf': toJson_MachineHealthCheckV1Beta2SpecRemediationTriggerIf(obj.triggerIf),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * selector is a label selector to match machines whose health will be exercised
+ *
+ * @schema MachineHealthCheckV1Beta2SpecSelector
+ */
+export interface MachineHealthCheckV1Beta2SpecSelector {
+  /**
+   * matchExpressions is a list of label selector requirements. The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecSelector#matchExpressions
+   */
+  readonly matchExpressions?: MachineHealthCheckV1Beta2SpecSelectorMatchExpressions[];
+
+  /**
+   * matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+   * map is equivalent to an element of matchExpressions, whose key field is "key", the
+   * operator is "In", and the values array contains only "value". The requirements are ANDed.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecSelector#matchLabels
+   */
+  readonly matchLabels?: { [key: string]: string };
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecSelector' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecSelector(obj: MachineHealthCheckV1Beta2SpecSelector | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'matchExpressions': obj.matchExpressions?.map(y => toJson_MachineHealthCheckV1Beta2SpecSelectorMatchExpressions(y)),
+    'matchLabels': ((obj.matchLabels) === undefined) ? undefined : (Object.entries(obj.matchLabels).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyMachineCondition represents a Machine condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a machine is considered unhealthy.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions
+ */
+export interface MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions#status
+   */
+  readonly status: MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditionsStatus;
+
+  /**
+   * timeoutSeconds is the duration that a machine must be in a given status for,
+   * after which the machine is considered unhealthy.
+   * For example, with a value of "3600", the machine must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions#timeoutSeconds
+   */
+  readonly timeoutSeconds: number;
+
+  /**
+   * type of Machine condition
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions(obj: MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * UnhealthyNodeCondition represents a Node condition type and value with a timeout
+ * specified as a duration.  When the named condition has been in the given
+ * status for at least the timeout value, a node is considered unhealthy.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions
+ */
+export interface MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions {
+  /**
+   * status of the condition, one of True, False, Unknown.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions#status
+   */
+  readonly status: string;
+
+  /**
+   * timeoutSeconds is the duration that a node must be in a given status for,
+   * after which the node is considered unhealthy.
+   * For example, with a value of "3600", the node must match the status
+   * for at least 1 hour before being considered unhealthy.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions#timeoutSeconds
+   */
+  readonly timeoutSeconds: number;
+
+  /**
+   * type of Node condition
+   *
+   * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions#type
+   */
+  readonly type: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions(obj: MachineHealthCheckV1Beta2SpecChecksUnhealthyNodeConditions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'status': obj.status,
+    'timeoutSeconds': obj.timeoutSeconds,
+    'type': obj.type,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * templateRef is a reference to a remediation template
+ * provided by an infrastructure provider.
+ *
+ * This field is completely optional, when filled, the MachineHealthCheck controller
+ * creates a new object from the template referenced and hands off remediation of the machine to
+ * a controller that lives outside of Cluster API.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecRemediationTemplateRef
+ */
+export interface MachineHealthCheckV1Beta2SpecRemediationTemplateRef {
+  /**
+   * apiVersion of the remediation template.
+   * apiVersion must be fully qualified domain name followed by / and a version.
+   * NOTE: This field must be kept in sync with the APIVersion of the remediation template.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediationTemplateRef#apiVersion
+   */
+  readonly apiVersion: string;
+
+  /**
+   * kind of the remediation template.
+   * kind must consist of alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediationTemplateRef#kind
+   */
+  readonly kind: string;
+
+  /**
+   * name of the remediation template.
+   * name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediationTemplateRef#name
+   */
+  readonly name: string;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecRemediationTemplateRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecRemediationTemplateRef(obj: MachineHealthCheckV1Beta2SpecRemediationTemplateRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'apiVersion': obj.apiVersion,
+    'kind': obj.kind,
+    'name': obj.name,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * triggerIf configures if remediations are triggered.
+ * If this field is not set, remediations are always triggered.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecRemediationTriggerIf
+ */
+export interface MachineHealthCheckV1Beta2SpecRemediationTriggerIf {
+  /**
+   * unhealthyInRange specifies that remediations are only triggered if the number of
+   * unhealthy Machines is in the configured range.
+   * Takes precedence over unhealthyLessThanOrEqualTo.
+   * Eg. "[3-5]" - This means that remediation will be allowed only when:
+   * (a) there are at least 3 unhealthy Machines (and)
+   * (b) there are at most 5 unhealthy Machines
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediationTriggerIf#unhealthyInRange
+   */
+  readonly unhealthyInRange?: string;
+
+  /**
+   * unhealthyLessThanOrEqualTo specifies that remediations are only triggered if the number of
+   * unhealthy Machines is less than or equal to the configured value.
+   * unhealthyInRange takes precedence if set.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecRemediationTriggerIf#unhealthyLessThanOrEqualTo
+   */
+  readonly unhealthyLessThanOrEqualTo?: MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo;
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecRemediationTriggerIf' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecRemediationTriggerIf(obj: MachineHealthCheckV1Beta2SpecRemediationTriggerIf | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'unhealthyInRange': obj.unhealthyInRange,
+    'unhealthyLessThanOrEqualTo': obj.unhealthyLessThanOrEqualTo?.value,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A label selector requirement is a selector that contains values, a key, and an operator that
+ * relates the key and values.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecSelectorMatchExpressions
+ */
+export interface MachineHealthCheckV1Beta2SpecSelectorMatchExpressions {
+  /**
+   * key is the label key that the selector applies to.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecSelectorMatchExpressions#key
+   */
+  readonly key: string;
+
+  /**
+   * operator represents a key's relationship to a set of values.
+   * Valid operators are In, NotIn, Exists and DoesNotExist.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecSelectorMatchExpressions#operator
+   */
+  readonly operator: string;
+
+  /**
+   * values is an array of string values. If the operator is In or NotIn,
+   * the values array must be non-empty. If the operator is Exists or DoesNotExist,
+   * the values array must be empty. This array is replaced during a strategic
+   * merge patch.
+   *
+   * @schema MachineHealthCheckV1Beta2SpecSelectorMatchExpressions#values
+   */
+  readonly values?: string[];
+}
+
+/**
+ * Converts an object of type 'MachineHealthCheckV1Beta2SpecSelectorMatchExpressions' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_MachineHealthCheckV1Beta2SpecSelectorMatchExpressions(obj: MachineHealthCheckV1Beta2SpecSelectorMatchExpressions | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'key': obj.key,
+    'operator': obj.operator,
+    'values': obj.values?.map(y => y),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * status of the condition, one of True, False, Unknown.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditionsStatus
+ */
+export enum MachineHealthCheckV1Beta2SpecChecksUnhealthyMachineConditionsStatus {
+  /** True */
+  TRUE = "True",
+  /** False */
+  FALSE = "False",
+  /** Unknown */
+  UNKNOWN = "Unknown",
+}
+
+/**
+ * unhealthyLessThanOrEqualTo specifies that remediations are only triggered if the number of
+ * unhealthy Machines is less than or equal to the configured value.
+ * unhealthyInRange takes precedence if set.
+ *
+ * @schema MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo
+ */
+export class MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+  public static fromNumber(value: number): MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+    return new MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo(value);
+  }
+  public static fromString(value: string): MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo {
+    return new MachineHealthCheckV1Beta2SpecRemediationTriggerIfUnhealthyLessThanOrEqualTo(value);
+  }
+  private constructor(public readonly value: number | string) {
+  }
+}
+
+
+/**
  * MachinePool is the Schema for the machinepools API.
 
 Deprecated: This type will be removed in one of the next releases.
