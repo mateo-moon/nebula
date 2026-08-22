@@ -249,6 +249,12 @@ export type {
   AwsEbsCsiDriverStorageClassConfig,
 } from "./aws-ebs-csi-driver";
 
+export { OpenEbsLvm } from "./openebs-lvm";
+export type {
+  OpenEbsLvmConfig,
+  OpenEbsLvmStorageClass,
+} from "./openebs-lvm";
+
 export { CsiSnapshotController } from "./csi-snapshot-controller";
 export type { CsiSnapshotControllerConfig } from "./csi-snapshot-controller";
 
