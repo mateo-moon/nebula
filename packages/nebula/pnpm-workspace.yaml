@@ -1,2 +1,4 @@
-onlyBuiltDependencies:
-  - "cdk8s-cli"
+# Explicit build allowlist for reproducible installs with pnpm 11.
+allowBuilds:
+  esbuild: true
+  cdk8s-cli@https://codeload.github.com/mateo-moon/cdk8s-cli/tar.gz/ef8da23a33eecab4fe7cfcbcee911c374e20ca6f: true
