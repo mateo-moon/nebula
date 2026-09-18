@@ -54,6 +54,7 @@ export type AwsProviderFamily =
   | "route53"
   | "kms"
   | "s3"
+  | "ecr"
   | "elasticache"
   | "rds"
   | "secretsmanager"

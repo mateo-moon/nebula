@@ -41,6 +41,7 @@ import { syncWave } from "../../../core";
 import { CILIUM_WIREGUARD_PORT } from "../../k8s/cilium";
 import {
   OWNED_POLICIES,
+  MUTABLE_OWNED_POLICIES,
   asPolicies,
   dataVolumePolicies,
 } from "../../../utils/crossplane-policies";
@@ -851,7 +852,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
         // nondeterministic lt-id external-name across async creates; a
         // create retry that lost its response fails AlreadyExists on the
         // unique name instead of duplicating.
-        managementPolicies: ["Observe", "Create", "Update", "Delete", "LateInitialize"],
+        managementPolicies: MUTABLE_OWNED_POLICIES,
         forProvider: {
           region: region.region,
           name: ltName,
