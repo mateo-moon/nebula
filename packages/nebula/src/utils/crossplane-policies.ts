@@ -34,6 +34,11 @@ export const OWNED_POLICIES: readonly string[] = [
   "LateInitialize",
 ];
 
+/** Owned resources with supported in-place updates, such as LaunchTemplate. */
+export const MUTABLE_OWNED_POLICIES: readonly string[] = [
+  "Observe", "Create", "Update", "Delete", "LateInitialize",
+];
+
 /**
  * A follower that BINDS identities something else owns (EIPAssociation,
  * VolumeAttachment).
