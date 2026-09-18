@@ -60,6 +60,7 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/kms.aws.upbound.io_keys.yaml
   # AWS Provider CRDs - S3 (Thanos long-term metrics bucket)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/s3.aws.upbound.io_buckets.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/ecr.aws.upbound.io_repositories.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/kms.aws.upbound.io_aliases.yaml
   # AWS Provider CRDs - Service Quotas (quota raises as code)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/servicequotas.aws.upbound.io_servicequotas.yaml

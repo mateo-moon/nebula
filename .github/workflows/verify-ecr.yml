@@ -1,0 +1,24 @@
+name: Verify private ECR module
+on:
+  pull_request:
+    paths: ["packages/nebula/**", ".github/workflows/verify-ecr.yml"]
+  workflow_dispatch: {}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm install --frozen-lockfile
+        working-directory: packages/nebula
+      - run: pnpm exec tsx --test test/ecr.test.ts
+        working-directory: packages/nebula
+      - run: pnpm exec tsc --noEmit
+        working-directory: packages/nebula
+      - run: pnpm verify:policies
+        working-directory: packages/nebula
