@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 // Publication guard: a class-pattern scan for material that must not be
-// published from this repository (account ids, private registry hosts,
-// private addresses, e-mail addresses, key material, chip-id-like values and
-// encoded blobs that could hide any of these).
+// published from this repository: account ids, private registry hosts,
+// registry namespaces and repository owners, domains, private, shared,
+// cluster and public addresses (IPv4 and IPv6), e-mail addresses, key
+// material (PEM, OpenSSH, PGP, and DER or PEM hidden in base64), chip-id-like
+// values, and encoded blobs that could hide any of these.
 //
-// It deliberately holds no word list: it matches classes of data, not names.
+// It deliberately holds no private word list: it matches classes of data, not
+// names. The only lists are public upstream names that may appear (registries,
+// owners and domains of upstream projects, documentation values); the owner of
+// the repository being checked is added from GITHUB_REPOSITORY_OWNER when set.
 //
 // Usage:
 //   node scripts/publication-guard.mjs [--root DIR] [--allowlist FILE] [--json] [PATH...]
@@ -14,11 +19,14 @@
 // non-ignored files). Exit status: 0 clean, 1 findings, 2 usage or input error.
 // Output never contains a matched value. High-entropy findings carry the
 // sha256 of the match so a reviewed item can be allowlisted by content hash;
-// low-entropy classes (a 12-digit id, an address) carry no hash, because such
-// a hash can be reversed by enumeration, and they cannot be allowlisted.
+// low-entropy classes (a 12-digit id, an address, a domain or owner name)
+// carry no hash, because such a hash can be reversed by enumeration, and they
+// cannot be allowlisted: a public upstream name that has to appear is added to
+// the upstream lists below in a reviewed change instead.
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
+import { isIPv6 } from "node:net";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
@@ -45,9 +53,52 @@ const DOCKER_UPSTREAM = new Set([
 ]);
 const EMAIL_ALLOWED_ADDRESSES = new Set(["noreply@anthropic.com", "noreply@github.com", "git@github.com", "git@gitlab.com"]);
 const EMAIL_ALLOWED_DOMAINS = [/^example\.(com|org|net)$/i, /\.(example|test|invalid|localhost)$/i, /^users\.noreply\.github\.com$/i, /^openssh\.com$/i];
+// Owners and namespaces of upstream projects on code hosts and registries
+// (github.com, gitlab.com, ghcr.io, quay.io, public.ecr.aws, ...).
+const UPSTREAM_OWNERS = new Set([
+  "example", "kubernetes", "kubernetes-sigs", "kubernetes-csi", "containerd", "opencontainers", "moby", "docker",
+  "confidential-containers", "kata-containers", "virtee", "intel", "amd", "amdese", "google", "googlecontainertools",
+  "aws", "awslabs", "eks", "eks-distro", "karpenter", "aws-observability", "amazonlinux", "ubuntu", "debian", "fedora",
+  "crossplane", "crossplane-contrib", "upbound", "cdk8s-team", "cert-manager", "jetstack", "argoproj", "argoproj-labs",
+  "cilium", "projectcalico", "calico", "tigera", "k0sproject", "siderolabs", "fluxcd", "prometheus",
+  "prometheus-operator", "prometheus-community", "grafana", "open-telemetry", "sigstore", "gitleaks", "actions",
+  "github", "nodejs", "microsoft", "pnpm", "privatenumber", "eemeli", "rust-lang", "rustls", "rustcrypto",
+  "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
+  "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics",
+]);
+if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
+const CODE_HOST_PATHS = new Set([
+  "orgs", "settings", "features", "marketplace", "apps", "sponsors", "topics", "login", "about", "pricing",
+  "enterprise", "security", "advisories", "notifications", "user-attachments", "explore", "search", "users",
+]);
+// Domains (and their subdomains) of upstream projects and standards bodies.
+const UPSTREAM_DOMAINS = [
+  "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
+  "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
+  "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
+  "katacontainers.io", "amd.com", "intel.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",
+  "cert-manager.io", "cncf.io", "argoproj.io", "coreos.com", "cilium.io", "projectcalico.org", "k0sproject.io",
+  "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
+  "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
+  "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io",
+];
+// Bare names are only matched under these TLDs (others collide with code:
+// this.app, tls.ca, provision.sh); hosts in URLs and after host keys under any
+// public TLD in URL_TLDS. Cluster-internal names (svc.namespace) pass.
+const BARE_DOMAIN_TLDS = "com|net|org|io|xyz|ninja|cloud|tech|online|site|info|biz|eu|uk";
+const URL_TLDS = new Set([
+  ...BARE_DOMAIN_TLDS.split("|"), "dev", "app", "ai", "co", "me", "sh", "so", "to", "tv", "cc", "ly", "gg", "im", "is",
+  "li", "lu", "de", "fr", "nl", "ch", "at", "be", "se", "no", "fi", "dk", "pl", "cz", "ee", "lt", "lv", "ro", "hu",
+  "it", "es", "pt", "ie", "ru", "ua", "us", "ca", "au", "nz", "jp", "kr", "cn", "hk", "sg", "in", "br", "mx", "ar",
+  "gov", "edu", "mil", "int", "pro", "host", "space", "store", "systems", "network", "zone", "run", "page", "link",
+  "services", "digital", "solutions", "works", "codes", "software", "technology", "email", "global",
+]);
+const RESERVED_DOMAIN = [/(^|\.)example\.(com|net|org)$/i, /\.(example|test|invalid|localhost|local|svc|arpa)$/i, /^localhost$/i];
+const WELL_KNOWN_IPV4 = new Set(["8.8.8.8", "8.8.4.4", "9.9.9.9", "149.112.112.112", "208.67.222.222", "208.67.220.220"]);
 
 const MAX_DEPTH = 4;
 const MIN_BLOB = 512;
+const MIN_DER = 40;
 const MAX_INFLATE = 64 * 1024 * 1024;
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
@@ -71,6 +122,18 @@ const DETECTORS = [
   { priority: 2, class: "ecr-host", re: /(?:[A-Za-z0-9-]+\.)*dkr\.ecr(?:-fips)?\.[A-Za-z0-9-]+\.amazonaws\.com(?:\.cn)?/g },
   {
     priority: 3,
+    class: "registry-namespace",
+    re: /(?<![A-Za-z0-9.-])(?:ghcr\.io|quay\.io|public\.ecr\.aws|registry\.gitlab\.com)\/([A-Za-z0-9][A-Za-z0-9._-]*)/gi,
+    keep: (m) => !UPSTREAM_OWNERS.has(m[1].toLowerCase()),
+  },
+  {
+    priority: 3,
+    class: "repository-owner",
+    re: /(?<![A-Za-z0-9.-])(?:www\.)?(?:github\.com|gitlab\.com|codeberg\.org|bitbucket\.org)[/:]([A-Za-z0-9][A-Za-z0-9._-]*)/gi,
+    keep: (m) => !UPSTREAM_OWNERS.has(m[1].toLowerCase()) && !CODE_HOST_PATHS.has(m[1].toLowerCase()),
+  },
+  {
+    priority: 3,
     class: "gcr-project",
     re: /(?<![A-Za-z0-9.-])(?:(?:us|eu|asia|mirror)\.)?gcr\.io\/([a-z0-9][a-z0-9_.-]*)|(?<![A-Za-z0-9.-])[a-z0-9-]+-docker\.pkg\.dev\/([a-z0-9][a-z0-9-]*)/g,
     keep: (m) => !GCR_UPSTREAM.has((m[1] ?? m[2]).toLowerCase()),
@@ -78,8 +141,21 @@ const DETECTORS = [
   {
     priority: 3,
     class: "docker-hub-user",
-    re: /(?<![A-Za-z0-9.-])(?:docker\.io|index\.docker\.io|registry-1\.docker\.io|hub\.docker\.com\/r)\/([A-Za-z0-9_][A-Za-z0-9._-]*)\//g,
+    re: /(?<![A-Za-z0-9.-])(?:docker\.io|index\.docker\.io|registry-1\.docker\.io|hub\.docker\.com\/[ru])\/([A-Za-z0-9_][A-Za-z0-9._-]*)(?=\/|(?![A-Za-z0-9._:@-]))/g,
     keep: (m) => !DOCKER_UPSTREAM.has(m[1].toLowerCase()),
+  },
+  {
+    // Docker Hub short names, which have no registry host: `image: user/app`
+    // in manifests and `FROM user/app` in Dockerfiles.
+    priority: 3,
+    class: "docker-hub-user",
+    re: /(?:\bimage["']?\s*[:=]\s*["']?|^[ \t]*FROM[ \t]+(?:--platform=\S+[ \t]+)?)([a-z0-9]+(?:[._-][a-z0-9]+)*)\/[a-z0-9]/gim,
+    keep: (m) => !m[1].includes(".") && m[1] !== "localhost" && !DOCKER_UPSTREAM.has(m[1]),
+  },
+  {
+    priority: 4,
+    class: "domain",
+    find: domains,
   },
   {
     priority: 4,
@@ -95,13 +171,96 @@ const DETECTORS = [
   },
   {
     priority: 5,
-    class: "private-ip",
-    re: /(?<![0-9.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![0-9]|\.[0-9])/g,
-    keep: (m) => privateIpClass(m) !== null,
-    classify: (m) => privateIpClass(m),
+    class: "aws-account-id",
+    re: /(?<![0-9A-Za-z-])(\d{4})-(\d{4})-(\d{4})(?![0-9A-Za-z-])/g,
+    keep: (m) => !DOC_ACCOUNT_IDS.has(m.slice(1, 4).join("")),
   },
-  { priority: 6, class: "hex-64-bytes", re: /(?<![0-9A-Fa-f])[0-9A-Fa-f]{128,}(?![0-9A-Fa-f])/g },
+  {
+    priority: 5,
+    class: "ipv4",
+    re: /(?<![0-9.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![0-9]|\.[0-9])/g,
+    keep: (m) => ipv4Class(m) !== null,
+    classify: (m) => ipv4Class(m),
+  },
+  {
+    priority: 5,
+    class: "ipv6",
+    re: /(?<![0-9A-Za-z:.])(?=[0-9A-Fa-f]*:[0-9A-Fa-f.]*:)[0-9A-Fa-f:.]{2,}(?![0-9A-Za-z:])/g,
+    keep: (m) => ipv6Class(m[0]) !== null,
+    classify: (m) => ipv6Class(m[0]),
+  },
+  { priority: 6, class: "hex-64-bytes", find: wrappedHex },
+  { priority: 7, class: "hex-64-bytes", re: /(?<![0-9A-Fa-f])[0-9A-Fa-f]{128,}(?![0-9A-Fa-f])/g },
 ];
+
+function domainAllowed(host) {
+  const h = host.toLowerCase().replace(/\.$/, "");
+  if (!h.includes(".") || /^[0-9.]+$/.test(h) || !URL_TLDS.has(h.slice(h.lastIndexOf(".") + 1))) return true;
+  if (RESERVED_DOMAIN.some((r) => r.test(h))) return true;
+  return UPSTREAM_DOMAINS.some((d) => h === d || h.endsWith(`.${d}`));
+}
+
+// Domains: any host in a URL (scheme://host, git@host:) or after a host-like
+// key (host:, endpoint =, ...), and bare names under common public TLDs.
+function* domains(text) {
+  const label = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
+  const contexts = [
+    new RegExp(`(?:\\b[a-z][a-z0-9+.-]*:\\/\\/(?:[^\\s/@]+@)?|\\bgit@)(${label}(?:\\.${label})+)`, "gi"),
+    new RegExp(`\\b(?:host|hostname|domain|server|endpoint|registry|fqdn|issuer|audience|address)["']?\\s*[:=]\\s*["']?(${label}(?:\\.${label})+)(?![A-Za-z0-9-]*:\\/\\/)`, "gi"),
+    new RegExp(`(?<![A-Za-z0-9_.@/-])((?:${label}\\.)+(?:${BARE_DOMAIN_TLDS}))(?![A-Za-z0-9_-])`, "gi"),
+  ];
+  const seen = new Set();
+  for (const re of contexts) {
+    for (const m of text.matchAll(re)) {
+      const host = m[1];
+      const index = m.index + m[0].length - host.length;
+      if (seen.has(index) || domainAllowed(host)) continue;
+      seen.add(index);
+      const found = [host];
+      found.index = index;
+      yield found;
+    }
+  }
+}
+
+// Hex split over lines (a chip id wrapped in a block scalar, joined with
+// "+" or continued with a backslash); a single long line is the next detector.
+function wrappedHex(text) {
+  const joinable = /^(?:\s*|\s*\\|["'`]?\s*\+\s*)$/;
+  const closing = /^["'`]?[\s,;)\]}]*$/;
+  const first = /(?:^|[\s:="'`(,[])([0-9A-Fa-f]{16,})((?:\s*\\|["'`]?\s*\+)?\s*)$/;
+  const next = /^[\s"'`+]*([0-9A-Fa-f]{2,})(.*)$/;
+  const out = [];
+  let block = null;
+  const flush = () => {
+    if (block && block.lines > 1 && block.hex.length >= 128) {
+      const found = [block.hex];
+      found.index = block.start;
+      found.end = block.end;
+      out.push(found);
+    }
+    block = null;
+  };
+  let offset = 0;
+  for (const line of text.split("\n")) {
+    const lineEnd = offset + line.length;
+    const cont = block?.open ? next.exec(line) : null;
+    if (cont && (joinable.test(cont[2]) || closing.test(cont[2]))) {
+      block.hex += cont[1];
+      block.lines++;
+      block.end = lineEnd;
+      block.open = cont[1].length >= 16 && joinable.test(cont[2]);
+      if (!block.open) flush();
+    } else {
+      flush();
+      const start = first.exec(line);
+      if (start) block = { start: offset + start.index + start[0].indexOf(start[1]), end: lineEnd, hex: start[1], lines: 1, open: true };
+    }
+    offset = lineEnd + 1;
+  }
+  flush();
+  return out;
+}
 
 // Complete PEM/OpenSSH/PGP private key blocks, plus any header whose block
 // never ends (its hash then covers everything from the header to the end).
@@ -121,13 +280,31 @@ function* privateKeyBlocks(text) {
   }
 }
 
-function privateIpClass(m) {
+function ipv4Class(m) {
   const o = m.slice(1, 5).map(Number);
   if (o.some((x) => x > 255)) return null;
-  if (o[0] === 10) return o[1] >= 96 && o[1] <= 111 ? "cluster-ip" : "rfc1918-ip";
-  if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return "rfc1918-ip";
-  if (o[0] === 192 && o[1] === 168) return "rfc1918-ip";
-  return null;
+  const [a, b, c] = o;
+  if (a === 10) return b >= 96 && b <= 111 ? "cluster-ip" : "rfc1918-ip";
+  if (a === 172 && b >= 16 && b <= 31) return "rfc1918-ip";
+  if (a === 192 && b === 168) return "rfc1918-ip";
+  if (a === 100 && b >= 64 && b <= 127) return "cgnat-ip";
+  // First octets 0-2 are skipped: OID arcs (2.5.4.3), placeholders and
+  // four-part versions look like them far more often than real hosts do.
+  if (a <= 2 || a === 127 || a >= 224 || (a === 169 && b === 254)) return null;
+  if ((a === 192 && b === 0 && c === 2) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113)) return null;
+  if (WELL_KNOWN_IPV4.has(o.join(".")) || /[vV]/.test(m.input[m.index - 1] ?? "")) return null;
+  return "public-ip";
+}
+
+function ipv6Class(token) {
+  const addr = token.replace(/\.+$/, "");
+  if (!isIPv6(addr)) return null;
+  const [g0, g1] = addr.split(":").map((g) => (g === "" ? 0 : parseInt(g, 16)));
+  if (addr.startsWith(":")) return null;
+  if (g0 >= 0xfc00 && g0 <= 0xfdff) return "ula-ip";
+  if (g0 < 0x2000 || g0 > 0x3fff) return null;
+  if ((g0 === 0x2001 && g1 === 0x0db8) || (g0 === 0x3fff && g1 < 0x1000)) return null;
+  return "public-ip";
 }
 
 function lineIndex(text) {
@@ -201,13 +378,67 @@ function decodeBase64(candidate) {
   return buf.length >= Math.floor((body.length * 3) / 4) - 2 ? buf : null;
 }
 
-// Base64 candidates: long single-line runs (also inside JSON strings with
-// literal "\n" separators), gzip streams of any length, and blocks of
-// consecutive wrapped base64 lines, where the first line may carry a
-// "key: " prefix and the last may be short.
+// The part of the base64 encoding of "-----BEGIN " that does not depend on
+// neighbouring bytes, at each of the three byte alignments.
+const PEM_MARKERS = [0, 1, 2].map((k) => {
+  const bytes = k + 11;
+  const encoded = Buffer.concat([Buffer.alloc(k), Buffer.from("-----BEGIN ")]).toString("base64");
+  const from = Math.ceil(k / 3);
+  const to = Math.floor(bytes / 3);
+  return encoded.slice(from * 4, to * 4);
+});
+
+// A candidate is decoded and rescanned when it is large, gzip or carries a
+// PEM header; a shorter one is only checked for a DER key or certificate
+// (DER starts with a SEQUENCE, 0x30, which base64-encodes to "M").
+function candidateKind(raw) {
+  const s = raw.replace(/\\n|\s/g, "");
+  if (s.length >= MIN_BLOB || s.startsWith("H4sI") || PEM_MARKERS.some((m) => s.includes(m))) return "blob";
+  return s.length >= MIN_DER && s.startsWith("M") ? "der" : null;
+}
+
+// Private or public key material in DER: an outer SEQUENCE spanning the
+// whole buffer that node:crypto parses as a key or an X.509 certificate.
+function derKeyClass(buf) {
+  if (buf.length < 30 || buf[0] !== 0x30) return null;
+  let length = buf[1];
+  let header = 2;
+  if (length & 0x80) {
+    const n = length & 0x7f;
+    if (n < 1 || n > 3 || buf.length < 2 + n) return null;
+    length = 0;
+    for (let i = 0; i < n; i++) length = length * 256 + buf[2 + i];
+    header = 2 + n;
+  }
+  if (header + length !== buf.length) return null;
+  for (const type of ["pkcs8", "sec1", "pkcs1"]) {
+    try {
+      createPrivateKey({ key: buf, format: "der", type });
+      return "private-key";
+    } catch (err) {
+      if (err?.code === "ERR_MISSING_PASSPHRASE") return "private-key";
+    }
+  }
+  for (const type of ["spki", "pkcs1"]) {
+    try {
+      createPublicKey({ key: buf, format: "der", type });
+      return "public-key";
+    } catch {}
+  }
+  try {
+    new X509Certificate(buf);
+    return "public-key";
+  } catch {}
+  return null;
+}
+
+// Base64 candidates: single-line runs (also inside JSON strings with literal
+// "\n" separators), gzip streams of any length, and blocks of consecutive
+// wrapped base64 lines, where the first line may carry a "key: " prefix and
+// the last may be short. Each is kept only if candidateKind() accepts it.
 function blobCandidates(text) {
   const out = [];
-  for (const m of text.matchAll(/(?:[A-Za-z0-9+/_-]|\\n){512,}={0,2}/g)) {
+  for (const m of text.matchAll(/(?:[A-Za-z0-9+/_-]|\\n){40,}={0,2}/g)) {
     out.push({ start: m.index, end: m.index + m[0].length, raw: m[0] });
   }
   // gzip streams start with 1f 8b 08, which base64-encodes to "H4sI": decode
@@ -217,7 +448,7 @@ function blobCandidates(text) {
   }
   let block = null;
   const flush = () => {
-    if (block && ((block.lines > 1 && block.raw.length >= MIN_BLOB) || block.raw.startsWith("H4sI"))) out.push(block);
+    if (block) out.push(block);
     block = null;
   };
   let offset = 0;
@@ -243,7 +474,8 @@ function blobCandidates(text) {
   flush();
   const diverse = out.filter((c) => {
     const s = c.raw.replace(/\\n/g, "");
-    return /[A-Z]/.test(s) && /[a-z]/.test(s) && /[0-9]/.test(s);
+    c.kind = candidateKind(c.raw);
+    return c.kind !== null && /[A-Z]/.test(s) && /[a-z]/.test(s) && /[0-9]/.test(s);
   });
   diverse.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
   const chosen = [];
@@ -266,7 +498,7 @@ export function scanText(text, { source = "<text>", allow = [], depth = 0, via, 
     for (const m of d.find ? d.find(text) : text.matchAll(d.re)) {
       if (d.keep && !d.keep(m)) continue;
       const cls = d.classify ? d.classify(m) : d.class;
-      direct.push({ priority: d.priority, start: m.index, end: m.index + m[0].length, finding: finding(cls, m[0], context, at(m.index)) });
+      direct.push({ priority: d.priority, start: m.index, end: m.end ?? m.index + m[0].length, finding: finding(cls, m[0], context, at(m.index)) });
     }
   }
   const kept = direct.filter(
@@ -278,6 +510,12 @@ export function scanText(text, { source = "<text>", allow = [], depth = 0, via, 
   for (const c of blobCandidates(mask(text, keySpans))) {
     const outerLine = context.line ?? at(c.start);
     const decoded = depth < MAX_DEPTH ? decodeBase64(c.raw) : null;
+    const key = decoded ? derKeyClass(decoded) : null;
+    if (key) {
+      findings.push(finding(key, c.raw, { ...context, via: step(via, "base64") }, outerLine));
+      continue;
+    }
+    if (c.kind === "der") continue;
     const payload = decoded ? unwrap(decoded, step(via, "base64"), depth + 1) : null;
     if (!payload) {
       findings.push(finding("opaque-blob", c.raw, context, outerLine));
