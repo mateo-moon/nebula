@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nebula:confidential-guests:wire-profile:v1",
+  "title": "Confidential guest wire profile",
+  "description": "Value of the GUEST_WIRE_PROFILE environment variable: one line of canonical JSON. Each identifier is a list; element 0 is emitted and every element is accepted. Byte-domain values are ASCII prefixes to which readers append their NUL separators.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["domains", "payloadTypes"],
+  "properties": {
+    "payloadTypes": {
+      "description": "DSSE payload types of the signed statements.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorityRotation", "record", "release", "releaseSet"],
+      "properties": {
+        "authorityRotation": { "$ref": "#/$defs/identifier" },
+        "record": { "$ref": "#/$defs/identifier" },
+        "release": { "$ref": "#/$defs/identifier" },
+        "releaseSet": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "domains": {
+      "description": "Byte domains separating hashed and signed messages.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "controlAuthorization", "evidence", "handoff", "identityFingerprint", "replay", "secrets", "session", "workload"],
+      "properties": {
+        "base": { "$ref": "#/$defs/identifier" },
+        "controlAuthorization": { "$ref": "#/$defs/identifier" },
+        "evidence": { "$ref": "#/$defs/identifier" },
+        "handoff": { "$ref": "#/$defs/identifier" },
+        "identityFingerprint": { "$ref": "#/$defs/identifier" },
+        "replay": { "$ref": "#/$defs/identifier" },
+        "secrets": { "$ref": "#/$defs/identifier" },
+        "session": { "$ref": "#/$defs/identifier" },
+        "workload": { "$ref": "#/$defs/identifier" }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[\\x21-\\x7e]+$" }
+    }
+  }
+}
