@@ -32,8 +32,7 @@ const PROBE = join(dirname(fileURLToPath(import.meta.url)), "io-probe.mjs");
 const MODULE_SOURCE = new Set([".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
 const TSX = `${sep}node_modules${sep}tsx${sep}`;
 
-/** Node's module loader, or the tsx loader that transpiles for it. */
-const isLoaderFrame = (frame: string) => frame.startsWith("node:internal/modules/") || frame.includes(TSX);
+const isTsxFrame = (frame: string) => frame.includes(TSX);
 
 /**
  * Import `specifier` in a fresh Node process (cwd `cwd`, which must resolve
@@ -85,11 +84,13 @@ const inside = (dir: string, p: string) => {
 /**
  * The events that are import-time I/O by the code under `scope.root`:
  *   - every process spawn;
- *   - every read, listing, stat or write (except a module loader, Node's or
- *     tsx's, reading a module source file) when the code under test is on
- *     the call stack, when the path is one of its own files or the root
- *     itself, or when the path lies outside the dependency roots (the working
- *     directory, the home directory, /etc, temporary directories, ...);
+ *   - every read, listing, stat or write when the code under test is on the
+ *     call stack, when the path is one of its own files or the root itself,
+ *     or when the path lies outside the dependency roots (the working
+ *     directory, the home directory, /etc, temporary directories, ...),
+ *     except Node's module loader reading a module source file and anything
+ *     the tsx loader does itself (reading sources, its transform cache in
+ *     the temporary directory);
  *   - every load of one of its own files that is not a module source (for
  *     example an eager JSON import), and every load from outside both its own
  *     files and the dependency roots.
@@ -105,7 +106,9 @@ export function importTimeViolations(events: ProbeEvent[], scope: ImportScope): 
     if (e.kind === "spawn") return true;
     const p = real(e.path);
     if (e.kind === "load") return own(p) ? !MODULE_SOURCE.has(extname(p)) : !dependency(p);
-    const byLoader = e.kind === "read" && isLoaderFrame(e.stack[0] ?? "");
+    const caller = e.stack[0] ?? "";
+    if (isTsxFrame(caller)) return false;
+    const byLoader = e.kind === "read" && caller.startsWith("node:internal/modules/");
     if (byLoader && moduleSource(p) && (own(p) || dependency(p))) return false;
     return e.stack.some(frame => own(real(frame))) || own(p) || !dependency(p);
   });
