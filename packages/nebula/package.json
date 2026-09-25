@@ -54,6 +54,7 @@
     "src/",
     "imports/",
     "tsconfig.json",
-    "README.md"
+    "LICENSE",
+    "NOTICE"
   ]
 }
