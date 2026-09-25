@@ -6,22 +6,24 @@
 // a clean project, and proves that:
 //   - every tracked file under src/ and imports/ ships, including non-code
 //     assets, and every literal `new URL("./x", import.meta.url)` target ships;
-//   - importing the package root reads no file of the package other than
-//     module sources and package.json, lists no directory and spawns no
-//     process (assets must be read lazily, inside functions).
-// The same probe is first shown to catch an import-time asset read, so a
-// blind probe cannot pass the test.
+//   - importing the package root does no file I/O of its own: no read,
+//     listing, stat or write by package code or of package files, nothing
+//     outside the installed dependencies (working directory, home, /etc,
+//     temporary directories), no eager non-code module import (such as a JSON
+//     asset) and no process spawn. Assets must be read lazily, inside
+//     functions. Only the module loader reading module sources is allowed.
+// The probe and its classifier are controlled in io-probe.test.ts; here the
+// probe is also shown to catch an eager read inside the consumer install.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, posix, relative } from "node:path";
+import { dirname, join, posix, relative } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { importTimeViolations, probeImport, type ImportScope } from "./support/import-io";
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
-const probe = join(pkgDir, "test", "support", "io-probe.mjs");
-const MODULE_SOURCE = new Set([".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
 
 let work: string;
 let tarball: string;
@@ -30,42 +32,6 @@ let consumer: string;
 
 const run = (cmd: string, args: string[], cwd: string) =>
   execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "true" } });
-
-interface ProbeEvent { kind: "read" | "list" | "spawn"; op: string; path: string }
-
-function probeImport(cwd: string, target: string, call?: string): { events: ProbeEvent[]; after: ProbeEvent[]; exports: string[] } {
-  const entry = join(cwd, "probe-entry.mjs");
-  writeFileSync(entry, [
-    "const probe = globalThis.__ioProbe;",
-    "probe.arm();",
-    `const mod = await import(${JSON.stringify(target)});`,
-    "const events = probe.disarm();",
-    "probe.arm();",
-    call ? `await mod[${JSON.stringify(call)}]();` : "",
-    "const after = probe.disarm();",
-    "process.stdout.write(JSON.stringify({ events, after, exports: Object.keys(mod) }));",
-  ].join("\n"));
-  const out = run(process.execPath, ["--import", "tsx", "--import", probe, entry], cwd);
-  return JSON.parse(out);
-}
-
-function violations(events: ProbeEvent[], root: string): ProbeEvent[] {
-  const realRoot = realpathSync(root);
-  const real = (p: string) => {
-    try {
-      return realpathSync(p);
-    } catch {
-      return p;
-    }
-  };
-  return events.filter(e => {
-    if (e.kind === "spawn") return true;
-    const p = real(e.path);
-    if (!p.startsWith(realRoot + "/") && p !== realRoot) return false;
-    if (e.kind === "list") return true;
-    return !(MODULE_SOURCE.has(extname(p)) || basename(p) === "package.json");
-  });
-}
 
 before(() => {
   work = mkdtempSync(join(tmpdir(), "nebula-pack-"));
@@ -87,11 +53,13 @@ before(() => {
   writeFileSync(join(consumer, "pnpm-workspace.yaml"), "allowBuilds:\n  esbuild: true\n");
   run("pnpm", ["install", "--prefer-offline", "--config.confirmModulesPurge=false"], consumer);
 
-  writeFileSync(join(consumer, "fixture-asset.txt"), "asset\n");
-  writeFileSync(join(consumer, "eager-module.mjs"),
-    'import { readFileSync } from "node:fs";\nexport const text = readFileSync(new URL("./fixture-asset.txt", import.meta.url), "utf8");\n');
-  writeFileSync(join(consumer, "lazy-module.mjs"),
-    'import { readFileSync } from "node:fs";\nexport function load() { return readFileSync(new URL("./fixture-asset.txt", import.meta.url), "utf8"); }\n');
+  const fixture = join(consumer, "fixture");
+  mkdirSync(fixture);
+  writeFileSync(join(fixture, "asset.txt"), "asset\n");
+  writeFileSync(join(fixture, "eager-module.mjs"),
+    'import { readFileSync } from "node:fs";\nexport const text = readFileSync(new URL("./asset.txt", import.meta.url), "utf8");\n');
+  writeFileSync(join(fixture, "lazy-module.mjs"),
+    'import { readFileSync } from "node:fs";\nexport function load() { return readFileSync(new URL("./asset.txt", import.meta.url), "utf8"); }\n');
 }, { timeout: 240_000 });
 
 after(() => {
@@ -104,6 +72,16 @@ test("the tarball ships every tracked file under src/ and imports/", () => {
   const missing = tracked.filter(f => !shipped.has(f));
   assert.deepEqual(missing, [], "tracked files missing from the packed tarball");
   assert.ok(shipped.has("package.json"));
+});
+
+test("every package.json `files` entry that exists ships", () => {
+  const { files } = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8")) as { files: string[] };
+  const present = files.filter(f => !/[*?[]/.test(f) && existsSync(join(pkgDir, f)));
+  assert.ok(present.length > 0);
+  for (const entry of present) {
+    const name = entry.replace(/\/$/, "");
+    assert.ok(shipped.has(name) || [...shipped].some(s => s.startsWith(`${name}/`)), `${entry} is listed in files but not in the tarball`);
+  }
 });
 
 test("every literal import.meta.url asset reference ships", () => {
@@ -121,19 +99,25 @@ test("every literal import.meta.url asset reference ships", () => {
   assert.ok(refs.every(r => !r.startsWith("..")), `asset reference escapes the package: ${refs}`);
 });
 
-test("the probe catches an import-time asset read and sees lazy reads only when called", () => {
-  const rel = (e: ProbeEvent) => relative(realpathSync(consumer), realpathSync(e.path));
-  const eager = probeImport(consumer, "./eager-module.mjs");
-  assert.deepEqual(violations(eager.events, consumer).map(rel), ["fixture-asset.txt"]);
-  const lazy = probeImport(consumer, "./lazy-module.mjs", "load");
-  assert.deepEqual(violations(lazy.events, consumer), []);
-  assert.deepEqual(violations(lazy.after, consumer).map(rel), ["fixture-asset.txt"]);
+test("the probe catches an import-time asset read in the consumer and sees lazy reads only when called", () => {
+  const fixture = join(consumer, "fixture");
+  const scope: ImportScope = { root: fixture, dependencyRoots: [join(consumer, "node_modules")] };
+  const rel = (e: { path: string }) => relative(realpathSync(fixture), realpathSync(e.path));
+  const eager = probeImport({ cwd: consumer, entryDir: consumer, specifier: join(fixture, "eager-module.mjs") });
+  assert.deepEqual(importTimeViolations(eager.events, scope).map(rel), ["asset.txt"]);
+  const lazy = probeImport({ cwd: consumer, entryDir: consumer, specifier: join(fixture, "lazy-module.mjs"), call: "load" });
+  assert.deepEqual(importTimeViolations(lazy.events, scope), []);
+  assert.deepEqual(importTimeViolations(lazy.after, scope).map(rel), ["asset.txt"]);
 });
 
 test("importing the package root does no file I/O beyond module loading", () => {
-  const installed = join(consumer, "node_modules", "nebula-cdk8s");
-  const result = probeImport(consumer, "nebula-cdk8s");
+  const installed = realpathSync(join(consumer, "node_modules", "nebula-cdk8s"));
+  const result = probeImport({ cwd: consumer, entryDir: consumer, specifier: "nebula-cdk8s" });
   assert.ok(result.exports.includes("BaseConstruct"), "package root did not load");
   assert.ok(result.events.some(e => e.kind === "read"), "the probe recorded no reads at all; it may be blind");
-  assert.deepEqual(violations(result.events, installed), [], "the package root read, listed or spawned at import time");
+  assert.ok(result.events.some(e => e.kind === "load" && realpathSync(e.path).startsWith(`${installed}/src/`)),
+    "the probe saw no package module load; the load hook may be blind");
+  const scope: ImportScope = { root: installed, dependencyRoots: [join(consumer, "node_modules")] };
+  const found = importTimeViolations(result.events, scope).map(e => `${e.kind} ${e.op} ${e.path}`);
+  assert.deepEqual(found, [], "importing the package root did file I/O of its own");
 });
