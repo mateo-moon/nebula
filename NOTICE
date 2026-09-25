@@ -1,0 +1,24 @@
+nebula
+Copyright The nebula authors.
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+Third-party components
+======================
+
+Material in this repository that was written by third parties is listed
+below with the files it covers, its copyright notice and its license. Such
+files keep their original copyright and license headers.
+
+Entry format:
+
+  <path or glob>
+    Copyright: <original copyright notice, verbatim>
+    License:   <SPDX identifier>
+    Source:    <upstream project and version or commit>
+    Changes:   <summary of local modifications, or "none">
+
+Entries:
+
+  (none)
