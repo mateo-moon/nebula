@@ -1,4 +1,4 @@
-// Tests for scripts/publication-guard.mjs. Run: node --test scripts/
+// Tests for scripts/publication-guard.mjs. Run: node --test scripts/publication-guard.test.mjs
 //
 // Every sensitive-looking sample below is synthetic and assembled at run
 // time, so this file itself holds no literal key block or address that a
