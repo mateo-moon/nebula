@@ -16,5 +16,6 @@ The GitHub `Verify modules` workflow runs these tests together with
 `tsc --noEmit`, the Crossplane management-policy conventions
 (`pnpm verify:policies`), the repository publication guard
 (`node scripts/publication-guard.mjs`, tested by
-`node --test scripts/`) and a secret scan of the pushed commits. Tests use
-synthetic identities and do not contact any cloud API.
+`node --test scripts/publication-guard.test.mjs`) and a secret scan of the
+pushed commits. Tests use synthetic identities and do not contact any cloud
+API.
