@@ -37,7 +37,12 @@ export interface WireDomains {
   readonly identityFingerprint: WireValue;
 }
 
-/** Every identifier a confidential guest and its verifiers put on the wire. */
+/**
+ * Every identifier a confidential guest and its verifiers put on the wire.
+ * Within a group (payload types, byte domains) a value belongs to at most one
+ * identifier, emitted or accepted, so that two message classes can never be
+ * mistaken for each other.
+ */
 export interface WireProfile {
   readonly payloadTypes: WirePayloadTypes;
   readonly domains: WireDomains;
@@ -121,12 +126,26 @@ function values(entry: unknown, where: string, mediaType: boolean): string[] {
   return list;
 }
 
+function assertDisjoint(group: string, lists: Record<string, string[]>): void {
+  const owner = new Map<string, string>();
+  for (const [key, list] of Object.entries(lists)) {
+    for (const value of list) {
+      const other = owner.get(value);
+      if (other !== undefined) {
+        throw new TypeError(`wireProfileEnv: ${JSON.stringify(value)} is used by both ${group}.${other} and ${group}.${key}`);
+      }
+      owner.set(value, key);
+    }
+  }
+}
+
 /**
  * Render a {@link WireProfile} as the value of {@link WIRE_PROFILE_ENV}: one
  * line of canonical ASCII JSON in which every identifier is a list whose
  * first element is emitted and every element is accepted.
- * @throws TypeError when an identifier is missing or unknown, duplicated, or
- * not printable ASCII.
+ * @throws TypeError when an identifier is missing or unknown, a value is
+ * listed twice or by two identifiers of the same group, or a value is not
+ * printable ASCII.
  */
 export function wireProfileEnv(profile: WireProfile): { name: typeof WIRE_PROFILE_ENV; value: string } {
   const root = exactKeys(profile, ["payloadTypes", "domains"], "profile");
@@ -136,6 +155,8 @@ export function wireProfileEnv(profile: WireProfile): { name: typeof WIRE_PROFIL
     payloadTypes: Object.fromEntries(PAYLOAD_KEYS.map(k => [k, values(payloadTypes[k], `payloadTypes.${k}`, true)])),
     domains: Object.fromEntries(DOMAIN_KEYS.map(k => [k, values(domains[k], `domains.${k}`, false)])),
   };
+  assertDisjoint("payloadTypes", rendered.payloadTypes);
+  assertDisjoint("domains", rendered.domains);
   const value = canonicalJson(rendered);
   if (!/^[\x20-\x7e]+$/.test(value)) throw new TypeError("wireProfileEnv: rendered value is not single-line ASCII");
   return { name: WIRE_PROFILE_ENV, value };

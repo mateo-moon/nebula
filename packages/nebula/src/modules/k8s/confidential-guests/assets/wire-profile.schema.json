@@ -8,7 +8,7 @@
   "required": ["domains", "payloadTypes"],
   "properties": {
     "payloadTypes": {
-      "description": "DSSE payload types of the signed statements.",
+      "description": "DSSE payload types of the signed statements. Within this group a value appears in at most one identifier, emitted or accepted; readers reject a profile that breaks this.",
       "type": "object",
       "additionalProperties": false,
       "required": ["authorityRotation", "record", "release", "releaseSet"],
@@ -20,7 +20,7 @@
       }
     },
     "domains": {
-      "description": "Byte domains separating hashed and signed messages.",
+      "description": "Byte domains separating hashed and signed messages. Within this group a value appears in at most one identifier, emitted or accepted; readers reject a profile that breaks this.",
       "type": "object",
       "additionalProperties": false,
       "required": ["base", "controlAuthorization", "evidence", "handoff", "identityFingerprint", "replay", "secrets", "session", "workload"],
