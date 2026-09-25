@@ -224,6 +224,26 @@ export type {
   CustomContainerdConfig,
 } from "./confidential-containers";
 
+export {
+  NEUTRAL_WIRE,
+  WIRE_PROFILE_ENV,
+  canonicalJson,
+  confidentialGuestAssetUrl,
+  digestImage,
+  isDigestImage,
+  readConfidentialGuestAsset,
+  sha256Hex,
+  wireProfileEnv,
+} from "./confidential-guests";
+export type {
+  ConfidentialGuestAsset,
+  DigestImage,
+  WireDomains,
+  WirePayloadTypes,
+  WireProfile,
+  WireValue,
+} from "./confidential-guests";
+
 export { ArgocdImageUpdater } from "./argocd-image-updater";
 export type {
   ArgocdImageUpdaterConfig,
