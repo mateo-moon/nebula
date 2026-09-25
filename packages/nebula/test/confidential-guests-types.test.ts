@@ -21,6 +21,10 @@ test("digestImage accepts fully qualified repo@sha256 references and returns the
   }
 });
 
+// containerd normalizes Docker Hub references (distribution/reference):
+// index.docker.io becomes docker.io and a one-component docker.io name gains
+// library/. A policy bound to the unnormalized string would not match what
+// the runtime reports, so only the normalized spelling is accepted.
 test("digestImage rejects tags, short or foreign digests and anything a runtime would rewrite", () => {
   const invalid: unknown[] = [
     "",
@@ -41,6 +45,11 @@ test("digestImage rejects tags, short or foreign digests and anything a runtime 
     `ghcr.io/example/app-@sha256:${HEX}`,
     `ghcr.io/${"a".repeat(256)}@sha256:${HEX}`,
     `-registry.example.com/app@sha256:${HEX}`,
+    `docker.io/alpine@sha256:${HEX}`,
+    `index.docker.io/library/alpine@sha256:${HEX}`,
+    `registry-1.docker.io/library/alpine@sha256:${HEX}`,
+    `Docker.io/library/alpine@sha256:${HEX}`,
+    `docker.io:443/library/alpine@sha256:${HEX}`,
     123,
     null,
     undefined,
@@ -54,4 +63,6 @@ test("digestImage rejects tags, short or foreign digests and anything a runtime 
 test("digestImage explains why a reference was refused", () => {
   assert.throws(() => digestImage("ghcr.io/example/app:1.0"), /repo@sha256:<64 lowercase hex>/);
   assert.throws(() => digestImage(`example/app@sha256:${HEX}`), /registry host/);
+  assert.throws(() => digestImage(`docker.io/alpine@sha256:${HEX}`), /docker\.io\/library\/alpine/);
+  assert.throws(() => digestImage(`index.docker.io/library/alpine@sha256:${HEX}`), /docker\.io/);
 });

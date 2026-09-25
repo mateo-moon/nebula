@@ -8,7 +8,11 @@ declare const digestImageBrand: unique symbol;
  * a DigestImage is only ever validated, never rewritten: no default registry,
  * no `library/` prefix, no case folding, no tag. The registry host is
  * required because a container runtime would otherwise expand a short name,
- * and the name it pulls would no longer be the name the policy binds.
+ * and the name it pulls would no longer be the name the policy binds. For
+ * the same reason Docker Hub references must already be in the form a
+ * runtime normalizes to: host `docker.io` (not `index.docker.io` or
+ * `registry-1.docker.io`) and at least two path components
+ * (`docker.io/library/alpine`, not `docker.io/alpine`).
  */
 export type DigestImage = string & { readonly [digestImageBrand]: true };
 
@@ -20,6 +24,8 @@ const PATH_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*";
 const NAME = new RegExp(`^(${HOST})/${PATH_COMPONENT}(?:/${PATH_COMPONENT})*$`);
 const REFERENCE = /^([^@]+)@sha256:[a-f0-9]{64}$/;
 const MAX_NAME_LENGTH = 255;
+const DOCKER_HUB = "docker.io";
+const DOCKER_HUB_ALIASES = new Set([DOCKER_HUB, "index.docker.io", "registry-1.docker.io"]);
 
 function refusal(ref: unknown): string | undefined {
   if (typeof ref !== "string") return `expected a string, got ${ref === null ? "null" : typeof ref}`;
@@ -32,6 +38,11 @@ function refusal(ref: unknown): string | undefined {
   const host = parsed[1];
   if (!(host.includes(".") || host.includes(":") || host === "localhost")) {
     return `the first path component must be a registry host (for example ghcr.io/...), otherwise a runtime rewrites the name`;
+  }
+  if (DOCKER_HUB_ALIASES.has(host.replace(/:[0-9]+$/, "").toLowerCase())) {
+    if (host !== DOCKER_HUB) return `write the Docker Hub host as ${DOCKER_HUB}; a runtime rewrites ${host} to it`;
+    const path = name.slice(DOCKER_HUB.length + 1);
+    if (!path.includes("/")) return `a runtime rewrites ${name} to ${DOCKER_HUB}/library/${path}; write that instead`;
   }
   return undefined;
 }
