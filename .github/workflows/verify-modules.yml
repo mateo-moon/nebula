@@ -2,6 +2,7 @@ name: Verify modules
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch: {}
@@ -10,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: verify-modules-${{ github.ref }}
-  cancel-in-progress: true
+  group: verify-modules-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   nebula:
