@@ -91,6 +91,17 @@ test("a dependency loaded at import time is module loading, not I/O", () => {
   assert.deepEqual(importTimeViolations(result.events, scope).map(label), []);
 });
 
+// tsx keeps a transform cache in the temporary directory and cleans it up
+// from a setImmediate() callback, which can land while the probe is armed.
+test("the tsx loader's own file access is not attributed to the code under test", () => {
+  const tsxFrame = join(pkgDir, "node_modules", "tsx", "dist", "index.mjs");
+  const cache = join(tmpdir(), "tsx");
+  const byTsx: ProbeEvent = { kind: "stat", op: "access", path: cache, stack: [tsxFrame, "node:internal/timers"] };
+  assert.deepEqual(importTimeViolations([byTsx], scope), []);
+  const byFixture: ProbeEvent = { ...byTsx, stack: [join(fixture, "eager-exists.mjs"), tsxFrame] };
+  assert.deepEqual(importTimeViolations([byFixture], scope).map(e => e.path), [cache]);
+});
+
 test("every kind of import-time I/O is reported", () => {
   assert.deepEqual(reported("eager-read.mjs"), ["read fixture/asset.txt"]);
   assert.deepEqual(reported("eager-exists.mjs"), ["stat fixture/asset.txt"]);
