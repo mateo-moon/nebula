@@ -25,6 +25,9 @@ const privatePem = () => generateKeyPairSync("ed25519").privateKey.export({ form
 const opensshPrivate = () => pemBlock(["OPENSSH", "PRIVATE", "KEY"].join(" "), randomBytes(300).toString("base64").replace(/.{70}/g, "$&\n"));
 const account = ["3141", "5926", "5358"].join("");
 const email = ["alice", "acme-corp.io"].join("@");
+const b64 = (s) => Buffer.from(s).toString("base64");
+const der = (key, type) => key.export({ format: "der", type }).toString("base64");
+const hex128 = () => randomBytes(64).toString("hex");
 
 function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "publication-guard-"));
@@ -55,6 +58,76 @@ test("every class is detected in plain text", () => {
   }
 });
 
+test("registry namespaces, repository owners and domains outside the upstream lists are detected", () => {
+  const cases = {
+    "registry-namespace": [
+      "image: ghcr.io/someprivate-org/app:1",
+      "image: quay.io/someuser/app:1",
+      "image: public.ecr.aws/somealias/app:1",
+      "image: registry.gitlab.com/someorg/app:1",
+    ],
+    "repository-owner": [
+      "source: https://github.com/someprivate-org/repo",
+      "remote: git@github.com:someprivate-org/repo.git",
+      "see gitlab.com/someorg/project",
+    ],
+    "docker-hub-user": [
+      "user: docker.io/someuser",
+      "image: someuser/app:1",
+      '"image": "someuser/app@sha256:' + "ab".repeat(32) + '"',
+      "FROM someuser/base:1",
+      "FROM --platform=linux/amd64 someuser/base:1",
+    ],
+    domain: [
+      "api: https://git.someprivate.xyz/api/v1",
+      "host: build.someprivate.ninja",
+      "see someprivate.io for details",
+      "endpoint = metrics.someprivate.dev",
+      "url: oci://registry.someprivate.cloud/charts",
+    ],
+  };
+  for (const [cls, texts] of Object.entries(cases)) {
+    for (const text of texts) assert.deepEqual(classes(scan(text)), [cls], text);
+  }
+});
+
+test("public and dual-stack addresses are detected", () => {
+  const cases = {
+    "public-ip": ["peer 11.22.33.44", "cidr: 11.20.0.0/16", "endpoint: http://172.32.0.1:9000", "addr 2c0f:1234:5678::1", "[2c0f:ab::10]:443"],
+    "ula-ip": ["serviceCIDR: fd00:10:96::/112", "clusterIP: fd00:10:96::a"],
+    "cgnat-ip": ["node 100.64.3.4"],
+  };
+  for (const [cls, texts] of Object.entries(cases)) {
+    for (const text of texts) assert.deepEqual(classes(scan(text)), [cls], text);
+  }
+});
+
+test("dashed account ids, wrapped chip ids and short or header-less key encodings are detected", () => {
+  assert.deepEqual(classes(scan(`account ${["3141", "5926", "5358"].join("-")}`)), ["aws-account-id"]);
+  const chip = hex128();
+  const wrapped = [
+    `chip: |\n  ${chip.slice(0, 64)}\n  ${chip.slice(64)}\n`,
+    `${chip.slice(0, 60)}\n${chip.slice(60, 120)}\n${chip.slice(120)}\n`,
+    `const chip = "${chip.slice(0, 64)}" +\n  "${chip.slice(64)}";`,
+    `chip=${chip.slice(0, 50)}\\\n${chip.slice(50, 100)}\\\n${chip.slice(100)}`,
+  ];
+  for (const text of wrapped) assert.deepEqual(classes(scan(text)), ["hex-64-bytes"], text);
+
+  const ed = generateKeyPairSync("ed25519");
+  const ec = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const shortPem = b64(ed.privateKey.export({ format: "pem", type: "pkcs8" }));
+  assert.ok(shortPem.length < 512);
+  assert.deepEqual(classes(scan(`data:\n  key.pem: ${shortPem}\n`)), ["private-key"]);
+  assert.deepEqual(classes(scan(`key: ${b64(ec.privateKey.export({ format: "pem", type: "sec1" }))}`)), ["private-key"]);
+  assert.deepEqual(classes(scan(`key: ${b64(`note\n${ec.privateKey.export({ format: "pem", type: "pkcs8" })}`)}`)), ["private-key"]);
+  assert.deepEqual(classes(scan(`key: ${der(ed.privateKey, "pkcs8")}`)), ["private-key"]);
+  assert.deepEqual(classes(scan(`key: ${der(ec.privateKey, "sec1")}`)), ["private-key"]);
+  const rsa = generateKeyPairSync("rsa", { modulusLength: 1024 });
+  assert.deepEqual(classes(scan(`key:\n${der(rsa.privateKey, "pkcs1").replace(/.{64}/g, "$&\n")}\n`)), ["private-key"]);
+  assert.deepEqual(classes(scan(`pub: ${der(ed.publicKey, "spki")}`)), ["public-key"]);
+  assert.deepEqual(classes(scan(`pub: ${b64(ec.publicKey.export({ format: "pem", type: "spki" }))}`)), ["public-key"]);
+});
+
 test("upstream, documentation and near-miss values pass", () => {
   const clean = [
     "image: docker.io/library/alpine:3.20",
@@ -65,8 +138,23 @@ test("upstream, documentation and near-miss values pass", () => {
     "contact: someone@example.com, other@example.org, x@svc.example",
     "Co-Authored-By: Bot <noreply@anthropic.com>",
     "url: git@github.com:example/repo.git",
-    "public: 8.8.8.8, 172.32.0.1, 192.0.2.10, 198.51.100.7, 203.0.113.9",
-    "version 1.10.0.1-rc",
+    "public: 8.8.8.8, 1.1.1.1, 192.0.2.10, 198.51.100.7, 203.0.113.9",
+    "special: 127.0.0.1, 0.0.0.0/0, 169.254.169.254, 255.255.255.0, 224.0.0.251",
+    "version 1.10.0.1-rc, v3.4.5.6, OIDs 1.2.840.10045.2.1 and 2.5.4.3",
+    "v6: ::1, fe80::1, 2001:db8::1, 3fff::1, fd::a, 64:ff9b::1",
+    "not addresses: 12:34:56, aa:bb:cc:dd:ee:ff, std::string, Foo::Bar",
+    "image: quay.io/cilium/cilium:v1.18.0 and public.ecr.aws/eks/aws-load-balancer-controller:v2",
+    "source: https://github.com/kubernetes/kubernetes and https://github.com/confidential-containers/guest-components",
+    "docs: https://json-schema.org/draft/2020-12/schema, https://kubernetes.io/docs/ and https://www.example.org/x",
+    "cluster: http://kbs.guests.svc:8080, https://api.guests.svc.cluster.local, postgres://db.guests:5432, host: localhost",
+    "apiVersion: networking.k8s.io/v1, cert-manager.io/cluster-issuer, confidentialcontainers.org/v1beta1",
+    "code: import.meta.url, this.app.dev, tls.ca, provision.sh, node:net",
+    "image: ghcr.io/example/app@sha256:" + "ab".repeat(32) + " and image: docker.io/library/alpine:3",
+    "FROM docker.io/library/alpine:3.20",
+    "doc account 1234-5678-9012",
+    "Generated with [Claude Code](https://claude.com/claude-code)",
+    `digests: [\n  "${"ab".repeat(32)}",\n  "${"cd".repeat(32)}"\n]`,
+    "type: application/vnd.nebula.confidential-guests.release.v1+json",
     "eleven 12345678901 and thirteen 1234567890123",
     "documentation accounts 123456789012 and 111122223333",
     "sha256 " + "cd".repeat(32) + " and sha384 " + "ef".repeat(48),

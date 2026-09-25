@@ -29,3 +29,8 @@ The GitHub `Verify modules` workflow runs these tests together with
 `node --test scripts/publication-guard.test.mjs`) and a secret scan of the
 pushed commits. Tests use synthetic identities and do not contact any cloud
 API.
+
+The secret scan (gitleaks) does not read the guard's hash allowlist
+(`scripts/publication-guard.allow.json`). A committed test key allowlisted
+there also needs its gitleaks fingerprint in `.gitleaksignore`, added in the
+same change.
