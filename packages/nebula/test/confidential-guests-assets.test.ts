@@ -73,4 +73,7 @@ test("the wire-profile schema matches the emitted profile", () => {
     }
   }
   assert.ok(!item.test("A B") && !item.test("A\nB") && !item.test("é") && !item.test(""));
+  for (const group of ["payloadTypes", "domains"]) {
+    assert.match(schema.properties[group].description, /at most one identifier/, `${group} must state the one-identifier rule`);
+  }
 });

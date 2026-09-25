@@ -82,3 +82,28 @@ test("wireProfileEnv refuses values that cannot travel as one line of ASCII", ()
   ];
   for (const [label, patch] of bad) assert.throws(() => wireProfileEnv(withIdentifier(patch)), TypeError, label);
 });
+
+// Byte domains keep message classes apart, and payload types tell verifiers
+// what a signed statement is: within a group, one value belongs to one
+// identifier, whether emitted or accepted.
+test("wireProfileEnv refuses a value shared by two identifiers of a group", () => {
+  const clashes: [string, (p: any) => void][] = [
+    ["domain emitted by two identifiers", p => { p.domains.session = { emit: "CONFIDENTIAL_GUESTS_HANDOFF_V1" }; }],
+    ["domain accepted where another emits it", p => { p.domains.session.accept = ["CONFIDENTIAL_GUESTS_HANDOFF_V1"]; }],
+    ["domain accepted by two identifiers", p => { p.domains.session.accept = ["LEGACY_V0"]; p.domains.base.accept = ["LEGACY_V0"]; }],
+    ["payload type emitted by two identifiers", p => { p.payloadTypes.record = { emit: `${PT}.release.v1+json` }; }],
+    ["payload type accepted where another emits it", p => { p.payloadTypes.releaseSet.accept = [`${PT}.release.v1+json`]; }],
+    ["payload type accepted by two identifiers", p => {
+      p.payloadTypes.release.accept = ["application/vnd.legacy.v1+json"];
+      p.payloadTypes.record.accept = ["application/vnd.legacy.v1+json"];
+    }],
+  ];
+  for (const [label, patch] of clashes) {
+    assert.throws(() => wireProfileEnv(withIdentifier(patch)), /used by both/, label);
+  }
+  const shared = withIdentifier(p => {
+    p.domains.session.accept = ["application/vnd.shared+json"];
+    p.payloadTypes.record.accept = ["application/vnd.shared+json"];
+  });
+  assert.doesNotThrow(() => wireProfileEnv(shared), "the two groups are separate namespaces");
+});
