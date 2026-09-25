@@ -1,44 +1,45 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   NEUTRAL_WIRE,
   confidentialGuestAssetUrl,
   readConfidentialGuestAsset,
   wireProfileEnv,
 } from "../src/modules/k8s/confidential-guests";
+import { importTimeViolations, probeImport, type ImportScope } from "./support/import-io";
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const moduleDir = join(pkgDir, "src", "modules", "k8s", "confidential-guests");
 
-test("assets are read only when asked for, never when the module is imported", t => {
-  const work = mkdtempSync(join(tmpdir(), "cg-assets-"));
+// Import-time I/O as defined in support/import-io.ts (controlled by
+// io-probe.test.ts): reads, listings, stats and writes by module code, of
+// module files or outside the dependencies, eager non-code imports, spawns.
+test("the module does no file I/O when imported, and reads an asset only when asked", t => {
+  const work = realpathSync(mkdtempSync(join(tmpdir(), "cg-assets-")));
   t.after(() => rmSync(work, { recursive: true, force: true }));
-  const entry = join(work, "entry.mjs");
-  writeFileSync(entry, [
-    "const probe = globalThis.__ioProbe;",
-    "probe.arm();",
-    `const mod = await import(${JSON.stringify(pathToFileURL(join(moduleDir, "index.ts")).href)});`,
-    "const atImport = probe.disarm();",
-    "probe.arm();",
-    'mod.readConfidentialGuestAsset("wire-profile.schema.json");',
-    "const onCall = probe.disarm();",
-    "process.stdout.write(JSON.stringify({ atImport, onCall }));",
-  ].join("\n"));
-  const out = execFileSync(process.execPath, ["--import", "tsx", "--import", join(pkgDir, "test", "support", "io-probe.mjs"), entry], {
-    cwd: pkgDir, encoding: "utf8",
+  const result = probeImport({
+    cwd: pkgDir,
+    entryDir: work,
+    specifier: join(moduleDir, "index.ts"),
+    call: "readConfidentialGuestAsset",
+    args: ["wire-profile.schema.json"],
   });
-  const { atImport, onCall } = JSON.parse(out) as Record<string, { kind: string; path: string }[]>;
-  const inModule = (events: { kind: string; path: string }[]) =>
-    events.filter(e => e.kind !== "read" || !/\.(ts|js|mjs|cjs)$/.test(e.path))
-      .map(e => relative(realpathSync(moduleDir), realpathSync(e.path)))
-      .filter(p => !p.startsWith(".."));
-  assert.deepEqual(inModule(atImport), [], "importing the module read an asset");
-  assert.deepEqual(inModule(onCall), ["assets/wire-profile.schema.json"], "the probe must see the lazy read");
+  const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules")] };
+  const real = (p: string) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  const shown = (events: { kind: string; path: string }[]) => events.map(e => `${e.kind} ${relative(real(moduleDir), real(e.path))}`);
+  assert.ok(result.events.some(e => e.kind === "load" && e.path.endsWith("assets.ts")), "the probe must see the module being loaded");
+  assert.deepEqual(shown(importTimeViolations(result.events, scope)), [], "importing the module did file I/O");
+  assert.deepEqual(shown(importTimeViolations(result.after, scope)), ["read assets/wire-profile.schema.json"], "the probe must see the lazy read");
 });
 
 test("asset names are a closed set and resolve inside the module", () => {
