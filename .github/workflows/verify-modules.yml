@@ -1,0 +1,109 @@
+name: Verify modules
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-modules-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nebula:
+    name: Tests, types and policies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/nebula
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm install --frozen-lockfile
+      - name: Tests (including the packed-tarball import test)
+        run: pnpm test
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm verify:policies
+
+  publication-guard:
+    name: Publication guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Guard self-test
+        run: node --test scripts/publication-guard.test.mjs
+      - name: Scan module paths
+        run: node scripts/publication-guard.mjs
+      - name: Scan pull request title, branch, body and commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -o pipefail
+          printf '%s\n' "$PR_TITLE" "$HEAD_REF" "$PR_BODY" | node scripts/publication-guard.mjs --stdin --label pull-request
+          git log --format=%B "$BASE_SHA..$HEAD_SHA" | node scripts/publication-guard.mjs --stdin --label commit-messages
+      - name: Scan pushed commit messages
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          if [ -z "${BEFORE//0/}" ]; then set -- -1 "$AFTER"; else set -- "$BEFORE..$AFTER"; fi
+          git log --format=%B "$@" | node scripts/publication-guard.mjs --stdin --label commit-messages
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan new commits
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            range="$BASE_SHA..$HEAD_SHA"
+          elif [ "$EVENT" = push ] && [ -n "${BEFORE//0/}" ]; then
+            range="$BEFORE..$AFTER"
+          else
+            range="-1 $AFTER"
+          fi
+          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --log-opts="$range" .
