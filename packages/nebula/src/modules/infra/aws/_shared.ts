@@ -231,7 +231,7 @@ export function emitAwsClusterCr(
     /**
      * Extra ingress rules appended to the NODE security group (CAPA
      * `network.additionalNodeIngressRules`). Use for workloads that need
-     * public inbound ports on the workers, e.g. Ethereum P2P (30303 + 9000
+     * public inbound ports on the workers, e.g. a P2P client (30303 + 9000
      * tcp/udp from 0.0.0.0/0). Omitted = the node SG stays CAPA-default
      * (intra-cluster only).
      */

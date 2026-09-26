@@ -12,7 +12,7 @@ all:
       vars:
       hosts:
         io.jupiter.nebula:
-          ansible_host: 173.214.163.130
+          ansible_host: 192.0.2.10
           ansible_user: root
           node_public_name: bright-side-3
           node_role: validator

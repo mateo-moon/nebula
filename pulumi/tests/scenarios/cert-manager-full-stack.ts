@@ -11,7 +11,7 @@
  *     kubeconfig: '.config/kube-config-dev-gke',
  *     certManager: {
  *       namespace: 'cert-manager',
- *       acmeEmail: 'devops@kampe.la',
+ *       acmeEmail: 'admin@example.com',
  *     },
  *   })
  */

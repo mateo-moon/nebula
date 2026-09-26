@@ -186,9 +186,9 @@ export interface PrometheusOperatorConfig {
     /** Promtail Helm chart version */
     version?: string;
     /**
-     * Promtail pod tolerations. When set, REPLACES the default list entirely
-     * (module `tolerations` + the tool-node toleration) — all-tainted member
-     * clusters need exact control, e.g. Exists-operator tolerations.
+     * Promtail pod tolerations. When set, REPLACES the default list (the
+     * module `tolerations`) — all-tainted member clusters need exact control,
+     * e.g. Exists-operator tolerations.
      */
     tolerations?: Toleration[];
   };
@@ -626,12 +626,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
                   },
             ],
           },
-          // promtail.tolerations replaces the default list entirely (see the
-          // config JSDoc) — the default tool-node toleration is hub-specific.
-          tolerations: this.config.promtail?.tolerations ?? [
-            ...defaultTolerations,
-            { key: "workload", value: "tool-node", effect: "NoSchedule" },
-          ],
+          tolerations: this.config.promtail?.tolerations ?? defaultTolerations,
           resources: {
             requests: { cpu: "100m", memory: "128Mi" },
             limits: { cpu: "200m", memory: "256Mi" },

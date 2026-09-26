@@ -26,7 +26,7 @@ export { AwsK0sProvider } from "./k0s-provider";
 export type { AwsMachineSpec, AwsK0sProviderConfig } from "./k0s-provider";
 
 export interface AwsRoute53ZoneConfig {
-  /** DNS name of the hosted zone (e.g. "aws.nuconstruct.xyz") */
+  /** DNS name of the hosted zone (e.g. "aws.example.com") */
   name: string;
   /** Comment on the zone */
   comment?: string;
@@ -76,9 +76,9 @@ export interface AwsConfig {
  * ```typescript
  * new AwsProvider(chart, 'aws-provider', { families: ['ec2', 'iam', 'route53', 'kms'], credentials: {...} });
  * new Aws(chart, 'aws', {
- *   name: 'nucon-aws',
+ *   name: 'my-aws',
  *   region: 'eu-central-1',
- *   route53Zone: { name: 'aws.nuconstruct.xyz' },
+ *   route53Zone: { name: 'aws.example.com' },
  *   kmsKey: { multiRegion: true },
  * });
  * ```

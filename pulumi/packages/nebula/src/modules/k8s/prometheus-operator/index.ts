@@ -625,8 +625,7 @@ export class PrometheusOperator extends BaseModule {
           }
         },
         tolerations: [
-          { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
-          { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
+          { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
         ],
         resources: {
           requests: {
