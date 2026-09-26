@@ -66,11 +66,11 @@ test("replacement is one pass: a target value never becomes a later reference va
 });
 
 test("a stage placeholder writes only its magic first sector and refuses a changed one", () => {
-  const magic = "EXAMPLE-STAGE-PLACEHOLDER-V1\n";
+  const magic = "example.placeholder/v1\n";
   const script = provisionScript({ ...target, sizeBytes: 16 * 1024 ** 2, sizeLabel: "16Mi", placeholderMagic: magic });
   const sector = Buffer.concat([Buffer.from(magic, "ascii"), Buffer.alloc(512 - magic.length)]);
   const sha = createHash("sha256").update(sector).digest("hex");
-  assert.ok(script.includes("(set -C; printf 'EXAMPLE-STAGE-PLACEHOLDER-V1\\n' > \"$file\")\n  fallocate -l \"$size\" \"$file\"\n"));
+  assert.ok(script.includes("(set -C; printf 'example.placeholder/v1\\n' > \"$file\")\n  fallocate -l \"$size\" \"$file\"\n"));
   assert.ok(script.includes("  echo 'refusing changed backing file'; exit 1;\n}\n"
     + `[ "$(head -c 512 "$file" | sha256sum | cut -d' ' -f1)" = '${sha}' ] || {\n`
     + "  echo 'refusing changed stage placeholder'; exit 1;\n}\n"));
@@ -86,11 +86,14 @@ test("a stage placeholder writes only its magic first sector and refuses a chang
 });
 
 test("a placeholder magic is printable ASCII that printf and the shell take literally, one sector at most", () => {
-  for (const magic of ["", "\n", "it's", "100%", "back\\slash", "two\nlines\n", "space here", "é", "$(id)", "`id`", "x".repeat(513), "x".repeat(512) + "\n"]) {
+  // printf would read a leading '-' as an option, leave the new file empty and refuse it on every restart.
+  for (const magic of ["", "\n", "it's", "100%", "back\\slash", "two\nlines\n", "space here", "é", "$(id)", "`id`", "x".repeat(513), "x".repeat(512) + "\n",
+    "-v", "--x\n", "-X-PLACEHOLDER\n", "-"]) {
     assert.throws(() => provisionScript({ ...target, placeholderMagic: magic }), /placeholder magic/, JSON.stringify(magic));
   }
   assert.doesNotThrow(() => provisionScript({ ...target, placeholderMagic: "x".repeat(511) + "\n" }));
   assert.doesNotThrow(() => provisionScript({ ...target, placeholderMagic: "x".repeat(512) }));
+  assert.doesNotThrow(() => provisionScript({ ...target, placeholderMagic: "x-v\n" }), "a '-' after the first byte is literal");
 });
 
 test("a template must contain every reference value, and the placeholder anchors once", () => {
@@ -99,6 +102,11 @@ test("a template must contain every reference value, and the placeholder anchors
   assert.throws(() => provisionScript({ ...target, template: missing }), /reference value/);
   const overlapping: ProvisionTemplate = { reference: { ...base.reference, file: "data-v1.img", stateDir: "/var/lib/data-v1.img" }, script: base.script };
   assert.throws(() => provisionScript({ ...target, template: overlapping }), /reference value/);
+  // Two reference values that are the same text (a size label in plain bytes)
+  // would both map to one replacement, and the size check could never pass.
+  const plainBytes: ProvisionTemplate = { reference: { ...base.reference, sizeLabel: String(base.reference.sizeBytes) },
+    script: base.script.replace(`'dedicated retained ${base.reference.sizeLabel} block volume ready'`, `'dedicated retained ${base.reference.sizeBytes} block volume ready'`) };
+  assert.throws(() => provisionScript({ ...target, sizeBytes: 2 * GiB, sizeLabel: "2Gi", template: plainBytes }), /reference values? .*twice/);
   const noAnchor: ProvisionTemplate = { reference: base.reference, script: base.script.replace("(set -C; : > \"$file\")", "touch \"$file\"") };
   assert.doesNotThrow(() => provisionScript({ ...target, template: noAnchor }));
   assert.throws(() => provisionScript({ ...target, template: noAnchor, placeholderMagic: "M\n" }), /placeholder/);

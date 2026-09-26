@@ -14,9 +14,10 @@ import { importTimeViolations, probeImport, type ImportScope } from "./support/i
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const moduleDir = join(pkgDir, "src", "modules", "k8s", "confidential-guests");
-// The module may load other package sources (such as core/argocd.ts) and the
-// installed dependencies; loading them is module loading, not file I/O.
-const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules"), join(pkgDir, "src")] };
+// The module may load the installed dependencies and the package's core
+// helpers (core/argocd.ts); loading them is module loading, not file I/O. Any
+// other package source it reached would be judged like its own code.
+const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules"), join(pkgDir, "src", "core")] };
 
 // Import-time I/O as defined in support/import-io.ts (controlled by
 // io-probe.test.ts): reads, listings, stats and writes by module code, of

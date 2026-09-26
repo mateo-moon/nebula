@@ -1,6 +1,6 @@
 import { Construct } from "constructs";
 import { KubeDeployment, KubePersistentVolume, KubePersistentVolumeClaim, Quantity } from "cdk8s-plus-33/lib/imports/k8s";
-import { validateDiskTable, type DiskEntry, type DiskTable } from "./disk-table";
+import { validateDiskTable, type DiskEntry, type DiskSize, type DiskTable } from "./disk-table";
 import { NriKeyInjector, type NriKeyInjectorProps } from "./key-injector";
 import { provisionScript, validSize, type ProvisionTemplate } from "./provision";
 import {
@@ -15,7 +15,12 @@ export interface SealedDiskRole {
   readonly claim: string;
   /** Backing file name prefix inside the state directory. */
   readonly file: string;
-  /** Size in bytes: a positive multiple of 512. */
+  /**
+   * Size in bytes of the live generation (and of every earlier one that
+   * states no size of its own): a positive multiple of 512. When it changes,
+   * give each retained or declared generation made at the old size that size
+   * in the table ({@link DiskSize}): its claim cannot be resized.
+   */
   readonly sizeBytes: number;
   /** The same size as a Kubernetes quantity (plain bytes or a binary suffix). */
   readonly sizeLabel: string;
@@ -110,9 +115,11 @@ function validRoles(roles: unknown, where: string): SealedDiskRole[] {
   });
 }
 
-const diskOf = (layout: SealedDiskRole, role: string, { generation, loop }: DiskEntry): SealedDisk => ({
+// A retained or retired generation may keep the size it was made with; any
+// other generation has its role's.
+const diskOf = (layout: SealedDiskRole, role: string, { generation, loop, sizeBytes, sizeLabel }: DiskEntry & DiskSize): SealedDisk => ({
   role, generation, claim: `${layout.claim}-v${generation}`, file: `${layout.file}-v${generation}.img`, loop, device: `/dev/loop${loop}`,
-  sizeBytes: layout.sizeBytes, sizeLabel: layout.sizeLabel,
+  sizeBytes: sizeBytes ?? layout.sizeBytes, sizeLabel: sizeLabel ?? layout.sizeLabel,
 });
 
 /**
@@ -131,11 +138,12 @@ export function sealedDisksPlan(roles: readonly SealedDiskRole[], table: DiskTab
     }
   }
   validateDiskTable(table);
-  const disk = (role: string, entry: DiskEntry) => diskOf(byRole.get(role)!, role, entry);
+  const disk = (role: string, entry: DiskEntry & DiskSize) => diskOf(byRole.get(role)!, role, entry);
   return {
     live: layouts.map(layout => disk(layout.role, table.live[layout.role])),
-    retained: table.retained.map(({ role, generation, loop }) => disk(role, { generation, loop })),
-    retiring: table.retired.filter(entry => entry.declared).map(({ role, generation, loop }) => disk(role, { generation, loop })),
+    retained: table.retained.map(({ role, generation, loop, sizeBytes, sizeLabel }) => disk(role, { generation, loop, sizeBytes, sizeLabel })),
+    retiring: table.retired.filter(entry => entry.declared)
+      .map(({ role, generation, loop, sizeBytes, sizeLabel }) => disk(role, { generation, loop, sizeBytes, sizeLabel })),
   };
 }
 

@@ -16,7 +16,7 @@ export interface ProvisionReference {
  * retargeted to another disk by replacing the reference values: the state
  * directory, the backing file, `/dev/loop<minor>`, `b 7 <minor>`,
  * `'7:<minor in hex>'`, the size in bytes and the size label. Each must occur
- * in the script, and none may contain another.
+ * in the script, and no two may be equal or contain one another.
  */
 export interface ProvisionTemplate {
   readonly script: string;
@@ -38,7 +38,8 @@ export interface ProvisionScriptProps {
    * Makes the disk a stage placeholder: a new file starts with this magic
    * (then zeros) instead of zeros, and a file whose first sector differs is
    * refused. Printable ASCII without `'`, `%`, `\`, spaces or shell
-   * metacharacters, optionally ending in one line feed, at most 512 bytes.
+   * metacharacters, not starting with `-` (printf would read it as an option),
+   * optionally ending in one line feed, at most 512 bytes.
    */
   readonly placeholderMagic?: string;
   /** Defaults to {@link defaultProvisionTemplate}. */
@@ -59,7 +60,7 @@ const WHERE = "provisionScript";
 const FILE = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 const SIZE_LABEL = /^([1-9][0-9]*)(Ki|Mi|Gi|Ti|Pi|Ei)?$/;
 const UNITS: Record<string, bigint> = { Ki: 1n << 10n, Mi: 1n << 20n, Gi: 1n << 30n, Ti: 1n << 40n, Pi: 1n << 50n, Ei: 1n << 60n };
-const MAGIC = /^[A-Za-z0-9._:=+/-]+\n?$/;
+const MAGIC = /^[A-Za-z0-9._:=+/][A-Za-z0-9._:=+/-]*\n?$/;
 // The anchors a placeholder rewrites: file creation, and the end of the
 // backing-file check after which the first-sector check goes.
 const CREATED = '(set -C; : > "$file")';
@@ -92,7 +93,7 @@ const tokens = (disk: ProvisionReference): string[] => [
 
 function placeholderSector(magic: unknown): { printf: string; sha256: string } {
   if (typeof magic !== "string" || !MAGIC.test(magic) || Buffer.byteLength(magic, "ascii") > 512) {
-    fail(WHERE, `placeholder magic must be at most 512 bytes of [A-Za-z0-9._:=+/-], optionally ending in one line feed`);
+    fail(WHERE, "placeholder magic must be at most 512 bytes of [A-Za-z0-9._:=+/-], not starting with '-', optionally ending in one line feed");
   }
   const sector = Buffer.alloc(512);
   sector.write(magic, "ascii");
@@ -115,6 +116,10 @@ export function provisionScript(props: ProvisionScriptProps): string {
   if (typeof template?.script !== "string") fail(WHERE, `template.script must be a string`);
   const reference = validDisk(template.reference, `${WHERE}: template.reference`);
   const from = tokens(reference), to = tokens(target);
+  // Two equal reference values (a size label in plain bytes) would map to one
+  // replacement, and the script's own size check could then never pass.
+  const repeated = from.find((token, i) => from.indexOf(token) !== i);
+  if (repeated !== undefined) fail(WHERE, `the template's reference values must differ: ${JSON.stringify(repeated)} is given twice`);
   for (const token of from) {
     if (!template.script.includes(token)) fail(WHERE, `the template does not contain its reference value ${JSON.stringify(token)}`);
     if (from.some(other => other !== token && other.includes(token))) {
