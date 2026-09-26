@@ -90,7 +90,7 @@ export interface AwsWorkerFleetOptions {
   sshSecretName: string;
   /** LVM VG name on data-bearing nodes (OpenEBS LocalPV-LVM). */
   dataVgName: string;
-  /** Organization tag/label domain, e.g. "example.io" — used for the
+  /** Organization tag/label domain, e.g. "example.com" — used for the
    *  purpose/geo/node tags and the spot Machine label. */
   tagDomain: string;
   /** Purpose tag value for fleet EIPs and instances, e.g. "stage-worker". */
