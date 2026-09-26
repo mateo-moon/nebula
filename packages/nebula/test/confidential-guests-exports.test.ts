@@ -22,6 +22,20 @@ const RUNTIME_EXPORTS = [
   "validateDiskTable",
   "wireProfileEnv",
 ];
+// The guest env contract: its reader and renderers.
+const GUEST_ENV_EXPORTS = [
+  "GuestEnvError",
+  "NEUTRAL_SEALED_STORAGE",
+  "NEUTRAL_WORKLOAD_API",
+  "STORAGE_LAYOUT_ENV",
+  "WORKLOAD_API_ENV",
+  "adapterModeEnv",
+  "guestEnv",
+  "readGuestEnv",
+  "sealedStorageEnv",
+  "storageLayoutEnv",
+  "workloadApiEnv",
+];
 // The guest lifecycle constructs and helpers.
 const LIFECYCLE_EXPORTS = [
   "ConfidentialGuestStack",
@@ -44,7 +58,7 @@ const LIFECYCLE_EXPORTS = [
   "lifecycleNames",
   "measuredGuest",
 ];
-RUNTIME_EXPORTS.push(...LIFECYCLE_EXPORTS);
+RUNTIME_EXPORTS.push(...LIFECYCLE_EXPORTS, ...GUEST_ENV_EXPORTS);
 RUNTIME_EXPORTS.sort();
 
 test("the package root re-exports the confidential-guests module unchanged", () => {

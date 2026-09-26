@@ -1,0 +1,1 @@
+{"keyResolverDomain":"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1","mode":"attest","routes":{"config":"/v1/config","evidence":"/v1/session/evidence-bundle","sign":"/v1/sign-message","status":"/v1/status","verify":"/v1/verify-session-bundle"},"signDomain":"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1"}

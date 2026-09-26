@@ -1,4 +1,7 @@
 import { canonicalJson } from "./canonical";
+import { WIRE_PROFILE_ENV, explicitDeploymentError, readWireProfileValue } from "./guest-env";
+
+export { WIRE_PROFILE_ENV } from "./guest-env";
 
 /**
  * One wire identifier. A deployment emits exactly one value and accepts that
@@ -12,7 +15,7 @@ export interface WireValue {
   readonly accept?: readonly string[];
 }
 
-/** DSSE payload types of the signed statements. */
+/** DSSE payload types of the signed statements: `application/vnd.<schema>+json`, the schema `[a-z0-9][a-z0-9._-]*`. */
 export interface WirePayloadTypes {
   readonly release: WireValue;
   readonly releaseSet: WireValue;
@@ -23,7 +26,11 @@ export interface WirePayloadTypes {
 /**
  * Byte domains that separate hashed and signed messages. Values are ASCII
  * prefixes; consumers append the NUL separators themselves (`\0`, and for
- * the handoff domain `\0source\0` / `\0target\0`).
+ * the handoff domain `\0source\0` / `\0target\0`). The session and
+ * control-bridge schemas derive from the session and controlAuthorization
+ * domains (lower case, `_` as `.`). The identity record's header and
+ * fingerprint domain are the disk's, not the wire's: they are in the storage
+ * layout ({@link GuestRecordFormat}).
  */
 export interface WireDomains {
   readonly handoff: WireValue;
@@ -33,33 +40,50 @@ export interface WireDomains {
   readonly workload: WireValue;
   readonly replay: WireValue;
   readonly controlAuthorization: WireValue;
-  readonly secrets: WireValue;
-  readonly identityFingerprint: WireValue;
 }
 
 /**
- * Every identifier a confidential guest and its verifiers put on the wire.
- * Within a group (payload types, byte domains) a value belongs to at most one
+ * The names a confidential guest and its verifiers put on the wire. Within a
+ * group (payload types, byte domains) a value belongs to at most one
  * identifier, emitted or accepted, so that two message classes can never be
  * mistaken for each other.
  */
-export interface WireProfile {
+export interface WireNames {
   readonly payloadTypes: WirePayloadTypes;
   readonly domains: WireDomains;
 }
 
-/** Environment variable that carries a {@link WireProfile} into a guest. */
-export const WIRE_PROFILE_ENV = "GUEST_WIRE_PROFILE";
+/** What a release set and a release may carry beyond their fixed fields. */
+export interface WireReleaseSet {
+  /**
+   * The release scope as `field=value`: the emitted entry is what signers
+   * write, and every entry is accepted. The field is `[a-z][a-z0-9_]{0,31}`
+   * and none of a release's fixed fields; the value is a lower-case name.
+   */
+  readonly scope: WireValue;
+  /** The member roles a release set may name, `node` among them; lower-case names. */
+  readonly roles: readonly string[];
+}
 
-const PAYLOAD_KEYS = ["release", "releaseSet", "record", "authorityRotation"] as const;
-const DOMAIN_KEYS = [
-  "handoff", "session", "evidence", "base", "workload", "replay", "controlAuthorization", "secrets", "identityFingerprint",
-] as const;
+/**
+ * Everything one guest Pod puts on the wire: the deployment's names, its
+ * release rules, and the Pod's own workload reference. nebula renders no
+ * legacy default, so `releaseSet` and `workloadRef` are required.
+ */
+export interface WireProfile extends WireNames {
+  readonly releaseSet: WireReleaseSet;
+  /**
+   * The workload this Pod's adapter serves, compared exactly (never an
+   * accept list): it ties the adapter to its own workload in the same Pod, so
+   * two Pods of one deployment differ here only.
+   */
+  readonly workloadRef: string;
+}
 
 const payloadType = (kind: string) => ({ emit: `application/vnd.nebula.confidential-guests.${kind}+json` });
 const domain = (name: string) => ({ emit: `CONFIDENTIAL_GUESTS_${name}` });
 
-function deepFreeze<T>(value: T): T {
+export function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object") {
     for (const child of Object.values(value)) deepFreeze(child);
     Object.freeze(value);
@@ -72,7 +96,7 @@ function deepFreeze<T>(value: T): T {
  * them stays verifiable only while verifiers keep accepting the name, so a
  * change here is a new identifier (a new version suffix), never an edit.
  */
-export const NEUTRAL_WIRE: WireProfile = deepFreeze({
+export const NEUTRAL_WIRE: WireNames = deepFreeze({
   payloadTypes: {
     release: payloadType("release.v1"),
     releaseSet: payloadType("release-set.v2"),
@@ -87,77 +111,60 @@ export const NEUTRAL_WIRE: WireProfile = deepFreeze({
     workload: domain("WORKLOAD_V1"),
     replay: domain("REPLAY_V1"),
     controlAuthorization: domain("CONTROL_AUTHORIZATION_V1"),
-    secrets: domain("SECRETS_V1"),
-    identityFingerprint: domain("IDENTITY_FINGERPRINT_V1"),
   },
 });
 
-// Printable ASCII without spaces: no NUL, no line breaks, nothing a shell,
-// an env file or a byte-domain prefix could mangle.
-const WIRE_STRING = /^[\x21-\x7e]+$/;
-const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
+const WHERE = "wireProfileEnv";
+const isPlain = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
-function exactKeys(value: unknown, keys: readonly string[], where: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`wireProfileEnv: ${where} must be an object`);
-  const actual = Object.keys(value);
-  const missing = keys.filter(k => !actual.includes(k));
-  const extra = actual.filter(k => !keys.includes(k));
-  if (missing.length || extra.length) {
-    throw new TypeError(`wireProfileEnv: ${where}: missing [${missing.join(", ")}], unknown [${extra.join(", ")}]`);
+/** An identifier as the list a guest reads: the emitted value first, then the accepted ones in order. */
+function identifier(entry: unknown, where: string): unknown[] {
+  if (!isPlain(entry) || Object.keys(entry).some(key => key !== "emit" && key !== "accept")) {
+    throw new TypeError(`${WHERE}: ${where} must be {emit, accept?}`);
   }
-  return value as Record<string, unknown>;
+  if (entry.emit === undefined) throw new TypeError(`${WHERE}: ${where}.emit is required`);
+  if (entry.accept !== undefined && !Array.isArray(entry.accept)) throw new TypeError(`${WHERE}: ${where}.accept must be a list`);
+  return [entry.emit, ...((entry.accept as unknown[] | undefined) ?? [])];
 }
 
-function values(entry: unknown, where: string, mediaType: boolean): string[] {
-  const wire = entry as WireValue;
-  if (wire === null || typeof wire !== "object" || Array.isArray(wire)) throw new TypeError(`wireProfileEnv: ${where} must be {emit, accept?}`);
-  const extra = Object.keys(wire).filter(k => k !== "emit" && k !== "accept");
-  if (extra.length) throw new TypeError(`wireProfileEnv: ${where}: unknown [${extra.join(", ")}]`);
-  if (wire.accept !== undefined && !Array.isArray(wire.accept)) throw new TypeError(`wireProfileEnv: ${where}.accept must be a list`);
-  const list = [wire.emit, ...(wire.accept ?? [])];
-  list.forEach((value, i) => {
-    const at = i === 0 ? `${where}.emit` : `${where}.accept[${i - 1}]`;
-    if (typeof value !== "string" || !WIRE_STRING.test(value)) {
-      throw new TypeError(`wireProfileEnv: ${at} must be non-empty printable ASCII without spaces, NUL or line breaks`);
-    }
-    if (mediaType && !MEDIA_TYPE.test(value)) throw new TypeError(`wireProfileEnv: ${at} is not a media type`);
-  });
-  if (new Set(list).size !== list.length) throw new TypeError(`wireProfileEnv: ${where} lists a value twice`);
-  return list;
+/** Every identifier of a group as a list; anything that is not a group is left for the guest's rules to refuse. */
+function group(value: unknown, name: string): unknown {
+  if (!isPlain(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, identifier(entry, `${name}.${key}`)]));
 }
 
-function assertDisjoint(group: string, lists: Record<string, string[]>): void {
-  const owner = new Map<string, string>();
-  for (const [key, list] of Object.entries(lists)) {
-    for (const value of list) {
-      const other = owner.get(value);
-      if (other !== undefined) {
-        throw new TypeError(`wireProfileEnv: ${JSON.stringify(value)} is used by both ${group}.${other} and ${group}.${key}`);
-      }
-      owner.set(value, key);
-    }
+/** The GUEST_WIRE_PROFILE document of a profile; its keys are checked by the guest's rules afterwards. */
+function document(profile: WireProfile): Record<string, unknown> {
+  if (!isPlain(profile)) throw new TypeError(`${WHERE}: profile must be an object`);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(profile)) {
+    if (value === undefined) continue;
+    if (key === "payloadTypes" || key === "domains") out[key] = group(value, key);
+    else if (key === "releaseSet" && isPlain(value)) out[key] = { ...value, ...(value.scope !== undefined ? { scope: identifier(value.scope, "releaseSet.scope") } : {}) };
+    else out[key] = value;
   }
+  return out;
 }
 
 /**
  * Render a {@link WireProfile} as the value of {@link WIRE_PROFILE_ENV}: one
  * line of canonical ASCII JSON in which every identifier is a list whose
- * first element is emitted and every element is accepted.
- * @throws TypeError when an identifier is missing or unknown, a value is
- * listed twice or by two identifiers of the same group, or a value is not
- * printable ASCII.
+ * first element is emitted and every element is accepted. The value is read
+ * back by the guest's rules, so a value a guest would refuse fails here with
+ * the guest's message ({@link GuestEnvError}): `$` (the kubelet rewrites it),
+ * a byte that is not printable ASCII, more than 16 KiB, a payload type that
+ * is not `application/vnd.<schema>+json` in lower case, a value used by two
+ * identifiers of a group, two authorization domains of one derived schema, a
+ * missing or unknown key.
+ * @throws TypeError when an identifier is not `{emit, accept?}`.
+ * @throws GuestEnvError when a guest would refuse the value, or it lacks
+ *   `releaseSet` or `workloadRef`.
  */
 export function wireProfileEnv(profile: WireProfile): { name: typeof WIRE_PROFILE_ENV; value: string } {
-  const root = exactKeys(profile, ["payloadTypes", "domains"], "profile");
-  const payloadTypes = exactKeys(root.payloadTypes, PAYLOAD_KEYS, "payloadTypes");
-  const domains = exactKeys(root.domains, DOMAIN_KEYS, "domains");
-  const rendered = {
-    payloadTypes: Object.fromEntries(PAYLOAD_KEYS.map(k => [k, values(payloadTypes[k], `payloadTypes.${k}`, true)])),
-    domains: Object.fromEntries(DOMAIN_KEYS.map(k => [k, values(domains[k], `domains.${k}`, false)])),
-  };
-  assertDisjoint("payloadTypes", rendered.payloadTypes);
-  assertDisjoint("domains", rendered.domains);
-  const value = canonicalJson(rendered);
-  if (!/^[\x20-\x7e]+$/.test(value)) throw new TypeError("wireProfileEnv: rendered value is not single-line ASCII");
+  const value = canonicalJson(document(profile));
+  const read = readWireProfileValue(value);
+  const missing = [...(read.releaseSet ? [] : ["releaseSet"]), ...(read.workloadRef === undefined ? ["workloadRef"] : [])];
+  if (missing.length) throw explicitDeploymentError(missing.map(key => `${WIRE_PROFILE_ENV}.${key}`));
   return { name: WIRE_PROFILE_ENV, value };
 }
