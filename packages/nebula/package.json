@@ -31,7 +31,8 @@
     "test": "tsx --test \"test/**/*.test.ts\"",
     "example:synth": "cdk8s synth --app 'tsx example/main.ts'",
     "example:aws:synth": "cdk8s synth --app 'tsx example/aws.ts'",
-    "example:vendor-free:synth": "cdk8s synth --app 'tsx example/vendor-free.ts'"
+    "example:vendor-free:synth": "cdk8s synth --app 'tsx example/vendor-free.ts'",
+    "example:confidential-guests:synth": "cdk8s synth --app 'tsx example/confidential-guests.ts'"
   },
   "engines": {
     "node": ">=20"
