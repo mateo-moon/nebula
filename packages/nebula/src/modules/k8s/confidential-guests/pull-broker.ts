@@ -4,7 +4,7 @@ import {
 } from "cdk8s-plus-33/lib/imports/k8s";
 import { sha256Hex } from "./canonical";
 import {
-  boundedInteger, command, dnsLabel, dnsSubdomain, image, isPlainObject, knownFields, labelDomain, labels, pullSecrets, serviceName,
+  command, dnsLabel, dnsSubdomain, fail, image, integer, isPlainObject, knownFields, labelDomain, labels, pullSecrets, serviceName,
   waveAnnotation,
 } from "./validate";
 
@@ -76,25 +76,25 @@ const RESOURCE_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 
 function hostData(value: unknown): string {
   if (typeof value !== "string" || !HOST_DATA.test(value) || /^0+$/.test(value)) {
-    throw new TypeError(`${WHERE}: init-data hashes must be nonzero SHA-256 values in lowercase hex, got ${JSON.stringify(value)}`);
+    fail(WHERE, `init-data hashes must be nonzero SHA-256 values in lowercase hex, got ${JSON.stringify(value)}`);
   }
   return value;
 }
 
 function validResourcePath(value: unknown): KbsResourcePath {
   if (!Array.isArray(value) || value.length !== 3 || !value.every(part => typeof part === "string" && RESOURCE_SEGMENT.test(part) && part !== "..")) {
-    throw new TypeError(`${WHERE}: resourcePath must be [repository, type, tag] of [A-Za-z0-9._-], got ${JSON.stringify(value)}`);
+    fail(WHERE, `resourcePath must be [repository, type, tag] of [A-Za-z0-9._-], got ${JSON.stringify(value)}`);
   }
   return value as unknown as KbsResourcePath;
 }
 
 function admission(value: unknown): string {
-  if (!isPlainObject(value)) throw new TypeError(`${WHERE}: init-data admission must be { form: "equals", value } or { form: "in", values }`);
+  if (!isPlainObject(value)) fail(WHERE, `init-data admission must be { form: "equals", value } or { form: "in", values }`);
   if (value.form === "equals" && Object.keys(value).sort().join() === "form,value") return `ev.init_data == "${hostData(value.value)}"`;
   if (value.form === "in" && Object.keys(value).sort().join() === "form,values" && Array.isArray(value.values) && value.values.length > 0) {
     return `ev.init_data in ${JSON.stringify(value.values.map(hostData))}`;
   }
-  throw new TypeError(`${WHERE}: init-data admission must be { form: "equals", value } or { form: "in", values: [at least one] }`);
+  fail(WHERE, `init-data admission must be { form: "equals", value } or { form: "in", values: [at least one] }`);
 }
 
 /**
@@ -136,32 +136,32 @@ export class AttestedPullBroker extends Construct {
 
   constructor(scope: Construct, id: string, props: AttestedPullBrokerProps) {
     super(scope, id);
-    knownFields(props, PROPS_FIELDS, WHERE, "props");
-    const namespace = dnsLabel(props.namespace, WHERE, "namespace");
-    const name = serviceName(props.name, WHERE, "name");
-    const configMapName = dnsSubdomain(props.configMapName, WHERE, "configMapName");
-    knownFields(props.networkPolicyNames, ["ingressBoundary", "fromGuests"], WHERE, "networkPolicyNames");
-    const boundaryName = dnsSubdomain(props.networkPolicyNames.ingressBoundary, WHERE, "networkPolicyNames.ingressBoundary");
-    const fromGuestsName = dnsSubdomain(props.networkPolicyNames.fromGuests, WHERE, "networkPolicyNames.fromGuests");
-    const podLabels = labels(props.podLabels, WHERE, "podLabels");
-    const guestSelector = labels(props.guestSelector, WHERE, "guestSelector");
-    const nodeName = dnsSubdomain(props.nodeName, WHERE, "nodeName");
-    const brokerImage = image(props.brokerImage, WHERE, "brokerImage");
-    const initImage = image(props.initImage, WHERE, "initImage");
-    const initCommand = command(props.initCommand, WHERE, "initCommand");
-    if (typeof props.configToml !== "string" || props.configToml.length === 0) throw new TypeError(`${WHERE}: configToml is required`);
+    knownFields(WHERE, "props", props, PROPS_FIELDS);
+    const namespace = dnsLabel(WHERE, "namespace", props.namespace);
+    const name = serviceName(WHERE, "name", props.name);
+    const configMapName = dnsSubdomain(WHERE, "configMapName", props.configMapName);
+    knownFields(WHERE, "networkPolicyNames", props.networkPolicyNames, ["ingressBoundary", "fromGuests"]);
+    const boundaryName = dnsSubdomain(WHERE, "networkPolicyNames.ingressBoundary", props.networkPolicyNames.ingressBoundary);
+    const fromGuestsName = dnsSubdomain(WHERE, "networkPolicyNames.fromGuests", props.networkPolicyNames.fromGuests);
+    const podLabels = labels(WHERE, "podLabels", props.podLabels);
+    const guestSelector = labels(WHERE, "guestSelector", props.guestSelector);
+    const nodeName = dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    const brokerImage = image(WHERE, "brokerImage", props.brokerImage);
+    const initImage = image(WHERE, "initImage", props.initImage);
+    const initCommand = command(WHERE, "initCommand", props.initCommand);
+    if (typeof props.configToml !== "string" || props.configToml.length === 0) fail(WHERE, `configToml is required`);
     const resourcePath = validResourcePath(props.resourcePath);
-    const secret = knownFields(props.pullSecret, ["name", "exposeAsResource"], WHERE, "pullSecret");
+    const secret = knownFields(WHERE, "pullSecret", props.pullSecret, ["name", "exposeAsResource"]);
     if (typeof secret.exposeAsResource !== "boolean") {
-      throw new TypeError(`${WHERE}: pullSecret must be { name, exposeAsResource: boolean }`);
+      fail(WHERE, `pullSecret must be { name, exposeAsResource: boolean }`);
     }
-    const secretName = dnsSubdomain(secret.name, WHERE, "pullSecret.name");
-    const domain = labelDomain(props.labelDomain, WHERE);
-    const imagePullSecrets = pullSecrets(props.imagePullSecrets, WHERE);
-    const port = boundedInteger(props.port ?? 8080, 1, 65536, WHERE, "port");
-    if (props.syncWaves !== undefined) knownFields(props.syncWaves, ["config", "broker"], WHERE, "syncWaves");
-    const configWave = waveAnnotation(props.syncWaves?.config ?? -2, WHERE, "syncWaves.config");
-    const brokerWave = waveAnnotation(props.syncWaves?.broker ?? -1, WHERE, "syncWaves.broker");
+    const secretName = dnsSubdomain(WHERE, "pullSecret.name", secret.name);
+    const domain = labelDomain(WHERE, "labelDomain", props.labelDomain);
+    const imagePullSecrets = pullSecrets(WHERE, props.imagePullSecrets);
+    const port = integer(WHERE, "port", props.port ?? 8080, 1, 65535);
+    if (props.syncWaves !== undefined) knownFields(WHERE, "syncWaves", props.syncWaves, ["config", "broker"]);
+    const configWave = waveAnnotation(WHERE, "syncWaves.config", props.syncWaves?.config ?? -2);
+    const brokerWave = waveAnnotation(WHERE, "syncWaves.broker", props.syncWaves?.broker ?? -1);
 
     this.policy = pullBrokerPolicy(resourcePath, props.initData);
     this.configSha256 = sha256Hex(this.policy + props.configToml);
@@ -252,6 +252,6 @@ export class AttestedPullBroker extends Construct {
 
   /** The URL guests reach the broker at, for a cluster DNS domain (default `cluster.local`). */
   public endpoint(clusterDomain = "cluster.local"): string {
-    return `http://${this.host}.${dnsSubdomain(clusterDomain, WHERE, "clusterDomain")}:${this.port}`;
+    return `http://${this.host}.${dnsSubdomain(WHERE, "clusterDomain", clusterDomain)}:${this.port}`;
   }
 }

@@ -1,6 +1,6 @@
 import { Construct } from "constructs";
 import { IntOrString, KubeNetworkPolicy, KubeService } from "cdk8s-plus-33/lib/imports/k8s";
-import { dnsLabel, fail, ipAddress, labels, list, port, syncWave, unique, waveAnnotations } from "./shared";
+import { dnsLabel, fail, ipAddress, labels, list, port, syncWave, unique, waveAnnotations } from "./validate";
 
 const OWNER = "GuestServices";
 

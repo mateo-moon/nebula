@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import { KubeConfigMap } from "cdk8s-plus-33/lib/imports/k8s";
 import { sha256Hex } from "./canonical";
-import { dnsLabel, dnsSubdomain, fail, integer, list, record, syncWave, unique, waveAnnotations } from "./shared";
+import { dnsLabel, dnsSubdomain, fail, integer, list, record, syncWave, unique, waveAnnotations } from "./validate";
 
 const OWNER = "SignedReleases";
 
