@@ -1,10 +1,11 @@
 import { Construct } from "constructs";
 import { KubeDeployment, KubePersistentVolume, KubePersistentVolumeClaim, Quantity } from "cdk8s-plus-33/lib/imports/k8s";
-import { ARGOCD_SYNC_OPTIONS_ANNOTATION } from "../../../core/argocd";
-import { validateDiskTable, type DiskEntry, type DiskTable } from "./disk-table";
+import { validateDiskTable, type DiskEntry, type DiskSize, type DiskTable } from "./disk-table";
 import { NriKeyInjector, type NriKeyInjectorProps } from "./key-injector";
 import { provisionScript, validSize, type ProvisionTemplate } from "./provision";
-import { dnsLabel, dnsSubdomain, hostPath, image, isPlainObject, knownFields, labels, pullSecrets, waveAnnotation } from "./validate";
+import {
+  KEEP_ANNOTATION, dnsLabel, dnsSubdomain, fail, hostPath, image, isPlainObject, knownFields, labels, pullSecrets, waveAnnotation,
+} from "./validate";
 
 /** How one role's disks are named and sized; generation g of the role renders as `<claim>-v<g>` backed by `<file>-v<g>.img`. */
 export interface SealedDiskRole {
@@ -14,7 +15,12 @@ export interface SealedDiskRole {
   readonly claim: string;
   /** Backing file name prefix inside the state directory. */
   readonly file: string;
-  /** Size in bytes: a positive multiple of 512. */
+  /**
+   * Size in bytes of the live generation (and of every earlier one that
+   * states no size of its own): a positive multiple of 512. When it changes,
+   * give each retained or declared generation made at the old size that size
+   * in the table ({@link DiskSize}): its claim cannot be resized.
+   */
   readonly sizeBytes: number;
   /** The same size as a Kubernetes quantity (plain bytes or a binary suffix). */
   readonly sizeLabel: string;
@@ -73,7 +79,9 @@ export interface SealedDisksProps {
   readonly imagePullSecrets?: readonly string[];
   /**
    * The key injector for the guests of these disks, rendered between the
-   * provisioners and the claims, in this namespace on this node.
+   * provisioners and the claims, in this namespace on this node. A
+   * ConfidentialGuestStack that builds these disks takes the injector here;
+   * its `keyInjector` slot is only for a standalone injector.
    */
   readonly injector?: Omit<NriKeyInjectorProps, "namespace" | "nodeName">;
   /** Argo CD sync wave of every object (and the injector's default). Default -1. */
@@ -87,31 +95,33 @@ const PROPS_FIELDS = [
 ];
 
 function validRoles(roles: unknown, where: string): SealedDiskRole[] {
-  if (!Array.isArray(roles) || roles.length === 0) throw new TypeError(`${where}: roles must list every role of the table`);
+  if (!Array.isArray(roles) || roles.length === 0) fail(where, `roles must list every role of the table`);
   const seen = { role: new Set<string>(), claim: new Set<string>(), file: new Set<string>() };
   return roles.map((layout: SealedDiskRole) => {
-    knownFields(layout, ROLE_FIELDS, where, "a role");
+    knownFields(where, "a role", layout, ROLE_FIELDS);
     for (const field of ["role", "claim", "file"] as const) {
       const value = layout[field];
       if (field === "file") {
-        if (typeof value !== "string" || !/^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(value)) throw new TypeError(`${where}: invalid file prefix ${JSON.stringify(value)}`);
+        if (typeof value !== "string" || !/^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(value)) fail(where, `invalid file prefix ${JSON.stringify(value)}`);
       } else {
-        dnsLabel(value, where, `${field} of role ${JSON.stringify(layout.role)}`);
+        dnsLabel(where, `${field} of role ${JSON.stringify(layout.role)}`, value);
       }
-      if (seen[field].has(value)) throw new TypeError(`${where}: two roles share the ${field} ${JSON.stringify(value)}`);
+      if (seen[field].has(value)) fail(where, `two roles share the ${field} ${JSON.stringify(value)}`);
       seen[field].add(value);
     }
     validSize(layout.sizeBytes, layout.sizeLabel, `${where}: role ${JSON.stringify(layout.role)}`);
     if (layout.placeholder !== undefined && typeof layout.placeholder !== "boolean") {
-      throw new TypeError(`${where}: placeholder of role ${JSON.stringify(layout.role)} must be a boolean`);
+      fail(where, `placeholder of role ${JSON.stringify(layout.role)} must be a boolean`);
     }
     return layout;
   });
 }
 
-const diskOf = (layout: SealedDiskRole, role: string, { generation, loop }: DiskEntry): SealedDisk => ({
+// A retained or retired generation may keep the size it was made with; any
+// other generation has its role's.
+const diskOf = (layout: SealedDiskRole, role: string, { generation, loop, sizeBytes, sizeLabel }: DiskEntry & DiskSize): SealedDisk => ({
   role, generation, claim: `${layout.claim}-v${generation}`, file: `${layout.file}-v${generation}.img`, loop, device: `/dev/loop${loop}`,
-  sizeBytes: layout.sizeBytes, sizeLabel: layout.sizeLabel,
+  sizeBytes: sizeBytes ?? layout.sizeBytes, sizeLabel: sizeLabel ?? layout.sizeLabel,
 });
 
 /**
@@ -123,18 +133,19 @@ export function sealedDisksPlan(roles: readonly SealedDiskRole[], table: DiskTab
   const byRole = new Map(layouts.map(layout => [layout.role, layout]));
   if (isPlainObject(table) && isPlainObject(table.live)) {
     for (const role of Object.keys(table.live)) {
-      if (!byRole.has(role)) throw new TypeError(`sealedDisksPlan: live role ${JSON.stringify(role)} has no layout in roles`);
+      if (!byRole.has(role)) fail("sealedDisksPlan", `live role ${JSON.stringify(role)} has no layout in roles`);
     }
     for (const layout of layouts) {
-      if (!Object.hasOwn(table.live, layout.role)) throw new TypeError(`sealedDisksPlan: role ${JSON.stringify(layout.role)} has no live disk in the table`);
+      if (!Object.hasOwn(table.live, layout.role)) fail("sealedDisksPlan", `role ${JSON.stringify(layout.role)} has no live disk in the table`);
     }
   }
   validateDiskTable(table);
-  const disk = (role: string, entry: DiskEntry) => diskOf(byRole.get(role)!, role, entry);
+  const disk = (role: string, entry: DiskEntry & DiskSize) => diskOf(byRole.get(role)!, role, entry);
   return {
     live: layouts.map(layout => disk(layout.role, table.live[layout.role])),
-    retained: table.retained.map(({ role, generation, loop }) => disk(role, { generation, loop })),
-    retiring: table.retired.filter(entry => entry.declared).map(({ role, generation, loop }) => disk(role, { generation, loop })),
+    retained: table.retained.map(({ role, generation, loop, sizeBytes, sizeLabel }) => disk(role, { generation, loop, sizeBytes, sizeLabel })),
+    retiring: table.retired.filter(entry => entry.declared)
+      .map(({ role, generation, loop, sizeBytes, sizeLabel }) => disk(role, { generation, loop, sizeBytes, sizeLabel })),
   };
 }
 
@@ -155,30 +166,30 @@ export class SealedDisks extends Construct {
 
   constructor(scope: Construct, id: string, props: SealedDisksProps) {
     super(scope, id);
-    knownFields(props, PROPS_FIELDS, WHERE, "props");
-    const namespace = dnsLabel(props.namespace, WHERE, "namespace");
-    const nodeName = dnsSubdomain(props.nodeName, WHERE, "nodeName");
-    const pinned = image(props.image, WHERE, "image");
-    const stateDir = hostPath(props.stateDir, WHERE, "stateDir");
-    const imagePullSecrets = pullSecrets(props.imagePullSecrets, WHERE);
-    const wave = waveAnnotation(props.syncWave ?? -1, WHERE, "syncWave");
+    knownFields(WHERE, "props", props, PROPS_FIELDS);
+    const namespace = dnsLabel(WHERE, "namespace", props.namespace);
+    const nodeName = dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    const pinned = image(WHERE, "image", props.image);
+    const stateDir = hostPath(WHERE, "stateDir", props.stateDir);
+    const imagePullSecrets = pullSecrets(WHERE, props.imagePullSecrets);
+    const wave = waveAnnotation(WHERE, "syncWave", props.syncWave ?? -1);
     const roles = validRoles(props.roles, WHERE);
     try {
       this.plan = sealedDisksPlan(roles, props.table);
     } catch (e) {
-      throw new (e instanceof TypeError ? TypeError : Error)(`${WHERE}: ${(e as Error).message}`);
+      fail(WHERE, (e as Error).message);
     }
     const provisioned = roles.filter(layout => layout.provisioner !== undefined);
-    const names = provisioned.map(layout => dnsLabel(layout.provisioner, WHERE, `provisioner of role ${JSON.stringify(layout.role)}`));
-    if (new Set(names).size !== names.length) throw new TypeError(`${WHERE}: two roles share a provisioner name`);
+    const names = provisioned.map(layout => dnsLabel(WHERE, `provisioner of role ${JSON.stringify(layout.role)}`, layout.provisioner));
+    if (new Set(names).size !== names.length) fail(WHERE, `two roles share a provisioner name`);
     if (props.injector && ("namespace" in props.injector || "nodeName" in props.injector)) {
-      throw new TypeError(`${WHERE}: the injector takes the disks' namespace and nodeName; do not set them on injector`);
+      fail(WHERE, `the injector takes the disks' namespace and nodeName; do not set them on injector`);
     }
     if (props.injector && names.includes(props.injector.name)) {
-      throw new TypeError(`${WHERE}: provisioner name ${JSON.stringify(props.injector.name)} is the injector's`);
+      fail(WHERE, `provisioner name ${JSON.stringify(props.injector.name)} is the injector's`);
     }
     if (provisioned.some(layout => layout.placeholder) && props.placeholderMagic === undefined) {
-      throw new TypeError(`${WHERE}: placeholderMagic is required for a placeholder role with a provisioner`);
+      fail(WHERE, `placeholderMagic is required for a placeholder role with a provisioner`);
     }
     // Validates every role's size, including roles without a provisioner.
     const scripts = new Map(this.plan.live.map(disk => {
@@ -193,7 +204,7 @@ export class SealedDisks extends Construct {
     for (const layout of provisioned) {
       const name = layout.provisioner!;
       const disk = this.plan.live.find(value => value.role === layout.role)!;
-      const podLabels = labels(layout.podLabels ?? { app: `${namespace}-${name}` }, WHERE, `podLabels of role ${JSON.stringify(layout.role)}`);
+      const podLabels = labels(WHERE, `podLabels of role ${JSON.stringify(layout.role)}`, layout.podLabels ?? { app: `${namespace}-${name}` });
       new KubeDeployment(this, `provisioner-${name}`, {
         metadata: { name, namespace, annotations: { ...wave } },
         spec: {
@@ -242,7 +253,7 @@ export class SealedDisks extends Construct {
       ...this.plan.retiring.map(disk => [disk, false] as const),
     ];
     for (const [disk, pinnedClaim] of claims) {
-      const annotations = () => ({ ...wave, ...(pinnedClaim ? { [ARGOCD_SYNC_OPTIONS_ANNOTATION]: "Prune=false,Delete=false" } : {}) });
+      const annotations = () => ({ ...wave, ...(pinnedClaim ? KEEP_ANNOTATION : {}) });
       new KubePersistentVolume(this, `volume-${disk.claim}`, {
         metadata: { name: disk.claim, annotations: annotations() },
         spec: {

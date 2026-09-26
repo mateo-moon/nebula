@@ -5,7 +5,7 @@ import { INIT_DATA_ANNOTATION, initDataSha256, type GuestPodManifest } from "./m
 import {
   ARGO_TRACKING_ID, dnsLabel, dnsSubdomain, fail, integer, labelDomain, labelValue, list, nonEmptyString, port, record,
   syncWave, unique, waveAnnotations,
-} from "./shared";
+} from "./validate";
 import { digestImage } from "./types";
 
 const OWNER = "GuestLifecycle";

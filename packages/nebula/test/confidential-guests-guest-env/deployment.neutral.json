@@ -1,0 +1,1481 @@
+{
+  "adapterEnv": {
+    "MODE": "attest"
+  },
+  "description": "The neutral example deployment's env, its adapter's MODE, what every reader derives from it, and the refusal vectors of deployments.json based on it (base neutral: this env) or on no env (base none) that name nothing legacy: the vendorable part of deployments.json, read as it describes.",
+  "env": {
+    "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}",
+    "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}",
+    "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+  },
+  "expect": {
+    "api": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}",
+    "controlBridgeSchemas": [
+      "confidential.guests.control.authorization.v1"
+    ],
+    "emitsLegacy": false,
+    "layout": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}",
+    "operatorRole": "operator",
+    "payloadSchemas": {
+      "authorityRotation": [
+        "nebula.confidential-guests.authority-rotation.v1"
+      ],
+      "record": [
+        "nebula.confidential-guests.record.v1"
+      ],
+      "release": [
+        "nebula.confidential-guests.release.v1"
+      ],
+      "releaseSet": [
+        "nebula.confidential-guests.release-set.v2"
+      ]
+    },
+    "recordFormats": [
+      [
+        "CONFIDENTIAL_GUESTS_SECRETS_V1",
+        "CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1"
+      ]
+    ],
+    "releaseSet": {
+      "roles": [
+        "node",
+        "operator"
+      ],
+      "scope": [
+        "deployment=example"
+      ]
+    },
+    "sessionSchemas": [
+      "confidential.guests.session.v1"
+    ],
+    "wire": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}",
+    "workloadRef": "example/workload:v1"
+  },
+  "refusals": [
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_SCHEMAS: not a guest env variable; GUEST_WIRE_PROFILE carries the schemas' domains, releaseSet and workloadRef",
+      "name": "superseded-schemas",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_SCHEMAS": "{\"session\":[\"confidential.guests.session.v1\"]}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "RELEASE_NETWORK, RELEASE_ROLES: not a guest env variable; GUEST_WIRE_PROFILE carries the schemas' domains, releaseSet and workloadRef",
+      "name": "superseded-release-variables",
+      "reader": "every",
+      "set": {
+        "RELEASE_NETWORK": "example",
+        "RELEASE_ROLES": "node,operator"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_REF: not a guest env variable; GUEST_WIRE_PROFILE carries the schemas' domains, releaseSet and workloadRef",
+      "name": "superseded-workload-ref",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_REF": "example/workload:v1"
+      }
+    },
+    {
+      "base": "none",
+      "error": "GUEST_WORKLOAD_REF: not a guest env variable; GUEST_WIRE_PROFILE carries the schemas' domains, releaseSet and workloadRef",
+      "name": "superseded-before-any-variable",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "",
+        "GUEST_WIRE_PROFILE": "[",
+        "GUEST_WORKLOAD_REF": "x"
+      }
+    },
+    {
+      "base": "none",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WIRE_PROFILE.releaseSet, GUEST_WIRE_PROFILE.workloadRef, GUEST_STORAGE_LAYOUT, GUEST_WORKLOAD_API",
+      "name": "renamed-wire-alone",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WIRE_PROFILE.releaseSet",
+      "name": "no-release-set",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WIRE_PROFILE.workloadRef",
+      "name": "no-workload-ref",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_STORAGE_LAYOUT",
+      "name": "no-layout",
+      "reader": "every",
+      "unset": [
+        "GUEST_STORAGE_LAYOUT"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WORKLOAD_API",
+      "name": "no-api",
+      "reader": "every",
+      "unset": [
+        "GUEST_WORKLOAD_API"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_STORAGE_LAYOUT, GUEST_WORKLOAD_API",
+      "name": "no-layout-no-api",
+      "reader": "every",
+      "unset": [
+        "GUEST_STORAGE_LAYOUT",
+        "GUEST_WORKLOAD_API"
+      ]
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WIRE_PROFILE: invalid JSON: ",
+      "name": "wire-before-layout",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "[",
+        "GUEST_WIRE_PROFILE": "["
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: layout: missing [\"chain\", \"kdf\", \"lifecycleKey\", \"secrets\", \"workspace\"], unknown []",
+      "name": "layout-before-api",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{}",
+        "GUEST_WORKLOAD_API": "{}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not UTF-8",
+      "name": "not-utf8-wire",
+      "reader": "every",
+      "setHex": {
+        "GUEST_WIRE_PROFILE": "7b2261223a22ff227d"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: not UTF-8",
+      "name": "not-utf8-layout",
+      "reader": "every",
+      "setHex": {
+        "GUEST_STORAGE_LAYOUT": "7b2261223a22ff227d"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: not UTF-8",
+      "name": "not-utf8-api",
+      "reader": "every",
+      "setHex": {
+        "GUEST_WORKLOAD_API": "7b2261223a22ff227d"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not UTF-8",
+      "name": "not-utf8-surrogate-bytes",
+      "reader": "every",
+      "setHex": {
+        "GUEST_WIRE_PROFILE": "7b2261223a22eda080227d"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: empty value",
+      "name": "empty-wire",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": ""
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: empty value",
+      "name": "empty-layout",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": ""
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: empty value",
+      "name": "empty-api",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": ""
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: longer than 16384 bytes",
+      "name": "oversized-wire",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: longer than 8192 bytes",
+      "name": "oversized-layout",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: longer than 4096 bytes",
+      "name": "oversized-api",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: byte 0x0a is not printable ASCII: one line of ASCII JSON is required",
+      "name": "trailing-newline",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}\n"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: byte 0x09 is not printable ASCII: one line of ASCII JSON is required",
+      "name": "tab",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\t\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: byte 0x00 is not printable ASCII: one line of ASCII JSON is required",
+      "name": "nul",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"\u0000}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: byte 0x7f is not printable ASCII: one line of ASCII JSON is required",
+      "name": "delete-byte",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"\u007f}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: byte 0xc3 is not printable ASCII: one line of ASCII JSON is required",
+      "name": "non-ascii",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-dat\u00e9\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: '$' is refused: the kubelet rewrites $$ and $(NAME) in env values",
+      "name": "dollar-in-wire",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"BASE_$(X)_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: '$' is refused: the kubelet rewrites $$ and $(NAME) in env values",
+      "name": "dollar-in-layout",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"data$$\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: '$' is refused: the kubelet rewrites $$ and $(NAME) in env values",
+      "name": "dollar-in-api",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"SIGN_$(HOME)\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WIRE_PROFILE: invalid JSON: ",
+      "name": "truncated",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\""
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_STORAGE_LAYOUT: invalid JSON: ",
+      "name": "trailing-comma",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"},}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WORKLOAD_API: invalid JSON: ",
+      "name": "single-quotes",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{'keyResolverDomain':'CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1','mode':'attest','routes':{'config':'/v1/config','evidence':'/v1/session/evidence-bundle','sign':'/v1/sign-message','status':'/v1/status','verify':'/v1/verify-session-bundle'},'signDomain':'CONFIDENTIAL_GUESTS_SESSION_SIGN_V1'}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WIRE_PROFILE: invalid JSON: ",
+      "name": "not-a-number",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":NaN}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WIRE_PROFILE: invalid JSON: ",
+      "name": "nested-128-deep",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"zz\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_STORAGE_LAYOUT: invalid JSON: ",
+      "name": "nested-128-deep-layout",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"zz\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WORKLOAD_API: invalid JSON: ",
+      "name": "nested-2044-deep-api",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"zz\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: profile: missing [\"domains\", \"payloadTypes\"], unknown [\"zz\"]",
+      "name": "nested-127-deep-parses",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"zz\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_STORAGE_LAYOUT: invalid JSON: ",
+      "name": "number-beyond-f64",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"a\":1e400}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_WIRE_PROFILE: invalid JSON: ",
+      "name": "lone-surrogate",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":\"\\ud800\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "errorPrefix": "GUEST_STORAGE_LAYOUT: invalid JSON: ",
+      "name": "lone-surrogate-key",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"\\udc00\":1}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "surrogate-pair",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":\"\\ud83d\\ude00\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "not-canonical",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\": \"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\", \"mode\": \"attest\", \"routes\": {\"config\": \"/v1/config\", \"evidence\": \"/v1/session/evidence-bundle\", \"sign\": \"/v1/sign-message\", \"status\": \"/v1/status\", \"verify\": \"/v1/verify-session-bundle\"}, \"signDomain\": \"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "leading-space",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": " {\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "unsorted-keys",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"payloadTypes\":{},\"domains\":{}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "duplicate-key",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "escaped-ascii",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":\"\\u0041\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "escaped-non-ascii",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"a\":\"\\u00e9\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "upper-case-escape",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":\"\\u001F\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: profile: missing [\"domains\", \"payloadTypes\"], unknown [\"a\"]",
+      "name": "control-escape-is-canonical",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":\"\\u001f\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "non-integer-number",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9.5,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "integer-beyond-u64",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":18446744073709551616,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: api: missing [\"keyResolverDomain\", \"mode\", \"routes\", \"signDomain\"], unknown [\"a\"]",
+      "name": "largest-u64-is-canonical",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"a\":18446744073709551615}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "negative-zero",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"a\":-0}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: not canonical JSON (sorted keys, no whitespace, each key once)",
+      "name": "exponent-integer",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"a\":1E3}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: profile must be an object",
+      "name": "wire-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "[]"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: profile: missing [\"domains\", \"payloadTypes\"], unknown []",
+      "name": "wire-empty-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: profile: missing [], unknown [\"zz\"]",
+      "name": "wire-unknown-key",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\",\"zz\":1}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: profile: missing [\"domains\", \"payloadTypes\"], unknown [\"\\u0001\", \"\\b\"]",
+      "name": "unknown-control-character-keys",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"\\u0001\":1,\"\\b\":1}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains: missing [], unknown [\"identityFingerprint\", \"secrets\"]",
+      "name": "nine-domain-profile",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"identityFingerprint\":[\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"secrets\":[\"CONFIDENTIAL_GUESTS_SECRETS_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: payloadTypes must be an object",
+      "name": "payload-types-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":[],\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains must be an object",
+      "name": "domains-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":\"base\",\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: payloadTypes: missing [\"record\"], unknown []",
+      "name": "payload-type-missing",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains.base must be a non-empty list",
+      "name": "identifier-not-a-list",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":\"CONFIDENTIAL_GUESTS_BASE_V1\",\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: payloadTypes.release must be a non-empty list",
+      "name": "identifier-empty",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains.base[0] must be printable ASCII without spaces, NUL or line breaks",
+      "name": "identifier-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"BASE V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains.handoff[0] must be printable ASCII without spaces, NUL or line breaks",
+      "name": "identifier-empty-string",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains.replay[0] must be printable ASCII without spaces, NUL or line breaks",
+      "name": "identifier-number",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[1],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains.base lists \"CONFIDENTIAL_GUESTS_BASE_V1\" twice",
+      "name": "identifier-twice",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\",\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: payloadTypes.record[0]: \"application/vnd.Example.record.v1+json\" is not application/vnd.<schema>+json",
+      "name": "upper-case-payload-type",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.Example.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: payloadTypes.authorityRotation[0]: \"application/vnd.x+y+json\" is not application/vnd.<schema>+json",
+      "name": "payload-type-two-suffixes",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.x+y+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: \"application/vnd.nebula.confidential-guests.release.v1+json\" is used by both payloadTypes.release and payloadTypes.record",
+      "name": "payload-type-of-two-identifiers",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: \"CONFIDENTIAL_GUESTS_BASE_V1\" is used by both domains.base and domains.replay",
+      "name": "domain-of-two-identifiers",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: \"CONFIDENTIAL_GUESTS_BASE_V1\" is used by both domains.base and domains.workload",
+      "name": "accepted-domain-of-two-identifiers",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\",\"CONFIDENTIAL_GUESTS_BASE_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: domains.controlAuthorization: \"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\" and \"confidential.guests.control.authorization.v1\" derive one schema \"confidential.guests.control.authorization.v1\"",
+      "name": "authorization-domains-derive-one-schema",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\",\"confidential.guests.control.authorization.v1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet must be an object",
+      "name": "release-set-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":[\"node\"],\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet: missing [\"scope\"], unknown []",
+      "name": "release-set-without-scope",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.roles must be a non-empty list",
+      "name": "release-roles-not-a-list",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":\"node\",\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.roles: \"Operator\" is not a role name",
+      "name": "release-role-upper-case",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"Operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.roles must include node",
+      "name": "release-roles-without-node",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.roles lists \"node\" twice",
+      "name": "release-role-twice",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.scope: \"deployment\" is not field=value",
+      "name": "scope-without-equals",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.scope: \"sequence\" cannot be a scope field",
+      "name": "scope-release-set-field",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"sequence=1\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.scope: \"roles\" cannot be a scope field",
+      "name": "scope-release-field",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"roles=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.scope: \"Deployment\" cannot be a scope field",
+      "name": "scope-upper-case-field",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"Deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.scope: \"Example\" is not a scope value",
+      "name": "scope-upper-case-value",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=Example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: releaseSet.scope lists \"deployment=example\" twice",
+      "name": "scope-twice",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\",\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: workloadRef must be printable ASCII without spaces, NUL or line breaks",
+      "name": "workload-ref-list",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":[\"example/workload:v1\"]}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: workloadRef must be printable ASCII without spaces, NUL or line breaks",
+      "name": "workload-ref-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WIRE_PROFILE: workloadRef must be printable ASCII without spaces, NUL or line breaks",
+      "name": "workload-ref-empty",
+      "reader": "every",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "the control bridge needs exactly one role besides node",
+      "name": "bridge-two-operator-roles",
+      "reader": "bridge",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"a\",\"b\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "the control bridge needs exactly one role besides node",
+      "name": "bridge-no-operator-role",
+      "reader": "bridge",
+      "set": {
+        "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: layout must be an object",
+      "name": "layout-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "[]"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: layout: missing [], unknown [\"zz\"]",
+      "name": "layout-unknown-key",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"},\"zz\":1}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets: missing [\"formats\"], unknown []",
+      "name": "layout-without-formats",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain must be an object",
+      "name": "volume-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":1,\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: workspace: missing [\"map\"], unknown []",
+      "name": "volume-without-map",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.bytes must be whole MiB above the 16 MiB placeholder",
+      "name": "bytes-of-the-placeholder",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":16777216,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: workspace.bytes must be whole MiB above the 16 MiB placeholder",
+      "name": "bytes-not-whole-mib",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741825,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.bytes must be whole MiB above the 16 MiB placeholder",
+      "name": "bytes-beyond-2-53",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":9007199255789568,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.bytes must be whole MiB above the 16 MiB placeholder",
+      "name": "bytes-boolean",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":true,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.bytes must be whole MiB above the 16 MiB placeholder",
+      "name": "bytes-negative",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":-1,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.map must be a device-mapper name",
+      "name": "map-upper-case",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"Guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.mount must be an absolute path without . or ..",
+      "name": "mount-relative",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.mount must be an absolute path without . or ..",
+      "name": "mount-dot-dot",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/../data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: workspace.mount must be an absolute path without . or ..",
+      "name": "mount-empty-part",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run//workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: workspace.mount must be an absolute path without . or ..",
+      "name": "mount-trailing-slash",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/workspace/\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.node must be printable ASCII without spaces",
+      "name": "node-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: workspace.volume must be printable ASCII without spaces",
+      "name": "volume-empty",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain.node must be printable ASCII without spaces",
+      "name": "node-of-256-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain and workspace must differ in node and map",
+      "name": "volumes-share-a-node",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-data\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain and workspace must differ in node and map",
+      "name": "volumes-share-a-map",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-data\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain and workspace mounts must be separate directories",
+      "name": "mounts-nested",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/data/w\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: chain and workspace mounts must be separate directories",
+      "name": "mounts-equal",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: kdf must be an object",
+      "name": "kdf-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":[],\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: kdf: missing [\"passphrase\"], unknown []",
+      "name": "kdf-without-passphrase",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: kdf.extract must be printable ASCII without spaces",
+      "name": "kdf-label-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"extract v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: kdf labels must differ",
+      "name": "kdf-labels-equal",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/extract/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey must be an object",
+      "name": "lifecycle-key-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":9,\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.mask must select GUEST_POLICY and MEASUREMENT and only SNP key fields",
+      "name": "mask-without-measurement",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":1,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.mask must select GUEST_POLICY and MEASUREMENT and only SNP key fields",
+      "name": "mask-beyond-snp-fields",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":73,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.mask must select GUEST_POLICY and MEASUREMENT and only SNP key fields",
+      "name": "mask-string",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":\"9\",\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.tcb must be 16 lower-case hex digits",
+      "name": "tcb-upper-case",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"000000000000000A\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.tcb must be 16 lower-case hex digits",
+      "name": "tcb-short",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.tcb is pinned exactly when the mask selects TCB_VERSION",
+      "name": "tcb-pinned-unselected",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000001\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: lifecycleKey.tcb is pinned exactly when the mask selects TCB_VERSION",
+      "name": "tcb-selected-unpinned",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":41,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets must be an object",
+      "name": "secrets-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":\"secrets\",\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.formats must list one to eight record formats",
+      "name": "formats-empty",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.formats must list one to eight record formats",
+      "name": "formats-nine",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"F0\",\"header\":\"H0\"},{\"fingerprint\":\"F1\",\"header\":\"H1\"},{\"fingerprint\":\"F2\",\"header\":\"H2\"},{\"fingerprint\":\"F3\",\"header\":\"H3\"},{\"fingerprint\":\"F4\",\"header\":\"H4\"},{\"fingerprint\":\"F5\",\"header\":\"H5\"},{\"fingerprint\":\"F6\",\"header\":\"H6\"},{\"fingerprint\":\"F7\",\"header\":\"H7\"},{\"fingerprint\":\"F8\",\"header\":\"H8\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.formats[0] must be an object",
+      "name": "format-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[\"H\"],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.formats[0]: missing [\"fingerprint\"], unknown []",
+      "name": "format-without-fingerprint",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"header\":\"H\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.formats[0].header must be printable ASCII without spaces",
+      "name": "format-header-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"F_V1\",\"header\":\"H V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: \"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\" names two record identifiers",
+      "name": "layout-shared-record-identifier",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"},{\"fingerprint\":\"OTHER_V1\",\"header\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: \"X_V1\" names two record identifiers",
+      "name": "format-header-is-its-fingerprint",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"X_V1\",\"header\":\"X_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.identityExports must name two files",
+      "name": "exports-one",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.identityExports must name two files",
+      "name": "exports-not-a-list",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":\"identity-a\",\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.identityExports[1] must be a file name",
+      "name": "export-dot-dot",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"..\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.identityExports must differ",
+      "name": "exports-equal",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-a\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.file must be a file name",
+      "name": "secrets-file-with-slash",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest/secrets\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_LAYOUT: secrets.jwtExport must be a file name",
+      "name": "jwt-export-of-65-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_LAYOUT": "{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: api must be an object",
+      "name": "api-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "\"attest\""
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: api: missing [], unknown [\"zz\"]",
+      "name": "api-unknown-key",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"zz\":1}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: mode must be a lower-case name",
+      "name": "mode-upper-case",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"Attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: mode must be a lower-case name",
+      "name": "mode-of-65-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: mode must be a lower-case name",
+      "name": "mode-number",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":1,\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: routes must be an object",
+      "name": "routes-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":\"/v1\",\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: routes: missing [\"sign\"], unknown []",
+      "name": "routes-without-sign",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: routes.status must be a path without query or fragment",
+      "name": "route-relative",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: routes.sign must be a path without query or fragment",
+      "name": "route-with-query",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign?x=1\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: routes.verify must be a path without query or fragment",
+      "name": "route-with-fragment",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify#x\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: routes.config must be a path without query or fragment",
+      "name": "route-of-129-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: portal routes must differ",
+      "name": "portal-routes-equal",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/status\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: verifier routes must differ",
+      "name": "verifier-routes-equal",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/config\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: signDomain must be printable ASCII without spaces",
+      "name": "sign-domain-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"SIGN V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: keyResolverDomain must be printable ASCII without spaces",
+      "name": "key-resolver-domain-of-129-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: signing and key-resolver domains must differ",
+      "name": "api-domains-equal",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "MODE=attest is required",
+      "name": "adapter-without-mode",
+      "reader": "adapter"
+    },
+    {
+      "base": "neutral",
+      "error": "MODE=attest is required",
+      "name": "adapter-mode-with-space",
+      "reader": "adapter",
+      "set": {
+        "MODE": "attest "
+      }
+    }
+  ]
+}

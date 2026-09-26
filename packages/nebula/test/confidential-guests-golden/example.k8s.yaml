@@ -4,7 +4,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
   name: ingress-boundary
-  namespace: confidential-guests
+  namespace: guests
 spec:
   ingress: []
   podSelector: {}
@@ -17,19 +17,19 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
   name: pull-broker-from-guests
-  namespace: confidential-guests
+  namespace: guests
 spec:
   ingress:
     - from:
         - podSelector:
             matchLabels:
-              app: confidential-guest
+              app: guests
       ports:
         - port: 8080
           protocol: TCP
   podSelector:
     matchLabels:
-      app: confidential-guests-pull-broker
+      app: guests-pull-broker
   policyTypes:
     - Ingress
 ---
@@ -39,7 +39,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
   name: pull-broker-configuration
-  namespace: confidential-guests
+  namespace: guests
 data:
   config.toml: |
     [http_server]
@@ -84,7 +84,7 @@ data:
         data.plugin == "resource"
         data["resource-path"] == ["default", "registry", "pull"]
         ev := input.submods.cpu0["ear.veraison.annotated-evidence"]
-        ev.init_data in ["d11f43ae520d1063a82d0b89ce2a7618e37b544a571c1b978cf1c55d1e23e6d8","dad0480c532d12882e6b3b313323223992e27bf11dacb623629f921eea743867"]
+        ev.init_data in ["cf0a41d3ef41f212a569890cc7e654d53c5b14c2cb6951e69b56563016b3c841","e47e5deb9d53cf9c67f88b97c0e58921ae65f27b86be21c418acbbeb5397519c"]
         ev.snp.policy_debug_allowed == false
     }
 ---
@@ -94,14 +94,14 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
   name: pull-broker
-  namespace: confidential-guests
+  namespace: guests
 spec:
   ports:
     - name: http
       port: 8080
       targetPort: 8080
   selector:
-    app: confidential-guests-pull-broker
+    app: guests-pull-broker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -109,20 +109,20 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
   name: pull-broker
-  namespace: confidential-guests
+  namespace: guests
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: confidential-guests-pull-broker
+      app: guests-pull-broker
   strategy:
     type: Recreate
   template:
     metadata:
       annotations:
-        guests.example.com/config-sha256: 369da533e7a3eb2d2c3bd969706b3ca872cd52d622defbbe3eaae113e7da22ef
+        guests.example.com/config-sha256: b36b088228d68703b2daac6981ca1fe0537ff3749b346e8f93749ad703367124
       labels:
-        app: confidential-guests-pull-broker
+        app: guests-pull-broker
     spec:
       automountServiceAccountToken: false
       containers:
@@ -133,7 +133,7 @@ spec:
           env:
             - name: RUST_LOG
               value: info
-          image: registry.example.com/guests/kbs@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          image: ghcr.io/example/kbs@sha256:8888888888888888888888888888888888888888888888888888888888888888
           name: broker
           ports:
             - containerPort: 8080
@@ -172,7 +172,7 @@ spec:
             - python3
             - -m
             - confidential_guests.registry_init
-          image: registry.example.com/guests/tools@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          image: ghcr.io/example/confidential-guests-tools@sha256:6666666666666666666666666666666666666666666666666666666666666666
           name: initialize-registry
           securityContext:
             allowPrivilegeEscalation: false
@@ -191,7 +191,7 @@ spec:
             - mountPath: /configuration
               name: configuration
               readOnly: true
-      nodeName: guest-host-1
+      nodeName: tee-node-1
       volumes:
         - emptyDir:
             medium: Memory
@@ -212,34 +212,154 @@ spec:
                 path: default\x2Fregistry\x2Fpull
             secretName: registry-pull
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: signed-release-5eed5eed5eed5eed
+  namespace: guests
+data:
+  release-set.dsse.json: '{"payloadType":"application/vnd.nebula.confidential-guests.release-set.v2+json","payload":"eyJkZXBsb3ltZW50IjoiZXhhbXBsZSIsInNlcXVlbmNlIjoxLCJleHBpcmVzX2F0IjoxODkzNDU2MDAwLCJtZW1iZXJzIjpbImNmMGE0MWQzZWY0MWYyMTJhNTY5ODkwY2M3ZTY1NGQ1M2M1YjE0YzJjYjY5NTFlNjliNTY1NjMwMTZiM2M4NDEiLCJlNDdlNWRlYjlkNTNjZjljNjdmODhiOTdjMGU1ODkyMWFlNjVmMjdiODZiZTIxYzQxOGFjYmJlYjUzOTc1MTljIl19","signatures":[]}'
+  release.dsse.json: '{"payloadType":"application/vnd.nebula.confidential-guests.release.v1+json","payload":"eyJkZXBsb3ltZW50IjoiZXhhbXBsZSIsImV4cGlyZXNfYXQiOjE4OTM0NTYwMDB9","signatures":[]}'
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: primary-control
+  namespace: guests
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: guests
+              role: operator
+      ports:
+        - port: 7443
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: guests
+      role: primary
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: primary-handoff
+  namespace: guests
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: guests
+              guests.example.com/lifecycle: stage
+              role: primary
+      ports:
+        - port: 7445
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: guests
+      guests.example.com/lifecycle: holder
+      role: primary
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: operator-ssh
+  namespace: guests
+spec:
+  ingress:
+    - ports:
+        - port: 2222
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: guests
+      role: operator
+  policyTypes:
+    - Ingress
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: guest-primary
+  namespace: guests
+spec:
+  ports:
+    - name: tcp-7443
+      port: 7443
+      protocol: TCP
+      targetPort: 7443
+    - name: tcp-7445
+      port: 7445
+      protocol: TCP
+      targetPort: 7445
+  publishNotReadyAddresses: true
+  selector:
+    app: guests
+    guests.example.com/lifecycle: holder
+    role: primary
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: guest-operator
+  namespace: guests
+spec:
+  ports:
+    - name: tcp-2222
+      port: 2222
+      protocol: TCP
+      targetPort: 2222
+  selector:
+    app: guests
+    role: operator
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-  name: data-provisioner
-  namespace: confidential-guests
+  name: primary-disk
+  namespace: guests
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: confidential-guests-data-provisioner
+      app: guests-primary-disk
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: confidential-guests-data-provisioner
+        app: guests-primary-disk
     spec:
       automountServiceAccountToken: false
       containers:
         - args:
             - |
               set -eu
-              dir=/var/lib/confidential-guests
-              file=$dir/data-v3.img
+              dir=/var/lib/guests/disks
+              file=$dir/primary-data-v3.img
               device=/dev/loop203
-              size=68719476736
+              size=1099511627776
               umask 077
               exec 9>"$dir/provision.lock"
               flock -x 9
@@ -271,19 +391,19 @@ spec:
               chown 0:6 "$device"
               chmod 0660 "$device"
               flock -u 9
-              echo 'dedicated retained 64Gi block volume ready'
+              echo 'dedicated retained 1Ti block volume ready'
               while :; do sleep 60; done
           command:
             - /bin/sh
             - -ec
-          image: registry.example.com/guests/storage@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          image: ghcr.io/example/confidential-guests-tools@sha256:6666666666666666666666666666666666666666666666666666666666666666
           name: provisioner
           readinessProbe:
             exec:
               command:
                 - /bin/sh
                 - -ec
-                - test "$(losetup -j /var/lib/confidential-guests/data-v3.img -n -O NAME)" = /dev/loop203
+                - test "$(losetup -j /var/lib/guests/disks/primary-data-v3.img -n -O NAME)" = /dev/loop203
             periodSeconds: 5
           resources:
             limits:
@@ -297,19 +417,19 @@ spec:
           volumeMounts:
             - mountPath: /dev
               name: dev
-            - mountPath: /var/lib/confidential-guests
+            - mountPath: /var/lib/guests/disks
               name: backing
       enableServiceLinks: false
       imagePullSecrets:
         - name: registry-pull
-      nodeName: guest-host-1
+      nodeName: tee-node-1
       volumes:
         - hostPath:
             path: /dev
             type: Directory
           name: dev
         - hostPath:
-            path: /var/lib/confidential-guests
+            path: /var/lib/guests/disks
             type: DirectoryOrCreate
           name: backing
 ---
@@ -318,129 +438,28 @@ kind: Deployment
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-  name: workspace-provisioner
-  namespace: confidential-guests
+  name: standby-disk
+  namespace: guests
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: confidential-guests-workspace-provisioner
+      app: guests-standby-disk
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: confidential-guests-workspace-provisioner
+        app: guests-standby-disk
     spec:
       automountServiceAccountToken: false
       containers:
         - args:
             - |
               set -eu
-              dir=/var/lib/confidential-guests
-              file=$dir/workspace-v1.img
+              dir=/var/lib/guests/disks
+              file=$dir/primary-stage-v1.img
               device=/dev/loop210
-              size=1073741824
-              umask 077
-              exec 9>"$dir/provision.lock"
-              flock -x 9
-              [ ! -L "$file" ] || { echo 'refusing backing-file symlink'; exit 1; }
-              if [ ! -e "$file" ]; then
-                # Noclobber fails if the path appeared after the existence check.
-                (set -C; : > "$file")
-                fallocate -l "$size" "$file"
-              fi
-              [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
-                echo 'refusing changed backing file'; exit 1;
-              }
-              if [ ! -e "$device" ]; then mknod "$device" b 7 210; fi
-              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:d2' ] || {
-                echo 'refusing wrong loop device'; exit 1;
-              }
-              # -j compares the actual backing file identity (device/inode), rather than
-              # d_path output, which changes when the previous helper mount namespace exits.
-              associated=$(losetup -j "$file" -n -O NAME)
-              current=$(losetup -n -O BACK-FILE "$device" 2>/dev/null || true)
-              if [ -n "$current" ]; then
-                [ "$associated" = "$device" ] || { echo 'loop slot occupied; refusing'; exit 1; }
-              else
-                [ -z "$associated" ] || { echo 'backing file attached elsewhere; refusing'; exit 1; }
-                losetup "$device" "$file"
-              fi
-              [ "$(losetup -j "$file" -n -O NAME)" = "$device" ] || exit 1
-              # Pin the owned block-node metadata passed by CRI into the measured guest.
-              chown 0:6 "$device"
-              chmod 0660 "$device"
-              flock -u 9
-              echo 'dedicated retained 1Gi block volume ready'
-              while :; do sleep 60; done
-          command:
-            - /bin/sh
-            - -ec
-          image: registry.example.com/guests/storage@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-          name: provisioner
-          readinessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -ec
-                - test "$(losetup -j /var/lib/confidential-guests/workspace-v1.img -n -O NAME)" = /dev/loop210
-            periodSeconds: 5
-          resources:
-            limits:
-              memory: 128Mi
-            requests:
-              cpu: 10m
-              memory: 32Mi
-          securityContext:
-            privileged: true
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - mountPath: /dev
-              name: dev
-            - mountPath: /var/lib/confidential-guests
-              name: backing
-      enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull
-      nodeName: guest-host-1
-      volumes:
-        - hostPath:
-            path: /dev
-            type: Directory
-          name: dev
-        - hostPath:
-            path: /var/lib/confidential-guests
-            type: DirectoryOrCreate
-          name: backing
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
-  name: stage-provisioner
-  namespace: confidential-guests
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: confidential-guests-stage-provisioner
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: confidential-guests-stage-provisioner
-    spec:
-      automountServiceAccountToken: false
-      containers:
-        - args:
-            - |
-              set -eu
-              dir=/var/lib/confidential-guests
-              file=$dir/stage-v1.img
-              device=/dev/loop220
               size=16777216
               umask 077
               exec 9>"$dir/provision.lock"
@@ -448,17 +467,17 @@ spec:
               [ ! -L "$file" ] || { echo 'refusing backing-file symlink'; exit 1; }
               if [ ! -e "$file" ]; then
                 # Noclobber fails if the path appeared after the existence check.
-                (set -C; printf 'EXAMPLE-STAGE-PLACEHOLDER-V1\n' > "$file")
+                (set -C; printf 'example.placeholder/v1\n' > "$file")
                 fallocate -l "$size" "$file"
               fi
               [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
                 echo 'refusing changed backing file'; exit 1;
               }
-              [ "$(head -c 512 "$file" | sha256sum | cut -d' ' -f1)" = '9a072816fa784257f2fe00d7586be8c61e8933167b6223cc8051ce93736cc548' ] || {
+              [ "$(head -c 512 "$file" | sha256sum | cut -d' ' -f1)" = '46cec1a2bbeae018a840c65a548174bd3b05a05922b995936b8816ad9b7f33e1' ] || {
                 echo 'refusing changed stage placeholder'; exit 1;
               }
-              if [ ! -e "$device" ]; then mknod "$device" b 7 220; fi
-              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:dc' ] || {
+              if [ ! -e "$device" ]; then mknod "$device" b 7 210; fi
+              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:d2' ] || {
                 echo 'refusing wrong loop device'; exit 1;
               }
               # -j compares the actual backing file identity (device/inode), rather than
@@ -481,14 +500,14 @@ spec:
           command:
             - /bin/sh
             - -ec
-          image: registry.example.com/guests/storage@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          image: ghcr.io/example/confidential-guests-tools@sha256:6666666666666666666666666666666666666666666666666666666666666666
           name: provisioner
           readinessProbe:
             exec:
               command:
                 - /bin/sh
                 - -ec
-                - test "$(losetup -j /var/lib/confidential-guests/stage-v1.img -n -O NAME)" = /dev/loop220
+                - test "$(losetup -j /var/lib/guests/disks/primary-stage-v1.img -n -O NAME)" = /dev/loop210
             periodSeconds: 5
           resources:
             limits:
@@ -502,19 +521,120 @@ spec:
           volumeMounts:
             - mountPath: /dev
               name: dev
-            - mountPath: /var/lib/confidential-guests
+            - mountPath: /var/lib/guests/disks
               name: backing
       enableServiceLinks: false
       imagePullSecrets:
         - name: registry-pull
-      nodeName: guest-host-1
+      nodeName: tee-node-1
       volumes:
         - hostPath:
             path: /dev
             type: Directory
           name: dev
         - hostPath:
-            path: /var/lib/confidential-guests
+            path: /var/lib/guests/disks
+            type: DirectoryOrCreate
+          name: backing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: operator-disk
+  namespace: guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guests-operator-disk
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: guests-operator-disk
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - |
+              set -eu
+              dir=/var/lib/guests/disks
+              file=$dir/operator-v1.img
+              device=/dev/loop220
+              size=1073741824
+              umask 077
+              exec 9>"$dir/provision.lock"
+              flock -x 9
+              [ ! -L "$file" ] || { echo 'refusing backing-file symlink'; exit 1; }
+              if [ ! -e "$file" ]; then
+                # Noclobber fails if the path appeared after the existence check.
+                (set -C; : > "$file")
+                fallocate -l "$size" "$file"
+              fi
+              [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
+                echo 'refusing changed backing file'; exit 1;
+              }
+              if [ ! -e "$device" ]; then mknod "$device" b 7 220; fi
+              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:dc' ] || {
+                echo 'refusing wrong loop device'; exit 1;
+              }
+              # -j compares the actual backing file identity (device/inode), rather than
+              # d_path output, which changes when the previous helper mount namespace exits.
+              associated=$(losetup -j "$file" -n -O NAME)
+              current=$(losetup -n -O BACK-FILE "$device" 2>/dev/null || true)
+              if [ -n "$current" ]; then
+                [ "$associated" = "$device" ] || { echo 'loop slot occupied; refusing'; exit 1; }
+              else
+                [ -z "$associated" ] || { echo 'backing file attached elsewhere; refusing'; exit 1; }
+                losetup "$device" "$file"
+              fi
+              [ "$(losetup -j "$file" -n -O NAME)" = "$device" ] || exit 1
+              # Pin the owned block-node metadata passed by CRI into the measured guest.
+              chown 0:6 "$device"
+              chmod 0660 "$device"
+              flock -u 9
+              echo 'dedicated retained 1Gi block volume ready'
+              while :; do sleep 60; done
+          command:
+            - /bin/sh
+            - -ec
+          image: ghcr.io/example/confidential-guests-tools@sha256:6666666666666666666666666666666666666666666666666666666666666666
+          name: provisioner
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - test "$(losetup -j /var/lib/guests/disks/operator-v1.img -n -O NAME)" = /dev/loop220
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /dev
+              name: dev
+            - mountPath: /var/lib/guests/disks
+              name: backing
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull
+      nodeName: tee-node-1
+      volumes:
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev
+        - hostPath:
+            path: /var/lib/guests/disks
             type: DirectoryOrCreate
           name: backing
 ---
@@ -524,28 +644,28 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
   name: key-injector
-  namespace: confidential-guests
+  namespace: guests
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: confidential-guests-key-injector
+      app: guests-key-injector
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: confidential-guests-key-injector
+        app: guests-key-injector
     spec:
       automountServiceAccountToken: false
       containers:
         - args:
             - --idx
-            - "90"
+            - "40"
             - --socket-path
             - /var/run/nri/nri.sock
             - --namespace
-            - confidential-guests
+            - guests
             - --runtime-handler
             - kata-qemu-snp
             - --device-major
@@ -553,14 +673,18 @@ spec:
             - --device-minor
             - "258"
             - --binding
-            - node=storage
+            - guest-primary=storage
             - --binding
-            - node=attest
+            - guest-primary=attest
             - --binding
-            - maintenance=storage
+            - guest-primary-stage=storage
             - --binding
-            - maintenance=attest
-          image: registry.example.com/guests/key-injector@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+            - guest-primary-stage=attest
+            - --binding
+            - guest-operator=storage
+            - --binding
+            - guest-operator=attest
+          image: ghcr.io/example/confidential-guests-injector@sha256:7777777777777777777777777777777777777777777777777777777777777777
           name: injector
           ports:
             - containerPort: 8080
@@ -591,7 +715,7 @@ spec:
       enableServiceLinks: false
       imagePullSecrets:
         - name: registry-pull
-      nodeName: guest-host-1
+      nodeName: tee-node-1
       volumes:
         - hostPath:
             path: /var/run/nri
@@ -604,15 +728,15 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-data-v3
+  name: guest-primary-data-v3
 spec:
   accessModes:
     - ReadWriteOnce
   capacity:
-    storage: 64Gi
+    storage: 1Ti
   claimRef:
-    name: node-data-v3
-    namespace: confidential-guests
+    name: guest-primary-data-v3
+    namespace: guests
   local:
     path: /dev/loop203
   nodeAffinity:
@@ -622,7 +746,7 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - guest-host-1
+                - tee-node-1
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   volumeMode: Block
@@ -633,17 +757,17 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-data-v3
-  namespace: confidential-guests
+  name: guest-primary-data-v3
+  namespace: guests
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 64Gi
+      storage: 1Ti
   storageClassName: ""
   volumeMode: Block
-  volumeName: node-data-v3
+  volumeName: guest-primary-data-v3
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -651,15 +775,15 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: maintenance-workspace-v1
+  name: guest-primary-stage-v1
 spec:
   accessModes:
     - ReadWriteOnce
   capacity:
-    storage: 1Gi
+    storage: 16Mi
   claimRef:
-    name: maintenance-workspace-v1
-    namespace: confidential-guests
+    name: guest-primary-stage-v1
+    namespace: guests
   local:
     path: /dev/loop210
   nodeAffinity:
@@ -669,7 +793,7 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - guest-host-1
+                - tee-node-1
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   volumeMode: Block
@@ -680,17 +804,17 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: maintenance-workspace-v1
-  namespace: confidential-guests
+  name: guest-primary-stage-v1
+  namespace: guests
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 16Mi
   storageClassName: ""
   volumeMode: Block
-  volumeName: maintenance-workspace-v1
+  volumeName: guest-primary-stage-v1
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -698,15 +822,15 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-stage-v1
+  name: guest-operator-v1
 spec:
   accessModes:
     - ReadWriteOnce
   capacity:
-    storage: 16Mi
+    storage: 1Gi
   claimRef:
-    name: node-stage-v1
-    namespace: confidential-guests
+    name: guest-operator-v1
+    namespace: guests
   local:
     path: /dev/loop220
   nodeAffinity:
@@ -716,7 +840,7 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - guest-host-1
+                - tee-node-1
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   volumeMode: Block
@@ -727,17 +851,17 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-stage-v1
-  namespace: confidential-guests
+  name: guest-operator-v1
+  namespace: guests
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 16Mi
+      storage: 1Gi
   storageClassName: ""
   volumeMode: Block
-  volumeName: node-stage-v1
+  volumeName: guest-operator-v1
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -745,15 +869,15 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-data-v2
+  name: guest-primary-data-v2
 spec:
   accessModes:
     - ReadWriteOnce
   capacity:
     storage: 64Gi
   claimRef:
-    name: node-data-v2
-    namespace: confidential-guests
+    name: guest-primary-data-v2
+    namespace: guests
   local:
     path: /dev/loop202
   nodeAffinity:
@@ -763,7 +887,7 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - guest-host-1
+                - tee-node-1
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   volumeMode: Block
@@ -774,8 +898,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-data-v2
-  namespace: confidential-guests
+  name: guest-primary-data-v2
+  namespace: guests
 spec:
   accessModes:
     - ReadWriteOnce
@@ -784,22 +908,22 @@ spec:
       storage: 64Gi
   storageClassName: ""
   volumeMode: Block
-  volumeName: node-data-v2
+  volumeName: guest-primary-data-v2
 ---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-data-v1
+  name: guest-primary-data-v1
 spec:
   accessModes:
     - ReadWriteOnce
   capacity:
     storage: 64Gi
   claimRef:
-    name: node-data-v1
-    namespace: confidential-guests
+    name: guest-primary-data-v1
+    namespace: guests
   local:
     path: /dev/loop201
   nodeAffinity:
@@ -809,7 +933,7 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - guest-host-1
+                - tee-node-1
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   volumeMode: Block
@@ -819,8 +943,8 @@ kind: PersistentVolumeClaim
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
-  name: node-data-v1
-  namespace: confidential-guests
+  name: guest-primary-data-v1
+  namespace: guests
 spec:
   accessModes:
     - ReadWriteOnce
@@ -829,4 +953,491 @@ spec:
       storage: 64Gi
   storageClassName: ""
   volumeMode: Block
-  volumeName: node-data-v1
+  volumeName: guest-primary-data-v1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  name: log-retention
+  namespace: guests
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  name: log-retention
+  namespace: guests
+rules:
+  - apiGroups:
+      - ""
+    resourceNames:
+      - guest-primary
+      - guest-operator
+      - guest-primary-stage
+    resources:
+      - pods/log
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  name: log-retention
+  namespace: guests
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: log-retention
+subjects:
+  - kind: ServiceAccount
+    name: log-retention
+    namespace: guests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  name: log-retention
+  namespace: guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guests-log-retention
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: guests-log-retention
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - command:
+            - python3
+            - -I
+            - -B
+            - -m
+            - confidential_guests.log_retention
+          env:
+            - name: LOG_NAMESPACE
+              value: guests
+            - name: LOG_SCOPE
+              value: '[["guest-primary",["storage","attest","workload"]],["guest-operator",["storage","attest","console"]],["guest-primary-stage",["storage","attest"]]]'
+          image: ghcr.io/example/confidential-guests-tools@sha256:6666666666666666666666666666666666666666666666666666666666666666
+          name: collector
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /logs
+              name: logs
+      nodeName: tee-node-1
+      serviceAccountName: log-retention
+      terminationGracePeriodSeconds: 15
+      volumes:
+        - hostPath:
+            path: /var/lib/guests/logs
+            type: DirectoryOrCreate
+          name: logs
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: guests-creator
+spec:
+  failurePolicy: Fail
+  matchConditions:
+    - expression: (has(object.spec.runtimeClassName) && object.spec.runtimeClassName == 'kata-qemu-snp') || (has(object.spec.volumes) && object.spec.volumes.exists(v, has(v.persistentVolumeClaim) && v.persistentVolumeClaim.claimName.startsWith('guest-')))
+      name: confidential-guest
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: guests
+    resourceRules:
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+        resources:
+          - pods
+  validations:
+    - expression: request.userInfo.username in ['system:serviceaccount:guests:primary-lifecycle', 'system:serviceaccount:guests:operator-lifecycle']
+      message: only the lifecycle controllers create guest Pods
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: guests-creator
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: guests
+  policyName: guests-creator
+  validationActions:
+    - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: guests-shape
+spec:
+  failurePolicy: Fail
+  matchConditions:
+    - expression: request.userInfo.username in ['system:serviceaccount:guests:primary-lifecycle', 'system:serviceaccount:guests:operator-lifecycle']
+      name: lifecycle-controller
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: guests
+    resourceRules:
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+        resources:
+          - pods
+  validations:
+    - expression: "request.userInfo.username == 'system:serviceaccount:guests:primary-lifecycle' ? object.metadata.name in ['guest-primary', 'guest-primary-stage'] : object.metadata.name == 'guest-operator'"
+      message: guest name outside the controller's role
+    - expression: has(object.spec.runtimeClassName) && object.spec.runtimeClassName == 'kata-qemu-snp' && has(object.spec.nodeName) && object.spec.nodeName == 'tee-node-1' && object.spec.restartPolicy == 'Never'
+      message: guest must run on the confidential node and runtime class with restartPolicy Never
+    - expression: "!(has(object.spec.hostNetwork) && object.spec.hostNetwork) && !(has(object.spec.hostPID) && object.spec.hostPID) && !(has(object.spec.hostIPC) && object.spec.hostIPC) && !(has(object.spec.shareProcessNamespace) && object.spec.shareProcessNamespace)"
+      message: guest must not share host or process namespaces
+    - expression: (!has(object.spec.serviceAccountName) || object.spec.serviceAccountName == 'default') && has(object.spec.automountServiceAccountToken) && object.spec.automountServiceAccountToken == false
+      message: guest must run as the default ServiceAccount without a token
+    - expression: has(object.spec.volumes) && object.spec.volumes.all(v, has(v.configMap) || has(v.emptyDir) || has(v.persistentVolumeClaim))
+      message: guest volumes are limited to configMap, emptyDir and persistentVolumeClaim
+    - expression: "has(object.spec.volumes) && object.spec.volumes.filter(v, has(v.persistentVolumeClaim)).size() == 1 && object.spec.volumes.exists(v, v.name == 'data' && has(v.persistentVolumeClaim) && v.persistentVolumeClaim.claimName.startsWith(object.metadata.name == 'guest-primary' ? 'guest-primary-data-v' : object.metadata.name == 'guest-primary-stage' ? 'guest-primary-stage-v' : 'guest-operator-v'))"
+      message: guest mounts exactly one claim, named data, of its own role
+    - expression: object.spec.containers.all(c, !has(c.securityContext) || (!(has(c.securityContext.privileged) && c.securityContext.privileged) && !(has(c.securityContext.allowPrivilegeEscalation) && c.securityContext.allowPrivilegeEscalation))) && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, !has(c.securityContext) || (!(has(c.securityContext.privileged) && c.securityContext.privileged) && !(has(c.securityContext.allowPrivilegeEscalation) && c.securityContext.allowPrivilegeEscalation))))
+      message: guest containers must not be privileged or escalate
+    - expression: has(object.metadata.annotations) && 'io.katacontainers.config.hypervisor.cc_init_data' in object.metadata.annotations && !('argocd.argoproj.io/tracking-id' in object.metadata.annotations)
+      message: guest must carry init-data and no Argo tracking-id
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: guests-shape
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: guests
+  policyName: guests-shape
+  validationActions:
+    - Deny
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  name: primary-lifecycle-spec
+  namespace: guests
+data:
+  spec.json: '{"budget":{"epoch":1,"limit":3},"claims":{"data":"guest-primary-data-v3","stage":"guest-primary-stage-v1"},"containers":["storage","attest","workload"],"current":"primary-v1","generation":3,"grace_seconds":120,"holder_name":"guest-primary","initializers":["initialize"],"label_domains":["guests.example.com"],"live":["attest","/livez",8081],"node_name":"tee-node-1","previous":null,"ready":["workload","/readyz",8080],"releases":{"primary-v1":{"init_data_sha256":"cf0a41d3ef41f212a569890cc7e654d53c5b14c2cb6951e69b56563016b3c841","stage_containers":["storage","attest"],"template":{"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{"io.katacontainers.config.hypervisor.cc_init_data":"H4sIAAAAAAACEzXNzQoCMQwE4HufYoj3sqIHEXwSFQlraIv9I1vUfXtbFg+5zDdD3qJLKBkX0GT3diLD0RUNzaeRLZ4PpyOZ65Mb3w3VEsO8WhVXaHjl+cVO0C+3x6a3vIN8OdUoqBoS64pNzug1UW6C5gUqHFGy4NPfDfrvyfwAvYvV15cAAAA=","io.katacontainers.config.hypervisor.default_vcpus":"2"},"labels":{"app":"guests","role":"primary"},"name":"guest-primary","namespace":"guests"},"spec":{"automountServiceAccountToken":false,"containers":[{"args":["serve"],"env":[{"name":"GUEST_STORAGE_LAYOUT","value":"{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"},{"name":"NODE_ID","value":"sealed-data"},{"name":"VOLUME_ID","value":"data-v1"}],"image":"ghcr.io/example/confidential-guests-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111","name":"storage","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"add":["SYS_ADMIN","MKNOD"],"drop":["ALL"]},"readOnlyRootFilesystem":true},"volumeDevices":[{"devicePath":"/dev/guest-data","name":"data"}],"volumeMounts":[{"mountPath":"/run/guest-attest","name":"run"}]},{"env":[{"name":"GUEST_WIRE_PROFILE","value":"{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}"},{"name":"GUEST_STORAGE_LAYOUT","value":"{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"},{"name":"GUEST_WORKLOAD_API","value":"{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"},{"name":"MODE","value":"attest"},{"name":"RELEASE_SET_PATH","value":"/release/release-set.dsse.json"}],"image":"ghcr.io/example/confidential-guests-attest@sha256:2222222222222222222222222222222222222222222222222222222222222222","name":"attest","readinessProbe":{"httpGet":{"path":"/livez","port":8081},"periodSeconds":5},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/release","name":"release","readOnly":true},{"mountPath":"/run/guest-attest","name":"run"}]},{"image":"ghcr.io/example/workload@sha256:3333333333333333333333333333333333333333333333333333333333333333","name":"workload","ports":[{"containerPort":7443,"name":"control"}],"readinessProbe":{"httpGet":{"path":"/readyz","port":8080},"periodSeconds":5},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}}],"enableServiceLinks":false,"initContainers":[{"args":["install"],"image":"ghcr.io/example/confidential-guests-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111","name":"initialize","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}}],"nodeName":"tee-node-1","restartPolicy":"Never","runtimeClassName":"kata-qemu-snp","terminationGracePeriodSeconds":120,"volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"${DISK}"}},{"emptyDir":{"medium":"Memory","sizeLimit":"16Mi"},"name":"run"},{"configMap":{"name":"signed-release-5eed5eed5eed5eed"},"name":"release"}]}}}},"role":"primary","rollout":{"backoff_seconds":120,"limit":3,"settle_seconds":30,"stage_seconds":600},"rollout_id":0,"runtime_class_name":"kata-qemu-snp","stage_name":"guest-primary-stage","startup_seconds":900,"version":2}'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-2"
+  name: primary-lifecycle-ledger
+  namespace: guests
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: primary-lifecycle
+  namespace: guests
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: primary-lifecycle
+  namespace: guests
+rules:
+  - apiGroups:
+      - ""
+    resourceNames:
+      - guest-primary
+      - guest-primary-stage
+    resources:
+      - pods
+    verbs:
+      - get
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resourceNames:
+      - primary-lifecycle-spec
+    resources:
+      - configmaps
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resourceNames:
+      - primary-lifecycle-ledger
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: primary-lifecycle
+  namespace: guests
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: primary-lifecycle
+subjects:
+  - kind: ServiceAccount
+    name: primary-lifecycle
+    namespace: guests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  name: primary-lifecycle
+  namespace: guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guests-primary-lifecycle
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: guests-primary-lifecycle
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - command:
+            - python3
+            - -I
+            - -B
+            - -m
+            - confidential_guests.lifecycle
+          env:
+            - name: LIFECYCLE_ROLE
+              value: primary
+            - name: LIFECYCLE_NAMESPACE
+              value: guests
+          image: ghcr.io/example/confidential-guests-control@sha256:5555555555555555555555555555555555555555555555555555555555555555
+          name: controller
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 65532
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+      enableServiceLinks: false
+      nodeName: tee-node-1
+      serviceAccountName: primary-lifecycle
+      terminationGracePeriodSeconds: 15
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  name: operator-lifecycle-spec
+  namespace: guests
+data:
+  spec.json: '{"budget":{"epoch":1,"limit":3},"claims":{"data":"guest-operator-v1","stage":null},"containers":["storage","attest","console"],"current":"operator-v1","generation":1,"grace_seconds":60,"holder_name":"guest-operator","initializers":["initialize"],"label_domains":["guests.example.com"],"live":["attest","/livez",8081],"node_name":"tee-node-1","previous":null,"ready":["attest","/livez",8081],"releases":{"operator-v1":{"init_data_sha256":"e47e5deb9d53cf9c67f88b97c0e58921ae65f27b86be21c418acbbeb5397519c","stage_containers":[],"template":{"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{"io.katacontainers.config.hypervisor.cc_init_data":"H4sIAAAAAAAAEzWNwQrCMBBE7/mKYb2Xih5E8EtUZKlLEkyzYRuq/r0JxcNc3htmVrElasYFNA77YSTHyavFGubOlsCH05Hc9cmV746Kpjh9BxOv1H3h6cVe0JLrY7O3vIN8eC5JoEWMqxo2dUbrdSKoQWDCCZoF7/bX1X+A3A8iytXgmAAAAA==","io.katacontainers.config.hypervisor.default_vcpus":"2"},"labels":{"app":"guests","role":"operator"},"name":"guest-operator","namespace":"guests"},"spec":{"automountServiceAccountToken":false,"containers":[{"args":["serve"],"env":[{"name":"GUEST_STORAGE_LAYOUT","value":"{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"},{"name":"NODE_ID","value":"sealed-workspace"},{"name":"VOLUME_ID","value":"workspace-v1"}],"image":"ghcr.io/example/confidential-guests-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111","name":"storage","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"add":["SYS_ADMIN","MKNOD"],"drop":["ALL"]},"readOnlyRootFilesystem":true},"volumeDevices":[{"devicePath":"/dev/guest-data","name":"data"}],"volumeMounts":[{"mountPath":"/run/guest-attest","name":"run"}]},{"env":[{"name":"GUEST_WIRE_PROFILE","value":"{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/console:v1\"}"},{"name":"GUEST_STORAGE_LAYOUT","value":"{\"chain\":{\"bytes\":1099511627776,\"map\":\"guest-data\",\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"identityExports\":[\"identity-a\",\"identity-b\"],\"jwtExport\":\"shared-secret\"},\"workspace\":{\"bytes\":1073741824,\"map\":\"guest-workspace\",\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}"},{"name":"GUEST_WORKLOAD_API","value":"{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"},{"name":"MODE","value":"attest"},{"name":"RELEASE_SET_PATH","value":"/release/release-set.dsse.json"}],"image":"ghcr.io/example/confidential-guests-attest@sha256:2222222222222222222222222222222222222222222222222222222222222222","name":"attest","readinessProbe":{"httpGet":{"path":"/livez","port":8081},"periodSeconds":5},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/release","name":"release","readOnly":true},{"mountPath":"/run/guest-attest","name":"run"}]},{"image":"ghcr.io/example/console@sha256:4444444444444444444444444444444444444444444444444444444444444444","name":"console","ports":[{"containerPort":2222,"name":"ssh"}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}}],"enableServiceLinks":false,"initContainers":[{"args":["install"],"image":"ghcr.io/example/confidential-guests-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111","name":"initialize","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}}],"nodeName":"tee-node-1","restartPolicy":"Never","runtimeClassName":"kata-qemu-snp","terminationGracePeriodSeconds":60,"volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"guest-operator-v1"}},{"emptyDir":{"medium":"Memory","sizeLimit":"16Mi"},"name":"run"},{"configMap":{"name":"signed-release-5eed5eed5eed5eed"},"name":"release"}]}}}},"role":"operator","rollout":{"backoff_seconds":120,"limit":3,"settle_seconds":30,"stage_seconds":600},"rollout_id":0,"runtime_class_name":"kata-qemu-snp","stage_name":null,"startup_seconds":900,"version":2}'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-2"
+  name: operator-lifecycle-ledger
+  namespace: guests
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: operator-lifecycle
+  namespace: guests
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: operator-lifecycle
+  namespace: guests
+rules:
+  - apiGroups:
+      - ""
+    resourceNames:
+      - guest-operator
+    resources:
+      - pods
+    verbs:
+      - get
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resourceNames:
+      - operator-lifecycle-spec
+    resources:
+      - configmaps
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resourceNames:
+      - operator-lifecycle-ledger
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: operator-lifecycle
+  namespace: guests
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: operator-lifecycle
+subjects:
+  - kind: ServiceAccount
+    name: operator-lifecycle
+    namespace: guests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  name: operator-lifecycle
+  namespace: guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guests-operator-lifecycle
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: guests-operator-lifecycle
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - command:
+            - python3
+            - -I
+            - -B
+            - -m
+            - confidential_guests.lifecycle
+          env:
+            - name: LIFECYCLE_ROLE
+              value: operator
+            - name: LIFECYCLE_NAMESPACE
+              value: guests
+          image: ghcr.io/example/confidential-guests-control@sha256:5555555555555555555555555555555555555555555555555555555555555555
+          name: controller
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 65532
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+      enableServiceLinks: false
+      nodeName: tee-node-1
+      serviceAccountName: operator-lifecycle
+      terminationGracePeriodSeconds: 15
