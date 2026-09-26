@@ -6,4 +6,4 @@ uvicorn[standard]>=0.30
 kubernetes>=30        # k8s_watch informers
 python-telegram-bot>=21  # telegram_bot
 matrix-nio>=0.25      # matrix_bridge
-mcp>=1.0             # cluster_info MCP server (official MCP Python SDK)
+mcp>=1.0,<2         # cluster_info MCP server (official MCP Python SDK)
