@@ -32,8 +32,8 @@
  *
  * Nameserver sourcing (the reason this pattern is worth copying): the
  * Composition CREATES/ADOPTS the Route53 zone and reads its live nameservers,
- * so the delegation tracks AWS's dynamically-assigned NS set. Because the two
- * Nuconstruct zones already exist, the per-XR `adoptZoneId` sets the composed
+ * so the delegation tracks AWS's dynamically-assigned NS set. When a zone
+ * already exists, the per-XR `adoptZoneId` sets the composed
  * zone's `crossplane.io/external-name` so upjet *observes/imports* the existing
  * hosted zone instead of creating a duplicate.
  *
@@ -51,12 +51,12 @@
  *   hetznerApiToken: 'ref+sops://.secrets/secrets.yaml#hetzner/api-token',
  * });
  *
- * // Per-zone: delegate stage.nuconstruct.xyz from the Hetzner parent zone 1030670,
- * // adopting the existing Route53 hosted zone Z020643437.
- * new DnsZoneHetzner(chart, 'stage-nuconstruct-xyz', {
- *   dnsName: 'stage.nuconstruct.xyz',
- *   hetznerZoneId: '1030670',
- *   adoptZoneId: 'Z020643437',
+ * // Per-zone: delegate stage.example.com from the Hetzner parent zone 1234567,
+ * // adopting the existing Route53 hosted zone Z0123456789EXAMPLE.
+ * new DnsZoneHetzner(chart, 'stage-example-com', {
+ *   dnsName: 'stage.example.com',
+ *   hetznerZoneId: '1234567',
+ *   adoptZoneId: 'Z0123456789EXAMPLE',
  * });
  * ```
  */
@@ -214,17 +214,17 @@ export class DnsHetznerComposition extends BaseConstruct<DnsHetznerCompositionCo
                       dnsName: {
                         type: "string",
                         description:
-                          "FQDN of the child zone, e.g. stage.nuconstruct.xyz. Becomes the Route53 hosted-zone name.",
+                          "FQDN of the child zone, e.g. stage.example.com. Becomes the Route53 hosted-zone name.",
                       },
                       hetznerZoneId: {
                         type: "string",
                         description:
-                          "Hetzner Cloud parent zone id (numeric id or zone name) that holds the NS delegation, e.g. 1030670 (nuconstruct.xyz).",
+                          "Hetzner Cloud parent zone id (numeric id or zone name) that holds the NS delegation, e.g. 1234567 (example.com).",
                       },
                       recordName: {
                         type: "string",
                         description:
-                          'Relative label of the NS rrset in the parent zone, e.g. "stage" for stage.nuconstruct.xyz. Use "@" for the apex.',
+                          'Relative label of the NS rrset in the parent zone, e.g. "stage" for stage.example.com. Use "@" for the apex.',
                       },
                       adoptZoneId: {
                         type: "string",
@@ -567,16 +567,16 @@ export class DnsHetznerComposition extends BaseConstruct<DnsHetznerCompositionCo
  * Configuration for a DNS zone with Hetzner delegation (Composite Resource).
  */
 export interface DnsZoneHetznerConfig {
-  /** FQDN of the child zone, e.g. 'stage.nuconstruct.xyz'. */
+  /** FQDN of the child zone, e.g. 'stage.example.com'. */
   dnsName: string;
-  /** Hetzner Cloud parent zone id (e.g. '1030670' for nuconstruct.xyz). */
+  /** Hetzner Cloud parent zone id (e.g. '1234567' for example.com). */
   hetznerZoneId: string;
   /**
    * Relative label of the NS rrset in the parent zone (e.g. 'stage').
    * Defaults to the first label of `dnsName`.
    */
   recordName?: string;
-  /** Existing Route53 hosted-zone id to adopt (e.g. 'Z020643437'). Omit to create new. */
+  /** Existing Route53 hosted-zone id to adopt (e.g. 'Z0123456789EXAMPLE'). Omit to create new. */
   adoptZoneId?: string;
   /** Comment for the Route53 hosted zone. */
   description?: string;
