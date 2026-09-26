@@ -32,7 +32,9 @@
  * - {@link GuestAdmissionFence}: admission policies that keep guest creation
  *   to those controllers and their roles' shape;
  * - {@link GuestLogRetention} and {@link GuestServices}: host-side log
- *   retention, and the guests' NetworkPolicies and Services.
+ *   retention, and the guests' NetworkPolicies and Services;
+ * - {@link ConfidentialGuestStack}: all of them in one namespace, wired
+ *   together, with slots for the host components.
  */
 export { digestImage, isDigestImage } from "./types";
 export type { DigestImage } from "./types";
@@ -94,5 +96,12 @@ export type {
 } from "./log-retention";
 export { GuestServices } from "./services";
 export type { GuestIngressRule, GuestService, GuestServicesProps } from "./services";
+export { ConfidentialGuestStack, guestClaimPrefix } from "./stack";
+export type {
+  ConfidentialGuestComponent,
+  ConfidentialGuestRoleContext,
+  ConfidentialGuestStackContext,
+  ConfidentialGuestStackProps,
+} from "./stack";
 export { confidentialGuestAssetUrl, readConfidentialGuestAsset } from "./assets";
 export type { ConfidentialGuestAsset } from "./assets";
