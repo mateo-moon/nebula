@@ -4,14 +4,14 @@
 #   k8s_watch:      python -u /app/k8s_watch/main.py
 #   alert_bridge:   uvicorn alert_bridge.main:app --host 0.0.0.0 --port 8080
 #   telegram_bot:   python -u /app/telegram_bot/main.py
-FROM python:3.12-slim
+FROM python:3.12.13-slim
 
 WORKDIR /app
 ENV PYTHONPATH=/app
 
 # Install deps first (layer cache).
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -c constraints.txt -r requirements.txt
 
 # Shared A2A client.
 COPY a2a_common.py ./
