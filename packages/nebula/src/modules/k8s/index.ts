@@ -225,6 +225,7 @@ export type {
 } from "./confidential-containers";
 
 export {
+  AttestedPullBroker,
   NEUTRAL_WIRE,
   NriKeyInjector,
   SealedDisks,
@@ -235,6 +236,7 @@ export {
   digestImage,
   isDigestImage,
   provisionScript,
+  pullBrokerPolicy,
   readConfidentialGuestAsset,
   sealedDisksPlan,
   sha256Hex,
@@ -242,10 +244,13 @@ export {
   wireProfileEnv,
 } from "./confidential-guests";
 export type {
+  AttestedPullBrokerProps,
   ConfidentialGuestAsset,
   DigestImage,
   DiskEntry,
   DiskTable,
+  InitDataAdmission,
+  KbsResourcePath,
   NriKeyBinding,
   NriKeyInjectorProps,
   ProvisionReference,
