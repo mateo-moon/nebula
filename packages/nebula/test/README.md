@@ -4,6 +4,9 @@
 
 - `ecr.test.ts` validates private ECR synthesis, repository retention, IAM
   access boundaries and keyless provider installation.
+- `k0smotron-control-plane.test.ts` checks where the hosted control plane's
+  component extra args land in the k0s config, and that leaving them unset
+  renders no block (so existing clusters do not restart).
 - `pack-import.test.ts` packs the package, installs the tarball into a clean
   project and imports the package root. It fails if a tracked file under
   `src/` or `imports/`, an existing `files` entry, or a literal
