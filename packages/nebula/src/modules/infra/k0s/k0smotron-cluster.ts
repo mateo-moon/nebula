@@ -24,6 +24,8 @@ import {
 export interface K0smotronClusterControlPlane {
   /** kube-apiserver extra args (e.g. OIDC flags). Changing restarts the kmc-* CP pod. */
   apiExtraArgs?: Record<string, string>;
+  /** kube-controller-manager extra args (e.g. terminated-pod-gc-threshold). Changing restarts the kmc-* CP pod. */
+  controllerManagerExtraArgs?: Record<string, string>;
   /** Hosted-etcd persistence (default emptyDir; prefer PVC on a persistent mgmt cluster). */
   persistence?: K0smotronControlPlanePersistence;
   /** API Service type on the hosting cluster (default LoadBalancer). */
@@ -168,6 +170,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       calico: this.config.calico,
       dualStack: this.config.dualStack,
       apiExtraArgs: this.config.controlPlane?.apiExtraArgs,
+      controllerManagerExtraArgs: this.config.controlPlane?.controllerManagerExtraArgs,
       persistence: this.config.controlPlane?.persistence,
       serviceType: this.config.controlPlane?.serviceType,
       serviceAnnotations: this.config.controlPlane?.serviceAnnotations,
