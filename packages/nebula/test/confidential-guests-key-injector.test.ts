@@ -9,13 +9,13 @@ const props = (change: Partial<NriKeyInjectorProps> = {}): NriKeyInjectorProps =
   namespace: "guests",
   nodeName: "guest-host-1",
   image,
-  pluginIndex: "90",
+  pluginIndex: "40",
   runtimeHandler: "kata-qemu-snp",
   device: { major: 10, minor: 258 },
   bindings: [
-    { pod: "node", container: "storage" },
-    { pod: "node", container: "attest" },
-    { pod: "maintenance", container: "storage" },
+    { pod: "guest-data", container: "storage" },
+    { pod: "guest-data", container: "attest" },
+    { pod: "guest-bridge", container: "storage" },
   ],
   imagePullSecrets: ["registry-pull"],
   ...change,
@@ -38,7 +38,7 @@ const manifest = ({ nri = "/var/run/nri", args = [] as string[], pullSecrets = [
         ...(pullSecrets ? { imagePullSecrets: pullSecrets } : {}),
         containers: [{
           name: "injector", image, securityContext: restricted,
-          args: ["--idx", "90", "--socket-path", `${nri}/nri.sock`, "--namespace", "guests", "--runtime-handler", "kata-qemu-snp",
+          args: ["--idx", "40", "--socket-path", `${nri}/nri.sock`, "--namespace", "guests", "--runtime-handler", "kata-qemu-snp",
             "--device-major", "10", "--device-minor", "258", ...args],
           volumeMounts: [{ name: "nri", mountPath: nri, readOnly: true }],
           resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { memory: "128Mi" } },
@@ -50,7 +50,7 @@ const manifest = ({ nri = "/var/run/nri", args = [] as string[], pullSecrets = [
     },
   },
 });
-const bindingArgs = ["--binding", "node=storage", "--binding", "node=attest", "--binding", "maintenance=storage"];
+const bindingArgs = ["--binding", "guest-data=storage", "--binding", "guest-data=attest", "--binding", "guest-bridge=storage"];
 
 test("NriKeyInjector renders byte-identically to the hand-written host helper manifest", () => {
   assert.equal(render(props()).yaml, rawSynth([manifest({ args: bindingArgs })]).yaml);
@@ -99,7 +99,7 @@ test("plugin index, runtime handler, device and image are validated", () => {
   const refusals: [string, Partial<NriKeyInjectorProps>, RegExp][] = [
     ["one-digit index", { pluginIndex: "7" }, /pluginIndex/],
     ["three-digit index", { pluginIndex: "100" }, /pluginIndex/],
-    ["numeric index", { pluginIndex: 90 as any }, /pluginIndex/],
+    ["numeric index", { pluginIndex: 40 as any }, /pluginIndex/],
     ["runtime handler", { runtimeHandler: "Kata QEMU" }, /runtimeHandler/],
     ["device major", { device: { major: 4096, minor: 1 } }, /device/],
     ["device minor", { device: { major: 10, minor: -1 } }, /device/],

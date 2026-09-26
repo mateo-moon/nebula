@@ -2,7 +2,7 @@ import { Construct } from "constructs";
 import { KubeValidatingAdmissionPolicy, KubeValidatingAdmissionPolicyBinding } from "cdk8s-plus-33/lib/imports/k8s";
 import { INIT_DATA_ANNOTATION } from "./measured";
 import { LIFECYCLE_DATA_VOLUME } from "./lifecycle";
-import { ARGO_TRACKING_ID, dnsLabel, dnsSubdomain, fail, labelKey, labelValue, list, nonEmptyString, syncWave, unique, waveAnnotations } from "./shared";
+import { ARGO_TRACKING_ID, dnsLabel, dnsSubdomain, fail, labelKey, labelValue, list, nonEmptyString, syncWave, unique, waveAnnotations } from "./validate";
 
 const OWNER = "GuestAdmissionFence";
 

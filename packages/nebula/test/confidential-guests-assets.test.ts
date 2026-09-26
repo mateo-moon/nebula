@@ -14,9 +14,10 @@ import { importTimeViolations, probeImport, type ImportScope } from "./support/i
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const moduleDir = join(pkgDir, "src", "modules", "k8s", "confidential-guests");
-// The module may load other package sources (such as core/argocd.ts) and the
-// installed dependencies; loading them is module loading, not file I/O.
-const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules"), join(pkgDir, "src")] };
+// The module may load the installed dependencies and the package's core
+// helpers (core/argocd.ts); loading them is module loading, not file I/O. Any
+// other package source it reached would be judged like its own code.
+const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules"), join(pkgDir, "src", "core")] };
 
 // Import-time I/O as defined in support/import-io.ts (controlled by
 // io-probe.test.ts): reads, listings, stats and writes by module code, of
@@ -71,28 +72,33 @@ test("asset names are a closed set and resolve inside the module", () => {
 });
 
 // The schema documents the GUEST_WIRE_PROFILE value for readers in other
-// languages; it must list exactly the identifiers wireProfileEnv emits.
+// languages; it must describe exactly what wireProfileEnv emits.
 test("the wire-profile schema matches the emitted profile", () => {
   const schema = JSON.parse(readConfidentialGuestAsset("wire-profile.schema.json"));
-  const value = JSON.parse(wireProfileEnv(NEUTRAL_WIRE).value);
-  assert.deepEqual(schema.required.slice().sort(), Object.keys(value).sort());
+  const value = JSON.parse(wireProfileEnv({ ...NEUTRAL_WIRE, releaseSet: { scope: { emit: "deployment=test" }, roles: ["node", "operator"] }, workloadRef: "example/test:v1" }).value);
+  assert.deepEqual(Object.keys(schema.properties).sort(), Object.keys(value).sort());
+  assert.deepEqual(schema.required.slice().sort(), ["domains", "payloadTypes"], "releaseSet and workloadRef are optional to a reader");
   assert.equal(schema.additionalProperties, false);
-  for (const group of Object.keys(value) as (keyof typeof NEUTRAL_WIRE)[]) {
+  for (const group of ["payloadTypes", "domains"] as const) {
     const node = schema.properties[group];
     assert.equal(node.additionalProperties, false, group);
     assert.deepEqual(node.required.slice().sort(), Object.keys(NEUTRAL_WIRE[group]).sort(), group);
     assert.deepEqual(Object.keys(node.properties).sort(), Object.keys(NEUTRAL_WIRE[group]).sort(), group);
+    assert.match(node.description, /at most one identifier/, `${group} must state the one-identifier rule`);
   }
   const identifier = schema.$defs.identifier;
   const item = new RegExp(identifier.items.pattern);
-  for (const group of Object.values(value) as Record<string, string[]>[]) {
-    for (const list of Object.values(group)) {
+  const payloadType = new RegExp(schema.$defs.payloadType.items.pattern);
+  for (const group of ["payloadTypes", "domains"]) {
+    for (const list of Object.values(value[group]) as string[][]) {
       assert.ok(list.length >= identifier.minItems);
-      assert.ok(list.every(s => item.test(s)));
+      assert.ok(list.every(s => item.test(s) && (group !== "payloadTypes" || payloadType.test(s))), group);
     }
   }
-  assert.ok(!item.test("A B") && !item.test("A\nB") && !item.test("é") && !item.test(""));
-  for (const group of ["payloadTypes", "domains"]) {
-    assert.match(schema.properties[group].description, /at most one identifier/, `${group} must state the one-identifier rule`);
-  }
+  assert.ok(!item.test("A B") && !item.test("A\nB") && !item.test("\u00e9") && !item.test("") && !item.test("A$B"));
+  assert.ok(!payloadType.test("application/vnd.Example+json") && !payloadType.test("application/vnd.x+y+json") && payloadType.test("application/vnd.a+json"));
+  const releaseSet = schema.properties.releaseSet;
+  assert.deepEqual(releaseSet.required.slice().sort(), Object.keys(value.releaseSet).sort());
+  assert.ok(new RegExp(releaseSet.properties.scope.items.pattern).test(value.releaseSet.scope[0]));
+  assert.ok(new RegExp(schema.properties.workloadRef.pattern).test(value.workloadRef));
 });

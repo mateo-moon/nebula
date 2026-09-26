@@ -2,7 +2,7 @@ import { posix } from "node:path";
 import { Construct } from "constructs";
 import { KubeConfigMap, KubeDeployment, KubeRole, KubeRoleBinding, KubeServiceAccount, Quantity } from "cdk8s-plus-33/lib/imports/k8s";
 import { canonicalJson, sha256Hex } from "./canonical";
-import { dnsLabel, dnsSubdomain, fail, labelDomain, labelValue, list, nonEmptyString, record, syncWave, unique, waveAnnotations } from "./shared";
+import { dnsLabel, dnsSubdomain, fail, labelDomain, labelValue, list, nonEmptyString, record, syncWave, unique, waveAnnotations } from "./validate";
 import { digestImage } from "./types";
 
 const OWNER = "GuestLogRetention";

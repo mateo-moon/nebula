@@ -8,10 +8,12 @@
  *   rewritten, because measured policies bind the exact string;
  * - {@link canonicalJson} / {@link sha256Hex}: the canonical form hashed into
  *   measured inputs;
- * - {@link WireProfile}: every identifier put on the wire, as "emit one,
- *   accept many" so identifiers can be renamed without breaking peers, with
- *   the frozen {@link NEUTRAL_WIRE} names and {@link wireProfileEnv} to pass a
- *   profile into a guest;
+ * - the guest env contract: {@link WireProfile} (every identifier put on the
+ *   wire, as "emit one, accept many" so identifiers can be renamed without
+ *   breaking peers, with the frozen {@link NEUTRAL_WIRE} names), the storage
+ *   layout and the workload API, rendered by {@link wireProfileEnv},
+ *   {@link storageLayoutEnv}, {@link workloadApiEnv} and {@link guestEnv}
+ *   and read back by the guest's rules ({@link readGuestEnv});
  * - lazily read assets shipped with the module.
  *
  * Host-side building blocks. Every name, address, image, host path and label
@@ -31,7 +33,11 @@
  * import { NEUTRAL_WIRE, digestImage, wireProfileEnv } from "nebula-cdk8s";
  *
  * const image = digestImage("ghcr.io/example/guest@sha256:0123...cdef");
- * const env = [wireProfileEnv(NEUTRAL_WIRE)]; // { name: "GUEST_WIRE_PROFILE", value: "{...}" }
+ * const env = [wireProfileEnv({
+ *   ...NEUTRAL_WIRE,
+ *   releaseSet: { scope: { emit: "deployment=example" }, roles: ["node", "operator"] },
+ *   workloadRef: "example/workload:v1",
+ * })]; // [{ name: "GUEST_WIRE_PROFILE", value: "{...}" }]
  * ```
  *
  * Guest lifecycle and its surroundings (see README.md). Every
@@ -52,7 +58,28 @@ export { digestImage, isDigestImage } from "./types";
 export type { DigestImage } from "./types";
 export { canonicalJson, sha256Hex } from "./canonical";
 export { NEUTRAL_WIRE, WIRE_PROFILE_ENV, wireProfileEnv } from "./wire";
-export type { WireDomains, WirePayloadTypes, WireProfile, WireValue } from "./wire";
+export type { WireDomains, WireNames, WirePayloadTypes, WireProfile, WireReleaseSet, WireValue } from "./wire";
+export { GuestEnvError, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, readGuestEnv } from "./guest-env";
+export type {
+  GuestDeployment,
+  GuestEnvOptions,
+  GuestEnvReader,
+  GuestRecordFormat,
+  GuestStorageLayout,
+  GuestStorageVolume,
+  GuestWireDocument,
+  GuestWorkloadApi,
+} from "./guest-env";
+export {
+  NEUTRAL_SEALED_STORAGE,
+  NEUTRAL_WORKLOAD_API,
+  adapterModeEnv,
+  guestEnv,
+  sealedStorageEnv,
+  storageLayoutEnv,
+  workloadApiEnv,
+} from "./deployment-env";
+export type { GuestDeploymentEnv, GuestEnvVar } from "./deployment-env";
 export { INIT_DATA_ANNOTATION, initDataSha256, measuredGuest } from "./measured";
 export type { GuestPodManifest, MeasuredArtifact } from "./measured";
 export { SignedReleases } from "./signed-releases";
@@ -111,6 +138,9 @@ export type { GuestIngressRule, GuestService, GuestServicesProps } from "./servi
 export { ConfidentialGuestStack, guestClaimPrefix } from "./stack";
 export type {
   ConfidentialGuestComponent,
+  ConfidentialGuestDisks,
+  ConfidentialGuestKeyInjector,
+  ConfidentialGuestPullBroker,
   ConfidentialGuestRoleContext,
   ConfidentialGuestStackContext,
   ConfidentialGuestStackProps,
@@ -120,7 +150,7 @@ export type { ConfidentialGuestAsset } from "./assets";
 export { AttestedPullBroker, pullBrokerPolicy } from "./pull-broker";
 export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath } from "./pull-broker";
 export { validateDiskTable } from "./disk-table";
-export type { DiskEntry, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
+export type { DiskEntry, DiskSize, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
 export { defaultProvisionTemplate, provisionScript } from "./provision";
 export type { ProvisionReference, ProvisionScriptProps, ProvisionTemplate } from "./provision";
 export { SealedDisks, sealedDisksPlan } from "./sealed-disks";
