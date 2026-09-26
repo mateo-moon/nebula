@@ -101,6 +101,14 @@ export interface K0smotronControlPlaneConfig {
    * pod — a brief child-API outage, workloads unaffected.
    */
   apiExtraArgs?: Record<string, string>;
+  /**
+   * kube-controller-manager extra args
+   * (`k0sConfig.spec.controllerManager.extraArgs`), e.g.
+   * `terminated-pod-gc-threshold`. k0smotron passes the block through untouched
+   * and k0s applies these over its own hardcoded flags. Changing these restarts
+   * the kmc-* CP pod — a brief child-API outage, workloads unaffected.
+   */
+  controllerManagerExtraArgs?: Record<string, string>;
   /** Hosted-etcd persistence (default emptyDir). */
   persistence?: K0smotronControlPlanePersistence;
   /**
@@ -241,6 +249,9 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             // alone.
             ...(this.config.apiExtraArgs
               ? { api: { extraArgs: this.config.apiExtraArgs } }
+              : {}),
+            ...(this.config.controllerManagerExtraArgs
+              ? { controllerManager: { extraArgs: this.config.controllerManagerExtraArgs } }
               : {}),
           },
         },
