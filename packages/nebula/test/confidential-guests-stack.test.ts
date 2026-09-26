@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Chart, Testing } from "cdk8s";
-import { KubeConfigMap } from "cdk8s-plus-33/lib/imports/k8s";
+import { KubeConfigMap, KubeValidatingAdmissionPolicy } from "cdk8s-plus-33/lib/imports/k8s";
 import {
   ConfidentialGuestStack,
   guestClaimPrefix,
@@ -13,7 +13,7 @@ import {
   type ConfidentialGuestStackProps,
 } from "../src/modules/k8s/confidential-guests";
 import { confidentialGuestStackExample } from "../example/confidential-guests-stack";
-import { DOMAIN, NAMESPACE, NODE, RUNTIME, image, initData, lifecycleProps } from "./confidential-guests-fixtures";
+import { DOMAIN, NAMESPACE, NODE, RUNTIME, image, initData, lifecycleProps, measured, roles } from "./confidential-guests-fixtures";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
@@ -89,23 +89,23 @@ test("emission order: broker, releases, services, disks, injector, logs, fence, 
   const at = (entry: string) => { const i = order.indexOf(entry); assert.ok(i >= 0, entry); return i; };
   const sequence = ["ConfigMap/broker", "ConfigMap/trust", "Service/guest-primary", "ConfigMap/disks", "ConfigMap/injector", "Deployment/log-retention",
     "ValidatingAdmissionPolicy/guests-creator", "ValidatingAdmissionPolicyBinding/guests-shape", "ConfigMap/primary-lifecycle-spec",
-    "Deployment/maintenance-lifecycle"].map(at);
+    "Deployment/operator-lifecycle"].map(at);
   assert.deepEqual(sequence, [...sequence].sort((a, b) => a - b), order.join("\n"));
-  assert.equal(order.at(-1), "Deployment/maintenance-lifecycle", "the controllers render last");
+  assert.equal(order.at(-1), "Deployment/operator-lifecycle", "the controllers render last");
   const context = seen.broker;
   assert.deepEqual([seen.disks, seen.injector], [context, context]);
   assert.deepEqual(context, {
     namespace: NAMESPACE, nodeName: NODE, runtimeClassName: RUNTIME, labelDomain: DOMAIN, lifecycleLabel: `${DOMAIN}/lifecycle`,
-    initDataSha256: [initData("primary-r1").initDataSha256, initData("primary-r2").initDataSha256, initData("maintenance-r1").initDataSha256],
-    guestPods: ["guest-primary", "guest-primary-stage", "guest-maintenance"],
+    initDataSha256: [initData("primary-r1").initDataSha256, initData("primary-r2").initDataSha256, initData("operator-r1").initDataSha256],
+    guestPods: ["guest-primary", "guest-primary-stage", "guest-operator"],
     roles: [
       { role: "primary", holder: "guest-primary", claim: "guest-primary-data-v2", generation: 2, stage: { name: "guest-primary-stage", claim: "guest-primary-stage-v1" } },
-      { role: "maintenance", holder: "guest-maintenance", claim: "guest-maintenance-v1", generation: 1 },
+      { role: "operator", holder: "guest-operator", claim: "guest-operator-v1", generation: 1 },
     ],
   });
   assert.equal(stack.context, context);
   assert.equal(stack.releases?.configMapOf(fp), "trust");
-  assert.deepEqual(stack.ignoreDifferences().map(e => e.name), ["primary-budget-v1", "primary-lifecycle-ledger", "maintenance-lifecycle-ledger"]);
+  assert.deepEqual(stack.ignoreDifferences().map(e => e.name), ["primary-budget-v1", "primary-lifecycle-ledger", "operator-lifecycle-ledger"]);
 });
 
 test("the fence and log retention derive from the lifecycle roles unless given", () => {
@@ -113,13 +113,13 @@ test("the fence and log retention derive from the lifecycle roles unless given",
   const creator = docs.find(d => d.metadata.name === "guests-creator" && d.kind === "ValidatingAdmissionPolicy");
   assert.deepEqual(creator.spec.matchConstraints.namespaceSelector, { matchLabels: { "kubernetes.io/metadata.name": NAMESPACE } });
   assert.equal(creator.spec.validations[0].expression,
-    "request.userInfo.username in ['system:serviceaccount:guests:primary-lifecycle', 'system:serviceaccount:guests:maintenance-lifecycle']");
+    "request.userInfo.username in ['system:serviceaccount:guests:primary-lifecycle', 'system:serviceaccount:guests:operator-lifecycle']");
   const shape = docs.find(d => d.metadata.name === "guests-shape" && d.kind === "ValidatingAdmissionPolicy");
   assert.match(shape.spec.validations[5].expression,
-    /startsWith\(object.metadata.name == 'guest-primary' \? 'guest-primary-data-v' : object.metadata.name == 'guest-primary-stage' \? 'guest-primary-stage-v' : 'guest-maintenance-v'\)/);
+    /startsWith\(object.metadata.name == 'guest-primary' \? 'guest-primary-data-v' : object.metadata.name == 'guest-primary-stage' \? 'guest-primary-stage-v' : 'guest-operator-v'\)/);
   const collector = docs.find(d => d.kind === "Deployment" && d.metadata.name === "log-retention");
   assert.equal(collector.spec.template.spec.containers[0].env[1].value,
-    '[["guest-primary",["storage","attest","app"]],["guest-maintenance",["storage","attest"]],["guest-primary-stage",["storage","attest"]]]');
+    '[["guest-primary",["storage","attest","app"]],["guest-operator",["storage","attest"]],["guest-primary-stage",["storage","attest"]]]');
   const custom = render(stackProps({
     fence: { ...stackProps().fence, namespaceSelector: { matchLabels: { fenced: "true" } } },
     logRetention: { hostPath: "/var/lib/guests/logs", collector: { image: image("tools") }, scopes: [{ pod: "guest-primary", containers: ["app"] }] },
@@ -141,6 +141,8 @@ test("any label domain: nothing outside the guest templates carries another", ()
 
 test("refusals happen before anything renders", () => {
   const refusals: [string, Partial<ConfidentialGuestStackProps>, RegExp][] = [
+    ["a part refuses after others were built", { services: { services: [{ name: "guest-primary", selector: { app: "guests" }, ports: [8080] }] },
+      fence: { ...stackProps().fence, messages: { ...MESSAGES, claim: "" } } }, /messages.claim/],
     ["claim outside the fenced prefix", { fence: { ...stackProps().fence, guestClaimPrefix: "vm-" } }, /outside fence.guestClaimPrefix/],
     ["no fence", { fence: undefined as any }, /fence is required/],
     ["no lifecycle", { lifecycle: undefined as any }, /lifecycle is required/],
@@ -152,4 +154,66 @@ test("refusals happen before anything renders", () => {
     assert.throws(() => new ConfidentialGuestStack(chart, "stack", stackProps(change)), error, label);
     assert.deepEqual(Testing.synth(chart), [], `${label}: nothing rendered`);
   }
+});
+
+/** Stack props whose roles use the given claims (the primary holder runs its placeholder release only). */
+function withClaims(primaryClaim: string, operatorClaim: string, stageClaim?: string): ConfidentialGuestStackProps {
+  const [primary, operator] = roles();
+  const base = stackProps();
+  return { ...base, lifecycle: { ...base.lifecycle, roles: [
+    { ...primary, claim: primaryClaim, releases: { r2: primary.releases.r2 }, previous: null,
+      stage: { ...primary.stage!, ...(stageClaim ? { claim: stageClaim } : {}) } },
+    { ...operator, claim: operatorClaim, releases: { m1: measured("operator", { claim: operatorClaim }) } },
+  ] } };
+}
+const controller = (role: string, guests: [string, string][]) =>
+  ({ serviceAccount: { namespace: NAMESPACE, name: `${role}-lifecycle` }, guests: guests.map(([name, claimPrefix]) => ({ name, claimPrefix })) });
+function withControllers(controllers: ReturnType<typeof controller>[]): ConfidentialGuestStackProps {
+  const base = stackProps();
+  return { ...base, fence: { ...base.fence, controllers } };
+}
+function refuse(label: string, props: ConfidentialGuestStackProps, error: RegExp) {
+  const chart = Testing.chart();
+  assert.throws(() => new ConfidentialGuestStack(chart, "stack", props), error, label);
+  assert.deepEqual(Testing.synth(chart), [], `${label}: nothing rendered`);
+}
+
+test("each role's claims stay its own through the fence, derived or given", () => {
+  refuse("claims that differ only in their number", withClaims("guest-disk-1", "guest-disk-2"),
+    /guest guest-primary claimPrefix "guest-disk-" overlaps guest guest-operator's "guest-disk-"/);
+  refuse("a stage claim under its holder's prefix", withClaims("guest-primary-v1", "guest-operator-v1", "guest-primary-v2"),
+    /guest guest-primary claimPrefix "guest-primary-v" overlaps guest guest-primary-stage's "guest-primary-v"/);
+  refuse("a role's guest listed under another controller", withControllers([
+    controller("primary", [["guest-primary", "guest-primary-data-v"]]),
+    controller("operator", [["guest-operator", "guest-operator-v"], ["guest-primary-stage", "guest-primary-stage-v"]])]),
+    /role primary: guest guest-primary-stage is not a guest of its controller guests\/primary-lifecycle in fence.controllers/);
+  refuse("a role's guest missing from the fence", withControllers([
+    controller("primary", [["guest-primary", "guest-primary-data-v"]]), controller("operator", [["guest-operator", "guest-operator-v"]])]),
+    /guest guest-primary-stage is not a guest of its controller/);
+  refuse("a claim outside its guest's prefix", withControllers([
+    controller("primary", [["guest-primary", "guest-primary-data-v"], ["guest-primary-stage", "guest-primary-stage-v"]]),
+    controller("operator", [["guest-operator", "guest-operator-x"]])]),
+    /role operator: claim guest-operator-v1 is outside guest guest-operator's claimPrefix "guest-operator-x"/);
+  const given = withControllers([
+    controller("primary", [["guest-primary", "guest-primary-data-v2"], ["guest-primary-stage", "guest-primary-stage-v1"]]),
+    controller("operator", [["guest-operator", "guest-operator-v1"]])]);
+  assert.ok(render(given).docs.length > 0, "narrower prefixes that still admit each claim are accepted");
+});
+
+test("no two parts render the same object", () => {
+  const release = { payloadType: "application/vnd.example.release+json", payload: Buffer.from('{"expires_at":1}').toString("base64") };
+  const releases = (configMap: string) => ({ payloadTypes: { f: { release: release.payloadType, releaseSet: "application/vnd.example.release-set+json" } },
+    releaseSet: false, reading: ["0123456789abcdef"],
+    authorities: [{ fingerprint: "0123456789abcdef", status: "active" as const, formats: [{ format: "f", configMap, envelopes: { release } }] }] });
+  refuse("a release ConfigMap named like a controller's spec", stackProps({ releases: releases("primary-lifecycle-spec") }),
+    /ConfigMap guests\/primary-lifecycle-spec is rendered twice/);
+  refuse("a component object named like another part's", stackProps({
+    disks: (scope, context) => { new KubeConfigMap(scope, "ledger", { metadata: { name: "operator-lifecycle-ledger", namespace: context.namespace } }); } }),
+    /ConfigMap guests\/operator-lifecycle-ledger is rendered twice/);
+  refuse("a cluster-scoped duplicate", stackProps({
+    keyInjector: scope => { new KubeValidatingAdmissionPolicy(scope, "policy", { metadata: { name: "guests-shape" } }); } }),
+    /ValidatingAdmissionPolicy.admissionregistration.k8s.io guests-shape is rendered twice/);
+  const elsewhere = render(stackProps({ releases: releases("trust"),
+    disks: scope => { new KubeConfigMap(scope, "other", { metadata: { name: "primary-lifecycle-spec", namespace: "other" } }); } })).docs;
+  assert.equal(elsewhere.filter(d => d.kind === "ConfigMap" && d.metadata.name === "primary-lifecycle-spec").length, 2, "the same name in another namespace is another object");
 });

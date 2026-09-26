@@ -40,7 +40,11 @@ export interface GuestAdmissionFenceMessages {
   readonly initData: string;
 }
 
-/** A label selector for the namespaces the fence applies to. */
+/**
+ * A label selector for the namespaces the fence applies to. It must name its
+ * namespaces with a `matchLabels` entry or an `In` expression; `NotIn`,
+ * `Exists` and `DoesNotExist` may only narrow that selection.
+ */
 export interface GuestAdmissionFenceNamespaceSelector {
   readonly matchLabels?: Readonly<Record<string, string>>;
   readonly matchExpressions?: readonly { readonly key: string; readonly operator: "In" | "NotIn" | "Exists" | "DoesNotExist"; readonly values?: readonly string[] }[];
@@ -48,9 +52,10 @@ export interface GuestAdmissionFenceNamespaceSelector {
 
 export interface GuestAdmissionFenceProps {
   /**
-   * The namespaces the fence applies to. Required and non-empty:
-   * ValidatingAdmissionPolicies are cluster-scoped, so without a selector the
-   * fence would apply to every namespace (including other guests').
+   * The namespaces the fence applies to. Required, and it must name them:
+   * ValidatingAdmissionPolicies are cluster-scoped, so a selector that
+   * matches nearly every namespace would deny runtime-class Pods in all of
+   * them (including other guests').
    */
   readonly namespaceSelector: GuestAdmissionFenceNamespaceSelector;
   /**
@@ -59,7 +64,12 @@ export interface GuestAdmissionFenceProps {
    */
   readonly policyNames: { readonly creator: string; readonly shape: string };
   readonly messages: GuestAdmissionFenceMessages;
-  /** The controllers and their guests; the last controller is the fallback branch of the name and claim checks. */
+  /**
+   * The controllers and their guests; the last controller is the fallback
+   * branch of the name and claim checks. Every guest's claim prefix starts
+   * with `guestClaimPrefix` and neither covers nor is covered by another
+   * guest's, so a guest mounts only its own claims.
+   */
   readonly controllers: readonly GuestAdmissionFenceController[];
   /** Runtime class of every guest. */
   readonly runtimeClassName: string;
@@ -76,6 +86,8 @@ export interface GuestAdmissionFenceProps {
 // Values interpolated into CEL string literals: validated so they can never
 // close the literal (no quotes or backslashes can pass these patterns).
 const CLAIM_PREFIX = /^[a-z0-9]([-a-z0-9.]*)?$/;
+const OPERATORS = ["In", "NotIn", "Exists", "DoesNotExist"];
+const SELECT_NAMESPACES = "namespaceSelector is required and must name its namespaces (a matchLabels entry or an In expression): the policies are cluster-scoped";
 const quote = (value: string) => `'${value}'`;
 const names = (values: readonly string[]) => `[${values.map(quote).join(", ")}]`;
 
@@ -100,18 +112,25 @@ export class GuestAdmissionFence extends Construct {
   constructor(scope: Construct, id: string, props: GuestAdmissionFenceProps) {
     super(scope, id);
     const selector = props.namespaceSelector;
-    const matchLabels = selector?.matchLabels ?? {}, matchExpressions = selector?.matchExpressions ?? [];
-    if (selector === null || typeof selector !== "object" || (Object.keys(matchLabels).length === 0 && matchExpressions.length === 0)) {
-      fail(OWNER, "namespaceSelector is required and must select something: the policies are cluster-scoped");
-    }
+    if (selector === null || typeof selector !== "object" || Array.isArray(selector)) fail(OWNER, SELECT_NAMESPACES);
+    const matchLabels = selector.matchLabels ?? {};
+    if (matchLabels === null || typeof matchLabels !== "object" || Array.isArray(matchLabels)) fail(OWNER, "namespaceSelector.matchLabels must be a map of labels");
     for (const [key, value] of Object.entries(matchLabels)) {
       labelKey(OWNER, "namespaceSelector key", key);
       labelValue(OWNER, `namespaceSelector[${key}]`, value);
     }
+    const matchExpressions = list<NonNullable<GuestAdmissionFenceNamespaceSelector["matchExpressions"]>[number]>(
+      OWNER, "namespaceSelector.matchExpressions", selector.matchExpressions ?? []);
     for (const expression of matchExpressions) {
-      labelKey(OWNER, "namespaceSelector expression key", expression?.key);
-      if (!["In", "NotIn", "Exists", "DoesNotExist"].includes(expression.operator)) fail(OWNER, "namespaceSelector expression operator is invalid");
+      const key = labelKey(OWNER, "namespaceSelector expression key", expression?.key);
+      if (!OPERATORS.includes(expression.operator)) fail(OWNER, `namespaceSelector expression ${key}: operator must be one of ${OPERATORS.join(", ")}`);
+      const values = list<string>(OWNER, `namespaceSelector expression ${key} values`, expression.values ?? []);
+      const takesValues = expression.operator === "In" || expression.operator === "NotIn";
+      if (takesValues && values.length === 0) fail(OWNER, `namespaceSelector expression ${key}: ${expression.operator} needs values`);
+      if (!takesValues && values.length > 0) fail(OWNER, `namespaceSelector expression ${key}: ${expression.operator} takes no values`);
+      values.forEach(value => labelValue(OWNER, `namespaceSelector expression ${key} value`, value));
     }
+    if (Object.keys(matchLabels).length === 0 && !matchExpressions.some(e => e.operator === "In")) fail(OWNER, SELECT_NAMESPACES);
     const policyNames = props.policyNames ?? fail(OWNER, "policyNames is required: the policies are cluster-scoped");
     dnsSubdomain(OWNER, "policyNames.creator", policyNames.creator);
     dnsSubdomain(OWNER, "policyNames.shape", policyNames.shape);
@@ -142,6 +161,16 @@ export class GuestAdmissionFence extends Construct {
       if (typeof guest.claimPrefix !== "string" || !CLAIM_PREFIX.test(guest.claimPrefix)) fail(OWNER, `guest ${guest.name} claimPrefix must be a claim name prefix`);
     }
     unique(OWNER, "guest", guests.map(g => g.name));
+    for (const guest of guests) {
+      if (!guest.claimPrefix.startsWith(guestClaimPrefix)) {
+        fail(OWNER, `guest ${guest.name} claimPrefix ${JSON.stringify(guest.claimPrefix)} is outside guestClaimPrefix ${JSON.stringify(guestClaimPrefix)}: the creator policy would not fence its claims`);
+      }
+      for (const other of guests) {
+        if (other !== guest && other.claimPrefix.startsWith(guest.claimPrefix)) {
+          fail(OWNER, `guest ${guest.name} claimPrefix ${JSON.stringify(guest.claimPrefix)} overlaps guest ${other.name}'s ${JSON.stringify(other.claimPrefix)}: a guest may mount only its own claims`);
+        }
+      }
+    }
 
     const username = "request.userInfo.username";
     const isController = `${username} in ${names(accounts)}`;

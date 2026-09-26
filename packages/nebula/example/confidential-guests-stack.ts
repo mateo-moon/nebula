@@ -5,7 +5,7 @@
  *
  * - `primary` runs a workload and can boot a second copy of its release
  *   beside the serving one (the stage boot) to hand its sealed disk over.
- * - `maintenance` is an operator guest that reaches the primary's control port.
+ * - `operator` is an operator guest that reaches the primary's control port.
  *
  * Every name, address, domain and image below is an example value. The
  * templates' init-data and hashes stand in for what policy generation
@@ -40,14 +40,14 @@ const images = {
   storage: digestImage(`ghcr.io/example/confidential-guests-storage@sha256:${"1".repeat(64)}`),
   attest: digestImage(`ghcr.io/example/confidential-guests-attest@sha256:${"2".repeat(64)}`),
   app: digestImage(`ghcr.io/example/workload@sha256:${"3".repeat(64)}`),
-  operator: digestImage(`ghcr.io/example/operator@sha256:${"4".repeat(64)}`),
+  console: digestImage(`ghcr.io/example/console@sha256:${"4".repeat(64)}`),
   control: digestImage(`ghcr.io/example/confidential-guests-control@sha256:${"5".repeat(64)}`),
   tools: digestImage(`ghcr.io/example/confidential-guests-tools@sha256:${"6".repeat(64)}`),
 };
 
 const guestLabels = { app: "guests" };
 const primaryLabels = { ...guestLabels, role: "primary" };
-const maintenanceLabels = { ...guestLabels, role: "maintenance" };
+const operatorLabels = { ...guestLabels, role: "operator" };
 const restricted = { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
 const memory = (name: string) => ({ name, emptyDir: { medium: "Memory", sizeLimit: "16Mi" } });
 const probe = (path: string, port: number) => ({ httpGet: { path, port }, periodSeconds: 5 });
@@ -57,7 +57,7 @@ const probe = (path: string, port: number) => ({ httpGet: { path, port }, period
 const attest = {
   name: "attest", image: images.attest, securityContext: restricted,
   env: [wireProfileEnv(NEUTRAL_WIRE), { name: "RELEASE_SET_PATH", value: "/release/release-set.dsse.json" }],
-  readinessProbe: probe("/livez", 9080),
+  readinessProbe: probe("/livez", 8081),
   volumeMounts: [{ name: "release", mountPath: "/release", readOnly: true }, { name: "run", mountPath: "/run/guest-attest" }],
 };
 const storage = {
@@ -89,23 +89,23 @@ function guest(name: string, labels: Record<string, string>, grace: number, clai
 // the claim placeholder; the controller substitutes the phase's claim.
 const primary = guest("guest-primary", primaryLabels, 120, LIFECYCLE_CLAIM_PLACEHOLDER, [
   { name: "workload", image: images.app, securityContext: restricted, readinessProbe: probe("/readyz", 8080),
-    ports: [{ name: "control", containerPort: 9443 }] },
+    ports: [{ name: "control", containerPort: 7443 }] },
 ]);
-const maintenance = guest("guest-maintenance", maintenanceLabels, 60, "guest-maintenance-v1", [
-  { name: "operator", image: images.operator, securityContext: restricted, ports: [{ name: "ssh", containerPort: 2200 }] },
+const operator = guest("guest-operator", operatorLabels, 60, "guest-operator-v1", [
+  { name: "console", image: images.console, securityContext: restricted, ports: [{ name: "ssh", containerPort: 2222 }] },
 ]);
 
 // What policy generation records for each template.
 const artifacts = {
   primary: {
-    canonicalPodSha256: "f044efca72ed5c091f4e2387a78bbb18af05c939af36b713065c16114446afc4",
+    canonicalPodSha256: "fe7ed907d33de147163e84b2f17334e2bbbd2fa1e9dfe712ba2b2694220c72b0",
     ccInitData: "H4sIAAAAAAACEzXNzQoCMQwE4HufYoj3sqIHEXwSFQlraIv9I1vUfXtbFg+5zDdD3qJLKBkX0GT3diLD0RUNzaeRLZ4PpyOZ65Mb3w3VEsO8WhVXaHjl+cVO0C+3x6a3vIN8OdUoqBoS64pNzug1UW6C5gUqHFGy4NPfDfrvyfwAvYvV15cAAAA=",
     initDataSha256: "cf0a41d3ef41f212a569890cc7e654d53c5b14c2cb6951e69b56563016b3c841",
   },
-  maintenance: {
-    canonicalPodSha256: "915fc138e3cf9bdd0e18e8cbeaff353c5fe9e35a591527329a1a954561bd0b17",
-    ccInitData: "H4sIAAAAAAACEzXNwQoCMQwE0Hu/IsR7WdGDCH6JioQ6tMU2Ld2y6t/bZfGQy7xhsqDNsShdiCe7txMbSb602ENesznI4XRkc31Kl7vhWlJ0X9vgC69exb3Eg8Zpf2x60x3hI7kmUJaoHSrqQJueaVTRpIN6ADVIoqKg93i50n+DzQ/ays7JmwAAAA==",
-    initDataSha256: "8e8bac0ab02d96a4f9551914aad3006298226019aea1b51fb85813ac315a6dea",
+  operator: {
+    canonicalPodSha256: "f0aa0e313817c5d02095e635674ee7b083b61e423a03f27d3bb551ed8a6c02de",
+    ccInitData: "H4sIAAAAAAAAEzWNwQrCMBBE7/mKYb2Xih5E8EtUZKlLEkyzYRuq/r0JxcNc3htmVrElasYFNA77YSTHyavFGubOlsCH05Hc9cmV746Kpjh9BxOv1H3h6cVe0JLrY7O3vIN8eC5JoEWMqxo2dUbrdSKoQWDCCZoF7/bX1X+A3A8iytXgmAAAAA==",
+    initDataSha256: "e47e5deb9d53cf9c67f88b97c0e58921ae65f27b86be21c418acbbeb5397519c",
   },
 };
 
@@ -125,22 +125,22 @@ export function confidentialGuestStackExample(scope: Construct): ConfidentialGue
       authorities: [{ fingerprint: authority, status: "active", formats: [{ format: "neutral", configMap: releaseConfigMap, envelopes: {
         release: statement(NEUTRAL_WIRE.payloadTypes.release.emit, { deployment: "example-v1", expires_at: expires }),
         releaseSet: statement(NEUTRAL_WIRE.payloadTypes.releaseSet.emit, { deployment: "example-v1", sequence: 1, expires_at: expires,
-          members: [artifacts.primary.initDataSha256, artifacts.maintenance.initDataSha256] }),
+          members: [artifacts.primary.initDataSha256, artifacts.operator.initDataSha256] }),
       } }] }],
     },
     services: {
       ingress: [
-        // The maintenance guest may reach the primary's control port.
-        { name: "primary-control", podSelector: primaryLabels, ports: [9443], from: [maintenanceLabels] },
+        // The operator guest may reach the primary's control port.
+        { name: "primary-control", podSelector: primaryLabels, ports: [7443], from: [operatorLabels] },
         // A stage boot reaches only the holder's handoff listener.
-        { name: "primary-handoff", podSelector: { ...primaryLabels, [lifecycleLabel]: "holder" }, ports: [9445],
+        { name: "primary-handoff", podSelector: { ...primaryLabels, [lifecycleLabel]: "holder" }, ports: [7445],
           from: [{ ...primaryLabels, [lifecycleLabel]: "stage" }] },
-        { name: "maintenance-ssh", podSelector: maintenanceLabels, ports: [2200] },
+        { name: "operator-ssh", podSelector: operatorLabels, ports: [2222] },
       ],
       services: [
         // The stage boot shares the primary's labels; only the holder serves.
-        { name: "guest-primary", selector: { ...primaryLabels, [lifecycleLabel]: "holder" }, ports: [9443, 9445], publishNotReadyAddresses: true },
-        { name: "guest-maintenance", selector: maintenanceLabels, ports: [2200] },
+        { name: "guest-primary", selector: { ...primaryLabels, [lifecycleLabel]: "holder" }, ports: [7443, 7445], publishNotReadyAddresses: true },
+        { name: "guest-operator", selector: operatorLabels, ports: [2222] },
       ],
     },
     logRetention: { hostPath: "/var/lib/guests/logs", collector: { image: images.tools } },
@@ -166,14 +166,14 @@ export function confidentialGuestStackExample(scope: Construct): ConfidentialGue
       roles: [
         {
           role: "primary", holder: "guest-primary", claim: "guest-primary-data-v1", generation: 1, graceSeconds: 120,
-          live: ["attest", "/livez", 9080], ready: ["workload", "/readyz", 8080],
+          live: ["attest", "/livez", 8081], ready: ["workload", "/readyz", 8080],
           releases: { "primary-v1": measuredGuest(primary, artifacts.primary) }, current: "primary-v1",
           stage: { name: "guest-primary-stage", claim: "guest-primary-stage-v1", containers: ["storage", "attest"] },
         },
         {
-          role: "maintenance", holder: "guest-maintenance", claim: "guest-maintenance-v1", generation: 1, graceSeconds: 60,
-          live: ["attest", "/livez", 9080], ready: ["attest", "/livez", 9080],
-          releases: { "maintenance-v1": measuredGuest(maintenance, artifacts.maintenance) }, current: "maintenance-v1",
+          role: "operator", holder: "guest-operator", claim: "guest-operator-v1", generation: 1, graceSeconds: 60,
+          live: ["attest", "/livez", 8081], ready: ["attest", "/livez", 8081],
+          releases: { "operator-v1": measuredGuest(operator, artifacts.operator) }, current: "operator-v1",
         },
       ],
     },

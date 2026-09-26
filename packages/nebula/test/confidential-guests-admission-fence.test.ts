@@ -11,7 +11,7 @@ const MESSAGES = {
   claim: "guest mounts exactly one claim, named data, of its own role", privilege: "guest containers must not be privileged or escalate",
   initData: "guest must carry init-data and no Argo tracking-id",
 };
-const SA_P = "system:serviceaccount:guests:primary-lifecycle", SA_M = "system:serviceaccount:guests:maintenance-lifecycle";
+const SA_P = "system:serviceaccount:guests:primary-lifecycle", SA_M = "system:serviceaccount:guests:operator-lifecycle";
 
 function props(extra: Partial<GuestAdmissionFenceProps> = {}): GuestAdmissionFenceProps {
   return {
@@ -21,7 +21,7 @@ function props(extra: Partial<GuestAdmissionFenceProps> = {}): GuestAdmissionFen
     controllers: [
       { serviceAccount: { namespace: "guests", name: "primary-lifecycle" },
         guests: [{ name: "guest-primary", claimPrefix: "guest-primary-data-v" }, { name: "guest-primary-stage", claimPrefix: "guest-primary-stage-v" }] },
-      { serviceAccount: { namespace: "guests", name: "maintenance-lifecycle" }, guests: [{ name: "guest-maintenance", claimPrefix: "guest-maintenance-v" }] },
+      { serviceAccount: { namespace: "guests", name: "operator-lifecycle" }, guests: [{ name: "guest-operator", claimPrefix: "guest-operator-v" }] },
     ],
     runtimeClassName: "kata-qemu-snp", nodeName: "node-a", guestClaimPrefix: "guest-",
     ...extra,
@@ -54,7 +54,7 @@ test("two cluster-scoped policies, each with its binding, limited to the selecte
     policy("guests-shape", {
       matchConditions: [{ name: "lifecycle-controller", expression: `request.userInfo.username in ['${SA_P}', '${SA_M}']` }],
       validations: [
-        { expression: `request.userInfo.username == '${SA_P}' ? object.metadata.name in ['guest-primary', 'guest-primary-stage'] : object.metadata.name == 'guest-maintenance'`,
+        { expression: `request.userInfo.username == '${SA_P}' ? object.metadata.name in ['guest-primary', 'guest-primary-stage'] : object.metadata.name == 'guest-operator'`,
           message: MESSAGES.name },
         { expression: "has(object.spec.runtimeClassName) && object.spec.runtimeClassName == 'kata-qemu-snp' && has(object.spec.nodeName) && object.spec.nodeName == 'node-a' && object.spec.restartPolicy == 'Never'",
           message: MESSAGES.placement },
@@ -65,7 +65,7 @@ test("two cluster-scoped policies, each with its binding, limited to the selecte
         { expression: "has(object.spec.volumes) && object.spec.volumes.all(v, has(v.configMap) || has(v.emptyDir) || has(v.persistentVolumeClaim))",
           message: MESSAGES.volumes },
         { expression: "has(object.spec.volumes) && object.spec.volumes.filter(v, has(v.persistentVolumeClaim)).size() == 1 && object.spec.volumes.exists(v, v.name == 'data' && has(v.persistentVolumeClaim)"
-          + " && v.persistentVolumeClaim.claimName.startsWith(object.metadata.name == 'guest-primary' ? 'guest-primary-data-v' : object.metadata.name == 'guest-primary-stage' ? 'guest-primary-stage-v' : 'guest-maintenance-v'))",
+          + " && v.persistentVolumeClaim.claimName.startsWith(object.metadata.name == 'guest-primary' ? 'guest-primary-data-v' : object.metadata.name == 'guest-primary-stage' ? 'guest-primary-stage-v' : 'guest-operator-v'))",
           message: MESSAGES.claim },
         { expression: `object.spec.containers.all(c, ${unprivileged}) && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, ${unprivileged}))`,
           message: MESSAGES.privilege },
@@ -79,22 +79,43 @@ test("two cluster-scoped policies, each with its binding, limited to the selecte
 
 test("one controller needs no branch; three chain their branches; condition names and wave are props", () => {
   const one = render(props({ controllers: [props().controllers[1]], conditionNames: { guest: "guest", controller: "controller" }, wave: "-4" }));
-  assert.equal(one[2].spec.validations[0].expression, "object.metadata.name == 'guest-maintenance'");
+  assert.equal(one[2].spec.validations[0].expression, "object.metadata.name == 'guest-operator'");
   assert.deepEqual(one[2].spec.matchConditions.map((c: any) => c.name), ["controller"]);
   assert.deepEqual(one[0].spec.matchConditions.map((c: any) => c.name), ["guest"]);
   assert.equal(one[0].metadata.annotations["argocd.argoproj.io/sync-wave"], "-4");
   const three = render(props({ controllers: [...props().controllers,
     { serviceAccount: { namespace: "guests", name: "extra-lifecycle" }, guests: [{ name: "guest-extra", claimPrefix: "guest-extra-v" }] }] }));
   assert.equal(three[2].spec.validations[0].expression, `request.userInfo.username == '${SA_P}' ? object.metadata.name in ['guest-primary', 'guest-primary-stage']`
-    + ` : request.userInfo.username == '${SA_M}' ? object.metadata.name == 'guest-maintenance' : object.metadata.name == 'guest-extra'`);
+    + ` : request.userInfo.username == '${SA_M}' ? object.metadata.name == 'guest-operator' : object.metadata.name == 'guest-extra'`);
 });
 
 test("the fence cannot be rendered cluster-wide or under shared names", () => {
-  for (const namespaceSelector of [undefined, {}, { matchLabels: {} }, { matchExpressions: [] }]) {
-    assert.throws(() => render(props({ namespaceSelector } as any)), /namespaceSelector is required/, JSON.stringify(namespaceSelector));
+  // Only a matchLabels entry or an In expression names namespaces; the other
+  // operators alone select every namespace but a few.
+  const clusterWide = [undefined, {}, { matchLabels: {} }, { matchExpressions: [] },
+    { matchExpressions: [{ key: "guests.example.com/fenced", operator: "Exists" }] },
+    { matchExpressions: [{ key: "guests.example.com/unfenced", operator: "DoesNotExist" }] },
+    { matchExpressions: [{ key: "kubernetes.io/metadata.name", operator: "NotIn", values: ["kube-system"] }] },
+    { matchExpressions: [{ key: "guests.example.com/fenced", operator: "Exists" }, { key: "guests.example.com/retired", operator: "DoesNotExist" }] }];
+  for (const namespaceSelector of clusterWide) {
+    assert.throws(() => render(props({ namespaceSelector } as any)), /namespaceSelector is required and must name its namespaces/, JSON.stringify(namespaceSelector));
   }
-  const byExpression = render(props({ namespaceSelector: { matchExpressions: [{ key: "guests.example.com/fenced", operator: "Exists" }] } }));
-  assert.deepEqual(byExpression[1].spec.matchResources, { namespaceSelector: { matchExpressions: [{ key: "guests.example.com/fenced", operator: "Exists" }] } });
+  const malformed: [string, unknown, RegExp][] = [
+    ["In without values", { matchExpressions: [{ key: "guests.example.com/fenced", operator: "In", values: [] }] }, /In needs values/],
+    ["In with no values field", { matchExpressions: [{ key: "guests.example.com/fenced", operator: "In" }] }, /In needs values/],
+    ["NotIn without values", { matchLabels: { fenced: "true" }, matchExpressions: [{ key: "k", operator: "NotIn" }] }, /NotIn needs values/],
+    ["Exists with values", { matchLabels: { fenced: "true" }, matchExpressions: [{ key: "k", operator: "Exists", values: ["x"] }] }, /Exists takes no values/],
+    ["a value that is not a label value", { matchExpressions: [{ key: "k", operator: "In", values: ["a b"] }] }, /label value/],
+    ["an unknown operator", { matchExpressions: [{ key: "k", operator: "Gt", values: ["1"] }] }, /operator/],
+    ["matchLabels as a list", { matchLabels: ["fenced"] }, /matchLabels/],
+    ["matchExpressions as an object", { matchLabels: { fenced: "true" }, matchExpressions: { key: "k" } }, /matchExpressions/],
+  ];
+  for (const [label, namespaceSelector, error] of malformed) assert.throws(() => render(props({ namespaceSelector } as any)), error, label);
+  const byIn = { matchExpressions: [{ key: "guests.example.com/fenced", operator: "In" as const, values: ["true"] }] };
+  assert.deepEqual(render(props({ namespaceSelector: byIn }))[1].spec.matchResources, { namespaceSelector: byIn });
+  const narrowed = { matchLabels: { "guests.example.com/fenced": "true" }, matchExpressions: [
+    { key: "guests.example.com/retired", operator: "DoesNotExist" as const }, { key: "kubernetes.io/metadata.name", operator: "NotIn" as const, values: ["kube-system"] }] };
+  assert.deepEqual(render(props({ namespaceSelector: narrowed }))[0].spec.matchConstraints.namespaceSelector, narrowed, "a named selection may be narrowed");
   assert.throws(() => render(props({ policyNames: undefined } as any)), /policyNames/);
   assert.throws(() => render(props({ policyNames: { creator: "same", shape: "same" } })), /differ/);
   assert.throws(() => render(props({ messages: undefined } as any)), /messages/);
@@ -115,4 +136,23 @@ test("values that reach CEL string literals cannot break out of them", () => {
     ["controller twice", { controllers: [props().controllers[1], props().controllers[1]] }, /twice/],
   ];
   for (const [label, change, error] of refusals) assert.throws(() => render(props(change)), error, label);
+});
+
+test("each guest's claims are its own: no guest's claim prefix covers another's, and all are fenced as guest claims", () => {
+  const [primary, operator] = props().controllers;
+  const prefixes = (holder: string, stage: string, other: string) => props({ controllers: [
+    { ...primary, guests: [{ name: "guest-primary", claimPrefix: holder }, { name: "guest-primary-stage", claimPrefix: stage }] },
+    { ...operator, guests: [{ name: "guest-operator", claimPrefix: other }] }] });
+  const refusals: [string, GuestAdmissionFenceProps, RegExp][] = [
+    ["two controllers' guests share a prefix", prefixes("guest-disk-", "guest-primary-stage-v", "guest-disk-"),
+      /guest guest-primary claimPrefix "guest-disk-" overlaps guest guest-operator's "guest-disk-"/],
+    ["a prefix covers another controller's guest", prefixes("guest-primary-data-v", "guest-primary-stage-v", "guest-primary-"), /overlaps/],
+    ["covered the other way round", prefixes("guest-o", "guest-primary-stage-v", "guest-operator-v"), /overlaps/],
+    ["a stage boot's prefix covers its holder's disk", prefixes("guest-primary-data-v", "guest-primary-", "guest-operator-v"), /overlaps/],
+    ["a guest's claims outside the guest prefix", prefixes("guest-primary-data-v", "guest-primary-stage-v", "vm-operator-v"),
+      /guest guest-operator claimPrefix "vm-operator-v" is outside guestClaimPrefix "guest-"/],
+  ];
+  for (const [label, value, error] of refusals) assert.throws(() => render(value), error, label);
+  assert.equal(render(prefixes("guest-primary-data-v", "guest-primary-stage-v", "guest-operator-v")).length, 4, "disjoint prefixes may share a leading part");
+  assert.equal(render(props({ guestClaimPrefix: "guest-operator-v", controllers: [operator] })).length, 4, "a prefix may equal the guest prefix");
 });
