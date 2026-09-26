@@ -62,6 +62,7 @@ export type { WireDomains, WireNames, WirePayloadTypes, WireProfile, WireRelease
 export { GuestEnvError, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, readGuestEnv } from "./guest-env";
 export type {
   GuestDeployment,
+  GuestEnvOptions,
   GuestEnvReader,
   GuestRecordFormat,
   GuestStorageLayout,

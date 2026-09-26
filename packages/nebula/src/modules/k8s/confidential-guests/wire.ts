@@ -1,5 +1,5 @@
 import { canonicalJson } from "./canonical";
-import { WIRE_PROFILE_ENV, explicitDeploymentError, readWireProfileValue } from "./guest-env";
+import { WIRE_PROFILE_ENV, explicitDeploymentError, readWireProfileValue, type GuestEnvOptions } from "./guest-env";
 
 export { WIRE_PROFILE_ENV } from "./guest-env";
 
@@ -156,14 +156,18 @@ function document(profile: WireProfile): Record<string, unknown> {
  * a byte that is not printable ASCII, more than 16 KiB, a payload type that
  * is not `application/vnd.<schema>+json` in lower case, a value used by two
  * identifiers of a group, two authorization domains of one derived schema, a
- * missing or unknown key.
- * @throws TypeError when an identifier is not `{emit, accept?}`.
+ * missing or unknown key. `options.controlBridgeSchemas` names the
+ * control-bridge schemas that predate the derivation rule, so that check
+ * sees them as the guest does; they are never rendered.
+ * @throws TypeError when an identifier is not `{emit, accept?}`, or `options` is malformed.
  * @throws GuestEnvError when a guest would refuse the value, or it lacks
  *   `releaseSet` or `workloadRef`.
  */
-export function wireProfileEnv(profile: WireProfile): { name: typeof WIRE_PROFILE_ENV; value: string } {
+export function wireProfileEnv(
+  profile: WireProfile, options?: Pick<GuestEnvOptions, "controlBridgeSchemas">,
+): { name: typeof WIRE_PROFILE_ENV; value: string } {
   const value = canonicalJson(document(profile));
-  const read = readWireProfileValue(value);
+  const read = readWireProfileValue(value, options, WHERE);
   const missing = [...(read.releaseSet ? [] : ["releaseSet"]), ...(read.workloadRef === undefined ? ["workloadRef"] : [])];
   if (missing.length) throw explicitDeploymentError(missing.map(key => `${WIRE_PROFILE_ENV}.${key}`));
   return { name: WIRE_PROFILE_ENV, value };

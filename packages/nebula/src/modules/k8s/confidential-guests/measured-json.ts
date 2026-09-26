@@ -37,20 +37,7 @@ const DOLLAR = "'$' is refused: the kubelet rewrites $$ and $(NAME) in env value
  * not be UTF-8. The caller puts the variable's name before a refusal.
  */
 export function measuredJson(value: string | Uint8Array, maximum: number): MeasuredValue {
-  let text: string, bytes: Uint8Array;
-  if (typeof value === "string") {
-    // A lone surrogate has no UTF-8 form.
-    ensure(!/[\uD800-\uDFFF]/u.test(value), "not UTF-8");
-    text = value;
-    bytes = new TextEncoder().encode(value);
-  } else {
-    try {
-      text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value);
-    } catch {
-      return refuse("not UTF-8");
-    }
-    bytes = value;
-  }
+  const { text, bytes } = utf8(value);
   ensure(text !== "", "empty value");
   ensure(bytes.length <= maximum, `longer than ${maximum} bytes`);
   const bad = bytes.find(byte => byte < 0x20 || byte > 0x7e);
@@ -61,6 +48,31 @@ export function measuredJson(value: string | Uint8Array, maximum: number): Measu
   const canonical = canonicalText(parsed);
   ensure(canonical === text, "not canonical JSON (sorted keys, no whitespace, each key once)");
   return plain(parsed);
+}
+
+/**
+ * Check a measured variable that is not JSON (a legacy workload reference) by
+ * the rules that still apply to it: UTF-8, and no `$`. Nothing else is
+ * checked; the caller puts the variable's name before a refusal.
+ */
+export function measuredText(value: string | Uint8Array): string {
+  const { text } = utf8(value);
+  ensure(!text.includes("$"), DOLLAR);
+  return text;
+}
+
+/** A value's text and its UTF-8 bytes; a value the guest receives may be raw bytes that are not UTF-8. */
+function utf8(value: string | Uint8Array): { text: string; bytes: Uint8Array } {
+  if (typeof value === "string") {
+    // A lone surrogate has no UTF-8 form.
+    ensure(!/[\uD800-\uDFFF]/u.test(value), "not UTF-8");
+    return { text: value, bytes: new TextEncoder().encode(value) };
+  }
+  try {
+    return { text: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value), bytes: value };
+  } catch {
+    return refuse("not UTF-8");
+  }
 }
 
 /** Whether arrays and objects nest more than MAX_DEPTH deep, strings skipped. */

@@ -5,7 +5,7 @@
 import { canonicalJson } from "./canonical";
 import {
   MODE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, readGuestEnv, readStorageLayoutValue, readWorkloadApiValue,
-  type GuestRecordFormat, type GuestStorageLayout, type GuestWorkloadApi,
+  type GuestEnvOptions, type GuestRecordFormat, type GuestStorageLayout, type GuestWorkloadApi,
 } from "./guest-env";
 import { deepFreeze, wireProfileEnv, type WireProfile } from "./wire";
 
@@ -82,15 +82,17 @@ export function workloadApiEnv(api: GuestWorkloadApi): GuestEnvVar<typeof WORKLO
  * a control bridge, observers): GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT and
  * GUEST_WORKLOAD_API, in the order a guest reads them. All three are
  * required: nebula renders no legacy default. The rendered env is read back
- * as a guest's components read it at start.
+ * as a guest's components read it at start, with the control-bridge schemas
+ * `options` names (see {@link wireProfileEnv}).
  * @throws GuestEnvError (a TypeError) when a guest would refuse it.
  */
-export function guestEnv(deployment: GuestDeploymentEnv): GuestEnvVar[] {
+export function guestEnv(deployment: GuestDeploymentEnv, options?: Pick<GuestEnvOptions, "controlBridgeSchemas">): GuestEnvVar[] {
   for (const key of ["wire", "storageLayout", "workloadApi"] as const) {
     if (deployment?.[key] === null || typeof deployment?.[key] !== "object") throw new TypeError(`guestEnv: ${key} is required`);
   }
-  const env = [wireProfileEnv(deployment.wire), storageLayoutEnv(deployment.storageLayout), workloadApiEnv(deployment.workloadApi)];
-  readGuestEnv(Object.fromEntries(env.map(entry => [entry.name, entry.value])));
+  const schemas = options?.controlBridgeSchemas === undefined ? undefined : { controlBridgeSchemas: options.controlBridgeSchemas };
+  const env = [wireProfileEnv(deployment.wire, schemas), storageLayoutEnv(deployment.storageLayout), workloadApiEnv(deployment.workloadApi)];
+  readGuestEnv(Object.fromEntries(env.map(entry => [entry.name, entry.value])), "every", schemas);
   return env;
 }
 

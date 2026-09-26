@@ -160,6 +160,81 @@ test("nebula renders no legacy default: a profile names its releaseSet and workl
   assert.throws(() => guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, storageLayout: undefined as any }), /storageLayout/);
 });
 
+// A deployment older than `workloadRef` measured each Pod's workload reference
+// in a variable of its own, and its guests keep reading it. The caller names it.
+const LEGACY_REF = "EXAMPLE_WORKLOAD_REF";
+const withLegacyRef = { legacyWorkloadRefEnv: LEGACY_REF } as const;
+const DOLLAR = "'$' is refused: the kubelet rewrites $$ and $(NAME) in env values";
+const refusedAs = (read: () => unknown, message: string, label: string) =>
+  assert.throws(read, (error: unknown) => {
+    assert.ok(error instanceof GuestEnvError, `${label}: ${String(error)}`);
+    assert.equal(error.message, message, label);
+    return true;
+  }, label);
+
+test("a legacy workload reference variable is read as the guest reads it, and must name the profile's workloadRef", () => {
+  const { env, expect } = deployment;
+  // The profile without its workloadRef: a renamed profile the legacy variable never completes.
+  const { workloadRef: _, ...unnamed } = JSON.parse(env[WIRE_PROFILE_ENV]);
+  const withoutRef = JSON.stringify(unnamed);
+  const { releaseSet: __, ...bare } = unnamed;
+  assert.equal(readGuestEnv({ ...env, [LEGACY_REF]: expect.workloadRef }, "every", withLegacyRef).workloadRef, expect.workloadRef);
+  const refusals: [string, Record<string, string | Uint8Array>, string][] = [
+    ["the references differ", { ...env, [LEGACY_REF]: "example/other:v1" }, `${LEGACY_REF} differs from ${WIRE_PROFILE_ENV}'s workloadRef`],
+    ["an empty legacy reference differs too", { ...env, [LEGACY_REF]: "" }, `${LEGACY_REF} differs from ${WIRE_PROFILE_ENV}'s workloadRef`],
+    ["'$' in the legacy reference", { [LEGACY_REF]: "example/workload:$(TAG)" }, `${LEGACY_REF}: ${DOLLAR}`],
+    ["a legacy reference that is not UTF-8", { [LEGACY_REF]: Buffer.from("6578616d706c652fff3a7631", "hex") }, `${LEGACY_REF}: not UTF-8`],
+    ["a lone surrogate has no UTF-8 form", { [LEGACY_REF]: "example/\ud800:v1" }, `${LEGACY_REF}: not UTF-8`],
+    ["the API is read before the legacy reference", { ...env, [LEGACY_REF]: "$", [WORKLOAD_API_ENV]: "" }, `${WORKLOAD_API_ENV}: empty value`],
+    ["the legacy reference is read before the explicit-deployment rule", { [LEGACY_REF]: "$(X)", [WIRE_PROFILE_ENV]: JSON.stringify(bare) }, `${LEGACY_REF}: ${DOLLAR}`],
+    ["the explicit-deployment rule comes before the agreement", (() => {
+      const { [STORAGE_LAYOUT_ENV]: _layout, ...rest } = env;
+      return { ...rest, [LEGACY_REF]: "example/other:v1" };
+    })(), `${EXPLICIT}${STORAGE_LAYOUT_ENV}`],
+    ["the legacy reference never stands in for workloadRef", { ...env, [WIRE_PROFILE_ENV]: withoutRef, [LEGACY_REF]: expect.workloadRef }, `${EXPLICIT}${WIRE_PROFILE_ENV}.workloadRef`],
+  ];
+  for (const [label, legacyEnv, message] of refusals) refusedAs(() => readGuestEnv(legacyEnv, "every", withLegacyRef), message, label);
+  // The agreement comes before the adapter's MODE.
+  refusedAs(() => readGuestEnv({ ...env, [LEGACY_REF]: "example/other:v1", MODE: "other" }, "adapter", withLegacyRef),
+    `${LEGACY_REF} differs from ${WIRE_PROFILE_ENV}'s workloadRef`, "agreement before MODE");
+  // A variable nobody named is not the contract's: nebula does not guess a deployment's legacy names.
+  assert.doesNotThrow(() => readGuestEnv({ ...env, [LEGACY_REF]: "example/other:v1" }));
+  for (const name of ["", "1REF", "A-REF", WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, "MODE", "GUEST_WORKLOAD_REF", "RELEASE_ROLES"]) {
+    assert.throws(() => readGuestEnv(env, "every", { legacyWorkloadRefEnv: name }), (error: unknown) =>
+      error instanceof TypeError && !(error instanceof GuestEnvError) && /readGuestEnv: legacyWorkloadRefEnv/.test((error as Error).message), JSON.stringify(name));
+  }
+});
+
+test("a control-bridge schema older than the derivation rule is named by the caller, and then read as the guest reads it", () => {
+  const LEGACY_AUTHORIZATION = "EXAMPLE_LEGACY_AUTHORIZATION_V1", LEGACY_SCHEMA = "example.legacy.bridge.v1";
+  const schemas = { controlBridgeSchemas: { [LEGACY_AUTHORIZATION]: LEGACY_SCHEMA } } as const;
+  const wire = EXAMPLE_GUEST_DEPLOYMENT.wire;
+  const withControl = (controlAuthorization: { emit: string; accept?: string[] }): WireProfile => ({ ...wire, domains: { ...wire.domains, controlAuthorization } });
+  const envOfWire = (value: string) => ({ ...deployment.env, [WIRE_PROFILE_ENV]: value });
+  const cutOver = withControl({ emit: "CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1", accept: [LEGACY_AUTHORIZATION] });
+  const rendered = wireProfileEnv(cutOver, schemas).value;
+  assert.equal(rendered, wireProfileEnv(cutOver).value, "the schemas are derived, never rendered");
+  assert.deepEqual(readGuestEnv(envOfWire(rendered)).controlBridgeSchemas, ["confidential.guests.control.authorization.v1", "example.legacy.authorization.v1"]);
+  assert.deepEqual(readGuestEnv(envOfWire(rendered), "every", schemas).controlBridgeSchemas, ["confidential.guests.control.authorization.v1", LEGACY_SCHEMA]);
+  assert.deepEqual(guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: cutOver }, schemas)[0], { name: WIRE_PROFILE_ENV, value: rendered });
+  // A domain deriving the older schema clashes with the older domain, which the plain rule cannot see.
+  const clash = withControl({ emit: LEGACY_AUTHORIZATION, accept: ["EXAMPLE_LEGACY_BRIDGE_V1"] });
+  const clashMessage = `${WIRE_PROFILE_ENV}: domains.controlAuthorization: "${LEGACY_AUTHORIZATION}" and "EXAMPLE_LEGACY_BRIDGE_V1" derive one schema "${LEGACY_SCHEMA}"`;
+  const clashValue = wireProfileEnv(clash).value;
+  refusedAs(() => wireProfileEnv(clash, schemas), clashMessage, "render");
+  refusedAs(() => readGuestEnv(envOfWire(clashValue), "every", schemas), clashMessage, "read");
+  refusedAs(() => guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: clash }, schemas), clashMessage, "guestEnv");
+  // And the older domain beside its plain derivation is no clash once its schema is named.
+  const plainPair = withControl({ emit: LEGACY_AUTHORIZATION, accept: ["example.legacy.authorization.v1"] });
+  refusedAs(() => wireProfileEnv(plainPair),
+    `${WIRE_PROFILE_ENV}: domains.controlAuthorization: "${LEGACY_AUTHORIZATION}" and "example.legacy.authorization.v1" derive one schema "example.legacy.authorization.v1"`, "plain pair");
+  assert.deepEqual(readGuestEnv(envOfWire(wireProfileEnv(plainPair, schemas).value), "every", schemas).controlBridgeSchemas, [LEGACY_SCHEMA, "example.legacy.authorization.v1"]);
+  for (const bad of [[] as unknown, { "": "a.v1" }, { "A B": "a.v1" }, { A_V1: "" }, { A_V1: "A.V1" }, { A_V1: 1 }]) {
+    assert.throws(() => wireProfileEnv(wire, { controlBridgeSchemas: bad as any }), (error: unknown) =>
+      error instanceof TypeError && !(error instanceof GuestEnvError) && /wireProfileEnv: controlBridgeSchemas/.test((error as Error).message), JSON.stringify(bad));
+  }
+});
+
 test("the renderers refuse what a guest would refuse, with the guest's message", () => {
   const wire = EXAMPLE_GUEST_DEPLOYMENT.wire;
   const withDomains = (domains: object): WireProfile => ({ ...wire, domains: { ...wire.domains, ...domains } as any });
