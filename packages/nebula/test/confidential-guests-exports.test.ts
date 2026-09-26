@@ -22,6 +22,30 @@ const RUNTIME_EXPORTS = [
   "validateDiskTable",
   "wireProfileEnv",
 ];
+// The guest lifecycle constructs and helpers.
+const LIFECYCLE_EXPORTS = [
+  "ConfidentialGuestStack",
+  "GuestAdmissionFence",
+  "GuestLifecycle",
+  "GuestLogRetention",
+  "GuestServices",
+  "INIT_DATA_ANNOTATION",
+  "LIFECYCLE_CLAIM_PLACEHOLDER",
+  "LIFECYCLE_CONTROLLER_COMMAND",
+  "LIFECYCLE_DATA_VOLUME",
+  "LIFECYCLE_SPEC_VERSIONS",
+  "LOG_RETENTION_COMMAND",
+  "SignedReleases",
+  "guestClaimPrefix",
+  "guestLifecycleSpec",
+  "initDataSha256",
+  "lifecycleIgnoreDifferences",
+  "lifecycleLabelKey",
+  "lifecycleNames",
+  "measuredGuest",
+];
+RUNTIME_EXPORTS.push(...LIFECYCLE_EXPORTS);
+RUNTIME_EXPORTS.sort();
 
 test("the package root re-exports the confidential-guests module unchanged", () => {
   assert.deepEqual(Object.keys(cg).sort(), RUNTIME_EXPORTS);

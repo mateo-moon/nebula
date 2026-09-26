@@ -29,6 +29,14 @@
   and every module load through an in-thread `module.registerHooks` hook;
   Node 22.15 or later) and its classifier (`support/import-io.ts`): each kind
   of import-time I/O must be reported, and plain module loading must not.
+- The guest lifecycle tests (`confidential-guests-measured`,
+  `-signed-releases`, `-lifecycle`, `-admission-fence`, `-log-retention`,
+  `-services` and `-stack.test.ts`) pin each construct's exact output and the
+  refusals that keep a bad render from reaching a cluster, using the
+  synthetic inputs in `confidential-guests-fixtures.ts`. The stack test also
+  compares `example/confidential-guests-stack.ts` with
+  `confidential-guests-stack.golden.yaml` (rerun with `UPDATE_GOLDEN=1` after
+  reviewing a change) and runs the publication guard over that output.
 
 The GitHub `Verify modules` workflow runs these tests together with
 `tsc --noEmit`, the Crossplane management-policy conventions
