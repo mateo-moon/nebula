@@ -26,7 +26,7 @@
  * ```typescript
  * new OpenEbsLvm(chart, "openebs", {
  *   kubeletDir: "/var/lib/k0s/kubelet/",
- *   storageClasses: [{ name: "openebs-lvm", vgName: "appnode-vg" }],
+ *   storageClasses: [{ name: "openebs-lvm", vgName: "data-vg" }],
  * });
  * ```
  */

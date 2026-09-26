@@ -8,7 +8,7 @@ delegates (k8s-inspector to diagnose, change-author to draft a fix — gated).
 De-dupes within a single webhook payload by `(alertname, fingerprint)`. Cross-request de-dup
 (needs shared state) is a TODO; for a PoC we lean on Alertmanager's grouping + repeat interval.
 
-Receives from the central Prometheus/Alertmanager (production app-node metrics). Runs as a
+Receives from the central Prometheus/Alertmanager. Runs as a
 FastAPI Deployment behind the AWS NLB + Route53 (Phase 5). The orchestrator reply (triage
 result / approval prompt) is returned in the HTTP response; persistent delivery to a chat
 channel is handled by the k8s-watch / telegram forwarding (TODO: a shared notifier).

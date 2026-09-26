@@ -7,8 +7,8 @@ Uses the official MCP Python SDK (FastMCP). Runs as a streamable-http server on 
 The docs-agent (or orchestrator) calls it via a RemoteMCPServer.
 
 Env:
-  CLUSTER_NAME      default kagent-e2e
-  API_ENDPOINT      default the kagent-e2e NLB
+  CLUSTER_NAME      required, the cluster name
+  API_ENDPOINT      required, the cluster API server URL
   PORT              default 8080
 """
 from __future__ import annotations
@@ -25,16 +25,13 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("cluster-info", host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
 
 CLUSTER_INFO = {
-    "cluster_name": os.getenv("CLUSTER_NAME", "kagent-e2e"),
+    "cluster_name": os.environ["CLUSTER_NAME"],
     "distribution": "k0s v1.31.8+k0s on AWS (CAPA / vendor-free)",
     "platform": "kagent 0.9.7 (CNCF Sandbox, Google ADK runtime)",
     "namespace": "kagent",
-    "api_endpoint": os.getenv(
-        "API_ENDPOINT",
-        "https://example-apiserver-0123456789abcdef.elb.eu-central-1.amazonaws.com:6443",
-    ),
+    "api_endpoint": os.environ["API_ENDPOINT"],
     "auth": "mTLS (kubeconfig client cert) + OIDC (Google via kubelogin, usernamePrefix oidc:)",
-    "deploy": "export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt; pnpm synth && pnpm apply (from ~/Gig/kagent-poc)",
+    "deploy": "export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt; pnpm synth && pnpm apply",
     "secrets": "SOPS (age) in .secrets/secrets.yaml; ref+sops:// resolved at synth via vals",
     "storage": "external ephemeral Postgres (kagent-pg, pgvector-enabled for agent memory)",
     "agents": [
@@ -58,19 +55,20 @@ def get_cluster_info() -> str:
 def get_access_instructions(audience: str = "developer") -> str:
     """Get step-by-step access instructions. Pass audience='developer' for OIDC/Google SSO
     access, or audience='operator' for the bootstrap kubeconfig."""
+    name = CLUSTER_INFO["cluster_name"]
     if audience == "operator":
         return (
-            "## Operator Access (kagent-e2e)\n\n"
+            f"## Operator Access ({name})\n\n"
             "```bash\n"
-            "export KUBECONFIG=~/.nebula/kagent-e2e/kubeconfig\n"
+            f"export KUBECONFIG=~/.nebula/{name}/kubeconfig\n"
             "kubectl get nodes\n"
             "kubectl -n kagent get pods\n"
             "```\n\n"
-            "This kubeconfig was written by `nebula bootstrap --provider aws --name kagent-e2e`.\n"
+            f"This kubeconfig was written by `nebula bootstrap --provider aws --name {name}`.\n"
             "It uses mTLS (cluster-admin client cert)."
         )
     return (
-        "## Developer Access (kagent-e2e)\n\n"
+        f"## Developer Access ({name})\n\n"
         "**Prerequisite:** install kubelogin (one time):\n"
         "```bash\n"
         "kubectl krew install oidc-login\n"

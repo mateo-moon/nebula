@@ -598,8 +598,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         },
         tolerations: [
-          { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
-          { key: 'workload', value: 'app-node', effect: 'NoSchedule' }
+          { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
         ],
         resources: {
           requests: {

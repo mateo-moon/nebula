@@ -2,7 +2,7 @@
  * Scheduled EBS snapshots via Data Lifecycle Manager.
  *
  * The estate ran with NO backups of any kind — a 2026-08-02 sweep found zero
- * snapshots in every region. Data volumes are the exposure that matters:
+ * snapshots in every region. Large stateful data volumes are the exposure that matters:
  * a lost 768Gi volume is days of resync, and until now nothing but the single
  * AZ-local copy stood behind it.
  *
@@ -12,8 +12,8 @@
  * than EBS to protect.
  *
  * Snapshots are crash-consistent, not application-consistent — DLM does not
- * quiesce the filesystem. That is the right trade for app data (the client
- * replays its WAL on start) and is NOT a substitute for an etcd backup, which
+ * quiesce the filesystem. That is the right trade for data whose application
+ * replays its WAL on start and is NOT a substitute for an etcd backup, which
  * needs `k0s etcd backup` semantics rather than a block-level copy.
  */
 import { Construct } from "constructs";

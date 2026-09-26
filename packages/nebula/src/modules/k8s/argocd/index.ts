@@ -156,7 +156,7 @@ export interface ArgoCdConfig {
   /**
    * Extra SSH known_hosts entries, appended to ArgoCD's built-in defaults
    * (github/gitlab/…) in the argocd-ssh-known-hosts-cm ConfigMap. REQUIRED for
-   * repositories on self-hosted SSH git servers (e.g. a private Git server): without
+   * repositories on self-hosted SSH git servers (e.g. a private Git forge): without
    * the server's host key, ArgoCD's repo-server rejects the clone with
    * "ssh: handshake failed: knownhosts: key is unknown" and nothing syncs.
    * Provide ssh-keyscan output, e.g. "[git.example.com]:2222 ssh-rsa AAAA...".
@@ -514,7 +514,7 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
     }
 
     // Append extra SSH known_hosts (self-hosted git servers) to ArgoCD's
-    // defaults so the repo-server can clone over SSH (e.g. a private Git server).
+    // defaults so the repo-server can clone over SSH (e.g. a private Git forge).
     if (this.config.sshKnownHosts) {
       if (!chartValues["configs"]) chartValues["configs"] = {};
       const configs = chartValues["configs"] as Record<string, unknown>;
