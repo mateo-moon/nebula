@@ -10,16 +10,24 @@ import { digestImage } from "./types";
 
 const OWNER = "GuestLifecycle";
 
-/** Version of the spec document ({@link guestLifecycleSpec}) the controller reads. */
-export const LIFECYCLE_SPEC_VERSION = 1;
+/**
+ * Versions of the spec document ({@link guestLifecycleSpec}) by controller
+ * mode. A code-mode controller reads version 1. An image-mode controller
+ * reads version 2, which adds `node_name`, `runtime_class_name` and
+ * `label_domains`, so the controller takes its placement and keys from Git.
+ */
+export const LIFECYCLE_SPEC_VERSIONS = Object.freeze({ code: 1, image: 2 } as const);
 /**
  * The claim a release template may name instead of a real one: the controller
  * substitutes the phase's claim (the holder's or the stage's) when it creates
  * the guest, so one measured template serves both.
  */
 export const LIFECYCLE_CLAIM_PLACEHOLDER = "${DISK}";
-/** Entry point of an image-mode controller unless `command` says otherwise. */
-export const LIFECYCLE_CONTROLLER_COMMAND: readonly string[] = Object.freeze(["python3", "-m", "confidential_guests.lifecycle"]);
+/**
+ * Entry point of an image-mode controller unless `command` says otherwise:
+ * isolated like code mode, but with site-packages, where the image installs it.
+ */
+export const LIFECYCLE_CONTROLLER_COMMAND: readonly string[] = Object.freeze(["python3", "-I", "-B", "-m", "confidential_guests.lifecycle"]);
 /** The volume that carries a guest's data claim; the controller rewrites its claim. */
 export const LIFECYCLE_DATA_VOLUME = "data";
 
@@ -121,8 +129,9 @@ export interface GuestLifecycleProps {
   readonly labelDomain: string;
   /**
    * Further domains an image-mode controller reads (never writes), for
-   * guests created under an earlier domain. Code-mode controllers read their
-   * own constants, so this needs image mode.
+   * guests created under an earlier domain; the spec's `label_domains` lists
+   * `labelDomain` first, then these. Code-mode controllers read their own
+   * constants, so this needs image mode.
    */
   readonly acceptLabelDomains?: readonly string[];
   readonly controller: GuestLifecycleController;
@@ -134,6 +143,12 @@ export interface GuestLifecycleProps {
   readonly rollout: GuestLifecycleRollout;
   /** Claim name a template may carry in place of the role's claim. Default {@link LIFECYCLE_CLAIM_PLACEHOLDER}. */
   readonly claimPlaceholder?: string;
+  /**
+   * Containers every stage boot must run, for a controller that requires them
+   * (for example the one that unlocks the stage's disk). Checked at render
+   * time only; nothing is rendered for it. Default none.
+   */
+  readonly requiredStageContainers?: readonly string[];
   /** Pull secrets for the controller Pods. Default none. */
   readonly imagePullSecrets?: readonly string[];
   readonly waves?: GuestLifecycleWaves;
@@ -141,7 +156,8 @@ export interface GuestLifecycleProps {
 
 /** The spec document a role's controller reads from `<role>-lifecycle-spec`. */
 export interface GuestLifecycleSpec {
-  readonly version: number;
+  /** {@link LIFECYCLE_SPEC_VERSIONS}: 1 in code mode, 2 in image mode. */
+  readonly version: 1 | 2;
   readonly role: string;
   readonly holder_name: string;
   readonly stage_name: string | null;
@@ -159,6 +175,12 @@ export interface GuestLifecycleSpec {
   readonly startup_seconds: number;
   readonly budget: { readonly epoch: number; readonly limit: number };
   readonly rollout: { readonly limit: number; readonly stage_seconds: number; readonly backoff_seconds: number; readonly settle_seconds: number };
+  /** Version 2: the node every guest runs on. */
+  readonly node_name?: string;
+  /** Version 2: the runtime class every guest declares. */
+  readonly runtime_class_name?: string;
+  /** Version 2: the label domains, the emitted one first, then those only read. */
+  readonly label_domains?: readonly string[];
 }
 
 /** An Argo CD `spec.ignoreDifferences` entry. */
@@ -274,6 +296,9 @@ function checkProps(props: GuestLifecycleProps): string[] {
   integer(OWNER, "startupSeconds", props.startupSeconds, 1);
   for (const key of ["limit", "stageSeconds", "backoffSeconds", "settleSeconds"] as const) integer(OWNER, `rollout.${key}`, props.rollout?.[key], 0);
   if (props.claimPlaceholder !== undefined) nonEmptyString(OWNER, "claimPlaceholder", props.claimPlaceholder);
+  const placeholder = props.claimPlaceholder ?? LIFECYCLE_CLAIM_PLACEHOLDER;
+  const requiredStage = list<string>(OWNER, "requiredStageContainers", props.requiredStageContainers ?? []);
+  requiredStage.forEach(container => nonEmptyString(OWNER, "requiredStageContainers entry", container));
   const roles = list<GuestLifecycleRole>(OWNER, "roles", props.roles, 1);
   unique(OWNER, "role", roles.map(r => r?.role));
   unique(OWNER, "guest Pod name", roles.flatMap(r => [r?.holder, ...(r?.stage ? [r.stage.name] : [])]));
@@ -285,12 +310,24 @@ function checkProps(props: GuestLifecycleProps): string[] {
     dnsSubdomain(OWNER, `role ${role.role} claim`, role.claim);
     integer(OWNER, `role ${role.role} generation`, role.generation, 1);
     integer(OWNER, `role ${role.role} graceSeconds`, role.graceSeconds, 1);
+    if (role.claim === placeholder) fail(OWNER, `role ${role.role}: claim ${role.claim} is the claim placeholder`);
     if (role.stage) {
       dnsSubdomain(OWNER, `role ${role.role} stage name`, role.stage.name);
       dnsSubdomain(OWNER, `role ${role.role} stage claim`, role.stage.claim);
+      if (role.stage.claim === role.claim) fail(OWNER, `role ${role.role}: the stage claim is the data claim ${role.claim}; a stage boot never mounts its holder's disk`);
+      if (role.stage.claim === placeholder) fail(OWNER, `role ${role.role}: stage claim ${role.stage.claim} is the claim placeholder`);
+      const containers = list<string>(OWNER, `role ${role.role} stage containers`, role.stage.containers, 1);
+      for (const container of requiredStage) {
+        if (!containers.includes(container)) fail(OWNER, `role ${role.role}: the stage boot must run ${container} (requiredStageContainers)`);
+      }
     }
     if (role.importedLedger) dnsSubdomain(OWNER, `role ${role.role} importedLedger name`, role.importedLedger.name);
   }
+  unique(OWNER, "claim", roles.flatMap(r => [r.claim, ...(r.stage ? [r.stage.claim] : [])]));
+  unique(OWNER, "ConfigMap", roles.flatMap(r => {
+    const own = lifecycleNames(r.role);
+    return [...(isCode(props.controller) ? [own.code] : []), own.spec, own.ledger, ...(r.importedLedger ? [r.importedLedger.name] : [])];
+  }));
   if (isCode(props.controller)) {
     if (props.acceptLabelDomains?.length) fail(OWNER, "acceptLabelDomains needs an image-mode controller; code-mode controllers read their own constants");
     const code = record<string>(OWNER, "controller.code", props.controller.code);
@@ -339,8 +376,10 @@ function specOf(props: GuestLifecycleProps, role: GuestLifecycleRole, domains: s
   unique(OWNER, `role ${role.role} stage container`, stageContainers);
   for (const name of stageContainers) if (!containers.includes(name)) fail(OWNER, `role ${role.role} stage container ${name} is not in the template`);
   const hostData = Object.fromEntries(ids.map(id => [id, checkTemplate(props, role, id, releases[id], { containers, initializers }, domains)]));
+  const placement = isCode(props.controller) ? { version: LIFECYCLE_SPEC_VERSIONS.code }
+    : { version: LIFECYCLE_SPEC_VERSIONS.image, node_name: props.nodeName, runtime_class_name: props.runtimeClassName, label_domains: domains };
   return {
-    version: LIFECYCLE_SPEC_VERSION, role: role.role, holder_name: role.holder, stage_name: role.stage?.name ?? null,
+    ...placement, role: role.role, holder_name: role.holder, stage_name: role.stage?.name ?? null,
     generation: role.generation,
     claims: { data: role.claim, stage: role.stage?.claim ?? null },
     releases: Object.fromEntries(ids.map(id => [id, { template: releases[id], init_data_sha256: hostData[id], stage_containers: [...stageContainers] }])),
@@ -431,10 +470,7 @@ export class GuestLifecycle extends Construct {
       new KubeRoleBinding(this, `${name}-binding`, { metadata: meta(name, waveAnnotations(setup)),
         roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name },
         subjects: [{ kind: "ServiceAccount", name, namespace }] });
-      const env = [{ name: "LIFECYCLE_ROLE", value: role.role }, { name: "LIFECYCLE_NAMESPACE", value: namespace },
-        ...(code ? [] : [{ name: "LIFECYCLE_NODE_NAME", value: props.nodeName },
-          { name: "LIFECYCLE_RUNTIME_CLASS", value: props.runtimeClassName },
-          { name: "LIFECYCLE_LABEL_DOMAINS", value: JSON.stringify(domains) }])];
+      const env = [{ name: "LIFECYCLE_ROLE", value: role.role }, { name: "LIFECYCLE_NAMESPACE", value: namespace }];
       const container = {
         name: "controller",
         securityContext: { runAsUser: 65532, runAsGroup: 65532, runAsNonRoot: true, allowPrivilegeEscalation: false,

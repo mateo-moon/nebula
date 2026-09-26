@@ -5,7 +5,7 @@ import { GuestLogRetention, LOG_RETENTION_COMMAND, canonicalJson, type GuestLogR
 import { DOMAIN, NAMESPACE, NODE, image, sha256 } from "./confidential-guests-fixtures";
 
 const CODE = { "follow.py": "import os\nprint(os.environ['LOG_SCOPE'])\n" };
-const SCOPES = [{ pod: "guest-primary", containers: ["storage", "attest", "app"] }, { pod: "guest-maintenance", containers: ["attest"] }];
+const SCOPES = [{ pod: "guest-primary", containers: ["storage", "attest", "app"] }, { pod: "guest-operator", containers: ["attest"] }];
 function props(extra: Partial<GuestLogRetentionProps> = {}): GuestLogRetentionProps {
   return { namespace: NAMESPACE, nodeName: NODE, labelDomain: DOMAIN, scopes: SCOPES, hostPath: "/var/lib/guests/logs",
     collector: { code: CODE, runtimeImage: image("python") }, ...extra };
@@ -23,7 +23,7 @@ test("code mode: access to the listed guests' logs only, the code, and one colle
   assert.deepEqual(render(props()), [
     { apiVersion: "v1", kind: "ServiceAccount", metadata: meta("log-retention"), automountServiceAccountToken: true },
     { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role", metadata: meta("log-retention"), rules: [
-      { apiGroups: [""], resources: ["pods/log"], resourceNames: ["guest-primary", "guest-maintenance"], verbs: ["get"] }] },
+      { apiGroups: [""], resources: ["pods/log"], resourceNames: ["guest-primary", "guest-operator"], verbs: ["get"] }] },
     { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding", metadata: meta("log-retention"),
       roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: "log-retention" },
       subjects: [{ kind: "ServiceAccount", name: "log-retention", namespace: NAMESPACE }] },
@@ -34,7 +34,7 @@ test("code mode: access to the listed guests' logs only, the code, and one colle
         nodeName: NODE, serviceAccountName: "log-retention", automountServiceAccountToken: true, terminationGracePeriodSeconds: 15,
         containers: [{ name: "collector", image: image("python"), command: ["python3", "-I", "-S", "-B", "/opt/log-retention/follow.py"],
           env: [{ name: "LOG_NAMESPACE", value: NAMESPACE },
-            { name: "LOG_SCOPE", value: '[["guest-primary",["storage","attest","app"]],["guest-maintenance",["attest"]]]' }],
+            { name: "LOG_SCOPE", value: '[["guest-primary",["storage","attest","app"]],["guest-operator",["attest"]]]' }],
           securityContext: { runAsUser: 0, runAsGroup: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
           resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { memory: "256Mi" } },
           volumeMounts: [{ name: "logs", mountPath: "/logs" }, { name: "code", mountPath: "/opt/log-retention", readOnly: true }] }],
@@ -54,6 +54,7 @@ test("image mode, name, wave and pull secrets", () => {
   const pod = deployment.spec.template.spec;
   assert.deepEqual(pod.imagePullSecrets, [{ name: "pull" }]);
   assert.deepEqual(pod.containers[0].command, [...LOG_RETENTION_COMMAND]);
+  assert.deepEqual(LOG_RETENTION_COMMAND, ["python3", "-I", "-B", "-m", "confidential_guests.log_retention"], "isolated like code mode, with site-packages");
   assert.deepEqual(pod.containers[0].volumeMounts, [{ name: "logs", mountPath: "/logs" }]);
   assert.deepEqual(pod.volumes, [{ name: "logs", hostPath: { path: "/var/lib/guests/logs", type: "DirectoryOrCreate" } }]);
   const custom = render(props({ collector: { image: image("tools"), command: ["/bin/follow"] } }));

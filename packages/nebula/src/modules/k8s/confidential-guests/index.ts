@@ -58,7 +58,7 @@ export {
   LIFECYCLE_CLAIM_PLACEHOLDER,
   LIFECYCLE_CONTROLLER_COMMAND,
   LIFECYCLE_DATA_VOLUME,
-  LIFECYCLE_SPEC_VERSION,
+  LIFECYCLE_SPEC_VERSIONS,
   guestLifecycleSpec,
   lifecycleIgnoreDifferences,
   lifecycleLabelKey,

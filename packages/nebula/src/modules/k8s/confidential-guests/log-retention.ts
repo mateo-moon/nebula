@@ -7,8 +7,11 @@ import { digestImage } from "./types";
 
 const OWNER = "GuestLogRetention";
 
-/** Entry point of an image-mode collector unless `command` says otherwise. */
-export const LOG_RETENTION_COMMAND: readonly string[] = Object.freeze(["python3", "-m", "confidential_guests.log_retention"]);
+/**
+ * Entry point of an image-mode collector unless `command` says otherwise:
+ * isolated like code mode, but with site-packages, where the image installs it.
+ */
+export const LOG_RETENTION_COMMAND: readonly string[] = Object.freeze(["python3", "-I", "-B", "-m", "confidential_guests.log_retention"]);
 
 /** The containers of one guest Pod whose logs are retained. */
 export interface GuestLogScope {

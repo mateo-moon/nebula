@@ -23,10 +23,10 @@ export function initData(label: string) {
   return { ccInitData: gzipSync(Buffer.from(text)).toString("base64"), initDataSha256: sha256(text) };
 }
 
-const health = (path: string) => ({ httpGet: { path, port: 9080 }, periodSeconds: 5 });
+const health = (path: string) => ({ httpGet: { path, port: 8081 }, periodSeconds: 5 });
 
 /** An unmeasured guest template for a role. */
-export function template(role: "primary" | "maintenance", opts: { claim?: string; image?: string; release?: string } = {}): GuestPodManifest {
+export function template(role: "primary" | "operator", opts: { claim?: string; image?: string; release?: string } = {}): GuestPodManifest {
   const holder = `guest-${role}`;
   const primary = role === "primary";
   return {
@@ -43,7 +43,7 @@ export function template(role: "primary" | "maintenance", opts: { claim?: string
         ...(primary ? [{ name: "app", image: opts.image ?? image("app"), readinessProbe: health("/readyz") }] : []),
       ],
       volumes: [
-        { name: "data", persistentVolumeClaim: { claimName: opts.claim ?? (primary ? "guest-primary-data-v2" : "guest-maintenance-v1") } },
+        { name: "data", persistentVolumeClaim: { claimName: opts.claim ?? (primary ? "guest-primary-data-v2" : "guest-operator-v1") } },
         { name: "scratch", emptyDir: { medium: "Memory", sizeLimit: "16Mi" } },
         { name: "release", configMap: { name: "signed-release-0123456789abcdef" } },
       ],
@@ -52,7 +52,7 @@ export function template(role: "primary" | "maintenance", opts: { claim?: string
 }
 
 /** A template measured against a synthetic policy. */
-export function measured(role: "primary" | "maintenance", opts: Parameters<typeof template>[1] = {}): GuestPodManifest {
+export function measured(role: "primary" | "operator", opts: Parameters<typeof template>[1] = {}): GuestPodManifest {
   const pod = template(role, opts);
   return measuredGuest(pod, { canonicalPodSha256: sha256(canonicalJson(pod)), ...initData(`${role}-${opts.release ?? "r1"}`) });
 }
@@ -61,16 +61,16 @@ export function roles(): GuestLifecycleRole[] {
   return [
     {
       role: "primary", holder: "guest-primary", claim: "guest-primary-data-v2", generation: 2, graceSeconds: 120,
-      live: ["attest", "/livez", 9080], ready: ["app", "/readyz", 9080],
+      live: ["attest", "/livez", 8081], ready: ["app", "/readyz", 8081],
       releases: { r1: measured("primary"), r2: measured("primary", { claim: "${DISK}", release: "r2", image: image("app", "2") }) },
       current: "r2", previous: "r1", rolloutId: 4,
       stage: { name: "guest-primary-stage", claim: "guest-primary-stage-v1", containers: ["storage", "attest"] },
       importedLedger: { name: "primary-budget-v1", state: { version: 1, attempts: [] } },
     },
     {
-      role: "maintenance", holder: "guest-maintenance", claim: "guest-maintenance-v1", generation: 1, graceSeconds: 60,
-      live: ["attest", "/livez", 9080], ready: ["attest", "/livez", 9080],
-      releases: { m1: measured("maintenance") }, current: "m1",
+      role: "operator", holder: "guest-operator", claim: "guest-operator-v1", generation: 1, graceSeconds: 60,
+      live: ["attest", "/livez", 8081], ready: ["attest", "/livez", 8081],
+      releases: { m1: measured("operator") }, current: "m1",
     },
   ];
 }
