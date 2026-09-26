@@ -29,6 +29,12 @@
   contract's neutral fixtures byte for byte under a pinned manifest, the
   neutral names and the example render exactly as those fixtures, and every
   refusal vector there is refused with the reader's message.
+  `confidential-guests-lifecycle-contract.test.ts` pins the image-mode
+  controller contract: `confidential-guests-lifecycle-contract/` is the
+  example's render of each role's spec and of each controller's and the log
+  collector's entry point, environment and permissions, byte for byte under
+  a pinned manifest, for a controller image to vendor (regenerate with
+  `UPDATE_LIFECYCLE_CONTRACT=1` after reviewing the change).
   `confidential-guests-validate.test.ts` checks that every construct refuses
   bad props the same way (a TypeError naming the construct).
 - `io-probe.test.ts` controls the probe behind that check
