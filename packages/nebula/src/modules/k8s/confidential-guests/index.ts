@@ -137,6 +137,9 @@ export type { GuestIngressRule, GuestService, GuestServicesProps } from "./servi
 export { ConfidentialGuestStack, guestClaimPrefix } from "./stack";
 export type {
   ConfidentialGuestComponent,
+  ConfidentialGuestDisks,
+  ConfidentialGuestKeyInjector,
+  ConfidentialGuestPullBroker,
   ConfidentialGuestRoleContext,
   ConfidentialGuestStackContext,
   ConfidentialGuestStackProps,

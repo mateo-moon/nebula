@@ -19,6 +19,9 @@ wave, a file name, a container entry point).
 | `GuestAdmissionFence` | Two ValidatingAdmissionPolicies with bindings: only the controllers create guests, only in their role's shape, each mounting only its own claims. |
 | `GuestLogRetention` | A host-side collector that keeps guest container logs across guest replacements. |
 | `GuestServices` | Ingress NetworkPolicies and Services, optionally at fixed cluster addresses. |
+| `AttestedPullBroker` | A Key Broker Service that releases private registry credentials only to guests whose attested init-data hash is admitted. |
+| `SealedDisks` | Loop-file block disks from a disk table: a provisioner per live disk, optionally the key injector, and a local PersistentVolume and claim per declared disk. |
+| `NriKeyInjector` | The NRI plugin that hands a key device to bound guest containers of its own namespace only. |
 | `ConfidentialGuestStack` | All of the above in one namespace, wired together (see below). |
 
 Helpers: `measuredGuest` (the synthesis gate for a measured template),
@@ -107,7 +110,8 @@ controller substitutes the phase's claim. Every claim belongs to one guest:
 a stage boot's claim is never its holder's, and no two roles share a claim.
 
 In both modes the environment carries only `LIFECYCLE_ROLE` and
-`LIFECYCLE_NAMESPACE`; everything else comes from the spec in Git.
+`LIFECYCLE_NAMESPACE`; everything else comes from the spec in Git (see the
+image-mode contract below).
 
 - Code mode (`{ code, runtimeImage, package }`) mounts the controller files
   at `/opt/lifecycle/<package>` and runs `<package>.lifecycle.main()` on the
@@ -127,6 +131,55 @@ Git declares each ledger once. Set `lifecycleIgnoreDifferences(...)` (or
 `stack.ignoreDifferences()`) on the Argo CD Application so a sync never
 resets one.
 
+### The image-mode controller contract
+
+A controller image run in image mode (`{ image, command? }`), and a log
+collector image (`GuestLogRetention` with `{ image, command? }`), implement
+this contract. It is what the constructs render; it does not change with the
+image.
+
+- **Entry points.** `python3 -I -B -m confidential_guests.lifecycle`
+  (`LIFECYCLE_CONTROLLER_COMMAND`) and
+  `python3 -I -B -m confidential_guests.log_retention`
+  (`LOG_RETENTION_COMMAND`), unless `command` names others. `-I` isolates
+  the interpreter from the environment and the working directory; `-S` is
+  left out because the image installs the package into site-packages.
+- **Controller environment.** Exactly `LIFECYCLE_ROLE` (the role) and
+  `LIFECYCLE_NAMESPACE`. The controller reads everything else from the spec.
+- **Spec.** ConfigMap `<role>-lifecycle-spec`, key `spec.json`, canonical
+  JSON (`GuestLifecycleSpec`), `version` 2: `role`, `holder_name`,
+  `stage_name`, `generation`, `claims` (`data`, `stage`), `releases` (per
+  release id: `template`, `init_data_sha256`, `stage_containers`),
+  `current`, `previous`, `rollout_id`, `grace_seconds`, `containers`,
+  `initializers`, `live` and `ready` (`[container, path, port]`),
+  `startup_seconds`, `budget` (`epoch`, `limit`), `rollout` (`limit`,
+  `stage_seconds`, `backoff_seconds`, `settle_seconds`), and in version 2
+  `node_name`, `runtime_class_name` and `label_domains`. A controller refuses
+  a version it does not know.
+- **Label domains.** On every guest it creates the controller writes the
+  lifecycle label `<domain>/lifecycle` (`holder` or `stage`) under every
+  listed domain, and reads it under any of them; the create nonce annotation
+  (`<domain>/create-nonce`) goes under `label_domains[0]` only. A domain is
+  renamed in three changes: list the new one first with the old one after
+  it, move the Services' and policies' selectors to the new one, then drop
+  the old one.
+- **Guests.** Created from a release's template, whose data volume `data`
+  names the phase's claim or the claim placeholder (`${DISK}` by default)
+  that the controller replaces with the holder's `claims.data` or the stage
+  boot's `claims.stage`. The render has checked that every template runs on
+  `node_name` with `runtime_class_name` and carries no Argo tracking id.
+- **State.** The ledger ConfigMap `<role>-lifecycle-ledger` (`data.state`),
+  which Git declares once and Argo never resets; an imported ledger, when the
+  role names one, is read once.
+- **Permissions.** The ServiceAccount `<role>-lifecycle` may get and delete
+  only the holder and stage Pods, create Pods (the admission fence limits
+  which), get its spec (and imported ledger) and get and patch its ledger.
+  The container runs as uid 65532, non-root, with a read-only root
+  filesystem, no capabilities and the runtime's default seccomp profile.
+- **Log collector.** It reads `LOG_NAMESPACE` and `LOG_SCOPE`
+  (`[[pod, [container, ...]], ...]` as JSON), may get `pods/log` of the
+  listed Pods only, and writes under `/logs`.
+
 ## Signed releases and wire formats
 
 `payloadTypes` names each wire format's DSSE payload types and is required.
@@ -139,17 +192,43 @@ retiring authority signs only what an active one signs (or what its entry
 pins), a retired one never renders, and every `expires_at` stays within the
 authority's `cap`.
 
+## Sealed disks
+
+`SealedDisks` renders, per live disk of its table, a privileged provisioner
+that creates (once), checks and attaches the backing file; then, with
+`injector`, the `NriKeyInjector` for the guests of these disks, in the same
+namespace on the same node; then a local block PersistentVolume and claim
+per declared disk (live and retained ones protected from pruning). A role's
+size is its live generation's; a retained or declared generation made at
+another size states it in the table (`sizeBytes` and `sizeLabel`), since
+its claim cannot be resized. A stage placeholder's magic is printable ASCII
+that `printf` takes literally, so it cannot start with `-`.
+
 ## The stack
 
 `ConfidentialGuestStack` renders, in order: pull broker, signed releases,
 Services, disks, key injector, log retention, admission fence, lifecycle
 controllers. The controllers act as soon as they run, so everything their
 guests need comes first. The stack derives the fence's controllers and
-guests and the log scopes from the lifecycle roles, and passes
-`ConfidentialGuestStackContext` (guest Pod names, claims and every release's
-HOST_DATA) to the host components it takes as functions (`pullBroker`,
-`disks`, `keyInjector`). It refuses two parts that render the same object,
-and a refusal anywhere leaves nothing rendered.
+guests and the log scopes from the lifecycle roles.
+
+The host components (`pullBroker`, `disks`, `keyInjector`) are given either
+as their constructs' props or as functions:
+
+- **Props.** The stack builds the construct in its namespace, on its node
+  (and for the broker under its label domain), and ties it to its guests: the
+  pull broker admits the HOST_DATA of every declared release; every guest's
+  claim (holder and stage boot) must be a live disk of the disks' table; an
+  injector binds only the stack's guest Pods. A prop the stack sets is
+  refused. `SealedDisks` renders the key injector itself (`disks.injector`),
+  so the `keyInjector` slot is only for a standalone `NriKeyInjector` beside
+  disks the stack does not build; the stack refuses both at once.
+- **Functions** `(scope, context) => void` receive
+  `ConfidentialGuestStackContext` (guest Pod names, claims and every
+  release's HOST_DATA) and build what they like.
+
+The stack refuses two parts that render the same object, and a refusal
+anywhere leaves nothing rendered.
 
 ## The admission fence
 
@@ -160,7 +239,10 @@ prefix starts with `guestClaimPrefix`, so the creator policy fences every
 guest claim, and no guest's prefix covers another's, so a controller cannot
 mount one guest's disk in another guest.
 
-`example/confidential-guests-stack.ts` shows a complete stack with example values.
+`example/confidential-guests.ts` shows a complete stack with example values:
+two guests with their lifecycle controllers, signed releases, Services, log
+retention and admission fence, the attested pull broker, sealed disks with
+their key injector, and the full guest env.
 
 ## Adopting an existing deployment
 

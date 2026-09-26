@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
-import { Chart, Testing } from "cdk8s";
+import { Testing } from "cdk8s";
 import { KubeConfigMap, KubeValidatingAdmissionPolicy } from "cdk8s-plus-33/lib/imports/k8s";
 import {
   ConfidentialGuestStack,
@@ -12,18 +8,7 @@ import {
   type ConfidentialGuestStackContext,
   type ConfidentialGuestStackProps,
 } from "../src/modules/k8s/confidential-guests";
-import { confidentialGuestStackExample } from "../example/confidential-guests-stack";
 import { DOMAIN, NAMESPACE, NODE, RUNTIME, image, initData, lifecycleProps, measured, roles } from "./confidential-guests-fixtures";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, "..", "..", "..");
-const GOLDEN = join(here, "confidential-guests-stack.golden.yaml");
-
-function exampleYaml(): string {
-  const app = Testing.app();
-  confidentialGuestStackExample(new Chart(app, "confidential-guests-stack"));
-  return app.synthYaml();
-}
 
 const MESSAGES = {
   creator: "c", name: "n", placement: "p", hostNamespaces: "h", serviceAccount: "s", volumes: "v", claim: "cl", privilege: "pr", initData: "i",
@@ -41,34 +26,6 @@ function render(props: ConfidentialGuestStackProps) {
   const stack = new ConfidentialGuestStack(chart, "stack", props);
   return { stack, docs: Testing.synth(chart) };
 }
-
-test("the example synthesizes to the reviewed golden output", () => {
-  const yaml = exampleYaml();
-  if (process.env.UPDATE_GOLDEN === "1") writeFileSync(GOLDEN, yaml);
-  assert.equal(yaml, readFileSync(GOLDEN, "utf8"), "example output changed; review it and rerun with UPDATE_GOLDEN=1");
-});
-
-test("the example's output passes the publication guard, and the guard sees this input", () => {
-  const guard = (input: string) => spawnSync(process.execPath, [join(repoRoot, "scripts", "publication-guard.mjs"), "--stdin", "--label", "example-synth"],
-    { input, encoding: "utf8", env: { ...process.env, GITHUB_REPOSITORY_OWNER: "" } });
-  const clean = guard(exampleYaml());
-  assert.equal(clean.status, 0, clean.stdout + clean.stderr);
-  // Assembled at run time so the seed itself is not a finding in this file.
-  const seeded = guard(exampleYaml().replace("tee-node-1", [10, 0, 0, 7].join(".")));
-  assert.equal(seeded.status, 1, "a private address seeded into the output must be found");
-});
-
-test("every rendered object is explicitly named and namespaced unless cluster-scoped", () => {
-  const app = Testing.app();
-  confidentialGuestStackExample(new Chart(app, "confidential-guests-stack"));
-  const docs = app.charts.flatMap(chart => chart.toJson());
-  assert.ok(docs.length > 20);
-  for (const doc of docs) {
-    assert.match(doc.metadata?.name ?? "", /^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/, `${doc.kind} without an explicit name`);
-    const clusterScoped = doc.kind.startsWith("ValidatingAdmissionPolicy");
-    assert.equal(doc.metadata.namespace, clusterScoped ? undefined : "guests", `${doc.kind}/${doc.metadata.name}`);
-  }
-});
 
 test("emission order: broker, releases, services, disks, injector, logs, fence, controllers; components receive the context", () => {
   const seen: Record<string, ConfidentialGuestStackContext> = {};
@@ -147,7 +104,10 @@ test("refusals happen before anything renders", () => {
     ["no fence", { fence: undefined as any }, /fence is required/],
     ["no lifecycle", { lifecycle: undefined as any }, /lifecycle is required/],
     ["no label domain", { labelDomain: undefined as any }, /labelDomain/],
-    ["component not a function", { disks: {} as any, services: { services: [{ name: "guest-primary", selector: { app: "guests" }, ports: [8080] }] } }, /disks must be a function/],
+    ["component neither props nor a function", { disks: 42 as any, services: { services: [{ name: "guest-primary", selector: { app: "guests" }, ports: [8080] }] } },
+      /disks must be its construct's props or a function/],
+    ["a component's props refused after others were built", { services: { services: [{ name: "guest-primary", selector: { app: "guests" }, ports: [8080] }] },
+      disks: {} as any }, /SealedDisks/],
   ];
   for (const [label, change, error] of refusals) {
     const chart = Testing.chart();
@@ -216,4 +176,86 @@ test("no two parts render the same object", () => {
   const elsewhere = render(stackProps({ releases: releases("trust"),
     disks: scope => { new KubeConfigMap(scope, "other", { metadata: { name: "primary-lifecycle-spec", namespace: "other" } }); } })).docs;
   assert.equal(elsewhere.filter(d => d.kind === "ConfigMap" && d.metadata.name === "primary-lifecycle-spec").length, 2, "the same name in another namespace is another object");
+});
+
+// The pull broker, sealed disks and a standalone key injector can be given as
+// their constructs' props; the stack fills in what it knows and checks that
+// they serve its guests.
+const GiB = 1024 ** 3, MiB = 1024 ** 2;
+const brokerProps = {
+  name: "pull-broker", configMapName: "pull-broker-configuration",
+  networkPolicyNames: { ingressBoundary: "ingress-boundary", fromGuests: "pull-broker-from-guests" },
+  podLabels: { app: "guests-pull-broker" }, guestSelector: { app: "guests" },
+  brokerImage: image("kbs"), initImage: image("tools"), initCommand: ["registry-init"], configToml: "[http_server]\n",
+  resourcePath: ["default", "registry", "pull"] as const, pullSecret: { name: "registry-pull", exposeAsResource: true },
+};
+const binding = (pod: string) => [{ pod, container: "storage" }, { pod, container: "attest" }];
+const injectorProps = {
+  name: "key-injector", image: image("injector"), pluginIndex: "40", runtimeHandler: RUNTIME, device: { major: 10, minor: 258 },
+  bindings: [...binding("guest-primary"), ...binding("guest-primary-stage"), ...binding("guest-operator")],
+};
+const diskProps = (injector: object | null = injectorProps) => ({
+  image: image("tools"), stateDir: "/var/lib/guests/disks",
+  roles: [
+    { role: "primary", claim: "guest-primary-data", file: "primary-data", sizeBytes: 64 * GiB, sizeLabel: "64Gi", provisioner: "primary-disk" },
+    { role: "standby", claim: "guest-primary-stage", file: "primary-stage", sizeBytes: 16 * MiB, sizeLabel: "16Mi", provisioner: "standby-disk", placeholder: true },
+    { role: "operator", claim: "guest-operator", file: "operator", sizeBytes: GiB, sizeLabel: "1Gi", provisioner: "operator-disk" },
+  ],
+  table: { live: { primary: { generation: 2, loop: 202 }, standby: { generation: 1, loop: 210 }, operator: { generation: 1, loop: 220 } },
+    retained: [{ role: "primary" as const, generation: 1, loop: 201, sizeBytes: 32 * GiB, sizeLabel: "32Gi" }],
+    retired: [], reservedLoops: [], protectedLoops: [], firstPinnedLoop: 100 },
+  placeholderMagic: "example.placeholder/v1\n",
+  ...(injector ? { injector } : {}),
+});
+
+test("the pull broker, disks and injector can be given as props: the stack places them and admits its own releases", () => {
+  const { docs, stack } = render(stackProps({ pullBroker: brokerProps, disks: diskProps() }));
+  const order = docs.map(d => `${d.kind}/${d.metadata.name}`);
+  assert.deepEqual(order.slice(0, 5), ["NetworkPolicy/ingress-boundary", "NetworkPolicy/pull-broker-from-guests", "ConfigMap/pull-broker-configuration",
+    "Service/pull-broker", "Deployment/pull-broker"], "the broker renders first");
+  const at = (entry: string) => order.indexOf(entry);
+  assert.ok(at("Deployment/primary-disk") > at("Deployment/pull-broker") && at("Deployment/key-injector") > at("Deployment/operator-disk"));
+  assert.ok(at("PersistentVolumeClaim/guest-operator-v1") < at("ValidatingAdmissionPolicy/guests-creator"));
+  for (const doc of docs.filter(d => d.kind !== "PersistentVolume" && !d.kind.startsWith("ValidatingAdmissionPolicy"))) {
+    assert.equal(doc.metadata.namespace, NAMESPACE, `${doc.kind}/${doc.metadata.name}`);
+  }
+  const broker = docs.find(d => d.kind === "ConfigMap" && d.metadata.name === "pull-broker-configuration");
+  assert.ok(broker.data["resource-policy.rego"].includes(`ev.init_data in ${JSON.stringify(stack.context.initDataSha256)}`), "the broker admits every release's HOST_DATA");
+  const deployment = (name: string) => docs.find(d => d.kind === "Deployment" && d.metadata.name === name).spec.template;
+  assert.ok(Object.keys(deployment("pull-broker").metadata.annotations).includes(`${DOMAIN}/config-sha256`));
+  for (const name of ["pull-broker", "primary-disk", "key-injector"]) assert.equal(deployment(name).spec.nodeName, NODE, name);
+  const claims = docs.filter(d => d.kind === "PersistentVolumeClaim").map(d => [d.metadata.name, d.spec.resources.requests.storage]);
+  assert.deepEqual(claims, [["guest-primary-data-v2", "64Gi"], ["guest-primary-stage-v1", "16Mi"], ["guest-operator-v1", "1Gi"], ["guest-primary-data-v1", "32Gi"]]);
+  // A standalone injector, for disks the stack does not build.
+  const standalone = render(stackProps({ keyInjector: injectorProps })).docs;
+  assert.deepEqual(standalone.filter(d => d.kind === "Deployment" && d.metadata.name === "key-injector").map(d => d.metadata.namespace), [NAMESPACE]);
+});
+
+test("props the stack sets, disks that miss a guest's claim and injectors that bind other Pods are refused", () => {
+  refuse("broker namespace", stackProps({ pullBroker: { ...brokerProps, namespace: "other" } as any }), /pullBroker: the stack sets namespace/);
+  refuse("broker admission", stackProps({ pullBroker: { ...brokerProps, initData: { form: "equals", value: "ab".repeat(32) } } as any }),
+    /pullBroker: the stack sets initData/);
+  refuse("broker label domain", stackProps({ pullBroker: { ...brokerProps, labelDomain: "other.example.com" } as any }), /pullBroker: the stack sets labelDomain/);
+  refuse("disks node", stackProps({ disks: { ...diskProps(), nodeName: "node-b" } as any }), /disks: the stack sets nodeName/);
+  refuse("injector namespace", stackProps({ keyInjector: { ...injectorProps, targetNamespace: NAMESPACE } as any }), /keyInjector: the stack sets targetNamespace/);
+  const withoutOperator = diskProps();
+  withoutOperator.roles = withoutOperator.roles.map(r => (r.role === "operator" ? { ...r, claim: "guest-console" } : r));
+  refuse("a guest claim no disk serves", stackProps({ disks: withoutOperator }),
+    /role operator: claim guest-operator-v1 is not a live disk of disks \(live: guest-primary-data-v2, guest-primary-stage-v1, guest-console-v1\)/);
+  refuse("the holder on a retained generation", stackProps({ disks: { ...diskProps(), table: { ...diskProps().table,
+    live: { ...diskProps().table.live, primary: { generation: 3, loop: 203 } }, retained: [{ role: "primary" as const, generation: 2, loop: 202 }] } } }),
+    /role primary: claim guest-primary-data-v2 is not a live disk/);
+  refuse("an injector binding outside the stack's guests", stackProps({ disks: diskProps({ ...injectorProps, bindings: binding("guest-other") }) }),
+    /disks.injector binds guest-other, which is not a guest Pod of the stack/);
+  refuse("a standalone injector binding outside the stack's guests", stackProps({ keyInjector: { ...injectorProps, bindings: binding("guest-other") } }),
+    /keyInjector binds guest-other, which is not a guest Pod of the stack/);
+  refuse("injector bindings that are not a list", stackProps({ keyInjector: { ...injectorProps, bindings: "guest-primary" as any } }),
+    /NriKeyInjector: bindings must list at least one binding/);
+  refuse("two injectors", stackProps({ disks: diskProps(), keyInjector: injectorProps }),
+    /keyInjector: disks already renders the key injector \(disks.injector\); keyInjector is for a standalone NriKeyInjector/);
+  assert.ok(render(stackProps({ disks: diskProps(null), keyInjector: injectorProps })).docs.length > 0, "disks without an injector and a standalone one");
+  // Function slots keep working beside typed ones.
+  assert.ok(render(stackProps({ pullBroker: brokerProps, disks: diskProps(null),
+    keyInjector: (scope, context) => { new KubeConfigMap(scope, "own", { metadata: { name: "own-injector", namespace: context.namespace } }); } })).docs
+    .some(d => d.metadata.name === "own-injector"));
 });

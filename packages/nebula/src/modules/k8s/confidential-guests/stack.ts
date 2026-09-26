@@ -4,7 +4,10 @@ import { GuestAdmissionFence, type GuestAdmissionFenceController, type GuestAdmi
 import {
   GuestLifecycle, guestLifecycleSpec, lifecycleLabelKey, lifecycleNames, type ArgoIgnoreDifference, type GuestLifecycleProps,
 } from "./lifecycle";
+import { NriKeyInjector, type NriKeyInjectorProps } from "./key-injector";
 import { GuestLogRetention, type GuestLogRetentionProps, type GuestLogScope } from "./log-retention";
+import { AttestedPullBroker, type AttestedPullBrokerProps } from "./pull-broker";
+import { SealedDisks, type SealedDisksProps } from "./sealed-disks";
 import { GuestServices, type GuestServicesProps } from "./services";
 import { SignedReleases, type SignedReleasesProps } from "./signed-releases";
 import { dnsLabel, dnsSubdomain, fail, labelDomain as domainOf, list } from "./validate";
@@ -39,6 +42,26 @@ export interface ConfidentialGuestStackContext {
 /** Builds a host component (pull broker, sealed disks, key injector) under `scope`. */
 export type ConfidentialGuestComponent = (scope: Construct, context: ConfidentialGuestStackContext) => void;
 
+/**
+ * The attested pull broker as the stack builds it: in the stack's namespace,
+ * on its node, under its label domain, admitting the HOST_DATA of every
+ * declared release (`initData` is `{ form: "in", values: context.initDataSha256 }`).
+ */
+export type ConfidentialGuestPullBroker = Omit<AttestedPullBrokerProps, "namespace" | "nodeName" | "labelDomain" | "initData">;
+/**
+ * Sealed disks as the stack builds them, in its namespace on its node. Every
+ * guest's claim (holder and stage boot) must be a live disk of the table.
+ * With `injector`, SealedDisks also renders the key injector (between the
+ * provisioners and the claims), bound only to the stack's guest Pods.
+ */
+export type ConfidentialGuestDisks = Omit<SealedDisksProps, "namespace" | "nodeName">;
+/**
+ * A standalone key injector, in the stack's namespace on its node, bound only
+ * to the stack's guest Pods: for disks the stack does not build. When the
+ * stack builds the disks, give the injector to them (`disks.injector`).
+ */
+export type ConfidentialGuestKeyInjector = Omit<NriKeyInjectorProps, "namespace" | "nodeName" | "targetNamespace">;
+
 export interface ConfidentialGuestStackProps {
   readonly namespace: string;
   readonly nodeName: string;
@@ -67,13 +90,24 @@ export interface ConfidentialGuestStackProps {
    */
   readonly logRetention?: Omit<GuestLogRetentionProps, "namespace" | "nodeName" | "labelDomain" | "scopes">
     & { readonly scopes?: readonly GuestLogScope[] };
-  /** The attested pull broker, rendered first. */
-  readonly pullBroker?: ConfidentialGuestComponent;
-  /** Sealed-disk provisioning and volumes, rendered after the Services. */
-  readonly disks?: ConfidentialGuestComponent;
-  /** The NRI key injector, rendered after the disks. */
-  readonly keyInjector?: ConfidentialGuestComponent;
+  /** The attested pull broker, rendered first: its props, or a function that builds it. */
+  readonly pullBroker?: ConfidentialGuestPullBroker | ConfidentialGuestComponent;
+  /** Sealed-disk provisioning and volumes (and their key injector), rendered after the Services: their props, or a function. */
+  readonly disks?: ConfidentialGuestDisks | ConfidentialGuestComponent;
+  /**
+   * A standalone NRI key injector, rendered after the disks: its props, or a
+   * function. Only for disks the stack does not build: SealedDisks renders
+   * its own injector (`disks.injector`), and the stack refuses a second one.
+   */
+  readonly keyInjector?: ConfidentialGuestKeyInjector | ConfidentialGuestComponent;
 }
+
+// What the stack sets on a component it builds from props.
+const STACK_SETS = {
+  pullBroker: ["namespace", "nodeName", "labelDomain", "initData"],
+  disks: ["namespace", "nodeName"],
+  keyInjector: ["namespace", "nodeName", "targetNamespace"],
+} as const;
 
 /** The admission prefix of a claim: the claim without its trailing generation number. */
 export function guestClaimPrefix(claim: string): string {
@@ -88,9 +122,12 @@ export function guestClaimPrefix(claim: string): string {
  *
  * The stack wires the parts together: the fence admits exactly the lifecycle
  * controllers and their guests, log retention follows the guests'
- * containers, and the host components receive the guests' Pod names, claims
- * and HOST_DATA through {@link ConfidentialGuestStackContext}. No two parts
- * may render the same object. A refusal anywhere leaves nothing rendered.
+ * containers, the pull broker admits every declared release, the disks
+ * serve every guest claim and an injector binds only the guests. The host
+ * components are given as their constructs' props, or as functions that
+ * receive the guests' Pod names, claims and HOST_DATA through
+ * {@link ConfidentialGuestStackContext}. No two parts may render the same
+ * object. A refusal anywhere leaves nothing rendered.
  */
 export class ConfidentialGuestStack extends Construct {
   public readonly context: ConfidentialGuestStackContext;
@@ -139,10 +176,23 @@ export class ConfidentialGuestStack extends Construct {
           }
         }
       }
-      for (const [name, build] of [["pullBroker", props.pullBroker], ["disks", props.disks], ["keyInjector", props.keyInjector]] as const) {
-        if (build !== undefined && typeof build !== "function") fail(OWNER, `${name} must be a function (scope, context) => void`);
+      for (const name of ["pullBroker", "disks", "keyInjector"] as const) {
+        const given = props[name];
+        if (given === undefined || typeof given === "function") continue;
+        if (given === null || typeof given !== "object" || Array.isArray(given)) fail(OWNER, `${name} must be its construct's props or a function (scope, context) => void`);
+        const set = STACK_SETS[name].filter(key => key in given);
+        if (set.length) fail(OWNER, `${name}: the stack sets ${set.join(", ")}`);
+      }
+      if (typeof props.disks === "object" && props.disks.injector !== undefined && props.keyInjector !== undefined) {
+        fail(OWNER, "keyInjector: disks already renders the key injector (disks.injector); keyInjector is for a standalone NriKeyInjector");
       }
       const component = (name: string, build: ConfidentialGuestComponent | undefined) => build?.(new Construct(this, name), this.context);
+      // A malformed binding list is left for the injector to refuse.
+      const guestPodsOnly = (what: string, bindings: unknown) => {
+        for (const pod of new Set((Array.isArray(bindings) ? bindings : []).map(binding => binding?.pod))) {
+          if (!this.context.guestPods.includes(pod)) fail(OWNER, `${what} binds ${pod}, which is not a guest Pod of the stack`);
+        }
+      };
 
       this.context = {
         namespace, nodeName, runtimeClassName, labelDomain, lifecycleLabel: lifecycleLabelKey(labelDomain),
@@ -152,11 +202,33 @@ export class ConfidentialGuestStack extends Construct {
           ...(role.stage ? { stage: { name: role.stage.name, claim: role.stage.claim } } : {}) })),
       };
 
-      component("pull-broker", props.pullBroker);
+      if (typeof props.pullBroker === "object") {
+        new AttestedPullBroker(this, "pull-broker", {
+          ...props.pullBroker, namespace, nodeName, labelDomain, initData: { form: "in", values: this.context.initDataSha256 },
+        });
+      } else {
+        component("pull-broker", props.pullBroker);
+      }
       if (props.releases) this.releases = new SignedReleases(this, "releases", { ...props.releases, namespace });
       if (props.services) new GuestServices(this, "services", { ...props.services, namespace });
-      component("disks", props.disks);
-      component("key-injector", props.keyInjector);
+      if (typeof props.disks === "object") {
+        guestPodsOnly("disks.injector", props.disks.injector?.bindings);
+        const disks = new SealedDisks(this, "disks", { ...props.disks, namespace, nodeName });
+        const live = disks.plan.live.map(disk => disk.claim);
+        for (const role of roles) {
+          for (const [, claim] of guestsOf(role)) {
+            if (!live.includes(claim)) fail(OWNER, `role ${role.role}: claim ${claim} is not a live disk of disks (live: ${live.join(", ")})`);
+          }
+        }
+      } else {
+        component("disks", props.disks);
+      }
+      if (typeof props.keyInjector === "object") {
+        guestPodsOnly("keyInjector", props.keyInjector.bindings);
+        new NriKeyInjector(this, "key-injector", { ...props.keyInjector, namespace, nodeName });
+      } else {
+        component("key-injector", props.keyInjector);
+      }
       if (props.logRetention) {
         const scopes = props.logRetention.scopes ?? [
           ...roles.map((role, i) => ({ pod: role.holder, containers: specs[i].containers })),

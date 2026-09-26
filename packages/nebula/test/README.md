@@ -20,9 +20,17 @@
   written as plain manifests (`support/cdk8s-render.ts`), and the two YAML
   outputs must be byte-identical, so a deployment written by hand can adopt
   a construct without a diff. `confidential-guests-example.test.ts` compares
-  `example/confidential-guests.ts` with the committed render in
-  `confidential-guests-golden/` (regenerate with `UPDATE_GOLDEN=1` after
-  reviewing the change) and runs the publication guard over that render.
+  `example/confidential-guests.ts` (one ConfidentialGuestStack with every
+  part) with the committed render in `confidential-guests-golden/`
+  (regenerate with `UPDATE_GOLDEN=1` after reviewing the change) and runs
+  the publication guard over that render.
+- `confidential-guests-guest-env.test.ts` holds the guest env renderers to
+  the guest's own readers: `confidential-guests-guest-env/` vendors the
+  contract's neutral fixtures byte for byte under a pinned manifest, the
+  neutral names and the example render exactly as those fixtures, and every
+  refusal vector there is refused with the reader's message.
+  `confidential-guests-validate.test.ts` checks that every construct refuses
+  bad props the same way (a TypeError naming the construct).
 - `io-probe.test.ts` controls the probe behind that check
   (`support/io-probe.mjs`, a preload that records `node:fs`,
   `node:fs/promises` and `node:child_process` calls with their call stacks,
@@ -33,10 +41,7 @@
   `-signed-releases`, `-lifecycle`, `-admission-fence`, `-log-retention`,
   `-services` and `-stack.test.ts`) pin each construct's exact output and the
   refusals that keep a bad render from reaching a cluster, using the
-  synthetic inputs in `confidential-guests-fixtures.ts`. The stack test also
-  compares `example/confidential-guests-stack.ts` with
-  `confidential-guests-stack.golden.yaml` (rerun with `UPDATE_GOLDEN=1` after
-  reviewing a change) and runs the publication guard over that output.
+  synthetic inputs in `confidential-guests-fixtures.ts`.
 
 The GitHub `Verify modules` workflow runs these tests together with
 `tsc --noEmit`, the Crossplane management-policy conventions
