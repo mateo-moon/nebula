@@ -16,6 +16,7 @@ const RUNTIME_EXPORTS = [
 ];
 // The guest lifecycle constructs and helpers.
 const LIFECYCLE_EXPORTS = [
+  "ConfidentialGuestStack",
   "GuestAdmissionFence",
   "GuestLifecycle",
   "GuestLogRetention",
@@ -27,6 +28,7 @@ const LIFECYCLE_EXPORTS = [
   "LIFECYCLE_SPEC_VERSION",
   "LOG_RETENTION_COMMAND",
   "SignedReleases",
+  "guestClaimPrefix",
   "guestLifecycleSpec",
   "initDataSha256",
   "lifecycleIgnoreDifferences",

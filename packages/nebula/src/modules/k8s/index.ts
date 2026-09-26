@@ -245,6 +245,7 @@ export type {
 } from "./confidential-guests";
 
 export {
+  ConfidentialGuestStack,
   GuestAdmissionFence,
   GuestLifecycle,
   GuestLogRetention,
@@ -256,6 +257,7 @@ export {
   LIFECYCLE_SPEC_VERSION,
   LOG_RETENTION_COMMAND,
   SignedReleases,
+  guestClaimPrefix,
   guestLifecycleSpec,
   initDataSha256,
   lifecycleIgnoreDifferences,
@@ -265,6 +267,10 @@ export {
 } from "./confidential-guests";
 export type {
   ArgoIgnoreDifference,
+  ConfidentialGuestComponent,
+  ConfidentialGuestRoleContext,
+  ConfidentialGuestStackContext,
+  ConfidentialGuestStackProps,
   DsseEnvelope,
   GuestAdmissionFenceController,
   GuestAdmissionFenceGuest,
