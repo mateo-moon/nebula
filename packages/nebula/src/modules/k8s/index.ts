@@ -248,6 +248,7 @@ export type {
   ConfidentialGuestAsset,
   DigestImage,
   DiskEntry,
+  DiskSize,
   DiskTable,
   InitDataAdmission,
   KbsResourcePath,

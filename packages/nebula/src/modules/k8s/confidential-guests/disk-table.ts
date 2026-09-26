@@ -1,3 +1,4 @@
+import { validSize } from "./provision";
 import { fail, isPlainObject } from "./validate";
 
 /** One generation of a role's disk and the loop minor its file is attached to. */
@@ -8,8 +9,20 @@ export interface DiskEntry {
   readonly loop: number;
 }
 
+/**
+ * The size an earlier generation was made with, when its role's size has
+ * changed since: bytes (a positive multiple of 512) and the same size as a
+ * Kubernetes quantity, both or neither. A generation without them has its
+ * role's current size. Its claim cannot be resized (no storage class), so a
+ * retained or declared generation must keep the size it has.
+ */
+export interface DiskSize {
+  readonly sizeBytes?: number;
+  readonly sizeLabel?: string;
+}
+
 /** An earlier generation still declared: PV/PVC kept, no provisioner, file and loop untouched. */
-export interface RetainedDisk extends DiskEntry {
+export interface RetainedDisk extends DiskEntry, DiskSize {
   readonly role: string;
 }
 
@@ -20,7 +33,7 @@ export interface RetainedDisk extends DiskEntry {
  * and the change dropping the mark lets Argo CD prune them. Neither step
  * touches the file or the loop device.
  */
-export interface RetiredDisk extends DiskEntry {
+export interface RetiredDisk extends DiskEntry, DiskSize {
   readonly role: string;
   readonly declared?: true;
 }
@@ -51,6 +64,7 @@ export interface DiskTable {
 
 const LIMIT = 1 << 20;
 const ROLE = /^[a-z]([-a-z0-9]*[a-z0-9])?$/;
+const SIZE_FIELDS = ["sizeBytes", "sizeLabel"];
 const TABLE_FIELDS = ["live", "retained", "retired", "reservedLoops", "protectedLoops", "firstPinnedLoop"];
 const bounded = (value: unknown, min: number) => Number.isSafeInteger(value) && (value as number) >= min && (value as number) < LIMIT;
 const only = (entry: object, fields: string[]) => Object.keys(entry).every(field => fields.includes(field));
@@ -66,6 +80,8 @@ const WHERE = "validateDiskTable";
  * - Loop minors are integers in [0, 2^20); every disk, retired ones included,
  *   sits at or above `firstPinnedLoop`; no minor is held twice across disks
  *   and `reservedLoops`; every protected minor stays reserved.
+ * - A retained or retired generation's own size ({@link DiskSize}) states
+ *   bytes and label together, and they agree.
  * @throws TypeError when the table is not an object or breaks a rule above.
  */
 export function validateDiskTable<T extends DiskTable>(table: T): T {
@@ -82,8 +98,8 @@ export function validateDiskTable<T extends DiskTable>(table: T): T {
   if (!roles.every(role => isPlainObject(table.live[role]) && only(table.live[role], ["generation", "loop"]))) fail(WHERE, "live disk with an unknown field");
   if (!table.retained.every(entry => isPlainObject(entry) && roles.includes(entry.role))) fail(WHERE, "retained disk without a known role");
   if (!table.retired.every(entry => isPlainObject(entry) && roles.includes(entry.role))) fail(WHERE, "retired disk without a known role");
-  if (!table.retained.every(entry => only(entry, ["role", "generation", "loop"]))) fail(WHERE, "retained disk with an unknown field");
-  if (!table.retired.every(entry => only(entry, ["role", "generation", "loop", "declared"]))) fail(WHERE, "retired disk with an unknown field");
+  if (!table.retained.every(entry => only(entry, ["role", "generation", "loop", ...SIZE_FIELDS]))) fail(WHERE, "retained disk with an unknown field");
+  if (!table.retired.every(entry => only(entry, ["role", "generation", "loop", "declared", ...SIZE_FIELDS]))) fail(WHERE, "retired disk with an unknown field");
   if (!table.retired.every(entry => entry.declared === undefined || entry.declared === true)) fail(WHERE, "retired disk declared other than true");
   const entries = [...roles.map(role => ({ role, ...table.live[role] })), ...table.retained, ...table.retired];
   if (!entries.every(entry => bounded(entry.generation, 1))) fail(WHERE, "invalid disk generation");
@@ -96,5 +112,12 @@ export function validateDiskTable<T extends DiskTable>(table: T): T {
   }
   if (new Set(minors).size !== minors.length) fail(WHERE, "loop minor allocated twice");
   if (!table.protectedLoops.every(minor => table.reservedLoops.includes(minor))) fail(WHERE, "protected loop minor released");
+  for (const [kind, entries] of [["retained", table.retained], ["retired", table.retired]] as const) {
+    for (const entry of entries as readonly (DiskSize & { role: string; generation: number })[]) {
+      if (entry.sizeBytes !== undefined || entry.sizeLabel !== undefined) {
+        validSize(entry.sizeBytes, entry.sizeLabel, `${WHERE}: ${kind} disk ${entry.role} generation ${entry.generation}`);
+      }
+    }
+  }
   return table;
 }

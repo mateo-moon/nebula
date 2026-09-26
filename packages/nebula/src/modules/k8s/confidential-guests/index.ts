@@ -120,7 +120,7 @@ export type { ConfidentialGuestAsset } from "./assets";
 export { AttestedPullBroker, pullBrokerPolicy } from "./pull-broker";
 export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath } from "./pull-broker";
 export { validateDiskTable } from "./disk-table";
-export type { DiskEntry, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
+export type { DiskEntry, DiskSize, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
 export { defaultProvisionTemplate, provisionScript } from "./provision";
 export type { ProvisionReference, ProvisionScriptProps, ProvisionTemplate } from "./provision";
 export { SealedDisks, sealedDisksPlan } from "./sealed-disks";
