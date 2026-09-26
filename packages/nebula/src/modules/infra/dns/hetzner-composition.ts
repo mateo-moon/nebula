@@ -32,8 +32,8 @@
  *
  * Nameserver sourcing (the reason this pattern is worth copying): the
  * Composition CREATES/ADOPTS the Route53 zone and reads its live nameservers,
- * so the delegation tracks AWS's dynamically-assigned NS set. Because the two
- * Example zones already exist, the per-XR `adoptZoneId` sets the composed
+ * so the delegation tracks AWS's dynamically-assigned NS set. When a zone
+ * already exists, the per-XR `adoptZoneId` sets the composed
  * zone's `crossplane.io/external-name` so upjet *observes/imports* the existing
  * hosted zone instead of creating a duplicate.
  *
@@ -52,11 +52,11 @@
  * });
  *
  * // Per-zone: delegate stage.example.com from the Hetzner parent zone 1234567,
- * // adopting the existing Route53 hosted zone Z3M3LMPEXAMPLE.
+ * // adopting the existing Route53 hosted zone Z0123456789EXAMPLE.
  * new DnsZoneHetzner(chart, 'stage-example-com', {
  *   dnsName: 'stage.example.com',
  *   hetznerZoneId: '1234567',
- *   adoptZoneId: 'Z3M3LMPEXAMPLE',
+ *   adoptZoneId: 'Z0123456789EXAMPLE',
  * });
  * ```
  */
@@ -576,7 +576,7 @@ export interface DnsZoneHetznerConfig {
    * Defaults to the first label of `dnsName`.
    */
   recordName?: string;
-  /** Existing Route53 hosted-zone id to adopt (e.g. 'Z3M3LMPEXAMPLE'). Omit to create new. */
+  /** Existing Route53 hosted-zone id to adopt (e.g. 'Z0123456789EXAMPLE'). Omit to create new. */
   adoptZoneId?: string;
   /** Comment for the Route53 hosted zone. */
   description?: string;

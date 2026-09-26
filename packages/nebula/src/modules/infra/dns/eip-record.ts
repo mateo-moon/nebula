@@ -29,7 +29,7 @@ import { OBSERVE_POLICIES } from "../../../utils/crossplane-policies";
 export interface EipDnsRecordConfig {
   /** metadata.name of the Eip managed resource to observe (cluster-scoped). */
   eipName: string;
-  /** Fully-qualified record name, e.g. "p2p-testnet-1.example.com". */
+  /** Fully-qualified record name, e.g. "p2p-1.example.com". */
   dnsName: string;
   /** metadata.name of the Zone managed resource the record belongs to (zoneIdRef). */
   zoneMrName: string;
