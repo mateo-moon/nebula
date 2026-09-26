@@ -161,6 +161,18 @@ collector image (`GuestLogRetention` with `{ image, command? }`), implement
 this contract. It is what the constructs render; it does not change with the
 image.
 
+**Status: not yet implemented.** No published controller image implements
+this contract yet, so image mode renders a controller that nothing runs
+today. Code mode, with spec version 1, is unaffected. The contract is
+decided as written here: spec version 2 carries the node, the runtime class
+and the label domains, and the environment carries nothing else.
+`test/confidential-guests-lifecycle-contract/` pins it as nebula's render
+of the example stack, byte for byte: both roles' specs (one with a stage
+boot, one without), and each controller's and the log collector's entry
+point, environment, security context and permissions. A controller image
+vendors those files and tests against them, and a change to this contract
+changes them in the same reviewed change.
+
 - **Entry points.** `python3 -I -B -m confidential_guests.lifecycle`
   (`LIFECYCLE_CONTROLLER_COMMAND`) and
   `python3 -I -B -m confidential_guests.log_retention`
