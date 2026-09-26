@@ -17,6 +17,9 @@
  * Host-side building blocks. Every name, address, image, host path and label
  * domain is a prop without a default; each construct renders plain
  * Kubernetes objects with explicit names, in a documented order:
+ * - {@link AttestedPullBroker}: a Key Broker Service that releases private
+ *   registry credentials only to guests whose attested init-data hash is
+ *   admitted (one value or a list);
  * - {@link SealedDisks}: loop-file block disks from a {@link DiskTable} of
  *   live, retained and retired generations ({@link validateDiskTable},
  *   {@link provisionScript}), with their provisioners and claims;
@@ -38,6 +41,8 @@ export { NEUTRAL_WIRE, WIRE_PROFILE_ENV, wireProfileEnv } from "./wire";
 export type { WireDomains, WirePayloadTypes, WireProfile, WireValue } from "./wire";
 export { confidentialGuestAssetUrl, readConfidentialGuestAsset } from "./assets";
 export type { ConfidentialGuestAsset } from "./assets";
+export { AttestedPullBroker, pullBrokerPolicy } from "./pull-broker";
+export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath } from "./pull-broker";
 export { validateDiskTable } from "./disk-table";
 export type { DiskEntry, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
 export { defaultProvisionTemplate, provisionScript } from "./provision";

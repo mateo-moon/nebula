@@ -4,6 +4,7 @@ import * as root from "../src";
 import * as cg from "../src/modules/k8s/confidential-guests";
 
 const RUNTIME_EXPORTS = [
+  "AttestedPullBroker",
   "NEUTRAL_WIRE",
   "NriKeyInjector",
   "SealedDisks",
@@ -14,6 +15,7 @@ const RUNTIME_EXPORTS = [
   "digestImage",
   "isDigestImage",
   "provisionScript",
+  "pullBrokerPolicy",
   "readConfidentialGuestAsset",
   "sealedDisksPlan",
   "sha256Hex",
