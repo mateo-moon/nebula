@@ -611,9 +611,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         },
         tolerations: [
-          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-          { key: 'workload', value: 'app-node', effect: 'NoSchedule' },
-          { key: 'app-node/instance', operator: 'Exists', effect: 'NoSchedule' }
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
         ],
         resources: {
           requests: {

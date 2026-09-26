@@ -19,7 +19,7 @@
  * new ImagePullSecret(chart, 'gcr-pull-secret', {
  *   registry: 'gcr.io',
  *   saJsonRef: 'ref+sops://.secrets/secrets.yaml#gcr/pull-sa-json',
- *   namespaces: ['app-node', 'app-node-2'],
+ *   namespaces: ['app', 'app-2'],
  * });
  * ```
  */

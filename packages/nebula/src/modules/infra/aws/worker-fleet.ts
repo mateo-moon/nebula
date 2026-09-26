@@ -90,7 +90,7 @@ export interface AwsWorkerFleetOptions {
   sshSecretName: string;
   /** LVM VG name on data-bearing nodes (OpenEBS LocalPV-LVM). */
   dataVgName: string;
-  /** Organization tag/label domain, e.g. "example.com" — used for the
+  /** Organization tag/label domain, e.g. "example.io" — used for the
    *  purpose/geo/node tags and the spot Machine label. */
   tagDomain: string;
   /** Purpose tag value for fleet EIPs and instances, e.g. "stage-worker". */
@@ -155,7 +155,7 @@ export interface AwsWorkerFleetRegion {
   az: string;
   vpcCidr: string;
   subnetCidr: string;
-  /** Extra publicly open ports (e.g. P2P where app-nodes live). */
+  /** Extra publicly open ports (e.g. P2P ports on nodes that need them). */
   extraOpenPorts?: AwsWorkerFleetPort[];
 }
 
@@ -172,7 +172,7 @@ export interface AwsWorkerFleetNode {
    *  alone never creates anything — declare the existing volume's id
    *  (adoption; the id is stable, doctrine-safe in git) or explicitly ask for
    *  a fresh empty volume. Rules out the silent-recreation failure mode where
-   *  a lost adoption turns days of volume data into a blank disk.
+   *  a lost adoption turns days of synced data into a blank disk.
    *  mrName overrides the MR name (an MR rename is a volume REPLACEMENT —
    *  days of resync); defaults to `<name>-data`. */
   dataVolume?: {
@@ -875,7 +875,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
           // AWS value back into spec, so a template created with
           // httpTokens=required keeps minting locked-down instances forever
           // (observed live TWICE — ebs-csi-node crashlooping "all specified
-          // --metadata-sources are unavailable", app-data PVCs unmountable
+          // --metadata-sources are unavailable", data PVCs unmountable
           // on every node born from such a template). Removing a field from
           // git only stops managing it; correcting AWS requires stating the
           // value you want.

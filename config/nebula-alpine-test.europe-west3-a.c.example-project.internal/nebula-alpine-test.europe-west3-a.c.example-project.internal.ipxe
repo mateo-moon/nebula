@@ -1,3 +1,0 @@
-#!ipxe
-chain https://raw.githubusercontent.com/mateo-moon/nebula/main/config/alpine/virt.ipxe
-

@@ -16,8 +16,7 @@
  *   clusters/mgmt/<module>/        the platform fundamentals (6 modules)
  *
  * Adding a workload cluster = adding a `clusters/<name>/` directory with its
- * own index.ts — no registry edits anywhere else. Mirrors the proven layout in
- * gitops/aws.
+ * own index.ts — no registry edits anywhere else.
  */
 import * as fs from "fs";
 import * as path from "path";
