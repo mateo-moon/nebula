@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import { IntOrString, KubeDeployment, Quantity } from "cdk8s-plus-33/lib/imports/k8s";
 import {
-  boundedInteger, dnsLabel, dnsSubdomain, hostPath, image, knownFields, labels, pullSecrets, waveAnnotation,
+  dnsLabel, dnsSubdomain, fail, hostPath, image, integer, knownFields, labels, pullSecrets, waveAnnotation,
 } from "./validate";
 
 /** A guest container the injector hands the key device to: `<pod>=<container>`. */
@@ -70,28 +70,28 @@ export class NriKeyInjector extends Construct {
 
   constructor(scope: Construct, id: string, props: NriKeyInjectorProps) {
     super(scope, id);
-    knownFields(props, PROPS_FIELDS, WHERE, "props");
-    const name = dnsLabel(props.name, WHERE, "name");
-    const namespace = dnsLabel(props.namespace, WHERE, "namespace");
+    knownFields(WHERE, "props", props, PROPS_FIELDS);
+    const name = dnsLabel(WHERE, "name", props.name);
+    const namespace = dnsLabel(WHERE, "namespace", props.namespace);
     if (props.targetNamespace !== undefined && props.targetNamespace !== namespace) {
-      throw new TypeError(`${WHERE}: targetNamespace ${JSON.stringify(props.targetNamespace)} differs from namespace ${JSON.stringify(namespace)}; an injector serves only its own namespace`);
+      fail(WHERE, `targetNamespace ${JSON.stringify(props.targetNamespace)} differs from namespace ${JSON.stringify(namespace)}; an injector serves only its own namespace`);
     }
-    const nodeName = dnsSubdomain(props.nodeName, WHERE, "nodeName");
-    const pinned = image(props.image, WHERE, "image");
+    const nodeName = dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    const pinned = image(WHERE, "image", props.image);
     if (typeof props.pluginIndex !== "string" || !PLUGIN_INDEX.test(props.pluginIndex)) {
-      throw new TypeError(`${WHERE}: pluginIndex must be two digits, got ${JSON.stringify(props.pluginIndex)}`);
+      fail(WHERE, `pluginIndex must be two digits, got ${JSON.stringify(props.pluginIndex)}`);
     }
     if (typeof props.runtimeHandler !== "string" || props.runtimeHandler.length > 253 || !RUNTIME_HANDLER.test(props.runtimeHandler)) {
-      throw new TypeError(`${WHERE}: runtimeHandler must be a runtime handler name, got ${JSON.stringify(props.runtimeHandler)}`);
+      fail(WHERE, `runtimeHandler must be a runtime handler name, got ${JSON.stringify(props.runtimeHandler)}`);
     }
-    const major = boundedInteger(props.device?.major, 0, 4096, WHERE, "device.major");
-    const minor = boundedInteger(props.device?.minor, 0, 1 << 20, WHERE, "device.minor");
+    const major = integer(WHERE, "device.major", props.device?.major, 0, 4095);
+    const minor = integer(WHERE, "device.minor", props.device?.minor, 0, (1 << 20) - 1);
     const bindings = validBindings(props.bindings);
-    const nri = hostPath(props.nriDirectory ?? DEFAULT_NRI_DIRECTORY, WHERE, "nriDirectory");
-    if (nri.endsWith(".sock")) throw new TypeError(`${WHERE}: nriDirectory must be the socket's directory, not the socket`);
-    const podLabels = labels(props.podLabels ?? { app: `${namespace}-${name}` }, WHERE, "podLabels");
-    const imagePullSecrets = pullSecrets(props.imagePullSecrets, WHERE);
-    const wave = waveAnnotation(props.syncWave ?? -1, WHERE, "syncWave");
+    const nri = hostPath(WHERE, "nriDirectory", props.nriDirectory ?? DEFAULT_NRI_DIRECTORY);
+    if (nri.endsWith(".sock")) fail(WHERE, `nriDirectory must be the socket's directory, not the socket`);
+    const podLabels = labels(WHERE, "podLabels", props.podLabels ?? { app: `${namespace}-${name}` });
+    const imagePullSecrets = pullSecrets(WHERE, props.imagePullSecrets);
+    const wave = waveAnnotation(WHERE, "syncWave", props.syncWave ?? -1);
 
     this.args = Object.freeze([
       "--idx", props.pluginIndex, "--socket-path", `${nri}/nri.sock`, "--namespace", namespace, "--runtime-handler", props.runtimeHandler,
@@ -135,19 +135,19 @@ export class NriKeyInjector extends Construct {
 }
 
 function validBindings(value: unknown): NriKeyBinding[] {
-  if (!Array.isArray(value) || value.length === 0) throw new TypeError(`${WHERE}: bindings must list at least one binding`);
+  if (!Array.isArray(value) || value.length === 0) fail(WHERE, `bindings must list at least one binding`);
   const seen = new Set<string>();
   return value.map((binding: NriKeyBinding, i) => {
-    knownFields(binding, ["pod", "container"], WHERE, `binding ${i}`);
+    knownFields(WHERE, `binding ${i}`, binding, ["pod", "container"]);
     const pod = binding.pod, container = binding.container;
     if (typeof pod !== "string" || pod.length > 253 || !pod.split(".").every(part => /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(part))) {
-      throw new TypeError(`${WHERE}: binding ${i} names an invalid Pod ${JSON.stringify(pod)}`);
+      fail(WHERE, `binding ${i} names an invalid Pod ${JSON.stringify(pod)}`);
     }
     if (typeof container !== "string" || container.length > 63 || !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(container)) {
-      throw new TypeError(`${WHERE}: binding ${i} names an invalid container ${JSON.stringify(container)}`);
+      fail(WHERE, `binding ${i} names an invalid container ${JSON.stringify(container)}`);
     }
     const key = `${pod}=${container}`;
-    if (seen.has(key)) throw new TypeError(`${WHERE}: binding ${key} is listed twice`);
+    if (seen.has(key)) fail(WHERE, `binding ${key} is listed twice`);
     seen.add(key);
     return { pod, container };
   });

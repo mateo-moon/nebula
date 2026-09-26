@@ -7,7 +7,7 @@ import {
 import { GuestLogRetention, type GuestLogRetentionProps, type GuestLogScope } from "./log-retention";
 import { GuestServices, type GuestServicesProps } from "./services";
 import { SignedReleases, type SignedReleasesProps } from "./signed-releases";
-import { fail, list } from "./shared";
+import { dnsLabel, dnsSubdomain, fail, labelDomain as domainOf, list } from "./validate";
 
 const OWNER = "ConfidentialGuestStack";
 
@@ -101,6 +101,10 @@ export class ConfidentialGuestStack extends Construct {
     super(scope, id);
     try {
       const { namespace, nodeName, runtimeClassName, labelDomain } = props;
+      dnsLabel(OWNER, "namespace", namespace);
+      dnsSubdomain(OWNER, "nodeName", nodeName);
+      dnsSubdomain(OWNER, "runtimeClassName", runtimeClassName);
+      domainOf(OWNER, "labelDomain", labelDomain);
       if (props.lifecycle === null || typeof props.lifecycle !== "object") fail(OWNER, "lifecycle is required");
       if (props.fence === null || typeof props.fence !== "object") fail(OWNER, "fence is required");
       const lifecycleProps: GuestLifecycleProps = { ...props.lifecycle, namespace, nodeName, runtimeClassName, labelDomain };

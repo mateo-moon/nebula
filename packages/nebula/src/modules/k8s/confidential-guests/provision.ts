@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readConfidentialGuestAsset } from "./assets";
-import { boundedInteger, hostPath } from "./validate";
+import { fail, hostPath, integer } from "./validate";
 
 /** The disk a provisioning template was written for, as literal values in its text. */
 export interface ProvisionReference {
@@ -66,11 +66,11 @@ const CREATED = '(set -C; : > "$file")';
 const UNCHANGED = "  echo 'refusing changed backing file'; exit 1;\n}\n";
 
 function validDisk(props: ProvisionReference, where: string): ProvisionReference {
-  hostPath(props.stateDir, where, "stateDir");
+  hostPath(where, "stateDir", props.stateDir);
   if (typeof props.file !== "string" || !FILE.test(props.file)) {
-    throw new TypeError(`${where}: file must be a file name of [A-Za-z0-9._-] not starting with '.', got ${JSON.stringify(props.file)}`);
+    fail(where, `file must be a file name of [A-Za-z0-9._-] not starting with '.', got ${JSON.stringify(props.file)}`);
   }
-  boundedInteger(props.loop, 0, 1 << 20, where, "loop");
+  integer(where, "loop", props.loop, 0, (1 << 20) - 1);
   validSize(props.sizeBytes, props.sizeLabel, where);
   return props;
 }
@@ -78,11 +78,11 @@ function validDisk(props: ProvisionReference, where: string): ProvisionReference
 /** A disk size in bytes (a positive multiple of 512) and the same size as a quantity (plain bytes or a binary suffix). */
 export function validSize(sizeBytes: unknown, sizeLabel: unknown, where: string): void {
   if (!Number.isSafeInteger(sizeBytes) || (sizeBytes as number) <= 0 || (sizeBytes as number) % 512 !== 0) {
-    throw new TypeError(`${where}: sizeBytes must be a positive multiple of 512, got ${String(sizeBytes)}`);
+    fail(where, `sizeBytes must be a positive multiple of 512, got ${String(sizeBytes)}`);
   }
   const label = typeof sizeLabel === "string" ? SIZE_LABEL.exec(sizeLabel) : null;
   if (!label || BigInt(label[1]) * (label[2] ? UNITS[label[2]] : 1n) !== BigInt(sizeBytes as number)) {
-    throw new TypeError(`${where}: sizeLabel must state sizeBytes (${String(sizeBytes)}) in bytes or with a binary suffix, got ${JSON.stringify(sizeLabel)}`);
+    fail(where, `sizeLabel must state sizeBytes (${String(sizeBytes)}) in bytes or with a binary suffix, got ${JSON.stringify(sizeLabel)}`);
   }
 }
 
@@ -92,7 +92,7 @@ const tokens = (disk: ProvisionReference): string[] => [
 
 function placeholderSector(magic: unknown): { printf: string; sha256: string } {
   if (typeof magic !== "string" || !MAGIC.test(magic) || Buffer.byteLength(magic, "ascii") > 512) {
-    throw new TypeError(`${WHERE}: placeholder magic must be at most 512 bytes of [A-Za-z0-9._:=+/-], optionally ending in one line feed`);
+    fail(WHERE, `placeholder magic must be at most 512 bytes of [A-Za-z0-9._:=+/-], optionally ending in one line feed`);
   }
   const sector = Buffer.alloc(512);
   sector.write(magic, "ascii");
@@ -112,13 +112,13 @@ function placeholderSector(magic: unknown): { printf: string; sha256: string } {
 export function provisionScript(props: ProvisionScriptProps): string {
   const target = validDisk(props, WHERE);
   const template = props.template ?? defaultProvisionTemplate();
-  if (typeof template?.script !== "string") throw new TypeError(`${WHERE}: template.script must be a string`);
+  if (typeof template?.script !== "string") fail(WHERE, `template.script must be a string`);
   const reference = validDisk(template.reference, `${WHERE}: template.reference`);
   const from = tokens(reference), to = tokens(target);
   for (const token of from) {
-    if (!template.script.includes(token)) throw new TypeError(`${WHERE}: the template does not contain its reference value ${JSON.stringify(token)}`);
+    if (!template.script.includes(token)) fail(WHERE, `the template does not contain its reference value ${JSON.stringify(token)}`);
     if (from.some(other => other !== token && other.includes(token))) {
-      throw new TypeError(`${WHERE}: reference value ${JSON.stringify(token)} is part of another reference value`);
+      fail(WHERE, `reference value ${JSON.stringify(token)} is part of another reference value`);
     }
   }
   const replacement = new Map(from.map((token, i) => [token, to[i]]));
@@ -127,7 +127,7 @@ export function provisionScript(props: ProvisionScriptProps): string {
   if (props.placeholderMagic === undefined) return script;
   const { printf, sha256 } = placeholderSector(props.placeholderMagic);
   if (script.split(CREATED).length !== 2 || script.split(UNCHANGED).length !== 2) {
-    throw new TypeError(`${WHERE}: a placeholder needs the template's file creation and backing-file check exactly once`);
+    fail(WHERE, `a placeholder needs the template's file creation and backing-file check exactly once`);
   }
   return script.replace(CREATED, () => `(set -C; printf '${printf}' > "$file")`).replace(UNCHANGED, () => UNCHANGED
     + `[ "$(head -c 512 "$file" | sha256sum | cut -d' ' -f1)" = '${sha256}' ] || {\n`

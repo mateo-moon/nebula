@@ -1,4 +1,4 @@
-import { isPlainObject } from "./validate";
+import { fail, isPlainObject } from "./validate";
 
 /** One generation of a role's disk and the loop minor its file is attached to. */
 export interface DiskEntry {
@@ -54,9 +54,7 @@ const ROLE = /^[a-z]([-a-z0-9]*[a-z0-9])?$/;
 const TABLE_FIELDS = ["live", "retained", "retired", "reservedLoops", "protectedLoops", "firstPinnedLoop"];
 const bounded = (value: unknown, min: number) => Number.isSafeInteger(value) && (value as number) >= min && (value as number) < LIMIT;
 const only = (entry: object, fields: string[]) => Object.keys(entry).every(field => fields.includes(field));
-const fail = (message: string): never => {
-  throw new Error(`validateDiskTable: ${message}`);
-};
+const WHERE = "validateDiskTable";
 
 /**
  * Validate a disk table and return it unchanged.
@@ -68,35 +66,35 @@ const fail = (message: string): never => {
  * - Loop minors are integers in [0, 2^20); every disk, retired ones included,
  *   sits at or above `firstPinnedLoop`; no minor is held twice across disks
  *   and `reservedLoops`; every protected minor stays reserved.
- * @throws TypeError when the table is not an object, Error for every rule above.
+ * @throws TypeError when the table is not an object or breaks a rule above.
  */
 export function validateDiskTable<T extends DiskTable>(table: T): T {
-  if (!isPlainObject(table)) throw new TypeError("validateDiskTable: the table must be an object");
-  if (!only(table, TABLE_FIELDS)) fail(`unknown field (expected ${TABLE_FIELDS.join(", ")})`);
-  if (!isPlainObject(table.live) || Object.keys(table.live).length === 0) fail("live must give at least one role its live disk");
+  if (!isPlainObject(table)) fail(WHERE, "the table must be an object");
+  if (!only(table, TABLE_FIELDS)) fail(WHERE, `unknown field (expected ${TABLE_FIELDS.join(", ")})`);
+  if (!isPlainObject(table.live) || Object.keys(table.live).length === 0) fail(WHERE, "live must give at least one role its live disk");
   for (const field of ["retained", "retired", "reservedLoops", "protectedLoops"] as const) {
-    if (!Array.isArray(table[field])) fail(`${field} is required and must be a list${field === "protectedLoops" ? " (empty only when no minor is protected)" : ""}`);
+    if (!Array.isArray(table[field])) fail(WHERE, `${field} is required and must be a list${field === "protectedLoops" ? " (empty only when no minor is protected)" : ""}`);
   }
-  if (!bounded(table.firstPinnedLoop, 0)) fail(`firstPinnedLoop is required and must be an integer in [0, 2^20), got ${String(table.firstPinnedLoop)}`);
+  if (!bounded(table.firstPinnedLoop, 0)) fail(WHERE, `firstPinnedLoop is required and must be an integer in [0, 2^20), got ${String(table.firstPinnedLoop)}`);
   const roles = Object.keys(table.live);
   const invalidRole = roles.find(role => !ROLE.test(role));
-  if (invalidRole !== undefined) fail(`invalid role name ${JSON.stringify(invalidRole)}`);
-  if (!roles.every(role => isPlainObject(table.live[role]) && only(table.live[role], ["generation", "loop"]))) fail("live disk with an unknown field");
-  if (!table.retained.every(entry => isPlainObject(entry) && roles.includes(entry.role))) fail("retained disk without a known role");
-  if (!table.retired.every(entry => isPlainObject(entry) && roles.includes(entry.role))) fail("retired disk without a known role");
-  if (!table.retained.every(entry => only(entry, ["role", "generation", "loop"]))) fail("retained disk with an unknown field");
-  if (!table.retired.every(entry => only(entry, ["role", "generation", "loop", "declared"]))) fail("retired disk with an unknown field");
-  if (!table.retired.every(entry => entry.declared === undefined || entry.declared === true)) fail("retired disk declared other than true");
+  if (invalidRole !== undefined) fail(WHERE, `invalid role name ${JSON.stringify(invalidRole)}`);
+  if (!roles.every(role => isPlainObject(table.live[role]) && only(table.live[role], ["generation", "loop"]))) fail(WHERE, "live disk with an unknown field");
+  if (!table.retained.every(entry => isPlainObject(entry) && roles.includes(entry.role))) fail(WHERE, "retained disk without a known role");
+  if (!table.retired.every(entry => isPlainObject(entry) && roles.includes(entry.role))) fail(WHERE, "retired disk without a known role");
+  if (!table.retained.every(entry => only(entry, ["role", "generation", "loop"]))) fail(WHERE, "retained disk with an unknown field");
+  if (!table.retired.every(entry => only(entry, ["role", "generation", "loop", "declared"]))) fail(WHERE, "retired disk with an unknown field");
+  if (!table.retired.every(entry => entry.declared === undefined || entry.declared === true)) fail(WHERE, "retired disk declared other than true");
   const entries = [...roles.map(role => ({ role, ...table.live[role] })), ...table.retained, ...table.retired];
-  if (!entries.every(entry => bounded(entry.generation, 1))) fail("invalid disk generation");
+  if (!entries.every(entry => bounded(entry.generation, 1))) fail(WHERE, "invalid disk generation");
   const minors = [...entries.map(entry => entry.loop), ...table.reservedLoops];
-  if (![...minors, ...table.protectedLoops].every(minor => bounded(minor, 0))) fail("invalid loop minor");
-  if (!entries.every(entry => entry.loop >= table.firstPinnedLoop)) fail("disk loop minor below firstPinnedLoop, inside the dynamic loop pool");
+  if (![...minors, ...table.protectedLoops].every(minor => bounded(minor, 0))) fail(WHERE, "invalid loop minor");
+  if (!entries.every(entry => entry.loop >= table.firstPinnedLoop)) fail(WHERE, "disk loop minor below firstPinnedLoop, inside the dynamic loop pool");
   const generations = entries.map(entry => `${entry.role}:${entry.generation}`);
   if (new Set(generations).size !== generations.length || !table.retired.every(entry => entry.generation < table.live[entry.role].generation)) {
-    fail("disk generation reused");
+    fail(WHERE, "disk generation reused");
   }
-  if (new Set(minors).size !== minors.length) fail("loop minor allocated twice");
-  if (!table.protectedLoops.every(minor => table.reservedLoops.includes(minor))) fail("protected loop minor released");
+  if (new Set(minors).size !== minors.length) fail(WHERE, "loop minor allocated twice");
+  if (!table.protectedLoops.every(minor => table.reservedLoops.includes(minor))) fail(WHERE, "protected loop minor released");
   return table;
 }
