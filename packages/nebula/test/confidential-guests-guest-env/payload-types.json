@@ -1,0 +1,26 @@
+{
+  "accept": {
+    "application/vnd.0.x_y-z+json": "0.x_y-z",
+    "application/vnd.a+json": "a",
+    "application/vnd.example.statement.v10+json": "example.statement.v10",
+    "application/vnd.nebula.confidential-guests.authority-rotation.v1+json": "nebula.confidential-guests.authority-rotation.v1"
+  },
+  "description": "Payload types every reader of GUEST_WIRE_PROFILE accepts, with the schema each names, or refuses: application/vnd.<schema>+json, the schema [a-z0-9][a-z0-9._-]*.",
+  "refuse": [
+    "application/json",
+    "application/vnd.+json",
+    "application/vnd.Example+json",
+    "Application/vnd.x+json",
+    "application/vnd.x+JSON",
+    "application/vnd.x.release.v1+cbor",
+    "application/vnd.x/y+json",
+    "application/vnd.-x+json",
+    "application/vnd._x+json",
+    "application/vnd..x+json",
+    "application/vnd.x!y+json",
+    "application/vnd.x+y+json",
+    "application/vnd.x y+json",
+    "release-v1",
+    ""
+  ]
+}

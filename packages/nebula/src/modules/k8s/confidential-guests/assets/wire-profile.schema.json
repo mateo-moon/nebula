@@ -2,39 +2,63 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:nebula:confidential-guests:wire-profile:v1",
   "title": "Confidential guest wire profile",
-  "description": "Value of the GUEST_WIRE_PROFILE environment variable: one line of canonical JSON. Each identifier is a list; element 0 is emitted and every element is accepted. Byte-domain values are ASCII prefixes to which readers append their NUL separators.",
+  "description": "Value of the GUEST_WIRE_PROFILE environment variable: one line of canonical JSON (sorted keys, no whitespace), bytes 0x20-0x7e only, no '$' (the kubelet rewrites it), at most 16 KiB. Each identifier is a list; element 0 is emitted and every element is accepted. Byte-domain values are ASCII prefixes to which readers append their NUL separators; the session and control-bridge schemas derive from the session and controlAuthorization domains (lower case, '_' as '.'). A reader takes legacy defaults for a missing releaseSet or workloadRef only while every identifier emits its legacy value; nebula always renders both.",
   "type": "object",
   "additionalProperties": false,
   "required": ["domains", "payloadTypes"],
   "properties": {
     "payloadTypes": {
-      "description": "DSSE payload types of the signed statements. Within this group a value appears in at most one identifier, emitted or accepted; readers reject a profile that breaks this.",
+      "description": "DSSE payload types of the signed statements, application/vnd.<schema>+json. Within this group a value appears in at most one identifier, emitted or accepted; readers reject a profile that breaks this.",
       "type": "object",
       "additionalProperties": false,
       "required": ["authorityRotation", "record", "release", "releaseSet"],
       "properties": {
-        "authorityRotation": { "$ref": "#/$defs/identifier" },
-        "record": { "$ref": "#/$defs/identifier" },
-        "release": { "$ref": "#/$defs/identifier" },
-        "releaseSet": { "$ref": "#/$defs/identifier" }
+        "authorityRotation": { "$ref": "#/$defs/payloadType" },
+        "record": { "$ref": "#/$defs/payloadType" },
+        "release": { "$ref": "#/$defs/payloadType" },
+        "releaseSet": { "$ref": "#/$defs/payloadType" }
       }
     },
     "domains": {
-      "description": "Byte domains separating hashed and signed messages. Within this group a value appears in at most one identifier, emitted or accepted; readers reject a profile that breaks this.",
+      "description": "Byte domains separating hashed and signed messages. Within this group a value appears in at most one identifier, emitted or accepted; readers reject a profile that breaks this. No two controlAuthorization domains may derive one schema.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["base", "controlAuthorization", "evidence", "handoff", "identityFingerprint", "replay", "secrets", "session", "workload"],
+      "required": ["base", "controlAuthorization", "evidence", "handoff", "replay", "session", "workload"],
       "properties": {
         "base": { "$ref": "#/$defs/identifier" },
         "controlAuthorization": { "$ref": "#/$defs/identifier" },
         "evidence": { "$ref": "#/$defs/identifier" },
         "handoff": { "$ref": "#/$defs/identifier" },
-        "identityFingerprint": { "$ref": "#/$defs/identifier" },
         "replay": { "$ref": "#/$defs/identifier" },
-        "secrets": { "$ref": "#/$defs/identifier" },
         "session": { "$ref": "#/$defs/identifier" },
         "workload": { "$ref": "#/$defs/identifier" }
       }
+    },
+    "releaseSet": {
+      "description": "What a release and a release set carry beyond their fixed fields: exactly one scope field with an accepted value (the first scope entry is what signers write), and member roles, node among them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roles", "scope"],
+      "properties": {
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "contains": { "const": "node" },
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" }
+        },
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}=[a-z0-9][a-z0-9._-]{0,127}$" }
+        }
+      }
+    },
+    "workloadRef": {
+      "description": "The workload this Pod's adapter serves, compared exactly: one string, never an accept list.",
+      "type": "string",
+      "pattern": "^[\\x21-\\x23\\x25-\\x7e]+$"
     }
   },
   "$defs": {
@@ -42,7 +66,13 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "type": "string", "pattern": "^[\\x21-\\x7e]+$" }
+      "items": { "type": "string", "pattern": "^[\\x21-\\x23\\x25-\\x7e]+$" }
+    },
+    "payloadType": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^application/vnd\\.[a-z0-9][a-z0-9._-]*\\+json$" }
     }
   }
 }

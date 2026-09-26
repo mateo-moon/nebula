@@ -20,12 +20,17 @@ import { Construct } from "constructs";
 import {
   ConfidentialGuestStack,
   LIFECYCLE_CLAIM_PLACEHOLDER,
+  NEUTRAL_SEALED_STORAGE,
   NEUTRAL_WIRE,
+  NEUTRAL_WORKLOAD_API,
+  adapterModeEnv,
   digestImage,
+  guestEnv,
   lifecycleLabelKey,
   measuredGuest,
-  wireProfileEnv,
+  sealedStorageEnv,
   type DsseEnvelope,
+  type GuestDeploymentEnv,
   type GuestPodManifest,
 } from "../src/modules/k8s";
 
@@ -52,22 +57,48 @@ const restricted = { allowPrivilegeEscalation: false, readOnlyRootFilesystem: tr
 const memory = (name: string) => ({ name, emptyDir: { medium: "Memory", sizeLimit: "16Mi" } });
 const probe = (path: string, port: number) => ({ httpGet: { path, port }, periodSeconds: 5 });
 
-// The attestation agent in every guest: it verifies the signed releases
-// mounted at /release and speaks the neutral wire names.
-const attest = {
+// The deployment's measured env (the guest env contract): the neutral wire
+// names with this deployment's release scope and roles, its sealed volumes
+// and the neutral adapter's API. The primary guest seals the `chain` volume,
+// the operator guest the `workspace` volume; each Pod names its own workload.
+export const EXAMPLE_GUEST_DEPLOYMENT: GuestDeploymentEnv = {
+  wire: {
+    ...NEUTRAL_WIRE,
+    releaseSet: { scope: { emit: "deployment=example" }, roles: ["node", "operator"] },
+    workloadRef: "example/workload:v1",
+  },
+  storageLayout: {
+    chain: { node: "sealed-data", volume: "data-v1", bytes: 1024 ** 4, map: "guest-data", mount: "/run/volume/data" },
+    workspace: { node: "sealed-workspace", volume: "workspace-v1", bytes: 1024 ** 3, map: "guest-workspace", mount: "/run/volume/workspace" },
+    kdf: NEUTRAL_SEALED_STORAGE.kdf,
+    lifecycleKey: { mask: 0x9, tcb: "0000000000000000" },
+    secrets: { file: "guest-secrets-v1", formats: [NEUTRAL_SEALED_STORAGE.recordFormat], identityExports: ["identity-a", "identity-b"], jwtExport: "shared-secret" },
+  },
+  workloadApi: NEUTRAL_WORKLOAD_API,
+};
+const deploymentFor = (workloadRef: string): GuestDeploymentEnv =>
+  ({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: { ...EXAMPLE_GUEST_DEPLOYMENT.wire, workloadRef } });
+
+// The attestation adapter in every guest: it verifies the signed releases
+// mounted at /release and reads the deployment's env.
+const attest = (workloadRef: string) => ({
   name: "attest", image: images.attest, securityContext: restricted,
-  env: [wireProfileEnv(NEUTRAL_WIRE), { name: "RELEASE_SET_PATH", value: "/release/release-set.dsse.json" }],
+  env: [...guestEnv(deploymentFor(workloadRef)), adapterModeEnv(NEUTRAL_WORKLOAD_API),
+    { name: "RELEASE_SET_PATH", value: "/release/release-set.dsse.json" }],
   readinessProbe: probe("/livez", 8081),
   volumeMounts: [{ name: "release", mountPath: "/release", readOnly: true }, { name: "run", mountPath: "/run/guest-attest" }],
-};
-const storage = {
+});
+// Sealed storage opens the guest's volume with the adapter's layout.
+const storage = (volume: "chain" | "workspace") => ({
   name: "storage", image: images.storage, args: ["serve"],
+  env: sealedStorageEnv(EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volume),
   securityContext: { ...restricted, capabilities: { drop: ["ALL"], add: ["SYS_ADMIN", "MKNOD"] } },
   volumeDevices: [{ name: "data", devicePath: "/dev/guest-data" }],
   volumeMounts: [{ name: "run", mountPath: "/run/guest-attest" }],
-};
+});
 
-function guest(name: string, labels: Record<string, string>, grace: number, claim: string, containers: object[]): GuestPodManifest {
+function guest(name: string, labels: Record<string, string>, grace: number, claim: string, containers: object[],
+  [volume, workloadRef]: ["chain" | "workspace", string]): GuestPodManifest {
   return {
     apiVersion: "v1", kind: "Pod",
     metadata: { name, namespace, labels, annotations: { "io.katacontainers.config.hypervisor.default_vcpus": "2" } },
@@ -75,7 +106,7 @@ function guest(name: string, labels: Record<string, string>, grace: number, clai
       runtimeClassName, nodeName, restartPolicy: "Never", terminationGracePeriodSeconds: grace,
       automountServiceAccountToken: false, enableServiceLinks: false,
       initContainers: [{ name: "initialize", image: images.storage, args: ["install"], securityContext: restricted }],
-      containers: [storage, attest, ...containers],
+      containers: [storage(volume), attest(workloadRef), ...containers],
       volumes: [
         { name: "data", persistentVolumeClaim: { claimName: claim } },
         memory("run"),
@@ -90,20 +121,20 @@ function guest(name: string, labels: Record<string, string>, grace: number, clai
 const primary = guest("guest-primary", primaryLabels, 120, LIFECYCLE_CLAIM_PLACEHOLDER, [
   { name: "workload", image: images.app, securityContext: restricted, readinessProbe: probe("/readyz", 8080),
     ports: [{ name: "control", containerPort: 7443 }] },
-]);
+], ["chain", EXAMPLE_GUEST_DEPLOYMENT.wire.workloadRef]);
 const operator = guest("guest-operator", operatorLabels, 60, "guest-operator-v1", [
   { name: "console", image: images.console, securityContext: restricted, ports: [{ name: "ssh", containerPort: 2222 }] },
-]);
+], ["workspace", "example/console:v1"]);
 
 // What policy generation records for each template.
 const artifacts = {
   primary: {
-    canonicalPodSha256: "fe7ed907d33de147163e84b2f17334e2bbbd2fa1e9dfe712ba2b2694220c72b0",
+    canonicalPodSha256: "f3b1aca39e8e9a9a4a16743b8682cab83bef3c1b586f08bcaab1fd38850e45d9",
     ccInitData: "H4sIAAAAAAACEzXNzQoCMQwE4HufYoj3sqIHEXwSFQlraIv9I1vUfXtbFg+5zDdD3qJLKBkX0GT3diLD0RUNzaeRLZ4PpyOZ65Mb3w3VEsO8WhVXaHjl+cVO0C+3x6a3vIN8OdUoqBoS64pNzug1UW6C5gUqHFGy4NPfDfrvyfwAvYvV15cAAAA=",
     initDataSha256: "cf0a41d3ef41f212a569890cc7e654d53c5b14c2cb6951e69b56563016b3c841",
   },
   operator: {
-    canonicalPodSha256: "f0aa0e313817c5d02095e635674ee7b083b61e423a03f27d3bb551ed8a6c02de",
+    canonicalPodSha256: "87af2b8de239680ef437602b6a8f9b8b58d31deaea0ea4744fb24517766c2d1a",
     ccInitData: "H4sIAAAAAAAAEzWNwQrCMBBE7/mKYb2Xih5E8EtUZKlLEkyzYRuq/r0JxcNc3htmVrElasYFNA77YSTHyavFGubOlsCH05Hc9cmV746Kpjh9BxOv1H3h6cVe0JLrY7O3vIN8eC5JoEWMqxo2dUbrdSKoQWDCCZoF7/bX1X+A3A8iytXgmAAAAA==",
     initDataSha256: "e47e5deb9d53cf9c67f88b97c0e58921ae65f27b86be21c418acbbeb5397519c",
   },
@@ -123,8 +154,8 @@ export function confidentialGuestStackExample(scope: Construct): ConfidentialGue
       payloadTypes: { neutral: { release: NEUTRAL_WIRE.payloadTypes.release.emit, releaseSet: NEUTRAL_WIRE.payloadTypes.releaseSet.emit } },
       releaseSet: true, reading: [authority],
       authorities: [{ fingerprint: authority, status: "active", formats: [{ format: "neutral", configMap: releaseConfigMap, envelopes: {
-        release: statement(NEUTRAL_WIRE.payloadTypes.release.emit, { deployment: "example-v1", expires_at: expires }),
-        releaseSet: statement(NEUTRAL_WIRE.payloadTypes.releaseSet.emit, { deployment: "example-v1", sequence: 1, expires_at: expires,
+        release: statement(NEUTRAL_WIRE.payloadTypes.release.emit, { deployment: "example", expires_at: expires }),
+        releaseSet: statement(NEUTRAL_WIRE.payloadTypes.releaseSet.emit, { deployment: "example", sequence: 1, expires_at: expires,
           members: [artifacts.primary.initDataSha256, artifacts.operator.initDataSha256] }),
       } }] }],
     },

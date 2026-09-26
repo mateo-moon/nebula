@@ -23,9 +23,11 @@ wave, a file name, a container entry point).
 
 Helpers: `measuredGuest` (the synthesis gate for a measured template),
 `initDataSha256`, `guestLifecycleSpec`, `lifecycleIgnoreDifferences`,
-`lifecycleNames`, `lifecycleLabelKey`, `guestClaimPrefix`, plus the
-foundations (`digestImage`, `canonicalJson`, `sha256Hex`, `WireProfile`,
-`NEUTRAL_WIRE`, `wireProfileEnv`).
+`lifecycleNames`, `lifecycleLabelKey`, `guestClaimPrefix`, the foundations
+(`digestImage`, `canonicalJson`, `sha256Hex`) and the guest env renderers
+(`wireProfileEnv`, `storageLayoutEnv`, `workloadApiEnv`, `guestEnv`,
+`adapterModeEnv`, `sealedStorageEnv`, `readGuestEnv`, with the frozen
+`NEUTRAL_WIRE`, `NEUTRAL_WORKLOAD_API` and `NEUTRAL_SEALED_STORAGE` names).
 
 ## Measured and unmeasured inputs
 
@@ -38,6 +40,61 @@ template or an image reference.
 
 Everything else (controller images, policies, Services, log collection) is
 unmeasured host-side configuration and can change without a new release.
+
+## The guest env contract
+
+A guest learns which deployment it belongs to from three measured
+environment variables. Its components (the attestation adapter, sealed
+storage, a control bridge, observers) read them when they start, with the
+rules below, and refuse to start on any violation. nebula renders them with
+the same rules and reads back everything it renders, so a value a guest
+would refuse fails the render with the guest's own message
+(`GuestEnvError`, a `TypeError`).
+
+| Variable | Renderer | Carries | Max |
+| --- | --- | --- | --- |
+| `GUEST_WIRE_PROFILE` | `wireProfileEnv(profile)` | payload types, byte domains, the release scope and roles, the Pod's workload reference | 16 KiB |
+| `GUEST_STORAGE_LAYOUT` | `storageLayoutEnv(layout)` | the two sealed volumes, KDF labels, the lifecycle key request, the identity record file and formats | 8 KiB |
+| `GUEST_WORKLOAD_API` | `workloadApiEnv(api)` | the adapter's mode, portal and verifier routes, signing and key-resolver domains | 4 KiB |
+
+Every value is one line of canonical JSON (sorted keys, no whitespace,
+integers only), bytes 0x20 to 0x7e, without `$` (the kubelet rewrites `$$`
+and `$(NAME)` in env values). A value is refused, never repaired.
+
+- **Wire profile.** `{domains, payloadTypes, releaseSet, workloadRef}`. Each
+  identifier is `{emit, accept?}`, rendered as a list whose element 0 is
+  emitted and whose every element is accepted; within a group a value
+  belongs to one identifier. Payload types are
+  `application/vnd.<schema>+json` with a lower-case schema. The session and
+  control-bridge schemas derive from the `session` and
+  `controlAuthorization` domains (lower case, `_` as `.`), so no two
+  authorization domains may derive one schema. `releaseSet.scope` entries
+  are `field=value` (the emitted one is what signers write); `roles` include
+  `node`. `workloadRef` is one exact string: it ties the adapter to its own
+  workload in the same Pod, so two Pods of a deployment differ only there.
+- **Storage layout.** The identity record's header and fingerprint domain
+  belong to the disk, not the wire: `secrets.formats` lists them (the first
+  is written, every one is read), so renaming wire identifiers never changes
+  a guest's persistent identity. The adapter and the storage container of a
+  Pod get the same layout (`sealedStorageEnv(layout, volume)` adds storage's
+  `NODE_ID` and `VOLUME_ID`).
+- **Workload API.** Peers of one deployment share it; the adapter's `MODE`
+  must equal its `mode` (`adapterModeEnv(api)`).
+
+`guestEnv({wire, storageLayout, workloadApi})` renders all three for every
+container that reads them, in the order a guest reads them. A guest takes
+built-in defaults only for a deployment that renders none of these variables
+and keeps its original identifiers; nebula renders no such default: a
+profile always names its `releaseSet` and `workloadRef`, and the layout and
+API are always rendered. An existing guest whose measured env has none of
+these variables is adopted by rendering none of them.
+
+`readGuestEnv(env, reader?)` reads an env as a guest's components do and
+returns the derived deployment (schemas, record formats, the operator role).
+The contract's neutral fixtures are vendored in
+`test/confidential-guests-guest-env/`; the tests render the neutral names
+and the example deployment byte for byte as those fixtures, and refuse every
+refusal vector there with the reader's message.
 
 ## Lifecycle controllers
 
