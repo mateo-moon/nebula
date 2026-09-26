@@ -5,17 +5,23 @@ import * as cg from "../src/modules/k8s/confidential-guests";
 
 const RUNTIME_EXPORTS = [
   "NEUTRAL_WIRE",
+  "NriKeyInjector",
+  "SealedDisks",
   "WIRE_PROFILE_ENV",
   "canonicalJson",
   "confidentialGuestAssetUrl",
+  "defaultProvisionTemplate",
   "digestImage",
   "isDigestImage",
+  "provisionScript",
   "readConfidentialGuestAsset",
+  "sealedDisksPlan",
   "sha256Hex",
+  "validateDiskTable",
   "wireProfileEnv",
 ];
 
-test("the package root re-exports the confidential-guests foundations unchanged", () => {
+test("the package root re-exports the confidential-guests module unchanged", () => {
   assert.deepEqual(Object.keys(cg).sort(), RUNTIME_EXPORTS);
   const exported = root as Record<string, unknown>;
   for (const name of RUNTIME_EXPORTS) {

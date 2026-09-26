@@ -15,6 +15,11 @@
   process spawn. Only the module loader reading module sources is allowed, so
   assets must be read lazily, inside functions. The test needs `pnpm` and
   registry access (or a warm pnpm store).
+- `confidential-guests-*.test.ts` cover the confidential-guests module with
+  synthetic names only: each construct is rendered next to the same objects
+  written as plain manifests (`support/cdk8s-render.ts`), and the two YAML
+  outputs must be byte-identical, so a deployment written by hand can adopt
+  a construct without a diff.
 - `io-probe.test.ts` controls the probe behind that check
   (`support/io-probe.mjs`, a preload that records `node:fs`,
   `node:fs/promises` and `node:child_process` calls with their call stacks,
