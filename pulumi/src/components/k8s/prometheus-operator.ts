@@ -20,7 +20,7 @@ export interface PrometheusOperatorConfig {
   lokiAuthHtpasswd?: string | pulumi.Output<string>;
   /** Prometheus remote_write Basic Auth htpasswd content */
   prometheusRwAuthHtpasswd?: string | pulumi.Output<string>;
-  /** Prometheus remote_write Ingress hostname (e.g., "prometheus-rw.dev.nuconstruct.xyz") */
+  /** Prometheus remote_write Ingress hostname (e.g., "prometheus-rw.dev.example.com") */
   prometheusRwHost?: string;
   /** Deploy a local Loki + its Grafana datasource (default true). Set false to ship logs to a
    *  remote Loki (see promtailClient) and skip the local Loki stack. */
@@ -611,9 +611,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         },
         tolerations: [
-          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' },
-          { key: 'workload', value: 'tool-node', effect: 'NoSchedule' },
-          { key: 'tool-node/instance', operator: 'Exists', effect: 'NoSchedule' }
+          { key: 'node.kubernetes.io/system', operator: 'Exists', effect: 'NoSchedule' }
         ],
         resources: {
           requests: {

@@ -27,7 +27,7 @@ const provider = new k8s.Provider("test-provider", {
 // Test: Create a ConfigMap with ref+sops secret
 // This tests that SOPS diagnostic messages are suppressed
 // The message "sops: successfully retrieved key=..." should NOT appear in output
-const sopsSecretPath = path.resolve(process.cwd(), '../../.secrets/secrets-nuconstruct-dev.yaml');
+const sopsSecretPath = path.resolve(process.cwd(), '../../.secrets/secrets-example-dev.yaml');
 const refPlusSopsSecret = `ref+sops://${sopsSecretPath}#non-existent-key`;
 
 console.log("Testing ref+sops string resolution:");

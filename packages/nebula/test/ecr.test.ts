@@ -5,7 +5,7 @@ import { EcrRepository, type EcrRepositoryConfig } from "../src/modules/infra/aw
 import { AwsProvider } from "../src/modules/providers/aws";
 
 const config: EcrRepositoryConfig = {
-  name: "coco-images", repositoryName: "coco/tool-node", accountId: "123456789012", region: "eu-central-1",
+  name: "app-images", repositoryName: "team/app", accountId: "123456789012", region: "eu-central-1",
   grants: [{ roleName: "publisher", access: "push" }, { roleName: "puller", access: "pull" }],
 };
 test("repository retains immutable private images; pull and publication grants are isolated", () => {
@@ -18,7 +18,7 @@ test("repository retains immutable private images; pull and publication grants a
   assert.equal(repository.spec.forProvider.imageTagMutability, "IMMUTABLE");
   assert.equal(repository.spec.forProvider.forceDelete, false);
   assert.equal(repository.metadata.annotations["crossplane.io/external-name"], config.repositoryName);
-  assert.equal(repo.repositoryUrl, "123456789012.dkr.ecr.eu-central-1.amazonaws.com/coco/tool-node");
+  assert.equal(repo.repositoryUrl, "123456789012.dkr.ecr.eu-central-1.amazonaws.com/team/app");
   const policies = resources.filter(r => r.kind === "Policy").map(r => JSON.parse(r.spec.forProvider.policy));
   for (const policy of policies) {
     assert.deepEqual(policy.Statement[0], { Effect: "Allow", Action: ["ecr:GetAuthorizationToken"], Resource: "*" });

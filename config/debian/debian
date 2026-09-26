@@ -51,7 +51,7 @@ d-i passwd/root-login boolean false
 #d-i passwd/make-user boolean false
 # To create a normal user account.
 d-i passwd/user-fullname string OP
-d-i passwd/username string mateomoon
+d-i passwd/username string user
 # Normal user's password, either in clear text
 d-i passwd/user-password password tmppwd
 d-i passwd/user-password-again password tmppwd
