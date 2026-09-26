@@ -315,6 +315,9 @@ export {
 export type {
   ArgoIgnoreDifference,
   ConfidentialGuestComponent,
+  ConfidentialGuestDisks,
+  ConfidentialGuestKeyInjector,
+  ConfidentialGuestPullBroker,
   ConfidentialGuestRoleContext,
   ConfidentialGuestStackContext,
   ConfidentialGuestStackProps,

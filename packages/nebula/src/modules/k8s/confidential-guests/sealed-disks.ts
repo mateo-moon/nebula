@@ -79,7 +79,9 @@ export interface SealedDisksProps {
   readonly imagePullSecrets?: readonly string[];
   /**
    * The key injector for the guests of these disks, rendered between the
-   * provisioners and the claims, in this namespace on this node.
+   * provisioners and the claims, in this namespace on this node. A
+   * ConfidentialGuestStack that builds these disks takes the injector here;
+   * its `keyInjector` slot is only for a standalone injector.
    */
   readonly injector?: Omit<NriKeyInjectorProps, "namespace" | "nodeName">;
   /** Argo CD sync wave of every object (and the injector's default). Default -1. */

@@ -30,7 +30,7 @@ import {
   type GuestStorageLayout,
   type WireProfile,
 } from "../src/modules/k8s/confidential-guests";
-import { EXAMPLE_GUEST_DEPLOYMENT, confidentialGuestStackExample } from "../example/confidential-guests-stack";
+import { EXAMPLE_GUEST_DEPLOYMENT, confidentialGuestsExample } from "../example/confidential-guests";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "confidential-guests-guest-env");
 // A fixture changes only together with this pin, in a reviewed change.
@@ -228,7 +228,7 @@ test("each guest Pod carries its own workload reference; everything else is the 
 
 test("the example's guests carry the neutral deployment's env, each Pod its own workload reference", () => {
   const app = Testing.app();
-  confidentialGuestStackExample(new Chart(app, "example"));
+  confidentialGuestsExample(new Chart(app, "example"));
   const docs = app.charts.flatMap(chart => chart.toJson());
   const template = (role: string) => {
     const spec = JSON.parse(docs.find(d => d.kind === "ConfigMap" && d.metadata.name === `${role}-lifecycle-spec`).data["spec.json"]);
