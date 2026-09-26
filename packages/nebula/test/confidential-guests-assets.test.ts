@@ -14,6 +14,9 @@ import { importTimeViolations, probeImport, type ImportScope } from "./support/i
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const moduleDir = join(pkgDir, "src", "modules", "k8s", "confidential-guests");
+// The module may load other package sources (such as core/argocd.ts) and the
+// installed dependencies; loading them is module loading, not file I/O.
+const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules"), join(pkgDir, "src")] };
 
 // Import-time I/O as defined in support/import-io.ts (controlled by
 // io-probe.test.ts): reads, listings, stats and writes by module code, of
@@ -28,7 +31,6 @@ test("the module does no file I/O when imported, and reads an asset only when as
     call: "readConfidentialGuestAsset",
     args: ["wire-profile.schema.json"],
   });
-  const scope: ImportScope = { root: moduleDir, dependencyRoots: [join(pkgDir, "node_modules")] };
   const real = (p: string) => {
     try {
       return realpathSync(p);
@@ -42,10 +44,27 @@ test("the module does no file I/O when imported, and reads an asset only when as
   assert.deepEqual(shown(importTimeViolations(result.after, scope)), ["read assets/wire-profile.schema.json"], "the probe must see the lazy read");
 });
 
+test("the default provisioning template is read only when a script is rendered", t => {
+  const work = realpathSync(mkdtempSync(join(tmpdir(), "cg-assets-")));
+  t.after(() => rmSync(work, { recursive: true, force: true }));
+  const result = probeImport({
+    cwd: pkgDir,
+    entryDir: work,
+    specifier: join(moduleDir, "index.ts"),
+    call: "provisionScript",
+    args: [{ stateDir: "/var/lib/guests", file: "data-v1.img", loop: 200, sizeBytes: 1073741824, sizeLabel: "1Gi" }],
+  });
+  const shown = (events: { kind: string; path: string }[]) => events.map(e => `${e.kind} ${relative(realpathSync(moduleDir), realpathSync(e.path))}`);
+  assert.deepEqual(shown(importTimeViolations(result.events, scope)), [], "importing the module did file I/O");
+  assert.deepEqual(shown(importTimeViolations(result.after, scope)), ["read assets/provision.sh"], "the probe must see the lazy read");
+});
+
 test("asset names are a closed set and resolve inside the module", () => {
-  const url = confidentialGuestAssetUrl("wire-profile.schema.json");
-  assert.equal(url.protocol, "file:");
-  assert.ok(fileURLToPath(url).startsWith(join(moduleDir, "assets") + "/"));
+  for (const name of ["wire-profile.schema.json", "provision.sh"] as const) {
+    const url = confidentialGuestAssetUrl(name);
+    assert.equal(url.protocol, "file:");
+    assert.equal(fileURLToPath(url), join(moduleDir, "assets", name));
+  }
   for (const name of ["../index.ts", "../../../../package.json", "assets/wire-profile.schema.json", "missing.json", ""]) {
     assert.throws(() => confidentialGuestAssetUrl(name as never), TypeError, name);
   }

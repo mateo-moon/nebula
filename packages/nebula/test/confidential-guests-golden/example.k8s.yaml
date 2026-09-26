@@ -1,0 +1,832 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: ingress-boundary
+  namespace: confidential-guests
+spec:
+  ingress: []
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: pull-broker-from-guests
+  namespace: confidential-guests
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: confidential-guest
+      ports:
+        - port: 8080
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app: confidential-guests-pull-broker
+  policyTypes:
+    - Ingress
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: pull-broker-configuration
+  namespace: confidential-guests
+data:
+  config.toml: |
+    [http_server]
+    insecure_http = true
+    sockets = ["0.0.0.0:8080"]
+
+    [attestation_token]
+    insecure_header_jwk = false
+    trusted_certs_paths = ["/state/issuer/cert.pem"]
+
+    [attestation_service]
+    type = "coco_as_builtin"
+
+    [attestation_service.attestation_token_broker]
+    duration_min = 5
+
+    [attestation_service.attestation_token_broker.signer]
+    key_path = "/state/issuer/key.pem"
+    cert_path = "/state/issuer/cert.pem"
+
+    [attestation_service.rvps_config]
+    type = "BuiltIn"
+
+    [attestation_service.verifier_config.snp_verifier]
+    vcek_sources = [{ type = "KDS" }]
+
+    [admin]
+    authorization_mode = "DenyAll"
+
+    [storage_backend]
+    storage_type = "LocalFs"
+    [storage_backend.backends.local_fs]
+    dir_path = "/state"
+
+    [[plugins]]
+    name = "resource"
+    storage_backend_type = "kvstorage"
+  resource-policy.rego: |
+    package policy
+    default allow := false
+    allow if {
+        data.plugin == "resource"
+        data["resource-path"] == ["default", "registry", "pull"]
+        ev := input.submods.cpu0["ear.veraison.annotated-evidence"]
+        ev.init_data in ["d11f43ae520d1063a82d0b89ce2a7618e37b544a571c1b978cf1c55d1e23e6d8","dad0480c532d12882e6b3b313323223992e27bf11dacb623629f921eea743867"]
+        ev.snp.policy_debug_allowed == false
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  name: pull-broker
+  namespace: confidential-guests
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: confidential-guests-pull-broker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: pull-broker
+  namespace: confidential-guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: confidential-guests-pull-broker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        guests.example.com/config-sha256: 369da533e7a3eb2d2c3bd969706b3ca872cd52d622defbbe3eaae113e7da22ef
+      labels:
+        app: confidential-guests-pull-broker
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - command:
+            - /usr/local/bin/kbs
+            - --config-file
+            - /configuration/config.toml
+          env:
+            - name: RUST_LOG
+              value: info
+          image: registry.example.com/guests/kbs@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          name: broker
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            periodSeconds: 2
+            tcpSocket:
+              port: http
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /state
+              name: state
+            - mountPath: /configuration
+              name: configuration
+              readOnly: true
+            - mountPath: /state/repository
+              name: registry-resource
+              readOnly: true
+      imagePullSecrets:
+        - name: registry-pull
+      initContainers:
+        - command:
+            - python3
+            - -m
+            - confidential_guests.registry_init
+          image: registry.example.com/guests/tools@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          name: initialize-registry
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /state
+              name: state
+            - mountPath: /registry
+              name: registry
+              readOnly: true
+            - mountPath: /configuration
+              name: configuration
+              readOnly: true
+      nodeName: guest-host-1
+      volumes:
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+          name: state
+        - name: registry
+          secret:
+            defaultMode: 256
+            secretName: registry-pull
+        - configMap:
+            name: pull-broker-configuration
+          name: configuration
+        - name: registry-resource
+          secret:
+            defaultMode: 256
+            items:
+              - key: .dockerconfigjson
+                path: default\x2Fregistry\x2Fpull
+            secretName: registry-pull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: data-provisioner
+  namespace: confidential-guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: confidential-guests-data-provisioner
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: confidential-guests-data-provisioner
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - |
+              set -eu
+              dir=/var/lib/confidential-guests
+              file=$dir/data-v3.img
+              device=/dev/loop203
+              size=68719476736
+              umask 077
+              exec 9>"$dir/provision.lock"
+              flock -x 9
+              [ ! -L "$file" ] || { echo 'refusing backing-file symlink'; exit 1; }
+              if [ ! -e "$file" ]; then
+                # Noclobber fails if the path appeared after the existence check.
+                (set -C; : > "$file")
+                fallocate -l "$size" "$file"
+              fi
+              [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
+                echo 'refusing changed backing file'; exit 1;
+              }
+              if [ ! -e "$device" ]; then mknod "$device" b 7 203; fi
+              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:cb' ] || {
+                echo 'refusing wrong loop device'; exit 1;
+              }
+              # -j compares the actual backing file identity (device/inode), rather than
+              # d_path output, which changes when the previous helper mount namespace exits.
+              associated=$(losetup -j "$file" -n -O NAME)
+              current=$(losetup -n -O BACK-FILE "$device" 2>/dev/null || true)
+              if [ -n "$current" ]; then
+                [ "$associated" = "$device" ] || { echo 'loop slot occupied; refusing'; exit 1; }
+              else
+                [ -z "$associated" ] || { echo 'backing file attached elsewhere; refusing'; exit 1; }
+                losetup "$device" "$file"
+              fi
+              [ "$(losetup -j "$file" -n -O NAME)" = "$device" ] || exit 1
+              # Pin the owned block-node metadata passed by CRI into the measured guest.
+              chown 0:6 "$device"
+              chmod 0660 "$device"
+              flock -u 9
+              echo 'dedicated retained 64Gi block volume ready'
+              while :; do sleep 60; done
+          command:
+            - /bin/sh
+            - -ec
+          image: registry.example.com/guests/storage@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          name: provisioner
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - test "$(losetup -j /var/lib/confidential-guests/data-v3.img -n -O NAME)" = /dev/loop203
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /dev
+              name: dev
+            - mountPath: /var/lib/confidential-guests
+              name: backing
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull
+      nodeName: guest-host-1
+      volumes:
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev
+        - hostPath:
+            path: /var/lib/confidential-guests
+            type: DirectoryOrCreate
+          name: backing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: workspace-provisioner
+  namespace: confidential-guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: confidential-guests-workspace-provisioner
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: confidential-guests-workspace-provisioner
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - |
+              set -eu
+              dir=/var/lib/confidential-guests
+              file=$dir/workspace-v1.img
+              device=/dev/loop210
+              size=1073741824
+              umask 077
+              exec 9>"$dir/provision.lock"
+              flock -x 9
+              [ ! -L "$file" ] || { echo 'refusing backing-file symlink'; exit 1; }
+              if [ ! -e "$file" ]; then
+                # Noclobber fails if the path appeared after the existence check.
+                (set -C; : > "$file")
+                fallocate -l "$size" "$file"
+              fi
+              [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
+                echo 'refusing changed backing file'; exit 1;
+              }
+              if [ ! -e "$device" ]; then mknod "$device" b 7 210; fi
+              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:d2' ] || {
+                echo 'refusing wrong loop device'; exit 1;
+              }
+              # -j compares the actual backing file identity (device/inode), rather than
+              # d_path output, which changes when the previous helper mount namespace exits.
+              associated=$(losetup -j "$file" -n -O NAME)
+              current=$(losetup -n -O BACK-FILE "$device" 2>/dev/null || true)
+              if [ -n "$current" ]; then
+                [ "$associated" = "$device" ] || { echo 'loop slot occupied; refusing'; exit 1; }
+              else
+                [ -z "$associated" ] || { echo 'backing file attached elsewhere; refusing'; exit 1; }
+                losetup "$device" "$file"
+              fi
+              [ "$(losetup -j "$file" -n -O NAME)" = "$device" ] || exit 1
+              # Pin the owned block-node metadata passed by CRI into the measured guest.
+              chown 0:6 "$device"
+              chmod 0660 "$device"
+              flock -u 9
+              echo 'dedicated retained 1Gi block volume ready'
+              while :; do sleep 60; done
+          command:
+            - /bin/sh
+            - -ec
+          image: registry.example.com/guests/storage@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          name: provisioner
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - test "$(losetup -j /var/lib/confidential-guests/workspace-v1.img -n -O NAME)" = /dev/loop210
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /dev
+              name: dev
+            - mountPath: /var/lib/confidential-guests
+              name: backing
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull
+      nodeName: guest-host-1
+      volumes:
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev
+        - hostPath:
+            path: /var/lib/confidential-guests
+            type: DirectoryOrCreate
+          name: backing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: stage-provisioner
+  namespace: confidential-guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: confidential-guests-stage-provisioner
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: confidential-guests-stage-provisioner
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - |
+              set -eu
+              dir=/var/lib/confidential-guests
+              file=$dir/stage-v1.img
+              device=/dev/loop220
+              size=16777216
+              umask 077
+              exec 9>"$dir/provision.lock"
+              flock -x 9
+              [ ! -L "$file" ] || { echo 'refusing backing-file symlink'; exit 1; }
+              if [ ! -e "$file" ]; then
+                # Noclobber fails if the path appeared after the existence check.
+                (set -C; printf 'EXAMPLE-STAGE-PLACEHOLDER-V1\n' > "$file")
+                fallocate -l "$size" "$file"
+              fi
+              [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
+                echo 'refusing changed backing file'; exit 1;
+              }
+              [ "$(head -c 512 "$file" | sha256sum | cut -d' ' -f1)" = '9a072816fa784257f2fe00d7586be8c61e8933167b6223cc8051ce93736cc548' ] || {
+                echo 'refusing changed stage placeholder'; exit 1;
+              }
+              if [ ! -e "$device" ]; then mknod "$device" b 7 220; fi
+              [ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:dc' ] || {
+                echo 'refusing wrong loop device'; exit 1;
+              }
+              # -j compares the actual backing file identity (device/inode), rather than
+              # d_path output, which changes when the previous helper mount namespace exits.
+              associated=$(losetup -j "$file" -n -O NAME)
+              current=$(losetup -n -O BACK-FILE "$device" 2>/dev/null || true)
+              if [ -n "$current" ]; then
+                [ "$associated" = "$device" ] || { echo 'loop slot occupied; refusing'; exit 1; }
+              else
+                [ -z "$associated" ] || { echo 'backing file attached elsewhere; refusing'; exit 1; }
+                losetup "$device" "$file"
+              fi
+              [ "$(losetup -j "$file" -n -O NAME)" = "$device" ] || exit 1
+              # Pin the owned block-node metadata passed by CRI into the measured guest.
+              chown 0:6 "$device"
+              chmod 0660 "$device"
+              flock -u 9
+              echo 'dedicated retained 16Mi block volume ready'
+              while :; do sleep 60; done
+          command:
+            - /bin/sh
+            - -ec
+          image: registry.example.com/guests/storage@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          name: provisioner
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - test "$(losetup -j /var/lib/confidential-guests/stage-v1.img -n -O NAME)" = /dev/loop220
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /dev
+              name: dev
+            - mountPath: /var/lib/confidential-guests
+              name: backing
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull
+      nodeName: guest-host-1
+      volumes:
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev
+        - hostPath:
+            path: /var/lib/confidential-guests
+            type: DirectoryOrCreate
+          name: backing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: key-injector
+  namespace: confidential-guests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: confidential-guests-key-injector
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: confidential-guests-key-injector
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - --idx
+            - "90"
+            - --socket-path
+            - /var/run/nri/nri.sock
+            - --namespace
+            - confidential-guests
+            - --runtime-handler
+            - kata-qemu-snp
+            - --device-major
+            - "10"
+            - --device-minor
+            - "258"
+            - --binding
+            - node=storage
+            - --binding
+            - node=attest
+            - --binding
+            - maintenance=storage
+            - --binding
+            - maintenance=attest
+          image: registry.example.com/guests/key-injector@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+          name: injector
+          ports:
+            - containerPort: 8080
+              name: health
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 2
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /var/run/nri
+              name: nri
+              readOnly: true
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull
+      nodeName: guest-host-1
+      volumes:
+        - hostPath:
+            path: /var/run/nri
+            type: Directory
+          name: nri
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-data-v3
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 64Gi
+  claimRef:
+    name: node-data-v3
+    namespace: confidential-guests
+  local:
+    path: /dev/loop203
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - guest-host-1
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  volumeMode: Block
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-data-v3
+  namespace: confidential-guests
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+  storageClassName: ""
+  volumeMode: Block
+  volumeName: node-data-v3
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: maintenance-workspace-v1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 1Gi
+  claimRef:
+    name: maintenance-workspace-v1
+    namespace: confidential-guests
+  local:
+    path: /dev/loop210
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - guest-host-1
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  volumeMode: Block
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: maintenance-workspace-v1
+  namespace: confidential-guests
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: ""
+  volumeMode: Block
+  volumeName: maintenance-workspace-v1
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-stage-v1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 16Mi
+  claimRef:
+    name: node-stage-v1
+    namespace: confidential-guests
+  local:
+    path: /dev/loop220
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - guest-host-1
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  volumeMode: Block
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-stage-v1
+  namespace: confidential-guests
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 16Mi
+  storageClassName: ""
+  volumeMode: Block
+  volumeName: node-stage-v1
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-data-v2
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 64Gi
+  claimRef:
+    name: node-data-v2
+    namespace: confidential-guests
+  local:
+    path: /dev/loop202
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - guest-host-1
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  volumeMode: Block
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-data-v2
+  namespace: confidential-guests
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+  storageClassName: ""
+  volumeMode: Block
+  volumeName: node-data-v2
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-data-v1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 64Gi
+  claimRef:
+    name: node-data-v1
+    namespace: confidential-guests
+  local:
+    path: /dev/loop201
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - guest-host-1
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  volumeMode: Block
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  name: node-data-v1
+  namespace: confidential-guests
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+  storageClassName: ""
+  volumeMode: Block
+  volumeName: node-data-v1

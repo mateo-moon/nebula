@@ -3,7 +3,7 @@
  * confidential guests (for example Kata Containers on AMD SEV-SNP) and for
  * the services that attest, release keys to and verify them.
  *
- * This first layer holds the shared foundations only:
+ * Foundations:
  * - {@link DigestImage}: digest-pinned image references, validated and never
  *   rewritten, because measured policies bind the exact string;
  * - {@link canonicalJson} / {@link sha256Hex}: the canonical form hashed into
@@ -13,6 +13,18 @@
  *   the frozen {@link NEUTRAL_WIRE} names and {@link wireProfileEnv} to pass a
  *   profile into a guest;
  * - lazily read assets shipped with the module.
+ *
+ * Host-side building blocks. Every name, address, image, host path and label
+ * domain is a prop without a default; each construct renders plain
+ * Kubernetes objects with explicit names, in a documented order:
+ * - {@link AttestedPullBroker}: a Key Broker Service that releases private
+ *   registry credentials only to guests whose attested init-data hash is
+ *   admitted (one value or a list);
+ * - {@link SealedDisks}: loop-file block disks from a {@link DiskTable} of
+ *   live, retained and retired generations ({@link validateDiskTable},
+ *   {@link provisionScript}), with their provisioners and claims;
+ * - {@link NriKeyInjector}: the NRI plugin that hands the key device to bound
+ *   guest containers of its own namespace only.
  *
  * @example
  * ```typescript
@@ -29,3 +41,13 @@ export { NEUTRAL_WIRE, WIRE_PROFILE_ENV, wireProfileEnv } from "./wire";
 export type { WireDomains, WirePayloadTypes, WireProfile, WireValue } from "./wire";
 export { confidentialGuestAssetUrl, readConfidentialGuestAsset } from "./assets";
 export type { ConfidentialGuestAsset } from "./assets";
+export { AttestedPullBroker, pullBrokerPolicy } from "./pull-broker";
+export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath } from "./pull-broker";
+export { validateDiskTable } from "./disk-table";
+export type { DiskEntry, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
+export { defaultProvisionTemplate, provisionScript } from "./provision";
+export type { ProvisionReference, ProvisionScriptProps, ProvisionTemplate } from "./provision";
+export { SealedDisks, sealedDisksPlan } from "./sealed-disks";
+export type { SealedDisk, SealedDiskRole, SealedDisksPlan, SealedDisksProps } from "./sealed-disks";
+export { NriKeyInjector } from "./key-injector";
+export type { NriKeyBinding, NriKeyInjectorProps } from "./key-injector";
