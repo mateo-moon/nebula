@@ -2,7 +2,8 @@
 // guest which deployment it belongs to, read here by the same rules, in the
 // same order and with the same messages as the guest's own readers. nebula
 // reads back everything it renders (see wire.ts and deployment-env.ts).
-import { GuestEnvError, ensure, measuredJson, refuse, type MeasuredValue } from "./measured-json";
+import { GuestEnvError, ensure, measuredJson, measuredText, refuse, type MeasuredValue } from "./measured-json";
+import { isPlainObject } from "./validate";
 
 export { GuestEnvError } from "./measured-json";
 
@@ -92,6 +93,28 @@ export interface GuestWorkloadApi {
   readonly keyResolverDomain: string;
 }
 
+/**
+ * What a deployment older than this contract still measures, named by the
+ * caller: nebula assumes no deployment's legacy names.
+ */
+export interface GuestEnvOptions {
+  /**
+   * The variable in which the deployment measured each Pod's workload
+   * reference before `workloadRef` existed. When the env sets it, it is read
+   * as the guest reads it: UTF-8 and without `$` (before the
+   * explicit-deployment rule), and equal to the profile's `workloadRef`
+   * (after it). It never stands in for `workloadRef`.
+   */
+  readonly legacyWorkloadRefEnv?: string;
+  /**
+   * Control-bridge schemas that predate the derivation rule, by the
+   * authorization domain that names them. Every other domain derives its
+   * schema by the rule. They are derived, never rendered, and take part in
+   * the check that no two authorization domains derive one schema.
+   */
+  readonly controlBridgeSchemas?: Readonly<Record<string, string>>;
+}
+
 /** Who reads the env: `every` guest component, or besides that the `adapter` (its MODE) or the control `bridge` (its one operator role). */
 export type GuestEnvReader = "every" | "adapter" | "bridge";
 
@@ -104,7 +127,7 @@ export interface GuestDeployment {
   readonly workloadRef: string;
   /** Every accepted session schema: each session domain in lower case, `_` as `.`. */
   readonly sessionSchemas: readonly string[];
-  /** Every accepted control-bridge schema, derived from the authorization domains by the same rule. */
+  /** Every accepted control-bridge schema, derived from the authorization domains by the same rule, or named in {@link GuestEnvOptions}. */
   readonly controlBridgeSchemas: readonly string[];
   /** Every accepted payload schema, by statement type. */
   readonly payloadSchemas: Readonly<Record<PayloadKey, readonly string[]>>;
@@ -148,7 +171,23 @@ function disjoint(group: string, identifiers: readonly (readonly [string, readon
 /** The session schema a session domain names: lower case, `_` as `.`. */
 export const sessionSchemaOf = (domain: string) => domain.toLowerCase().replaceAll("_", ".");
 
-function readWire(value: MeasuredValue): GuestWireDocument {
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SCHEMA = /^[a-z0-9][a-z0-9._-]*$/;
+
+/** The control-bridge schema of each authorization domain: the caller's named ones, else the derivation rule. */
+function controlBridgeSchemaOf(where: string, options: GuestEnvOptions | undefined): (domain: string) => string {
+  const named = options?.controlBridgeSchemas;
+  if (named === undefined) return sessionSchemaOf;
+  if (!isPlainObject(named)) throw new TypeError(`${where}: controlBridgeSchemas must be an object of authorization domain to schema`);
+  for (const [domain, schema] of Object.entries(named)) {
+    if (!WIRE_STRING.test(domain)) throw new TypeError(`${where}: controlBridgeSchemas key ${quoted(domain)} must be printable ASCII without spaces`);
+    if (typeof schema !== "string" || !SCHEMA.test(schema)) throw new TypeError(`${where}: controlBridgeSchemas[${quoted(domain)}] must be a lower-case schema`);
+  }
+  const schemas = new Map(Object.entries(named as Record<string, string>));
+  return domain => schemas.get(domain) ?? sessionSchemaOf(domain);
+}
+
+function readWire(value: MeasuredValue, controlBridgeSchema: (domain: string) => string): GuestWireDocument {
   const root = object(value, "profile", ["domains", "payloadTypes"], ["releaseSet", "workloadRef"]);
   const payloads = object(root.payloadTypes, "payloadTypes", PAYLOAD_KEYS);
   const domains = object(root.domains, "domains", DOMAIN_KEYS);
@@ -167,8 +206,8 @@ function readWire(value: MeasuredValue): GuestWireDocument {
   const controls = domainValues.controlAuthorization;
   controls.forEach((first, index) => {
     for (const second of controls.slice(index + 1)) {
-      const schema = sessionSchemaOf(first);
-      ensure(schema !== sessionSchemaOf(second), `domains.controlAuthorization: ${quoted(first)} and ${quoted(second)} derive one schema ${quoted(schema)}`);
+      const schema = controlBridgeSchema(first);
+      ensure(schema !== controlBridgeSchema(second), `domains.controlAuthorization: ${quoted(first)} and ${quoted(second)} derive one schema ${quoted(schema)}`);
     }
   });
   const document: { -readonly [K in keyof GuestWireDocument]: GuestWireDocument[K] } = { payloadTypes, domains: domainValues };
@@ -308,8 +347,9 @@ function readApi(value: MeasuredValue): GuestWorkloadApi {
 }
 
 /** Read one measured variable, as the guest does; every error names the variable. */
-export function readWireProfileValue(value: string | Uint8Array): GuestWireDocument {
-  return named(WIRE_PROFILE_ENV, () => readWire(measuredJson(value, MAXIMUM[WIRE_PROFILE_ENV])));
+export function readWireProfileValue(value: string | Uint8Array, options?: GuestEnvOptions, where = "readWireProfileValue"): GuestWireDocument {
+  const controlBridgeSchema = controlBridgeSchemaOf(where, options);
+  return named(WIRE_PROFILE_ENV, () => readWire(measuredJson(value, MAXIMUM[WIRE_PROFILE_ENV]), controlBridgeSchema));
 }
 export function readStorageLayoutValue(value: string | Uint8Array): GuestStorageLayout {
   return named(STORAGE_LAYOUT_ENV, () => readLayout(measuredJson(value, MAXIMUM[STORAGE_LAYOUT_ENV])));
@@ -332,27 +372,50 @@ export function explicitDeploymentError(missing: readonly string[]): GuestEnvErr
   return new GuestEnvError(EXPLICIT + missing.join(", "));
 }
 
+/** The caller's legacy workload reference variable, which is none of the contract's. */
+function legacyWorkloadRefEnvOf(where: string, options: GuestEnvOptions | undefined): string | undefined {
+  const name = options?.legacyWorkloadRefEnv;
+  if (name === undefined) return undefined;
+  if (typeof name !== "string" || !ENV_NAME.test(name) || [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, MODE_ENV, ...SUPERSEDED].includes(name)) {
+    throw new TypeError(`${where}: legacyWorkloadRefEnv must be an env variable name outside the guest env contract, got ${JSON.stringify(name)}`);
+  }
+  return name;
+}
+
 /**
  * Read a guest's env as its components do when they start, and return the
  * deployment they serve; throws {@link GuestEnvError} with the reader's
  * message. The order is the guest's: variables of the superseded contract;
  * GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT and GUEST_WORKLOAD_API, each by
- * its rules; then the explicit-deployment rule; then the `adapter`'s MODE or
- * the control `bridge`'s one operator role.
+ * its rules, then the legacy workload reference variable, when `options`
+ * names one; then the explicit-deployment rule; then the legacy reference's
+ * agreement with `workloadRef`; then the `adapter`'s MODE or the control
+ * `bridge`'s one operator role.
  *
  * nebula renders explicit deployments only, and holds no legacy identifiers:
  * it applies the explicit-deployment rule to every profile, so every piece
  * (the profile with its `releaseSet` and `workloadRef`, the layout and the
- * API) is required. An env with none of these variables is a guest that uses
- * its built-in defaults; nebula renders nothing for it and does not read it.
+ * API) is required, and names GUEST_WIRE_PROFILE itself when it is unset (a
+ * message of nebula's own: a guest would fall back to its built-in profile).
+ * A guest whose env renders none of these variables uses its built-in
+ * defaults; nebula renders nothing for it and does not read it. `options`
+ * names what an existing deployment still measures (see
+ * {@link GuestEnvOptions}).
+ * @throws TypeError when `options` is malformed.
  */
-export function readGuestEnv(env: Readonly<Record<string, string | Uint8Array | undefined>>, reader: GuestEnvReader = "every"): GuestDeployment {
+export function readGuestEnv(
+  env: Readonly<Record<string, string | Uint8Array | undefined>>, reader: GuestEnvReader = "every", options?: GuestEnvOptions,
+): GuestDeployment {
+  const where = "readGuestEnv";
+  const legacyRefEnv = legacyWorkloadRefEnvOf(where, options);
+  const controlBridgeSchema = controlBridgeSchemaOf(where, options);
   const present = (name: string) => env[name] !== undefined;
   const stale = SUPERSEDED.filter(present);
   ensure(!stale.length, `${stale.join(", ")}: not a guest env variable; ${WIRE_PROFILE_ENV} carries the schemas' domains, releaseSet and workloadRef`);
-  const wire = present(WIRE_PROFILE_ENV) ? readWireProfileValue(env[WIRE_PROFILE_ENV]!) : undefined;
+  const wire = present(WIRE_PROFILE_ENV) ? readWireProfileValue(env[WIRE_PROFILE_ENV]!, options, where) : undefined;
   const layout = present(STORAGE_LAYOUT_ENV) ? readStorageLayoutValue(env[STORAGE_LAYOUT_ENV]!) : undefined;
   const api = present(WORKLOAD_API_ENV) ? readWorkloadApiValue(env[WORKLOAD_API_ENV]!) : undefined;
+  const legacyRef = legacyRefEnv !== undefined && present(legacyRefEnv) ? named(legacyRefEnv, () => measuredText(env[legacyRefEnv]!)) : undefined;
   const missing = [
     ...(wire ? [] : [WIRE_PROFILE_ENV]),
     ...(wire && !wire.releaseSet ? [`${WIRE_PROFILE_ENV}.releaseSet`] : []),
@@ -361,6 +424,7 @@ export function readGuestEnv(env: Readonly<Record<string, string | Uint8Array | 
     ...(api ? [] : [WORKLOAD_API_ENV]),
   ];
   if (missing.length) throw explicitDeploymentError(missing);
+  ensure(legacyRef === undefined || legacyRef === wire!.workloadRef, `${legacyRefEnv} differs from ${WIRE_PROFILE_ENV}'s workloadRef`);
   const others = wire!.releaseSet!.roles.filter(role => role !== "node");
   if (reader === "adapter") {
     const mode = env[MODE_ENV];
@@ -370,7 +434,7 @@ export function readGuestEnv(env: Readonly<Record<string, string | Uint8Array | 
   return {
     wire: wire!, layout: layout!, api: api!, workloadRef: wire!.workloadRef!,
     sessionSchemas: wire!.domains.session.map(sessionSchemaOf),
-    controlBridgeSchemas: wire!.domains.controlAuthorization.map(sessionSchemaOf),
+    controlBridgeSchemas: wire!.domains.controlAuthorization.map(controlBridgeSchema),
     payloadSchemas: Object.fromEntries(PAYLOAD_KEYS.map(key => [key, wire!.payloadTypes[key].map(type => PAYLOAD_TYPE.exec(type)![1])])) as Record<PayloadKey, string[]>,
     ...(others.length === 1 ? { operatorRole: others[0] } : {}),
   };

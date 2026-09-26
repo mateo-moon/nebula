@@ -70,7 +70,8 @@ and `$(NAME)` in env values). A value is refused, never repaired.
   belongs to one identifier. Payload types are
   `application/vnd.<schema>+json` with a lower-case schema. The session and
   control-bridge schemas derive from the `session` and
-  `controlAuthorization` domains (lower case, `_` as `.`), so no two
+  `controlAuthorization` domains (lower case, `_` as `.`; a caller may name
+  a control-bridge schema that predates this rule, see below), so no two
   authorization domains may derive one schema. `releaseSet.scope` entries
   are `field=value` (the emitted one is what signers write); `roles` include
   `node`. `workloadRef` is one exact string: it ties the adapter to its own
@@ -84,16 +85,38 @@ and `$(NAME)` in env values). A value is refused, never repaired.
 - **Workload API.** Peers of one deployment share it; the adapter's `MODE`
   must equal its `mode` (`adapterModeEnv(api)`).
 
-`guestEnv({wire, storageLayout, workloadApi})` renders all three for every
-container that reads them, in the order a guest reads them. A guest takes
-built-in defaults only for a deployment that renders none of these variables
-and keeps its original identifiers; nebula renders no such default: a
-profile always names its `releaseSet` and `workloadRef`, and the layout and
-API are always rendered. An existing guest whose measured env has none of
-these variables is adopted by rendering none of them.
+`guestEnv({wire, storageLayout, workloadApi}, options?)` renders all three
+for every container that reads them, in the order a guest reads them.
+nebula renders no legacy default: a profile always names its `releaseSet`
+and `workloadRef`, and the layout and API are always rendered.
 
-`readGuestEnv(env, reader?)` reads an env as a guest's components do and
-returns the derived deployment (schemas, record formats, the operator role).
+A guest takes its built-in defaults when its env has none of these
+variables, or when its wire profile still emits the guest's original
+identifiers (a "dual" profile that may also accept renamed ones, with no
+`releaseSet` or `workloadRef`). nebula renders neither by design. An
+existing guest whose measured env has none of these variables is adopted by
+rendering none of them. Moving such a guest to an env nebula renders means
+an explicit profile, with its original values written out in full, and that
+is a new measurement.
+
+`readGuestEnv(env, reader?, options?)` reads an env as a guest's components
+read it when they start, and returns the derived deployment (schemas, record
+formats, the operator role). nebula holds no legacy identifiers, so it
+applies the explicit-deployment rule to every profile: it refuses a dual
+profile, and when `GUEST_WIRE_PROFILE` is unset it names that variable among
+the missing pieces (a message of nebula's own; a guest would take its
+built-in profile). `options` names what an existing deployment still
+measures, because nebula assumes none of its names:
+
+- `legacyWorkloadRefEnv`: the variable in which the deployment measured each
+  Pod's workload reference before `workloadRef` existed. When the env sets
+  it, it is read as the guest reads it (UTF-8, no `$`) and must equal
+  `workloadRef`. It never stands in for `workloadRef`.
+- `controlBridgeSchemas`: control-bridge schemas that predate the derivation
+  rule, by the authorization domain that names them. `wireProfileEnv` and
+  `guestEnv` take them too, so that the check that no two authorization
+  domains derive one schema sees them. They are derived, never rendered.
+
 The contract's neutral fixtures are vendored in
 `test/confidential-guests-guest-env/`; the tests render the neutral names
 and the example deployment byte for byte as those fixtures, and refuse every
