@@ -229,6 +229,7 @@ test("a control-bridge schema older than the derivation rule is named by the cal
   refusedAs(() => wireProfileEnv(plainPair),
     `${WIRE_PROFILE_ENV}: domains.controlAuthorization: "${LEGACY_AUTHORIZATION}" and "example.legacy.authorization.v1" derive one schema "example.legacy.authorization.v1"`, "plain pair");
   assert.deepEqual(readGuestEnv(envOfWire(wireProfileEnv(plainPair, schemas).value), "every", schemas).controlBridgeSchemas, [LEGACY_SCHEMA, "example.legacy.authorization.v1"]);
+  assert.deepEqual(guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: plainPair }, schemas)[0], wireProfileEnv(plainPair, schemas));
   for (const bad of [[] as unknown, { "": "a.v1" }, { "A B": "a.v1" }, { A_V1: "" }, { A_V1: "A.V1" }, { A_V1: 1 }]) {
     assert.throws(() => wireProfileEnv(wire, { controlBridgeSchemas: bad as any }), (error: unknown) =>
       error instanceof TypeError && !(error instanceof GuestEnvError) && /wireProfileEnv: controlBridgeSchemas/.test((error as Error).message), JSON.stringify(bad));
@@ -290,6 +291,67 @@ test("the renderers refuse what a guest would refuse, with the guest's message",
       return true;
     }, label);
   }
+});
+
+test("every limit of the contract is reached and not passed: the limit is accepted, one past it refused", () => {
+  const { wire, storageLayout } = EXAMPLE_GUEST_DEPLOYMENT;
+  const envWith = (name: string, value: string) => ({ ...deployment.env, [name]: value });
+  const refusedWith = (read: () => unknown, message: string, label: string) => refusedAs(read, message, label);
+  // Sizes: a value of exactly the maximum passes the size rule (and fails later for its shape); one byte more does not.
+  const shapes: [string, number, string][] = [
+    [WIRE_PROFILE_ENV, 16384, 'profile: missing ["domains", "payloadTypes"], unknown ["a"]'],
+    [STORAGE_LAYOUT_ENV, 8192, 'layout: missing ["chain", "kdf", "lifecycleKey", "secrets", "workspace"], unknown ["a"]'],
+    [WORKLOAD_API_ENV, 4096, 'api: missing ["keyResolverDomain", "mode", "routes", "signDomain"], unknown ["a"]'],
+  ];
+  for (const [name, maximum, shape] of shapes) {
+    const sized = (bytes: number) => `{"a":"${"x".repeat(bytes - 8)}"}`;
+    assert.equal(sized(maximum).length, maximum);
+    refusedWith(() => readGuestEnv(envWith(name, sized(maximum))), `${name}: ${shape}`, `${name} at ${maximum} bytes`);
+    refusedWith(() => readGuestEnv(envWith(name, sized(maximum + 1))), `${name}: longer than ${maximum} bytes`, `${name} past ${maximum} bytes`);
+  }
+  const base = wireProfileEnv(wire).value.length;
+  const padded = (bytes: number): WireProfile => ({ ...wire, domains: { ...wire.domains, base: { ...wire.domains.base, accept: ["X".repeat(bytes - base - 3)] } } });
+  assert.equal(wireProfileEnv(padded(16384)).value.length, 16384);
+  refusedWith(() => wireProfileEnv(padded(16385)), `${WIRE_PROFILE_ENV}: longer than 16384 bytes`, "a profile past 16 KiB");
+  // Release rules: roles and scope values up to 128 bytes, scope fields up to 32.
+  const rules = (roles: string[], scope: string) => ({ ...wire, releaseSet: { roles, scope: { emit: scope } } });
+  const role = (bytes: number) => `r${"0".repeat(bytes - 1)}`;
+  assert.deepEqual(readGuestEnv(envWith(WIRE_PROFILE_ENV, wireProfileEnv(rules(["node", role(128)], "deployment=example")).value)).operatorRole, role(128));
+  refusedWith(() => wireProfileEnv(rules(["node", role(129)], "deployment=example")), `${WIRE_PROFILE_ENV}: releaseSet.roles: "${role(129)}" is not a role name`, "a role past 128 bytes");
+  assert.doesNotThrow(() => wireProfileEnv(rules(["node", "bridge"], `deployment=${role(128)}`)));
+  refusedWith(() => wireProfileEnv(rules(["node", "bridge"], `deployment=${role(129)}`)), `${WIRE_PROFILE_ENV}: releaseSet.scope: "${role(129)}" is not a scope value`, "a scope value past 128 bytes");
+  const field = (bytes: number) => `f${"_".repeat(bytes - 1)}`;
+  assert.doesNotThrow(() => wireProfileEnv(rules(["node", "bridge"], `${field(32)}=example`)));
+  refusedWith(() => wireProfileEnv(rules(["node", "bridge"], `${field(33)}=example`)), `${WIRE_PROFILE_ENV}: releaseSet.scope: "${field(33)}" cannot be a scope field`, "a scope field past 32 bytes");
+  // Storage layout: sizes up to 2^53 bytes, mapper names up to 127 bytes, mounts up to 255 bytes.
+  const layout = (change: (value: any) => void): GuestStorageLayout => {
+    const value = structuredClone(storageLayout) as any;
+    change(value);
+    return value;
+  };
+  const mib = 1024 ** 2;
+  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.chain.bytes = 2 ** 53; })));
+  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.workspace.bytes = 17 * mib; })));
+  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.bytes = 2 ** 53 + mib; })),
+    `${STORAGE_LAYOUT_ENV}: chain.bytes must be whole MiB above the 16 MiB placeholder`, "a volume past 2^53 bytes");
+  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.bytes = 17 * mib + 1; })),
+    `${STORAGE_LAYOUT_ENV}: chain.bytes must be whole MiB above the 16 MiB placeholder`, "a volume of part of a MiB");
+  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.chain.map = "m".repeat(127); })));
+  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.map = "m".repeat(128); })), `${STORAGE_LAYOUT_ENV}: chain.map must be a device-mapper name`, "a mapper name past 127 bytes");
+  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.chain.mount = `/${"d".repeat(254)}`; })));
+  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.mount = `/${"d".repeat(255)}`; })),
+    `${STORAGE_LAYOUT_ENV}: chain.mount must be an absolute path without . or ..`, "a mount past 255 bytes");
+  // Mounts are separate directories: siblings that share a prefix are, nested or equal ones are not.
+  const mounts = (chain: string, workspace: string) => layout(v => { v.chain.mount = chain; v.workspace.mount = workspace; });
+  assert.doesNotThrow(() => storageLayoutEnv(mounts("/run/data", "/run/data2")));
+  assert.doesNotThrow(() => storageLayoutEnv(mounts("/run/data2", "/run/data")));
+  for (const [chain, workspace] of [["/run/data", "/run/data/workspace"], ["/run/data/chain", "/run/data"], ["/run/data", "/run/data"]]) {
+    refusedWith(() => storageLayoutEnv(mounts(chain, workspace)), `${STORAGE_LAYOUT_ENV}: chain and workspace mounts must be separate directories`, `${chain} and ${workspace}`);
+  }
+  // The adapter's MODE is only ever the mode of an API a guest accepts.
+  refusedWith(() => adapterModeEnv({ ...NEUTRAL_WORKLOAD_API, mode: "Attest" }), `${WORKLOAD_API_ENV}: mode must be a lower-case name`, "MODE of a refused API");
+  refusedWith(() => adapterModeEnv({ ...NEUTRAL_WORKLOAD_API, keyResolverDomain: NEUTRAL_WORKLOAD_API.signDomain }),
+    `${WORKLOAD_API_ENV}: signing and key-resolver domains must differ`, "MODE of an API with one domain twice");
 });
 
 test("each guest Pod carries its own workload reference; everything else is the deployment's", () => {
