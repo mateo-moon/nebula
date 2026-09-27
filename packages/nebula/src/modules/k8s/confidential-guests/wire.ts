@@ -1,5 +1,5 @@
 import { canonicalJson } from "./canonical";
-import { WIRE_PROFILE_ENV, explicitDeploymentError, readWireProfileValue, type GuestEnvOptions } from "./guest-env";
+import { WIRE_PROFILE_ENV, explicitDeploymentError, readWireProfileValue } from "./guest-env";
 
 export { WIRE_PROFILE_ENV } from "./guest-env";
 
@@ -28,9 +28,10 @@ export interface WirePayloadTypes {
  * prefixes; consumers append the NUL separators themselves (`\0`, and for
  * the handoff domain `\0source\0` / `\0target\0`). The session and
  * control-bridge schemas derive from the session and controlAuthorization
- * domains (lower case, `_` as `.`). The identity record's header and
- * fingerprint domain are the disk's, not the wire's: they are in the storage
- * layout ({@link GuestRecordFormat}).
+ * domains (lower case, `_` as `.`), unless the profile names a domain's
+ * control-bridge schema ({@link WireProfile.controlBridgeSchemas}). The
+ * identity record's header and fingerprint domain are the disk's, not the
+ * wire's: they are in the storage layout ({@link GuestRecordFormat}).
  */
 export interface WireDomains {
   readonly handoff: WireValue;
@@ -71,6 +72,14 @@ export interface WireReleaseSet {
  * legacy default, so `releaseSet` and `workloadRef` are required.
  */
 export interface WireProfile extends WireNames {
+  /**
+   * For some accepted authorization domains, the control-bridge schema a
+   * handshake bound to that domain names, instead of the one the domain
+   * derives: data, for bridges that speak a schema older than the derivation
+   * rule. Rendered as given; no two accepted authorization domains may name
+   * or derive one schema.
+   */
+  readonly controlBridgeSchemas?: Readonly<Record<string, string>>;
   readonly releaseSet: WireReleaseSet;
   /**
    * The workload this Pod's adapter serves, compared exactly (never an
@@ -150,24 +159,22 @@ function document(profile: WireProfile): Record<string, unknown> {
 /**
  * Render a {@link WireProfile} as the value of {@link WIRE_PROFILE_ENV}: one
  * line of canonical ASCII JSON in which every identifier is a list whose
- * first element is emitted and every element is accepted. The value is read
- * back by the guest's rules, so a value a guest would refuse fails here with
- * the guest's message ({@link GuestEnvError}): `$` (the kubelet rewrites it),
- * a byte that is not printable ASCII, more than 16 KiB, a payload type that
- * is not `application/vnd.<schema>+json` in lower case, a value used by two
- * identifiers of a group, two authorization domains of one derived schema, a
- * missing or unknown key. `options.controlBridgeSchemas` names the
- * control-bridge schemas that predate the derivation rule, so that check
- * sees them as the guest does; they are never rendered.
- * @throws TypeError when an identifier is not `{emit, accept?}`, or `options` is malformed.
+ * first element is emitted and every element is accepted, with the profile's
+ * `controlBridgeSchemas` as given. The value is read back by the guest's
+ * rules, so a value a guest would refuse fails here with the guest's message
+ * ({@link GuestEnvError}): `$` (the kubelet rewrites it), a byte that is not
+ * printable ASCII, more than 16 KiB, a payload type that is not
+ * `application/vnd.<schema>+json` in lower case, a value used by two
+ * identifiers of a group, a control-bridge schema for a domain the profile
+ * does not accept, two authorization domains of one schema, a missing or
+ * unknown key.
+ * @throws TypeError when an identifier is not `{emit, accept?}`.
  * @throws GuestEnvError when a guest would refuse the value, or it lacks
  *   `releaseSet` or `workloadRef`.
  */
-export function wireProfileEnv(
-  profile: WireProfile, options?: Pick<GuestEnvOptions, "controlBridgeSchemas">,
-): { name: typeof WIRE_PROFILE_ENV; value: string } {
+export function wireProfileEnv(profile: WireProfile): { name: typeof WIRE_PROFILE_ENV; value: string } {
   const value = canonicalJson(document(profile));
-  const read = readWireProfileValue(value, options, WHERE);
+  const read = readWireProfileValue(value);
   const missing = [...(read.releaseSet ? [] : ["releaseSet"]), ...(read.workloadRef === undefined ? ["workloadRef"] : [])];
   if (missing.length) throw explicitDeploymentError(missing.map(key => `${WIRE_PROFILE_ENV}.${key}`));
   return { name: WIRE_PROFILE_ENV, value };

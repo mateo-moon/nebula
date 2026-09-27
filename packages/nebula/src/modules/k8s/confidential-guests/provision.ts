@@ -48,7 +48,7 @@ export interface ProvisionScriptProps {
 
 // The reference disk of assets/provision.sh.
 const DEFAULT_REFERENCE: ProvisionReference = Object.freeze({
-  stateDir: "/var/lib/sealed-disks", file: "data-v1.img", loop: 123, sizeBytes: 1073741824, sizeLabel: "1Gi",
+  stateDir: "/var/lib/sealed-disks", file: "data-v1.img", loop: 99, sizeBytes: 1073741824, sizeLabel: "1Gi",
 });
 
 /** The shipped provisioning script and its reference disk (read from the module's assets when called). */

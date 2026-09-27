@@ -20,6 +20,7 @@ import {
   WIRE_PROFILE_ENV,
   WORKLOAD_API_ENV,
   adapterModeEnv,
+  canonicalJson,
   guestEnv,
   readGuestEnv,
   sealedStorageEnv,
@@ -34,7 +35,7 @@ import { EXAMPLE_GUEST_DEPLOYMENT, confidentialGuestsExample } from "../example/
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "confidential-guests-guest-env");
 // A fixture changes only together with this pin, in a reviewed change.
-const MANIFEST_SHA256 = "12aeb6b114bb14d7c8a8625a4a5a89800d8492d3f1575c86f6b539b76c502c27";
+const MANIFEST_SHA256 = "62ed468384e8c3eb82d81c98cc2dfdf844d6102b9fbb9cbd1b33e213db1c87b7";
 const VENDORED = ["deployment.neutral.json", "payload-types.json", "storage-layout.neutral.json", "wire-profile.neutral.json", "workload-api.neutral.json"];
 const sha256 = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
 const text = (name: string) => readFileSync(join(FIXTURES, name), "utf8");
@@ -88,9 +89,28 @@ test("the neutral names and the example deployment render byte for byte as the f
   assert.deepEqual(guestEnv(EXAMPLE_GUEST_DEPLOYMENT), [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV].map(name => ({ name, value: deployment.env[name] })));
   assert.deepEqual(Object.keys(deployment.env).sort(), [STORAGE_LAYOUT_ENV, WIRE_PROFILE_ENV, WORKLOAD_API_ENV]);
   assert.deepEqual(adapterModeEnv(workloadApi), { name: "MODE", value: deployment.adapterEnv.MODE });
-  assert.deepEqual(sealedStorageEnv(storageLayout, "chain"), [
+  assert.deepEqual(sealedStorageEnv(storageLayout, "data"), [
     { name: STORAGE_LAYOUT_ENV, value: deployment.env[STORAGE_LAYOUT_ENV] }, { name: "NODE_ID", value: "sealed-data" }, { name: "VOLUME_ID", value: "data-v1" }]);
-  assert.deepEqual(sealedStorageEnv(storageLayout, "workspace").slice(1), [{ name: "NODE_ID", value: "sealed-workspace" }, { name: "VOLUME_ID", value: "workspace-v1" }]);
+  assert.deepEqual(sealedStorageEnv(storageLayout, "scratch").slice(1), [{ name: "NODE_ID", value: "sealed-workspace" }, { name: "VOLUME_ID", value: "workspace-v1" }]);
+});
+
+test("the layout's volumes are named by configuration, and storage serves one of them by its name", () => {
+  const { data, scratch } = EXAMPLE_GUEST_DEPLOYMENT.storageLayout.volumes;
+  // Any names: the layout names its volumes, and nothing in nebula knows one by a compiled name.
+  const renamed: GuestStorageLayout = { ...EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volumes: { alpha: data, "b-2": scratch }, secrets: { ...EXAMPLE_GUEST_DEPLOYMENT.storageLayout.secrets, volume: "alpha" } };
+  assert.deepEqual(Object.keys(readGuestEnv({ ...deployment.env, [STORAGE_LAYOUT_ENV]: storageLayoutEnv(renamed).value }).layout.volumes), ["alpha", "b-2"]);
+  assert.deepEqual(sealedStorageEnv(renamed, "b-2").slice(1), [{ name: "NODE_ID", value: "sealed-workspace" }, { name: "VOLUME_ID", value: "workspace-v1" }]);
+  // One volume is a layout too: it holds the record and its exports.
+  const single: GuestStorageLayout = { ...EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volumes: { data } };
+  assert.equal(readGuestEnv({ ...deployment.env, [STORAGE_LAYOUT_ENV]: storageLayoutEnv(single).value }).layout.secrets.volume, "data");
+  for (const name of ["workspace", "", "DATA", undefined, 1]) {
+    assert.throws(() => sealedStorageEnv(EXAMPLE_GUEST_DEPLOYMENT.storageLayout, name as any), (error: unknown) =>
+      error instanceof TypeError && !(error instanceof GuestEnvError)
+        && (error as Error).message === `sealedStorageEnv: volumeName must name one of the layout's volumes (data, scratch), got ${JSON.stringify(name)}`, String(name));
+  }
+  // The layout is read before the name, so a layout a guest refuses fails with the guest's message.
+  refusedAs(() => sealedStorageEnv({ ...EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volumes: { Data: data } }, "Data"),
+    `${STORAGE_LAYOUT_ENV}: volumes: "Data" is not a volume name`, "a volume name the contract refuses");
 });
 
 test("nebula reads the neutral deployment as the guest's readers do", () => {
@@ -113,7 +133,7 @@ test("nebula reads the neutral deployment as the guest's readers do", () => {
 
 test("every refusal vector is refused with the reader's message, in the reader's order", () => {
   const vectors: Vector[] = deployment.refusals;
-  assert.ok(vectors.length >= 150, `${vectors.length} vectors`);
+  assert.ok(vectors.length >= 200, `${vectors.length} vectors`);
   const readers = new Set(vectors.map(v => v.reader));
   assert.deepEqual([...readers].sort(), ["adapter", "bridge", "every"]);
   for (const vector of vectors) {
@@ -205,34 +225,47 @@ test("a legacy workload reference variable is read as the guest reads it, and mu
   }
 });
 
-test("a control-bridge schema older than the derivation rule is named by the caller, and then read as the guest reads it", () => {
+test("a control-bridge schema the rule does not derive is data in the wire profile, rendered and read as the guest reads it", () => {
   const LEGACY_AUTHORIZATION = "EXAMPLE_LEGACY_AUTHORIZATION_V1", LEGACY_SCHEMA = "example.legacy.bridge.v1";
-  const schemas = { controlBridgeSchemas: { [LEGACY_AUTHORIZATION]: LEGACY_SCHEMA } } as const;
+  const named = { [LEGACY_AUTHORIZATION]: LEGACY_SCHEMA };
   const wire = EXAMPLE_GUEST_DEPLOYMENT.wire;
-  const withControl = (controlAuthorization: { emit: string; accept?: string[] }): WireProfile => ({ ...wire, domains: { ...wire.domains, controlAuthorization } });
+  const withControl = (controlAuthorization: { emit: string; accept?: string[] }, controlBridgeSchemas?: Record<string, string>): WireProfile =>
+    ({ ...wire, domains: { ...wire.domains, controlAuthorization }, ...(controlBridgeSchemas ? { controlBridgeSchemas } : {}) });
   const envOfWire = (value: string) => ({ ...deployment.env, [WIRE_PROFILE_ENV]: value });
-  const cutOver = withControl({ emit: "CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1", accept: [LEGACY_AUTHORIZATION] });
-  const rendered = wireProfileEnv(cutOver, schemas).value;
-  assert.equal(rendered, wireProfileEnv(cutOver).value, "the schemas are derived, never rendered");
-  assert.deepEqual(readGuestEnv(envOfWire(rendered)).controlBridgeSchemas, ["confidential.guests.control.authorization.v1", "example.legacy.authorization.v1"]);
-  assert.deepEqual(readGuestEnv(envOfWire(rendered), "every", schemas).controlBridgeSchemas, ["confidential.guests.control.authorization.v1", LEGACY_SCHEMA]);
-  assert.deepEqual(guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: cutOver }, schemas)[0], { name: WIRE_PROFILE_ENV, value: rendered });
-  // A domain deriving the older schema clashes with the older domain, which the plain rule cannot see.
-  const clash = withControl({ emit: LEGACY_AUTHORIZATION, accept: ["EXAMPLE_LEGACY_BRIDGE_V1"] });
+  const cutOver = { emit: "CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1", accept: [LEGACY_AUTHORIZATION] };
+  const rendered = wireProfileEnv(withControl(cutOver, named)).value;
+  assert.deepEqual(JSON.parse(rendered).controlBridgeSchemas, named, "the map is rendered as given");
+  assert.equal(JSON.parse(wireProfileEnv(withControl(cutOver)).value).controlBridgeSchemas, undefined, "and only when the profile names one");
+  const read = readGuestEnv(envOfWire(rendered));
+  assert.deepEqual(read.wire.controlBridgeSchemas, named);
+  assert.deepEqual(read.controlBridgeSchemas, ["confidential.guests.control.authorization.v1", LEGACY_SCHEMA]);
+  assert.deepEqual(readGuestEnv(envOfWire(wireProfileEnv(withControl(cutOver)).value)).controlBridgeSchemas,
+    ["confidential.guests.control.authorization.v1", "example.legacy.authorization.v1"]);
+  assert.deepEqual(guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: withControl(cutOver, named) })[0], { name: WIRE_PROFILE_ENV, value: rendered });
+  // A domain deriving the named schema clashes with the named domain, which the plain rule cannot see.
+  const clash = { emit: LEGACY_AUTHORIZATION, accept: ["EXAMPLE_LEGACY_BRIDGE_V1"] };
+  assert.doesNotThrow(() => wireProfileEnv(withControl(clash)));
   const clashMessage = `${WIRE_PROFILE_ENV}: domains.controlAuthorization: "${LEGACY_AUTHORIZATION}" and "EXAMPLE_LEGACY_BRIDGE_V1" derive one schema "${LEGACY_SCHEMA}"`;
-  const clashValue = wireProfileEnv(clash).value;
-  refusedAs(() => wireProfileEnv(clash, schemas), clashMessage, "render");
-  refusedAs(() => readGuestEnv(envOfWire(clashValue), "every", schemas), clashMessage, "read");
-  refusedAs(() => guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: clash }, schemas), clashMessage, "guestEnv");
-  // And the older domain beside its plain derivation is no clash once its schema is named.
-  const plainPair = withControl({ emit: LEGACY_AUTHORIZATION, accept: ["example.legacy.authorization.v1"] });
-  refusedAs(() => wireProfileEnv(plainPair),
+  refusedAs(() => wireProfileEnv(withControl(clash, named)), clashMessage, "render");
+  refusedAs(() => guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: withControl(clash, named) }), clashMessage, "guestEnv");
+  const clashValue = JSON.stringify({ ...JSON.parse(wireProfileEnv(withControl(clash)).value), controlBridgeSchemas: named });
+  refusedAs(() => readGuestEnv(envOfWire(canonicalJson(JSON.parse(clashValue)))), clashMessage, "read");
+  // And a domain beside its plain derivation is no clash once its schema is named.
+  const plainPair = { emit: LEGACY_AUTHORIZATION, accept: ["example.legacy.authorization.v1"] };
+  refusedAs(() => wireProfileEnv(withControl(plainPair)),
     `${WIRE_PROFILE_ENV}: domains.controlAuthorization: "${LEGACY_AUTHORIZATION}" and "example.legacy.authorization.v1" derive one schema "example.legacy.authorization.v1"`, "plain pair");
-  assert.deepEqual(readGuestEnv(envOfWire(wireProfileEnv(plainPair, schemas).value), "every", schemas).controlBridgeSchemas, [LEGACY_SCHEMA, "example.legacy.authorization.v1"]);
-  assert.deepEqual(guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: plainPair }, schemas)[0], wireProfileEnv(plainPair, schemas));
-  for (const bad of [[] as unknown, { "": "a.v1" }, { "A B": "a.v1" }, { A_V1: "" }, { A_V1: "A.V1" }, { A_V1: 1 }]) {
-    assert.throws(() => wireProfileEnv(wire, { controlBridgeSchemas: bad as any }), (error: unknown) =>
-      error instanceof TypeError && !(error instanceof GuestEnvError) && /wireProfileEnv: controlBridgeSchemas/.test((error as Error).message), JSON.stringify(bad));
+  assert.deepEqual(readGuestEnv(envOfWire(wireProfileEnv(withControl(plainPair, named)).value)).controlBridgeSchemas, [LEGACY_SCHEMA, "example.legacy.authorization.v1"]);
+  // The map is checked as the guest checks it, key by key in order.
+  const refusals: [Record<string, unknown>, string][] = [
+    [{}, "controlBridgeSchemas must be a non-empty object"],
+    [[] as unknown as Record<string, unknown>, "controlBridgeSchemas must be a non-empty object"],
+    [{ OTHER_AUTHORIZATION_V1: "a.v1" }, 'controlBridgeSchemas: "OTHER_AUTHORIZATION_V1" is not a domains.controlAuthorization value'],
+    [{ [LEGACY_AUTHORIZATION]: "A.V1" }, `controlBridgeSchemas["${LEGACY_AUTHORIZATION}"] must match [a-z0-9][a-z0-9._-]*`],
+    [{ [LEGACY_AUTHORIZATION]: 1 }, `controlBridgeSchemas["${LEGACY_AUTHORIZATION}"] must match [a-z0-9][a-z0-9._-]*`],
+    [{ [LEGACY_AUTHORIZATION]: "", OTHER_V1: "a.v1" }, `controlBridgeSchemas["${LEGACY_AUTHORIZATION}"] must match [a-z0-9][a-z0-9._-]*`],
+  ];
+  for (const [map, message] of refusals) {
+    refusedAs(() => wireProfileEnv(withControl(cutOver, map as Record<string, string>)), `${WIRE_PROFILE_ENV}: ${message}`, JSON.stringify(map));
   }
 });
 
@@ -267,12 +300,26 @@ test("the renderers refuse what a guest would refuse, with the guest's message",
       'GUEST_WIRE_PROFILE: releaseSet.scope: "members" cannot be a scope field'],
     ["release roles without node", () => wireProfileEnv({ ...wire, releaseSet: { ...wire.releaseSet, roles: ["operator"] } }),
       "GUEST_WIRE_PROFILE: releaseSet.roles must include node"],
-    ["'$' in a mount", () => storageLayoutEnv(layout(v => { v.chain.mount = "/run/$data"; })),
+    ["'$' in a mount", () => storageLayoutEnv(layout(v => { v.volumes.data.mount = "/run/$data"; })),
       "GUEST_STORAGE_LAYOUT: '$' is refused: the kubelet rewrites $$ and $(NAME) in env values"],
-    ["a fractional size", () => storageLayoutEnv(layout(v => { v.chain.bytes = 1.5; })),
+    ["a fractional size", () => storageLayoutEnv(layout(v => { v.volumes.data.bytes = 1.5; })),
       "GUEST_STORAGE_LAYOUT: not canonical JSON (sorted keys, no whitespace, each key once)"],
-    ["the placeholder size", () => storageLayoutEnv(layout(v => { v.workspace.bytes = 16 * 1024 ** 2; })),
-      "GUEST_STORAGE_LAYOUT: workspace.bytes must be whole MiB above the 16 MiB placeholder"],
+    ["the placeholder size", () => storageLayoutEnv(layout(v => { v.volumes.scratch.bytes = 16 * 1024 ** 2; })),
+      "GUEST_STORAGE_LAYOUT: volumes.scratch.bytes must be whole MiB above the 16 MiB placeholder"],
+    ["a numeric mode", () => storageLayoutEnv(layout(v => { v.volumes.data.clients[1].mode = 0o750; })),
+      "GUEST_STORAGE_LAYOUT: volumes.data.clients[1].mode must be 0 and three octal digits"],
+    ["a mode of four octal digits past 0", () => storageLayoutEnv(layout(v => { v.volumes.data.exports[0].mode = "1400"; })),
+      "GUEST_STORAGE_LAYOUT: volumes.data.exports[0].mode must be 0 and three octal digits"],
+    ["a client name of another volume", () => storageLayoutEnv(layout(v => { v.volumes.scratch.clients[0].name = "secondary"; })),
+      'GUEST_STORAGE_LAYOUT: client "secondary" is listed twice'],
+    ["a uid of two clients", () => storageLayoutEnv(layout(v => { v.volumes.scratch.clients[0].uid = 20001; })),
+      "GUEST_STORAGE_LAYOUT: uid 20001 belongs to two clients"],
+    ["exports on a volume without the record", () => storageLayoutEnv(layout(v => { v.secrets.volume = "scratch"; })),
+      "GUEST_STORAGE_LAYOUT: volumes.data.exports: only the secrets volume exports"],
+    ["an export inside a mount", () => storageLayoutEnv(layout(v => { v.volumes.data.exports[2].dir = "/run/volume/data/shared"; })),
+      "GUEST_STORAGE_LAYOUT: volumes.data.exports[2].dir must be separate from every volume's mount"],
+    ["a client subtree named like the marker", () => storageLayoutEnv(layout(v => { v.volumes.scratch.marker.file = "operator"; })),
+      'GUEST_STORAGE_LAYOUT: volumes.scratch: "operator" names two entries of its root'],
     ["no record format", () => storageLayoutEnv(layout(v => { v.secrets.formats = []; })),
       "GUEST_STORAGE_LAYOUT: secrets.formats must list one to eight record formats"],
     ["a record header that is another's fingerprint", () => storageLayoutEnv(layout(v => {
@@ -300,7 +347,7 @@ test("every limit of the contract is reached and not passed: the limit is accept
   // Sizes: a value of exactly the maximum passes the size rule (and fails later for its shape); one byte more does not.
   const shapes: [string, number, string][] = [
     [WIRE_PROFILE_ENV, 16384, 'profile: missing ["domains", "payloadTypes"], unknown ["a"]'],
-    [STORAGE_LAYOUT_ENV, 8192, 'layout: missing ["chain", "kdf", "lifecycleKey", "secrets", "workspace"], unknown ["a"]'],
+    [STORAGE_LAYOUT_ENV, 8192, 'layout: missing ["kdf", "lifecycleKey", "lifecycleRecord", "placeholderMagic", "secrets", "volumes"], unknown ["a"]'],
     [WORKLOAD_API_ENV, 4096, 'api: missing ["keyResolverDomain", "mode", "routes", "signDomain"], unknown ["a"]'],
   ];
   for (const [name, maximum, shape] of shapes) {
@@ -323,30 +370,53 @@ test("every limit of the contract is reached and not passed: the limit is accept
   const field = (bytes: number) => `f${"_".repeat(bytes - 1)}`;
   assert.doesNotThrow(() => wireProfileEnv(rules(["node", "bridge"], `${field(32)}=example`)));
   refusedWith(() => wireProfileEnv(rules(["node", "bridge"], `${field(33)}=example`)), `${WIRE_PROFILE_ENV}: releaseSet.scope: "${field(33)}" cannot be a scope field`, "a scope field past 32 bytes");
-  // Storage layout: sizes up to 2^53 bytes, mapper names up to 127 bytes, mounts up to 255 bytes.
+  // Storage layout: sizes up to 2^53 bytes, mapper names up to 127 bytes, mounts up to 255 bytes, names up to 32 bytes,
+  // one to eight volumes, clients and exports, ids up to 2^31 - 1, grace up to an hour, placeholder magic up to 64 bytes.
   const layout = (change: (value: any) => void): GuestStorageLayout => {
     const value = structuredClone(storageLayout) as any;
     change(value);
     return value;
   };
   const mib = 1024 ** 2;
-  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.chain.bytes = 2 ** 53; })));
-  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.workspace.bytes = 17 * mib; })));
-  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.bytes = 2 ** 53 + mib; })),
-    `${STORAGE_LAYOUT_ENV}: chain.bytes must be whole MiB above the 16 MiB placeholder`, "a volume past 2^53 bytes");
-  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.bytes = 17 * mib + 1; })),
-    `${STORAGE_LAYOUT_ENV}: chain.bytes must be whole MiB above the 16 MiB placeholder`, "a volume of part of a MiB");
-  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.chain.map = "m".repeat(127); })));
-  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.map = "m".repeat(128); })), `${STORAGE_LAYOUT_ENV}: chain.map must be a device-mapper name`, "a mapper name past 127 bytes");
-  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.chain.mount = `/${"d".repeat(254)}`; })));
-  refusedWith(() => storageLayoutEnv(layout(v => { v.chain.mount = `/${"d".repeat(255)}`; })),
-    `${STORAGE_LAYOUT_ENV}: chain.mount must be an absolute path without . or ..`, "a mount past 255 bytes");
+  const data = (change: (volume: any) => void) => layout(v => change(v.volumes.data));
+  assert.doesNotThrow(() => storageLayoutEnv(data(v => { v.bytes = 2 ** 53; })));
+  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.volumes.scratch.bytes = 17 * mib; })));
+  refusedWith(() => storageLayoutEnv(data(v => { v.bytes = 2 ** 53 + mib; })),
+    `${STORAGE_LAYOUT_ENV}: volumes.data.bytes must be whole MiB above the 16 MiB placeholder`, "a volume past 2^53 bytes");
+  refusedWith(() => storageLayoutEnv(data(v => { v.bytes = 17 * mib + 1; })),
+    `${STORAGE_LAYOUT_ENV}: volumes.data.bytes must be whole MiB above the 16 MiB placeholder`, "a volume of part of a MiB");
+  assert.doesNotThrow(() => storageLayoutEnv(data(v => { v.map = "m".repeat(127); })));
+  refusedWith(() => storageLayoutEnv(data(v => { v.map = "m".repeat(128); })), `${STORAGE_LAYOUT_ENV}: volumes.data.map must be a device-mapper name`, "a mapper name past 127 bytes");
+  assert.doesNotThrow(() => storageLayoutEnv(data(v => { v.mount = `/${"d".repeat(254)}`; })));
+  refusedWith(() => storageLayoutEnv(data(v => { v.mount = `/${"d".repeat(255)}`; })),
+    `${STORAGE_LAYOUT_ENV}: volumes.data.mount must be an absolute path without . or ..`, "a mount past 255 bytes");
+  const named = (name: string) => layout(v => { v.volumes = { [name]: v.volumes.data }; v.secrets.volume = name; });
+  assert.doesNotThrow(() => storageLayoutEnv(named(`v${"-".repeat(31)}`)));
+  refusedWith(() => storageLayoutEnv(named(`v${"-".repeat(32)}`)), `${STORAGE_LAYOUT_ENV}: volumes: "v${"-".repeat(32)}" is not a volume name`, "a volume name past 32 bytes");
+  const spare = (index: number) => ({ ...structuredClone(storageLayout.volumes.scratch), node: `node-${index}`, map: `map-${index}`, mount: `/run/spare/${index}`,
+    clients: [{ ...storageLayout.volumes.scratch.clients[0], name: `client-${index}`, uid: 30000 + index }] });
+  const spares = (count: number) => layout(v => { for (let i = 0; i < count; i++) v.volumes[`spare-${i}`] = spare(i); });
+  assert.doesNotThrow(() => storageLayoutEnv(spares(6)));
+  refusedWith(() => storageLayoutEnv(spares(7)), `${STORAGE_LAYOUT_ENV}: volumes must name one to eight volumes`, "nine volumes");
+  refusedWith(() => storageLayoutEnv(layout(v => { v.volumes = {}; })), `${STORAGE_LAYOUT_ENV}: volumes must name one to eight volumes`, "no volume");
+  const clients = (count: number) => data(v => { v.clients = Array.from({ length: count }, (_, i) => ({ ...v.clients[0], name: `c${i}`, uid: 40000 + i })); });
+  assert.doesNotThrow(() => storageLayoutEnv(clients(8)));
+  refusedWith(() => storageLayoutEnv(clients(9)), `${STORAGE_LAYOUT_ENV}: volumes.data.clients must list one to eight clients`, "nine clients");
+  refusedWith(() => storageLayoutEnv(clients(0)), `${STORAGE_LAYOUT_ENV}: volumes.data.clients must list one to eight clients`, "no client");
+  const first = (change: (client: any) => void) => data(v => change(v.clients[0]));
+  assert.doesNotThrow(() => storageLayoutEnv(first(c => { c.uid = 2 ** 31 - 1; c.gid = 2 ** 31 - 1; c.graceSeconds = 3600; })));
+  refusedWith(() => storageLayoutEnv(first(c => { c.uid = 2 ** 31; })), `${STORAGE_LAYOUT_ENV}: volumes.data.clients[0].uid must be an integer from 1 to 2147483647`, "a uid past 2^31 - 1");
+  refusedWith(() => storageLayoutEnv(first(c => { c.uid = 0; })), `${STORAGE_LAYOUT_ENV}: volumes.data.clients[0].uid must be an integer from 1 to 2147483647`, "uid 0");
+  refusedWith(() => storageLayoutEnv(first(c => { c.graceSeconds = 3601; })), `${STORAGE_LAYOUT_ENV}: volumes.data.clients[0].graceSeconds must be an integer from 1 to 3600`, "grace past an hour");
+  assert.doesNotThrow(() => storageLayoutEnv(layout(v => { v.placeholderMagic = `${"M".repeat(63)}\n`; })));
+  refusedWith(() => storageLayoutEnv(layout(v => { v.placeholderMagic = "M".repeat(65); })),
+    `${STORAGE_LAYOUT_ENV}: placeholderMagic must be 1 to 64 bytes of printable ASCII or line feeds`, "a magic past 64 bytes");
   // Mounts are separate directories: siblings that share a prefix are, nested or equal ones are not.
-  const mounts = (chain: string, workspace: string) => layout(v => { v.chain.mount = chain; v.workspace.mount = workspace; });
+  const mounts = (one: string, other: string) => layout(v => { v.volumes.data.mount = one; v.volumes.scratch.mount = other; });
   assert.doesNotThrow(() => storageLayoutEnv(mounts("/run/data", "/run/data2")));
   assert.doesNotThrow(() => storageLayoutEnv(mounts("/run/data2", "/run/data")));
-  for (const [chain, workspace] of [["/run/data", "/run/data/workspace"], ["/run/data/chain", "/run/data"], ["/run/data", "/run/data"]]) {
-    refusedWith(() => storageLayoutEnv(mounts(chain, workspace)), `${STORAGE_LAYOUT_ENV}: chain and workspace mounts must be separate directories`, `${chain} and ${workspace}`);
+  for (const [one, other] of [["/run/data", "/run/data/scratch"], ["/run/data/scratch", "/run/data"], ["/run/data", "/run/data"]]) {
+    refusedWith(() => storageLayoutEnv(mounts(one, other)), `${STORAGE_LAYOUT_ENV}: volumes "data" and "scratch" mounts must be separate directories`, `${one} and ${other}`);
   }
   // The adapter's MODE is only ever the mode of an API a guest accepts.
   refusedWith(() => adapterModeEnv({ ...NEUTRAL_WORKLOAD_API, mode: "Attest" }), `${WORKLOAD_API_ENV}: mode must be a lower-case name`, "MODE of a refused API");
@@ -377,9 +447,13 @@ test("the example's guests carry the neutral deployment's env, each Pod its own 
   assert.deepEqual({ ...adapter, RELEASE_SET_PATH: undefined }, { ...deployment.env, ...deployment.adapterEnv, RELEASE_SET_PATH: undefined });
   assert.doesNotThrow(() => readGuestEnv(adapter, "adapter"));
   assert.doesNotThrow(() => readGuestEnv(adapter, "bridge"));
+  assert.deepEqual(env(primary, "storage"), Object.fromEntries(sealedStorageEnv(EXAMPLE_GUEST_DEPLOYMENT.storageLayout, "data").map(e => [e.name, e.value])));
   assert.deepEqual(env(primary, "storage"), { [STORAGE_LAYOUT_ENV]: deployment.env[STORAGE_LAYOUT_ENV], NODE_ID: "sealed-data", VOLUME_ID: "data-v1" });
   const operatorAdapter = env(operator, "attest");
   assert.equal(readGuestEnv(operatorAdapter, "adapter").workloadRef, "example/console:v1");
   assert.deepEqual({ ...operatorAdapter, [WIRE_PROFILE_ENV]: undefined }, { ...adapter, [WIRE_PROFILE_ENV]: undefined });
   assert.deepEqual(env(operator, "storage"), { [STORAGE_LAYOUT_ENV]: deployment.env[STORAGE_LAYOUT_ENV], NODE_ID: "sealed-workspace", VOLUME_ID: "workspace-v1" });
+  // The stage placeholder carries the magic the layout gives the guests' storage.
+  const standby = JSON.stringify(docs.filter(d => d.metadata?.name === "standby-disk"));
+  assert.ok(standby.includes(EXAMPLE_GUEST_DEPLOYMENT.storageLayout.placeholderMagic.trimEnd()), "the placeholder magic");
 });
