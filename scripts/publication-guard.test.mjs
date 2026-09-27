@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, randomBytes, randomInt } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -302,4 +302,55 @@ test("the checked-in allowlist is well formed", async () => {
     assert.match(e.sha256, /^[0-9a-f]{64}$/);
     assert.ok(e.class && e.reason, "entries need a class and a reason");
   }
+});
+
+test("the default scope covers the bridge image build context", (t) => {
+  assert.ok(DEFAULT_SCOPE.includes("docker/devops-bridge"));
+  const root = tempDir(t);
+  execFileSync("git", ["init", "-q", root]);
+  mkdirSync(join(root, "docker", "devops-bridge"), { recursive: true });
+  const marker = ["10", "66", "77", "88"].join(".");
+  writeFileSync(join(root, "docker", "devops-bridge", "synthetic.py"), `# synthetic marker\nBACKEND = "${marker}"\n`);
+  const run = spawnSync(process.execPath, [GUARD, "--root", root, "--json"], { encoding: "utf8" });
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout).findings.map((f) => [f.source, f.line, f.class]),
+    [["docker/devops-bridge/synthetic.py", 2, "rfc1918-ip"]]);
+  assert.ok(!run.stdout.includes(marker), "CLI output leaked a value");
+});
+
+test("a method call is not a bare domain; the Matrix homeserver domain is upstream", () => {
+  assert.deepEqual(scan('log.info("%d alert(s)", n)\nMATRIX_HOMESERVER e.g. https://matrix.org'), []);
+  assert.deepEqual(classes(scan("see status.info for details")), ["domain"]);
+  assert.deepEqual(classes(scan("MATRIX_HOMESERVER e.g. https://chat.acme-corp.info")), ["domain"]);
+  assert.deepEqual(scan("self.log.info(msg)\nlogger.info (msg)"), []);
+  assert.deepEqual(classes(scan("metrics go to telemetry.acme-corp.com(the collector)")), ["domain"]);
+  assert.deepEqual(classes(scan("see docs.acme-corp.io(beta)")), ["domain"]);
+});
+
+test("the bridge image is published only after its build context passes the guard", () => {
+  const workflows = join(dirname(GUARD), "..", ".github", "workflows");
+  assert.ok(!existsSync(join(workflows, "build-devops-bridge.yml")),
+    "the unguarded workflow path stays retired, so disabling it cannot touch the guarded one");
+  const workflow = readFileSync(join(workflows, "publish-devops-bridge.yml"), "utf8");
+  assert.match(workflow, /\n      - \.github\/workflows\/publish-devops-bridge\.yml\n/, "edits to the workflow re-run it");
+  const jobs = workflow.slice(workflow.indexOf("\njobs:"));
+  const names = [...jobs.matchAll(/\n  ([A-Za-z0-9_-]+):\n/g)].map((m) => m[1]);
+  const job = (name) => {
+    const start = jobs.indexOf(`\n  ${name}:\n`);
+    assert.ok(start >= 0, `job ${name}`);
+    const next = jobs.slice(start + 1).search(/\n  [A-Za-z0-9_-]+:\n/);
+    return next < 0 ? jobs.slice(start) : jobs.slice(start, start + 1 + next);
+  };
+  const publishing = names.filter((n) => /\n\s+(?:packages: write|push: (?!false\b))/.test(job(n)));
+  assert.ok(publishing.length > 0, "a publishing job exists");
+  for (const name of publishing) {
+    assert.notEqual(name, "guard");
+    assert.match(job(name), /\n    needs: (?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\n/, `${name} must need the guard`);
+    assert.doesNotMatch(job(name), /\n\s+if:/, `${name} must not run around the guard`);
+    const context = /\n\s+context: (\S+)\n/.exec(job(name))?.[1];
+    assert.equal(context, "docker/devops-bridge");
+    assert.match(job("guard"), new RegExp(`\\n\\s+run: node scripts/publication-guard\\.mjs ${context}\\n`),
+      "the guard scans the build context");
+  }
+  assert.doesNotMatch(job("guard"), /continue-on-error|\n\s+if:/, "the guard cannot be skipped or soft-fail");
 });

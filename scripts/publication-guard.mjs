@@ -37,6 +37,7 @@ export const DEFAULT_SCOPE = [
   ":(glob)packages/nebula/test/confidential-guests*",
   ":(glob)packages/nebula/test/confidential-guests*/**",
   ":(glob)packages/nebula/example/confidential-guests*",
+  "docker/devops-bridge",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);
@@ -80,11 +81,12 @@ const UPSTREAM_DOMAINS = [
   "cert-manager.io", "cncf.io", "argoproj.io", "coreos.com", "cilium.io", "projectcalico.org", "k0sproject.io",
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
-  "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io",
+  "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
-// this.app, tls.ca, provision.sh); hosts in URLs and after host keys under any
-// public TLD in URL_TLDS. Cluster-internal names (svc.namespace) pass.
+// this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
+// in URLs and after host keys under any public TLD in URL_TLDS.
+// Cluster-internal names (svc.namespace) pass.
 const BARE_DOMAIN_TLDS = "com|net|org|io|xyz|ninja|cloud|tech|online|site|info|biz|eu|uk";
 const URL_TLDS = new Set([
   ...BARE_DOMAIN_TLDS.split("|"), "dev", "app", "ai", "co", "me", "sh", "so", "to", "tv", "cc", "ly", "gg", "im", "is",
@@ -207,7 +209,7 @@ function* domains(text) {
   const contexts = [
     new RegExp(`(?:\\b[a-z][a-z0-9+.-]*:\\/\\/(?:[^\\s/@]+@)?|\\bgit@)(${label}(?:\\.${label})+)`, "gi"),
     new RegExp(`\\b(?:host|hostname|domain|server|endpoint|registry|fqdn|issuer|audience|address)["']?\\s*[:=]\\s*["']?(${label}(?:\\.${label})+)(?![A-Za-z0-9-]*:\\/\\/)`, "gi"),
-    new RegExp(`(?<![A-Za-z0-9_.@/-])((?:${label}\\.)+(?:${BARE_DOMAIN_TLDS}))(?![A-Za-z0-9_-])`, "gi"),
+    new RegExp(`(?<![A-Za-z0-9_.@/-])((?:${label}\\.)+(?:${BARE_DOMAIN_TLDS}))(?![A-Za-z0-9_-])(?!(?<=\\.info)\\s*\\()`, "gi"),
   ];
   const seen = new Set();
   for (const re of contexts) {
