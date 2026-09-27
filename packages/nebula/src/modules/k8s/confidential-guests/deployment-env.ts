@@ -5,7 +5,7 @@
 import { canonicalJson } from "./canonical";
 import {
   MODE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, readGuestEnv, readStorageLayoutValue, readWorkloadApiValue,
-  type GuestEnvOptions, type GuestRecordFormat, type GuestStorageLayout, type GuestWorkloadApi,
+  type GuestRecordFormat, type GuestStorageLayout, type GuestWorkloadApi,
 } from "./guest-env";
 import { deepFreeze, wireProfileEnv, type WireProfile } from "./wire";
 
@@ -43,7 +43,7 @@ export const NEUTRAL_WORKLOAD_API: GuestWorkloadApi = deepFreeze({
 /**
  * The neutral sealed-storage names of a {@link GuestStorageLayout}: the
  * key-derivation labels of the volume passphrases and the identity record
- * format. Frozen: a disk made under them keeps them for life, so a new
+ * format. The volumes, their at-rest files and clients are the deployment's. Frozen: a disk made under them keeps them for life, so a new
  * format is added to `secrets.formats` after the old one, never edited.
  */
 export const NEUTRAL_SEALED_STORAGE: {
@@ -82,17 +82,15 @@ export function workloadApiEnv(api: GuestWorkloadApi): GuestEnvVar<typeof WORKLO
  * a control bridge, observers): GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT and
  * GUEST_WORKLOAD_API, in the order a guest reads them. All three are
  * required: nebula renders no legacy default. The rendered env is read back
- * as a guest's components read it at start, with the control-bridge schemas
- * `options` names (see {@link wireProfileEnv}).
+ * as a guest's components read it at start.
  * @throws GuestEnvError (a TypeError) when a guest would refuse it.
  */
-export function guestEnv(deployment: GuestDeploymentEnv, options?: Pick<GuestEnvOptions, "controlBridgeSchemas">): GuestEnvVar[] {
+export function guestEnv(deployment: GuestDeploymentEnv): GuestEnvVar[] {
   for (const key of ["wire", "storageLayout", "workloadApi"] as const) {
     if (deployment?.[key] === null || typeof deployment?.[key] !== "object") throw new TypeError(`guestEnv: ${key} is required`);
   }
-  const schemas = options?.controlBridgeSchemas === undefined ? undefined : { controlBridgeSchemas: options.controlBridgeSchemas };
-  const env = [wireProfileEnv(deployment.wire, schemas), storageLayoutEnv(deployment.storageLayout), workloadApiEnv(deployment.workloadApi)];
-  readGuestEnv(Object.fromEntries(env.map(entry => [entry.name, entry.value])), "every", schemas);
+  const env = [wireProfileEnv(deployment.wire), storageLayoutEnv(deployment.storageLayout), workloadApiEnv(deployment.workloadApi)];
+  readGuestEnv(Object.fromEntries(env.map(entry => [entry.name, entry.value])));
   return env;
 }
 
@@ -103,13 +101,19 @@ export function adapterModeEnv(api: GuestWorkloadApi): GuestEnvVar<typeof MODE_E
 }
 
 /**
- * The env of the sealed-storage container that opens one of the layout's
- * volumes: the same GUEST_STORAGE_LAYOUT as the adapter beside it (which
- * seals the passphrase storage opens), and the volume's NODE_ID and VOLUME_ID.
+ * The env of the sealed-storage container that serves one of the layout's
+ * volumes, by its name in the layout: the same GUEST_STORAGE_LAYOUT as the
+ * adapter beside it (which seals the passphrase storage opens), and the
+ * volume's NODE_ID and VOLUME_ID.
+ * @throws GuestEnvError (a TypeError) when a guest would refuse the layout.
+ * @throws TypeError when the layout names no such volume.
  */
-export function sealedStorageEnv(layout: GuestStorageLayout, volume: "chain" | "workspace"): GuestEnvVar[] {
+export function sealedStorageEnv(layout: GuestStorageLayout, volumeName: string): GuestEnvVar[] {
   const rendered = storageLayoutEnv(layout);
-  if (volume !== "chain" && volume !== "workspace") throw new TypeError(`sealedStorageEnv: volume must be chain or workspace, got ${JSON.stringify(volume)}`);
-  const { node, volume: id } = readStorageLayoutValue(rendered.value)[volume];
-  return [rendered, { name: "NODE_ID", value: node }, { name: "VOLUME_ID", value: id }];
+  const { volumes } = readStorageLayoutValue(rendered.value);
+  if (typeof volumeName !== "string" || !Object.hasOwn(volumes, volumeName)) {
+    throw new TypeError(`sealedStorageEnv: volumeName must name one of the layout's volumes (${Object.keys(volumes).sort().join(", ")}), got ${JSON.stringify(volumeName)}`);
+  }
+  const { node, volume } = volumes[volumeName];
+  return [rendered, { name: "NODE_ID", value: node }, { name: "VOLUME_ID", value: volume }];
 }

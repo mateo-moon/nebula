@@ -67,6 +67,9 @@ export type {
   GuestRecordFormat,
   GuestStorageLayout,
   GuestStorageVolume,
+  GuestVolumeClient,
+  GuestVolumeExport,
+  GuestVolumeMarker,
   GuestWireDocument,
   GuestWorkloadApi,
 } from "./guest-env";

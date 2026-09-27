@@ -56,36 +56,46 @@ would refuse fails the render with the guest's own message
 
 | Variable | Renderer | Carries | Max |
 | --- | --- | --- | --- |
-| `GUEST_WIRE_PROFILE` | `wireProfileEnv(profile)` | payload types, byte domains, the release scope and roles, the Pod's workload reference | 16 KiB |
-| `GUEST_STORAGE_LAYOUT` | `storageLayoutEnv(layout)` | the two sealed volumes, KDF labels, the lifecycle key request, the identity record file and formats | 8 KiB |
-| `GUEST_WORKLOAD_API` | `workloadApiEnv(api)` | the adapter's mode, portal and verifier routes, signing and key-resolver domains | 4 KiB |
+| `GUEST_WIRE_PROFILE` | `wireProfileEnv(profile)` | payload types, byte domains, named control-bridge schemas, the release scope and roles, the Pod's workload reference | 16 KiB |
+| `GUEST_STORAGE_LAYOUT` | `storageLayoutEnv(layout)` | the named sealed volumes with their at-rest files, clients and exports, KDF labels, the lifecycle key request and record, the placeholder magic, the identity record file, formats and volume | 8 KiB |
+| `GUEST_WORKLOAD_API` | `workloadApiEnv(api)` | the adapter's mode, its workload and verifier routes, signing and key-resolver domains | 4 KiB |
 
 Every value is one line of canonical JSON (sorted keys, no whitespace,
 integers only), bytes 0x20 to 0x7e, without `$` (the kubelet rewrites `$$`
 and `$(NAME)` in env values). A value is refused, never repaired.
 
-- **Wire profile.** `{domains, payloadTypes, releaseSet, workloadRef}`. Each
+- **Wire profile.** `{controlBridgeSchemas?, domains, payloadTypes, releaseSet, workloadRef}`. Each
   identifier is `{emit, accept?}`, rendered as a list whose element 0 is
   emitted and whose every element is accepted; within a group a value
   belongs to one identifier. Payload types are
   `application/vnd.<schema>+json` with a lower-case schema. The session and
   control-bridge schemas derive from the `session` and
-  `controlAuthorization` domains (lower case, `_` as `.`; a caller may name
-  a control-bridge schema that predates this rule, see below), so no two
-  authorization domains may derive one schema. `releaseSet.scope` entries
+  `controlAuthorization` domains (lower case, `_` as `.`), except that
+  `controlBridgeSchemas` names the schema of an accepted authorization
+  domain whose bridges speak one the rule does not derive. It is data in
+  the profile, rendered as given; no two authorization domains may name or
+  derive one schema. `releaseSet.scope` entries
   are `field=value` (the emitted one is what signers write); `roles` include
   `node`. `workloadRef` is one exact string: it ties the adapter to its own
   workload in the same Pod, so two Pods of a deployment differ only there.
-- **Storage layout.** The identity record's header and fingerprint domain
-  belong to the disk, not the wire: `secrets.formats` lists them (the first
-  is written, every one is read), so renaming wire identifiers never changes
-  a guest's persistent identity. The adapter and the storage container of a
-  Pod get the same layout (`sealedStorageEnv(layout, volume)` adds storage's
-  `NODE_ID` and `VOLUME_ID`).
+- **Storage layout.** `volumes` names one to eight sealed volumes by
+  configuration (`[a-z][a-z0-9-]{0,31}`); nothing reads a volume by a
+  compiled name. Each carries what its disk holds at rest: its `marker`
+  file, its `clients` (a subtree per client with owner, group and a mode of
+  `0` and three octal digits, and the client's program and stop grace) and,
+  on the volume `secrets.volume` names, exactly three `exports` of the
+  identity record's secrets. `lifecycleRecord` and `placeholderMagic` are
+  the lifecycle record's files and a stage placeholder's first bytes. The
+  identity record's header and fingerprint domain belong to the disk, not
+  the wire: `secrets.formats` lists them (the first is written, every one is
+  read), so renaming wire identifiers never changes a guest's persistent
+  identity. The adapter and the storage container of a Pod get the same
+  layout (`sealedStorageEnv(layout, volumeName)` adds the named volume's
+  `NODE_ID` and `VOLUME_ID` for storage).
 - **Workload API.** Peers of one deployment share it; the adapter's `MODE`
   must equal its `mode` (`adapterModeEnv(api)`).
 
-`guestEnv({wire, storageLayout, workloadApi}, options?)` renders all three
+`guestEnv({wire, storageLayout, workloadApi})` renders all three
 for every container that reads them, in the order a guest reads them.
 nebula renders no legacy default: a profile always names its `releaseSet`
 and `workloadRef`, and the layout and API are always rendered.
@@ -112,10 +122,6 @@ measures, because nebula assumes none of its names:
   Pod's workload reference before `workloadRef` existed. When the env sets
   it, it is read as the guest reads it (UTF-8, no `$`) and must equal
   `workloadRef`. It never stands in for `workloadRef`.
-- `controlBridgeSchemas`: control-bridge schemas that predate the derivation
-  rule, by the authorization domain that names them. `wireProfileEnv` and
-  `guestEnv` take them too, so that the check that no two authorization
-  domains derive one schema sees them. They are derived, never rendered.
 
 The contract's neutral fixtures are vendored in
 `test/confidential-guests-guest-env/`; the tests render the neutral names

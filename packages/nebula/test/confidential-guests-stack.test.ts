@@ -83,7 +83,7 @@ test("the fence and log retention derive from the lifecycle roles unless given",
   })).docs;
   assert.deepEqual(custom.find(d => d.kind === "ValidatingAdmissionPolicyBinding").spec.matchResources.namespaceSelector, { matchLabels: { fenced: "true" } });
   assert.equal(custom.find(d => d.metadata.name === "log-retention" && d.kind === "Deployment").spec.template.spec.containers[0].env[1].value, '[["guest-primary",["app"]]]');
-  assert.equal(guestClaimPrefix("guest-primary-data-v12"), "guest-primary-data-v");
+  assert.equal(guestClaimPrefix("guest-primary-data-v42"), "guest-primary-data-v");
   assert.equal(guestClaimPrefix("scratch"), "scratch");
 });
 

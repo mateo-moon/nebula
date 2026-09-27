@@ -1,7 +1,7 @@
 set -eu
 dir=/var/lib/sealed-disks
 file=$dir/data-v1.img
-device=/dev/loop123
+device=/dev/loop99
 size=1073741824
 umask 077
 exec 9>"$dir/provision.lock"
@@ -15,8 +15,8 @@ fi
 [ -f "$file" ] && [ "$(stat -c %s "$file")" = "$size" ] && [ "$(stat -c %h "$file")" = 1 ] || {
   echo 'refusing changed backing file'; exit 1;
 }
-if [ ! -e "$device" ]; then mknod "$device" b 7 123; fi
-[ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:7b' ] || {
+if [ ! -e "$device" ]; then mknod "$device" b 7 99; fi
+[ -b "$device" ] && [ ! -L "$device" ] && [ "$(stat -c '%t:%T' "$device")" = '7:63' ] || {
   echo 'refusing wrong loop device'; exit 1;
 }
 # -j compares the actual backing file identity (device/inode), rather than

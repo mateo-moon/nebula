@@ -49,7 +49,7 @@ test("provisionScript retargets every disk-specific value and keeps every safety
 
 test("any template written for another reference disk renders the same script", () => {
   const base = defaultProvisionTemplate();
-  const other = { stateDir: "/srv/other-reference", file: "ref-v9.img", loop: 250, sizeBytes: 16 * 1024 ** 2, sizeLabel: "16Mi" };
+  const other = { stateDir: "/srv/other-reference", file: "ref-v2.img", loop: 250, sizeBytes: 16 * 1024 ** 2, sizeLabel: "16Mi" };
   const rewritten: ProvisionTemplate = { reference: other, script: provisionScript({ ...other }) };
   assert.notEqual(rewritten.script, base.script);
   assert.equal(provisionScript({ ...target, template: rewritten }), provisionScript(target));

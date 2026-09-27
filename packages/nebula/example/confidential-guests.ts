@@ -55,10 +55,17 @@ const images = {
   kbs: digestImage(`ghcr.io/example/kbs@sha256:${"8".repeat(64)}`),
 };
 
+// Every sealed volume's marker file, and a client that owns its subtree at the
+// volume root (group 0, mode 0750) and runs its own program.
+const marker = { file: "volume-marker", prefix: "sealed-volume-v1:" };
+const client = (name: string, uid: number, graceSeconds: number) =>
+  ({ name, uid, gid: 0, mode: "0750", graceSeconds, program: `/usr/local/bin/${name}` });
+
 // The deployment's measured env (the guest env contract): the neutral wire
 // names with this deployment's release scope and roles, its sealed volumes
-// and the neutral adapter's API. The primary guest seals the `chain` volume,
-// the operator guest the `workspace` volume; each Pod names its own workload.
+// and the neutral adapter's API. The primary guest seals the `data` volume,
+// which holds the identity record and exports its three secrets; the operator
+// guest seals the `scratch` volume. Each Pod names its own workload.
 export const EXAMPLE_GUEST_DEPLOYMENT: GuestDeploymentEnv = {
   wire: {
     ...NEUTRAL_WIRE,
@@ -66,11 +73,26 @@ export const EXAMPLE_GUEST_DEPLOYMENT: GuestDeploymentEnv = {
     workloadRef: "example/workload:v1",
   },
   storageLayout: {
-    chain: { node: "sealed-data", volume: "data-v1", bytes: TiB, map: "guest-data", mount: "/run/volume/data" },
-    workspace: { node: "sealed-workspace", volume: "workspace-v1", bytes: GiB, map: "guest-workspace", mount: "/run/volume/workspace" },
+    volumes: {
+      data: {
+        node: "sealed-data", volume: "data-v1", bytes: TiB, map: "guest-data", mount: "/run/volume/data", marker,
+        clients: [client("primary", 20001, 120), client("secondary", 20002, 120)],
+        exports: [
+          { name: "identity-a", dir: "/run/exports/identity", owner: { uid: 20001, gid: 20001 }, mode: "0400" },
+          { name: "identity-b", dir: "/run/exports/identity", owner: { uid: 20001, gid: 20001 }, mode: "0400" },
+          { name: "shared-secret", dir: "/run/exports/shared", owner: { uid: 0, gid: 0 }, mode: "0444" },
+        ],
+      },
+      scratch: {
+        node: "sealed-workspace", volume: "workspace-v1", bytes: GiB, map: "guest-workspace", mount: "/run/volume/workspace", marker,
+        clients: [client("operator", 20003, 60)],
+      },
+    },
     kdf: NEUTRAL_SEALED_STORAGE.kdf,
     lifecycleKey: { mask: 0x9, tcb: "0000000000000000" },
-    secrets: { file: "guest-secrets-v1", formats: [NEUTRAL_SEALED_STORAGE.recordFormat], identityExports: ["identity-a", "identity-b"], jwtExport: "shared-secret" },
+    lifecycleRecord: { name: "lifecycle-v1", temp: "lifecycle-v1.tmp" },
+    placeholderMagic: "SEALED-STORAGE-PLACEHOLDER-V1\n",
+    secrets: { file: "guest-secrets-v1", formats: [NEUTRAL_SEALED_STORAGE.recordFormat], volume: "data" },
   },
   workloadApi: NEUTRAL_WORKLOAD_API,
 };
@@ -94,7 +116,7 @@ const attest = (workloadRef: string) => ({
   volumeMounts: [{ name: "release", mountPath: "/release", readOnly: true }, { name: "run", mountPath: "/run/guest-attest" }],
 });
 // Sealed storage opens the guest's volume with the adapter's layout.
-const storage = (volume: "chain" | "workspace") => ({
+const storage = (volume: "data" | "scratch") => ({
   name: "storage", image: images.storage, args: ["serve"],
   env: sealedStorageEnv(EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volume),
   securityContext: { ...restricted, capabilities: { drop: ["ALL"], add: ["SYS_ADMIN", "MKNOD"] } },
@@ -103,7 +125,7 @@ const storage = (volume: "chain" | "workspace") => ({
 });
 
 function guest(name: string, labels: Record<string, string>, grace: number, claim: string, containers: object[],
-  [volume, workloadRef]: ["chain" | "workspace", string]): GuestPodManifest {
+  [volume, workloadRef]: ["data" | "scratch", string]): GuestPodManifest {
   return {
     apiVersion: "v1", kind: "Pod",
     metadata: { name, namespace, labels, annotations: { "io.katacontainers.config.hypervisor.default_vcpus": "2" } },
@@ -126,20 +148,20 @@ function guest(name: string, labels: Record<string, string>, grace: number, clai
 const primary = guest("guest-primary", primaryLabels, 120, LIFECYCLE_CLAIM_PLACEHOLDER, [
   { name: "workload", image: images.app, securityContext: restricted, readinessProbe: probe("/readyz", 8080),
     ports: [{ name: "control", containerPort: 7443 }] },
-], ["chain", EXAMPLE_GUEST_DEPLOYMENT.wire.workloadRef]);
+], ["data", EXAMPLE_GUEST_DEPLOYMENT.wire.workloadRef]);
 const operator = guest("guest-operator", operatorLabels, 60, "guest-operator-v1", [
   { name: "console", image: images.console, securityContext: restricted, ports: [{ name: "ssh", containerPort: 2222 }] },
-], ["workspace", "example/console:v1"]);
+], ["scratch", "example/console:v1"]);
 
 // What policy generation records for each template.
 const artifacts = {
   primary: {
-    canonicalPodSha256: "f3b1aca39e8e9a9a4a16743b8682cab83bef3c1b586f08bcaab1fd38850e45d9",
+    canonicalPodSha256: "854482f7e6a564729219d52288dd23904ed3da2529e830a1148c79fc2d597de4",
     ccInitData: "H4sIAAAAAAACEzXNzQoCMQwE4HufYoj3sqIHEXwSFQlraIv9I1vUfXtbFg+5zDdD3qJLKBkX0GT3diLD0RUNzaeRLZ4PpyOZ65Mb3w3VEsO8WhVXaHjl+cVO0C+3x6a3vIN8OdUoqBoS64pNzug1UW6C5gUqHFGy4NPfDfrvyfwAvYvV15cAAAA=",
     initDataSha256: "cf0a41d3ef41f212a569890cc7e654d53c5b14c2cb6951e69b56563016b3c841",
   },
   operator: {
-    canonicalPodSha256: "87af2b8de239680ef437602b6a8f9b8b58d31deaea0ea4744fb24517766c2d1a",
+    canonicalPodSha256: "ba1ebe0518e15aaed826eff12283bb3b81920fcba7fcd30652d1521ff9048fa2",
     ccInitData: "H4sIAAAAAAAAEzWNwQrCMBBE7/mKYb2Xih5E8EtUZKlLEkyzYRuq/r0JxcNc3htmVrElasYFNA77YSTHyavFGubOlsCH05Hc9cmV746Kpjh9BxOv1H3h6cVe0JLrY7O3vIN8eC5JoEWMqxo2dUbrdSKoQWDCCZoF7/bX1X+A3A8iytXgmAAAAA==",
     initDataSha256: "e47e5deb9d53cf9c67f88b97c0e58921ae65f27b86be21c418acbbeb5397519c",
   },
@@ -250,7 +272,8 @@ export function confidentialGuestsExample(scope: Construct): ConfidentialGuestSt
           placeholder: true },
         { role: "operator", claim: "guest-operator", file: "operator", sizeBytes: GiB, sizeLabel: "1Gi", provisioner: "operator-disk" },
       ],
-      placeholderMagic: "example.placeholder/v1\n",
+      // The stage placeholder carries the magic the guests' storage reads from the layout.
+      placeholderMagic: EXAMPLE_GUEST_DEPLOYMENT.storageLayout.placeholderMagic,
       table: {
         live: { primary: { generation: 3, loop: 203 }, standby: { generation: 1, loop: 210 }, operator: { generation: 1, loop: 220 } },
         retained: [{ role: "primary", generation: 2, loop: 202, sizeBytes: 64 * GiB, sizeLabel: "64Gi" }],
