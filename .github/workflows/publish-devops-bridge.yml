@@ -1,11 +1,11 @@
-name: Build devops-bridge image
+name: Publish devops-bridge image
 
 on:
   push:
     branches: [main, "feat/**"]
     paths:
       - docker/devops-bridge/**
-      - .github/workflows/build-devops-bridge.yml
+      - .github/workflows/publish-devops-bridge.yml
   workflow_dispatch:
 
 env:

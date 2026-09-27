@@ -84,7 +84,7 @@ const UPSTREAM_DOMAINS = [
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
-// this.app, tls.ca, provision.sh), and not when called (log.info(...)); hosts
+// this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
 // in URLs and after host keys under any public TLD in URL_TLDS.
 // Cluster-internal names (svc.namespace) pass.
 const BARE_DOMAIN_TLDS = "com|net|org|io|xyz|ninja|cloud|tech|online|site|info|biz|eu|uk";
@@ -209,7 +209,7 @@ function* domains(text) {
   const contexts = [
     new RegExp(`(?:\\b[a-z][a-z0-9+.-]*:\\/\\/(?:[^\\s/@]+@)?|\\bgit@)(${label}(?:\\.${label})+)`, "gi"),
     new RegExp(`\\b(?:host|hostname|domain|server|endpoint|registry|fqdn|issuer|audience|address)["']?\\s*[:=]\\s*["']?(${label}(?:\\.${label})+)(?![A-Za-z0-9-]*:\\/\\/)`, "gi"),
-    new RegExp(`(?<![A-Za-z0-9_.@/-])((?:${label}\\.)+(?:${BARE_DOMAIN_TLDS}))(?![A-Za-z0-9_(-])`, "gi"),
+    new RegExp(`(?<![A-Za-z0-9_.@/-])((?:${label}\\.)+(?:${BARE_DOMAIN_TLDS}))(?![A-Za-z0-9_-])(?!(?<=\\.info)\\s*\\()`, "gi"),
   ];
   const seen = new Set();
   for (const re of contexts) {
