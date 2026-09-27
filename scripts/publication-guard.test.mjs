@@ -348,43 +348,153 @@ test("the Helm and vals download sources are upstream; neighbouring names are no
 });
 
 const WORKFLOWS = join(dirname(GUARD), "..", ".github", "workflows");
+// Splits a workflow into its jobs by indentation, whatever the indent width,
+// so a job cannot hide from the checks below by formatting alone.
 const jobsOf = (workflow) => {
-  const jobs = workflow.slice(workflow.indexOf("\njobs:"));
-  const names = [...jobs.matchAll(/\n  ([A-Za-z0-9_-]+):\n/g)].map((m) => m[1]);
-  const job = (name) => {
-    const start = jobs.indexOf(`\n  ${name}:\n`);
-    assert.ok(start >= 0, `job ${name}`);
-    const next = jobs.slice(start + 1).search(/\n  [A-Za-z0-9_-]+:\n/);
-    return next < 0 ? jobs.slice(start) : jobs.slice(start, start + 1 + next);
-  };
-  return { names, job };
+  const lines = workflow.split("\n");
+  const top = lines.findIndex((l) => /^["']?jobs["']?:\s*(?:#.*)?$/.test(l));
+  const jobs = new Map();
+  if (top < 0) return jobs;
+  const end = lines.findIndex((l, i) => i > top && /^[^\s#]/.test(l));
+  const body = lines.slice(top + 1, end < 0 ? lines.length : end);
+  const indent = body.find((l) => /^\s+[^\s#]/.test(l))?.match(/^\s+/)[0];
+  if (!indent) return jobs;
+  const header = new RegExp(`^${indent}["']?([^\\s"':#]+)["']?:\\s*(?:#.*)?$`);
+  let name;
+  for (const line of body) {
+    const m = header.exec(line);
+    if (m) jobs.set((name = m[1]), "");
+    else if (name) jobs.set(name, `${jobs.get(name)}\n${line}`);
+  }
+  for (const [n, text] of jobs) jobs.set(n, `${text}\n`);
+  return jobs;
 };
-const publishingJobs = ({ names, job }) =>
-  names.filter((n) => /\n\s+(?:packages: write|push: (?!false\b))|\b(?:docker|podman|buildah|oras|crane|skopeo) (?:image )?(?:push|copy)\b|\s--push\b|\bnpm publish\b|\bgh release (?:create|upload)\b/.test(job(n)));
+const PUBLISHES = new RegExp([
+  String.raw`\n\s*packages:\s*write\b`,
+  String.raw`\n\s*push:\s*(?!false\b)\S`,
+  String.raw`\btype=(?:registry|image)\b`,
+  String.raw`\bpush=true\b`,
+  String.raw`\b(?:docker|podman|buildah|oras|crane|skopeo) (?:image )?(?:push|copy)\b`,
+  String.raw`\s--push\b`,
+  String.raw`\b(?:npm|pnpm|yarn|cargo|gem|poetry) publish\b`,
+  String.raw`\btwine upload\b`,
+  String.raw`\bhelm push\b`,
+  String.raw`\bgh release (?:create|upload)\b`,
+  String.raw`uses:\s*["']?(?:softprops/action-gh-release|ncipollo/release-action|pypa/gh-action-pypi-publish)\b`,
+].join("|"));
+const publishingJobs = (jobs) => [...jobs].filter(([, text]) => PUBLISHES.test(text)).map(([n]) => n);
+
+const RELEASE_VERSION = String.raw`^[0-9]+\.[0-9]+\.[0-9]+$`;
+const imageWorkflowViolations = (workflow, { context, path }) => {
+  const v = [];
+  const check = (ok, what) => { if (!ok) v.push(what); };
+  check(workflow.includes(`\n      - .github/workflows/${path}\n`), "edits to the workflow re-run it");
+  const jobs = jobsOf(workflow);
+  const guard = jobs.get("guard");
+  if (!guard) return [...v, "a guard job exists"];
+  check(!/continue-on-error|\n\s+if:/.test(guard), "the guard cannot be skipped or soft-fail");
+  check(guard.includes(`\n        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs ${context}\n`),
+    "the guard scans the build context without the repository owner exemption");
+  const publishing = publishingJobs(jobs);
+  check(publishing.length > 0, "a publishing job exists");
+  check(!publishing.includes("guard"), "the guard job does not publish");
+  check(!/\$\{\{[^}]*inputs\./.test(guard.replace(/\n\s+[A-Z_]+:\s*\$\{\{[^}]*\}\}\s*(?=\n)/g, "")),
+    "dispatch inputs reach the guard only as step env values");
+  for (const job of [guard, ...publishing.map((n) => jobs.get(n))]) {
+    check(!/\n\s+(?:ref|repository):/.test(job), "the guard and the build check out the same tree (no ref: or repository:)");
+  }
+  for (const name of publishing.filter((n) => n !== "guard")) {
+    const job = jobs.get(name);
+    check(/\n\s+needs:\s*(?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\s*\n/.test(job), `${name} needs the guard`);
+    check(!/\n\s+if:|continue-on-error/.test(job), `${name} does not run around the guard`);
+    const contexts = [...job.matchAll(/\n\s+context:\s*(\S+)\s*\n/g)].map((m) => m[1]);
+    const builds = job.match(/\n\s+(?:-\s+)?uses:\s*["']?docker\/build-push-action@/g) ?? [];
+    check(builds.length > 0 && contexts.length === builds.length && contexts.every((c) => c === context),
+      `${name} builds only ${context}, and every build step names it`);
+    check(!/\n\s+(?:-\s+)?run:/.test(job), `${name} runs no commands that could change the scanned tree`);
+    check(!/\n\s+(?:sbom|attests):/.test(job), `${name} publishes no attestation the guard did not scan`);
+    for (const [, file] of job.matchAll(/\n\s+file:\s*(\S+)\s*\n/g)) {
+      check(file.startsWith(`${context}/`) && !file.split("/").includes(".."), `${name} uses a Dockerfile inside ${context}`);
+    }
+    check(!/\n\s+build-contexts:/.test(job), `${name} adds no build contexts the guard did not scan`);
+    check(/\n\s+provenance:\s*false\s*\n/.test(job), `${name} publishes no provenance the guard did not scan`);
+    check(!/\binputs\.|github\.event\.inputs/.test(job), `${name} takes dispatch inputs only through the guard's validated outputs`);
+    for (const [, out] of job.matchAll(/needs\.guard\.outputs\.([A-Za-z0-9_-]+)/g)) {
+      check(new RegExp(`\\n\\s+${out}:\\s*\\$\\{\\{\\s*steps\\.versions\\.outputs\\.${out}\\s*\\}\\}`).test(guard),
+        `the guard exports ${out} from its validation step`);
+      const variable = out.toUpperCase();
+      check(guard.includes(`[[ "$v" =~ ${RELEASE_VERSION} ]]`) && guard.includes(`for v in `) && new RegExp(`for v in [^\\n]*"\\$${variable}"`).test(guard),
+        `the guard validates ${out} as a release version`);
+      check(guard.includes(`\n          echo "${out}=$${variable}" >> "$GITHUB_OUTPUT"\n`), `the guard exports the validated ${variable}`);
+    }
+  }
+  return v;
+};
 
 for (const { context, workflow: path, retired } of IMAGES) {
   test(`the ${context} image is published only after its build context passes the guard`, () => {
     assert.ok(!existsSync(join(WORKFLOWS, retired)),
       "the unguarded workflow path stays retired, so disabling it cannot touch the guarded one");
-    const workflow = readFileSync(join(WORKFLOWS, path), "utf8");
-    assert.match(workflow, new RegExp(`\\n      - \\.github/workflows/${path.replace(/\./g, "\\.")}\\n`), "edits to the workflow re-run it");
-    const { names, job } = jobsOf(workflow);
-    const publishing = publishingJobs({ names, job });
-    assert.ok(publishing.length > 0, "a publishing job exists");
-    for (const name of publishing) {
-      assert.notEqual(name, "guard");
-      assert.match(job(name), /\n    needs: (?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\n/, `${name} must need the guard`);
-      assert.doesNotMatch(job(name), /\n\s+if:/, `${name} must not run around the guard`);
-      const built = /\n\s+context: (\S+)\n/.exec(job(name))?.[1];
-      assert.equal(built, context);
-      assert.match(job("guard"), new RegExp(`\\n\\s+run: node scripts/publication-guard\\.mjs ${built}\\n`),
-        "the guard scans the build context");
-    }
-    assert.doesNotMatch(job("guard"), /continue-on-error|\n\s+if:/, "the guard cannot be skipped or soft-fail");
+    assert.deepEqual(imageWorkflowViolations(readFileSync(join(WORKFLOWS, path), "utf8"), { context, path }), []);
   });
 }
 
-test("every workflow that publishes an image is one of the guarded image workflows", () => {
+test("seeded workflow mutations that would publish unscanned content are caught", () => {
+  const path = "publish-nebula-cmp.yml";
+  const context = "docker/nebula-cmp";
+  const real = readFileSync(join(WORKFLOWS, path), "utf8");
+  const edit = (from, to) => {
+    assert.ok(real.includes(from), `mutation anchor: ${from}`);
+    return real.replace(from, to);
+  };
+  const guardCheckout = "  guard:\n    name: Publication guard (build context)\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    permissions:\n      contents: read\n";
+  const mutations = {
+    "guard checks out another ref": edit("        with:\n          persist-credentials: false\n", "        with:\n          persist-credentials: false\n          ref: main\n"),
+    "build checks out another ref": edit("      - uses: actions/checkout@v4\n", "      - uses: actions/checkout@v4\n        with:\n          ref: main\n"),
+    "Dockerfile outside the context": edit("          context: docker/nebula-cmp\n", "          context: docker/nebula-cmp\n          file: Dockerfile\n"),
+    "Dockerfile escapes the context": edit("          context: docker/nebula-cmp\n", "          context: docker/nebula-cmp\n          file: docker/nebula-cmp/../../Dockerfile\n"),
+    "extra build context": edit("          context: docker/nebula-cmp\n", "          context: docker/nebula-cmp\n          build-contexts: extra=.\n"),
+    "needs dropped": edit("    needs: guard\n", ""),
+    "build runs regardless": edit("    needs: guard\n", "    needs: guard\n    if: always()\n"),
+    "build soft-fails": edit("    needs: guard\n", "    needs: guard\n    continue-on-error: true\n"),
+    "guard soft-fails": edit(guardCheckout, `${guardCheckout}    continue-on-error: true\n`),
+    "guard scans another dir": edit(`publication-guard.mjs ${context}\n`, "publication-guard.mjs docker\n"),
+    "owner exemption restored": edit("run: env -u GITHUB_REPOSITORY_OWNER node", "run: node"),
+    "provenance published": edit("          provenance: false\n", ""),
+    "raw dispatch input": edit("needs.guard.outputs.vals_version", "inputs.vals_version"),
+    "output not from validation": edit("steps.versions.outputs.vals_version }}", "inputs.vals_version }}"),
+    "unvalidated value exported": edit('echo "vals_version=$VALS_VERSION"', 'echo "vals_version=${{ inputs.vals_version }}"'),
+    "version left out of validation": edit('for v in "$HELM_VERSION" "$VALS_VERSION"; do', 'for v in "$HELM_VERSION"; do'),
+    "second build without context": edit("          provenance: false\n", "          provenance: false\n      - uses: docker/build-push-action@v6\n        with:\n          push: true\n"),
+    "context rewritten before build": edit("      - uses: docker/build-push-action@v6\n", "      - run: echo x > docker/nebula-cmp/extra\n      - uses: docker/build-push-action@v6\n"),
+    "sbom published": edit("          provenance: false\n", "          provenance: false\n          sbom: true\n"),
+  };
+  for (const [what, mutated] of Object.entries(mutations)) {
+    assert.notDeepEqual(imageWorkflowViolations(mutated, { context, path }), [], what);
+  }
+});
+
+test("the publisher detector sees jobs at any indent and every publishing form", () => {
+  const wf = (jobs) => `name: x\non:\n  push:\n    branches: [main]\njobs:\n${jobs}`;
+  const publishers = {
+    "four-space jobs": "    pub:\n        runs-on: ubuntu-24.04\n        steps:\n            - uses: docker/build-push-action@v6\n              with:\n                  push: true\n",
+    "registry output": "  pub:\n    steps:\n      - uses: docker/build-push-action@v6\n        with:\n          outputs: type=registry\n",
+    "image output": "  pub:\n    steps:\n      - uses: docker/build-push-action@v6\n        with:\n          outputs: type=image,name=x,push=true\n",
+    "commented header": "  pub: # publishes\n    permissions:\n      packages: write\n",
+    "docker push": "  pub:\n    steps:\n      - run: docker push x\n",
+    "pnpm publish": "  pub:\n    steps:\n      - run: pnpm publish --access public\n",
+    "helm push": "  pub:\n    steps:\n      - run: helm push chart.tgz oci://x\n",
+    "release action": "  pub:\n    steps:\n      - uses: softprops/action-gh-release@v2\n",
+  };
+  for (const [what, jobs] of Object.entries(publishers)) {
+    assert.deepEqual(publishingJobs(jobsOf(wf(jobs))), ["pub"], what);
+  }
+  const quiet = "  test:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: docker/build-push-action@v6\n        with:\n          push: false\n          load: true\n";
+  assert.deepEqual(publishingJobs(jobsOf(wf(quiet))), []);
+  assert.deepEqual([...jobsOf(wf(`${quiet}  other:\n    steps:\n      - run: true\n`)).keys()], ["test", "other"]);
+});
+
+test("every workflow that publishes (by the detector above) is one of the guarded image workflows", () => {
   const guarded = new Set(IMAGES.map((i) => i.workflow));
   for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
     const publishing = publishingJobs(jobsOf(readFileSync(join(WORKFLOWS, file), "utf8")));

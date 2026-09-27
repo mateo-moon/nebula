@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: "24"
       - name: Scan the image build context
-        run: node scripts/publication-guard.mjs docker/devops-bridge
+        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs docker/devops-bridge
 
   build:
     needs: guard
