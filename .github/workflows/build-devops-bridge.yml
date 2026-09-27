@@ -3,7 +3,9 @@ name: Build devops-bridge image
 on:
   push:
     branches: [main, "feat/**"]
-    paths: [docker/devops-bridge/**]
+    paths:
+      - docker/devops-bridge/**
+      - .github/workflows/build-devops-bridge.yml
   workflow_dispatch:
 
 env:
@@ -44,3 +46,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: false

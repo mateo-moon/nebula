@@ -76,7 +76,7 @@ export interface AwsConfig {
  * ```typescript
  * new AwsProvider(chart, 'aws-provider', { families: ['ec2', 'iam', 'route53', 'kms'], credentials: {...} });
  * new Aws(chart, 'aws', {
- *   name: 'example-aws',
+ *   name: 'my-aws',
  *   region: 'eu-central-1',
  *   route53Zone: { name: 'aws.example.com' },
  *   kmsKey: { multiRegion: true },

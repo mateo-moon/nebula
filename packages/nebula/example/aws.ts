@@ -60,7 +60,7 @@ new AwsProvider(mgmt, "aws-provider", {
 
 // AWS primitives beside the cluster: node IAM profile + Route53 zone + SOPS KMS
 new Aws(mgmt, "aws", {
-  name: "example",
+  name: "demo",
   region,
   route53Zone: { name: domain },
   kmsKey: { multiRegion: true },
@@ -83,7 +83,7 @@ new ClusterApiOperator(mgmt, "capi", {
 // single, reusable way nebula defines a cluster (a future GcpK0sProvider slots
 // into the same base).
 new K0sCluster(mgmt, "workload", {
-  name: "example-aws",
+  name: "demo-aws",
   k8sVersion: "v1.31.8",
   // k0s installs NO CNI ("custom") so Calico owns pod networking + the encrypted
   // node mesh (installed on the workload cluster below).
@@ -138,7 +138,7 @@ new K0sCluster(mgmt, "workload", {
   // AWS (CAPA) infrastructure adapter — cluster-level infra config lives here.
   provider: new AwsK0sProvider({
     region,
-    sshKeyName: "example-aws", // a pre-existing EC2 key pair
+    sshKeyName: "demo-aws", // a pre-existing EC2 key pair
     iamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
     // Spread subnets/NAT gateways across 3 AZs (one NAT + Elastic IP per AZ).
     availabilityZoneUsageLimit: 3,
@@ -146,28 +146,28 @@ new K0sCluster(mgmt, "workload", {
     // so open the P2P ports to the internet on every node.
     additionalNodeIngressRules: [
       {
-        description: "Client P2P (TCP)",
+        description: "P2P 30303 (TCP)",
         protocol: "tcp",
         fromPort: 30303,
         toPort: 30303,
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
-        description: "Client P2P (UDP discovery)",
+        description: "P2P 30303 (UDP discovery)",
         protocol: "udp",
         fromPort: 30303,
         toPort: 30303,
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
-        description: "Peer P2P (TCP)",
+        description: "P2P 9000 (TCP)",
         protocol: "tcp",
         fromPort: 9000,
         toPort: 9000,
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
-        description: "Peer P2P (UDP discovery)",
+        description: "P2P 9000 (UDP discovery)",
         protocol: "udp",
         fromPort: 9000,
         toPort: 9000,
@@ -247,7 +247,7 @@ new Longhorn(workload, "longhorn", {});
 // Renders an encrypted gp3 StorageClass marked as the cluster default.
 new AwsEbsCsiDriver(workload, "aws-ebs-csi-driver", {
   region,
-  clusterName: "example-aws",
+  clusterName: "demo-aws",
   storageClass: { isDefault: true },
 });
 
@@ -259,7 +259,7 @@ new CertManager(workload, "cert-manager", { acmeEmail: `admin@${domain}` });
 new ImagePullSecret(workload, "gcr-pull-secret", {
   registry: "gcr.io",
   saJsonRef: '{"type":"service_account","project_id":"example"}',
-  namespaces: ["app-node", "app-node-2"],
+  namespaces: ["app", "app-2"],
 });
 
 // NodePort ingress (k0smotron control plane has no AWS LB controller dependency).
@@ -277,7 +277,7 @@ new ExternalDns(workload, "external-dns", {
   awsRegion: region,
   domainFilters: [domain],
   policy: "sync",
-  txtOwnerId: "example-aws",
+  txtOwnerId: "demo-aws",
   createGcpServiceAccount: false,
   credentialsSecret: { name: "route53-credentials" },
 });
