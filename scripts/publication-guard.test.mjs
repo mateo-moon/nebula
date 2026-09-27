@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, randomBytes, randomInt } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -359,7 +359,8 @@ const jobsOf = (workflow) => {
   };
   return { names, job };
 };
-const publishingJobs = ({ names, job }) => names.filter((n) => /\n\s+(?:packages: write|push: (?!false\b))/.test(job(n)));
+const publishingJobs = ({ names, job }) =>
+  names.filter((n) => /\n\s+(?:packages: write|push: (?!false\b))|\b(?:docker|podman|buildah|oras|crane|skopeo) (?:image )?(?:push|copy)\b|\s--push\b|\bnpm publish\b|\bgh release (?:create|upload)\b/.test(job(n)));
 
 for (const { context, workflow: path, retired } of IMAGES) {
   test(`the ${context} image is published only after its build context passes the guard`, () => {
@@ -383,8 +384,7 @@ for (const { context, workflow: path, retired } of IMAGES) {
   });
 }
 
-test("every workflow that publishes an image is one of the guarded image workflows", async () => {
-  const { readdirSync } = await import("node:fs");
+test("every workflow that publishes an image is one of the guarded image workflows", () => {
   const guarded = new Set(IMAGES.map((i) => i.workflow));
   for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
     const publishing = publishingJobs(jobsOf(readFileSync(join(WORKFLOWS, file), "utf8")));
