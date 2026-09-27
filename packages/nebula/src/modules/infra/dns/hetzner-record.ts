@@ -22,9 +22,9 @@ import { ApiObject } from "cdk8s";
 const NAME_VALUED_TYPES = new Set(["CNAME", "NS", "PTR"]);
 
 export interface HetznerDnsRecordConfig {
-  /** Hetzner Cloud zone id the rrset lives in (e.g. '1030670'). */
+  /** Hetzner Cloud zone id the rrset lives in (e.g. '1234567'). */
   hetznerZoneId: string;
-  /** Relative rrset label within the zone (e.g. 'relay-hoodi'). */
+  /** Relative rrset label within the zone (e.g. 'relay'). */
   name: string;
   /** rrset type: 'CNAME', 'A', 'AAAA', 'TXT', ... */
   type: string;
