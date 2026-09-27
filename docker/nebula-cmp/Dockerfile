@@ -1,5 +1,5 @@
 # Multi-arch (amd64 + arm64). Build with:
-#   docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/mateo-moon/nebula-cmp:latest --push .
+#   docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<owner>/nebula-cmp:latest --push .
 # node:*-alpine is already multi-arch; TARGETARCH is set by buildx per platform
 # (amd64 | arm64), which matches both the Helm and vals release asset naming.
 FROM node:24-alpine

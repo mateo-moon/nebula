@@ -304,19 +304,26 @@ test("the checked-in allowlist is well formed", async () => {
   }
 });
 
-test("the default scope covers the bridge image build context", (t) => {
-  assert.ok(DEFAULT_SCOPE.includes("docker/devops-bridge"));
-  const root = tempDir(t);
-  execFileSync("git", ["init", "-q", root]);
-  mkdirSync(join(root, "docker", "devops-bridge"), { recursive: true });
-  const marker = ["10", "66", "77", "88"].join(".");
-  writeFileSync(join(root, "docker", "devops-bridge", "synthetic.py"), `# synthetic marker\nBACKEND = "${marker}"\n`);
-  const run = spawnSync(process.execPath, [GUARD, "--root", root, "--json"], { encoding: "utf8" });
-  assert.equal(run.status, 1, run.stdout + run.stderr);
-  assert.deepEqual(JSON.parse(run.stdout).findings.map((f) => [f.source, f.line, f.class]),
-    [["docker/devops-bridge/synthetic.py", 2, "rfc1918-ip"]]);
-  assert.ok(!run.stdout.includes(marker), "CLI output leaked a value");
-});
+const IMAGES = [
+  { context: "docker/devops-bridge", workflow: "publish-devops-bridge.yml", retired: "build-devops-bridge.yml", file: "synthetic.py" },
+  { context: "docker/nebula-cmp", workflow: "publish-nebula-cmp.yml", retired: "build-nebula-cmp.yml", file: "Dockerfile" },
+];
+
+for (const { context, file } of IMAGES) {
+  test(`the default scope covers the ${context} image build context`, (t) => {
+    assert.ok(DEFAULT_SCOPE.includes(context));
+    const root = tempDir(t);
+    execFileSync("git", ["init", "-q", root]);
+    mkdirSync(join(root, ...context.split("/")), { recursive: true });
+    const marker = ["10", "66", "77", "88"].join(".");
+    writeFileSync(join(root, ...context.split("/"), file), `# synthetic marker\nBACKEND = "${marker}"\n`);
+    const run = spawnSync(process.execPath, [GUARD, "--root", root, "--json"], { encoding: "utf8" });
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.deepEqual(JSON.parse(run.stdout).findings.map((f) => [f.source, f.line, f.class]),
+      [[`${context}/${file}`, 2, "rfc1918-ip"]]);
+    assert.ok(!run.stdout.includes(marker), "CLI output leaked a value");
+  });
+}
 
 test("a method call is not a bare domain; the Matrix homeserver domain is upstream", () => {
   assert.deepEqual(scan('log.info("%d alert(s)", n)\nMATRIX_HOMESERVER e.g. https://matrix.org'), []);
@@ -327,12 +334,21 @@ test("a method call is not a bare domain; the Matrix homeserver domain is upstre
   assert.deepEqual(classes(scan("see docs.acme-corp.io(beta)")), ["domain"]);
 });
 
-test("the bridge image is published only after its build context passes the guard", () => {
-  const workflows = join(dirname(GUARD), "..", ".github", "workflows");
-  assert.ok(!existsSync(join(workflows, "build-devops-bridge.yml")),
-    "the unguarded workflow path stays retired, so disabling it cannot touch the guarded one");
-  const workflow = readFileSync(join(workflows, "publish-devops-bridge.yml"), "utf8");
-  assert.match(workflow, /\n      - \.github\/workflows\/publish-devops-bridge\.yml\n/, "edits to the workflow re-run it");
+test("the Helm and vals download sources are upstream; neighbouring names are not", () => {
+  const clean = [
+    'wget -qO /tmp/helm.tar.gz "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${TARGETARCH}.tar.gz"',
+    'wget -qO /tmp/vals.tar.gz "https://github.com/helmfile/vals/releases/download/v${VALS_VERSION}/vals.tar.gz"',
+    "docs: https://helm.sh/docs/",
+  ];
+  for (const text of clean) assert.deepEqual(scan(text), [], text);
+  assert.deepEqual(classes(scan("https://get.helm-mirror.sh/helm.tar.gz")), ["domain"]);
+  assert.deepEqual(classes(scan("https://helm.sh.acme-corp.io/helm.tar.gz")), ["domain"]);
+  assert.deepEqual(classes(scan("https://github.com/helmfile-fork/vals")), ["repository-owner"]);
+  assert.deepEqual(classes(scan("ghcr.io/helmfiles/vals:1")), ["registry-namespace"]);
+});
+
+const WORKFLOWS = join(dirname(GUARD), "..", ".github", "workflows");
+const jobsOf = (workflow) => {
   const jobs = workflow.slice(workflow.indexOf("\njobs:"));
   const names = [...jobs.matchAll(/\n  ([A-Za-z0-9_-]+):\n/g)].map((m) => m[1]);
   const job = (name) => {
@@ -341,16 +357,46 @@ test("the bridge image is published only after its build context passes the guar
     const next = jobs.slice(start + 1).search(/\n  [A-Za-z0-9_-]+:\n/);
     return next < 0 ? jobs.slice(start) : jobs.slice(start, start + 1 + next);
   };
-  const publishing = names.filter((n) => /\n\s+(?:packages: write|push: (?!false\b))/.test(job(n)));
-  assert.ok(publishing.length > 0, "a publishing job exists");
-  for (const name of publishing) {
-    assert.notEqual(name, "guard");
-    assert.match(job(name), /\n    needs: (?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\n/, `${name} must need the guard`);
-    assert.doesNotMatch(job(name), /\n\s+if:/, `${name} must not run around the guard`);
-    const context = /\n\s+context: (\S+)\n/.exec(job(name))?.[1];
-    assert.equal(context, "docker/devops-bridge");
-    assert.match(job("guard"), new RegExp(`\\n\\s+run: node scripts/publication-guard\\.mjs ${context}\\n`),
-      "the guard scans the build context");
+  return { names, job };
+};
+const publishingJobs = ({ names, job }) => names.filter((n) => /\n\s+(?:packages: write|push: (?!false\b))/.test(job(n)));
+
+for (const { context, workflow: path, retired } of IMAGES) {
+  test(`the ${context} image is published only after its build context passes the guard`, () => {
+    assert.ok(!existsSync(join(WORKFLOWS, retired)),
+      "the unguarded workflow path stays retired, so disabling it cannot touch the guarded one");
+    const workflow = readFileSync(join(WORKFLOWS, path), "utf8");
+    assert.match(workflow, new RegExp(`\\n      - \\.github/workflows/${path.replace(/\./g, "\\.")}\\n`), "edits to the workflow re-run it");
+    const { names, job } = jobsOf(workflow);
+    const publishing = publishingJobs({ names, job });
+    assert.ok(publishing.length > 0, "a publishing job exists");
+    for (const name of publishing) {
+      assert.notEqual(name, "guard");
+      assert.match(job(name), /\n    needs: (?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\n/, `${name} must need the guard`);
+      assert.doesNotMatch(job(name), /\n\s+if:/, `${name} must not run around the guard`);
+      const built = /\n\s+context: (\S+)\n/.exec(job(name))?.[1];
+      assert.equal(built, context);
+      assert.match(job("guard"), new RegExp(`\\n\\s+run: node scripts/publication-guard\\.mjs ${built}\\n`),
+        "the guard scans the build context");
+    }
+    assert.doesNotMatch(job("guard"), /continue-on-error|\n\s+if:/, "the guard cannot be skipped or soft-fail");
+  });
+}
+
+test("every workflow that publishes an image is one of the guarded image workflows", async () => {
+  const { readdirSync } = await import("node:fs");
+  const guarded = new Set(IMAGES.map((i) => i.workflow));
+  for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
+    const publishing = publishingJobs(jobsOf(readFileSync(join(WORKFLOWS, file), "utf8")));
+    if (publishing.length > 0) assert.ok(guarded.has(file), `${file} publishes (${publishing.join(", ")}) without a guarded image entry`);
   }
-  assert.doesNotMatch(job("guard"), /continue-on-error|\n\s+if:/, "the guard cannot be skipped or soft-fail");
+});
+
+test("the image build contexts pass without the repository owner exemption", () => {
+  const env = { ...process.env };
+  delete env.GITHUB_REPOSITORY_OWNER;
+  for (const { context } of IMAGES) {
+    const run = spawnSync(process.execPath, [GUARD, "--root", join(WORKFLOWS, "..", ".."), context], { encoding: "utf8", env });
+    assert.equal(run.status, 0, `${context}: ${run.stdout}${run.stderr}`);
+  }
 });
