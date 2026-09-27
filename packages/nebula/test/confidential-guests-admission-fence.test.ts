@@ -36,8 +36,8 @@ const render = (value: GuestAdmissionFenceProps) => {
 test("two cluster-scoped policies, each with its binding, limited to the selected namespaces", () => {
   const selector = { matchLabels: { "kubernetes.io/metadata.name": "guests" } };
   const annotations = { "argocd.argoproj.io/sync-wave": "-2" };
-  const unprivileged = "!has(c.securityContext) || (!(has(c.securityContext.privileged) && c.securityContext.privileged)"
-    + " && !(has(c.securityContext.allowPrivilegeEscalation) && c.securityContext.allowPrivilegeEscalation))";
+  const unprivileged = "has(c.securityContext) && has(c.securityContext.allowPrivilegeEscalation)"
+    + " && c.securityContext.allowPrivilegeEscalation == false && !(has(c.securityContext.privileged) && c.securityContext.privileged)";
   const policy = (name: string, spec: object) => ({ apiVersion: "admissionregistration.k8s.io/v1", kind: "ValidatingAdmissionPolicy",
     metadata: { name, annotations }, spec: { failurePolicy: "Fail",
       matchConstraints: { namespaceSelector: selector, resourceRules: [{ apiGroups: [""], apiVersions: ["v1"], operations: ["CREATE"], resources: ["pods"] }] },
