@@ -472,7 +472,7 @@ function readApi(value: MeasuredValue): GuestWorkloadApi {
     ensure(typeof route === "string" && ROUTE.test(route), `routes.${key} must be a path without query or fragment`);
   }
   const route = routes as Record<(typeof ROUTES)[number], string>;
-  ensure(new Set([route.status, route.evidence, route.sign]).size === 3, "portal routes must differ");
+  ensure(new Set([route.status, route.evidence, route.sign]).size === 3, "workload routes must differ");
   ensure(route.config !== route.verify, "verifier routes must differ");
   for (const key of ["signDomain", "keyResolverDomain"] as const) {
     const domain = root[key];
