@@ -398,6 +398,8 @@ const imageWorkflowViolations = (workflow, { context, path }) => {
   const publishing = publishingJobs(jobs);
   check(publishing.length > 0, "a publishing job exists");
   check(!publishing.includes("guard"), "the guard job does not publish");
+  check(!/\$\{\{[^}]*inputs\./.test(guard.replace(/\n\s+[A-Z_]+:\s*\$\{\{[^}]*\}\}\s*(?=\n)/g, "")),
+    "dispatch inputs reach the guard only as step env values");
   for (const job of [guard, ...publishing.map((n) => jobs.get(n))]) {
     check(!/\n\s+(?:ref|repository):/.test(job), "the guard and the build check out the same tree (no ref: or repository:)");
   }
@@ -406,7 +408,11 @@ const imageWorkflowViolations = (workflow, { context, path }) => {
     check(/\n\s+needs:\s*(?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\s*\n/.test(job), `${name} needs the guard`);
     check(!/\n\s+if:|continue-on-error/.test(job), `${name} does not run around the guard`);
     const contexts = [...job.matchAll(/\n\s+context:\s*(\S+)\s*\n/g)].map((m) => m[1]);
-    check(contexts.length > 0 && contexts.every((c) => c === context), `${name} builds only ${context}`);
+    const builds = job.match(/\n\s+(?:-\s+)?uses:\s*["']?docker\/build-push-action@/g) ?? [];
+    check(builds.length > 0 && contexts.length === builds.length && contexts.every((c) => c === context),
+      `${name} builds only ${context}, and every build step names it`);
+    check(!/\n\s+(?:-\s+)?run:/.test(job), `${name} runs no commands that could change the scanned tree`);
+    check(!/\n\s+(?:sbom|attests):/.test(job), `${name} publishes no attestation the guard did not scan`);
     for (const [, file] of job.matchAll(/\n\s+file:\s*(\S+)\s*\n/g)) {
       check(file.startsWith(`${context}/`) && !file.split("/").includes(".."), `${name} uses a Dockerfile inside ${context}`);
     }
@@ -416,7 +422,10 @@ const imageWorkflowViolations = (workflow, { context, path }) => {
     for (const [, out] of job.matchAll(/needs\.guard\.outputs\.([A-Za-z0-9_-]+)/g)) {
       check(new RegExp(`\\n\\s+${out}:\\s*\\$\\{\\{\\s*steps\\.versions\\.outputs\\.${out}\\s*\\}\\}`).test(guard),
         `the guard exports ${out} from its validation step`);
-      check(guard.includes(RELEASE_VERSION), `the guard validates ${out} as a release version`);
+      const variable = out.toUpperCase();
+      check(guard.includes(`[[ "$v" =~ ${RELEASE_VERSION} ]]`) && guard.includes(`for v in `) && new RegExp(`for v in [^\\n]*"\\$${variable}"`).test(guard),
+        `the guard validates ${out} as a release version`);
+      check(guard.includes(`\n          echo "${out}=$${variable}" >> "$GITHUB_OUTPUT"\n`), `the guard exports the validated ${variable}`);
     }
   }
   return v;
@@ -454,6 +463,11 @@ test("seeded workflow mutations that would publish unscanned content are caught"
     "provenance published": edit("          provenance: false\n", ""),
     "raw dispatch input": edit("needs.guard.outputs.vals_version", "inputs.vals_version"),
     "output not from validation": edit("steps.versions.outputs.vals_version }}", "inputs.vals_version }}"),
+    "unvalidated value exported": edit('echo "vals_version=$VALS_VERSION"', 'echo "vals_version=${{ inputs.vals_version }}"'),
+    "version left out of validation": edit('for v in "$HELM_VERSION" "$VALS_VERSION"; do', 'for v in "$HELM_VERSION"; do'),
+    "second build without context": edit("          provenance: false\n", "          provenance: false\n      - uses: docker/build-push-action@v6\n        with:\n          push: true\n"),
+    "context rewritten before build": edit("      - uses: docker/build-push-action@v6\n", "      - run: echo x > docker/nebula-cmp/extra\n      - uses: docker/build-push-action@v6\n"),
+    "sbom published": edit("          provenance: false\n", "          provenance: false\n          sbom: true\n"),
   };
   for (const [what, mutated] of Object.entries(mutations)) {
     assert.notDeepEqual(imageWorkflowViolations(mutated, { context, path }), [], what);
