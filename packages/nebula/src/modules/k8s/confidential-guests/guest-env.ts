@@ -3,7 +3,6 @@
 // same order and with the same messages as the guest's own readers. nebula
 // reads back everything it renders (see wire.ts and deployment-env.ts).
 import { GuestEnvError, ensure, measuredJson, measuredText, refuse, type MeasuredValue } from "./measured-json";
-import { isPlainObject } from "./validate";
 
 export { GuestEnvError } from "./measured-json";
 
@@ -38,8 +37,46 @@ const SCOPE_FIELD = /^[a-z][a-z0-9_]{0,31}$/;
 export interface GuestWireDocument {
   readonly payloadTypes: Readonly<Record<PayloadKey, readonly string[]>>;
   readonly domains: Readonly<Record<DomainKey, readonly string[]>>;
+  /** For some accepted authorization domains, the control-bridge schema a handshake bound to that domain names instead of the derived one. */
+  readonly controlBridgeSchemas?: Readonly<Record<string, string>>;
   readonly releaseSet?: { readonly roles: readonly string[]; readonly scope: readonly string[] };
   readonly workloadRef?: string;
+}
+
+/** The file at a volume's mount root that holds `prefix` followed by 64 lower-case hex digits. */
+export interface GuestVolumeMarker {
+  readonly file: string;
+  readonly prefix: string;
+}
+
+/**
+ * A client of a sealed volume: its subtree `name` at the volume root, created
+ * with owner `uid`:`gid` and mode `mode` and checked on every boot, and how it
+ * is launched (`program`, and `graceSeconds` to stop). A client name and a
+ * uid belong to one client of the whole layout.
+ */
+export interface GuestVolumeClient {
+  /** `[a-z][a-z0-9-]{0,31}`. */
+  readonly name: string;
+  /** 1 to 2147483647. */
+  readonly uid: number;
+  /** The subtree's group, 0 to 2147483647. */
+  readonly gid: number;
+  /** The subtree's mode: `0` and three octal digits, such as `"0750"`. */
+  readonly mode: string;
+  /** 1 to 3600. */
+  readonly graceSeconds: number;
+  /** An absolute path. */
+  readonly program: string;
+}
+
+/** A file written each boot to `dir`/`name` (a per-guest directory) with one 32-byte secret of the identity record as hex. */
+export interface GuestVolumeExport {
+  readonly name: string;
+  readonly dir: string;
+  readonly owner: { readonly uid: number; readonly gid: number };
+  /** `0` and three octal digits, such as `"0400"`. */
+  readonly mode: string;
 }
 
 /** One sealed volume of a {@link GuestStorageLayout}. */
@@ -54,6 +91,11 @@ export interface GuestStorageVolume {
   readonly map: string;
   /** Where the guest mounts it. */
   readonly mount: string;
+  readonly marker: GuestVolumeMarker;
+  /** One to eight clients. */
+  readonly clients: readonly GuestVolumeClient[];
+  /** Exactly three on the volume `secrets.volume` names (the record's secrets, in order), none on any other. */
+  readonly exports?: readonly GuestVolumeExport[];
 }
 
 /** An identity record format: the header before the secrets and the domain of their fingerprint (ASCII prefixes). */
@@ -63,23 +105,29 @@ export interface GuestRecordFormat {
 }
 
 /**
- * GUEST_STORAGE_LAYOUT: the guest's two sealed volumes, the key-derivation
- * labels of their passphrases, the SNP key request that seals the lifecycle
- * passphrase, and the identity record. The record's formats belong to the
- * disk, not the wire: the first is written, every one is read, and a record
- * is fingerprinted under the domain of the format it carries.
+ * GUEST_STORAGE_LAYOUT: the guest's sealed volumes, named by configuration
+ * (one to eight, each `[a-z][a-z0-9-]{0,31}`), with everything a disk
+ * carries at rest (its marker, client subtrees, lifecycle record and
+ * placeholder magic); the key-derivation labels of their passphrases; the SNP
+ * key request that seals the lifecycle passphrase; and the identity record.
+ * The record's formats belong to the disk, not the wire: the first is
+ * written, every one is read, and a record is fingerprinted under the domain
+ * of the format it carries.
  */
 export interface GuestStorageLayout {
-  readonly data: GuestStorageVolume;
-  readonly workspace: GuestStorageVolume;
+  readonly volumes: Readonly<Record<string, GuestStorageVolume>>;
   readonly kdf: { readonly extract: string; readonly passphrase: string };
   /** SNP key request: `mask` selects GUEST_POLICY and MEASUREMENT (0x9) within 0x3f; `tcb` is 16 hex digits, non-zero exactly when the mask selects TCB_VERSION (0x20). */
   readonly lifecycleKey: { readonly mask: number; readonly tcb: string };
+  /** The lifecycle record's file at a volume root, and the temporary file it is replaced through. */
+  readonly lifecycleRecord: { readonly name: string; readonly temp: string };
+  /** The first bytes of a stage placeholder disk, whose first sector is the magic and then zeros. */
+  readonly placeholderMagic: string;
   readonly secrets: {
     readonly file: string;
     readonly formats: readonly GuestRecordFormat[];
-    readonly keyExports: readonly [string, string];
-    readonly sharedSecretExport: string;
+    /** The volume that holds the record and carries its exports. */
+    readonly volume: string;
   };
 }
 
@@ -87,7 +135,7 @@ export interface GuestStorageLayout {
 export interface GuestWorkloadApi {
   /** The adapter's `MODE`. */
   readonly mode: string;
-  /** Workload routes (status, evidence, sign) and verifier routes (config, verify). */
+  /** The workload's routes (status, evidence, sign), asked of the adapter, and the verifier's (config, verify). */
   readonly routes: { readonly status: string; readonly evidence: string; readonly sign: string; readonly config: string; readonly verify: string };
   readonly signDomain: string;
   readonly keyResolverDomain: string;
@@ -106,13 +154,6 @@ export interface GuestEnvOptions {
    * (after it). It never stands in for `workloadRef`.
    */
   readonly legacyWorkloadRefEnv?: string;
-  /**
-   * Control-bridge schemas that predate the derivation rule, by the
-   * authorization domain that names them. Every other domain derives its
-   * schema by the rule. They are derived, never rendered, and take part in
-   * the check that no two authorization domains derive one schema.
-   */
-  readonly controlBridgeSchemas?: Readonly<Record<string, string>>;
 }
 
 /** Who reads the env: `every` guest component, or besides that the `adapter` (its MODE) or the control `bridge` (its one operator role). */
@@ -127,7 +168,7 @@ export interface GuestDeployment {
   readonly workloadRef: string;
   /** Every accepted session schema: each session domain in lower case, `_` as `.`. */
   readonly sessionSchemas: readonly string[];
-  /** Every accepted control-bridge schema, derived from the authorization domains by the same rule, or named in {@link GuestEnvOptions}. */
+  /** Every accepted control-bridge schema: the one the profile's `controlBridgeSchemas` names for an authorization domain, else the domain's by the session rule. */
   readonly controlBridgeSchemas: readonly string[];
   /** Every accepted payload schema, by statement type. */
   readonly payloadSchemas: Readonly<Record<PayloadKey, readonly string[]>>;
@@ -174,21 +215,28 @@ export const sessionSchemaOf = (domain: string) => domain.toLowerCase().replaceA
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SCHEMA = /^[a-z0-9][a-z0-9._-]*$/;
 
-/** The control-bridge schema of each authorization domain: the caller's named ones, else the derivation rule. */
-function controlBridgeSchemaOf(where: string, options: GuestEnvOptions | undefined): (domain: string) => string {
-  const named = options?.controlBridgeSchemas;
-  if (named === undefined) return sessionSchemaOf;
-  if (!isPlainObject(named)) throw new TypeError(`${where}: controlBridgeSchemas must be an object of authorization domain to schema`);
-  for (const [domain, schema] of Object.entries(named)) {
-    if (!WIRE_STRING.test(domain)) throw new TypeError(`${where}: controlBridgeSchemas key ${quoted(domain)} must be printable ASCII without spaces`);
-    if (typeof schema !== "string" || !SCHEMA.test(schema)) throw new TypeError(`${where}: controlBridgeSchemas[${quoted(domain)}] must be a lower-case schema`);
+/** The control-bridge schema of an authorization domain: the one the profile names, else the session rule's. */
+const controlBridgeSchemaOf = (named: Readonly<Record<string, string>> | undefined) =>
+  (domain: string) => (named && Object.hasOwn(named, domain) ? named[domain] : sessionSchemaOf(domain));
+
+/** An object's keys in their canonical (code point) order, which is the text's: JavaScript lists integer-like keys first. */
+const keysOf = (value: { [key: string]: MeasuredValue }) => Object.keys(value).sort();
+
+/** controlBridgeSchemas: a non-empty object of accepted authorization domains to schemas, each key checked for both rules before the next. */
+function readBridgeSchemas(value: MeasuredValue, controls: readonly string[]): Record<string, string> {
+  ensure(isObject(value) && Object.keys(value).length > 0, "controlBridgeSchemas must be a non-empty object");
+  const schemas: Record<string, string> = {};
+  for (const domain of keysOf(value)) {
+    ensure(controls.includes(domain), `controlBridgeSchemas: ${quoted(domain)} is not a domains.controlAuthorization value`);
+    const schema = value[domain];
+    ensure(typeof schema === "string" && SCHEMA.test(schema), `controlBridgeSchemas[${quoted(domain)}] must match [a-z0-9][a-z0-9._-]*`);
+    schemas[domain] = schema;
   }
-  const schemas = new Map(Object.entries(named as Record<string, string>));
-  return domain => schemas.get(domain) ?? sessionSchemaOf(domain);
+  return schemas;
 }
 
-function readWire(value: MeasuredValue, controlBridgeSchema: (domain: string) => string): GuestWireDocument {
-  const root = object(value, "profile", ["domains", "payloadTypes"], ["releaseSet", "workloadRef"]);
+function readWire(value: MeasuredValue): GuestWireDocument {
+  const root = object(value, "profile", ["domains", "payloadTypes"], ["controlBridgeSchemas", "releaseSet", "workloadRef"]);
   const payloads = object(root.payloadTypes, "payloadTypes", PAYLOAD_KEYS);
   const domains = object(root.domains, "domains", DOMAIN_KEYS);
   const payloadTypes = {} as Record<PayloadKey, string[]>;
@@ -202,8 +250,10 @@ function readWire(value: MeasuredValue, controlBridgeSchema: (domain: string) =>
   for (const key of DOMAIN_KEYS) domainValues[key] = strings(domains[key], `domains.${key}`);
   disjoint("payloadTypes", PAYLOAD_KEYS.map(key => [key, payloadTypes[key]] as const));
   disjoint("domains", DOMAIN_KEYS.map(key => [key, domainValues[key]] as const));
-  // A handshake's schema selects the one authorization domain both sides bind.
   const controls = domainValues.controlAuthorization;
+  const bridgeSchemas = Object.hasOwn(root, "controlBridgeSchemas") ? readBridgeSchemas(root.controlBridgeSchemas, controls) : undefined;
+  // A handshake's schema selects the one authorization domain both sides bind.
+  const controlBridgeSchema = controlBridgeSchemaOf(bridgeSchemas);
   controls.forEach((first, index) => {
     for (const second of controls.slice(index + 1)) {
       const schema = controlBridgeSchema(first);
@@ -211,6 +261,7 @@ function readWire(value: MeasuredValue, controlBridgeSchema: (domain: string) =>
     }
   });
   const document: { -readonly [K in keyof GuestWireDocument]: GuestWireDocument[K] } = { payloadTypes, domains: domainValues };
+  if (bridgeSchemas) document.controlBridgeSchemas = bridgeSchemas;
   if (Object.hasOwn(root, "releaseSet")) document.releaseSet = readReleaseSet(root.releaseSet);
   if (Object.hasOwn(root, "workloadRef")) {
     const ref = root.workloadRef;
@@ -244,9 +295,17 @@ const MAX_INTEGER = 1n << 53n;
 const KNOWN_FIELDS = 0x3fn;
 const REQUIRED_FIELDS = 0x1n | 0x8n;
 const TCB_VERSION = 0x20n;
+const MAX_ID = 2147483647n;
+const MAX_GRACE = 3600n;
+const MAX_ENTRIES = 8;
+// The identity record's 96 secret bytes, one export per 32.
+const EXPORTS = 3;
 const MAPPER = /^[a-z0-9][a-z0-9._-]{0,126}$/;
 const PATH_PART = /^[A-Za-z0-9._-]+$/;
 const FILE_NAME = /^[A-Za-z0-9._-]{1,64}$/;
+const NAME = /^[a-z][a-z0-9-]{0,31}$/;
+const MODE_BITS = /^0[0-7]{3}$/;
+const MAGIC = /^[\x20-\x7e\n]{1,64}$/;
 
 /** A JSON unsigned integer (0 to 2^64 - 1), else undefined. */
 const count = (value: MeasuredValue) => (typeof value === "bigint" && value >= 0n && value < 1n << 64n ? value : undefined);
@@ -263,16 +322,59 @@ function fileName(value: MeasuredValue, name: string): string {
 
 const absolute = (path: string) => path.startsWith("/") && path.slice(1).split("/").every(part => part !== "." && part !== ".." && PATH_PART.test(part));
 
+function path(value: MeasuredValue, name: string): string {
+  ensure(typeof value === "string" && value.length <= 255 && absolute(value), `${name} must be an absolute path without . or ..`);
+  return value;
+}
+
+function boundedInteger(value: MeasuredValue, name: string, low: bigint, high: bigint): number {
+  const number = count(value);
+  ensure(number !== undefined && number >= low && number <= high, `${name} must be an integer from ${low} to ${high}`);
+  return Number(number);
+}
+
+function mode(value: MeasuredValue, name: string): string {
+  ensure(typeof value === "string" && MODE_BITS.test(value), `${name} must be 0 and three octal digits`);
+  return value;
+}
+
+function entries(value: MeasuredValue, name: string, what: string): MeasuredValue[] {
+  ensure(Array.isArray(value) && value.length >= 1 && value.length <= MAX_ENTRIES, `${name} must list one to eight ${what}`);
+  return value;
+}
+
+function client(value: MeasuredValue, name: string): GuestVolumeClient {
+  const fields = object(value, name, ["gid", "graceSeconds", "mode", "name", "program", "uid"]);
+  const clientName = fields.name;
+  ensure(typeof clientName === "string" && NAME.test(clientName), `${name}.name must be a client name`);
+  const uid = boundedInteger(fields.uid, `${name}.uid`, 1n, MAX_ID), gid = boundedInteger(fields.gid, `${name}.gid`, 0n, MAX_ID);
+  const bits = mode(fields.mode, `${name}.mode`);
+  const graceSeconds = boundedInteger(fields.graceSeconds, `${name}.graceSeconds`, 1n, MAX_GRACE);
+  return { name: clientName, uid, gid, mode: bits, graceSeconds, program: path(fields.program, `${name}.program`) };
+}
+
+function exported(value: MeasuredValue, name: string): GuestVolumeExport {
+  const fields = object(value, name, ["dir", "mode", "name", "owner"]);
+  const file = fileName(fields.name, `${name}.name`), dir = path(fields.dir, `${name}.dir`);
+  const owner = object(fields.owner, `${name}.owner`, ["gid", "uid"]);
+  const uid = boundedInteger(owner.uid, `${name}.owner.uid`, 0n, MAX_ID), gid = boundedInteger(owner.gid, `${name}.owner.gid`, 0n, MAX_ID);
+  return { name: file, dir, owner: { uid, gid }, mode: mode(fields.mode, `${name}.mode`) };
+}
+
 function volume(value: MeasuredValue, name: string): GuestStorageVolume {
-  const fields = object(value, name, ["bytes", "map", "mount", "node", "volume"]);
+  const fields = object(value, name, ["bytes", "clients", "map", "marker", "mount", "node", "volume"], ["exports"]);
   const size = count(fields.bytes);
   ensure(size !== undefined && size > PLACEHOLDER_BYTES && size % MIB === 0n && size <= MAX_INTEGER, `${name}.bytes must be whole MiB above the 16 MiB placeholder`);
   const map = fields.map;
   ensure(typeof map === "string" && MAPPER.test(map), `${name}.map must be a device-mapper name`);
-  const mount = fields.mount;
-  ensure(typeof mount === "string" && mount.length <= 255 && absolute(mount), `${name}.mount must be an absolute path without . or ..`);
+  const mount = path(fields.mount, `${name}.mount`);
   const node = label(fields.node, `${name}.node`), id = label(fields.volume, `${name}.volume`);
-  return { node, volume: id, bytes: Number(size), map, mount };
+  const markerFields = object(fields.marker, `${name}.marker`, ["file", "prefix"]);
+  const marker = { file: fileName(markerFields.file, `${name}.marker.file`), prefix: label(markerFields.prefix, `${name}.marker.prefix`) };
+  const clients = entries(fields.clients, `${name}.clients`, "clients").map((item, index) => client(item, `${name}.clients[${index}]`));
+  const read: GuestStorageVolume = { node, volume: id, bytes: Number(size), map, mount, marker, clients };
+  if (!Object.hasOwn(fields, "exports")) return read;
+  return { ...read, exports: entries(fields.exports, `${name}.exports`, "exports").map((item, index) => exported(item, `${name}.exports[${index}]`)) };
 }
 
 function recordFormats(value: MeasuredValue): GuestRecordFormat[] {
@@ -290,13 +392,29 @@ function recordFormats(value: MeasuredValue): GuestRecordFormat[] {
   });
 }
 
+const nested = (outer: string, inner: string) => inner.startsWith(`${outer}/`);
+const separate = (a: string, b: string) => a !== b && !nested(a, b) && !nested(b, a);
+
 function readLayout(value: MeasuredValue): GuestStorageLayout {
-  const root = object(value, "layout", ["data", "kdf", "lifecycleKey", "secrets", "workspace"]);
-  const data = volume(root.data, "data"), workspace = volume(root.workspace, "workspace");
-  ensure(data.node !== workspace.node && data.map !== workspace.map, "data and workspace must differ in node and map");
-  const nested = (outer: string, inner: string) => inner.startsWith(`${outer}/`);
-  ensure(data.mount !== workspace.mount && !nested(data.mount, workspace.mount) && !nested(workspace.mount, data.mount),
-    "data and workspace mounts must be separate directories");
+  const root = object(value, "layout", ["kdf", "lifecycleKey", "lifecycleRecord", "placeholderMagic", "secrets", "volumes"]);
+  const entries = root.volumes;
+  ensure(isObject(entries) && Object.keys(entries).length >= 1 && Object.keys(entries).length <= MAX_ENTRIES, "volumes must name one to eight volumes");
+  const names = keysOf(entries);
+  for (const name of names) ensure(NAME.test(name), `volumes: ${quoted(name)} is not a volume name`);
+  const volumes: [string, GuestStorageVolume][] = names.map(name => [name, volume(entries[name], `volumes.${name}`)]);
+  volumes.forEach(([first, one], index) => {
+    for (const [second, other] of volumes.slice(index + 1)) {
+      ensure(one.node !== other.node && one.map !== other.map, `volumes ${quoted(first)} and ${quoted(second)} must differ in node and map`);
+      ensure(separate(one.mount, other.mount), `volumes ${quoted(first)} and ${quoted(second)} mounts must be separate directories`);
+    }
+  });
+  const clientNames: string[] = [], uids: number[] = [];
+  for (const { name, uid } of volumes.flatMap(([, entry]) => entry.clients)) {
+    ensure(!clientNames.includes(name), `client ${quoted(name)} is listed twice`);
+    ensure(!uids.includes(uid), `uid ${uid} belongs to two clients`);
+    clientNames.push(name);
+    uids.push(uid);
+  }
   const kdf = object(root.kdf, "kdf", ["extract", "passphrase"]);
   const labels = { extract: label(kdf.extract, "kdf.extract"), passphrase: label(kdf.passphrase, "kdf.passphrase") };
   ensure(labels.extract !== labels.passphrase, "kdf labels must differ");
@@ -307,15 +425,36 @@ function readLayout(value: MeasuredValue): GuestStorageLayout {
   const tcb = key.tcb;
   ensure(typeof tcb === "string" && /^[0-9a-f]{16}$/.test(tcb), "lifecycleKey.tcb must be 16 lower-case hex digits");
   ensure(((mask & TCB_VERSION) !== 0n) === (BigInt(`0x${tcb}`) !== 0n), "lifecycleKey.tcb is pinned exactly when the mask selects TCB_VERSION");
-  const secrets = object(root.secrets, "secrets", ["file", "formats", "keyExports", "sharedSecretExport"]);
+  const record = object(root.lifecycleRecord, "lifecycleRecord", ["name", "temp"]);
+  const lifecycleRecord = { name: fileName(record.name, "lifecycleRecord.name"), temp: fileName(record.temp, "lifecycleRecord.temp") };
+  ensure(lifecycleRecord.name !== lifecycleRecord.temp, "lifecycleRecord.name and lifecycleRecord.temp must differ");
+  const placeholderMagic = root.placeholderMagic;
+  ensure(typeof placeholderMagic === "string" && MAGIC.test(placeholderMagic), "placeholderMagic must be 1 to 64 bytes of printable ASCII or line feeds");
+  const secrets = object(root.secrets, "secrets", ["file", "formats", "volume"]);
   const formats = recordFormats(secrets.formats);
-  const exports = secrets.keyExports;
-  ensure(Array.isArray(exports) && exports.length === 2, "secrets.keyExports must name two files");
-  const keyExports = [fileName(exports[0], "secrets.keyExports[0]"), fileName(exports[1], "secrets.keyExports[1]")] as [string, string];
-  ensure(keyExports[0] !== keyExports[1], "secrets.keyExports must differ");
   const file = fileName(secrets.file, "secrets.file");
-  const sharedSecretExport = fileName(secrets.sharedSecretExport, "secrets.sharedSecretExport");
-  return { data, workspace, kdf: labels, lifecycleKey: { mask: Number(mask), tcb }, secrets: { file, formats, keyExports, sharedSecretExport } };
+  const secretsVolume = secrets.volume;
+  ensure(typeof secretsVolume === "string" && names.includes(secretsVolume), "secrets.volume must name one of the layout's volumes");
+  const exportedPaths: string[] = [];
+  for (const [name, entry] of volumes) {
+    const exports = entry.exports ?? [];
+    if (name === secretsVolume) ensure(exports.length === EXPORTS, `volumes.${name}.exports must list the record's three secrets`);
+    else ensure(!exports.length, `volumes.${name}.exports: only the secrets volume exports`);
+    exports.forEach((item, index) => {
+      const target = `${item.dir}/${item.name}`;
+      ensure(!exportedPaths.includes(target), `${quoted(target)} is exported twice`);
+      exportedPaths.push(target);
+      ensure(volumes.every(([, other]) => separate(other.mount, item.dir)), `volumes.${name}.exports[${index}].dir must be separate from every volume's mount`);
+    });
+  }
+  for (const [name, entry] of volumes) {
+    const root = [entry.marker.file, ...entry.clients.map(item => item.name), lifecycleRecord.name, lifecycleRecord.temp, ...(name === secretsVolume ? [file] : [])];
+    root.forEach((item, index) => ensure(!root.slice(0, index).includes(item), `volumes.${name}: ${quoted(item)} names two entries of its root`));
+  }
+  return {
+    volumes: Object.fromEntries(volumes), kdf: labels, lifecycleKey: { mask: Number(mask), tcb }, lifecycleRecord, placeholderMagic,
+    secrets: { file, formats, volume: secretsVolume },
+  };
 }
 
 // GUEST_WORKLOAD_API
@@ -347,9 +486,8 @@ function readApi(value: MeasuredValue): GuestWorkloadApi {
 }
 
 /** Read one measured variable, as the guest does; every error names the variable. */
-export function readWireProfileValue(value: string | Uint8Array, options?: GuestEnvOptions, where = "readWireProfileValue"): GuestWireDocument {
-  const controlBridgeSchema = controlBridgeSchemaOf(where, options);
-  return named(WIRE_PROFILE_ENV, () => readWire(measuredJson(value, MAXIMUM[WIRE_PROFILE_ENV]), controlBridgeSchema));
+export function readWireProfileValue(value: string | Uint8Array): GuestWireDocument {
+  return named(WIRE_PROFILE_ENV, () => readWire(measuredJson(value, MAXIMUM[WIRE_PROFILE_ENV])));
 }
 export function readStorageLayoutValue(value: string | Uint8Array): GuestStorageLayout {
   return named(STORAGE_LAYOUT_ENV, () => readLayout(measuredJson(value, MAXIMUM[STORAGE_LAYOUT_ENV])));
@@ -408,11 +546,10 @@ export function readGuestEnv(
 ): GuestDeployment {
   const where = "readGuestEnv";
   const legacyRefEnv = legacyWorkloadRefEnvOf(where, options);
-  const controlBridgeSchema = controlBridgeSchemaOf(where, options);
   const present = (name: string) => env[name] !== undefined;
   const stale = SUPERSEDED.filter(present);
   ensure(!stale.length, `${stale.join(", ")}: not a guest env variable; ${WIRE_PROFILE_ENV} carries the schemas' domains, releaseSet and workloadRef`);
-  const wire = present(WIRE_PROFILE_ENV) ? readWireProfileValue(env[WIRE_PROFILE_ENV]!, options, where) : undefined;
+  const wire = present(WIRE_PROFILE_ENV) ? readWireProfileValue(env[WIRE_PROFILE_ENV]!) : undefined;
   const layout = present(STORAGE_LAYOUT_ENV) ? readStorageLayoutValue(env[STORAGE_LAYOUT_ENV]!) : undefined;
   const api = present(WORKLOAD_API_ENV) ? readWorkloadApiValue(env[WORKLOAD_API_ENV]!) : undefined;
   const legacyRef = legacyRefEnv !== undefined && present(legacyRefEnv) ? named(legacyRefEnv, () => measuredText(env[legacyRefEnv]!)) : undefined;
@@ -434,7 +571,7 @@ export function readGuestEnv(
   return {
     wire: wire!, layout: layout!, api: api!, workloadRef: wire!.workloadRef!,
     sessionSchemas: wire!.domains.session.map(sessionSchemaOf),
-    controlBridgeSchemas: wire!.domains.controlAuthorization.map(controlBridgeSchema),
+    controlBridgeSchemas: wire!.domains.controlAuthorization.map(controlBridgeSchemaOf(wire!.controlBridgeSchemas)),
     payloadSchemas: Object.fromEntries(PAYLOAD_KEYS.map(key => [key, wire!.payloadTypes[key].map(type => PAYLOAD_TYPE.exec(type)![1])])) as Record<PayloadKey, string[]>,
     ...(others.length === 1 ? { operatorRole: others[0] } : {}),
   };
