@@ -43,8 +43,9 @@ export const NEUTRAL_WORKLOAD_API: GuestWorkloadApi = deepFreeze({
 /**
  * The neutral sealed-storage names of a {@link GuestStorageLayout}: the
  * key-derivation labels of the volume passphrases and the identity record
- * format. The volumes, their at-rest files and clients are the deployment's. Frozen: a disk made under them keeps them for life, so a new
- * format is added to `secrets.formats` after the old one, never edited.
+ * format. The volumes, their at-rest files and clients are the deployment's.
+ * Frozen: a disk made under them keeps them for life, so a new format is
+ * added to `secrets.formats` after the old one, never edited.
  */
 export const NEUTRAL_SEALED_STORAGE: {
   readonly kdf: GuestStorageLayout["kdf"];

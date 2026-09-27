@@ -29,9 +29,9 @@ export interface WirePayloadTypes {
  * the handoff domain `\0source\0` / `\0target\0`). The session and
  * control-bridge schemas derive from the session and controlAuthorization
  * domains (lower case, `_` as `.`), unless the profile names a domain's
- * control-bridge schema ({@link WireProfile.controlBridgeSchemas}). The identity record's header and
- * fingerprint domain are the disk's, not the wire's: they are in the storage
- * layout ({@link GuestRecordFormat}).
+ * control-bridge schema ({@link WireProfile.controlBridgeSchemas}). The
+ * identity record's header and fingerprint domain are the disk's, not the
+ * wire's: they are in the storage layout ({@link GuestRecordFormat}).
  */
 export interface WireDomains {
   readonly handoff: WireValue;
