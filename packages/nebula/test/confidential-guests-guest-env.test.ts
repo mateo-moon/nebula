@@ -35,7 +35,7 @@ import { EXAMPLE_GUEST_DEPLOYMENT, confidentialGuestsExample } from "../example/
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "confidential-guests-guest-env");
 // A fixture changes only together with this pin, in a reviewed change.
-const MANIFEST_SHA256 = "62ed468384e8c3eb82d81c98cc2dfdf844d6102b9fbb9cbd1b33e213db1c87b7";
+const MANIFEST_SHA256 = "96e89be0fd7c57c1c9ef92d741024cd7d6e4d109ad40b6a5e6c9a754f38db1c1";
 const VENDORED = ["deployment.neutral.json", "payload-types.json", "storage-layout.neutral.json", "wire-profile.neutral.json", "workload-api.neutral.json"];
 const sha256 = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
 const text = (name: string) => readFileSync(join(FIXTURES, name), "utf8");

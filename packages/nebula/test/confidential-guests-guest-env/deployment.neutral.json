@@ -1815,8 +1815,8 @@
     },
     {
       "base": "neutral",
-      "error": "GUEST_WORKLOAD_API: portal routes must differ",
-      "name": "portal-routes-equal",
+      "error": "GUEST_WORKLOAD_API: workload routes must differ",
+      "name": "workload-routes-equal",
       "reader": "every",
       "set": {
         "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/status\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
