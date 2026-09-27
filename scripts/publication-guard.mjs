@@ -38,6 +38,7 @@ export const DEFAULT_SCOPE = [
   ":(glob)packages/nebula/test/confidential-guests*/**",
   ":(glob)packages/nebula/example/confidential-guests*",
   "docker/devops-bridge",
+  "docker/nebula-cmp",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);
@@ -65,7 +66,7 @@ const UPSTREAM_OWNERS = new Set([
   "prometheus-operator", "prometheus-community", "grafana", "open-telemetry", "sigstore", "gitleaks", "actions",
   "github", "nodejs", "microsoft", "pnpm", "privatenumber", "eemeli", "rust-lang", "rustls", "rustcrypto",
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
-  "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics",
+  "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
@@ -82,6 +83,7 @@ const UPSTREAM_DOMAINS = [
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
+  "helm.sh",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
