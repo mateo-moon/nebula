@@ -34,7 +34,7 @@ export interface GuestAdmissionFenceMessages {
   readonly volumes: string;
   /** Not exactly one claim, named `data`, of the guest's own role. */
   readonly claim: string;
-  /** A privileged or escalating container. */
+  /** A privileged container, or one that does not set allowPrivilegeEscalation to false. */
   readonly privilege: string;
   /** No init-data, or an Argo tracking id (the guest would belong to Argo). */
   readonly initData: string;
@@ -104,8 +104,9 @@ function choose(branches: readonly (readonly [condition: string, value: string])
  * - The shape policy: a controller creates only its own guests, on the node
  *   and runtime class, with restartPolicy Never, no host namespaces, the
  *   default ServiceAccount without a token, configMap/emptyDir/PVC volumes,
- *   exactly one `data` claim of its role, unprivileged containers, init-data
- *   and no Argo tracking id.
+ *   exactly one `data` claim of its role, unprivileged containers and init
+ *   containers that each set allowPrivilegeEscalation to false, init-data and
+ *   no Argo tracking id.
  * Init-data content is not compared here; attestation binds it.
  */
 export class GuestAdmissionFence extends Construct {
@@ -176,8 +177,9 @@ export class GuestAdmissionFence extends Construct {
     const isController = `${username} in ${names(accounts)}`;
     const nameOf = (c: GuestAdmissionFenceController) => c.guests.length === 1
       ? `object.metadata.name == ${quote(c.guests[0].name)}` : `object.metadata.name in ${names(c.guests.map(g => g.name))}`;
-    const unprivileged = "!has(c.securityContext) || (!(has(c.securityContext.privileged) && c.securityContext.privileged)"
-      + " && !(has(c.securityContext.allowPrivilegeEscalation) && c.securityContext.allowPrivilegeEscalation))";
+    const unprivileged = "has(c.securityContext) && has(c.securityContext.allowPrivilegeEscalation)"
+      + " && c.securityContext.allowPrivilegeEscalation == false"
+      + " && !(has(c.securityContext.privileged) && c.securityContext.privileged)";
     const policies = [
       [policyNames.creator, {
         matchConditions: [{ name: conditionNames.guest,
