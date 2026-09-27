@@ -120,11 +120,12 @@ export function declareGithubMcp(
 export interface ClusterInfoMcpConfig {
   /** Image bundling cluster_info/main.py (default: the shared devops-bridge image). */
   image?: string;
-  /** Cluster name surfaced by get_cluster_info (env CLUSTER_NAME; defaults to the server's
-   *  built-in default if unset — pass the real cluster name for portability). */
-  clusterName?: string;
-  /** API endpoint surfaced by get_cluster_info (env API_ENDPOINT; optional). */
-  apiEndpoint?: string;
+  /** Cluster name surfaced by get_cluster_info (env CLUSTER_NAME; required — the
+   *  server has no built-in default). */
+  clusterName: string;
+  /** API endpoint surfaced by get_cluster_info (env API_ENDPOINT; required — the
+   *  server has no built-in default). */
+  apiEndpoint: string;
   /** Listening port (default 8080 — the FastMCP streamable-http port). */
   port?: number;
 }
@@ -138,22 +139,24 @@ export const CLUSTER_INFO_MCP = "cluster-info";
  * `declareAgents({ clusterInfoMcp })` so the docs-agent can call get_cluster_info /
  * get_access_instructions.
  *
- * The server is stateless + tokenless, so it's safe to deploy unconditionally
- * (unlike the bridges, it won't crash-loop on a missing secret).
+ * The server is stateless + tokenless (no secret to wait on), but it refuses to
+ * start without CLUSTER_NAME and API_ENDPOINT, so both are required here.
  */
 export function declareClusterInfoMcp(
   scope: Construct,
   ns: string,
-  cfg: ClusterInfoMcpConfig = {},
+  cfg: ClusterInfoMcpConfig,
 ): string {
   const name = CLUSTER_INFO_MCP;
   const image = cfg.image ?? DEFAULT_BRIDGE_IMAGE;
   const port = cfg.port ?? 8080;
 
-  // Env for main.py: PORT (listen port) + the optional cluster specifics it surfaces.
-  const env: { name: string; value: string }[] = [{ name: "PORT", value: String(port) }];
-  if (cfg.clusterName) env.push({ name: "CLUSTER_NAME", value: cfg.clusterName });
-  if (cfg.apiEndpoint) env.push({ name: "API_ENDPOINT", value: cfg.apiEndpoint });
+  // Env for main.py: PORT (listen port) + the cluster specifics it surfaces.
+  const env: { name: string; value: string }[] = [
+    { name: "PORT", value: String(port) },
+    { name: "CLUSTER_NAME", value: cfg.clusterName },
+    { name: "API_ENDPOINT", value: cfg.apiEndpoint },
+  ];
 
   new ApiObject(scope, "cluster-info-mcp-deploy", {
     apiVersion: "apps/v1",

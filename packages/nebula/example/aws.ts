@@ -38,7 +38,7 @@ import {
 
 const app = new App();
 const region = "eu-central-1";
-const domain = "aws.nuconstruct.xyz";
+const domain = "aws.example.com";
 const k0sKubeletPath = "/var/lib/k0s/kubelet";
 
 // ===========================================================================
@@ -60,7 +60,7 @@ new AwsProvider(mgmt, "aws-provider", {
 
 // AWS primitives beside the cluster: node IAM profile + Route53 zone + SOPS KMS
 new Aws(mgmt, "aws", {
-  name: "nucon",
+  name: "demo",
   region,
   route53Zone: { name: domain },
   kmsKey: { multiRegion: true },
@@ -83,7 +83,7 @@ new ClusterApiOperator(mgmt, "capi", {
 // single, reusable way nebula defines a cluster (a future GcpK0sProvider slots
 // into the same base).
 new K0sCluster(mgmt, "workload", {
-  name: "nucon-aws",
+  name: "demo-aws",
   k8sVersion: "v1.31.8",
   // k0s installs NO CNI ("custom") so Calico owns pod networking + the encrypted
   // node mesh (installed on the workload cluster below).
@@ -109,9 +109,9 @@ new K0sCluster(mgmt, "workload", {
         ami: { id: "ami-0123456789abcdef0" },
       },
     },
-    // Dedicated Ethereum-node pool: labeled + tainted (only tolerating pods
+    // Dedicated P2P-node pool: labeled + tainted (only tolerating pods
     // land here) and running on Spot capped below the on-demand price.
-    ethereum: {
+    p2p: {
       replicas: 2,
       machine: {
         instanceType: "m6i.2xlarge",
@@ -119,8 +119,8 @@ new K0sCluster(mgmt, "workload", {
         ami: { id: "ami-0123456789abcdef0" },
         spot: { maxPrice: "0.30" },
       },
-      nodeLabels: { "nucon.io/pool": "ethereum" },
-      taints: [{ key: "nucon.io/ethereum", value: "true", effect: "NoSchedule" }],
+      nodeLabels: { "example.com/pool": "p2p" },
+      taints: [{ key: "example.com/p2p", value: "true", effect: "NoSchedule" }],
       // Extra raw `k0s worker` args, appended after --labels/--taints.
       k0sArgs: ["--kubelet-extra-args=--max-pods=64"],
     },
@@ -132,42 +132,42 @@ new K0sCluster(mgmt, "workload", {
         ami: { id: "ami-0123456789abcdef0" },
         spot: true,
       },
-      nodeLabels: { "nucon.io/pool": "burst" },
+      nodeLabels: { "example.com/pool": "burst" },
     },
   },
   // AWS (CAPA) infrastructure adapter — cluster-level infra config lives here.
   provider: new AwsK0sProvider({
     region,
-    sshKeyName: "nucon-aws", // a pre-existing EC2 key pair
+    sshKeyName: "demo-aws", // a pre-existing EC2 key pair
     iamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io",
     // Spread subnets/NAT gateways across 3 AZs (one NAT + Elastic IP per AZ).
     availabilityZoneUsageLimit: 3,
-    // Ethereum P2P: the node SG only allows intra-cluster traffic by default,
+    // P2P: the node SG only allows intra-cluster traffic by default,
     // so open the P2P ports to the internet on every node.
     additionalNodeIngressRules: [
       {
-        description: "Ethereum execution P2P (TCP)",
+        description: "P2P 30303 (TCP)",
         protocol: "tcp",
         fromPort: 30303,
         toPort: 30303,
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
-        description: "Ethereum execution P2P (UDP discovery)",
+        description: "P2P 30303 (UDP discovery)",
         protocol: "udp",
         fromPort: 30303,
         toPort: 30303,
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
-        description: "Ethereum consensus P2P (TCP)",
+        description: "P2P 9000 (TCP)",
         protocol: "tcp",
         fromPort: 9000,
         toPort: 9000,
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
-        description: "Ethereum consensus P2P (UDP discovery)",
+        description: "P2P 9000 (UDP discovery)",
         protocol: "udp",
         fromPort: 9000,
         toPort: 9000,
@@ -247,7 +247,7 @@ new Longhorn(workload, "longhorn", {});
 // Renders an encrypted gp3 StorageClass marked as the cluster default.
 new AwsEbsCsiDriver(workload, "aws-ebs-csi-driver", {
   region,
-  clusterName: "nucon-aws",
+  clusterName: "demo-aws",
   storageClass: { isDefault: true },
 });
 
@@ -259,7 +259,7 @@ new CertManager(workload, "cert-manager", { acmeEmail: `admin@${domain}` });
 new ImagePullSecret(workload, "gcr-pull-secret", {
   registry: "gcr.io",
   saJsonRef: '{"type":"service_account","project_id":"example"}',
-  namespaces: ["tool-node", "tool-node-2"],
+  namespaces: ["app", "app-2"],
 });
 
 // NodePort ingress (k0smotron control plane has no AWS LB controller dependency).
@@ -277,7 +277,7 @@ new ExternalDns(workload, "external-dns", {
   awsRegion: region,
   domainFilters: [domain],
   policy: "sync",
-  txtOwnerId: "nucon-aws",
+  txtOwnerId: "demo-aws",
   createGcpServiceAccount: false,
   credentialsSecret: { name: "route53-credentials" },
 });

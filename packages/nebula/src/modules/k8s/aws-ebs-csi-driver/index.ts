@@ -19,7 +19,7 @@
  *
  * new AwsEbsCsiDriver(chart, 'aws-ebs-csi-driver', {
  *   region: 'eu-central-1',
- *   clusterName: 'nucon-aws',
+ *   clusterName: 'my-cluster',
  *   storageClass: { isDefault: true },
  * });
  * ```

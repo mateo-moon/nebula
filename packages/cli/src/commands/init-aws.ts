@@ -16,8 +16,7 @@
  *   clusters/mgmt/<module>/        the platform fundamentals (6 modules)
  *
  * Adding a workload cluster = adding a `clusters/<name>/` directory with its
- * own index.ts — no registry edits anywhere else. Mirrors the proven layout in
- * DevOps/aws.
+ * own index.ts — no registry edits anywhere else.
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -67,7 +66,7 @@ export async function initAws(
     cpReplicas: options.cpReplicas ?? 3,
     repoUrl:
       options.gitRepo ||
-      "ssh://git@gitea.example.com:2222/your-org/your-repo.git",
+      "ssh://git@git.example.com:2222/your-org/your-repo.git",
     targetRevision: options.targetRevision || "main",
     pathPrefix: options.pathPrefix || "aws",
     knownHosts: options.sshKnownHosts || "",
@@ -131,8 +130,8 @@ AWS GitOps tree scaffolded.
   console.log(
     "  1. Edit config.ts — set aws.amiId (Ubuntu 22.04 in your region) and git.knownHosts",
   );
-  console.log(`        (ssh-keyscan -p 2222 your-gitea-host).`);
-  console.log("  2. Put your gitea deploy key in .secrets/secrets.yaml and encrypt:");
+  console.log(`        (ssh-keyscan -p 2222 your-git-host).`);
+  console.log("  2. Put your git deploy key in .secrets/secrets.yaml and encrypt:");
   console.log("        sops -e -i .secrets/secrets.yaml   (needs SOPS_AGE_KEY_FILE / a .sops.yaml recipient)");
   console.log("  3. Commit + push, then from this dir:  nebula bootstrap --provider aws --aws-profile <p>");
   console.log("");
@@ -285,7 +284,7 @@ creation_rules:
 function genSecretsTemplate(): string {
   return `# PLAINTEXT TEMPLATE — encrypt before committing:  sops -e -i .secrets/secrets.yaml
 # (requires a .sops.yaml age recipient and SOPS_AGE_KEY_FILE for decryption).
-gitea:
+git:
   deploy_key:
     # A read-only deploy key for this repo. ArgoCD's repo-server clones with it.
     ssh_private_key: |
@@ -351,7 +350,7 @@ new ArgoCd(chart, "argocd", {
           // ref+sops paths are anchored to the git repo ROOT, so include the
           // pathPrefix to reach this subtree's age-encrypted secrets.
           sshPrivateKey:
-            \`ref+sops://\${config.git.pathPrefix}/.secrets/secrets.yaml#gitea/deploy_key/ssh_private_key\`,
+            \`ref+sops://\${config.git.pathPrefix}/.secrets/secrets.yaml#git/deploy_key/ssh_private_key\`,
         },
       },
     ],

@@ -79,7 +79,7 @@ export interface AwsK0sProviderConfig {
    */
   controlPlaneLoadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
   /**
-   * Extra ingress rules appended to the NODE security group (e.g. Ethereum P2P
+   * Extra ingress rules appended to the NODE security group (e.g. a P2P client
    * 30303 + 9000 tcp/udp from 0.0.0.0/0).
    */
   additionalNodeIngressRules?: NodeIngressRuleSpec[];

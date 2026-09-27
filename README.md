@@ -116,7 +116,7 @@ Nebula automatically generates standardized kubeconfig files with a clean, predi
 **Examples:**
 - `.config/kube-config-kurtosis-dev-gke` - Kurtosis project, dev environment, on GKE
 - `.config/kube-config-myapp-prod-eks` - MyApp project, production environment, on EKS
-- `.config/kube-config-tool-staging-constellation` - Tool project, staging environment, on Constellation
+- `.config/kube-config-shop-staging-constellation` - Shop project, staging environment, on Constellation
 
 **Features:**
 - ✅ Automatically extracts project name from Pulumi project

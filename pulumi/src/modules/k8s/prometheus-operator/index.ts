@@ -20,7 +20,7 @@ export interface PrometheusOperatorConfig {
   lokiAuthHtpasswd?: string | pulumi.Output<string>;
   /** Prometheus remote_write Basic Auth htpasswd content */
   prometheusRwAuthHtpasswd?: string | pulumi.Output<string>;
-  /** Prometheus remote_write Ingress hostname (e.g., "prometheus-rw.dev.nuconstruct.xyz") */
+  /** Prometheus remote_write Ingress hostname (e.g., "prometheus-rw.dev.example.com") */
   prometheusRwHost?: string;
 }
 
@@ -598,8 +598,7 @@ export class PrometheusOperator extends pulumi.ComponentResource {
           }
         },
         tolerations: [
-          { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' },
-          { key: 'workload', value: 'tool-node', effect: 'NoSchedule' }
+          { key: 'components.gke.io/gke-managed-components', operator: 'Exists', effect: 'NoSchedule' }
         ],
         resources: {
           requests: {
