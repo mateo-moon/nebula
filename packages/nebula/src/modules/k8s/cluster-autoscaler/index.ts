@@ -28,6 +28,7 @@
  */
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
+import * as kplus from "cdk8s-plus-33";
 import { HelmModule, type Toleration } from "../../../core";
 
 export interface ClusterAutoscalerConfig {
@@ -94,20 +95,34 @@ export function clusterAutoscalerValues(config: ClusterAutoscalerConfig): Record
   };
 }
 
+/** The API group of the infrastructure providers' machine templates, whose `status.capacity` plans a node from zero. */
+export const INFRASTRUCTURE_API_GROUP = "infrastructure.cluster.x-k8s.io";
+
 export class ClusterAutoscaler extends HelmModule<ClusterAutoscalerConfig> {
   public readonly helm: Helm;
+  /** Read access to the infrastructure templates, which the chart's own role leaves out. */
+  public readonly infrastructureRole: kplus.ClusterRole;
 
   constructor(scope: Construct, id: string, config: ClusterAutoscalerConfig) {
     super(scope, id, config);
+    const namespace = this.config.clusterNamespace ?? "default";
+    const name = `cluster-autoscaler-${this.config.clusterName}`;
     this.helm = this.createHelmRelease({
-      namespace: this.config.clusterNamespace ?? "default",
+      namespace,
       chart: "cluster-autoscaler",
       repo: CLUSTER_AUTOSCALER_REPO,
-      releaseName: `cluster-autoscaler-${this.config.clusterName}`,
+      releaseName: name,
       version: this.config.version ?? CLUSTER_AUTOSCALER_CHART_VERSION,
       defaultValues: clusterAutoscalerValues(this.config),
       values: this.config.values ?? {},
     });
+    // Scaling from zero reads the machine template a pool points at (its
+    // status.capacity); the chart grants cluster.x-k8s.io only.
+    this.infrastructureRole = new kplus.ClusterRole(this, "infrastructure-role", {
+      metadata: { name: `${name}-infrastructure` },
+    });
+    this.infrastructureRole.allowRead(kplus.ApiResource.custom({ apiGroup: INFRASTRUCTURE_API_GROUP, resourceType: "*" }));
+    this.infrastructureRole.bind(kplus.ServiceAccount.fromServiceAccountName(this, "service-account", name, { namespaceName: namespace }));
   }
 }
 

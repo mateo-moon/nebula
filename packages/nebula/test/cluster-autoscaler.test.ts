@@ -85,4 +85,9 @@ test("the construct renders one autoscaler deployment in the cluster's namespace
   const volume = deployment.spec.template.spec.volumes.find((v: { secret?: { secretName: string } }) => v.secret?.secretName === "ci-kubeconfig");
   assert.ok(volume, "kubeconfig secret volume");
   assert.ok(objects.some(o => o.kind === "ClusterRole" && JSON.stringify(o.rules).includes("cluster.x-k8s.io")));
+  // Scale from zero reads the infrastructure templates' capacity; the chart's role leaves that group out.
+  const infra = objects.find(o => o.kind === "ClusterRole" && o.metadata.name === "cluster-autoscaler-ci-infrastructure");
+  assert.deepEqual(infra.rules, [{ apiGroups: ["infrastructure.cluster.x-k8s.io"], resourceNames: [], resources: ["*"], verbs: ["get", "list", "watch"] }]);
+  const binding = objects.find(o => o.kind === "ClusterRoleBinding" && o.roleRef.name === "cluster-autoscaler-ci-infrastructure");
+  assert.deepEqual(binding.subjects, [{ apiGroup: "", kind: "ServiceAccount", name: "cluster-autoscaler-ci", namespace: "default" }]);
 });
