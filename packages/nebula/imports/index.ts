@@ -59,3 +59,6 @@ export * as cnpg from "./postgresql.cnpg.io";
 
 // Barman Cloud Plugin
 export * as barmanCloud from "./barmancloud.cnpg.io";
+
+// KEDA (event-driven autoscaling)
+export * as keda from "./keda.sh";
