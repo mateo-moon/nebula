@@ -1,6 +1,6 @@
 // The guest env contract: what nebula renders into a confidential guest's
-// measured env (GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT, GUEST_WORKLOAD_API)
-// is read by the guest with the same rules, in the same order, with the same
+// measured env (GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT, GUEST_WORKLOAD_API
+// and the three runtime paths) is read by the guest with the same rules, in the same order, with the same
 // messages. confidential-guests-guest-env/ holds the contract's neutral shared
 // fixtures, vendored byte for byte: nebula must render them exactly and refuse
 // every refusal vector with the reader's message.
@@ -16,26 +16,32 @@ import {
   NEUTRAL_SEALED_STORAGE,
   NEUTRAL_WIRE,
   NEUTRAL_WORKLOAD_API,
+  STORAGE_CONTROL_DIR_ENV,
   STORAGE_LAYOUT_ENV,
+  VERIFIER_SOCKET_ENV,
   WIRE_PROFILE_ENV,
   WORKLOAD_API_ENV,
+  WORKLOAD_SOCKET_ENV,
   adapterModeEnv,
   canonicalJson,
   guestEnv,
   readGuestEnv,
+  runtimePathMounts,
+  runtimePathsEnv,
   sealedStorageEnv,
   storageLayoutEnv,
   wireProfileEnv,
   workloadApiEnv,
   type GuestEnvReader,
   type GuestStorageLayout,
+  type GuestWorkloadApi,
   type WireProfile,
 } from "../src/modules/k8s/confidential-guests";
 import { EXAMPLE_GUEST_DEPLOYMENT, confidentialGuestsExample } from "../example/confidential-guests";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "confidential-guests-guest-env");
 // A fixture changes only together with this pin, in a reviewed change.
-const MANIFEST_SHA256 = "96e89be0fd7c57c1c9ef92d741024cd7d6e4d109ad40b6a5e6c9a754f38db1c1";
+const MANIFEST_SHA256 = "fe24bc1f80a04eb525cf04bccb19e41c1b842e444e99c0865789f1377fabda53";
 const VENDORED = ["deployment.neutral.json", "payload-types.json", "storage-layout.neutral.json", "wire-profile.neutral.json", "workload-api.neutral.json"];
 const sha256 = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
 const text = (name: string) => readFileSync(join(FIXTURES, name), "utf8");
@@ -46,6 +52,8 @@ const measured = (name: string) => {
   return value.slice(0, -1);
 };
 const deployment = JSON.parse(text("deployment.neutral.json"));
+const PATH_ENVS = [WORKLOAD_SOCKET_ENV, VERIFIER_SOCKET_ENV, STORAGE_CONTROL_DIR_ENV];
+const API: GuestWorkloadApi = EXAMPLE_GUEST_DEPLOYMENT.workloadApi;
 
 interface Vector {
   name: string;
@@ -77,17 +85,19 @@ test("the vendored fixtures are the contract's neutral files, byte for byte as t
 });
 
 test("the neutral names and the example deployment render byte for byte as the fixtures", () => {
-  const { wire, storageLayout, workloadApi } = EXAMPLE_GUEST_DEPLOYMENT;
+  const { wire, storageLayout, workloadApi, runtimePaths } = EXAMPLE_GUEST_DEPLOYMENT;
   assert.deepEqual({ payloadTypes: wire.payloadTypes, domains: wire.domains }, NEUTRAL_WIRE, "the example speaks the neutral wire names");
   assert.equal(wireProfileEnv(wire).value, measured("wire-profile.neutral.json"));
   assert.equal(storageLayoutEnv(storageLayout).value, measured("storage-layout.neutral.json"));
-  assert.equal(workloadApiEnv(NEUTRAL_WORKLOAD_API).value, measured("workload-api.neutral.json"));
-  assert.equal(workloadApi, NEUTRAL_WORKLOAD_API);
+  assert.equal(workloadApiEnv(workloadApi).value, measured("workload-api.neutral.json"));
+  const { mode, routes, signDomain, keyResolverDomain } = workloadApi;
+  assert.deepEqual({ mode, routes, signDomain, keyResolverDomain }, NEUTRAL_WORKLOAD_API, "the example serves the neutral adapter's API names");
+  assert.deepEqual(runtimePathsEnv(runtimePaths), PATH_ENVS.map(name => ({ name, value: deployment.env[name] })));
   assert.deepEqual(storageLayout.kdf, NEUTRAL_SEALED_STORAGE.kdf);
   assert.deepEqual(storageLayout.secrets.formats, [NEUTRAL_SEALED_STORAGE.recordFormat]);
   // guestEnv renders the variables in the order a guest reads them.
-  assert.deepEqual(guestEnv(EXAMPLE_GUEST_DEPLOYMENT), [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV].map(name => ({ name, value: deployment.env[name] })));
-  assert.deepEqual(Object.keys(deployment.env).sort(), [STORAGE_LAYOUT_ENV, WIRE_PROFILE_ENV, WORKLOAD_API_ENV]);
+  assert.deepEqual(guestEnv(EXAMPLE_GUEST_DEPLOYMENT), [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, ...PATH_ENVS].map(name => ({ name, value: deployment.env[name] })));
+  assert.deepEqual(Object.keys(deployment.env).sort(), [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, ...PATH_ENVS].sort());
   assert.deepEqual(adapterModeEnv(workloadApi), { name: "MODE", value: deployment.adapterEnv.MODE });
   assert.deepEqual(sealedStorageEnv(storageLayout, "data"), [
     { name: STORAGE_LAYOUT_ENV, value: deployment.env[STORAGE_LAYOUT_ENV] }, { name: "NODE_ID", value: "sealed-data" }, { name: "VOLUME_ID", value: "data-v1" }]);
@@ -126,7 +136,18 @@ test("nebula reads the neutral deployment as the guest's readers do", () => {
   assert.equal(read.workloadRef, expect.workloadRef);
   assert.equal(read.operatorRole, expect.operatorRole);
   assert.deepEqual(read.layout.secrets.formats.map(f => [f.header, f.fingerprint]), expect.recordFormats);
+  assert.equal(read.baseImageRef, expect.baseImageRef);
+  assert.equal(read.api.baseImageRef, expect.baseImageRef);
+  assert.deepEqual(read.paths, expect.paths);
   assert.equal(expect.emitsLegacy, false);
+  // The adapter's bodies come from the API alone, written as canonical text (serde_json without preserve_order).
+  const { responses } = expect;
+  assert.equal(canonicalJson(read.api.config), responses.config);
+  const served = JSON.parse(responses.status);
+  const computed = { state: "Running", base_image_id: served.base_image_id, base_image_ref: read.baseImageRef, workload_id: served.workload_id, workload_ref: read.workloadRef };
+  assert.equal(canonicalJson({ ...read.api.statusFields, ...computed }), responses.status);
+  const [error] = JSON.parse(responses.verifyFailure).errors;
+  assert.equal(canonicalJson({ errors: [error], checks: [{ name: read.api.checkName, valid: false, detail: error }] }), responses.verifyFailure);
   assert.doesNotThrow(() => readGuestEnv({ ...deployment.env, ...deployment.adapterEnv }, "adapter"));
   assert.doesNotThrow(() => readGuestEnv(deployment.env, "bridge"));
 });
@@ -176,8 +197,10 @@ test("nebula renders no legacy default: a profile names its releaseSet and workl
   assert.throws(() => wireProfileEnv({ ...names, releaseSet } as WireProfile), { message: `${EXPLICIT}GUEST_WIRE_PROFILE.workloadRef` });
   assert.throws(() => wireProfileEnv(names as WireProfile), { message: `${EXPLICIT}GUEST_WIRE_PROFILE.releaseSet, GUEST_WIRE_PROFILE.workloadRef` });
   // A guest env without a wire profile would fall back to in-guest defaults nebula does not render.
-  assert.throws(() => readGuestEnv({ [STORAGE_LAYOUT_ENV]: deployment.env[STORAGE_LAYOUT_ENV] }), { message: `${EXPLICIT}GUEST_WIRE_PROFILE, GUEST_WORKLOAD_API` });
+  assert.throws(() => readGuestEnv({ [STORAGE_LAYOUT_ENV]: deployment.env[STORAGE_LAYOUT_ENV] }),
+    { message: `${EXPLICIT}GUEST_WIRE_PROFILE, GUEST_WORKLOAD_API, GUEST_WORKLOAD_SOCKET, GUEST_VERIFIER_SOCKET, GUEST_STORAGE_CONTROL_DIR` });
   assert.throws(() => guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, storageLayout: undefined as any }), /storageLayout/);
+  assert.throws(() => guestEnv({ ...EXAMPLE_GUEST_DEPLOYMENT, runtimePaths: undefined as any }), { message: "guestEnv: runtimePaths is required" });
 });
 
 // A deployment older than `workloadRef` measured each Pod's workload reference
@@ -219,7 +242,7 @@ test("a legacy workload reference variable is read as the guest reads it, and mu
     `${LEGACY_REF} differs from ${WIRE_PROFILE_ENV}'s workloadRef`, "agreement before MODE");
   // A variable nobody named is not the contract's: nebula does not guess a deployment's legacy names.
   assert.doesNotThrow(() => readGuestEnv({ ...env, [LEGACY_REF]: "example/other:v1" }));
-  for (const name of ["", "1REF", "A-REF", WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, "MODE", "GUEST_WORKLOAD_REF", "RELEASE_ROLES"]) {
+  for (const name of ["", "1REF", "A-REF", WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, ...PATH_ENVS, "MODE", "GUEST_WORKLOAD_REF", "RELEASE_ROLES"]) {
     assert.throws(() => readGuestEnv(env, "every", { legacyWorkloadRefEnv: name }), (error: unknown) =>
       error instanceof TypeError && !(error instanceof GuestEnvError) && /readGuestEnv: legacyWorkloadRefEnv/.test((error as Error).message), JSON.stringify(name));
   }
@@ -325,11 +348,23 @@ test("the renderers refuse what a guest would refuse, with the guest's message",
     ["a record header that is another's fingerprint", () => storageLayoutEnv(layout(v => {
       v.secrets.formats = [v.secrets.formats[0], { header: v.secrets.formats[0].fingerprint, fingerprint: "OTHER_V1" }]; })),
       'GUEST_STORAGE_LAYOUT: "CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1" names two record identifiers'],
-    ["an upper-case mode", () => workloadApiEnv({ ...NEUTRAL_WORKLOAD_API, mode: "Attest" }), "GUEST_WORKLOAD_API: mode must be a lower-case name"],
-    ["a route with a query", () => workloadApiEnv({ ...NEUTRAL_WORKLOAD_API, routes: { ...NEUTRAL_WORKLOAD_API.routes, sign: "/v1/sign?x=1" } }),
+    ["an upper-case mode", () => workloadApiEnv({ ...API, mode: "Attest" }), "GUEST_WORKLOAD_API: mode must be a lower-case name"],
+    ["a route with a query", () => workloadApiEnv({ ...API, routes: { ...API.routes, sign: "/v1/sign?x=1" } }),
       "GUEST_WORKLOAD_API: routes.sign must be a path without query or fragment"],
-    ["a NUL", () => workloadApiEnv({ ...NEUTRAL_WORKLOAD_API, signDomain: "SIGN\0V1" }),
+    ["a NUL", () => workloadApiEnv({ ...API, signDomain: "SIGN\0V1" }),
       "GUEST_WORKLOAD_API: signDomain must be printable ASCII without spaces"],
+    ["the neutral names alone", () => workloadApiEnv(NEUTRAL_WORKLOAD_API as GuestWorkloadApi),
+      'GUEST_WORKLOAD_API: api: missing ["baseImageRef", "checkName", "config", "statusFields"], unknown []'],
+    ["a base image reference with a space", () => workloadApiEnv({ ...API, baseImageRef: "example/guest base:v1" }),
+      "GUEST_WORKLOAD_API: baseImageRef must be printable ASCII without spaces, NUL or line breaks"],
+    ["a list as the config", () => workloadApiEnv({ ...API, config: [] as any }), "GUEST_WORKLOAD_API: config must be an object"],
+    ["status fields that name computed members", () => workloadApiEnv({ ...API, statusFields: { workload_ref: "x", state: "Ready", detail: "d" } }),
+      'GUEST_WORKLOAD_API: statusFields must not name the computed members ["state", "workload_ref"]'],
+    ["an empty check name", () => workloadApiEnv({ ...API, checkName: "" }), "GUEST_WORKLOAD_API: checkName must be printable ASCII without spaces"],
+    ["a relative workload socket", () => runtimePathsEnv({ ...EXAMPLE_GUEST_DEPLOYMENT.runtimePaths, workloadSocket: "run/workload.sock" }),
+      "GUEST_WORKLOAD_SOCKET: not an absolute path without . or .. of at most 107 bytes"],
+    ["a control directory with a trailing slash", () => runtimePathsEnv({ ...EXAMPLE_GUEST_DEPLOYMENT.runtimePaths, storageControlDir: "/run/sealed-storage/" }),
+      "GUEST_STORAGE_CONTROL_DIR: not an absolute path without . or .. of at most 107 bytes"],
   ];
   for (const [label, render, message] of refusals) {
     assert.throws(render, (error: unknown) => {
@@ -348,7 +383,7 @@ test("every limit of the contract is reached and not passed: the limit is accept
   const shapes: [string, number, string][] = [
     [WIRE_PROFILE_ENV, 16384, 'profile: missing ["domains", "payloadTypes"], unknown ["a"]'],
     [STORAGE_LAYOUT_ENV, 8192, 'layout: missing ["kdf", "lifecycleKey", "lifecycleRecord", "placeholderMagic", "secrets", "volumes"], unknown ["a"]'],
-    [WORKLOAD_API_ENV, 4096, 'api: missing ["keyResolverDomain", "mode", "routes", "signDomain"], unknown ["a"]'],
+    [WORKLOAD_API_ENV, 4096, 'api: missing ["baseImageRef", "checkName", "config", "keyResolverDomain", "mode", "routes", "signDomain", "statusFields"], unknown ["a"]'],
   ];
   for (const [name, maximum, shape] of shapes) {
     const sized = (bytes: number) => `{"a":"${"x".repeat(bytes - 8)}"}`;
@@ -418,9 +453,24 @@ test("every limit of the contract is reached and not passed: the limit is accept
   for (const [one, other] of [["/run/data", "/run/data/scratch"], ["/run/data/scratch", "/run/data"], ["/run/data", "/run/data"]]) {
     refusedWith(() => storageLayoutEnv(mounts(one, other)), `${STORAGE_LAYOUT_ENV}: volumes "data" and "scratch" mounts must be separate directories`, `${one} and ${other}`);
   }
+  // The API: the check name up to 128 bytes; the base image reference is bounded by the variable alone.
+  assert.doesNotThrow(() => workloadApiEnv({ ...API, checkName: "c".repeat(128) }));
+  refusedWith(() => workloadApiEnv({ ...API, checkName: "c".repeat(129) }), `${WORKLOAD_API_ENV}: checkName must be printable ASCII without spaces`, "a check name past 128 bytes");
+  const withRef = (bytes: number) => ({ ...API, baseImageRef: "b".repeat(bytes) });
+  const room = 4096 - workloadApiEnv(withRef(1)).value.length + 1;
+  assert.equal(workloadApiEnv(withRef(room)).value.length, 4096);
+  refusedWith(() => workloadApiEnv(withRef(room + 1)), `${WORKLOAD_API_ENV}: longer than 4096 bytes`, "a base image reference past the variable's 4 KiB");
+  // Runtime paths: up to 107 bytes, so a socket's fits sun_path with its NUL.
+  const paths = EXAMPLE_GUEST_DEPLOYMENT.runtimePaths;
+  const long = (bytes: number) => `/${"p".repeat(bytes - 1)}`;
+  for (const [key, name] of [["workloadSocket", WORKLOAD_SOCKET_ENV], ["verifierSocket", VERIFIER_SOCKET_ENV], ["storageControlDir", STORAGE_CONTROL_DIR_ENV]] as const) {
+    assert.equal(readGuestEnv(envWith(name, long(107))).paths[key], long(107));
+    refusedWith(() => readGuestEnv(envWith(name, long(108))), `${name}: not an absolute path without . or .. of at most 107 bytes`, `${name} past 107 bytes`);
+    refusedWith(() => runtimePathsEnv({ ...paths, [key]: long(108) }), `${name}: not an absolute path without . or .. of at most 107 bytes`, `${key} past 107 bytes`);
+  }
   // The adapter's MODE is only ever the mode of an API a guest accepts.
-  refusedWith(() => adapterModeEnv({ ...NEUTRAL_WORKLOAD_API, mode: "Attest" }), `${WORKLOAD_API_ENV}: mode must be a lower-case name`, "MODE of a refused API");
-  refusedWith(() => adapterModeEnv({ ...NEUTRAL_WORKLOAD_API, keyResolverDomain: NEUTRAL_WORKLOAD_API.signDomain }),
+  refusedWith(() => adapterModeEnv({ ...API, mode: "Attest" }), `${WORKLOAD_API_ENV}: mode must be a lower-case name`, "MODE of a refused API");
+  refusedWith(() => adapterModeEnv({ ...API, keyResolverDomain: API.signDomain }),
     `${WORKLOAD_API_ENV}: signing and key-resolver domains must differ`, "MODE of an API with one domain twice");
 });
 
@@ -453,7 +503,127 @@ test("the example's guests carry the neutral deployment's env, each Pod its own 
   assert.equal(readGuestEnv(operatorAdapter, "adapter").workloadRef, "example/console:v1");
   assert.deepEqual({ ...operatorAdapter, [WIRE_PROFILE_ENV]: undefined }, { ...adapter, [WIRE_PROFILE_ENV]: undefined });
   assert.deepEqual(env(operator, "storage"), { [STORAGE_LAYOUT_ENV]: deployment.env[STORAGE_LAYOUT_ENV], NODE_ID: "sealed-workspace", VOLUME_ID: "workspace-v1" });
+  // The adapter binds its sockets in the directory it mounts the shared run volume at.
+  for (const spec of [primary, operator]) {
+    const mounts = spec.containers.find((c: any) => c.name === "attest").volumeMounts;
+    assert.deepEqual(mounts.filter((m: any) => m.name === "run"), [{ name: "run", mountPath: dirname(deployment.expect.paths.workloadSocket) }]);
+  }
   // The stage placeholder carries the magic the layout gives the guests' storage.
   const standby = JSON.stringify(docs.filter(d => d.metadata?.name === "standby-disk"));
   assert.ok(standby.includes(EXAMPLE_GUEST_DEPLOYMENT.storageLayout.placeholderMagic.trimEnd()), "the placeholder magic");
+});
+
+const PATH_RULE = "not an absolute path without . or .. of at most 107 bytes";
+const without = (env: Record<string, string>, ...names: string[]) => Object.fromEntries(Object.entries(env).filter(([name]) => !names.includes(name)));
+
+test("the adapter's config and status fields are data: rendered as given and read back exactly", () => {
+  const api: GuestWorkloadApi = { ...API,
+    config: { nested: { list: [1, "two", null, true], n: 2 ** 53 }, "z-key": {} },
+    statusFields: { chain: { registration: "off" }, detail: "any text, with spaces" } };
+  const value = workloadApiEnv(api).value;
+  const read = readGuestEnv({ ...deployment.env, [WORKLOAD_API_ENV]: value });
+  assert.deepEqual(read.api.config, api.config);
+  assert.deepEqual(read.api.statusFields, api.statusFields);
+  assert.equal(workloadApiEnv(read.api).value, value);
+  // An integer a JavaScript number cannot hold exactly is refused on read: nebula could not render it back.
+  const huge = value.replace('"n":9007199254740992', '"n":9007199254740993');
+  assert.notEqual(huge, value);
+  refusedAs(() => readGuestEnv({ ...deployment.env, [WORKLOAD_API_ENV]: huge }),
+    `${WORKLOAD_API_ENV}: config.nested.n: 9007199254740993 has no exact JavaScript number`, "an integer past 2^53");
+  // A fraction has no canonical form, as the guest reads it.
+  refusedAs(() => workloadApiEnv({ ...API, config: { f: 1.5 } }), `${WORKLOAD_API_ENV}: not canonical JSON (sorted keys, no whitespace, each key once)`, "a fraction");
+  // statusFields may name anything but the five computed members.
+  for (const member of ["base_image_id", "base_image_ref", "state", "workload_id", "workload_ref"]) {
+    refusedAs(() => workloadApiEnv({ ...API, statusFields: { [member]: "x" } }), `${WORKLOAD_API_ENV}: statusFields must not name the computed members ["${member}"]`, member);
+  }
+  assert.ok(Object.isFrozen(NEUTRAL_WORKLOAD_API) && Object.isFrozen(NEUTRAL_WORKLOAD_API.routes));
+});
+
+test("a renamed deployment sets its three runtime paths, read as the guest reads them before the explicit-deployment rule", () => {
+  const env: Record<string, string> = deployment.env;
+  const refusals: [string, Record<string, string>, string][] = [
+    ["no workload socket", without(env, WORKLOAD_SOCKET_ENV), `${EXPLICIT}${WORKLOAD_SOCKET_ENV}`],
+    ["no paths", without(env, ...PATH_ENVS), `${EXPLICIT}${PATH_ENVS.join(", ")}`],
+    ["a variable nobody named never stands in", { ...without(env, WORKLOAD_SOCKET_ENV), PORTAL_SOCKET: env[WORKLOAD_SOCKET_ENV] }, `${EXPLICIT}${WORKLOAD_SOCKET_ENV}`],
+    ["the paths are read before the explicit-deployment rule", { [STORAGE_CONTROL_DIR_ENV]: "x" }, `${STORAGE_CONTROL_DIR_ENV}: ${PATH_RULE}`],
+    ["in the guest's order", { ...env, [STORAGE_CONTROL_DIR_ENV]: "z", [VERIFIER_SOCKET_ENV]: "y", [WORKLOAD_SOCKET_ENV]: "x" }, `${WORKLOAD_SOCKET_ENV}: ${PATH_RULE}`],
+    ["the API is read before the paths", { ...env, [WORKLOAD_API_ENV]: "", [WORKLOAD_SOCKET_ENV]: "x" }, `${WORKLOAD_API_ENV}: empty value`],
+    ["'$' breaks the path form", { ...env, [WORKLOAD_SOCKET_ENV]: "/run/$(HOME).sock" }, `${WORKLOAD_SOCKET_ENV}: ${PATH_RULE}`],
+    ["a lone surrogate has no UTF-8 form", { ...env, [VERIFIER_SOCKET_ENV]: "/run/\ud800.sock" }, `${VERIFIER_SOCKET_ENV}: not UTF-8`],
+    ["the root", { ...env, [STORAGE_CONTROL_DIR_ENV]: "/" }, `${STORAGE_CONTROL_DIR_ENV}: ${PATH_RULE}`],
+  ];
+  for (const [label, pathEnv, message] of refusals) refusedAs(() => readGuestEnv(pathEnv), message, label);
+  refusedAs(() => readGuestEnv({ ...env, [STORAGE_CONTROL_DIR_ENV]: Buffer.from("2f72756e2fff", "hex") } as any), `${STORAGE_CONTROL_DIR_ENV}: not UTF-8`, "raw bytes");
+  // A path is its variable's value as is.
+  assert.deepEqual(readGuestEnv({ ...env, [WORKLOAD_SOCKET_ENV]: "/a.sock", [VERIFIER_SOCKET_ENV]: "/b/c.sock", [STORAGE_CONTROL_DIR_ENV]: "/d" }).paths,
+    { workloadSocket: "/a.sock", verifierSocket: "/b/c.sock", storageControlDir: "/d" });
+});
+
+// A deployment older than this contract measured its base image reference and
+// its sockets in variables of its own; the caller names them.
+const LEGACY_BASE = "EXAMPLE_BASE_IMAGE_REF", LEGACY_WORKLOAD_SOCKET = "EXAMPLE_PORTAL_SOCKET", LEGACY_VERIFIER_SOCKET = "EXAMPLE_VERIFIER_SOCKET";
+const legacyNames = { legacyWorkloadRefEnv: LEGACY_REF, legacyBaseImageRefEnv: LEGACY_BASE, legacyWorkloadSocketEnv: LEGACY_WORKLOAD_SOCKET, legacyVerifierSocketEnv: LEGACY_VERIFIER_SOCKET };
+
+test("legacy base image and socket variables are read as the guest reads them, and must equal the contract's values", () => {
+  const { env, expect } = deployment;
+  const agreeing = { ...env, [LEGACY_REF]: expect.workloadRef, [LEGACY_BASE]: expect.baseImageRef,
+    [LEGACY_WORKLOAD_SOCKET]: expect.paths.workloadSocket, [LEGACY_VERIFIER_SOCKET]: expect.paths.verifierSocket };
+  const read = readGuestEnv(agreeing, "every", legacyNames);
+  assert.equal(read.baseImageRef, expect.baseImageRef);
+  assert.deepEqual(read.paths, expect.paths);
+  const refusals: [string, Record<string, string>, string][] = [
+    ["the base image references differ", { ...agreeing, [LEGACY_BASE]: "example/other-base:v1" }, `${LEGACY_BASE} differs from ${WORKLOAD_API_ENV}'s baseImageRef`],
+    ["the workload sockets differ", { ...agreeing, [LEGACY_WORKLOAD_SOCKET]: "/run/other.sock" }, `${LEGACY_WORKLOAD_SOCKET} differs from ${WORKLOAD_SOCKET_ENV}`],
+    ["the verifier sockets differ", { ...agreeing, [LEGACY_VERIFIER_SOCKET]: "/run/other.sock" }, `${LEGACY_VERIFIER_SOCKET} differs from ${VERIFIER_SOCKET_ENV}`],
+    ["'$' in the legacy base image reference", { ...agreeing, [LEGACY_BASE]: "example/base:$(TAG)" }, `${LEGACY_BASE}: ${DOLLAR}`],
+    ["a legacy socket that is not a path", { ...agreeing, [LEGACY_WORKLOAD_SOCKET]: "portal.sock" }, `${LEGACY_WORKLOAD_SOCKET}: ${PATH_RULE}`],
+    ["the legacy workload reference is read before the base image reference", { ...agreeing, [LEGACY_REF]: "$", [LEGACY_BASE]: "$" }, `${LEGACY_REF}: ${DOLLAR}`],
+    ["the base image reference before the workload socket", { ...agreeing, [LEGACY_BASE]: "$", [WORKLOAD_SOCKET_ENV]: "x" }, `${LEGACY_BASE}: ${DOLLAR}`],
+    ["the workload socket before its legacy name", { ...agreeing, [WORKLOAD_SOCKET_ENV]: "x", [LEGACY_WORKLOAD_SOCKET]: "y" }, `${WORKLOAD_SOCKET_ENV}: ${PATH_RULE}`],
+    ["the legacy workload socket before the verifier socket", { ...agreeing, [LEGACY_WORKLOAD_SOCKET]: "y", [VERIFIER_SOCKET_ENV]: "x" }, `${LEGACY_WORKLOAD_SOCKET}: ${PATH_RULE}`],
+    ["the verifier socket before its legacy name", { ...agreeing, [VERIFIER_SOCKET_ENV]: "x", [LEGACY_VERIFIER_SOCKET]: "y" }, `${VERIFIER_SOCKET_ENV}: ${PATH_RULE}`],
+    ["the legacy verifier socket before the control directory", { ...agreeing, [LEGACY_VERIFIER_SOCKET]: "y", [STORAGE_CONTROL_DIR_ENV]: "z" }, `${LEGACY_VERIFIER_SOCKET}: ${PATH_RULE}`],
+    ["the explicit-deployment rule comes before the agreement", { ...without(agreeing, STORAGE_LAYOUT_ENV), [LEGACY_BASE]: "example/other-base:v1" }, `${EXPLICIT}${STORAGE_LAYOUT_ENV}`],
+    ["a legacy socket never stands in for its variable", without(agreeing, WORKLOAD_SOCKET_ENV), `${EXPLICIT}${WORKLOAD_SOCKET_ENV}`],
+    ["the workload reference agrees first", { ...agreeing, [LEGACY_REF]: "example/other:v1", [LEGACY_BASE]: "x", [LEGACY_WORKLOAD_SOCKET]: "/x" }, `${LEGACY_REF} differs from ${WIRE_PROFILE_ENV}'s workloadRef`],
+    ["then the base image reference", { ...agreeing, [LEGACY_BASE]: "x", [LEGACY_WORKLOAD_SOCKET]: "/x" }, `${LEGACY_BASE} differs from ${WORKLOAD_API_ENV}'s baseImageRef`],
+    ["then each socket", { ...agreeing, [LEGACY_WORKLOAD_SOCKET]: "/x", [LEGACY_VERIFIER_SOCKET]: "/y" }, `${LEGACY_WORKLOAD_SOCKET} differs from ${WORKLOAD_SOCKET_ENV}`],
+  ];
+  for (const [label, legacyEnv, message] of refusals) refusedAs(() => readGuestEnv(legacyEnv, "every", legacyNames), message, label);
+  // The agreement comes before the adapter's MODE.
+  refusedAs(() => readGuestEnv({ ...agreeing, [LEGACY_BASE]: "x", MODE: "other" }, "adapter", legacyNames), `${LEGACY_BASE} differs from ${WORKLOAD_API_ENV}'s baseImageRef`, "agreement before MODE");
+  // A variable nobody named is not the contract's.
+  assert.doesNotThrow(() => readGuestEnv({ ...env, [LEGACY_BASE]: "x", [LEGACY_WORKLOAD_SOCKET]: "y" }));
+  for (const option of ["legacyBaseImageRefEnv", "legacyWorkloadSocketEnv", "legacyVerifierSocketEnv"]) {
+    for (const name of ["", "A-B", WORKLOAD_API_ENV, ...PATH_ENVS, "MODE", "GUEST_WORKLOAD_REF"]) {
+      assert.throws(() => readGuestEnv(env, "every", { [option]: name } as any), (error: unknown) =>
+        error instanceof TypeError && !(error instanceof GuestEnvError) && (error as Error).message.startsWith(`readGuestEnv: ${option} must be an env variable name outside the guest env contract`), `${option} ${JSON.stringify(name)}`);
+    }
+  }
+  assert.throws(() => readGuestEnv(env, "every", { legacyWorkloadSocketEnv: "X_SOCKET", legacyVerifierSocketEnv: "X_SOCKET" } as any),
+    { message: 'readGuestEnv: legacyVerifierSocketEnv names "X_SOCKET", as legacyWorkloadSocketEnv does: each legacy variable is its own' });
+});
+
+test("runtimePathMounts mounts the sockets' directory and, for a reader of storage's status, the control directory", () => {
+  const paths = EXAMPLE_GUEST_DEPLOYMENT.runtimePaths;
+  assert.deepEqual(runtimePathMounts(paths, { sockets: "run" }), [{ name: "run", mountPath: "/run/guest-attest" }]);
+  assert.deepEqual(runtimePathMounts(paths, { sockets: "run", control: "control" }),
+    [{ name: "run", mountPath: "/run/guest-attest" }, { name: "control", mountPath: "/run/sealed-storage", readOnly: true }]);
+  const refusals: [string, () => unknown, string][] = [
+    ["equal sockets", () => runtimePathMounts({ ...paths, verifierSocket: paths.workloadSocket }, { sockets: "run" }), "the workload and verifier sockets must differ"],
+    ["sockets in two directories", () => runtimePathMounts({ ...paths, verifierSocket: "/run/other/verifier.sock" }, { sockets: "run" }),
+      "the workload and verifier sockets must lie in one directory, which the sockets volume is mounted at"],
+    ["sockets at the root", () => runtimePathMounts({ ...paths, workloadSocket: "/w.sock", verifierSocket: "/v.sock" }, { sockets: "run" }),
+      "the sockets' directory must not be /"],
+    ["the control directory is the sockets' directory", () => runtimePathMounts({ ...paths, storageControlDir: "/run/guest-attest" }, { sockets: "run", control: "control" }),
+      "the control directory must differ from the sockets' directory"],
+    ["one volume twice", () => runtimePathMounts(paths, { sockets: "run", control: "run" }), "sockets and control must name two volumes"],
+    ["a volume name Kubernetes refuses", () => runtimePathMounts(paths, { sockets: "Run" }), 'sockets must be a volume name, got "Run"'],
+    ["no sockets volume", () => runtimePathMounts(paths, {} as any), "sockets must be a volume name, got undefined"],
+  ];
+  for (const [label, mount, message] of refusals) {
+    assert.throws(mount, (error: unknown) => error instanceof TypeError && !(error instanceof GuestEnvError) && (error as Error).message === `runtimePathMounts: ${message}`, label);
+  }
+  // A path a guest refuses fails with the guest's message.
+  refusedAs(() => runtimePathMounts({ ...paths, storageControlDir: "run" }, { sockets: "run" }), `${STORAGE_CONTROL_DIR_ENV}: ${PATH_RULE}`, "a relative control directory");
 });

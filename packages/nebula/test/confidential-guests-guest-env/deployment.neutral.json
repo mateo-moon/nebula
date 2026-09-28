@@ -4,18 +4,27 @@
   },
   "description": "The neutral example deployment's env, its adapter's MODE, what every reader derives from it, and the refusal vectors of deployments.json based on it (base neutral: this env) or on no env (base none) that name nothing legacy: the vendorable part of deployments.json, read as it describes.",
   "env": {
+    "GUEST_STORAGE_CONTROL_DIR": "/run/sealed-storage",
     "GUEST_STORAGE_LAYOUT": "{\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"lifecycleRecord\":{\"name\":\"lifecycle-v1\",\"temp\":\"lifecycle-v1.tmp\"},\"placeholderMagic\":\"SEALED-STORAGE-PLACEHOLDER-V1\\n\",\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"volume\":\"data\"},\"volumes\":{\"data\":{\"bytes\":1099511627776,\"clients\":[{\"gid\":0,\"graceSeconds\":120,\"mode\":\"0750\",\"name\":\"primary\",\"program\":\"/usr/local/bin/primary\",\"uid\":20001},{\"gid\":0,\"graceSeconds\":120,\"mode\":\"0750\",\"name\":\"secondary\",\"program\":\"/usr/local/bin/secondary\",\"uid\":20002}],\"exports\":[{\"dir\":\"/run/exports/identity\",\"mode\":\"0400\",\"name\":\"identity-a\",\"owner\":{\"gid\":20001,\"uid\":20001}},{\"dir\":\"/run/exports/identity\",\"mode\":\"0400\",\"name\":\"identity-b\",\"owner\":{\"gid\":20001,\"uid\":20001}},{\"dir\":\"/run/exports/shared\",\"mode\":\"0444\",\"name\":\"shared-secret\",\"owner\":{\"gid\":0,\"uid\":0}}],\"map\":\"guest-data\",\"marker\":{\"file\":\"volume-marker\",\"prefix\":\"sealed-volume-v1:\"},\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"scratch\":{\"bytes\":1073741824,\"clients\":[{\"gid\":0,\"graceSeconds\":60,\"mode\":\"0750\",\"name\":\"operator\",\"program\":\"/usr/local/bin/operator\",\"uid\":20003}],\"map\":\"guest-workspace\",\"marker\":{\"file\":\"volume-marker\",\"prefix\":\"sealed-volume-v1:\"},\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}}",
+    "GUEST_VERIFIER_SOCKET": "/run/guest-attest/verifier.sock",
     "GUEST_WIRE_PROFILE": "{\"domains\":{\"base\":[\"CONFIDENTIAL_GUESTS_BASE_V1\"],\"controlAuthorization\":[\"CONFIDENTIAL_GUESTS_CONTROL_AUTHORIZATION_V1\"],\"evidence\":[\"CONFIDENTIAL_GUESTS_EVIDENCE_V1\"],\"handoff\":[\"CONFIDENTIAL_GUESTS_HANDOFF_V1\"],\"replay\":[\"CONFIDENTIAL_GUESTS_REPLAY_V1\"],\"session\":[\"CONFIDENTIAL_GUESTS_SESSION_V1\"],\"workload\":[\"CONFIDENTIAL_GUESTS_WORKLOAD_V1\"]},\"payloadTypes\":{\"authorityRotation\":[\"application/vnd.nebula.confidential-guests.authority-rotation.v1+json\"],\"record\":[\"application/vnd.nebula.confidential-guests.record.v1+json\"],\"release\":[\"application/vnd.nebula.confidential-guests.release.v1+json\"],\"releaseSet\":[\"application/vnd.nebula.confidential-guests.release-set.v2+json\"]},\"releaseSet\":{\"roles\":[\"node\",\"operator\"],\"scope\":[\"deployment=example\"]},\"workloadRef\":\"example/workload:v1\"}",
-    "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+    "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}",
+    "GUEST_WORKLOAD_SOCKET": "/run/guest-attest/workload.sock"
   },
   "expect": {
-    "api": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}",
+    "api": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}",
+    "baseImageRef": "example/guest-base:v1",
     "controlBridgeSchemas": [
       "confidential.guests.control.authorization.v1"
     ],
     "emitsLegacy": false,
     "layout": "{\"kdf\":{\"extract\":\"confidential-guests/sealed-storage/extract/v1\",\"passphrase\":\"confidential-guests/sealed-storage/luks-passphrase/v1\"},\"lifecycleKey\":{\"mask\":9,\"tcb\":\"0000000000000000\"},\"lifecycleRecord\":{\"name\":\"lifecycle-v1\",\"temp\":\"lifecycle-v1.tmp\"},\"placeholderMagic\":\"SEALED-STORAGE-PLACEHOLDER-V1\\n\",\"secrets\":{\"file\":\"guest-secrets-v1\",\"formats\":[{\"fingerprint\":\"CONFIDENTIAL_GUESTS_IDENTITY_FINGERPRINT_V1\",\"header\":\"CONFIDENTIAL_GUESTS_SECRETS_V1\"}],\"volume\":\"data\"},\"volumes\":{\"data\":{\"bytes\":1099511627776,\"clients\":[{\"gid\":0,\"graceSeconds\":120,\"mode\":\"0750\",\"name\":\"primary\",\"program\":\"/usr/local/bin/primary\",\"uid\":20001},{\"gid\":0,\"graceSeconds\":120,\"mode\":\"0750\",\"name\":\"secondary\",\"program\":\"/usr/local/bin/secondary\",\"uid\":20002}],\"exports\":[{\"dir\":\"/run/exports/identity\",\"mode\":\"0400\",\"name\":\"identity-a\",\"owner\":{\"gid\":20001,\"uid\":20001}},{\"dir\":\"/run/exports/identity\",\"mode\":\"0400\",\"name\":\"identity-b\",\"owner\":{\"gid\":20001,\"uid\":20001}},{\"dir\":\"/run/exports/shared\",\"mode\":\"0444\",\"name\":\"shared-secret\",\"owner\":{\"gid\":0,\"uid\":0}}],\"map\":\"guest-data\",\"marker\":{\"file\":\"volume-marker\",\"prefix\":\"sealed-volume-v1:\"},\"mount\":\"/run/volume/data\",\"node\":\"sealed-data\",\"volume\":\"data-v1\"},\"scratch\":{\"bytes\":1073741824,\"clients\":[{\"gid\":0,\"graceSeconds\":60,\"mode\":\"0750\",\"name\":\"operator\",\"program\":\"/usr/local/bin/operator\",\"uid\":20003}],\"map\":\"guest-workspace\",\"marker\":{\"file\":\"volume-marker\",\"prefix\":\"sealed-volume-v1:\"},\"mount\":\"/run/volume/workspace\",\"node\":\"sealed-workspace\",\"volume\":\"workspace-v1\"}}}",
     "operatorRole": "operator",
+    "paths": {
+      "storageControlDir": "/run/sealed-storage",
+      "verifierSocket": "/run/guest-attest/verifier.sock",
+      "workloadSocket": "/run/guest-attest/workload.sock"
+    },
     "payloadSchemas": {
       "authorityRotation": [
         "nebula.confidential-guests.authority-rotation.v1"
@@ -44,6 +53,11 @@
       "scope": [
         "deployment=example"
       ]
+    },
+    "responses": {
+      "config": "{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"}",
+      "status": "{\"base_image_id\":\"0x1111111111111111111111111111111111111111111111111111111111111111\",\"base_image_ref\":\"example/guest-base:v1\",\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"},\"state\":\"Running\",\"workload_id\":\"0x2222222222222222222222222222222222222222222222222222222222222222\",\"workload_ref\":\"example/workload:v1\"}",
+      "verifyFailure": "{\"checks\":[{\"detail\":\"peer identity references do not match this deployment\",\"name\":\"snp-session\",\"valid\":false}],\"errors\":[\"peer identity references do not match this deployment\"]}"
     },
     "sessionSchemas": [
       "confidential.guests.session.v1"
@@ -93,7 +107,7 @@
     },
     {
       "base": "none",
-      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WIRE_PROFILE.releaseSet, GUEST_WIRE_PROFILE.workloadRef, GUEST_STORAGE_LAYOUT, GUEST_WORKLOAD_API",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WIRE_PROFILE.releaseSet, GUEST_WIRE_PROFILE.workloadRef, GUEST_STORAGE_LAYOUT, GUEST_WORKLOAD_API, GUEST_WORKLOAD_SOCKET, GUEST_VERIFIER_SOCKET, GUEST_STORAGE_CONTROL_DIR",
       "name": "renamed-wire-alone",
       "reader": "every",
       "set": {
@@ -280,7 +294,7 @@
       "name": "nul",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"\u0000}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}\u0000}"
       }
     },
     {
@@ -325,7 +339,7 @@
       "name": "dollar-in-api",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"SIGN_$(HOME)\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"SIGN_$(HOME)\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -352,7 +366,7 @@
       "name": "single-quotes",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{'keyResolverDomain':'CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1','mode':'attest','routes':{'config':'/v1/config','evidence':'/v1/session/evidence-bundle','sign':'/v1/sign-message','status':'/v1/status','verify':'/v1/verify-session-bundle'},'signDomain':'CONFIDENTIAL_GUESTS_SESSION_SIGN_V1'}"
+        "GUEST_WORKLOAD_API": "{'baseImageRef':'example/guest-base:v1','checkName':'snp-session','config':{'platforms':['qemu/sev-snp'],'trustMode':'local-identity'},'keyResolverDomain':'CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1','mode':'attest','routes':{'config':'/v1/config','evidence':'/v1/session/evidence-bundle','sign':'/v1/sign-message','status':'/v1/status','verify':'/v1/verify-session-bundle'},'signDomain':'CONFIDENTIAL_GUESTS_SESSION_SIGN_V1','statusFields':{'detail':'session ready','platform':{'attestation_mode':'hardware'}}}"
       }
     },
     {
@@ -442,7 +456,7 @@
       "name": "not-canonical",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\": \"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\", \"mode\": \"attest\", \"routes\": {\"config\": \"/v1/config\", \"evidence\": \"/v1/session/evidence-bundle\", \"sign\": \"/v1/sign-message\", \"status\": \"/v1/status\", \"verify\": \"/v1/verify-session-bundle\"}, \"signDomain\": \"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\": \"example/guest-base:v1\", \"checkName\": \"snp-session\", \"config\": {\"platforms\": [\"qemu/sev-snp\"], \"trustMode\": \"local-identity\"}, \"keyResolverDomain\": \"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\", \"mode\": \"attest\", \"routes\": {\"config\": \"/v1/config\", \"evidence\": \"/v1/session/evidence-bundle\", \"sign\": \"/v1/sign-message\", \"status\": \"/v1/status\", \"verify\": \"/v1/verify-session-bundle\"}, \"signDomain\": \"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\", \"statusFields\": {\"detail\": \"session ready\", \"platform\": {\"attestation_mode\": \"hardware\"}}}"
       }
     },
     {
@@ -528,7 +542,7 @@
     },
     {
       "base": "neutral",
-      "error": "GUEST_WORKLOAD_API: api: missing [\"keyResolverDomain\", \"mode\", \"routes\", \"signDomain\"], unknown [\"a\"]",
+      "error": "GUEST_WORKLOAD_API: api: missing [\"baseImageRef\", \"checkName\", \"config\", \"keyResolverDomain\", \"mode\", \"routes\", \"signDomain\", \"statusFields\"], unknown [\"a\"]",
       "name": "largest-u64-is-canonical",
       "reader": "every",
       "set": {
@@ -1729,7 +1743,7 @@
       "name": "api-unknown-key",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"zz\":1}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}},\"zz\":1}"
       }
     },
     {
@@ -1738,7 +1752,7 @@
       "name": "mode-upper-case",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"Attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"Attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1747,7 +1761,7 @@
       "name": "mode-of-65-bytes",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1756,7 +1770,7 @@
       "name": "mode-number",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":1,\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":1,\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1765,7 +1779,7 @@
       "name": "routes-not-an-object",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":\"/v1\",\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":\"/v1\",\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1774,7 +1788,7 @@
       "name": "routes-without-sign",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1783,7 +1797,7 @@
       "name": "route-relative",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1792,7 +1806,7 @@
       "name": "route-with-query",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign?x=1\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign?x=1\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1801,7 +1815,7 @@
       "name": "route-with-fragment",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify#x\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify#x\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1810,7 +1824,7 @@
       "name": "route-of-129-bytes",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1819,7 +1833,7 @@
       "name": "workload-routes-equal",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/status\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/status\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1828,7 +1842,7 @@
       "name": "verifier-routes-equal",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/config\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/config\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1837,7 +1851,7 @@
       "name": "sign-domain-with-space",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"SIGN V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"SIGN V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1846,7 +1860,7 @@
       "name": "key-resolver-domain-of-129-bytes",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
     },
     {
@@ -1855,8 +1869,281 @@
       "name": "api-domains-equal",
       "reader": "every",
       "set": {
-        "GUEST_WORKLOAD_API": "{\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
       }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: signing and key-resolver domains must differ",
+      "name": "domains-differ-before-base-image-ref",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: baseImageRef must be printable ASCII without spaces, NUL or line breaks",
+      "name": "base-image-ref-empty",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: baseImageRef must be printable ASCII without spaces, NUL or line breaks",
+      "name": "base-image-ref-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: baseImageRef must be printable ASCII without spaces, NUL or line breaks",
+      "name": "base-image-ref-list",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":[\"example/guest-base:v1\"],\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: api: missing [\"baseImageRef\"], unknown []",
+      "name": "api-without-base-image-ref",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: config must be an object",
+      "name": "config-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":[],\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: statusFields must be an object",
+      "name": "status-fields-not-an-object",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":\"session ready\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: statusFields must not name the computed members [\"state\", \"workload_ref\"]",
+      "name": "status-fields-name-computed-members",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"},\"state\":\"Ready\",\"workload_ref\":\"example/workload:v1\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: config must be an object",
+      "name": "config-before-status-fields",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp-session\",\"config\":null,\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"state\":\"Ready\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: statusFields must not name the computed members [\"base_image_id\"]",
+      "name": "computed-members-before-check-name",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"base_image_id\":\"0x00\"}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: checkName must be printable ASCII without spaces",
+      "name": "check-name-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"snp session\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: checkName must be printable ASCII without spaces",
+      "name": "check-name-of-129-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"checkName\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\",\"statusFields\":{\"detail\":\"session ready\",\"platform\":{\"attestation_mode\":\"hardware\"}}}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_API: api: missing [\"checkName\", \"statusFields\"], unknown []",
+      "name": "api-without-status-fields-and-check-name",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_API": "{\"baseImageRef\":\"example/guest-base:v1\",\"config\":{\"platforms\":[\"qemu/sev-snp\"],\"trustMode\":\"local-identity\"},\"keyResolverDomain\":\"CONFIDENTIAL_GUESTS_KEY_RESOLVER_V1\",\"mode\":\"attest\",\"routes\":{\"config\":\"/v1/config\",\"evidence\":\"/v1/session/evidence-bundle\",\"sign\":\"/v1/sign-message\",\"status\":\"/v1/status\",\"verify\":\"/v1/verify-session-bundle\"},\"signDomain\":\"CONFIDENTIAL_GUESTS_SESSION_SIGN_V1\"}"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WORKLOAD_SOCKET",
+      "name": "no-workload-socket",
+      "reader": "every",
+      "unset": [
+        "GUEST_WORKLOAD_SOCKET"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_VERIFIER_SOCKET",
+      "name": "no-verifier-socket",
+      "reader": "every",
+      "unset": [
+        "GUEST_VERIFIER_SOCKET"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_STORAGE_CONTROL_DIR",
+      "name": "no-storage-control-dir",
+      "reader": "every",
+      "unset": [
+        "GUEST_STORAGE_CONTROL_DIR"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WORKLOAD_SOCKET, GUEST_VERIFIER_SOCKET, GUEST_STORAGE_CONTROL_DIR",
+      "name": "no-runtime-paths",
+      "reader": "every",
+      "unset": [
+        "GUEST_WORKLOAD_SOCKET",
+        "GUEST_VERIFIER_SOCKET",
+        "GUEST_STORAGE_CONTROL_DIR"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WORKLOAD_API, GUEST_WORKLOAD_SOCKET, GUEST_VERIFIER_SOCKET, GUEST_STORAGE_CONTROL_DIR",
+      "name": "no-api-no-paths",
+      "reader": "every",
+      "unset": [
+        "GUEST_WORKLOAD_API",
+        "GUEST_WORKLOAD_SOCKET",
+        "GUEST_VERIFIER_SOCKET",
+        "GUEST_STORAGE_CONTROL_DIR"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "the wire profile emits renamed identifiers, so the deployment takes no legacy default: set GUEST_WORKLOAD_SOCKET",
+      "name": "legacy-socket-does-not-name-a-renamed-socket",
+      "reader": "every",
+      "set": {
+        "PORTAL_SOCKET": "/run/guest-attest/workload.sock"
+      },
+      "unset": [
+        "GUEST_WORKLOAD_SOCKET"
+      ]
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "workload-socket-relative",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_SOCKET": "run/workload.sock"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_VERIFIER_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "verifier-socket-dot-dot",
+      "reader": "every",
+      "set": {
+        "GUEST_VERIFIER_SOCKET": "/run/../verifier.sock"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_CONTROL_DIR: not an absolute path without . or .. of at most 107 bytes",
+      "name": "storage-control-dir-trailing-slash",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_CONTROL_DIR": "/run/sealed-storage/"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "workload-socket-with-space",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_SOCKET": "/run/guest attest.sock"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "workload-socket-dollar",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_SOCKET": "/run/$(HOME).sock"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_WORKLOAD_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "workload-socket-empty",
+      "reader": "every",
+      "set": {
+        "GUEST_WORKLOAD_SOCKET": ""
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_VERIFIER_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "verifier-socket-of-108-bytes",
+      "reader": "every",
+      "set": {
+        "GUEST_VERIFIER_SOCKET": "/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_CONTROL_DIR: not UTF-8",
+      "name": "storage-control-dir-not-utf8",
+      "reader": "every",
+      "setHex": {
+        "GUEST_STORAGE_CONTROL_DIR": "2f72756e2fff"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_VERIFIER_SOCKET: not an absolute path without . or .. of at most 107 bytes",
+      "name": "sockets-before-control-dir",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_CONTROL_DIR": "y",
+        "GUEST_VERIFIER_SOCKET": "x"
+      }
+    },
+    {
+      "base": "neutral",
+      "error": "GUEST_STORAGE_CONTROL_DIR: not an absolute path without . or .. of at most 107 bytes",
+      "name": "paths-before-explicit",
+      "reader": "every",
+      "set": {
+        "GUEST_STORAGE_CONTROL_DIR": "x"
+      },
+      "unset": [
+        "GUEST_STORAGE_LAYOUT"
+      ]
     },
     {
       "base": "neutral",
