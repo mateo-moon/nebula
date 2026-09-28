@@ -13,6 +13,11 @@ export type {
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
 
+export { Keda, kedaValues } from "./keda";
+export type { KedaConfig } from "./keda";
+export { GiteaEphemeralRunners, scaledJobSpec, queuedJobsUrl } from "./keda/gitea-runners";
+export type { GiteaEphemeralRunnersConfig, GiteaRunnerPool } from "./keda/gitea-runners";
+
 export { ClusterAutoscaler, clusterAutoscalerValues } from "./cluster-autoscaler";
 export type { ClusterAutoscalerConfig } from "./cluster-autoscaler";
 
