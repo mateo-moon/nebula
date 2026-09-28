@@ -89,5 +89,5 @@ test("the construct renders one autoscaler deployment in the cluster's namespace
   const infra = objects.find(o => o.kind === "ClusterRole" && o.metadata.name === "cluster-autoscaler-ci-infrastructure");
   assert.deepEqual(infra.rules, [{ apiGroups: ["infrastructure.cluster.x-k8s.io"], resourceNames: [], resources: ["*"], verbs: ["get", "list", "watch"] }]);
   const binding = objects.find(o => o.kind === "ClusterRoleBinding" && o.roleRef.name === "cluster-autoscaler-ci-infrastructure");
-  assert.deepEqual(binding.subjects, [{ kind: "ServiceAccount", name: "cluster-autoscaler-ci", namespace: "default" }]);
+  assert.deepEqual(binding.subjects, [{ apiGroup: "", kind: "ServiceAccount", name: "cluster-autoscaler-ci", namespace: "default" }]);
 });
