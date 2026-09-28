@@ -78,7 +78,10 @@ export interface GuestLifecycleRole {
   /** The rollout counter. Default 0. */
   readonly rolloutId?: number;
   readonly stage?: GuestLifecycleStage;
-  /** A ledger to import once, rendered with Prune=false,Delete=false. */
+  /**
+   * A ledger to import once, rendered with Prune=false,Delete=false. Code mode
+   * only: spec version 2 names no imported ledger, so image mode refuses it.
+   */
   readonly importedLedger?: GuestLifecycleImportedLedger;
 }
 
@@ -342,6 +345,9 @@ function checkProps(props: GuestLifecycleProps): string[] {
     const controller = props.controller as GuestLifecycleImage;
     if (controller === null || typeof controller !== "object" || !("image" in controller)) fail(OWNER, "controller must be {code, runtimeImage, package} or {image}");
     digestImage(controller.image);
+    for (const role of roles) {
+      if (role.importedLedger) fail(OWNER, `role ${role.role}: importedLedger needs a code-mode controller; lifecycle spec version 2 names no imported ledger, so an image-mode controller would never read it and would start from a fresh budget`);
+    }
     if (controller.command !== undefined) list<string>(OWNER, "controller.command", controller.command, 1).forEach(a => nonEmptyString(OWNER, "controller.command entry", a));
   }
   for (const secret of props.imagePullSecrets ?? []) dnsSubdomain(OWNER, "imagePullSecrets entry", secret);

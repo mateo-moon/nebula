@@ -211,7 +211,8 @@ changes them in the same reviewed change.
   `node_name` with `runtime_class_name` and carries no Argo tracking id.
 - **State.** The ledger ConfigMap `<role>-lifecycle-ledger` (`data.state`),
   which Git declares once and Argo never resets; an imported ledger, when the
-  role names one, is read once.
+  role names one, is read once. Only code mode imports one: spec version 2
+  names no imported ledger, so image mode refuses `importedLedger`.
 - **Permissions.** The ServiceAccount `<role>-lifecycle` may get and delete
   only the holder and stage Pods, create Pods (the admission fence limits
   which), get its spec (and imported ledger) and get and patch its ledger.
