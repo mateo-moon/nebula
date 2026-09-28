@@ -75,10 +75,16 @@ export function initDataSha256(ccInitData: string): string {
   }
   // gunzip reads on past the first member (a second member, trailing zeros); a guest may read the first alone.
   const header = gzipHeaderLength(bytes);
-  const deflated = header < 0 ? -1
-    : (inflateRawSync(bytes.subarray(header), { info: true, maxOutputLength: MAX_INIT_DATA }) as unknown as { engine: { bytesWritten: number } })
-      .engine.bytesWritten;
-  if (header < 0 || header + deflated + 8 !== bytes.length) throw new Error("init-data: not exactly one gzip member");
+  let deflated = -1;
+  try {
+    if (header >= 0) {
+      const inflated = inflateRawSync(bytes.subarray(header), { info: true, maxOutputLength: MAX_INIT_DATA }) as unknown as { engine: { bytesWritten: number } };
+      deflated = inflated.engine.bytesWritten;
+    }
+  } catch {
+    deflated = -1;
+  }
+  if (header < 0 || deflated < 0 || header + deflated + 8 !== bytes.length) throw new Error("init-data: not exactly one gzip member");
   return sha256Hex(document);
 }
 
