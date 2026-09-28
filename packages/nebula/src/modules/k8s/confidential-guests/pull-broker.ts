@@ -12,8 +12,23 @@ import {
  * Which guests the broker releases the pull credentials to, by the SHA-256
  * of their measured init-data (the value SEV-SNP reports as HOST_DATA):
  * exactly one (`equals`) or any of a list (`in`, rendered in the given order).
+ *
+ * Init-data is a launch parameter the host chooses, so on its own it does
+ * not identify the guest software: any non-debug guest launched with an
+ * admitted init-data hash receives the credentials. A deployment should pin
+ * the launch measurements of its releases ({@link MeasurementAdmission}).
  */
 export type InitDataAdmission =
+  | { readonly form: "equals"; readonly value: string }
+  | { readonly form: "in"; readonly values: readonly string[] };
+
+/**
+ * Which guests the broker releases the pull credentials to, by their SEV-SNP
+ * launch measurement (the 48-byte launch digest, 96 lowercase hex characters
+ * as the attestation token reports it): exactly one (`equals`) or any of a
+ * list (`in`, rendered in the given order).
+ */
+export type MeasurementAdmission =
   | { readonly form: "equals"; readonly value: string }
   | { readonly form: "in"; readonly values: readonly string[] };
 
@@ -52,6 +67,12 @@ export interface AttestedPullBrokerProps {
   readonly resourcePath: KbsResourcePath;
   readonly initData: InitDataAdmission;
   /**
+   * Launch measurements admitted besides the init-data. Without it every
+   * non-debug guest launched with an admitted init-data hash receives the
+   * credentials; pin the launch measurements of the deployment's releases.
+   */
+  readonly measurement?: MeasurementAdmission;
+  /**
    * Secret with the registry credentials (`.dockerconfigjson`). It is always
    * mounted for the init container; with `exposeAsResource` it is also
    * mounted read-only into the broker's local resource store as the resource.
@@ -69,14 +90,22 @@ export interface AttestedPullBrokerProps {
 const WHERE = "AttestedPullBroker";
 const PROPS_FIELDS = [
   "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "initImage",
-  "initCommand", "configToml", "resourcePath", "initData", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
+  "initCommand", "configToml", "resourcePath", "initData", "measurement", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
 ];
 const HOST_DATA = /^[a-f0-9]{64}$/;
+const MEASUREMENT = /^[a-f0-9]{96}$/;
 const RESOURCE_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 
 function hostData(value: unknown): string {
   if (typeof value !== "string" || !HOST_DATA.test(value) || /^0+$/.test(value)) {
     fail(WHERE, `init-data hashes must be nonzero SHA-256 values in lowercase hex, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+function launchMeasurement(value: unknown): string {
+  if (typeof value !== "string" || !MEASUREMENT.test(value) || /^0+$/.test(value)) {
+    fail(WHERE, `launch measurements must be nonzero 48-byte SEV-SNP launch digests in lowercase hex, got ${JSON.stringify(value)}`);
   }
   return value;
 }
@@ -88,28 +117,34 @@ function validResourcePath(value: unknown): KbsResourcePath {
   return value as unknown as KbsResourcePath;
 }
 
-function admission(value: unknown): string {
-  if (!isPlainObject(value)) fail(WHERE, `init-data admission must be { form: "equals", value } or { form: "in", values }`);
-  if (value.form === "equals" && Object.keys(value).sort().join() === "form,value") return `ev.init_data == "${hostData(value.value)}"`;
+/** One policy line admitting `claim` by `admitted` values: `== "one"` or `in ["any", ...]`. */
+function admission(what: string, claim: string, value: unknown, admitted: (value: unknown) => string): string {
+  if (!isPlainObject(value)) fail(WHERE, `${what} admission must be { form: "equals", value } or { form: "in", values }`);
+  if (value.form === "equals" && Object.keys(value).sort().join() === "form,value") return `${claim} == "${admitted(value.value)}"`;
   if (value.form === "in" && Object.keys(value).sort().join() === "form,values" && Array.isArray(value.values) && value.values.length > 0) {
-    return `ev.init_data in ${JSON.stringify(value.values.map(hostData))}`;
+    return `${claim} in ${JSON.stringify(value.values.map(admitted))}`;
   }
-  fail(WHERE, `init-data admission must be { form: "equals", value } or { form: "in", values: [at least one] }`);
+  fail(WHERE, `${what} admission must be { form: "equals", value } or { form: "in", values: [at least one] }`);
 }
 
 /**
  * The KBS resource policy: release the resource only to SEV-SNP evidence
- * without the debug policy bit whose init-data hash is admitted.
+ * without the debug policy bit whose init-data hash is admitted and, when a
+ * measurement admission is given, whose launch measurement is admitted too.
+ * Init-data alone does not identify the guest software (see
+ * {@link InitDataAdmission}); without a measurement the policy is as before.
  */
-export function pullBrokerPolicy(resourcePath: KbsResourcePath, initData: InitDataAdmission): string {
+export function pullBrokerPolicy(resourcePath: KbsResourcePath, initData: InitDataAdmission, measurement?: MeasurementAdmission): string {
   const path = validResourcePath(resourcePath);
+  const admitted = [admission("init-data", "ev.init_data", initData, hostData)];
+  if (measurement !== undefined) admitted.push(admission("measurement", "ev.snp.measurement", measurement, launchMeasurement));
   return `package policy
 default allow := false
 allow if {
     data.plugin == "resource"
     data["resource-path"] == [${path.map(part => JSON.stringify(part)).join(", ")}]
     ev := input.submods.cpu0["ear.veraison.annotated-evidence"]
-    ${admission(initData)}
+    ${admitted.join("\n    ")}
     ev.snp.policy_debug_allowed == false
 }
 `;
@@ -118,7 +153,8 @@ allow if {
 /**
  * An attestation-gated pull broker: an upstream Key Broker Service that
  * releases private registry credentials to a guest's image pull only when
- * the guest's attested init-data is admitted. Renders, in order: a
+ * the guest's attested init-data (and, when pinned, its launch measurement)
+ * is admitted. Renders, in order: a
  * namespace-wide ingress deny, the guests-to-broker ingress rule, the
  * configuration (KBS config and resource policy), the Service and the broker
  * Deployment, whose Pod template carries the configuration hash so a policy
@@ -163,7 +199,7 @@ export class AttestedPullBroker extends Construct {
     const configWave = waveAnnotation(WHERE, "syncWaves.config", props.syncWaves?.config ?? -2);
     const brokerWave = waveAnnotation(WHERE, "syncWaves.broker", props.syncWaves?.broker ?? -1);
 
-    this.policy = pullBrokerPolicy(resourcePath, props.initData);
+    this.policy = pullBrokerPolicy(resourcePath, props.initData, props.measurement);
     this.configSha256 = sha256Hex(this.policy + props.configToml);
     this.resourceUri = `kbs:///${resourcePath.join("/")}`;
     this.host = `${name}.${namespace}.svc`;
