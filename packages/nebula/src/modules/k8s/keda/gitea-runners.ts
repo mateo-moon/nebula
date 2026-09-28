@@ -50,6 +50,7 @@ import {
   ScaledJob,
   ScaledJobSpecJobTargetRefTemplateSpecContainersResourcesLimits as Limit,
   ScaledJobSpecJobTargetRefTemplateSpecContainersResourcesRequests as Request,
+  ScaledJobSpecRolloutStrategy,
   ScaledJobSpecScalingStrategyStrategy,
   TriggerAuthentication,
   type ScaledJobSpec,
@@ -139,6 +140,10 @@ export function scaledJobSpec(
     failedJobsHistoryLimit: 5,
     // One Job per queued job, minus the Jobs already running.
     scalingStrategy: { strategy: ScaledJobSpecScalingStrategyStrategy.DEFAULT },
+    // A change to this spec leaves running Jobs alone (KEDA's default deletes
+    // them, which fails the job in flight and, for a runner that never took
+    // one, leaves a registration Gitea never deletes).
+    rollout: { strategy: ScaledJobSpecRolloutStrategy.GRADUAL },
     triggers: [
       {
         type: "metrics-api",
