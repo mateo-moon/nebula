@@ -14,7 +14,7 @@ import {
   type GuestLifecycleProps,
   type GuestLifecycleRole,
 } from "../src/modules/k8s/confidential-guests";
-import { CONTROLLER_CODE, DOMAIN, NAMESPACE, NODE, image, initData, lifecycleProps, measured, roles, sha256 } from "./confidential-guests-fixtures";
+import { CONTROLLER_CODE, DOMAIN, NAMESPACE, NODE, image, imageRoles, initData, lifecycleProps, measured, roles, sha256 } from "./confidential-guests-fixtures";
 
 function render(props: GuestLifecycleProps) {
   const chart = Testing.chart();
@@ -106,7 +106,7 @@ test("the spec carries every release with its HOST_DATA and the role's scope", (
 });
 
 test("image mode: no code ConfigMap; the controller reads its node, runtime class and label domains from spec version 2", () => {
-  const props = lifecycleProps({ controller: { image: image("control") }, acceptLabelDomains: ["old.example.org"], imagePullSecrets: ["pull"] });
+  const props = lifecycleProps({ controller: { image: image("control") }, roles: imageRoles(), acceptLabelDomains: ["old.example.org"], imagePullSecrets: ["pull"] });
   const { docs } = render(props);
   assert.ok(!docs.some(d => d.metadata.name.endsWith("-code")));
   const deployment = docs.find(d => d.kind === "Deployment" && d.metadata.name === "primary-lifecycle");
@@ -122,12 +122,22 @@ test("image mode: no code ConfigMap; the controller reads its node, runtime clas
   assert.deepEqual(container.env, [{ name: "LIFECYCLE_ROLE", value: "primary" }, { name: "LIFECYCLE_NAMESPACE", value: NAMESPACE }],
     "the environment of code mode: everything else is in the spec");
   const spec = guestLifecycleSpec(props, "primary");
-  assert.deepEqual(spec, { ...guestLifecycleSpec(lifecycleProps(), "primary"), version: 2,
+  assert.deepEqual(spec, { ...guestLifecycleSpec(lifecycleProps({ roles: imageRoles() }), "primary"), version: 2,
     node_name: NODE, runtime_class_name: "kata-qemu-snp", label_domains: [DOMAIN, "old.example.org"] }, "version 1 plus the placement and the label domains, emitted domain first");
   assert.equal(docs.find(d => d.metadata.name === "primary-lifecycle-spec").data["spec.json"], canonicalJson(spec));
   assert.deepEqual(LIFECYCLE_SPEC_VERSIONS, { code: 1, image: 2 });
-  const custom = render(lifecycleProps({ controller: { image: image("control"), command: ["/bin/controller", "--serve"] } }));
+  const custom = render(lifecycleProps({ controller: { image: image("control"), command: ["/bin/controller", "--serve"] }, roles: imageRoles() }));
   assert.deepEqual(custom.docs.find(d => d.kind === "Deployment").spec.template.spec.containers[0].command, ["/bin/controller", "--serve"]);
+});
+
+test("image mode refuses an imported ledger: spec version 2 names none, so the controller would start from a fresh budget", () => {
+  const props = lifecycleProps({ controller: { image: image("control") } });
+  assert.ok(props.roles[0].importedLedger, "the default primary role imports a ledger");
+  assert.throws(() => render(props),
+    /role primary: importedLedger needs a code-mode controller; lifecycle spec version 2 names no imported ledger, so an image-mode controller would never read it and would start from a fresh budget/);
+  assert.throws(() => guestLifecycleSpec(props, "operator"), /role primary: importedLedger needs a code-mode controller/,
+    "the spec of any role is refused, not only the importing one");
+  assert.doesNotThrow(() => render(lifecycleProps()), "code mode imports it as before");
 });
 
 test("every claim belongs to one guest: a stage boot never mounts its holder's disk and roles share no claim", () => {
@@ -161,7 +171,7 @@ test("any label domain the deployment controls is used, and none is assumed", ()
     assert.throws(() => render(lifecycleProps({ labelDomain } as any)), /labelDomain/, String(labelDomain));
   }
   assert.throws(() => render(lifecycleProps({ acceptLabelDomains: ["old.example.org"] })), /image-mode/);
-  assert.throws(() => render(lifecycleProps({ controller: { image: image("control") }, acceptLabelDomains: [DOMAIN] })), /twice/);
+  assert.throws(() => render(lifecycleProps({ controller: { image: image("control") }, roles: imageRoles(), acceptLabelDomains: [DOMAIN] })), /twice/);
 });
 
 test("the controllers' ledgers are ignored by Argo: imported ledgers first, then lifecycle ledgers, in role order", () => {
