@@ -11,9 +11,10 @@
  * - the guest env contract: {@link WireProfile} (every identifier put on the
  *   wire, as "emit one, accept many" so identifiers can be renamed without
  *   breaking peers, with the frozen {@link NEUTRAL_WIRE} names), the storage
- *   layout and the workload API, rendered by {@link wireProfileEnv},
- *   {@link storageLayoutEnv}, {@link workloadApiEnv} and {@link guestEnv}
- *   and read back by the guest's rules ({@link readGuestEnv});
+ *   layout, the workload API and the runtime paths, rendered by
+ *   {@link wireProfileEnv}, {@link storageLayoutEnv}, {@link workloadApiEnv},
+ *   {@link runtimePathsEnv} and {@link guestEnv} (with the containers'
+ *   mounts from {@link runtimePathMounts}) and read back by the guest's rules ({@link readGuestEnv});
  * - lazily read assets shipped with the module.
  *
  * Host-side building blocks. Every name, address, image, host path and label
@@ -59,12 +60,23 @@ export type { DigestImage } from "./types";
 export { canonicalJson, sha256Hex } from "./canonical";
 export { NEUTRAL_WIRE, WIRE_PROFILE_ENV, wireProfileEnv } from "./wire";
 export type { WireDomains, WireNames, WirePayloadTypes, WireProfile, WireReleaseSet, WireValue } from "./wire";
-export { GuestEnvError, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, readGuestEnv } from "./guest-env";
+export {
+  GuestEnvError,
+  STORAGE_CONTROL_DIR_ENV,
+  STORAGE_LAYOUT_ENV,
+  VERIFIER_SOCKET_ENV,
+  WORKLOAD_API_ENV,
+  WORKLOAD_SOCKET_ENV,
+  readGuestEnv,
+} from "./guest-env";
 export type {
   GuestDeployment,
   GuestEnvOptions,
   GuestEnvReader,
+  GuestJsonObject,
+  GuestJsonValue,
   GuestRecordFormat,
+  GuestRuntimePaths,
   GuestStorageLayout,
   GuestStorageVolume,
   GuestVolumeClient,
@@ -78,11 +90,13 @@ export {
   NEUTRAL_WORKLOAD_API,
   adapterModeEnv,
   guestEnv,
+  runtimePathMounts,
+  runtimePathsEnv,
   sealedStorageEnv,
   storageLayoutEnv,
   workloadApiEnv,
 } from "./deployment-env";
-export type { GuestDeploymentEnv, GuestEnvVar } from "./deployment-env";
+export type { GuestDeploymentEnv, GuestEnvVar, GuestVolumeMount, GuestWorkloadApiNames, RuntimePathVolumes } from "./deployment-env";
 export { INIT_DATA_ANNOTATION, initDataSha256, measuredGuest } from "./measured";
 export type { GuestPodManifest, MeasuredArtifact } from "./measured";
 export { SignedReleases } from "./signed-releases";

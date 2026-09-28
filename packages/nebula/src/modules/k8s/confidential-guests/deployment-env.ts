@@ -1,11 +1,13 @@
 // Renderers for a guest's measured deployment env: GUEST_STORAGE_LAYOUT,
-// GUEST_WORKLOAD_API, the three variables together, and the adapter's and
-// storage's own variables. Each value is read back by the guest's rules
-// (guest-env.ts) before it is returned.
+// GUEST_WORKLOAD_API, the runtime paths, all of them together, and the
+// adapter's and storage's own variables. Each value is read back by the
+// guest's rules (guest-env.ts) before it is returned.
+import { posix } from "node:path";
 import { canonicalJson } from "./canonical";
 import {
-  MODE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, readGuestEnv, readStorageLayoutValue, readWorkloadApiValue,
-  type GuestRecordFormat, type GuestStorageLayout, type GuestWorkloadApi,
+  MODE_ENV, STORAGE_CONTROL_DIR_ENV, STORAGE_LAYOUT_ENV, VERIFIER_SOCKET_ENV, WORKLOAD_API_ENV, WORKLOAD_SOCKET_ENV,
+  readGuestEnv, readRuntimePathValue, readStorageLayoutValue, readWorkloadApiValue,
+  type GuestRecordFormat, type GuestRuntimePaths, type GuestStorageLayout, type GuestWorkloadApi,
 } from "./guest-env";
 import { deepFreeze, wireProfileEnv, type WireProfile } from "./wire";
 
@@ -15,19 +17,29 @@ export interface GuestEnvVar<N extends string = string> {
   readonly value: string;
 }
 
-/** A guest deployment's measured env: the Pod's wire profile, and the layout and API every Pod of the deployment shares. */
+/**
+ * A guest deployment's measured env: the Pod's wire profile, the layout and
+ * API every Pod of the deployment shares, and the runtime paths as the
+ * reading containers mount them.
+ */
 export interface GuestDeploymentEnv {
   readonly wire: WireProfile;
   readonly storageLayout: GuestStorageLayout;
   readonly workloadApi: GuestWorkloadApi;
+  readonly runtimePaths: GuestRuntimePaths;
 }
 
+/** The names of a workload API: its mode, routes and domains. The base image and the adapter's bodies are the deployment's. */
+export type GuestWorkloadApiNames = Pick<GuestWorkloadApi, "mode" | "routes" | "signDomain" | "keyResolverDomain">;
+
 /**
- * The workload API of the neutral attestation adapter: mode `attest`, its
- * `/v1` routes and its signing and key-resolver domains. Frozen like
- * {@link NEUTRAL_WIRE}: a change is a new version, never an edit.
+ * The names of the neutral attestation adapter's workload API: mode
+ * `attest`, its `/v1` routes and its signing and key-resolver domains. A
+ * deployment adds its base image reference and the adapter's bodies
+ * (`config`, `statusFields`, `checkName`). Frozen like {@link NEUTRAL_WIRE}:
+ * a change is a new version, never an edit.
  */
-export const NEUTRAL_WORKLOAD_API: GuestWorkloadApi = deepFreeze({
+export const NEUTRAL_WORKLOAD_API: GuestWorkloadApiNames = deepFreeze({
   mode: "attest",
   routes: {
     status: "/v1/status",
@@ -79,18 +91,80 @@ export function workloadApiEnv(api: GuestWorkloadApi): GuestEnvVar<typeof WORKLO
 }
 
 /**
+ * Render {@link GuestRuntimePaths} as GUEST_WORKLOAD_SOCKET,
+ * GUEST_VERIFIER_SOCKET and GUEST_STORAGE_CONTROL_DIR, in the order a guest
+ * reads them. Each is a path as the reading container mounts it: absolute,
+ * without `.` or `..`, of at most 107 bytes.
+ * @throws GuestEnvError (a TypeError) when a guest would refuse a value.
+ */
+export function runtimePathsEnv(paths: GuestRuntimePaths): GuestEnvVar[] {
+  const entries = [[WORKLOAD_SOCKET_ENV, paths?.workloadSocket], [VERIFIER_SOCKET_ENV, paths?.verifierSocket], [STORAGE_CONTROL_DIR_ENV, paths?.storageControlDir]] as const;
+  return entries.map(([name, value]) => ({ name, value: readRuntimePathValue(name, typeof value === "string" ? value : "") }));
+}
+
+/** The volumes a reading container mounts its runtime paths from. */
+export interface RuntimePathVolumes {
+  /** The volume holding the adapter's two sockets, mounted at their directory. */
+  readonly sockets: string;
+  /** For a reader of sealed storage's status (an observer), the volume holding it, mounted read-only at the control directory. */
+  readonly control?: string;
+}
+
+/** One volume mount of a container. */
+export interface GuestVolumeMount {
+  readonly name: string;
+  readonly mountPath: string;
+  readonly readOnly?: boolean;
+}
+
+const VOLUME_NAME = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+
+/**
+ * The volume mounts that put a container's runtime paths where its env
+ * names them: the sockets volume at the sockets' one directory (the adapter
+ * binds them there, the bridge and observers ask them there) and, when
+ * `control` is given, the control volume read-only at the storage control
+ * directory. Render the same paths into that container's env.
+ * @throws GuestEnvError (a TypeError) when a guest would refuse a path.
+ * @throws TypeError when the sockets are one path or lie in two directories,
+ * their directory is `/`, the control directory is theirs, or a volume name
+ * is not one.
+ */
+export function runtimePathMounts(paths: GuestRuntimePaths, volumes: RuntimePathVolumes): GuestVolumeMount[] {
+  const where = "runtimePathMounts";
+  runtimePathsEnv(paths);
+  const volume = (key: keyof RuntimePathVolumes) => {
+    const name = volumes?.[key];
+    if (typeof name !== "string" || !VOLUME_NAME.test(name)) throw new TypeError(`${where}: ${key} must be a volume name, got ${JSON.stringify(name)}`);
+    return name;
+  };
+  const sockets = volume("sockets");
+  const control = volumes.control === undefined ? undefined : volume("control");
+  if (control === sockets) throw new TypeError(`${where}: sockets and control must name two volumes`);
+  if (paths.workloadSocket === paths.verifierSocket) throw new TypeError(`${where}: the workload and verifier sockets must differ`);
+  const directory = posix.dirname(paths.workloadSocket);
+  if (posix.dirname(paths.verifierSocket) !== directory) {
+    throw new TypeError(`${where}: the workload and verifier sockets must lie in one directory, which the sockets volume is mounted at`);
+  }
+  if (directory === "/") throw new TypeError(`${where}: the sockets' directory must not be /`);
+  if (control !== undefined && paths.storageControlDir === directory) throw new TypeError(`${where}: the control directory must differ from the sockets' directory`);
+  return [{ name: sockets, mountPath: directory }, ...(control === undefined ? [] : [{ name: control, mountPath: paths.storageControlDir, readOnly: true }])];
+}
+
+/**
  * The deployment env of every guest container that reads it (the adapter,
- * a control bridge, observers): GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT and
- * GUEST_WORKLOAD_API, in the order a guest reads them. All three are
- * required: nebula renders no legacy default. The rendered env is read back
- * as a guest's components read it at start.
+ * a control bridge, observers): GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT,
+ * GUEST_WORKLOAD_API and the three runtime paths, in the order a guest
+ * reads them. All are required: nebula renders no legacy default. The
+ * rendered env is read back as a guest's components read it at start.
  * @throws GuestEnvError (a TypeError) when a guest would refuse it.
  */
 export function guestEnv(deployment: GuestDeploymentEnv): GuestEnvVar[] {
-  for (const key of ["wire", "storageLayout", "workloadApi"] as const) {
+  for (const key of ["wire", "storageLayout", "workloadApi", "runtimePaths"] as const) {
     if (deployment?.[key] === null || typeof deployment?.[key] !== "object") throw new TypeError(`guestEnv: ${key} is required`);
   }
-  const env = [wireProfileEnv(deployment.wire), storageLayoutEnv(deployment.storageLayout), workloadApiEnv(deployment.workloadApi)];
+  const env = [wireProfileEnv(deployment.wire), storageLayoutEnv(deployment.storageLayout), workloadApiEnv(deployment.workloadApi),
+    ...runtimePathsEnv(deployment.runtimePaths)];
   readGuestEnv(Object.fromEntries(env.map(entry => [entry.name, entry.value])));
   return env;
 }

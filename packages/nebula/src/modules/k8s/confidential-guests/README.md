@@ -28,8 +28,9 @@ Helpers: `measuredGuest` (the synthesis gate for a measured template),
 `initDataSha256`, `guestLifecycleSpec`, `lifecycleIgnoreDifferences`,
 `lifecycleNames`, `lifecycleLabelKey`, `guestClaimPrefix`, the foundations
 (`digestImage`, `canonicalJson`, `sha256Hex`) and the guest env renderers
-(`wireProfileEnv`, `storageLayoutEnv`, `workloadApiEnv`, `guestEnv`,
-`adapterModeEnv`, `sealedStorageEnv`, `readGuestEnv`, with the frozen
+(`wireProfileEnv`, `storageLayoutEnv`, `workloadApiEnv`, `runtimePathsEnv`,
+`guestEnv`, `adapterModeEnv`, `sealedStorageEnv`, `runtimePathMounts`,
+`readGuestEnv`, with the frozen
 `NEUTRAL_WIRE`, `NEUTRAL_WORKLOAD_API` and `NEUTRAL_SEALED_STORAGE` names).
 
 ## Measured and unmeasured inputs
@@ -58,9 +59,11 @@ would refuse fails the render with the guest's own message
 | --- | --- | --- | --- |
 | `GUEST_WIRE_PROFILE` | `wireProfileEnv(profile)` | payload types, byte domains, named control-bridge schemas, the release scope and roles, the Pod's workload reference | 16 KiB |
 | `GUEST_STORAGE_LAYOUT` | `storageLayoutEnv(layout)` | the named sealed volumes with their at-rest files, clients and exports, KDF labels, the lifecycle key request and record, the placeholder magic, the identity record file, formats and volume | 8 KiB |
-| `GUEST_WORKLOAD_API` | `workloadApiEnv(api)` | the adapter's mode, its workload and verifier routes, signing and key-resolver domains | 4 KiB |
+| `GUEST_WORKLOAD_API` | `workloadApiEnv(api)` | the adapter's mode, its workload and verifier routes, signing and key-resolver domains, the base image reference, and the adapter's fixed bodies | 4 KiB |
+| `GUEST_WORKLOAD_SOCKET`, `GUEST_VERIFIER_SOCKET` | `runtimePathsEnv(paths)` | the adapter's workload and verifier sockets (a path, not JSON) | 107 bytes |
+| `GUEST_STORAGE_CONTROL_DIR` | `runtimePathsEnv(paths)` | the directory holding sealed storage's `status.json` (a path, not JSON) | 107 bytes |
 
-Every value is one line of canonical JSON (sorted keys, no whitespace,
+Every JSON value is one line of canonical JSON (sorted keys, no whitespace,
 integers only), bytes 0x20 to 0x7e, without `$` (the kubelet rewrites `$$`
 and `$(NAME)` in env values). A value is refused, never repaired.
 
@@ -93,12 +96,31 @@ and `$(NAME)` in env values). A value is refused, never repaired.
   layout (`sealedStorageEnv(layout, volumeName)` adds the named volume's
   `NODE_ID` and `VOLUME_ID` for storage).
 - **Workload API.** Peers of one deployment share it; the adapter's `MODE`
-  must equal its `mode` (`adapterModeEnv(api)`).
+  must equal its `mode` (`adapterModeEnv(api)`). `NEUTRAL_WORKLOAD_API`
+  holds the neutral adapter's names (mode, routes, domains); a deployment
+  adds `baseImageRef`, the base image reference a verify request must name
+  exactly (never an accept list), and the adapter's bodies: `config`, the
+  object the config route serves as is; `statusFields`, the members the
+  status route adds to those the adapter computes (`state`,
+  `base_image_id`, `base_image_ref`, `workload_id`, `workload_ref`, which it
+  may not name); and `checkName`, the one failed check of a refused
+  verification. The adapter writes each body as canonical text. An integer
+  in a body is a JavaScript number, so nebula reads back only integers it
+  can hold exactly.
+- **Runtime paths.** Where a component finds what another container of its
+  Pod serves, as its own container mounts it: the adapter's two sockets
+  (bound by the adapter, asked by a control bridge and observers) and
+  storage's control directory (read by observers). Each is an absolute
+  path without `.` or `..` of at most 107 bytes, so a socket's fits
+  `sun_path`. `runtimePathMounts(paths, {sockets, control?})` mounts the
+  sockets volume at the sockets' one directory and, for an observer, the
+  control volume read-only at the control directory.
 
-`guestEnv({wire, storageLayout, workloadApi})` renders all three
-for every container that reads them, in the order a guest reads them.
-nebula renders no legacy default: a profile always names its `releaseSet`
-and `workloadRef`, and the layout and API are always rendered.
+`guestEnv({wire, storageLayout, workloadApi, runtimePaths})` renders all
+six variables for every container that reads them, in the order a guest
+reads them. nebula renders no legacy default: a profile always names its
+`releaseSet` and `workloadRef`, and the layout, API and runtime paths are
+always rendered.
 
 A guest takes its built-in defaults when its env has none of these
 variables, or when its wire profile still emits the guest's original
@@ -122,6 +144,12 @@ measures, because nebula assumes none of its names:
   Pod's workload reference before `workloadRef` existed. When the env sets
   it, it is read as the guest reads it (UTF-8, no `$`) and must equal
   `workloadRef`. It never stands in for `workloadRef`.
+- `legacyBaseImageRefEnv`: likewise for the base image reference, which
+  must equal the API's `baseImageRef`.
+- `legacyWorkloadSocketEnv`, `legacyVerifierSocketEnv`: the variables that
+  named the adapter's sockets before the runtime paths. Each is read as a
+  runtime path and must equal `GUEST_WORKLOAD_SOCKET` or
+  `GUEST_VERIFIER_SOCKET`. Neither stands in for its variable.
 
 The contract's neutral fixtures are vendored in
 `test/confidential-guests-guest-env/`; the tests render the neutral names
