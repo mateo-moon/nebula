@@ -46,6 +46,8 @@ export type ConfidentialGuestComponent = (scope: Construct, context: Confidentia
  * The attested pull broker as the stack builds it: in the stack's namespace,
  * on its node, under its label domain, admitting the HOST_DATA of every
  * declared release (`initData` is `{ form: "in", values: context.initDataSha256 }`).
+ * The stack does not derive the releases' launch measurements: pin them
+ * with `measurement`.
  */
 export type ConfidentialGuestPullBroker = Omit<AttestedPullBrokerProps, "namespace" | "nodeName" | "labelDomain" | "initData">;
 /**
