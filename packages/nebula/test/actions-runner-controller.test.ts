@@ -39,6 +39,7 @@ test("a scale set defaults to dind, zero idle runners and the controller referen
   assert.deepEqual(spec.initContainers.map((c: any) => c.name), ["init-dind-externals", "dind"]);
   const dind = spec.initContainers[1];
   assert.equal(dind.image, "docker:dind");
+  assert.deepEqual(dind.args, ["dockerd", "--host=unix:///var/run/docker.sock", "--group=$(DOCKER_GROUP_GID)"]);
   assert.equal(dind.restartPolicy, "Always");
   assert.equal(dind.securityContext.privileged, true);
   assert.deepEqual(dind.volumeMounts.find((m: any) => m.name === "dind-store"), { name: "dind-store", mountPath: "/var/lib/docker" });
@@ -159,4 +160,15 @@ test("the construct renders the controller with its CRDs and every scale set aft
   }
   const deployment = objects.find(o => o.kind === "Deployment" && o.metadata.namespace === "arc-systems");
   assert.equal(deployment.spec.template.spec.serviceAccountName, "arc-gha-rs-controller");
+});
+
+test("registry mirrors become --registry-mirror flags of the dind daemon", () => {
+  const values = scaleSetValues("ci", { ...set, registryMirrors: ["http://registry-mirror.registry-mirror.svc.cluster.local:5000"] }, controller);
+  const dind = (values.template as { spec: any }).spec.initContainers[1];
+  assert.deepEqual(dind.args, [
+    "dockerd",
+    "--host=unix:///var/run/docker.sock",
+    "--group=$(DOCKER_GROUP_GID)",
+    "--registry-mirror=http://registry-mirror.registry-mirror.svc.cluster.local:5000",
+  ]);
 });

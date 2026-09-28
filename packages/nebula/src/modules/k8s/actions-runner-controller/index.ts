@@ -118,6 +118,8 @@ export interface RunnerScaleSetConfig {
   resources?: RunnerResources;
   /** Disk of a dind runner pod; ignored in the kubernetes modes. */
   storage?: RunnerStorage;
+  /** Pull-through caches the dind daemon pulls docker.io images from (a `RegistryMirror` endpoint); ignored in the kubernetes modes. */
+  registryMirrors?: string[];
   /**
    * Annotations on the runner pods. By default they carry
    * `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, so a cluster
@@ -194,7 +196,12 @@ export function dindTemplateSpec(set: RunnerScaleSetConfig, runner: Record<strin
       {
         name: "dind",
         image: DIND_IMAGE,
-        args: ["dockerd", "--host=unix:///var/run/docker.sock", "--group=$(DOCKER_GROUP_GID)"],
+        args: [
+          "dockerd",
+          "--host=unix:///var/run/docker.sock",
+          "--group=$(DOCKER_GROUP_GID)",
+          ...(set.registryMirrors ?? []).map(mirror => `--registry-mirror=${mirror}`),
+        ],
         env: [{ name: "DOCKER_GROUP_GID", value: "123" }],
         securityContext: { privileged: true },
         restartPolicy: "Always",

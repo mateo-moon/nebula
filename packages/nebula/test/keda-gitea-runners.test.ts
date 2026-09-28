@@ -101,7 +101,7 @@ test("the construct renders the namespace, the authentication, and per pool a se
   const apiSecret = objects.find(o => o.kind === "Secret" && o.metadata.name === "runners-gitea-api");
   assert.equal(apiSecret.stringData.authorization, "token api-token");
   const apps = objects.find(o => o.kind === "ConfigMap" && o.metadata.name === "apps-config");
-  assert.equal(JSON.parse(apps.data["daemon.json"])["data-root"], `${DOCKER_VOLUME}/data`);
+  assert.deepEqual(JSON.parse(apps.data["daemon.json"]), { "data-root": `${DOCKER_VOLUME}/data` });
   assert.equal(apps.data["config.yaml"], "runner:\n  capacity: 1\n");
   for (const o of objects) if (o.kind !== "Namespace") assert.equal(o.metadata.namespace, "gitea-runners");
 });
@@ -121,4 +121,20 @@ test("the KEDA module renders its namespace, CRDs and operator", { skip: process
   assert.ok(objects.some(o => o.kind === "Namespace" && o.metadata.name === "keda"));
   assert.ok(objects.some(o => o.kind === "CustomResourceDefinition" && o.metadata.name === "scaledjobs.keda.sh"));
   assert.ok(objects.some(o => o.kind === "Deployment" && o.metadata.name === "keda-operator" && o.metadata.namespace === "keda"));
+});
+
+test("registry mirrors reach the runners' daemon through its daemon.json", () => {
+  const chart = Testing.chart();
+  new GiteaEphemeralRunners(chart, "runners", {
+    namespace: "gitea-runners",
+    instanceUrl: "https://git.example.test",
+    apiToken: "api-token",
+    registryMirrors: ["http://registry-mirror.registry-mirror.svc.cluster.local:5000"],
+    pools: { infra: pool },
+  });
+  const config = Testing.synth(chart).find(o => o.kind === "ConfigMap" && o.metadata.name === "infra-config");
+  assert.deepEqual(JSON.parse(config.data["daemon.json"]), {
+    "data-root": `${DOCKER_VOLUME}/data`,
+    "registry-mirrors": ["http://registry-mirror.registry-mirror.svc.cluster.local:5000"],
+  });
 });
