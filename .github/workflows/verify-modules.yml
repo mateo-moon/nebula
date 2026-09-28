@@ -71,7 +71,9 @@ jobs:
           AFTER: ${{ github.sha }}
         run: |
           set -o pipefail
-          if [ -z "${BEFORE//0/}" ]; then set -- -1 "$AFTER"; else set -- "$BEFORE..$AFTER"; fi
+          if [ -z "${BEFORE//0/}" ]; then set -- -1 "$AFTER"
+          elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null && git merge-base --is-ancestor "$BEFORE" "$AFTER"; then set -- "$BEFORE..$AFTER"
+          else set -- "$AFTER"; fi
           git log --format=%B "$@" | node scripts/publication-guard.mjs --stdin --label commit-messages
 
   secrets:
@@ -102,8 +104,11 @@ jobs:
         run: |
           if [ "$EVENT" = pull_request ]; then
             range="$BASE_SHA..$HEAD_SHA"
-          elif [ "$EVENT" = push ] && [ -n "${BEFORE//0/}" ]; then
+          elif [ "$EVENT" = push ] && [ -n "${BEFORE//0/}" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null \
+              && git merge-base --is-ancestor "$BEFORE" "$AFTER"; then
             range="$BEFORE..$AFTER"
+          elif [ "$EVENT" = push ] && [ -n "${BEFORE//0/}" ]; then
+            range="$AFTER"
           else
             range="-1 $AFTER"
           fi
