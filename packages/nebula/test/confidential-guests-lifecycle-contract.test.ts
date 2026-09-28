@@ -24,7 +24,7 @@ import { confidentialGuestsExample } from "../example/confidential-guests";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "confidential-guests-lifecycle-contract");
 // A fixture changes only together with this pin, in a reviewed change.
-const MANIFEST_SHA256 = "b183c81f5fa4ecc9914b83f984004a1a4588fd9329b148fb8bbae68cddbdd823";
+const MANIFEST_SHA256 = "e2b7a0573c400923b52acc15af723cb530bc09a639e258e36e233bfa591387b8";
 const ROLES = ["operator", "primary"];
 const FILES = ["controllers.json", ...ROLES.map(role => `lifecycle-spec.${role}.json`)];
 // Every key of a version 2 spec: version 1's and the placement an image-mode controller takes from Git.

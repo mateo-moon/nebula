@@ -11,8 +11,8 @@ guest's message.
 | --- | --- |
 | `wire-profile.neutral.json` | `GUEST_WIRE_PROFILE` of the neutral example deployment: one canonical line and a newline |
 | `storage-layout.neutral.json` | its `GUEST_STORAGE_LAYOUT` |
-| `workload-api.neutral.json` | its `GUEST_WORKLOAD_API` (the neutral adapter's API) |
-| `deployment.neutral.json` | the deployment's env, its adapter's `MODE`, what every reader derives from it, and the refusal vectors |
+| `workload-api.neutral.json` | its `GUEST_WORKLOAD_API` (the neutral adapter's API names, with the deployment's base image reference and the adapter's bodies) |
+| `deployment.neutral.json` | the deployment's env (the three JSON variables and the three runtime paths), its adapter's `MODE`, what every reader derives from it (with the base image reference, the runtime paths and the adapter's responses for fixed launch ids), and the refusal vectors |
 | `payload-types.json` | payload types every reader accepts, with the schema each names, and payload types every reader refuses |
 | `MANIFEST.sha256` | the SHA-256 of each file above |
 

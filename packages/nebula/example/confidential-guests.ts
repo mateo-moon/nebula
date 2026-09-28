@@ -29,6 +29,7 @@ import {
   guestEnv,
   lifecycleLabelKey,
   measuredGuest,
+  runtimePathMounts,
   sealedStorageEnv,
   type DsseEnvelope,
   type GuestDeploymentEnv,
@@ -62,10 +63,12 @@ const client = (name: string, uid: number, graceSeconds: number) =>
   ({ name, uid, gid: 0, mode: "0750", graceSeconds, program: `/usr/local/bin/${name}` });
 
 // The deployment's measured env (the guest env contract): the neutral wire
-// names with this deployment's release scope and roles, its sealed volumes
-// and the neutral adapter's API. The primary guest seals the `data` volume,
-// which holds the identity record and exports its three secrets; the operator
-// guest seals the `scratch` volume. Each Pod names its own workload.
+// names with this deployment's release scope and roles, its sealed volumes,
+// the neutral adapter's API names with this deployment's base image and the
+// adapter's bodies, and where the adapter's sockets and storage's status are
+// mounted. The primary guest seals the `data` volume, which holds the
+// identity record and exports its three secrets; the operator guest seals
+// the `scratch` volume. Each Pod names its own workload.
 export const EXAMPLE_GUEST_DEPLOYMENT: GuestDeploymentEnv = {
   wire: {
     ...NEUTRAL_WIRE,
@@ -94,7 +97,18 @@ export const EXAMPLE_GUEST_DEPLOYMENT: GuestDeploymentEnv = {
     placeholderMagic: "SEALED-STORAGE-PLACEHOLDER-V1\n",
     secrets: { file: "guest-secrets-v1", formats: [NEUTRAL_SEALED_STORAGE.recordFormat], volume: "data" },
   },
-  workloadApi: NEUTRAL_WORKLOAD_API,
+  workloadApi: {
+    ...NEUTRAL_WORKLOAD_API,
+    baseImageRef: "example/guest-base:v1",
+    config: { platforms: ["qemu/sev-snp"], trustMode: "local-identity" },
+    statusFields: { detail: "session ready", platform: { attestation_mode: "hardware" } },
+    checkName: "snp-session",
+  },
+  runtimePaths: {
+    workloadSocket: "/run/guest-attest/workload.sock",
+    verifierSocket: "/run/guest-attest/verifier.sock",
+    storageControlDir: "/run/sealed-storage",
+  },
 };
 const deploymentFor = (workloadRef: string): GuestDeploymentEnv =>
   ({ ...EXAMPLE_GUEST_DEPLOYMENT, wire: { ...EXAMPLE_GUEST_DEPLOYMENT.wire, workloadRef } });
@@ -110,10 +124,10 @@ const probe = (path: string, port: number) => ({ httpGet: { path, port }, period
 // mounted at /release and reads the deployment's env.
 const attest = (workloadRef: string) => ({
   name: "attest", image: images.attest, securityContext: restricted,
-  env: [...guestEnv(deploymentFor(workloadRef)), adapterModeEnv(NEUTRAL_WORKLOAD_API),
+  env: [...guestEnv(deploymentFor(workloadRef)), adapterModeEnv(EXAMPLE_GUEST_DEPLOYMENT.workloadApi),
     { name: "RELEASE_SET_PATH", value: "/release/release-set.dsse.json" }],
   readinessProbe: probe("/livez", 8081),
-  volumeMounts: [{ name: "release", mountPath: "/release", readOnly: true }, { name: "run", mountPath: "/run/guest-attest" }],
+  volumeMounts: [{ name: "release", mountPath: "/release", readOnly: true }, ...runtimePathMounts(EXAMPLE_GUEST_DEPLOYMENT.runtimePaths, { sockets: "run" })],
 });
 // Sealed storage opens the guest's volume with the adapter's layout.
 const storage = (volume: "data" | "scratch") => ({
@@ -121,7 +135,7 @@ const storage = (volume: "data" | "scratch") => ({
   env: sealedStorageEnv(EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volume),
   securityContext: { ...restricted, capabilities: { drop: ["ALL"], add: ["SYS_ADMIN", "MKNOD"] } },
   volumeDevices: [{ name: "data", devicePath: "/dev/guest-data" }],
-  volumeMounts: [{ name: "run", mountPath: "/run/guest-attest" }],
+  volumeMounts: runtimePathMounts(EXAMPLE_GUEST_DEPLOYMENT.runtimePaths, { sockets: "run" }),
 });
 
 function guest(name: string, labels: Record<string, string>, grace: number, claim: string, containers: object[],
@@ -156,12 +170,12 @@ const operator = guest("guest-operator", operatorLabels, 60, "guest-operator-v1"
 // What policy generation records for each template.
 const artifacts = {
   primary: {
-    canonicalPodSha256: "854482f7e6a564729219d52288dd23904ed3da2529e830a1148c79fc2d597de4",
+    canonicalPodSha256: "0f4a5a187306a0174badd085c4136c4f251581d45ec32fdb3da93718cfa9870c",
     ccInitData: "H4sIAAAAAAACEzXNzQoCMQwE4HufYoj3sqIHEXwSFQlraIv9I1vUfXtbFg+5zDdD3qJLKBkX0GT3diLD0RUNzaeRLZ4PpyOZ65Mb3w3VEsO8WhVXaHjl+cVO0C+3x6a3vIN8OdUoqBoS64pNzug1UW6C5gUqHFGy4NPfDfrvyfwAvYvV15cAAAA=",
     initDataSha256: "cf0a41d3ef41f212a569890cc7e654d53c5b14c2cb6951e69b56563016b3c841",
   },
   operator: {
-    canonicalPodSha256: "ba1ebe0518e15aaed826eff12283bb3b81920fcba7fcd30652d1521ff9048fa2",
+    canonicalPodSha256: "fafd2ee24e3f47ab9c1d9cc6fe52c5c698a420e6bf15234d52e1686217ee636c",
     ccInitData: "H4sIAAAAAAAAEzWNwQrCMBBE7/mKYb2Xih5E8EtUZKlLEkyzYRuq/r0JxcNc3htmVrElasYFNA77YSTHyavFGubOlsCH05Hc9cmV746Kpjh9BxOv1H3h6cVe0JLrY7O3vIN8eC5JoEWMqxo2dUbrdSKoQWDCCZoF7/bX1X+A3A8iytXgmAAAAA==",
     initDataSha256: "e47e5deb9d53cf9c67f88b97c0e58921ae65f27b86be21c418acbbeb5397519c",
   },

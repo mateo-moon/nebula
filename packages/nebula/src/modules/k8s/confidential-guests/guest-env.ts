@@ -2,7 +2,7 @@
 // guest which deployment it belongs to, read here by the same rules, in the
 // same order and with the same messages as the guest's own readers. nebula
 // reads back everything it renders (see wire.ts and deployment-env.ts).
-import { GuestEnvError, ensure, measuredJson, measuredText, refuse, type MeasuredValue } from "./measured-json";
+import { GuestEnvError, ensure, measuredJson, measuredText, measuredUtf8, refuse, type MeasuredValue } from "./measured-json";
 
 export { GuestEnvError } from "./measured-json";
 
@@ -14,6 +14,17 @@ export const STORAGE_LAYOUT_ENV = "GUEST_STORAGE_LAYOUT";
 export const WORKLOAD_API_ENV = "GUEST_WORKLOAD_API";
 /** The adapter's mode: the workload API's `mode`. */
 export const MODE_ENV = "MODE";
+/** The adapter's workload socket, as the reading container mounts it (a path, not JSON). */
+export const WORKLOAD_SOCKET_ENV = "GUEST_WORKLOAD_SOCKET";
+/** The adapter's verifier socket, as the reading container mounts it. */
+export const VERIFIER_SOCKET_ENV = "GUEST_VERIFIER_SOCKET";
+/** The directory holding sealed storage's `status.json`, as the reading container mounts it. */
+export const STORAGE_CONTROL_DIR_ENV = "GUEST_STORAGE_CONTROL_DIR";
+/** The runtime paths, in the order a guest reads them. */
+const PATH_ENVS = [WORKLOAD_SOCKET_ENV, VERIFIER_SOCKET_ENV, STORAGE_CONTROL_DIR_ENV] as const;
+// A socket's path fits sun_path with its NUL.
+const MAX_PATH = 107;
+const PATH_RULE = `not an absolute path without . or .. of at most ${MAX_PATH} bytes`;
 
 const MAXIMUM = { [WIRE_PROFILE_ENV]: 16 * 1024, [STORAGE_LAYOUT_ENV]: 8 * 1024, [WORKLOAD_API_ENV]: 4 * 1024 } as const;
 // Variables of a superseded contract: a guest given one refuses to start rather than ignore it.
@@ -131,6 +142,11 @@ export interface GuestStorageLayout {
   };
 }
 
+/** A JSON value of the workload API's bodies. Integers are JavaScript numbers, so each is exact up to 2^53. */
+export type GuestJsonValue = null | boolean | number | string | readonly GuestJsonValue[] | { readonly [key: string]: GuestJsonValue };
+/** A JSON object of the workload API's bodies. */
+export type GuestJsonObject = { readonly [key: string]: GuestJsonValue };
+
 /** GUEST_WORKLOAD_API: the API the adapter serves its own workload. Peers of one deployment share it. */
 export interface GuestWorkloadApi {
   /** The adapter's `MODE`. */
@@ -139,6 +155,28 @@ export interface GuestWorkloadApi {
   readonly routes: { readonly status: string; readonly evidence: string; readonly sign: string; readonly config: string; readonly verify: string };
   readonly signDomain: string;
   readonly keyResolverDomain: string;
+  /** The base image reference the adapter advertises and a verify request must name exactly; never an accept list. */
+  readonly baseImageRef: string;
+  /** The verifier config the config route serves as is. */
+  readonly config: GuestJsonObject;
+  /**
+   * The members the status route adds to those the adapter computes
+   * (`state`, `base_image_id`, `base_image_ref`, `workload_id`,
+   * `workload_ref`), none of which it may name.
+   */
+  readonly statusFields: GuestJsonObject;
+  /** The name of the one failed check in a refused verification (HTTP 422). */
+  readonly checkName: string;
+}
+
+/** Where a component finds what another container of its Pod serves, as the component's own container mounts it. */
+export interface GuestRuntimePaths {
+  /** GUEST_WORKLOAD_SOCKET: the adapter's workload socket, which the adapter binds and the bridge and observers ask. */
+  readonly workloadSocket: string;
+  /** GUEST_VERIFIER_SOCKET: the adapter's verifier socket. */
+  readonly verifierSocket: string;
+  /** GUEST_STORAGE_CONTROL_DIR: the directory holding sealed storage's `status.json`, which the observers read. */
+  readonly storageControlDir: string;
 }
 
 /**
@@ -154,6 +192,20 @@ export interface GuestEnvOptions {
    * (after it). It never stands in for `workloadRef`.
    */
   readonly legacyWorkloadRefEnv?: string;
+  /**
+   * The variable in which the deployment measured its base image reference
+   * before `baseImageRef` existed: read as the legacy workload reference is,
+   * and equal to the API's `baseImageRef`. It never stands in for it.
+   */
+  readonly legacyBaseImageRefEnv?: string;
+  /**
+   * The variables in which the deployment named the adapter's workload and
+   * verifier sockets before the runtime paths existed: each read as a
+   * runtime path is, and equal to GUEST_WORKLOAD_SOCKET or
+   * GUEST_VERIFIER_SOCKET. Neither stands in for its variable.
+   */
+  readonly legacyWorkloadSocketEnv?: string;
+  readonly legacyVerifierSocketEnv?: string;
 }
 
 /** Who reads the env: `every` guest component, or besides that the `adapter` (its MODE) or the control `bridge` (its one operator role). */
@@ -166,6 +218,10 @@ export interface GuestDeployment {
   readonly api: GuestWorkloadApi;
   /** The Pod's workload reference. */
   readonly workloadRef: string;
+  /** The deployment's base image reference: the API's `baseImageRef`. */
+  readonly baseImageRef: string;
+  /** The reading container's runtime paths. */
+  readonly paths: GuestRuntimePaths;
   /** Every accepted session schema: each session domain in lower case, `_` as `.`. */
   readonly sessionSchemas: readonly string[];
   /** Every accepted control-bridge schema: the one the profile's `controlBridgeSchemas` names for an authorization domain, else the domain's by the session rule. */
@@ -461,9 +517,24 @@ function readLayout(value: MeasuredValue): GuestStorageLayout {
 const MODE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const ROUTE = /^\/[A-Za-z0-9/._~-]{0,127}$/;
 const ROUTES = ["status", "evidence", "sign", "config", "verify"] as const;
+const API_KEYS = ["baseImageRef", "checkName", "config", "keyResolverDomain", "mode", "routes", "signDomain", "statusFields"];
+// The status members the adapter computes; statusFields may name none of them.
+const COMPUTED_STATUS = ["base_image_id", "base_image_ref", "state", "workload_id", "workload_ref"];
+
+/** A body's value as JavaScript JSON: refused, with nebula's message, for an integer a number cannot hold and print exactly. */
+function json(value: MeasuredValue, name: string): GuestJsonValue {
+  if (typeof value === "bigint") {
+    const number = Number(value);
+    ensure(BigInt(number) === value && String(number) === value.toString(), `${name}: ${value} has no exact JavaScript number`);
+    return number;
+  }
+  if (Array.isArray(value)) return value.map((item, index) => json(item, `${name}[${index}]`));
+  if (isObject(value)) return Object.fromEntries(Object.keys(value).map(key => [key, json(value[key], `${name}.${key}`)]));
+  return value;
+}
 
 function readApi(value: MeasuredValue): GuestWorkloadApi {
-  const root = object(value, "api", ["keyResolverDomain", "mode", "routes", "signDomain"]);
+  const root = object(value, "api", API_KEYS);
   const mode = root.mode;
   ensure(typeof mode === "string" && MODE.test(mode), "mode must be a lower-case name");
   const routes = object(root.routes, "routes", ROUTES);
@@ -479,9 +550,17 @@ function readApi(value: MeasuredValue): GuestWorkloadApi {
     ensure(typeof domain === "string" && domain.length <= 128 && WIRE_STRING.test(domain), `${key} must be printable ASCII without spaces`);
   }
   ensure(root.signDomain !== root.keyResolverDomain, "signing and key-resolver domains must differ");
+  const { baseImageRef, config, statusFields, checkName } = root;
+  ensure(typeof baseImageRef === "string" && WIRE_STRING.test(baseImageRef), "baseImageRef must be printable ASCII without spaces, NUL or line breaks");
+  ensure(isObject(config), "config must be an object");
+  ensure(isObject(statusFields), "statusFields must be an object");
+  const computed = Object.keys(statusFields).filter(key => COMPUTED_STATUS.includes(key)).sort();
+  ensure(!computed.length, `statusFields must not name the computed members ${keyList(computed)}`);
+  ensure(typeof checkName === "string" && checkName.length <= 128 && WIRE_STRING.test(checkName), "checkName must be printable ASCII without spaces");
   return {
     mode, routes: { status: route.status, evidence: route.evidence, sign: route.sign, config: route.config, verify: route.verify },
-    signDomain: root.signDomain as string, keyResolverDomain: root.keyResolverDomain as string,
+    signDomain: root.signDomain as string, keyResolverDomain: root.keyResolverDomain as string, baseImageRef,
+    config: json(config, "config") as GuestJsonObject, statusFields: json(statusFields, "statusFields") as GuestJsonObject, checkName,
   };
 }
 
@@ -494,6 +573,14 @@ export function readStorageLayoutValue(value: string | Uint8Array): GuestStorage
 }
 export function readWorkloadApiValue(value: string | Uint8Array): GuestWorkloadApi {
   return named(WORKLOAD_API_ENV, () => readApi(measuredJson(value, MAXIMUM[WORKLOAD_API_ENV])));
+}
+/** Read a runtime path variable (or a legacy name of one), as the guest does: UTF-8, then §4's path form of at most 107 bytes. */
+export function readRuntimePathValue(name: string, value: string | Uint8Array): string {
+  return named(name, () => {
+    const text = measuredUtf8(value);
+    ensure(text.length <= MAX_PATH && absolute(text), PATH_RULE);
+    return text;
+  });
 }
 
 function named<T>(name: string, read: () => T): T {
@@ -510,14 +597,24 @@ export function explicitDeploymentError(missing: readonly string[]): GuestEnvErr
   return new GuestEnvError(EXPLICIT + missing.join(", "));
 }
 
-/** The caller's legacy workload reference variable, which is none of the contract's. */
-function legacyWorkloadRefEnvOf(where: string, options: GuestEnvOptions | undefined): string | undefined {
-  const name = options?.legacyWorkloadRefEnv;
-  if (name === undefined) return undefined;
-  if (typeof name !== "string" || !ENV_NAME.test(name) || [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, MODE_ENV, ...SUPERSEDED].includes(name)) {
-    throw new TypeError(`${where}: legacyWorkloadRefEnv must be an env variable name outside the guest env contract, got ${JSON.stringify(name)}`);
+const LEGACY_OPTIONS = ["legacyWorkloadRefEnv", "legacyBaseImageRefEnv", "legacyWorkloadSocketEnv", "legacyVerifierSocketEnv"] as const;
+type LegacyOption = (typeof LEGACY_OPTIONS)[number];
+const CONTRACT_ENVS: readonly string[] = [WIRE_PROFILE_ENV, STORAGE_LAYOUT_ENV, WORKLOAD_API_ENV, MODE_ENV, ...PATH_ENVS, ...SUPERSEDED];
+
+/** The caller's legacy variables: each none of the contract's, and each its own. */
+function legacyEnvsOf(where: string, options: GuestEnvOptions | undefined): Partial<Record<LegacyOption, string>> {
+  const names: Partial<Record<LegacyOption, string>> = {};
+  for (const option of LEGACY_OPTIONS) {
+    const name = options?.[option];
+    if (name === undefined) continue;
+    if (typeof name !== "string" || !ENV_NAME.test(name) || CONTRACT_ENVS.includes(name)) {
+      throw new TypeError(`${where}: ${option} must be an env variable name outside the guest env contract, got ${JSON.stringify(name)}`);
+    }
+    const other = LEGACY_OPTIONS.find(named => names[named] === name);
+    if (other) throw new TypeError(`${where}: ${option} names ${JSON.stringify(name)}, as ${other} does: each legacy variable is its own`);
+    names[option] = name;
   }
-  return name;
+  return names;
 }
 
 /**
@@ -525,15 +622,19 @@ function legacyWorkloadRefEnvOf(where: string, options: GuestEnvOptions | undefi
  * deployment they serve; throws {@link GuestEnvError} with the reader's
  * message. The order is the guest's: variables of the superseded contract;
  * GUEST_WIRE_PROFILE, GUEST_STORAGE_LAYOUT and GUEST_WORKLOAD_API, each by
- * its rules, then the legacy workload reference variable, when `options`
- * names one; then the explicit-deployment rule; then the legacy reference's
- * agreement with `workloadRef`; then the `adapter`'s MODE or the control
+ * its rules; the legacy workload and base image reference variables, when
+ * `options` names them; GUEST_WORKLOAD_SOCKET and its legacy name,
+ * GUEST_VERIFIER_SOCKET and its legacy name, and GUEST_STORAGE_CONTROL_DIR;
+ * then the explicit-deployment rule; then each legacy variable's agreement
+ * with its contract value (the workload reference, the base image
+ * reference, each socket); then the `adapter`'s MODE or the control
  * `bridge`'s one operator role.
  *
  * nebula renders explicit deployments only, and holds no legacy identifiers:
  * it applies the explicit-deployment rule to every profile, so every piece
- * (the profile with its `releaseSet` and `workloadRef`, the layout and the
- * API) is required, and names GUEST_WIRE_PROFILE itself when it is unset (a
+ * (the profile with its `releaseSet` and `workloadRef`, the layout, the API
+ * and the three runtime paths) is required, and names GUEST_WIRE_PROFILE
+ * itself when it is unset (a
  * message of nebula's own: a guest would fall back to its built-in profile).
  * A guest whose env renders none of these variables uses its built-in
  * defaults; nebula renders nothing for it and does not read it. `options`
@@ -545,23 +646,35 @@ export function readGuestEnv(
   env: Readonly<Record<string, string | Uint8Array | undefined>>, reader: GuestEnvReader = "every", options?: GuestEnvOptions,
 ): GuestDeployment {
   const where = "readGuestEnv";
-  const legacyRefEnv = legacyWorkloadRefEnvOf(where, options);
+  const legacy = legacyEnvsOf(where, options);
   const present = (name: string) => env[name] !== undefined;
   const stale = SUPERSEDED.filter(present);
   ensure(!stale.length, `${stale.join(", ")}: not a guest env variable; ${WIRE_PROFILE_ENV} carries the schemas' domains, releaseSet and workloadRef`);
   const wire = present(WIRE_PROFILE_ENV) ? readWireProfileValue(env[WIRE_PROFILE_ENV]!) : undefined;
   const layout = present(STORAGE_LAYOUT_ENV) ? readStorageLayoutValue(env[STORAGE_LAYOUT_ENV]!) : undefined;
   const api = present(WORKLOAD_API_ENV) ? readWorkloadApiValue(env[WORKLOAD_API_ENV]!) : undefined;
-  const legacyRef = legacyRefEnv !== undefined && present(legacyRefEnv) ? named(legacyRefEnv, () => measuredText(env[legacyRefEnv]!)) : undefined;
+  const text = (name: string | undefined) => (name !== undefined && present(name) ? named(name, () => measuredText(env[name]!)) : undefined);
+  const path = (name: string | undefined) => (name !== undefined && present(name) ? readRuntimePathValue(name, env[name]!) : undefined);
+  const legacyRef = text(legacy.legacyWorkloadRefEnv);
+  const legacyBase = text(legacy.legacyBaseImageRefEnv);
+  const workloadSocket = path(WORKLOAD_SOCKET_ENV);
+  const legacyWorkloadSocket = path(legacy.legacyWorkloadSocketEnv);
+  const verifierSocket = path(VERIFIER_SOCKET_ENV);
+  const legacyVerifierSocket = path(legacy.legacyVerifierSocketEnv);
+  const storageControlDir = path(STORAGE_CONTROL_DIR_ENV);
   const missing = [
     ...(wire ? [] : [WIRE_PROFILE_ENV]),
     ...(wire && !wire.releaseSet ? [`${WIRE_PROFILE_ENV}.releaseSet`] : []),
     ...(wire && wire.workloadRef === undefined ? [`${WIRE_PROFILE_ENV}.workloadRef`] : []),
     ...(layout ? [] : [STORAGE_LAYOUT_ENV]),
     ...(api ? [] : [WORKLOAD_API_ENV]),
+    ...PATH_ENVS.filter(name => !present(name)),
   ];
   if (missing.length) throw explicitDeploymentError(missing);
-  ensure(legacyRef === undefined || legacyRef === wire!.workloadRef, `${legacyRefEnv} differs from ${WIRE_PROFILE_ENV}'s workloadRef`);
+  ensure(legacyRef === undefined || legacyRef === wire!.workloadRef, `${legacy.legacyWorkloadRefEnv} differs from ${WIRE_PROFILE_ENV}'s workloadRef`);
+  ensure(legacyBase === undefined || legacyBase === api!.baseImageRef, `${legacy.legacyBaseImageRefEnv} differs from ${WORKLOAD_API_ENV}'s baseImageRef`);
+  ensure(legacyWorkloadSocket === undefined || legacyWorkloadSocket === workloadSocket, `${legacy.legacyWorkloadSocketEnv} differs from ${WORKLOAD_SOCKET_ENV}`);
+  ensure(legacyVerifierSocket === undefined || legacyVerifierSocket === verifierSocket, `${legacy.legacyVerifierSocketEnv} differs from ${VERIFIER_SOCKET_ENV}`);
   const others = wire!.releaseSet!.roles.filter(role => role !== "node");
   if (reader === "adapter") {
     const mode = env[MODE_ENV];
@@ -569,7 +682,8 @@ export function readGuestEnv(
   }
   if (reader === "bridge") ensure(others.length === 1, "the control bridge needs exactly one role besides node");
   return {
-    wire: wire!, layout: layout!, api: api!, workloadRef: wire!.workloadRef!,
+    wire: wire!, layout: layout!, api: api!, workloadRef: wire!.workloadRef!, baseImageRef: api!.baseImageRef,
+    paths: { workloadSocket: workloadSocket!, verifierSocket: verifierSocket!, storageControlDir: storageControlDir! },
     sessionSchemas: wire!.domains.session.map(sessionSchemaOf),
     controlBridgeSchemas: wire!.domains.controlAuthorization.map(controlBridgeSchemaOf(wire!.controlBridgeSchemas)),
     payloadSchemas: Object.fromEntries(PAYLOAD_KEYS.map(key => [key, wire!.payloadTypes[key].map(type => PAYLOAD_TYPE.exec(type)![1])])) as Record<PayloadKey, string[]>,

@@ -51,14 +51,19 @@ export function measuredJson(value: string | Uint8Array, maximum: number): Measu
 }
 
 /**
- * Check a measured variable that is not JSON (a legacy workload reference) by
- * the rules that still apply to it: UTF-8, and no `$`. Nothing else is
- * checked; the caller puts the variable's name before a refusal.
+ * Check a measured variable that is not JSON (a legacy reference) by the rules
+ * that still apply to it: UTF-8, and no `$`. Nothing else is checked; the
+ * caller puts the variable's name before a refusal.
  */
 export function measuredText(value: string | Uint8Array): string {
-  const { text } = utf8(value);
+  const text = measuredUtf8(value);
   ensure(!text.includes("$"), DOLLAR);
   return text;
+}
+
+/** A measured value that is not JSON, as text: refused only when it is not UTF-8. */
+export function measuredUtf8(value: string | Uint8Array): string {
+  return utf8(value).text;
 }
 
 /** A value's text and its UTF-8 bytes; a value the guest receives may be raw bytes that are not UTF-8. */
