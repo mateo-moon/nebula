@@ -53,6 +53,13 @@ test("a scale set defaults to dind, zero idle runners and the controller referen
   assert.ok(spec.volumes.every((v: any) => JSON.stringify(v.emptyDir) === "{}"));
 });
 
+test("runner pods are not the autoscaler's to evict unless said otherwise", () => {
+  const meta = (scaleSetValues("ci", set, controller).template as { metadata: any }).metadata;
+  assert.deepEqual(meta.annotations, { "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" });
+  const custom = (scaleSetValues("ci", { ...set, podAnnotations: { "cluster-autoscaler.kubernetes.io/safe-to-evict": "true", team: "ci" } }, controller).template as { metadata: any }).metadata;
+  assert.deepEqual(custom.annotations, { "cluster-autoscaler.kubernetes.io/safe-to-evict": "true", team: "ci" });
+});
+
 test("storage figures override the defaults and a limit is optional", () => {
   const values = scaleSetValues("ci", { ...set, storage: { docker: { request: "12Gi" }, workspace: { request: "2Gi", limit: "8Gi" } } }, controller);
   const spec = (values.template as { spec: any }).spec;
@@ -147,6 +154,7 @@ test("the construct renders the controller with its CRDs and every scale set aft
     assert.ok(dind.volumeMounts.some((m: { mountPath: string }) => m.mountPath === "/var/lib/docker"));
     assert.equal(dind.resources.limits["ephemeral-storage"], "30Gi");
     assert.ok(pod.containers[0].env.some((e: { name: string }) => e.name === "DOCKER_HOST"));
+    assert.equal(s.spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"], "false");
     assert.equal(pod.nodeSelector?.["kubernetes.io/arch"], s.metadata.name === "ci" ? "amd64" : undefined);
   }
   const deployment = objects.find(o => o.kind === "Deployment" && o.metadata.namespace === "arc-systems");

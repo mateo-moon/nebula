@@ -118,6 +118,13 @@ export interface RunnerScaleSetConfig {
   resources?: RunnerResources;
   /** Disk of a dind runner pod; ignored in the kubernetes modes. */
   storage?: RunnerStorage;
+  /**
+   * Annotations on the runner pods. By default they carry
+   * `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, so a cluster
+   * autoscaler never removes a node under a running job; set it to "true"
+   * here to allow that.
+   */
+  podAnnotations?: Record<string, string>;
   /** Extra chart values, deep-merged last. */
   values?: Record<string, unknown>;
 }
@@ -140,6 +147,10 @@ export interface ActionsRunnerControllerConfig {
 }
 
 export const ARC_CHART_REGISTRY = "oci://ghcr.io/actions/actions-runner-controller-charts";
+/** A node with a running job is not the autoscaler's to remove. */
+export const RUNNER_POD_ANNOTATIONS: Record<string, string> = {
+  "cluster-autoscaler.kubernetes.io/safe-to-evict": "false",
+};
 export const ARC_DEFAULT_VERSION = "0.14.2";
 const DEFAULT_NAMESPACE = "arc-systems";
 const DEFAULT_RUNNERS_NAMESPACE = "arc-runners";
@@ -308,7 +319,10 @@ export function scaleSetValues(
               : {}),
           },
         }),
-    template: { spec },
+    template: {
+      metadata: { annotations: { ...RUNNER_POD_ANNOTATIONS, ...(set.podAnnotations ?? {}) } },
+      spec,
+    },
   };
   return deepmerge(defaults, set.values ?? {}) as Record<string, unknown>;
 }
