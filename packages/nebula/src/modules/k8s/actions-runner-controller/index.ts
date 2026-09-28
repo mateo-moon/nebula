@@ -10,10 +10,17 @@
  * holds no pod while nothing is queued, so a pool of Spot nodes under a cluster
  * autoscaler costs nothing between jobs.
  *
- * Every scale set defaults to `containerMode: "dind"`: the runner pod carries
- * a privileged `docker:dind` sidecar, which workflows that build or run
- * containers need. Pin the runner pods to a node pool with `nodeSelector` and
- * `tolerations`, and size the runner container with `resources`.
+ * Every scale set defaults to dind: the runner pod carries a privileged
+ * `docker:dind` sidecar (a native sidecar, so Kubernetes 1.29 or newer), which
+ * workflows that build or run containers need. The module renders that pod
+ * template itself rather than through the chart's `containerMode: dind`,
+ * because the chart's own dind sidecar leaves `/var/lib/docker` on the image's
+ * anonymous volume, which the kubelet neither counts nor bounds: here the
+ * daemon's store is an emptyDir mounted at exactly that path, with an
+ * ephemeral-storage request and limit, and the runner's workspace is
+ * requested too, so disk pressure evicts the pod that fills the disk. Pin the
+ * runner pods to a node pool with `nodeSelector` and `tolerations`, and size
+ * the runner container with `resources`.
  *
  * The chart discovers the controller with a `lookup`, which `helm template`
  * cannot do, so this module names the controller's service account explicitly
@@ -71,6 +78,24 @@ export interface RunnerResources {
   limits?: Record<string, string>;
 }
 
+/** An ephemeral-storage request, and optionally the limit that evicts the pod. */
+export interface EphemeralStorage {
+  request: string;
+  limit?: string;
+}
+
+/**
+ * Disk of a dind runner pod: the docker daemon's store (images, layers, build
+ * cache) and the runner's workspace (checkouts, build output). Both are
+ * emptyDirs the kubelet counts against these figures.
+ */
+export interface RunnerStorage {
+  /** Default request 8Gi, limit 30Gi. */
+  docker?: EphemeralStorage;
+  /** Default request 5Gi, limit 20Gi. */
+  workspace?: EphemeralStorage;
+}
+
 export interface RunnerScaleSetConfig {
   /** `https://github.com/<org>`, `https://github.com/<org>/<repo>` or an enterprise URL. */
   githubConfigUrl: string;
@@ -89,8 +114,10 @@ export interface RunnerScaleSetConfig {
   runnerImage?: string;
   nodeSelector?: Record<string, string>;
   tolerations?: Toleration[];
-  /** Resources of the runner container (the dind sidecar keeps the chart's defaults). */
+  /** CPU and memory of the runner container. */
   resources?: RunnerResources;
+  /** Disk of a dind runner pod; ignored in the kubernetes modes. */
+  storage?: RunnerStorage;
   /** Extra chart values, deep-merged last. */
   values?: Record<string, unknown>;
 }
@@ -119,6 +146,84 @@ const DEFAULT_RUNNERS_NAMESPACE = "arc-runners";
 const DEFAULT_RELEASE = "arc";
 /** The scale sets sync after the controller and its CRDs are healthy. */
 const SCALE_SET_WAVE = 1;
+
+const DIND_IMAGE = "docker:dind";
+const DOCKER_STORE = "/var/lib/docker";
+const DEFAULT_STORAGE: Required<RunnerStorage> = {
+  docker: { request: "8Gi", limit: "30Gi" },
+  workspace: { request: "5Gi", limit: "20Gi" },
+};
+
+const ephemeral = (storage: EphemeralStorage) => ({
+  requests: { "ephemeral-storage": storage.request },
+  ...(storage.limit ? { limits: { "ephemeral-storage": storage.limit } } : {}),
+});
+
+/**
+ * The dind pod template the chart would render for `containerMode: dind`,
+ * with the docker store on a counted, bounded emptyDir and the workspace
+ * requested. The runner container keeps the caller's image and resources.
+ */
+export function dindTemplateSpec(set: RunnerScaleSetConfig, runner: Record<string, unknown>): Record<string, unknown> {
+  const docker = set.storage?.docker ?? DEFAULT_STORAGE.docker;
+  const workspace = set.storage?.workspace ?? DEFAULT_STORAGE.workspace;
+  const resources = set.resources ?? {};
+  const workspaceResources = ephemeral(workspace);
+  return {
+    ...(set.nodeSelector ? { nodeSelector: set.nodeSelector } : {}),
+    ...(set.tolerations ? { tolerations: set.tolerations } : {}),
+    initContainers: [
+      {
+        name: "init-dind-externals",
+        image: runner.image,
+        command: ["cp"],
+        args: ["-r", "/home/runner/externals/.", "/home/runner/tmpDir/"],
+        volumeMounts: [{ name: "dind-externals", mountPath: "/home/runner/tmpDir" }],
+      },
+      {
+        name: "dind",
+        image: DIND_IMAGE,
+        args: ["dockerd", "--host=unix:///var/run/docker.sock", "--group=$(DOCKER_GROUP_GID)"],
+        env: [{ name: "DOCKER_GROUP_GID", value: "123" }],
+        securityContext: { privileged: true },
+        restartPolicy: "Always",
+        startupProbe: { exec: { command: ["docker", "info"] }, initialDelaySeconds: 0, failureThreshold: 24, periodSeconds: 5 },
+        resources: ephemeral(docker),
+        volumeMounts: [
+          { name: "work", mountPath: "/home/runner/_work" },
+          { name: "dind-sock", mountPath: "/var/run" },
+          { name: "dind-externals", mountPath: "/home/runner/externals" },
+          { name: "dind-store", mountPath: DOCKER_STORE },
+        ],
+      },
+    ],
+    containers: [
+      {
+        ...runner,
+        env: [
+          { name: "DOCKER_HOST", value: "unix:///var/run/docker.sock" },
+          { name: "RUNNER_WAIT_FOR_DOCKER_IN_SECONDS", value: "120" },
+        ],
+        volumeMounts: [
+          { name: "work", mountPath: "/home/runner/_work" },
+          { name: "dind-sock", mountPath: "/var/run" },
+        ],
+        resources: {
+          requests: { ...(resources.requests ?? {}), ...workspaceResources.requests },
+          ...(resources.limits || workspaceResources.limits
+            ? { limits: { ...(resources.limits ?? {}), ...(workspaceResources.limits ?? {}) } }
+            : {}),
+        },
+      },
+    ],
+    volumes: [
+      { name: "work", emptyDir: {} },
+      { name: "dind-sock", emptyDir: {} },
+      { name: "dind-externals", emptyDir: {} },
+      { name: "dind-store", emptyDir: {} },
+    ],
+  };
+}
 
 /** The controller's service account, named on both charts so `helm template` needs no cluster lookup. */
 export function controllerServiceAccountName(releaseName = DEFAULT_RELEASE): string {
@@ -169,13 +274,16 @@ export function scaleSetValues(
     name: "runner",
     image: set.runnerImage ?? "ghcr.io/actions/actions-runner:latest",
     command: ["/home/runner/run.sh"],
-    ...(set.resources ? { resources: set.resources } : {}),
   };
-  const spec: Record<string, unknown> = {
-    ...(set.nodeSelector ? { nodeSelector: set.nodeSelector } : {}),
-    ...(set.tolerations ? { tolerations: set.tolerations } : {}),
-    containers: [runner],
-  };
+  // dind renders its own template (see the module comment); the kubernetes
+  // modes take the chart's, which mounts the work volume claim itself.
+  const spec: Record<string, unknown> = mode === "dind"
+    ? dindTemplateSpec(set, runner)
+    : {
+        ...(set.nodeSelector ? { nodeSelector: set.nodeSelector } : {}),
+        ...(set.tolerations ? { tolerations: set.tolerations } : {}),
+        containers: [{ ...runner, ...(set.resources ? { resources: set.resources } : {}) }],
+      };
   const defaults: Record<string, unknown> = {
     githubConfigUrl: set.githubConfigUrl,
     githubConfigSecret: scaleSetSecretName(name, set.auth),
@@ -184,18 +292,22 @@ export function scaleSetValues(
     maxRunners,
     ...(set.runnerGroup ? { runnerGroup: set.runnerGroup } : {}),
     controllerServiceAccount: { namespace: controller.namespace, name: controller.serviceAccountName },
-    containerMode: {
-      type: mode,
-      ...(mode === "kubernetes" && set.workVolumeClaim
-        ? {
-            kubernetesModeWorkVolumeClaim: {
-              accessModes: set.workVolumeClaim.accessModes ?? ["ReadWriteOnce"],
-              storageClassName: set.workVolumeClaim.storageClassName,
-              resources: { requests: { storage: set.workVolumeClaim.storage } },
-            },
-          }
-        : {}),
-    },
+    ...(mode === "dind"
+      ? {}
+      : {
+          containerMode: {
+            type: mode,
+            ...(mode === "kubernetes" && set.workVolumeClaim
+              ? {
+                  kubernetesModeWorkVolumeClaim: {
+                    accessModes: set.workVolumeClaim.accessModes ?? ["ReadWriteOnce"],
+                    storageClassName: set.workVolumeClaim.storageClassName,
+                    resources: { requests: { storage: set.workVolumeClaim.storage } },
+                  },
+                }
+              : {}),
+          },
+        }),
     template: { spec },
   };
   return deepmerge(defaults, set.values ?? {}) as Record<string, unknown>;

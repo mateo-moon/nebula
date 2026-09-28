@@ -21,6 +21,8 @@ export type {
   RunnerContainerMode,
   RunnerWorkVolumeClaim,
   RunnerResources,
+  RunnerStorage,
+  EphemeralStorage,
 } from "./actions-runner-controller";
 
 export { Kagent } from "./kagent";
