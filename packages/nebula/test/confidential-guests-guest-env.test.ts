@@ -530,6 +530,11 @@ test("the adapter's config and status fields are data: rendered as given and rea
   assert.notEqual(huge, value);
   refusedAs(() => readGuestEnv({ ...deployment.env, [WORKLOAD_API_ENV]: huge }),
     `${WORKLOAD_API_ENV}: config.nested.n: 9007199254740993 has no exact JavaScript number`, "an integer past 2^53");
+  // So is an exactly held integer JavaScript prints differently (2^60 prints as 1152921504606847000).
+  for (const big of ["1152921504606846976", "9223372036854775808", "-9223372036854775808"]) {
+    refusedAs(() => readGuestEnv({ ...deployment.env, [WORKLOAD_API_ENV]: value.replace('"n":9007199254740992', `"n":${big}`) }),
+      `${WORKLOAD_API_ENV}: config.nested.n: ${big} has no exact JavaScript number`, big);
+  }
   // A fraction has no canonical form, as the guest reads it.
   refusedAs(() => workloadApiEnv({ ...API, config: { f: 1.5 } }), `${WORKLOAD_API_ENV}: not canonical JSON (sorted keys, no whitespace, each key once)`, "a fraction");
   // statusFields may name anything but the five computed members.
