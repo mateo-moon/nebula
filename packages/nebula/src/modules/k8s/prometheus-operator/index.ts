@@ -15,7 +15,15 @@
 import { Construct } from "constructs";
 import { ApiObject, Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
-import { deepmerge } from "deepmerge-ts";
+import {
+  toJson_Toleration,
+  toJson_Volume,
+  toJson_VolumeMount,
+  type Toleration as PodToleration,
+  type Volume,
+  type VolumeMount,
+} from "cdk8s-plus-33/lib/imports/k8s";
+import { deepmerge, deepmergeCustom } from "deepmerge-ts";
 import { ServiceAccount as CpServiceAccount } from "#imports/cloudplatform.gcp.upbound.io";
 import {
   BucketV1Beta2 as GcsBucket,
@@ -101,6 +109,58 @@ export interface PromtailClientConfig {
   passwordRef?: string;
   /** external_labels stamped on every pushed stream (e.g. { cluster: "dev" }). */
   externalLabels?: Record<string, string>;
+}
+
+/**
+ * Promtail chart values, merged over the module's the way `helm --values`
+ * merges: maps merge key by key, lists and scalars replace. The typed keys
+ * are the ones a deployment usually adds; any other chart value passes
+ * through as given.
+ *
+ * The chart runs `config.file` and every snippet string through `tpl`, so a
+ * literal `{{` in them (a promtail `template` stage) is written `{{ "{{" }}`.
+ */
+export interface PromtailValues {
+  config?: {
+    snippets?: {
+      /** Scrape configs (YAML) after the chart's kubernetes-pods job. */
+      extraScrapeConfigs?: string;
+      /** Relabel configs appended to the kubernetes-pods job. */
+      extraRelabelConfigs?: Record<string, unknown>[];
+      /** Pipeline stages of the kubernetes-pods job (chart default `- cri: {}`). */
+      pipelineStages?: Record<string, unknown>[];
+      /** YAML under `limits_config:`. */
+      extraLimitsConfig?: string;
+      /** YAML under `server:`. */
+      extraServerConfigs?: string;
+      [key: string]: unknown;
+    };
+    /**
+     * The whole promtail.yaml template, which the chart otherwise assembles
+     * from the snippets. The only way to a top-level section the default
+     * template has no slot for, such as `target_config`.
+     */
+    file?: string;
+    [key: string]: unknown;
+  };
+  /** Promtail pod tolerations. Replace the module's. */
+  tolerations?: PodToleration[];
+  /** Pod volumes after the chart's (config, run, containers, pods). */
+  extraVolumes?: Volume[];
+  /** promtail container mounts after the chart's. */
+  extraVolumeMounts?: VolumeMount[];
+  /** Extra promtail command-line flags. */
+  extraArgs?: string[];
+  /** A ServiceMonitor for the http-metrics port (the chart has no PodMonitor). */
+  serviceMonitor?: {
+    enabled?: boolean;
+    interval?: string;
+    labels?: Record<string, string>;
+    relabelings?: Record<string, unknown>[];
+    metricRelabelings?: Record<string, unknown>[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
 }
 
 /**
@@ -191,6 +251,8 @@ export interface PrometheusOperatorConfig {
      * e.g. Exists-operator tolerations.
      */
     tolerations?: Toleration[];
+    /** Chart values merged over the module's, last (see {@link PromtailValues}). */
+    values?: PromtailValues;
   };
   /**
    * Point Promtail at a remote central Loki sink (basic auth) instead of the
@@ -214,6 +276,76 @@ export interface PrometheusOperatorConfig {
   grafanaAdminPassword?: string;
   /** Tolerations */
   tolerations?: Toleration[];
+}
+
+const mergeHelmValues = deepmergeCustom({ mergeArrays: false });
+
+/**
+ * The promtail chart values the module renders: one client (the local Loki,
+ * or `promtailClient`), the promtail or module tolerations, then
+ * `promtail.values` merged over them.
+ */
+export function promtailValues(
+  config: PrometheusOperatorConfig,
+): Record<string, unknown> {
+  const namespaceName = config.namespace ?? "monitoring";
+  const promtailClient = config.promtailClient;
+  // Half-configured auth would silently ship an auth-less client that
+  // 401s at the sink — fail at synth instead.
+  if (
+    promtailClient &&
+    !!promtailClient.username !== !!promtailClient.passwordRef
+  ) {
+    throw new Error(
+      "promtailClient: username and passwordRef must be set together (or both omitted for a no-auth sink)",
+    );
+  }
+  const defaults: Record<string, unknown> = {
+    config: {
+      clients: [
+        promtailClient
+          ? {
+              // Remote central Loki sink (basic auth at its ingress) —
+              // the member/spoke pattern; works with loki.enabled=false.
+              url: promtailClient.url,
+              ...(promtailClient.username && promtailClient.passwordRef
+                ? {
+                    basic_auth: {
+                      username: promtailClient.username,
+                      password: promtailClient.passwordRef,
+                    },
+                  }
+                : {}),
+              ...(promtailClient.externalLabels
+                ? { external_labels: promtailClient.externalLabels }
+                : {}),
+            }
+          : {
+              // Push straight to the Loki service (same target as the Grafana
+              // datasource) so ingestion is unaffected by the optional gateway
+              // basic-auth enabled via loki.authHtpasswd.
+              url: `http://loki.${namespaceName}.svc.cluster.local:3100/loki/api/v1/push`,
+            },
+      ],
+    },
+    tolerations: config.promtail?.tolerations ?? config.tolerations ?? [],
+    resources: {
+      requests: { cpu: "100m", memory: "128Mi" },
+      limits: { cpu: "200m", memory: "256Mi" },
+    },
+    // Disable readiness probe as it can cause issues
+    readinessProbe: null,
+  };
+  const { tolerations, extraVolumes, extraVolumeMounts, ...values } =
+    config.promtail?.values ?? {};
+  return mergeHelmValues(defaults, {
+    ...values,
+    ...(tolerations ? { tolerations: tolerations.map((t) => toJson_Toleration(t)) } : {}),
+    ...(extraVolumes ? { extraVolumes: extraVolumes.map((v) => toJson_Volume(v)) } : {}),
+    ...(extraVolumeMounts
+      ? { extraVolumeMounts: extraVolumeMounts.map((m) => toJson_VolumeMount(m)) }
+      : {}),
+  }) as Record<string, unknown>;
 }
 
 export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
@@ -581,59 +713,13 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
 
     // Deploy Promtail
     if (this.config.promtail?.enabled !== false) {
-      const promtailClient = this.config.promtailClient;
-      // Half-configured auth would silently ship an auth-less client that
-      // 401s at the sink — fail at synth instead.
-      if (
-        promtailClient &&
-        !!promtailClient.username !== !!promtailClient.passwordRef
-      ) {
-        throw new Error(
-          "promtailClient: username and passwordRef must be set together (or both omitted for a no-auth sink)",
-        );
-      }
       this.promtailHelm = new Helm(this, "promtail", {
         chart: "promtail",
         releaseName: "promtail",
         repo: "https://grafana.github.io/helm-charts",
         version: this.config.promtail?.version ?? "6.17.1",
         namespace: namespaceName,
-        values: {
-          config: {
-            clients: [
-              promtailClient
-                ? {
-                    // Remote central Loki sink (basic auth at its ingress) —
-                    // the member/spoke pattern; works with loki.enabled=false.
-                    url: promtailClient.url,
-                    ...(promtailClient.username && promtailClient.passwordRef
-                      ? {
-                          basic_auth: {
-                            username: promtailClient.username,
-                            password: promtailClient.passwordRef,
-                          },
-                        }
-                      : {}),
-                    ...(promtailClient.externalLabels
-                      ? { external_labels: promtailClient.externalLabels }
-                      : {}),
-                  }
-                : {
-                    // Push straight to the Loki service (same target as the Grafana
-                    // datasource) so ingestion is unaffected by the optional gateway
-                    // basic-auth enabled via loki.authHtpasswd.
-                    url: `http://loki.${namespaceName}.svc.cluster.local:3100/loki/api/v1/push`,
-                  },
-            ],
-          },
-          tolerations: this.config.promtail?.tolerations ?? defaultTolerations,
-          resources: {
-            requests: { cpu: "100m", memory: "128Mi" },
-            limits: { cpu: "200m", memory: "256Mi" },
-          },
-          // Disable readiness probe as it can cause issues
-          readinessProbe: null,
-        },
+        values: promtailValues(this.config),
       });
     }
 

@@ -42,7 +42,11 @@ import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct, type Toleration } from "../../../core";
-import { PrometheusOperator, type PromtailClientConfig } from "./index";
+import {
+  PrometheusOperator,
+  type PromtailClientConfig,
+  type PromtailValues,
+} from "./index";
 
 /** Central Prometheus remote-write target (basic auth). */
 export interface MemberRemoteWriteConfig {
@@ -99,6 +103,12 @@ export interface MemberMonitoringConfig {
    */
   promtailClient?: PromtailClientConfig;
   /**
+   * Promtail chart values merged over the preset (see {@link PromtailValues});
+   * `tolerations` here replaces the member `tolerations` for promtail alone.
+   * Needs `promtailClient`.
+   */
+  promtailValues?: PromtailValues;
+  /**
    * Tolerations for every monitoring component — applied to the wrapper keys
    * AND the kube-state-metrics / node-exporter subchart keys (the wrapper
    * keys don't reach subchart pods) AND Promtail. Required on all-tainted
@@ -121,6 +131,12 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
     const storageSize = this.config.storageSize ?? "5Gi";
     const tolerations = this.config.tolerations;
     const promtailClient = this.config.promtailClient;
+    const promtailValues = this.config.promtailValues;
+    if (promtailValues && !promtailClient) {
+      throw new Error(
+        "MemberMonitoring: promtailValues needs promtailClient (promtail is rendered only with a client)",
+      );
+    }
 
     // remote_write basic-auth Secret referenced by prometheusSpec.remoteWrite.
     const rwSecretName = "central-rw-auth";
@@ -230,7 +246,11 @@ export class MemberMonitoring extends BaseConstruct<MemberMonitoringConfig> {
       // No local Loki — logs go to the central sink (or nowhere).
       loki: { enabled: false },
       promtail: promtailClient
-        ? { enabled: true, ...(tolerations ? { tolerations } : {}) }
+        ? {
+            enabled: true,
+            ...(tolerations ? { tolerations } : {}),
+            ...(promtailValues ? { values: promtailValues } : {}),
+          }
         : { enabled: false },
       ...(promtailClient
         ? {
