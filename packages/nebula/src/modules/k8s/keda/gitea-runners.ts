@@ -15,6 +15,10 @@
  * path (containerd drops the image volume only on an exact match), with an
  * ephemeral-storage request and limit, and its data root is a subdirectory,
  * because the rootless daemon cannot chmod the root-owned emptyDir itself.
+ * Every Job starts with an empty store, so its base image is pulled each time:
+ * `registryMirrors` points the daemon at a pull-through cache for that. The
+ * image's other volumes (`/data` with the registration file, `/var/lib/docker`,
+ * unused by rootless) stay anonymous and kilobyte-sized.
  *
  * Needs a Gitea API token that can list the repository's jobs (a
  * TriggerAuthentication) and, per pool, the repository's runner
@@ -91,6 +95,8 @@ export interface GiteaEphemeralRunnersConfig {
   runnerImage?: string;
   /** How often KEDA polls the queue, in seconds (default 10). */
   pollingInterval?: number;
+  /** Pull-through caches the runners' docker daemon pulls docker.io images from (a {@link RegistryMirror} endpoint). */
+  registryMirrors?: string[];
   /** Runner pools by name; the name is the ScaledJob's. */
   pools: Record<string, GiteaRunnerPool>;
 }
@@ -237,7 +243,10 @@ export class GiteaEphemeralRunners extends BaseConstruct<GiteaEphemeralRunnersCo
         metadata: { name: `${name}-config`, namespace },
         data: {
           // data-root is a subdirectory: the rootless daemon chmods its data root, which fails on the emptyDir itself.
-          "daemon.json": JSON.stringify({ "data-root": `${DOCKER_VOLUME}/data` }),
+          "daemon.json": JSON.stringify({
+            "data-root": `${DOCKER_VOLUME}/data`,
+            ...(this.config.registryMirrors?.length ? { "registry-mirrors": this.config.registryMirrors } : {}),
+          }),
           ...(pool.runnerConfig ? { "config.yaml": pool.runnerConfig } : {}),
         },
       });
