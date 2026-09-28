@@ -18,9 +18,9 @@ const pool: GiteaRunnerPool = {
 const names = { authentication: "runners-gitea-api", registrationSecret: "infra-registration", config: "infra-config" };
 const instance = { instanceUrl: "https://git.example.test/" };
 
-test("the trigger polls the repository's waiting jobs with the API token as the Authorization header", () => {
+test("the trigger polls the repository's queued jobs with the API token as the Authorization header", () => {
   assert.equal(queuedJobsUrl("https://git.example.test/", "platform/infra"),
-    "https://git.example.test/api/v1/repos/platform/infra/actions/jobs?status=waiting&limit=1");
+    "https://git.example.test/api/v1/repos/platform/infra/actions/jobs?status=queued&limit=1");
   const spec = scaledJobSpec("infra", pool, instance, names);
   assert.equal(spec.triggers.length, 1);
   const [trigger] = spec.triggers;

@@ -4,7 +4,7 @@
  *
  * Gitea has no runner controller, so this composes upstream parts: one KEDA
  * `ScaledJob` per runner pool polls the repository's queued jobs
- * (`GET /api/v1/repos/{owner}/{repo}/actions/jobs?status=waiting`) and
+ * (`GET /api/v1/repos/{owner}/{repo}/actions/jobs?status=queued`) and
  * creates one Kubernetes Job per queued job. Each Job runs `act_runner`
  * (the docker-in-docker rootless image) registered as EPHEMERAL: it takes
  * exactly one job, exits, and Gitea deletes the registration itself. When
@@ -104,7 +104,7 @@ const SAFE_TO_EVICT = "cluster-autoscaler.kubernetes.io/safe-to-evict";
 
 /** The queued-jobs URL a pool's trigger polls. */
 export function queuedJobsUrl(instanceUrl: string, repository: string): string {
-  return `${instanceUrl.replace(/\/$/, "")}/api/v1/repos/${repository}/actions/jobs?status=waiting&limit=1`;
+  return `${instanceUrl.replace(/\/$/, "")}/api/v1/repos/${repository}/actions/jobs?status=queued&limit=1`;
 }
 
 export interface ScaledJobNames {
