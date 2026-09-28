@@ -13,6 +13,16 @@ export type {
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
 
+export { ActionsRunnerController } from "./actions-runner-controller";
+export type {
+  ActionsRunnerControllerConfig,
+  RunnerScaleSetConfig,
+  RunnerScaleSetAuth,
+  RunnerContainerMode,
+  RunnerWorkVolumeClaim,
+  RunnerResources,
+} from "./actions-runner-controller";
+
 export { Kagent } from "./kagent";
 export type {
   KagentConfig,
