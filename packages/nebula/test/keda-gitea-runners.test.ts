@@ -35,6 +35,7 @@ test("the trigger polls the repository's queued jobs with the API token as the A
   assert.equal(spec.maxReplicaCount, 4);
   assert.equal(spec.pollingInterval, 10);
   assert.deepEqual(spec.scalingStrategy, { strategy: "default" });
+  assert.deepEqual(spec.rollout, { strategy: "gradual" });
 });
 
 test("each Job is one ephemeral, once-only act_runner with a counted docker store that refuses eviction", () => {
