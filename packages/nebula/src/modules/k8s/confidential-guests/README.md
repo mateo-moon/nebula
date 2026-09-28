@@ -106,7 +106,7 @@ and `$(NAME)` in env values). A value is refused, never repaired.
   may not name); and `checkName`, the one failed check of a refused
   verification. The adapter writes each body as canonical text. An integer
   in a body is a JavaScript number, so nebula reads back only integers it
-  can hold exactly.
+  can hold and print exactly.
 - **Runtime paths.** Where a component finds what another container of its
   Pod serves, as its own container mounts it: the adapter's two sockets
   (bound by the adapter, asked by a control bridge and observers) and

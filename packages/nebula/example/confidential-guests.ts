@@ -135,7 +135,7 @@ const storage = (volume: "data" | "scratch") => ({
   env: sealedStorageEnv(EXAMPLE_GUEST_DEPLOYMENT.storageLayout, volume),
   securityContext: { ...restricted, capabilities: { drop: ["ALL"], add: ["SYS_ADMIN", "MKNOD"] } },
   volumeDevices: [{ name: "data", devicePath: "/dev/guest-data" }],
-  volumeMounts: [{ name: "run", mountPath: "/run/guest-attest" }],
+  volumeMounts: runtimePathMounts(EXAMPLE_GUEST_DEPLOYMENT.runtimePaths, { sockets: "run" }),
 });
 
 function guest(name: string, labels: Record<string, string>, grace: number, claim: string, containers: object[],

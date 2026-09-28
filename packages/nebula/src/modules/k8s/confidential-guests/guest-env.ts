@@ -521,11 +521,11 @@ const API_KEYS = ["baseImageRef", "checkName", "config", "keyResolverDomain", "m
 // The status members the adapter computes; statusFields may name none of them.
 const COMPUTED_STATUS = ["base_image_id", "base_image_ref", "state", "workload_id", "workload_ref"];
 
-/** A body's value as JavaScript JSON: refused, with nebula's message, for an integer a number cannot hold exactly. */
+/** A body's value as JavaScript JSON: refused, with nebula's message, for an integer a number cannot hold and print exactly. */
 function json(value: MeasuredValue, name: string): GuestJsonValue {
   if (typeof value === "bigint") {
     const number = Number(value);
-    ensure(BigInt(number) === value, `${name}: ${value} has no exact JavaScript number`);
+    ensure(BigInt(number) === value && String(number) === value.toString(), `${name}: ${value} has no exact JavaScript number`);
     return number;
   }
   if (Array.isArray(value)) return value.map((item, index) => json(item, `${name}[${index}]`));
