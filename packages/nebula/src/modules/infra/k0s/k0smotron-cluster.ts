@@ -14,6 +14,7 @@ import {
   withNodeIpArgs,
   type K0sInfraProvider,
   type K0sWorkerPool,
+  autoscalerAnnotations,
 } from "./cluster";
 import {
   K0smotronControlPlane,
@@ -219,11 +220,12 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
         },
       });
 
+      const annotations = autoscalerAnnotations(pool);
       new MachineDeploymentV1Beta1(this, `worker-md-${poolName}`, {
-        metadata: { name: `${name}-${poolName}`, namespace },
+        metadata: { name: `${name}-${poolName}`, namespace, ...(annotations ? { annotations } : {}) },
         spec: {
           clusterName,
-          replicas: pool.replicas ?? 2,
+          ...(annotations ? {} : { replicas: pool.replicas ?? 2 }),
           selector: {
             matchLabels: { "cluster.x-k8s.io/cluster-name": clusterName },
           },
