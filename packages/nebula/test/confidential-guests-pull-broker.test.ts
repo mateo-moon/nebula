@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { AttestedPullBroker, pullBrokerPolicy, sha256Hex, type AttestedPullBrokerProps } from "../src/modules/k8s/confidential-guests";
 import { kindsAndNames, rawSynth, synthOf } from "./support/cdk8s-render";
@@ -8,6 +9,9 @@ const brokerImage = `registry.example.com/guests/kbs@sha256:${digest("2")}`;
 const initImage = `registry.example.com/guests/tools@sha256:${digest("3")}`;
 const configToml = "[http_server]\ninsecure_http = true\nsockets = [\"0.0.0.0:8080\"]\n";
 const primary = sha256Hex("example primary release"), bridge = sha256Hex("example bridge release");
+// SEV-SNP launch measurements are 48 bytes: the size of a SHA-384 digest.
+const launch = (name: string) => createHash("sha384").update(name).digest("hex");
+const primaryLaunch = launch("example primary launch"), bridgeLaunch = launch("example bridge launch");
 
 const props = (change: Partial<AttestedPullBrokerProps> = {}): AttestedPullBrokerProps => ({
   namespace: "guests",
@@ -30,10 +34,10 @@ const props = (change: Partial<AttestedPullBrokerProps> = {}): AttestedPullBroke
 });
 const render = (value: AttestedPullBrokerProps) => synthOf(chart => new AttestedPullBroker(chart, "broker", value));
 
-const policyFor = (condition: string) => "package policy\ndefault allow := false\nallow if {\n    data.plugin == \"resource\"\n"
+const policyFor = (...conditions: string[]) => "package policy\ndefault allow := false\nallow if {\n    data.plugin == \"resource\"\n"
   + "    data[\"resource-path\"] == [\"default\", \"registry\", \"pull\"]\n"
   + "    ev := input.submods.cpu0[\"ear.veraison.annotated-evidence\"]\n"
-  + `    ${condition}\n`
+  + conditions.map(condition => `    ${condition}\n`).join("")
   + "    ev.snp.policy_debug_allowed == false\n}\n";
 
 // The broker as plain manifests, in the shape they were first written by hand.
@@ -95,6 +99,35 @@ test("the 'in' form admits exactly the listed init-data hashes, in order, and ca
   assert.equal(rendered.yaml, rawSynth(manifests(policy, true)).yaml);
 });
 
+test("a pinned launch measurement is admitted right after the init-data, as one value or a list, and rolls the broker", () => {
+  const path = ["default", "registry", "pull"] as const;
+  const initData = { form: "equals", value: primary } as const;
+  const one = policyFor(`ev.init_data == "${primary}"`, `ev.snp.measurement == "${primaryLaunch}"`);
+  assert.equal(pullBrokerPolicy(path, initData, { form: "equals", value: primaryLaunch }), one);
+  const measurement = { form: "in", values: [bridgeLaunch, primaryLaunch] } as const;
+  const any = policyFor(`ev.init_data == "${primary}"`, `ev.snp.measurement in ["${bridgeLaunch}","${primaryLaunch}"]`);
+  assert.equal(pullBrokerPolicy(path, initData, measurement), any);
+  const rendered = render(props({ measurement })), without = render(props());
+  assert.equal(rendered.yaml, rawSynth(manifests(any, false)).yaml);
+  const hash = (deployment: any) => deployment.spec.template.metadata.annotations["guests.example.com/config-sha256"];
+  assert.equal(hash(rendered.objects.at(-1)), sha256Hex(any + configToml));
+  assert.notEqual(hash(rendered.objects.at(-1)), hash(without.objects.at(-1)), "pinning a measurement rolls the broker");
+  assert.equal(pullBrokerPolicy(path, initData, undefined), pullBrokerPolicy(path, initData));
+  assert.equal(render(props({ measurement: undefined })).yaml, without.yaml, "without a measurement the policy is as it was");
+});
+
+test("launch measurements are reviewed nonzero 48-byte values in lowercase hex", () => {
+  const bad: unknown[] = ["", primaryLaunch.slice(1), `${primaryLaunch}0`, primaryLaunch.toUpperCase(), "0".repeat(96), primary, 42, null];
+  for (const value of bad) {
+    assert.throws(() => render(props({ measurement: { form: "equals", value } as any })), /launch measurements must be nonzero/, String(value));
+    assert.throws(() => render(props({ measurement: { form: "in", values: [primaryLaunch, value] } as any })), /launch measurements must be nonzero/,
+      String(value));
+  }
+  for (const measurement of [{ form: "in", values: [] }, { form: "any" }, { form: "equals", value: primaryLaunch, values: [primaryLaunch] }, null, primaryLaunch]) {
+    assert.throws(() => render(props({ measurement: measurement as any })), /measurement admission must be/, JSON.stringify(measurement));
+  }
+});
+
 test("the configuration hash annotation lives under the caller's label domain and covers policy and config", () => {
   for (const labelDomain of ["guests.example.com", "confidential.example.org", "a.b.example.net"]) {
     const broker = synthOf(chart => new AttestedPullBroker(chart, "broker", props({ labelDomain }))).objects.at(-1);
@@ -148,6 +181,7 @@ test("names, selectors, images and commands are validated", () => {
     ["wave", { syncWaves: { config: 0.5 } }, /syncWaves/],
     ["misspelt wave", { syncWaves: { brokr: -1 } } as any, /unknown field brokr/],
     ["misspelt prop", { initdata: { form: "equals", value: primary } } as any, /unknown field initdata/],
+    ["misspelt measurement", { measurements: { form: "equals", value: primaryLaunch } } as any, /unknown field measurements/],
     ["pull secret field", { pullSecret: { name: "registry-pull", exposeAsResource: true, key: "x" } } as any, /unknown field key/],
   ];
   for (const [label, change, error] of refusals) assert.throws(() => render(props(change)), error, label);

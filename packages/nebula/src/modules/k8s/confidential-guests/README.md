@@ -19,7 +19,7 @@ wave, a file name, a container entry point).
 | `GuestAdmissionFence` | Two ValidatingAdmissionPolicies with bindings: only the controllers create guests, only in their role's shape, each mounting only its own claims. |
 | `GuestLogRetention` | A host-side collector that keeps guest container logs across guest replacements. |
 | `GuestServices` | Ingress NetworkPolicies and Services, optionally at fixed cluster addresses. |
-| `AttestedPullBroker` | A Key Broker Service that releases private registry credentials only to guests whose attested init-data hash is admitted. |
+| `AttestedPullBroker` | A Key Broker Service that releases private registry credentials only to guests whose attested init-data hash and, when pinned, launch measurement are admitted. |
 | `SealedDisks` | Loop-file block disks from a disk table: a provisioner per live disk, optionally the key injector, and a local PersistentVolume and claim per declared disk. |
 | `NriKeyInjector` | The NRI plugin that hands a key device to bound guest containers of its own namespace only. |
 | `ConfidentialGuestStack` | All of the above in one namespace, wired together (see below). |
@@ -41,6 +41,14 @@ templates through `measuredGuest(template, artifact)`, which refuses a
 template that changed since its policy was generated and init-data that does
 not hash to the recorded HOST_DATA. Nothing in this module rewrites a
 template or an image reference.
+
+Init-data is a launch parameter the host chooses, so HOST_DATA alone does
+not identify the guest software: a pull broker admitting only init-data
+releases the credentials to any non-debug guest launched with an admitted
+hash. Pin the launch measurements of the deployment's releases with the
+broker's `measurement` admission (`{ form: "equals", value }` or
+`{ form: "in", values }` of 96-character lowercase hex launch digests); the
+stack passes `pullBroker.measurement` through unchanged.
 
 Everything else (controller images, policies, Services, log collection) is
 unmeasured host-side configuration and can change without a new release.
@@ -287,7 +295,8 @@ as their constructs' props or as functions:
 
 - **Props.** The stack builds the construct in its namespace, on its node
   (and for the broker under its label domain), and ties it to its guests: the
-  pull broker admits the HOST_DATA of every declared release; every guest's
+  pull broker admits the HOST_DATA of every declared release (pin their
+  launch measurements with `pullBroker.measurement`); every guest's
   claim (holder and stage boot) must be a live disk of the disks' table; an
   injector binds only the stack's guest Pods. A prop the stack sets is
   refused. `SealedDisks` renders the key injector itself (`disks.injector`),

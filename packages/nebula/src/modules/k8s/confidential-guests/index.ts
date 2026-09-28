@@ -21,8 +21,8 @@
  * domain is a prop without a default; each construct renders plain
  * Kubernetes objects with explicit names, in a documented order:
  * - {@link AttestedPullBroker}: a Key Broker Service that releases private
- *   registry credentials only to guests whose attested init-data hash is
- *   admitted (one value or a list);
+ *   registry credentials only to guests whose attested init-data hash and,
+ *   when pinned, launch measurement are admitted (one value or a list each);
  * - {@link SealedDisks}: loop-file block disks from a {@link DiskTable} of
  *   live, retained and retired generations ({@link validateDiskTable},
  *   {@link provisionScript}), with their provisioners and claims;
@@ -165,7 +165,7 @@ export type {
 export { confidentialGuestAssetUrl, readConfidentialGuestAsset } from "./assets";
 export type { ConfidentialGuestAsset } from "./assets";
 export { AttestedPullBroker, pullBrokerPolicy } from "./pull-broker";
-export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath } from "./pull-broker";
+export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath, MeasurementAdmission } from "./pull-broker";
 export { validateDiskTable } from "./disk-table";
 export type { DiskEntry, DiskSize, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
 export { defaultProvisionTemplate, provisionScript } from "./provision";

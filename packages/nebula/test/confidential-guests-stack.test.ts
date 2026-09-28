@@ -221,6 +221,9 @@ test("the pull broker, disks and injector can be given as props: the stack place
   }
   const broker = docs.find(d => d.kind === "ConfigMap" && d.metadata.name === "pull-broker-configuration");
   assert.ok(broker.data["resource-policy.rego"].includes(`ev.init_data in ${JSON.stringify(stack.context.initDataSha256)}`), "the broker admits every release's HOST_DATA");
+  const pinned = render(stackProps({ pullBroker: { ...brokerProps, measurement: { form: "equals", value: "ab".repeat(48) } }, disks: diskProps() })).docs
+    .find(d => d.kind === "ConfigMap" && d.metadata.name === "pull-broker-configuration");
+  assert.ok(pinned.data["resource-policy.rego"].includes(`ev.snp.measurement == "${"ab".repeat(48)}"`), "a pinned launch measurement passes through");
   const deployment = (name: string) => docs.find(d => d.kind === "Deployment" && d.metadata.name === name).spec.template;
   assert.ok(Object.keys(deployment("pull-broker").metadata.annotations).includes(`${DOMAIN}/config-sha256`));
   for (const name of ["pull-broker", "primary-disk", "key-injector"]) assert.equal(deployment(name).spec.nodeName, NODE, name);
