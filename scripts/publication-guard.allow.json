@@ -1,1 +1,40 @@
-{ "version": 1, "entries": [] }
+{
+  "version": 1,
+  "entries": [
+    {
+      "class": "hex-64-bytes",
+      "sha256": "37945a3519275d66b3206a6939c9bf641969320e0357db8eacecb6da3545fa40",
+      "reason": "HOST_DATA test vectors: base64 of gzip of 1 MiB and 1 MiB + 1 zero bytes (decompressed-at-limit, decompressed-over-limit)"
+    },
+    {
+      "class": "opaque-blob",
+      "sha256": "edb7d0a61a58d5c03aaa1eef0d1bc606012893bd62c31bbb5d8034049097117b",
+      "reason": "HOST_DATA test vector decompressed-at-limit: base64 of gzip of 1 MiB of zero bytes"
+    },
+    {
+      "class": "opaque-blob",
+      "sha256": "2f10df64609367e9054143c8752bad224c3e2032dd42bea09bf791aa561c49ac",
+      "reason": "HOST_DATA test vector decompressed-over-limit: base64 of gzip of 1 MiB + 1 zero bytes"
+    },
+    {
+      "class": "opaque-blob",
+      "sha256": "a5083deb50932cf5a45f196cbdc5184acc31f4ab2adc576f710608effe4f0591",
+      "reason": "HOST_DATA test vector url-safe-alphabet: the canonical example init-data with '-_' inserted"
+    },
+    {
+      "class": "opaque-blob",
+      "sha256": "8de062c6d172a29a3048954fa358a3c6ab1a8ed4584bc603563643af6cfb9160",
+      "reason": "HOST_DATA test vector truncated: the example init-data gzip without its trailer"
+    },
+    {
+      "class": "opaque-blob",
+      "sha256": "04538de8b02fe61f597a744de50f60b582eae886b1eed967fc572bf61b268810",
+      "reason": "HOST_DATA test vector bad-crc: the example init-data gzip with its CRC flipped"
+    },
+    {
+      "class": "opaque-blob",
+      "sha256": "421be3037544def5f33750966d92bdca6e9e821cd0649e421e95289beff474db",
+      "reason": "HOST_DATA test vector trailing-text: the example init-data gzip followed by 'xyz'"
+    }
+  ]
+}

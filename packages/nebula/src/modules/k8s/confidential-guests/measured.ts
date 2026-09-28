@@ -1,4 +1,4 @@
-import { gunzipSync } from "node:zlib";
+import { gunzipSync, inflateRawSync } from "node:zlib";
 import { canonicalJson, sha256Hex } from "./canonical";
 
 /**
@@ -39,10 +39,29 @@ export interface GuestPodManifest {
 }
 
 /**
+ * Length of the gzip member header at the start of `bytes` (RFC 1952 2.3),
+ * or -1 when they do not start with one.
+ */
+function gzipHeaderLength(bytes: Buffer): number {
+  if (bytes.length < 18 || bytes[0] !== 0x1f || bytes[1] !== 0x8b || bytes[2] !== 8 || (bytes[3] & 0xe0) !== 0) return -1;
+  const flags = bytes[3];
+  let at = 10;
+  if (flags & 0x04) at = at + 2 > bytes.length ? -1 : at + 2 + bytes.readUInt16LE(at);
+  for (const field of [0x08, 0x10]) {
+    if (at >= 0 && flags & field) {
+      const end = bytes.indexOf(0, at);
+      at = end < 0 ? -1 : end + 1;
+    }
+  }
+  if (at >= 0 && flags & 0x02) at += 2;
+  return at >= 0 && at + 8 <= bytes.length ? at : -1;
+}
+
+/**
  * HOST_DATA of an init-data annotation value: the SHA-256 of the decompressed
  * document. The value must be canonical base64 (what a re-encode produces)
- * and gzip of at most 1 MiB.
- * @throws Error when the value is not canonical base64 of gzip data.
+ * and exactly one gzip member, with nothing after it, of at most 1 MiB.
+ * @throws Error when the value is not canonical base64 of one gzip member.
  */
 export function initDataSha256(ccInitData: string): string {
   if (typeof ccInitData !== "string" || ccInitData.length === 0) throw new Error("init-data: expected a non-empty string");
@@ -54,6 +73,18 @@ export function initDataSha256(ccInitData: string): string {
   } catch (error) {
     throw new Error(`init-data: not gzip of at most ${MAX_INIT_DATA} bytes (${(error as Error).message})`);
   }
+  // gunzip reads on past the first member (a second member, trailing zeros); a guest may read the first alone.
+  const header = gzipHeaderLength(bytes);
+  let deflated = -1;
+  try {
+    if (header >= 0) {
+      const inflated = inflateRawSync(bytes.subarray(header), { info: true, maxOutputLength: MAX_INIT_DATA }) as unknown as { engine: { bytesWritten: number } };
+      deflated = inflated.engine.bytesWritten;
+    }
+  } catch {
+    deflated = -1;
+  }
+  if (header < 0 || deflated < 0 || header + deflated + 8 !== bytes.length) throw new Error("init-data: not exactly one gzip member");
   return sha256Hex(document);
 }
 
