@@ -32,12 +32,73 @@ export interface NodeTaint {
 }
 
 /**
+ * Lets the Kubernetes cluster-autoscaler (Cluster API provider) size a pool.
+ * The MachineDeployment carries the autoscaler's min/max annotations and no
+ * replica count of its own: Cluster API defaults a new one to `minSize`, and
+ * the autoscaler owns it from there. `minSize: 0` means the pool is empty
+ * while nothing needs it; the infrastructure template's `status.capacity`
+ * (set by CAPA from the instance type) and the pool's labels and taints let
+ * the autoscaler plan a node it has never seen.
+ */
+export interface K0sWorkerPoolAutoscaling {
+  /** Fewest nodes, 0 for scale-to-zero. */
+  minSize: number;
+  /** Most nodes. */
+  maxSize: number;
+  /**
+   * What a node of this pool offers, for planning one from zero. CAPA fills
+   * cpu and memory on the machine template; the disk it does not, and a pod
+   * that requests ephemeral storage never fits a node planned without any
+   * (observed live: every runner pod "can't be scheduled ... NodeResourcesFit"
+   * against an otherwise correct pool). Give `ephemeralDisk` the allocatable
+   * disk, a little under the root volume.
+   */
+  capacity?: {
+    /** Allocatable ephemeral storage, e.g. "140Gi". */
+    ephemeralDisk?: string;
+    cpu?: string;
+    memory?: string;
+    maxPods?: number;
+  };
+}
+
+const AUTOSCALER_ANNOTATION = "cluster.x-k8s.io/cluster-api-autoscaler-node-group";
+const CAPACITY_ANNOTATION = "capacity.cluster-autoscaler.kubernetes.io";
+
+/**
+ * The cluster-autoscaler annotations of an autoscaled pool's
+ * MachineDeployment, or undefined for a static pool.
+ */
+export function autoscalerAnnotations<M>(pool: K0sWorkerPool<M>): Record<string, string> | undefined {
+  const scaling = pool.autoscaling;
+  if (!scaling) return undefined;
+  if (!Number.isInteger(scaling.minSize) || !Number.isInteger(scaling.maxSize) || scaling.minSize < 0 || scaling.maxSize < scaling.minSize) {
+    throw new Error(`autoscaling: 0 <= minSize (${scaling.minSize}) <= maxSize (${scaling.maxSize})`);
+  }
+  const labels = Object.entries(pool.nodeLabels ?? {}).map(([k, v]) => `${k}=${v}`);
+  const taints = (pool.taints ?? []).map(t => `${t.key}${t.value !== undefined ? `=${t.value}` : ""}:${t.effect}`);
+  const capacity = scaling.capacity ?? {};
+  return {
+    [`${AUTOSCALER_ANNOTATION}-min-size`]: String(scaling.minSize),
+    [`${AUTOSCALER_ANNOTATION}-max-size`]: String(scaling.maxSize),
+    ...(labels.length ? { [`${CAPACITY_ANNOTATION}/labels`]: labels.join(",") } : {}),
+    ...(taints.length ? { [`${CAPACITY_ANNOTATION}/taints`]: taints.join(",") } : {}),
+    ...(capacity.ephemeralDisk ? { [`${CAPACITY_ANNOTATION}/ephemeral-disk`]: capacity.ephemeralDisk } : {}),
+    ...(capacity.cpu ? { [`${CAPACITY_ANNOTATION}/cpu`]: capacity.cpu } : {}),
+    ...(capacity.memory ? { [`${CAPACITY_ANNOTATION}/memory`]: capacity.memory } : {}),
+    ...(capacity.maxPods !== undefined ? { [`${CAPACITY_ANNOTATION}/maxPods`]: String(capacity.maxPods) } : {}),
+  };
+}
+
+/**
  * A worker pool. Provider-agnostic except for `machine` — the infrastructure
  * machine spec (`M`) the provider understands (e.g. AWS instanceType/ami/spot).
  */
 export interface K0sWorkerPool<M> {
-  /** Number of worker nodes (static — no autoscaler). Default 2. */
+  /** Number of worker nodes (static). Default 2. Ignored with `autoscaling`. */
   replicas?: number;
+  /** Size the pool by demand instead of `replicas`; see {@link K0sWorkerPoolAutoscaling}. */
+  autoscaling?: K0sWorkerPoolAutoscaling;
   /** Node labels, applied via the native `k0s worker --labels` flag. */
   nodeLabels?: Record<string, string>;
   /** Node taints, applied via the native `k0s worker --taints` flag. */
@@ -413,11 +474,12 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
         },
       });
 
+      const annotations = autoscalerAnnotations(pool);
       new MachineDeploymentV1Beta1(this, `worker-md-${poolName}`, {
-        metadata: { name: `${name}-${poolName}`, namespace },
+        metadata: { name: `${name}-${poolName}`, namespace, ...(annotations ? { annotations } : {}) },
         spec: {
           clusterName,
-          replicas: pool.replicas ?? 2,
+          ...(annotations ? {} : { replicas: pool.replicas ?? 2 }),
           selector: {
             matchLabels: { "cluster.x-k8s.io/cluster-name": clusterName },
           },

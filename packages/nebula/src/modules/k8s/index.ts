@@ -13,7 +13,17 @@ export type {
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
 
+export { Keda, kedaValues } from "./keda";
+export type { KedaConfig } from "./keda";
+export { GiteaEphemeralRunners, scaledJobSpec, queuedJobsUrl } from "./keda/gitea-runners";
+export type { GiteaEphemeralRunnersConfig, GiteaRunnerPool } from "./keda/gitea-runners";
+
+export { ClusterAutoscaler, clusterAutoscalerValues } from "./cluster-autoscaler";
+export type { ClusterAutoscalerConfig } from "./cluster-autoscaler";
+
 export { ActionsRunnerController } from "./actions-runner-controller";
+export { RegistryMirror, mirrorEndpoint } from "./registry-mirror";
+export type { RegistryMirrorConfig } from "./registry-mirror";
 export type {
   ActionsRunnerControllerConfig,
   RunnerScaleSetConfig,
@@ -21,6 +31,8 @@ export type {
   RunnerContainerMode,
   RunnerWorkVolumeClaim,
   RunnerResources,
+  RunnerStorage,
+  EphemeralStorage,
 } from "./actions-runner-controller";
 
 export { Kagent } from "./kagent";
@@ -140,11 +152,12 @@ export type {
   CalicoWgFamily,
 } from "./calico-wg-repair";
 
-export { PrometheusOperator, MemberMonitoring } from "./prometheus-operator";
+export { PrometheusOperator, MemberMonitoring, promtailValues } from "./prometheus-operator";
 export type {
   PrometheusOperatorConfig,
   ThanosConfig,
   PromtailClientConfig,
+  PromtailValues,
   PrometheusRwIngressConfig,
   LokiPushIngressConfig,
   MemberMonitoringConfig,

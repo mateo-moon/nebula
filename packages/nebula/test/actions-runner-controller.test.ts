@@ -32,11 +32,40 @@ test("a scale set defaults to dind, zero idle runners and the controller referen
   assert.equal(values.runnerScaleSetName, "ci");
   assert.equal(values.minRunners, 0);
   assert.equal(values.maxRunners, 4);
-  assert.deepEqual(values.containerMode, { type: "dind" });
+  // dind is rendered as an explicit template, not through the chart's containerMode.
+  assert.equal(values.containerMode, undefined);
   assert.deepEqual(values.controllerServiceAccount, { namespace: "arc-systems", name: "arc-gha-rs-controller" });
-  assert.deepEqual(values.template, {
-    spec: { containers: [{ name: "runner", image: "ghcr.io/actions/actions-runner:latest", command: ["/home/runner/run.sh"] }] },
-  });
+  const spec = (values.template as { spec: any }).spec;
+  assert.deepEqual(spec.initContainers.map((c: any) => c.name), ["init-dind-externals", "dind"]);
+  const dind = spec.initContainers[1];
+  assert.equal(dind.image, "docker:dind");
+  assert.deepEqual(dind.args, ["dockerd", "--host=unix:///var/run/docker.sock", "--group=$(DOCKER_GROUP_GID)"]);
+  assert.equal(dind.restartPolicy, "Always");
+  assert.equal(dind.securityContext.privileged, true);
+  assert.deepEqual(dind.volumeMounts.find((m: any) => m.name === "dind-store"), { name: "dind-store", mountPath: "/var/lib/docker" });
+  assert.deepEqual(dind.resources, { requests: { "ephemeral-storage": "8Gi" }, limits: { "ephemeral-storage": "30Gi" } });
+  const runner = spec.containers[0];
+  assert.equal(runner.name, "runner");
+  assert.equal(runner.image, "ghcr.io/actions/actions-runner:latest");
+  assert.deepEqual(runner.command, ["/home/runner/run.sh"]);
+  assert.deepEqual(runner.env.map((e: any) => e.name), ["DOCKER_HOST", "RUNNER_WAIT_FOR_DOCKER_IN_SECONDS"]);
+  assert.deepEqual(runner.resources, { requests: { "ephemeral-storage": "5Gi" }, limits: { "ephemeral-storage": "20Gi" } });
+  assert.deepEqual(spec.volumes.map((v: any) => v.name), ["work", "dind-sock", "dind-externals", "dind-store"]);
+  assert.ok(spec.volumes.every((v: any) => JSON.stringify(v.emptyDir) === "{}"));
+});
+
+test("runner pods are not the autoscaler's to evict unless said otherwise", () => {
+  const meta = (scaleSetValues("ci", set, controller).template as { metadata: any }).metadata;
+  assert.deepEqual(meta.annotations, { "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" });
+  const custom = (scaleSetValues("ci", { ...set, podAnnotations: { "cluster-autoscaler.kubernetes.io/safe-to-evict": "true", team: "ci" } }, controller).template as { metadata: any }).metadata;
+  assert.deepEqual(custom.annotations, { "cluster-autoscaler.kubernetes.io/safe-to-evict": "true", team: "ci" });
+});
+
+test("storage figures override the defaults and a limit is optional", () => {
+  const values = scaleSetValues("ci", { ...set, storage: { docker: { request: "12Gi" }, workspace: { request: "2Gi", limit: "8Gi" } } }, controller);
+  const spec = (values.template as { spec: any }).spec;
+  assert.deepEqual(spec.initContainers[1].resources, { requests: { "ephemeral-storage": "12Gi" } });
+  assert.deepEqual(spec.containers[0].resources, { requests: { "ephemeral-storage": "2Gi" }, limits: { "ephemeral-storage": "8Gi" } });
 });
 
 test("node placement and resources land on the runner pod template", () => {
@@ -54,15 +83,17 @@ test("node placement and resources land on the runner pod template", () => {
   assert.equal(values.minRunners, 1);
   assert.equal(values.maxRunners, 8);
   assert.equal(values.runnerGroup, "spot");
-  const spec = (values.template as { spec: Record<string, unknown> }).spec;
+  const spec = (values.template as { spec: any }).spec;
   assert.deepEqual(spec.nodeSelector, { "node-role/ci": "true" });
   assert.deepEqual(spec.tolerations, [{ key: "ci", operator: "Equal", value: "true", effect: "NoSchedule" }]);
-  assert.deepEqual(spec.containers, [{
-    name: "runner",
-    image: "ghcr.io/actions/actions-runner:2.330.0",
-    command: ["/home/runner/run.sh"],
-    resources: { requests: { cpu: "2", memory: "4Gi" }, limits: { memory: "8Gi" } },
-  }]);
+  const runner = spec.containers[0];
+  assert.equal(runner.image, "ghcr.io/actions/actions-runner:2.330.0");
+  assert.equal(spec.initContainers[0].image, "ghcr.io/actions/actions-runner:2.330.0");
+  // The caller's CPU and memory sit beside the workspace's ephemeral storage.
+  assert.deepEqual(runner.resources, {
+    requests: { cpu: "2", memory: "4Gi", "ephemeral-storage": "5Gi" },
+    limits: { memory: "8Gi", "ephemeral-storage": "20Gi" },
+  });
   assert.deepEqual(values.proxy, { https: { url: "http://proxy.example:3128" } });
 });
 
@@ -120,8 +151,24 @@ test("the construct renders the controller with its CRDs and every scale set aft
     const pod = s.spec.template.spec;
     const names = [...(pod.initContainers ?? []), ...pod.containers].map((c: { name: string }) => c.name);
     assert.ok(names.includes("runner") && names.includes("dind"), names.join(","));
+    const dind = pod.initContainers.find((c: { name: string }) => c.name === "dind");
+    assert.ok(dind.volumeMounts.some((m: { mountPath: string }) => m.mountPath === "/var/lib/docker"));
+    assert.equal(dind.resources.limits["ephemeral-storage"], "30Gi");
+    assert.ok(pod.containers[0].env.some((e: { name: string }) => e.name === "DOCKER_HOST"));
+    assert.equal(s.spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"], "false");
     assert.equal(pod.nodeSelector?.["kubernetes.io/arch"], s.metadata.name === "ci" ? "amd64" : undefined);
   }
   const deployment = objects.find(o => o.kind === "Deployment" && o.metadata.namespace === "arc-systems");
   assert.equal(deployment.spec.template.spec.serviceAccountName, "arc-gha-rs-controller");
+});
+
+test("registry mirrors become --registry-mirror flags of the dind daemon", () => {
+  const values = scaleSetValues("ci", { ...set, registryMirrors: ["http://registry-mirror.registry-mirror.svc.cluster.local:5000"] }, controller);
+  const dind = (values.template as { spec: any }).spec.initContainers[1];
+  assert.deepEqual(dind.args, [
+    "dockerd",
+    "--host=unix:///var/run/docker.sock",
+    "--group=$(DOCKER_GROUP_GID)",
+    "--registry-mirror=http://registry-mirror.registry-mirror.svc.cluster.local:5000",
+  ]);
 });
