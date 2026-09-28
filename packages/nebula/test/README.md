@@ -7,6 +7,11 @@
 - `k0smotron-control-plane.test.ts` checks where the hosted control plane's
   component extra args land in the k0s config, and that leaving them unset
   renders no block (so existing clusters do not restart).
+- `prometheus-operator-promtail.test.ts` checks the promtail chart values:
+  the module's own without `promtail.values`, Helm's merge semantics with
+  them (maps merge, lists replace), typed volumes and mounts as manifest
+  JSON, and that MemberMonitoring hands `promtailValues` to the promtail
+  release (through a stub `helm` that keeps each release's values file).
 - `pack-import.test.ts` packs the package, installs the tarball into a clean
   project and imports the package root. It fails if a tracked file under
   `src/` or `imports/`, an existing `files` entry, or a literal

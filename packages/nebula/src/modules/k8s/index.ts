@@ -142,11 +142,12 @@ export type {
   CalicoWgFamily,
 } from "./calico-wg-repair";
 
-export { PrometheusOperator, MemberMonitoring } from "./prometheus-operator";
+export { PrometheusOperator, MemberMonitoring, promtailValues } from "./prometheus-operator";
 export type {
   PrometheusOperatorConfig,
   ThanosConfig,
   PromtailClientConfig,
+  PromtailValues,
   PrometheusRwIngressConfig,
   LokiPushIngressConfig,
   MemberMonitoringConfig,
