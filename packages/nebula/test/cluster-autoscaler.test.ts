@@ -46,6 +46,10 @@ test("an autoscaled pool has min/max, its labels and taints, and no replicas of 
     "capacity.cluster-autoscaler.kubernetes.io/labels": "node-role.kubernetes.io/ci=,tier=spot",
     "capacity.cluster-autoscaler.kubernetes.io/taints": "ci=true:NoSchedule,spot:PreferNoSchedule",
   });
+  const capacity = autoscalerAnnotations({ autoscaling: { minSize: 0, maxSize: 2, capacity: { ephemeralDisk: "140Gi", maxPods: 110 } }, machine: { size: "l" } })!;
+  assert.equal(capacity["capacity.cluster-autoscaler.kubernetes.io/ephemeral-disk"], "140Gi");
+  assert.equal(capacity["capacity.cluster-autoscaler.kubernetes.io/maxPods"], "110");
+  assert.equal(capacity["capacity.cluster-autoscaler.kubernetes.io/cpu"], undefined);
   assert.throws(() => autoscalerAnnotations({ autoscaling: { minSize: 3, maxSize: 2 }, machine: { size: "l" } }), /minSize/);
   assert.throws(() => autoscalerAnnotations({ autoscaling: { minSize: -1, maxSize: 2 }, machine: { size: "l" } }), /minSize/);
 });
