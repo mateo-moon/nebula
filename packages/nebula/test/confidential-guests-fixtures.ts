@@ -77,6 +77,11 @@ export function roles(): GuestLifecycleRole[] {
 
 export const CONTROLLER_CODE = { "__init__.py": "", "lifecycle.py": "def main():\n    pass\n", "identity.py": "SHARED = ()\n" };
 
+/** roles() for an image-mode controller: spec version 2 names no imported ledger, so a role carries none. */
+export function imageRoles(): GuestLifecycleRole[] {
+  return roles().map(({ importedLedger: _, ...role }) => role);
+}
+
 export function lifecycleProps(extra: Partial<GuestLifecycleProps> = {}): GuestLifecycleProps {
   return {
     namespace: NAMESPACE, nodeName: NODE, runtimeClassName: RUNTIME, labelDomain: DOMAIN,

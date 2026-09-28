@@ -18,7 +18,7 @@ import {
   SealedDisks,
   SignedReleases,
 } from "../src/modules/k8s/confidential-guests";
-import { image, lifecycleProps } from "./confidential-guests-fixtures";
+import { image, imageRoles, lifecycleProps } from "./confidential-guests-fixtures";
 
 const moduleDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "modules", "k8s", "confidential-guests");
 
@@ -59,7 +59,7 @@ const disks = {
   table: { live: { data: { generation: 1, loop: 200 } }, retained: [], retired: [], reservedLoops: [], protectedLoops: [], firstPinnedLoop: 100 },
 };
 const stackProps = (labelDomain: string) => {
-  const { namespace, nodeName, runtimeClassName, ...lifecycle } = lifecycleProps({ controller: { image: image("control") } });
+  const { namespace, nodeName, runtimeClassName, ...lifecycle } = lifecycleProps({ controller: { image: image("control") }, roles: imageRoles() });
   return { namespace, nodeName, runtimeClassName, labelDomain, lifecycle,
     fence: { policyNames: fence.policyNames, guestClaimPrefix: "guest-", messages: MESSAGES } };
 };

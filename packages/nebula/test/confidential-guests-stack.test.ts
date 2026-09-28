@@ -8,13 +8,13 @@ import {
   type ConfidentialGuestStackContext,
   type ConfidentialGuestStackProps,
 } from "../src/modules/k8s/confidential-guests";
-import { DOMAIN, NAMESPACE, NODE, RUNTIME, image, initData, lifecycleProps, measured, roles } from "./confidential-guests-fixtures";
+import { DOMAIN, NAMESPACE, NODE, RUNTIME, image, imageRoles, initData, lifecycleProps, measured } from "./confidential-guests-fixtures";
 
 const MESSAGES = {
   creator: "c", name: "n", placement: "p", hostNamespaces: "h", serviceAccount: "s", volumes: "v", claim: "cl", privilege: "pr", initData: "i",
 };
 function stackProps(extra: Partial<ConfidentialGuestStackProps> = {}): ConfidentialGuestStackProps {
-  const { namespace, nodeName, runtimeClassName, labelDomain, ...lifecycle } = lifecycleProps({ controller: { image: image("control") } });
+  const { namespace, nodeName, runtimeClassName, labelDomain, ...lifecycle } = lifecycleProps({ controller: { image: image("control") }, roles: imageRoles() });
   return {
     namespace, nodeName, runtimeClassName, labelDomain, lifecycle,
     fence: { policyNames: { creator: "guests-creator", shape: "guests-shape" }, guestClaimPrefix: "guest-", messages: MESSAGES },
@@ -62,7 +62,7 @@ test("emission order: broker, releases, services, disks, injector, logs, fence, 
   });
   assert.equal(stack.context, context);
   assert.equal(stack.releases?.configMapOf(fp), "trust");
-  assert.deepEqual(stack.ignoreDifferences().map(e => e.name), ["primary-budget-v1", "primary-lifecycle-ledger", "operator-lifecycle-ledger"]);
+  assert.deepEqual(stack.ignoreDifferences().map(e => e.name), ["primary-lifecycle-ledger", "operator-lifecycle-ledger"]);
 });
 
 test("the fence and log retention derive from the lifecycle roles unless given", () => {
@@ -118,7 +118,7 @@ test("refusals happen before anything renders", () => {
 
 /** Stack props whose roles use the given claims (the primary holder runs its placeholder release only). */
 function withClaims(primaryClaim: string, operatorClaim: string, stageClaim?: string): ConfidentialGuestStackProps {
-  const [primary, operator] = roles();
+  const [primary, operator] = imageRoles();
   const base = stackProps();
   return { ...base, lifecycle: { ...base.lifecycle, roles: [
     { ...primary, claim: primaryClaim, releases: { r2: primary.releases.r2 }, previous: null,
