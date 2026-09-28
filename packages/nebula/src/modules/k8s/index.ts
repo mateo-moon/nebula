@@ -13,6 +13,9 @@ export type {
 export { CertManager } from "./cert-manager";
 export type { CertManagerConfig } from "./cert-manager";
 
+export { ClusterAutoscaler, clusterAutoscalerValues } from "./cluster-autoscaler";
+export type { ClusterAutoscalerConfig } from "./cluster-autoscaler";
+
 export { ActionsRunnerController } from "./actions-runner-controller";
 export type {
   ActionsRunnerControllerConfig,
