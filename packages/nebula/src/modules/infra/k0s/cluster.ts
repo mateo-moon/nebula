@@ -45,6 +45,21 @@ export interface K0sWorkerPoolAutoscaling {
   minSize: number;
   /** Most nodes. */
   maxSize: number;
+  /**
+   * What a node of this pool offers, for planning one from zero. CAPA fills
+   * cpu and memory on the machine template; the disk it does not, and a pod
+   * that requests ephemeral storage never fits a node planned without any
+   * (observed live: every runner pod "can't be scheduled ... NodeResourcesFit"
+   * against an otherwise correct pool). Give `ephemeralDisk` the allocatable
+   * disk, a little under the root volume.
+   */
+  capacity?: {
+    /** Allocatable ephemeral storage, e.g. "140Gi". */
+    ephemeralDisk?: string;
+    cpu?: string;
+    memory?: string;
+    maxPods?: number;
+  };
 }
 
 const AUTOSCALER_ANNOTATION = "cluster.x-k8s.io/cluster-api-autoscaler-node-group";
@@ -62,11 +77,16 @@ export function autoscalerAnnotations<M>(pool: K0sWorkerPool<M>): Record<string,
   }
   const labels = Object.entries(pool.nodeLabels ?? {}).map(([k, v]) => `${k}=${v}`);
   const taints = (pool.taints ?? []).map(t => `${t.key}${t.value !== undefined ? `=${t.value}` : ""}:${t.effect}`);
+  const capacity = scaling.capacity ?? {};
   return {
     [`${AUTOSCALER_ANNOTATION}-min-size`]: String(scaling.minSize),
     [`${AUTOSCALER_ANNOTATION}-max-size`]: String(scaling.maxSize),
     ...(labels.length ? { [`${CAPACITY_ANNOTATION}/labels`]: labels.join(",") } : {}),
     ...(taints.length ? { [`${CAPACITY_ANNOTATION}/taints`]: taints.join(",") } : {}),
+    ...(capacity.ephemeralDisk ? { [`${CAPACITY_ANNOTATION}/ephemeral-disk`]: capacity.ephemeralDisk } : {}),
+    ...(capacity.cpu ? { [`${CAPACITY_ANNOTATION}/cpu`]: capacity.cpu } : {}),
+    ...(capacity.memory ? { [`${CAPACITY_ANNOTATION}/memory`]: capacity.memory } : {}),
+    ...(capacity.maxPods !== undefined ? { [`${CAPACITY_ANNOTATION}/maxPods`]: String(capacity.maxPods) } : {}),
   };
 }
 
