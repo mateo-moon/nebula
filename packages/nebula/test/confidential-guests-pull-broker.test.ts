@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { AttestedPullBroker, pullBrokerPolicy, sha256Hex, type AttestedPullBrokerProps } from "../src/modules/k8s/confidential-guests";
+import {
+  AttestedPullBroker, pullBrokerPolicy, readConfidentialGuestAsset, sha256Hex, type AttestedPullBrokerProps,
+} from "../src/modules/k8s/confidential-guests";
 import { kindsAndNames, rawSynth, synthOf } from "./support/cdk8s-render";
 
 const digest = (n: string) => n.repeat(64);
@@ -82,6 +84,26 @@ const manifests = (policy: string, exposeAsResource: boolean) => {
   ];
 };
 
+// The opt-in modes, as edits of the hand-written manifests: the read-only
+// policy adds a ConfigMap projection at /state/kbs; the ephemeral issuer also
+// replaces the caller's init with the shipped one in the broker image, which
+// mounts only /state, and drops the credential mount it no longer needs.
+const optIn = (policy: string, exposeAsResource: boolean, ephemeral: boolean) => {
+  const objects: any[] = structuredClone(manifests(policy, exposeAsResource));
+  const pod = objects.at(-1).spec.template.spec;
+  const at = (list: any[], name: string) => list.findIndex(entry => entry.name === name) + 1;
+  const broker = pod.containers[0];
+  broker.volumeMounts.splice(at(broker.volumeMounts, "configuration"), 0, { name: "policy", mountPath: "/state/kbs", readOnly: true });
+  pod.volumes.splice(at(pod.volumes, "configuration"), 0, { name: "policy", configMap: { name: "pull-broker-configuration",
+    items: [{ key: "resource-policy.rego", path: "resource-policy.rego" }] } });
+  if (ephemeral) {
+    pod.initContainers = [{ name: "initialize-issuer", image: brokerImage, command: ["/bin/sh", "-c", readConfidentialGuestAsset("pull-broker-issuer.sh")],
+      securityContext: restricted, volumeMounts: [{ name: "state", mountPath: "/state" }] }];
+    pod.volumes = pod.volumes.filter((volume: any) => volume.name !== "registry");
+  }
+  return objects;
+};
+
 test("the 'equals' form renders byte-identically to the hand-written broker manifests", () => {
   const policy = policyFor(`ev.init_data == "${primary}"`);
   assert.equal(pullBrokerPolicy(["default", "registry", "pull"], { form: "equals", value: primary }), policy);
@@ -89,6 +111,51 @@ test("the 'equals' form renders byte-identically to the hand-written broker mani
   assert.equal(rendered.yaml, rawSynth(manifests(policy, false)).yaml);
   assert.deepEqual(kindsAndNames(rendered.objects), ["NetworkPolicy/ingress-boundary", "NetworkPolicy/pull-broker-from-guests",
     "ConfigMap/pull-broker-configuration", "Service/pull-broker", "Deployment/pull-broker"]);
+});
+
+const ephemeral = (change: Partial<AttestedPullBrokerProps> = {}) => props({
+  issuer: "ephemeral", initImage: undefined, initCommand: undefined, pullSecret: { name: "registry-pull", exposeAsResource: true }, ...change,
+});
+
+test("existing brokers render as before: the ephemeral issuer and the read-only policy are opt-in", () => {
+  const before = render(props()).yaml;
+  assert.equal(render(props({ policyReadOnly: false })).yaml, before);
+  assert.equal(render(props({ issuer: undefined, policyReadOnly: undefined })).yaml, before);
+});
+
+test("the ephemeral issuer runs the shipped init in the broker image and mounts the policy and credential read-only", () => {
+  const policy = policyFor(`ev.init_data == "${primary}"`);
+  const rendered = render(ephemeral());
+  assert.equal(rendered.yaml, rawSynth(optIn(policy, true, true)).yaml);
+  const pod = rendered.objects.at(-1).spec.template.spec;
+  const [init] = pod.initContainers;
+  assert.equal(init.image, pod.containers[0].image, "the init is the pinned broker image");
+  assert.deepEqual(init.command, ["/bin/sh", "-c", readConfidentialGuestAsset("pull-broker-issuer.sh")]);
+  assert.deepEqual(init.volumeMounts, [{ name: "state", mountPath: "/state" }], "the init sees neither the credential nor the policy");
+  assert.deepEqual(pod.volumes.filter((v: any) => v.secret).map((v: any) => v.name), ["registry-resource"],
+    "the credential is projected only as the broker's resource");
+  const mounts = Object.fromEntries(pod.containers[0].volumeMounts.map((m: any) => [m.mountPath, m.readOnly === true]));
+  assert.deepEqual(mounts, { "/state": false, "/configuration": true, "/state/kbs": true, "/state/repository": true });
+  assert.equal(render(ephemeral({ policyReadOnly: true })).yaml, rendered.yaml, "the ephemeral issuer implies the read-only policy");
+});
+
+test("the read-only policy can be taken with the caller's init too", () => {
+  const policy = policyFor(`ev.init_data == "${primary}"`);
+  assert.equal(render(props({ policyReadOnly: true })).yaml, rawSynth(optIn(policy, false, false)).yaml);
+});
+
+test("the issuer source is unambiguous and fails closed", () => {
+  const refusals: [string, AttestedPullBrokerProps, RegExp][] = [
+    ["unknown issuer", props({ issuer: "static" as any }), /issuer must be "ephemeral"/],
+    ["ephemeral with an init image", ephemeral({ initImage }), /initImage and initCommand must be omitted/],
+    ["ephemeral with an init command", ephemeral({ initCommand: ["python3", "/opt/tools/registry_init.py"] }), /initImage and initCommand must be omitted/],
+    ["ephemeral without the credential resource", ephemeral({ pullSecret: { name: "registry-pull", exposeAsResource: false } }), /exposeAsResource/],
+    ["ephemeral with a writable policy", ephemeral({ policyReadOnly: false }), /policyReadOnly/],
+    ["no init image", props({ initImage: undefined }), /initImage and initCommand are required/],
+    ["no init command", props({ initCommand: undefined }), /initImage and initCommand are required/],
+    ["policy flag", props({ policyReadOnly: "yes" as any }), /policyReadOnly must be a boolean/],
+  ];
+  for (const [label, value, error] of refusals) assert.throws(() => render(value), error, label);
 });
 
 test("the 'in' form admits exactly the listed init-data hashes, in order, and can expose the pull secret as a resource", () => {

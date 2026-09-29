@@ -50,6 +50,19 @@ broker's `measurement` admission (`{ form: "equals", value }` or
 `{ form: "in", values }` of 96-character lowercase hex launch digests); the
 stack passes `pullBroker.measurement` through unchanged.
 
+KBS signs its attestation tokens with an issuer it also trusts, which the
+broker keeps in its memory-backed `/state/issuer`. With `issuer: "ephemeral"`
+the broker image mints it itself before KBS starts: its openssl CLI makes a
+P-256 CA certificate (pathlen 0, 3650 days) under a temporary name and renames
+it into place. A restart of the Pod's containers keeps an existing pair only
+when the key matches the certificate and the certificate has not expired;
+without openssl, or when minting fails, the Pod does not start. The key never
+leaves the Pod and dies with it. This mode mounts the resource policy
+read-only at `/state/kbs` and needs `pullSecret.exposeAsResource`; the init
+sees neither the policy nor the credential. Without `issuer`, the caller's
+`initImage` and `initCommand` prepare `/state` as before (`policyReadOnly`
+mounts the policy read-only for them too).
+
 Everything else (controller images, policies, Services, log collection) is
 unmeasured host-side configuration and can change without a new release.
 

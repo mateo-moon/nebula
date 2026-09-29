@@ -239,8 +239,8 @@ export function confidentialGuestsExample(scope: Construct): ConfidentialGuestSt
       podLabels: { app: `${namespace}-pull-broker` },
       guestSelector: guestLabels,
       brokerImage: images.kbs,
-      initImage: images.tools,
-      initCommand: ["python3", "-m", "confidential_guests.registry_init"],
+      // The broker image mints its own token-signing issuer into memory at start.
+      issuer: "ephemeral",
       configToml: EXAMPLE_BROKER_CONFIG,
       resourcePath: ["default", "registry", "pull"],
       pullSecret: { name: pullSecret, exposeAsResource: true },

@@ -2,6 +2,7 @@ import { Construct } from "constructs";
 import {
   IntOrString, KubeConfigMap, KubeDeployment, KubeNetworkPolicy, KubeService, Quantity,
 } from "cdk8s-plus-33/lib/imports/k8s";
+import { readConfidentialGuestAsset } from "./assets";
 import { sha256Hex } from "./canonical";
 import {
   command, dnsLabel, dnsSubdomain, fail, image, integer, isPlainObject, knownFields, labelDomain, labels, pullSecrets, serviceName,
@@ -53,9 +54,27 @@ export interface AttestedPullBrokerProps {
   readonly nodeName: string;
   /** Digest-pinned KBS image; it runs `/usr/local/bin/kbs --config-file /configuration/config.toml`. */
   readonly brokerImage: string;
-  /** Digest-pinned image of the init container that prepares `/state` from the pull Secret mounted at `/registry`. */
-  readonly initImage: string;
-  readonly initCommand: readonly string[];
+  /**
+   * Where the broker's token-signing issuer comes from. Omitted, the caller's
+   * init (`initImage`, `initCommand`) prepares `/state` from the pull Secret
+   * mounted at `/registry`. `"ephemeral"`: the broker image itself mints a
+   * P-256 CA issuer with its openssl CLI into `/state/issuer` (`key.pem`,
+   * `cert.pem`) before KBS starts, keeps a matching unexpired pair across
+   * restarts of the Pod's containers, and fails closed without one. The key
+   * lives only in the Pod's memory-backed state and dies with the Pod. It
+   * takes the read-only policy and needs `pullSecret.exposeAsResource`; the
+   * init sees neither the credential nor the policy.
+   */
+  readonly issuer?: "ephemeral";
+  /** Digest-pinned image of the init container that prepares `/state` from the pull Secret mounted at `/registry`. Omitted with the ephemeral issuer. */
+  readonly initImage?: string;
+  readonly initCommand?: readonly string[];
+  /**
+   * Mount the resource policy read-only where KBS reads it
+   * (`/state/kbs/resource-policy.rego`), from the ConfigMap, instead of
+   * leaving it to the init. Default false; always on with the ephemeral issuer.
+   */
+  readonly policyReadOnly?: boolean;
   /**
    * KBS configuration. The broker's state is an in-memory `/state`
    * (keep issuer material and the resource store there) and the
@@ -73,9 +92,10 @@ export interface AttestedPullBrokerProps {
    */
   readonly measurement?: MeasurementAdmission;
   /**
-   * Secret with the registry credentials (`.dockerconfigjson`). It is always
-   * mounted for the init container; with `exposeAsResource` it is also
-   * mounted read-only into the broker's local resource store as the resource.
+   * Secret with the registry credentials (`.dockerconfigjson`). The caller's
+   * init container gets it at `/registry`; with `exposeAsResource` it is also
+   * mounted read-only into the broker's local resource store as the resource,
+   * which is the only way the ephemeral issuer's broker receives it.
    */
   readonly pullSecret: { readonly name: string; readonly exposeAsResource: boolean };
   /** Domain of the `<labelDomain>/config-sha256` annotation that rolls the broker when policy or configuration change. */
@@ -89,8 +109,8 @@ export interface AttestedPullBrokerProps {
 
 const WHERE = "AttestedPullBroker";
 const PROPS_FIELDS = [
-  "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "initImage",
-  "initCommand", "configToml", "resourcePath", "initData", "measurement", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
+  "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "issuer", "initImage",
+  "initCommand", "policyReadOnly", "configToml", "resourcePath", "initData", "measurement", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
 ];
 const HOST_DATA = /^[a-f0-9]{64}$/;
 const MEASUREMENT = /^[a-f0-9]{96}$/;
@@ -183,8 +203,18 @@ export class AttestedPullBroker extends Construct {
     const guestSelector = labels(WHERE, "guestSelector", props.guestSelector);
     const nodeName = dnsSubdomain(WHERE, "nodeName", props.nodeName);
     const brokerImage = image(WHERE, "brokerImage", props.brokerImage);
-    const initImage = image(WHERE, "initImage", props.initImage);
-    const initCommand = command(WHERE, "initCommand", props.initCommand);
+    if (props.issuer !== undefined && props.issuer !== "ephemeral") fail(WHERE, `issuer must be "ephemeral" when given, got ${JSON.stringify(props.issuer)}`);
+    const ephemeral = props.issuer === "ephemeral";
+    if (props.policyReadOnly !== undefined && typeof props.policyReadOnly !== "boolean") fail(WHERE, `policyReadOnly must be a boolean`);
+    if (ephemeral && props.policyReadOnly === false) fail(WHERE, `the ephemeral issuer reads the policy only read-only; omit policyReadOnly or set it true`);
+    const policyReadOnly = ephemeral || props.policyReadOnly === true;
+    const hasInit = props.initImage !== undefined || props.initCommand !== undefined;
+    if (ephemeral && hasInit) fail(WHERE, `initImage and initCommand must be omitted with the ephemeral issuer`);
+    if (!ephemeral && (props.initImage === undefined || props.initCommand === undefined)) {
+      fail(WHERE, `initImage and initCommand are required unless issuer is "ephemeral"`);
+    }
+    const initImage = ephemeral ? brokerImage : image(WHERE, "initImage", props.initImage);
+    const initCommand = ephemeral ? ["/bin/sh", "-c", readConfidentialGuestAsset("pull-broker-issuer.sh")] : command(WHERE, "initCommand", props.initCommand);
     if (typeof props.configToml !== "string" || props.configToml.length === 0) fail(WHERE, `configToml is required`);
     const resourcePath = validResourcePath(props.resourcePath);
     const secret = knownFields(WHERE, "pullSecret", props.pullSecret, ["name", "exposeAsResource"]);
@@ -192,6 +222,9 @@ export class AttestedPullBroker extends Construct {
       fail(WHERE, `pullSecret must be { name, exposeAsResource: boolean }`);
     }
     const secretName = dnsSubdomain(WHERE, "pullSecret.name", secret.name);
+    if (ephemeral && !secret.exposeAsResource) {
+      fail(WHERE, `the ephemeral issuer's init does not write the resource; set pullSecret.exposeAsResource`);
+    }
     const domain = labelDomain(WHERE, "labelDomain", props.labelDomain);
     const imagePullSecrets = pullSecrets(WHERE, props.imagePullSecrets);
     const port = integer(WHERE, "port", props.port ?? 8080, 1, 65535);
@@ -243,11 +276,11 @@ export class AttestedPullBroker extends Construct {
             automountServiceAccountToken: false,
             ...(imagePullSecrets ? { imagePullSecrets } : {}),
             initContainers: [{
-              name: "initialize-registry",
+              name: ephemeral ? "initialize-issuer" : "initialize-registry",
               image: initImage,
               command: [...initCommand],
               securityContext: restricted,
-              volumeMounts: [
+              volumeMounts: ephemeral ? [{ name: "state", mountPath: "/state" }] : [
                 { name: "state", mountPath: "/state" },
                 { name: "registry", mountPath: "/registry", readOnly: true },
                 { name: "configuration", mountPath: "/configuration", readOnly: true },
@@ -268,13 +301,16 @@ export class AttestedPullBroker extends Construct {
               volumeMounts: [
                 { name: "state", mountPath: "/state" },
                 { name: "configuration", mountPath: "/configuration", readOnly: true },
+                ...(policyReadOnly ? [{ name: "policy", mountPath: "/state/kbs", readOnly: true }] : []),
                 ...(exposed ? [{ name: "registry-resource", mountPath: "/state/repository", readOnly: true }] : []),
               ],
             }],
             volumes: [
               { name: "state", emptyDir: { medium: "Memory", sizeLimit: Quantity.fromString("64Mi") } },
-              { name: "registry", secret: { secretName, defaultMode: 0o400 } },
+              ...(ephemeral ? [] : [{ name: "registry", secret: { secretName, defaultMode: 0o400 } }]),
               { name: "configuration", configMap: { name: configMapName } },
+              ...(policyReadOnly ? [{ name: "policy", configMap: { name: configMapName,
+                items: [{ key: "resource-policy.rego", path: "resource-policy.rego" }] } }] : []),
               // The KBS local store keeps a resource in one file named by its
               // path with each "/" written as \x2F.
               ...(exposed ? [{ name: "registry-resource", secret: { secretName, defaultMode: 0o400,
