@@ -53,6 +53,7 @@ imports:
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_rolepolicyattachments.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_instanceprofiles.yaml
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_policies.yaml
+  - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/iam.aws.upbound.io_openidconnectproviders.yaml
   # AWS Provider CRDs - Route53 (DNS zone only; the `Record` kind is omitted as
   # external-dns manages records, and its generated class collides with TS's Record<>)
   - https://raw.githubusercontent.com/crossplane-contrib/provider-upjet-aws/v2.6.0/package/crds/route53.aws.upbound.io_zones.yaml

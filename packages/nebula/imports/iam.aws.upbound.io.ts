@@ -953,6 +953,489 @@ export enum InstanceProfileSpecInitProviderRoleSelectorPolicyResolve {
 
 
 /**
+ * OpenIDConnectProvider is the Schema for the OpenIDConnectProviders API. Provides an IAM OpenID Connect provider.
+ *
+ * @schema OpenIDConnectProvider
+ */
+export class OpenIdConnectProvider extends ApiObject {
+  /**
+   * Returns the apiVersion and kind for "OpenIDConnectProvider"
+   */
+  public static readonly GVK: GroupVersionKind = {
+    apiVersion: 'iam.aws.upbound.io/v1beta1',
+    kind: 'OpenIDConnectProvider',
+  }
+
+  /**
+   * Renders a Kubernetes manifest for "OpenIDConnectProvider".
+   *
+   * This can be used to inline resource manifests inside other objects (e.g. as templates).
+   *
+   * @param props initialization props
+   */
+  public static manifest(props: OpenIdConnectProviderProps): any {
+    return {
+      ...OpenIdConnectProvider.GVK,
+      ...toJson_OpenIdConnectProviderProps(props),
+    };
+  }
+
+  /**
+   * Defines a "OpenIDConnectProvider" API object
+   * @param scope the scope in which to define this object
+   * @param id a scope-local name for the object
+   * @param props initialization props
+   */
+  public constructor(scope: Construct, id: string, props: OpenIdConnectProviderProps) {
+    super(scope, id, {
+      ...OpenIdConnectProvider.GVK,
+      ...props,
+    });
+  }
+
+  /**
+   * Renders the object to Kubernetes JSON.
+   */
+  public override toJson(): any {
+    const resolved = super.toJson();
+
+    return {
+      ...OpenIdConnectProvider.GVK,
+      ...toJson_OpenIdConnectProviderProps(resolved),
+    };
+  }
+}
+
+/**
+ * OpenIDConnectProvider is the Schema for the OpenIDConnectProviders API. Provides an IAM OpenID Connect provider.
+ *
+ * @schema OpenIDConnectProvider
+ */
+export interface OpenIdConnectProviderProps {
+  /**
+   * @schema OpenIDConnectProvider#metadata
+   */
+  readonly metadata?: ApiObjectMetadata;
+
+  /**
+   * OpenIDConnectProviderSpec defines the desired state of OpenIDConnectProvider
+   *
+   * @schema OpenIDConnectProvider#spec
+   */
+  readonly spec: OpenIdConnectProviderSpec;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderProps' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderProps(obj: OpenIdConnectProviderProps | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'metadata': obj.metadata,
+    'spec': toJson_OpenIdConnectProviderSpec(obj.spec),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * OpenIDConnectProviderSpec defines the desired state of OpenIDConnectProvider
+ *
+ * @schema OpenIdConnectProviderSpec
+ */
+export interface OpenIdConnectProviderSpec {
+  /**
+   * DeletionPolicy specifies what will happen to the underlying external
+   * when this managed resource is deleted - either "Delete" or "Orphan" the
+   * external resource.
+   * This field is planned to be deprecated in favor of the ManagementPolicies
+   * field in a future release. Currently, both could be set independently and
+   * non-default values would be honored if the feature flag is enabled.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   *
+   * @schema OpenIdConnectProviderSpec#deletionPolicy
+   */
+  readonly deletionPolicy?: OpenIdConnectProviderSpecDeletionPolicy;
+
+  /**
+   * @schema OpenIdConnectProviderSpec#forProvider
+   */
+  readonly forProvider: OpenIdConnectProviderSpecForProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It will be honored
+   * unless the Management Policies feature flag is disabled.
+   * InitProvider holds the same fields as ForProvider, with the exception
+   * of Identifier and other resource reference fields. The fields that are
+   * in InitProvider are merged into ForProvider when the resource is created.
+   * The same fields are also added to the terraform ignore_changes hook, to
+   * avoid updating them after creation. This is useful for fields that are
+   * required on creation, but we do not desire to update them after creation,
+   * for example because of an external controller is managing them, like an
+   * autoscaler.
+   *
+   * @schema OpenIdConnectProviderSpec#initProvider
+   */
+  readonly initProvider?: OpenIdConnectProviderSpecInitProvider;
+
+  /**
+   * THIS IS A BETA FIELD. It is on by default but can be opted out
+   * through a Crossplane feature flag.
+   * ManagementPolicies specify the array of actions Crossplane is allowed to
+   * take on the managed and external resources.
+   * This field is planned to replace the DeletionPolicy field in a future
+   * release. Currently, both could be set independently and non-default
+   * values would be honored if the feature flag is enabled. If both are
+   * custom, the DeletionPolicy field will be ignored.
+   * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+   * and this one: https://github.com/crossplane/crossplane/blob/444267e84783136daa93568b364a5f01228cacbe/design/one-pager-ignore-changes.md
+   *
+   * @schema OpenIdConnectProviderSpec#managementPolicies
+   */
+  readonly managementPolicies?: OpenIdConnectProviderSpecManagementPolicies[];
+
+  /**
+   * ProviderConfigReference specifies how the provider that will be used to
+   * create, observe, update, and delete this managed resource should be
+   * configured.
+   *
+   * @schema OpenIdConnectProviderSpec#providerConfigRef
+   */
+  readonly providerConfigRef?: OpenIdConnectProviderSpecProviderConfigRef;
+
+  /**
+   * WriteConnectionSecretToReference specifies the namespace and name of a
+   * Secret to which any connection details for this managed resource should
+   * be written. Connection details frequently include the endpoint, username,
+   * and password required to connect to the managed resource.
+   *
+   * @schema OpenIdConnectProviderSpec#writeConnectionSecretToRef
+   */
+  readonly writeConnectionSecretToRef?: OpenIdConnectProviderSpecWriteConnectionSecretToRef;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderSpec' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderSpec(obj: OpenIdConnectProviderSpec | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'deletionPolicy': obj.deletionPolicy,
+    'forProvider': toJson_OpenIdConnectProviderSpecForProvider(obj.forProvider),
+    'initProvider': toJson_OpenIdConnectProviderSpecInitProvider(obj.initProvider),
+    'managementPolicies': obj.managementPolicies?.map(y => y),
+    'providerConfigRef': toJson_OpenIdConnectProviderSpecProviderConfigRef(obj.providerConfigRef),
+    'writeConnectionSecretToRef': toJson_OpenIdConnectProviderSpecWriteConnectionSecretToRef(obj.writeConnectionSecretToRef),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * DeletionPolicy specifies what will happen to the underlying external
+ * when this managed resource is deleted - either "Delete" or "Orphan" the
+ * external resource.
+ * This field is planned to be deprecated in favor of the ManagementPolicies
+ * field in a future release. Currently, both could be set independently and
+ * non-default values would be honored if the feature flag is enabled.
+ * See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+ *
+ * @schema OpenIdConnectProviderSpecDeletionPolicy
+ */
+export enum OpenIdConnectProviderSpecDeletionPolicy {
+  /** Orphan */
+  ORPHAN = "Orphan",
+  /** Delete */
+  DELETE = "Delete",
+}
+
+/**
+ * @schema OpenIdConnectProviderSpecForProvider
+ */
+export interface OpenIdConnectProviderSpecForProvider {
+  /**
+   * List of client IDs (audiences) that identify the application registered with the OpenID Connect provider. This is the value sent as the client_id parameter in OAuth requests.
+   *
+   * @schema OpenIdConnectProviderSpecForProvider#clientIdList
+   */
+  readonly clientIdList?: string[];
+
+  /**
+   * Key-value map of resource tags.
+   *
+   * @schema OpenIdConnectProviderSpecForProvider#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * List of server certificate thumbprints for the OpenID Connect (OIDC) identity provider's server certificate(s). For certain OIDC identity providers (e.g., Auth0, GitHub, GitLab, Google, or those using an Amazon S3-hosted JWKS endpoint), AWS relies on its own library of trusted root certificate authorities (CAs) for validation instead of using any configured thumbprints. In these cases, any configured thumbprint_list is retained in the configuration but not used for verification. For other IdPs, if no thumbprint_list is provided, IAM automatically retrieves and uses the top intermediate CA thumbprint from the OIDC IdP server certificate. Instead, it continues using the original thumbprint list from the initial configuration. This differs from the behavior when creating an aws_iam_openid_connect_provider without a thumbprint_list.
+   *
+   * @schema OpenIdConnectProviderSpecForProvider#thumbprintList
+   */
+  readonly thumbprintList?: string[];
+
+  /**
+   * URL of the identity provider, corresponding to the iss claim.
+   *
+   * @schema OpenIdConnectProviderSpecForProvider#url
+   */
+  readonly url?: string;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderSpecForProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderSpecForProvider(obj: OpenIdConnectProviderSpecForProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clientIdList': obj.clientIdList?.map(y => y),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'thumbprintList': obj.thumbprintList?.map(y => y),
+    'url': obj.url,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * THIS IS A BETA FIELD. It will be honored
+ * unless the Management Policies feature flag is disabled.
+ * InitProvider holds the same fields as ForProvider, with the exception
+ * of Identifier and other resource reference fields. The fields that are
+ * in InitProvider are merged into ForProvider when the resource is created.
+ * The same fields are also added to the terraform ignore_changes hook, to
+ * avoid updating them after creation. This is useful for fields that are
+ * required on creation, but we do not desire to update them after creation,
+ * for example because of an external controller is managing them, like an
+ * autoscaler.
+ *
+ * @schema OpenIdConnectProviderSpecInitProvider
+ */
+export interface OpenIdConnectProviderSpecInitProvider {
+  /**
+   * List of client IDs (audiences) that identify the application registered with the OpenID Connect provider. This is the value sent as the client_id parameter in OAuth requests.
+   *
+   * @schema OpenIdConnectProviderSpecInitProvider#clientIdList
+   */
+  readonly clientIdList?: string[];
+
+  /**
+   * Key-value map of resource tags.
+   *
+   * @schema OpenIdConnectProviderSpecInitProvider#tags
+   */
+  readonly tags?: { [key: string]: string };
+
+  /**
+   * List of server certificate thumbprints for the OpenID Connect (OIDC) identity provider's server certificate(s). For certain OIDC identity providers (e.g., Auth0, GitHub, GitLab, Google, or those using an Amazon S3-hosted JWKS endpoint), AWS relies on its own library of trusted root certificate authorities (CAs) for validation instead of using any configured thumbprints. In these cases, any configured thumbprint_list is retained in the configuration but not used for verification. For other IdPs, if no thumbprint_list is provided, IAM automatically retrieves and uses the top intermediate CA thumbprint from the OIDC IdP server certificate. Instead, it continues using the original thumbprint list from the initial configuration. This differs from the behavior when creating an aws_iam_openid_connect_provider without a thumbprint_list.
+   *
+   * @schema OpenIdConnectProviderSpecInitProvider#thumbprintList
+   */
+  readonly thumbprintList?: string[];
+
+  /**
+   * URL of the identity provider, corresponding to the iss claim.
+   *
+   * @schema OpenIdConnectProviderSpecInitProvider#url
+   */
+  readonly url?: string;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderSpecInitProvider' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderSpecInitProvider(obj: OpenIdConnectProviderSpecInitProvider | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'clientIdList': obj.clientIdList?.map(y => y),
+    'tags': ((obj.tags) === undefined) ? undefined : (Object.entries(obj.tags).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {})),
+    'thumbprintList': obj.thumbprintList?.map(y => y),
+    'url': obj.url,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * A ManagementAction represents an action that the Crossplane controllers
+ * can take on an external resource.
+ *
+ * @schema OpenIdConnectProviderSpecManagementPolicies
+ */
+export enum OpenIdConnectProviderSpecManagementPolicies {
+  /** Observe */
+  OBSERVE = "Observe",
+  /** Create */
+  CREATE = "Create",
+  /** Update */
+  UPDATE = "Update",
+  /** Delete */
+  DELETE = "Delete",
+  /** LateInitialize */
+  LATE_INITIALIZE = "LateInitialize",
+  /** * */
+  VALUE_ASTERISK = "*",
+}
+
+/**
+ * ProviderConfigReference specifies how the provider that will be used to
+ * create, observe, update, and delete this managed resource should be
+ * configured.
+ *
+ * @schema OpenIdConnectProviderSpecProviderConfigRef
+ */
+export interface OpenIdConnectProviderSpecProviderConfigRef {
+  /**
+   * Name of the referenced object.
+   *
+   * @schema OpenIdConnectProviderSpecProviderConfigRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Policies for referencing.
+   *
+   * @schema OpenIdConnectProviderSpecProviderConfigRef#policy
+   */
+  readonly policy?: OpenIdConnectProviderSpecProviderConfigRefPolicy;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderSpecProviderConfigRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderSpecProviderConfigRef(obj: OpenIdConnectProviderSpecProviderConfigRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'policy': toJson_OpenIdConnectProviderSpecProviderConfigRefPolicy(obj.policy),
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * WriteConnectionSecretToReference specifies the namespace and name of a
+ * Secret to which any connection details for this managed resource should
+ * be written. Connection details frequently include the endpoint, username,
+ * and password required to connect to the managed resource.
+ *
+ * @schema OpenIdConnectProviderSpecWriteConnectionSecretToRef
+ */
+export interface OpenIdConnectProviderSpecWriteConnectionSecretToRef {
+  /**
+   * Name of the secret.
+   *
+   * @schema OpenIdConnectProviderSpecWriteConnectionSecretToRef#name
+   */
+  readonly name: string;
+
+  /**
+   * Namespace of the secret.
+   *
+   * @schema OpenIdConnectProviderSpecWriteConnectionSecretToRef#namespace
+   */
+  readonly namespace: string;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderSpecWriteConnectionSecretToRef' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderSpecWriteConnectionSecretToRef(obj: OpenIdConnectProviderSpecWriteConnectionSecretToRef | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'name': obj.name,
+    'namespace': obj.namespace,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Policies for referencing.
+ *
+ * @schema OpenIdConnectProviderSpecProviderConfigRefPolicy
+ */
+export interface OpenIdConnectProviderSpecProviderConfigRefPolicy {
+  /**
+   * Resolution specifies whether resolution of this reference is required.
+   * The default is 'Required', which means the reconcile will fail if the
+   * reference cannot be resolved. 'Optional' means this reference will be
+   * a no-op if it cannot be resolved.
+   *
+   * @schema OpenIdConnectProviderSpecProviderConfigRefPolicy#resolution
+   */
+  readonly resolution?: OpenIdConnectProviderSpecProviderConfigRefPolicyResolution;
+
+  /**
+   * Resolve specifies when this reference should be resolved. The default
+   * is 'IfNotPresent', which will attempt to resolve the reference only when
+   * the corresponding field is not present. Use 'Always' to resolve the
+   * reference on every reconcile.
+   *
+   * @schema OpenIdConnectProviderSpecProviderConfigRefPolicy#resolve
+   */
+  readonly resolve?: OpenIdConnectProviderSpecProviderConfigRefPolicyResolve;
+}
+
+/**
+ * Converts an object of type 'OpenIdConnectProviderSpecProviderConfigRefPolicy' to JSON representation.
+ */
+/* eslint-disable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+export function toJson_OpenIdConnectProviderSpecProviderConfigRefPolicy(obj: OpenIdConnectProviderSpecProviderConfigRefPolicy | undefined): Record<string, any> | undefined {
+  if (obj === undefined) { return undefined; }
+  const result = {
+    'resolution': obj.resolution,
+    'resolve': obj.resolve,
+  };
+  // filter undefined values
+  return Object.entries(result).reduce((r, i) => (i[1] === undefined) ? r : ({ ...r, [i[0]]: i[1] }), {});
+}
+/* eslint-enable max-len, @stylistic/max-len, quote-props, @stylistic/quote-props */
+
+/**
+ * Resolution specifies whether resolution of this reference is required.
+ * The default is 'Required', which means the reconcile will fail if the
+ * reference cannot be resolved. 'Optional' means this reference will be
+ * a no-op if it cannot be resolved.
+ *
+ * @schema OpenIdConnectProviderSpecProviderConfigRefPolicyResolution
+ */
+export enum OpenIdConnectProviderSpecProviderConfigRefPolicyResolution {
+  /** Required */
+  REQUIRED = "Required",
+  /** Optional */
+  OPTIONAL = "Optional",
+}
+
+/**
+ * Resolve specifies when this reference should be resolved. The default
+ * is 'IfNotPresent', which will attempt to resolve the reference only when
+ * the corresponding field is not present. Use 'Always' to resolve the
+ * reference on every reconcile.
+ *
+ * @schema OpenIdConnectProviderSpecProviderConfigRefPolicyResolve
+ */
+export enum OpenIdConnectProviderSpecProviderConfigRefPolicyResolve {
+  /** Always */
+  ALWAYS = "Always",
+  /** IfNotPresent */
+  IF_NOT_PRESENT = "IfNotPresent",
+}
+
+
+/**
  * Policy is the Schema for the Policys API. Provides an IAM policy.
  *
  * @schema Policy
