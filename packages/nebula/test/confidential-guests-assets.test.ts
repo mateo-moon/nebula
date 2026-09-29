@@ -61,7 +61,7 @@ test("the default provisioning template is read only when a script is rendered",
 });
 
 test("asset names are a closed set and resolve inside the module", () => {
-  for (const name of ["wire-profile.schema.json", "provision.sh"] as const) {
+  for (const name of ["wire-profile.schema.json", "provision.sh", "pull-broker-issuer.sh"] as const) {
     const url = confidentialGuestAssetUrl(name);
     assert.equal(url.protocol, "file:");
     assert.equal(fileURLToPath(url), join(moduleDir, "assets", name));
