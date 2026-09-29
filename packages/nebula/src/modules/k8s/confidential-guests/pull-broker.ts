@@ -92,9 +92,10 @@ export interface AttestedPullBrokerProps {
    */
   readonly measurement?: MeasurementAdmission;
   /**
-   * Secret with the registry credentials (`.dockerconfigjson`). It is always
-   * mounted for the init container; with `exposeAsResource` it is also
-   * mounted read-only into the broker's local resource store as the resource.
+   * Secret with the registry credentials (`.dockerconfigjson`). The caller's
+   * init container gets it at `/registry`; with `exposeAsResource` it is also
+   * mounted read-only into the broker's local resource store as the resource,
+   * which is the only way the ephemeral issuer's broker receives it.
    */
   readonly pullSecret: { readonly name: string; readonly exposeAsResource: boolean };
   /** Domain of the `<labelDomain>/config-sha256` annotation that rolls the broker when policy or configuration change. */
