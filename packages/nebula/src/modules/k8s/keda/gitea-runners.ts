@@ -51,6 +51,7 @@ import {
   ScaledJobSpecJobTargetRefTemplateSpecContainersResourcesLimits as Limit,
   ScaledJobSpecJobTargetRefTemplateSpecContainersResourcesRequests as Request,
   ScaledJobSpecRolloutStrategy,
+  ScaledJobSpecScalingStrategyMultipleScalersCalculation,
   ScaledJobSpecScalingStrategyStrategy,
   TriggerAuthentication,
   type ScaledJobSpec,
@@ -71,6 +72,14 @@ export interface GiteaRunnerPool {
   registrationToken: string;
   /** act_runner labels, e.g. `self-hosted:docker://catthehacker/ubuntu:act-22.04,size-l:docker://...`. */
   labels: string;
+  /**
+   * Count only the queued jobs whose `runs-on` names one of these labels
+   * (default: every queued job of the repository). Set it when several pools
+   * serve one repository, or a runner would start for a job it cannot take.
+   * Name labels that never occur together on one job, which would be counted
+   * once per label. The first {@link QUEUE_PAGE} queued jobs are read.
+   */
+  queueLabels?: string[];
   /** Most Jobs at once (default 4). */
   maxJobs?: number;
   /** act_runner config.yaml contents, when the defaults will not do. */
@@ -109,9 +118,18 @@ const DEFAULT_STORAGE: Required<EphemeralStorage> = { request: "10Gi", limit: "2
 const DEFAULT_RESOURCES = { requests: { cpu: "1", memory: "2Gi" }, limits: { cpu: "6", memory: "12Gi" } };
 const SAFE_TO_EVICT = "cluster-autoscaler.kubernetes.io/safe-to-evict";
 
+/** Most jobs Gitea returns in one page. */
+export const QUEUE_PAGE = 50;
+
 /** The queued-jobs URL a pool's trigger polls. */
-export function queuedJobsUrl(instanceUrl: string, repository: string): string {
-  return `${instanceUrl.replace(/\/$/, "")}/api/v1/repos/${repository}/actions/jobs?status=queued&limit=1`;
+export function queuedJobsUrl(instanceUrl: string, repository: string, limit = 1): string {
+  return `${instanceUrl.replace(/\/$/, "")}/api/v1/repos/${repository}/actions/jobs?status=queued&limit=${limit}`;
+}
+
+/** Where the number of listed jobs naming `label` is in the response (a GJSON path). */
+export function queuedJobsWithLabel(label: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(label)) throw new Error(`queueLabels: "${label}" is not a runner label name`);
+  return `jobs.#(labels.#(=="${label}"))#|#`;
 }
 
 export interface ScaledJobNames {
@@ -132,6 +150,21 @@ export function scaledJobSpec(
 ): ScaledJobSpec {
   const storage = pool.storage ?? DEFAULT_STORAGE;
   const resources = pool.resources ?? DEFAULT_RESOURCES;
+  const queueLabels = pool.queueLabels ?? [];
+  const trigger = (valueLocation: string, limit: number) => ({
+    type: "metrics-api",
+    metadata: {
+      url: queuedJobsUrl(config.instanceUrl, pool.repository, limit),
+      valueLocation,
+      targetValue: "1",
+      activationTargetValue: "0",
+      format: "json",
+      authMode: "apiKey",
+      method: "header",
+      keyParamName: "Authorization",
+    },
+    authenticationRef: { name: names.authentication },
+  });
   return {
     pollingInterval: config.pollingInterval ?? 10,
     minReplicaCount: 0,
@@ -139,27 +172,17 @@ export function scaledJobSpec(
     successfulJobsHistoryLimit: 3,
     failedJobsHistoryLimit: 5,
     // One Job per queued job, minus the Jobs already running.
-    scalingStrategy: { strategy: ScaledJobSpecScalingStrategyStrategy.DEFAULT },
+    scalingStrategy: {
+      strategy: ScaledJobSpecScalingStrategyStrategy.DEFAULT,
+      ...(queueLabels.length > 1 ? { multipleScalersCalculation: ScaledJobSpecScalingStrategyMultipleScalersCalculation.SUM } : {}),
+    },
     // A change to this spec leaves running Jobs alone (KEDA's default deletes
     // them, which fails the job in flight and, for a runner that never took
     // one, leaves a registration Gitea never deletes).
     rollout: { strategy: ScaledJobSpecRolloutStrategy.GRADUAL },
-    triggers: [
-      {
-        type: "metrics-api",
-        metadata: {
-          url: queuedJobsUrl(config.instanceUrl, pool.repository),
-          valueLocation: "total_count",
-          targetValue: "1",
-          activationTargetValue: "0",
-          format: "json",
-          authMode: "apiKey",
-          method: "header",
-          keyParamName: "Authorization",
-        },
-        authenticationRef: { name: names.authentication },
-      },
-    ],
+    triggers: queueLabels.length
+      ? queueLabels.map(label => trigger(queuedJobsWithLabel(label), QUEUE_PAGE))
+      : [trigger("total_count", 1)],
     jobTargetRef: {
       // An ephemeral runner takes one job and exits; a failed pod is not retried, the queue re-scales instead.
       backoffLimit: 0,

@@ -6,6 +6,7 @@ import {
   DOCKER_VOLUME,
   GiteaEphemeralRunners,
   queuedJobsUrl,
+  queuedJobsWithLabel,
   scaledJobSpec,
   type GiteaRunnerPool,
 } from "../src/modules/k8s/keda/gitea-runners";
@@ -36,6 +37,23 @@ test("the trigger polls the repository's queued jobs with the API token as the A
   assert.equal(spec.pollingInterval, 10);
   assert.deepEqual(spec.scalingStrategy, { strategy: "default" });
   assert.deepEqual(spec.rollout, { strategy: "gradual" });
+});
+
+test("a pool with queue labels counts only the queued jobs that name one of them", () => {
+  const one = scaledJobSpec("arm64", { ...pool, queueLabels: ["ubuntu-latest"] }, instance, names);
+  assert.equal(one.triggers.length, 1);
+  assert.equal(one.triggers[0].metadata.url,
+    "https://git.example.test/api/v1/repos/platform/infra/actions/jobs?status=queued&limit=50");
+  assert.equal(one.triggers[0].metadata.valueLocation, 'jobs.#(labels.#(=="ubuntu-latest"))#|#');
+  assert.deepEqual(one.triggers[0].authenticationRef, { name: "runners-gitea-api" });
+  assert.deepEqual(one.scalingStrategy, { strategy: "default" });
+
+  const two = scaledJobSpec("arm64", { ...pool, queueLabels: ["ubuntu-latest", "ubuntu-22.04"] }, instance, names);
+  assert.deepEqual(two.triggers.map(t => t.metadata.valueLocation),
+    ['jobs.#(labels.#(=="ubuntu-latest"))#|#', 'jobs.#(labels.#(=="ubuntu-22.04"))#|#']);
+  assert.deepEqual(two.scalingStrategy, { strategy: "default", multipleScalersCalculation: "sum" });
+
+  assert.throws(() => queuedJobsWithLabel('a"b'), /not a runner label name/);
 });
 
 test("each Job is one ephemeral, once-only act_runner with a counted docker store that refuses eviction", () => {
