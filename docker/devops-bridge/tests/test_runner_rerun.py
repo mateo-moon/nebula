@@ -49,6 +49,15 @@ class Rules(unittest.TestCase):
         false_condition["status"]["conditions"].append({"type": "DisruptionTarget", "status": "False", "reason": "x"})
         self.assertIsNone(disruption_reason(false_condition))
 
+    def test_a_pod_evicted_for_exceeding_its_own_limit_is_the_jobs_doing(self):
+        own = pod(reason="TerminationByKubelet")
+        own["status"].update(reason="Evicted", message="Pod ephemeral local storage usage exceeds the total limit of containers 25Gi.")
+        self.assertIsNone(disruption_reason(own))
+        self.assertFalse(lost_with_node(own, None))
+        pressure = pod(reason="TerminationByKubelet")
+        pressure["status"].update(reason="Evicted", message="The node was low on resource: ephemeral-storage.")
+        self.assertEqual(disruption_reason(pressure), "TerminationByKubelet")
+
     def test_a_running_pod_deleted_on_a_ready_node_is_not_a_loss(self):
         self.assertFalse(lost_with_node(pod(), True))
         self.assertTrue(lost_with_node(pod(), False))

@@ -17,8 +17,16 @@ RERUN_JOB = "rerun-job"
 RERUN_FAILED = "rerun-failed"
 
 
+def over_its_own_limit(pod: dict) -> bool:
+    """Evicted by the kubelet for exceeding a limit of the pod itself: the job's doing, and a rerun would repeat it."""
+    status = pod.get("status") or {}
+    return status.get("reason") == "Evicted" and "exceed" in (status.get("message") or "").lower()
+
+
 def disruption_reason(pod: dict) -> str | None:
     """Why Kubernetes took the pod away (eviction, taint manager, pod GC, kubelet), if it did."""
+    if over_its_own_limit(pod):
+        return None
     for condition in (pod.get("status") or {}).get("conditions") or []:
         if condition.get("type") == DISRUPTION_CONDITION and condition.get("status") == "True":
             return condition.get("reason") or "Disrupted"
@@ -31,7 +39,7 @@ def lost_with_node(pod: dict, node_ready: bool | None) -> bool:
     Covers a deletion that carries no disruption condition. A runner removed
     while idle, or by hand, sits on a ready node and is not a loss.
     """
-    return (pod.get("status") or {}).get("phase") == "Running" and node_ready is not True
+    return (pod.get("status") or {}).get("phase") == "Running" and node_ready is not True and not over_its_own_limit(pod)
 
 
 def node_is_ready(node: dict | None) -> bool | None:

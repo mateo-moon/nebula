@@ -9,7 +9,8 @@ This controller watches the runner pods, and when Kubernetes takes one away
 on a node that is gone or not ready) it notes the job the runner held. Once
 the run has finished it asks for that job to run again, unless the run has
 already started another attempt or reached the last one allowed. A job that
-failed on its own is never rerun: its runner pod ended, it was not taken.
+failed on its own is never rerun: its runner pod ended, it was not taken. Nor
+is one whose pod the kubelet evicted for exceeding the pod's own limit.
 
 Which job a runner holds:
   - Actions Runner Controller: the EphemeralRunner's status names the
