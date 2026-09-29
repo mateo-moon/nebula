@@ -385,14 +385,24 @@ const PUBLISHES = new RegExp([
 const publishingJobs = (jobs) => [...jobs].filter(([, text]) => PUBLISHES.test(text)).map(([n]) => n);
 
 const RELEASE_VERSION = String.raw`^[0-9]+\.[0-9]+\.[0-9]+$`;
+const MAIN_ONLY = "\n    if: github.ref == 'refs/heads/main'\n";
+// The on: block of a workflow, as the text between its header and the next top-level key.
+const triggersOf = (workflow) => workflow.match(/\n["']?on["']?:[^\n]*\n((?:[ \t#][^\n]*\n|\n)*)/)?.[1] ?? "";
 const imageWorkflowViolations = (workflow, { context, path }) => {
   const v = [];
   const check = (ok, what) => { if (!ok) v.push(what); };
   check(workflow.includes(`\n      - .github/workflows/${path}\n`), "edits to the workflow re-run it");
+  const triggers = triggersOf(workflow);
+  const events = [...triggers.matchAll(/^ {2}["']?([^\s"':#]+)["']?:/gm)].map((m) => m[1]);
+  check(events.length > 0 && events.every((e) => e === "push" || e === "workflow_dispatch"),
+    "the workflow runs only on push and workflow_dispatch");
+  check(/\n  push:\n    branches: \[main\]\n/.test(`\n${triggers}`) && !/\b(?:tags|branches-ignore|tags-ignore)\s*:/.test(triggers),
+    "a push publishes only from main");
   const jobs = jobsOf(workflow);
   const guard = jobs.get("guard");
   if (!guard) return [...v, "a guard job exists"];
-  check(!/continue-on-error|\n\s+if:/.test(guard), "the guard cannot be skipped or soft-fail");
+  check(guard.includes(MAIN_ONLY), "the guard, and so every job that needs it, runs only on main");
+  check(!/continue-on-error|\n\s+if:/.test(guard.replace(MAIN_ONLY, "\n")), "the guard cannot be skipped off main or soft-fail");
   check(guard.includes(`\n        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs ${context}\n`),
     "the guard scans the build context without the repository owner exemption");
   const publishing = publishingJobs(jobs);
@@ -447,10 +457,12 @@ test("seeded workflow mutations that would publish unscanned content are caught"
     assert.ok(real.includes(from), `mutation anchor: ${from}`);
     return real.replace(from, to);
   };
-  const guardCheckout = "  guard:\n    name: Publication guard (build context)\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    permissions:\n      contents: read\n";
+  const guardCheckout = "  guard:\n    name: Publication guard (build context)\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    permissions:\n      contents: read\n";
+  const buildCheckout = "      packages: write\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n";
+  const buildPush = "      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2\n";
   const mutations = {
     "guard checks out another ref": edit("        with:\n          persist-credentials: false\n", "        with:\n          persist-credentials: false\n          ref: main\n"),
-    "build checks out another ref": edit("      - uses: actions/checkout@v4\n", "      - uses: actions/checkout@v4\n        with:\n          ref: main\n"),
+    "build checks out another ref": edit(buildCheckout, `${buildCheckout}          ref: main\n`),
     "Dockerfile outside the context": edit("          context: docker/nebula-cmp\n", "          context: docker/nebula-cmp\n          file: Dockerfile\n"),
     "Dockerfile escapes the context": edit("          context: docker/nebula-cmp\n", "          context: docker/nebula-cmp\n          file: docker/nebula-cmp/../../Dockerfile\n"),
     "extra build context": edit("          context: docker/nebula-cmp\n", "          context: docker/nebula-cmp\n          build-contexts: extra=.\n"),
@@ -466,8 +478,16 @@ test("seeded workflow mutations that would publish unscanned content are caught"
     "unvalidated value exported": edit('echo "vals_version=$VALS_VERSION"', 'echo "vals_version=${{ inputs.vals_version }}"'),
     "version left out of validation": edit('for v in "$HELM_VERSION" "$VALS_VERSION"; do', 'for v in "$HELM_VERSION"; do'),
     "second build without context": edit("          provenance: false\n", "          provenance: false\n      - uses: docker/build-push-action@v6\n        with:\n          push: true\n"),
-    "context rewritten before build": edit("      - uses: docker/build-push-action@v6\n", "      - run: echo x > docker/nebula-cmp/extra\n      - uses: docker/build-push-action@v6\n"),
+    "context rewritten before build": edit(buildPush, `      - run: echo x > docker/nebula-cmp/extra\n${buildPush}`),
     "sbom published": edit("          provenance: false\n", "          provenance: false\n          sbom: true\n"),
+    "guard runs off main": edit(MAIN_ONLY, "\n"),
+    "guard gate widened": edit(MAIN_ONLY, "\n    if: startsWith(github.ref, 'refs/heads/')\n"),
+    "guard gate made step-level": edit(MAIN_ONLY, "\n").replace("      - name: Scan the image build context\n", `      - name: Scan the image build context\n${MAIN_ONLY.slice(1).replace("    if", "        if")}`),
+    "build gated on its own": edit("    needs: guard\n", `    needs: guard${MAIN_ONLY}`),
+    "feature branches publish": edit("    branches: [main]\n", '    branches: [main, "feat/**"]\n'),
+    "tags publish": edit("    branches: [main]\n", "    branches: [main]\n    tags: [\"v*\"]\n"),
+    "pull request trigger": edit("  workflow_dispatch:\n", "  pull_request_target:\n  workflow_dispatch:\n"),
+    "workflow_run trigger": edit("  workflow_dispatch:\n", "  workflow_run:\n    workflows: [x]\n  workflow_dispatch:\n"),
   };
   for (const [what, mutated] of Object.entries(mutations)) {
     assert.notDeepEqual(imageWorkflowViolations(mutated, { context, path }), [], what);
@@ -509,4 +529,23 @@ test("the image build contexts pass without the repository owner exemption", () 
     const run = spawnSync(process.execPath, [GUARD, "--root", join(WORKFLOWS, "..", ".."), context], { encoding: "utf8", env });
     assert.equal(run.status, 0, `${context}: ${run.stdout}${run.stderr}`);
   }
+});
+
+// Tags and branches can be moved; only a full commit SHA names fixed code.
+const unpinnedActions = (workflow) => [...workflow.matchAll(/\n\s+(?:-\s+)?uses:\s*["']?([^\s"'#]+)["']?[^\S\n]*(#[^\n]*)?/g)]
+  .filter(([, ref, comment]) => !ref.startsWith("./") && !(/^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/.test(ref) && /^# v\d/.test(comment ?? "")))
+  .map(([, ref]) => ref);
+
+test("every workflow pins each action to a full commit SHA with its version noted", () => {
+  for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
+    assert.deepEqual(unpinnedActions(readFileSync(join(WORKFLOWS, file), "utf8")), [], file);
+  }
+  const pinned = "      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0\n";
+  assert.deepEqual(unpinnedActions(`\n${pinned}`), []);
+  assert.deepEqual(unpinnedActions("\n      - uses: ./.github/actions/local\n"), []);
+  for (const ref of ["docker/login-action@v3", "docker/login-action@main", "docker/login-action@c94ce9fb4685",
+    "docker/login-action@C94CE9FB468520275223C153574B00DF6FE4BCC9", "docker://alpine:3"]) {
+    assert.deepEqual(unpinnedActions(`\n      - uses: ${ref} # v3.7.0\n`), [ref], ref);
+  }
+  assert.deepEqual(unpinnedActions(`\n${pinned.replace(" # v3.7.0", "")}`), ["docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9"]);
 });
