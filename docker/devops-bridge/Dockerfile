@@ -4,6 +4,7 @@
 #   k8s_watch:      python -u /app/k8s_watch/main.py
 #   alert_bridge:   uvicorn alert_bridge.main:app --host 0.0.0.0 --port 8080
 #   telegram_bot:   python -u /app/telegram_bot/main.py
+#   runner_rerun:   python -u -m runner_rerun.main
 FROM python:3.12.13-slim
 
 WORKDIR /app
@@ -27,6 +28,8 @@ COPY github_bridge/ ./github_bridge/
 COPY matrix_bridge/ ./matrix_bridge/
 # Cluster-info MCP (#4):
 COPY cluster_info/ ./cluster_info/
+# Rerun of CI jobs lost with their runner:
+COPY runner_rerun/ ./runner_rerun/
 
 # Non-root (M10): the bridges don't need root; run as a dedicated uid.
 RUN useradd -r -u 10001 -m app && chown -R app /app
