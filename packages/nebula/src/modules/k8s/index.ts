@@ -24,6 +24,8 @@ export type { ClusterAutoscalerConfig } from "./cluster-autoscaler";
 export { ActionsRunnerController } from "./actions-runner-controller";
 export { RegistryMirror, mirrorEndpoint } from "./registry-mirror";
 export type { RegistryMirrorConfig } from "./registry-mirror";
+export { RunnerJobRerun, runnerRerunSettings } from "./runner-rerun";
+export type { RunnerJobRerunConfig, RunnerJobRerunGitea } from "./runner-rerun";
 export type {
   ActionsRunnerControllerConfig,
   RunnerScaleSetConfig,
