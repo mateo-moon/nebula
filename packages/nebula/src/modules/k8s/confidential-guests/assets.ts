@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs";
 
 /** Files shipped in this module's assets/ directory. */
-export type ConfidentialGuestAsset = "wire-profile.schema.json" | "provision.sh" | "pull-broker-issuer.sh";
+export type ConfidentialGuestAsset = "wire-profile.schema.json" | "provision.sh" | "pull-broker-issuer.sh"
+  | "storage-controls.rego" | "guest-pull.rego" | "required-env.rego" | "volume-transport.rego" | "native-peer-controls.rego";
 
-const ASSETS: ReadonlySet<string> = new Set<ConfidentialGuestAsset>(["wire-profile.schema.json", "provision.sh", "pull-broker-issuer.sh"]);
+const ASSETS: ReadonlySet<string> = new Set<ConfidentialGuestAsset>([
+  "wire-profile.schema.json", "provision.sh", "pull-broker-issuer.sh", "storage-controls.rego",
+  "guest-pull.rego", "required-env.rego", "volume-transport.rego", "native-peer-controls.rego",
+]);
 
 /**
  * URL of a shipped asset. Assets are resolved and read only inside functions,
