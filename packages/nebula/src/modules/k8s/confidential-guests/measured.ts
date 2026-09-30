@@ -64,7 +64,13 @@ function gzipHeaderLength(bytes: Buffer): number {
  * @throws Error when the value is not canonical base64 of one gzip member.
  */
 export function initDataSha256(ccInitData: string): string {
+  return sha256Hex(initDataDocument(ccInitData));
+}
+
+/** Decode the single bounded gzip member shared by measurement and policy tooling. */
+export function initDataDocument(ccInitData: string): Buffer {
   if (typeof ccInitData !== "string" || ccInitData.length === 0) throw new Error("init-data: expected a non-empty string");
+  if (ccInitData.length > MAX_INIT_DATA * 2) throw new Error("init-data: compressed input is too large");
   const bytes = Buffer.from(ccInitData, "base64");
   if (bytes.toString("base64") !== ccInitData) throw new Error("init-data: not canonical base64 (a re-encode differs)");
   let document: Buffer;
@@ -85,7 +91,7 @@ export function initDataSha256(ccInitData: string): string {
     deflated = -1;
   }
   if (header < 0 || deflated < 0 || header + deflated + 8 !== bytes.length) throw new Error("init-data: not exactly one gzip member");
-  return sha256Hex(document);
+  return document;
 }
 
 /**

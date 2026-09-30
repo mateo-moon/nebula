@@ -13,6 +13,8 @@ const RUNTIME_EXPORTS = [
   "confidentialGuestAssetUrl",
   "defaultProvisionTemplate",
   "digestImage",
+  "decodeGuestPolicy",
+  "replaceGuestPolicy",
   "isDigestImage",
   "provisionScript",
   "pullBrokerPolicy",
