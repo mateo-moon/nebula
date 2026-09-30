@@ -1320,13 +1320,7 @@ spec:
     spec:
       automountServiceAccountToken: true
       containers:
-        - command:
-            - python3
-            - -I
-            - -B
-            - -m
-            - confidential_guests.lifecycle
-          env:
+        - env:
             - name: LIFECYCLE_ROLE
               value: primary
             - name: LIFECYCLE_NAMESPACE
@@ -1461,13 +1455,7 @@ spec:
     spec:
       automountServiceAccountToken: true
       containers:
-        - command:
-            - python3
-            - -I
-            - -B
-            - -m
-            - confidential_guests.lifecycle
-          env:
+        - env:
             - name: LIFECYCLE_ROLE
               value: operator
             - name: LIFECYCLE_NAMESPACE

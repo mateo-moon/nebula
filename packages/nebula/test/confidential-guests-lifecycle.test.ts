@@ -5,7 +5,6 @@ import {
   GuestLifecycle,
   INIT_DATA_ANNOTATION,
   LIFECYCLE_CLAIM_PLACEHOLDER,
-  LIFECYCLE_CONTROLLER_COMMAND,
   LIFECYCLE_SPEC_VERSIONS,
   canonicalJson,
   guestLifecycleSpec,
@@ -116,8 +115,7 @@ test("image mode: no code ConfigMap; the controller reads its node, runtime clas
   assert.equal(pod.volumes, undefined);
   const [container] = pod.containers;
   assert.equal(container.image, image("control"));
-  assert.deepEqual(container.command, [...LIFECYCLE_CONTROLLER_COMMAND]);
-  assert.deepEqual(LIFECYCLE_CONTROLLER_COMMAND, ["python3", "-I", "-B", "-m", "confidential_guests.lifecycle"]);
+  assert.equal(Object.hasOwn(container, "command"), false, "the image owns its entrypoint");
   assert.equal(container.volumeMounts, undefined);
   assert.deepEqual(container.env, [{ name: "LIFECYCLE_ROLE", value: "primary" }, { name: "LIFECYCLE_NAMESPACE", value: NAMESPACE }],
     "the environment of code mode: everything else is in the spec");

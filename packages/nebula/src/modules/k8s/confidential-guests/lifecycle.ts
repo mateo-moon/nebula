@@ -23,11 +23,6 @@ export const LIFECYCLE_SPEC_VERSIONS = Object.freeze({ code: 1, image: 2 } as co
  * the guest, so one measured template serves both.
  */
 export const LIFECYCLE_CLAIM_PLACEHOLDER = "${DISK}";
-/**
- * Entry point of an image-mode controller unless `command` says otherwise:
- * isolated like code mode, but with site-packages, where the image installs it.
- */
-export const LIFECYCLE_CONTROLLER_COMMAND: readonly string[] = Object.freeze(["python3", "-I", "-B", "-m", "confidential_guests.lifecycle"]);
 /** The volume that carries a guest's data claim; the controller rewrites its claim. */
 export const LIFECYCLE_DATA_VOLUME = "data";
 
@@ -98,7 +93,7 @@ export interface GuestLifecycleCode {
 /** Controller shipped in an image, pinned by digest. */
 export interface GuestLifecycleImage {
   readonly image: string;
-  /** Default {@link LIFECYCLE_CONTROLLER_COMMAND}. */
+  /** Optional entrypoint override. Omit to use the image's own entrypoint. */
   readonly command?: readonly string[];
 }
 
@@ -495,7 +490,7 @@ export class GuestLifecycle extends Construct {
                 command: ["python3", "-I", "-S", "-B", "-c",
                   `import sys; sys.path.insert(0, '/opt/lifecycle'); from ${controller.package} import lifecycle; lifecycle.main()`],
                 volumeMounts: [{ name: "code", mountPath: `/opt/lifecycle/${controller.package}`, readOnly: true }] }
-              : { ...container, image: controller.image, env, command: [...(controller.command ?? LIFECYCLE_CONTROLLER_COMMAND)] }],
+              : { ...container, image: controller.image, env, ...(controller.command ? { command: [...controller.command] } : {}) }],
             ...(code ? { volumes: [{ name: "code", configMap: { name: own.code } }] } : {}),
           },
         },
