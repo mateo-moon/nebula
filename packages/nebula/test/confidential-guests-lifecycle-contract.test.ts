@@ -14,7 +14,6 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Chart, Testing } from "cdk8s";
 import {
-  LIFECYCLE_CONTROLLER_COMMAND,
   LIFECYCLE_SPEC_VERSIONS,
   LOG_RETENTION_COMMAND,
   canonicalJson,
@@ -24,7 +23,7 @@ import { confidentialGuestsExample } from "../example/confidential-guests";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "confidential-guests-lifecycle-contract");
 // A fixture changes only together with this pin, in a reviewed change.
-const MANIFEST_SHA256 = "e2b7a0573c400923b52acc15af723cb530bc09a639e258e36e233bfa591387b8";
+const MANIFEST_SHA256 = "437e09ad5b9c29562d237e9f72f4c3ead83d6194353ca7b1e26c57150456a84d";
 const ROLES = ["operator", "primary"];
 const FILES = ["controllers.json", ...ROLES.map(role => `lifecycle-spec.${role}.json`)];
 // Every key of a version 2 spec: version 1's and the placement an image-mode controller takes from Git.
@@ -44,7 +43,7 @@ function rendered(): Record<string, string> {
     const spec = find("Deployment", deployment).spec.template.spec;
     assert.equal(spec.containers.length, 1, deployment);
     const [{ command, env, securityContext, volumeMounts }] = spec.containers;
-    return { command, env, securityContext, ...(volumeMounts ? { volumeMounts } : {}),
+    return { ...(command ? { command } : {}), env, securityContext, ...(volumeMounts ? { volumeMounts } : {}),
       serviceAccountName: spec.serviceAccountName, rules: find("Role", spec.serviceAccountName).rules };
   };
   const files: Record<string, string> = {};
@@ -84,7 +83,7 @@ test("an image-mode controller gets its role and namespace only, and reads every
   assert.deepEqual(Object.keys(controllers.lifecycle), ROLES);
   for (const role of ROLES) {
     const controller = controllers.lifecycle[role];
-    assert.deepEqual(controller.command, LIFECYCLE_CONTROLLER_COMMAND);
+    assert.equal(Object.hasOwn(controller, "command"), false, "the image owns its entrypoint");
     assert.deepEqual(controller.env, [{ name: "LIFECYCLE_ROLE", value: role }, { name: "LIFECYCLE_NAMESPACE", value: "guests" }]);
     assert.deepEqual(controller.securityContext, {
       allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] }, readOnlyRootFilesystem: true,

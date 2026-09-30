@@ -218,8 +218,8 @@ image-mode contract below).
   at `/opt/lifecycle/<package>` and runs `<package>.lifecycle.main()` on the
   pinned runtime image. The spec is version 1: the shipped controller knows
   its node, runtime class and label domain itself.
-- Image mode (`{ image, command? }`) runs the controller image
-  (`python3 -I -B -m confidential_guests.lifecycle` by default). The spec is
+- Image mode (`{ image, command? }`) uses the image's own entrypoint unless
+  `command` explicitly overrides it. The spec is
   version 2: version 1 plus `node_name`, `runtime_class_name` and
   `label_domains` (the emitted domain first, then the domains in
   `acceptLabelDomains` that are only read).
@@ -239,10 +239,9 @@ collector image (`GuestLogRetention` with `{ image, command? }`), implement
 this contract. It is what the constructs render; it does not change with the
 image.
 
-**Status: not yet implemented.** No published controller image implements
-this contract yet, so image mode renders a controller that nothing runs
-today. Code mode, with spec version 1, is unaffected. The contract is
-decided as written here: spec version 2 carries the node, the runtime class
+The constructs do not publish controller images. Supply an image that implements
+the spec features you declare. Code mode, with spec version 1, is unaffected.
+Spec version 2 carries the node, the runtime class
 and the label domains, and the environment carries nothing else.
 `test/confidential-guests-lifecycle-contract/` pins it as nebula's render
 of the example stack, byte for byte: both roles' specs (one with a stage
@@ -251,12 +250,11 @@ point, environment, security context and permissions. A controller image
 vendors those files and tests against them, and a change to this contract
 changes them in the same reviewed change.
 
-- **Entry points.** `python3 -I -B -m confidential_guests.lifecycle`
-  (`LIFECYCLE_CONTROLLER_COMMAND`) and
-  `python3 -I -B -m confidential_guests.log_retention`
-  (`LOG_RETENTION_COMMAND`), unless `command` names others. `-I` isolates
-  the interpreter from the environment and the working directory; `-S` is
-  left out because the image installs the package into site-packages.
+- **Entry points.** Lifecycle images use their own entrypoint unless `command`
+  overrides it. The former `LIFECYCLE_CONTROLLER_COMMAND` export is removed;
+  images that relied on it must set their own entrypoint or an explicit command.
+  Log retention still defaults to `python3 -I -B -m confidential_guests.log_retention`
+  (`LOG_RETENTION_COMMAND`), unless `command` overrides it.
 - **Controller environment.** Exactly `LIFECYCLE_ROLE` (the role) and
   `LIFECYCLE_NAMESPACE`. The controller reads everything else from the spec.
 - **Spec.** ConfigMap `<role>-lifecycle-spec`, key `spec.json`, canonical

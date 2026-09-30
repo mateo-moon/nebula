@@ -11,7 +11,7 @@ entry point, environment, security context and permissions given here.
 | --- | --- |
 | `lifecycle-spec.operator.json` | the `spec.json` of the operator role's `<role>-lifecycle-spec`: spec version 2, no stage boot. One canonical line and a newline |
 | `lifecycle-spec.primary.json` | the same for the primary role, with a stage boot and a template that names the claim placeholder |
-| `controllers.json` | per role, the controller container's `command`, `env`, `securityContext`, its `serviceAccountName` and Role `rules`, its spec ConfigMap and key, and its ledger ConfigMap and key; and the same for the log collector |
+| `controllers.json` | per role, the controller container's optional `command`, `env`, `securityContext`, its `serviceAccountName` and Role `rules`, its spec ConfigMap and key, and its ledger ConfigMap and key; and the same for the log collector. Lifecycle omits `command` to use the image entrypoint. |
 | `MANIFEST.sha256` | the SHA-256 of each file above |
 
 `confidential-guests-lifecycle-contract.test.ts` renders the example and
