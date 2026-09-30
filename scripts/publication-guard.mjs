@@ -6,7 +6,8 @@
 // material (PEM, OpenSSH, PGP, and DER or PEM hidden in base64), chip-id-like
 // values, and encoded blobs that could hide any of these.
 //
-// It deliberately holds no private word list: it matches classes of data, not
+// Optional --terms and --values JSON files stay outside the scanned repository.
+// This script deliberately holds no private word list: it matches classes of data, not
 // names. The only lists are public upstream names that may appear (registries,
 // owners and domains of upstream projects, documentation values); the owner of
 // the repository being checked is added from GITHUB_REPOSITORY_OWNER when set.
@@ -14,6 +15,7 @@
 // Usage:
 //   node scripts/publication-guard.mjs [--root DIR] [--allowlist FILE] [--json] [PATH...]
 //   <text> | node scripts/publication-guard.mjs --stdin [--label NAME]
+//   node scripts/publication-guard.mjs --terms /private/terms.json --values /private/values.json [PATH...]
 //
 // Without PATH arguments it scans DEFAULT_SCOPE (tracked and untracked,
 // non-ignored files). Exit status: 0 clean, 1 findings, 2 usage or input error.
@@ -27,7 +29,7 @@ import { execFileSync } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { isIPv6 } from "node:net";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
@@ -587,15 +589,129 @@ function walk(root, path, out) {
   }
 }
 
-function scanFile(root, rel, allow) {
+// Private corpora are operator inputs, never defaults or publishable configuration.
+// Terms are literal strings (case-insensitive), or {pattern, flags} JavaScript regexes.
+// Values are literal strings; hex/base64 strings are also checked as decoded bytes.
+function loadPrivateInputs(opts, root) {
+  const rules = { terms: [], values: [] };
+  for (const kind of ["terms", "values"]) {
+    if (!opts[kind]) continue;
+    try {
+      const path = realpathSync(opts[kind]);
+      const within = relative(realpathSync(root), path);
+      if (!within || (within.split(sep)[0] !== ".." && !isAbsolute(within))) throw new Error();
+      const info = lstatSync(path);
+      if (!info.isFile() || info.size > 16 * 1024 * 1024) throw new Error();
+      const entries = JSON.parse(readFileSync(path, "utf8"));
+      if (!Array.isArray(entries) || entries.length === 0) throw new Error();
+      for (const entry of entries) {
+        if (kind === "terms") {
+          if (typeof entry === "string" && entry.length > 0) {
+            rules.terms.push(new RegExp(entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"));
+          } else if (entry && Object.keys(entry).every((k) => k === "pattern" || k === "flags") &&
+                     typeof entry.pattern === "string" && entry.pattern.length > 0 &&
+                     typeof (entry.flags ?? "") === "string" && /^[imsu]*$/.test(entry.flags ?? "")) {
+            const re = new RegExp(entry.pattern, (entry.flags ?? "") + "g");
+            if (re.test("")) throw new Error();
+            re.lastIndex = 0;
+            rules.terms.push(re);
+          } else throw new Error();
+        } else {
+          if (typeof entry !== "string" || entry.length === 0) throw new Error();
+          const needles = [Buffer.from(entry)];
+          if (/^(?:[0-9a-fA-F]{2}){16,}$/.test(entry)) needles.push(Buffer.from(entry, "hex"));
+          if (/^[A-Za-z0-9+/_-]{32,}={0,2}$/.test(entry)) {
+            const decoded = decodeBase64(entry);
+            if (decoded) needles.push(decoded);
+          }
+          rules.values.push({ needles, hex: /^(?:[0-9a-fA-F]{2}){16,}$/.test(entry) ? new RegExp(entry, "i") : null });
+        }
+      }
+    } catch {
+      // JSON/RegExp/OS errors can quote the private input or its filename.
+      throw new Error(`invalid --${kind} input: expected a nonempty JSON array in a regular file outside the scan root`);
+    }
+  }
+  return rules;
+}
+
+function scanPrivate(buf, rules, context, depth = 0) {
+  if (!rules.terms.length && !rules.values.length) return [];
+  const findings = [];
+  const text = buf.toString("utf8");
+  const at = lineIndex(text);
+  rules.terms.forEach((re, i) => {
+    for (const match of text.matchAll(re)) {
+      findings.push({ ...finding("private-term", match[0], context, at(match.index)), rule: i + 1 });
+    }
+  });
+  rules.values.forEach(({ needles, hex }, i) => {
+    const match = hex?.exec(text);
+    if (match) {
+      findings.push({ ...finding("private-value", match[0], context, at(match.index)), rule: i + 1 });
+      return;
+    }
+    for (const needle of needles) {
+      const offset = buf.indexOf(needle);
+      if (offset >= 0) {
+        const line = buf.subarray(0, offset).toString("utf8").split("\n").length;
+        findings.push({ ...finding("private-value", needle, context, line), rule: i + 1 });
+        break;
+      }
+    }
+  });
+  if (depth >= MAX_DEPTH) {
+    findings.push(finding("private-scan-limit", buf, context, 1));
+    return findings;
+  }
+  if (isGzip(buf)) {
+    try {
+      findings.push(...scanPrivate(gunzipSync(buf, { maxOutputLength: MAX_INFLATE }), rules,
+        { ...context, via: step(context.via, "gzip"), line: context.line ?? 1 }, depth + 1));
+    } catch {
+      findings.push(finding("private-scan-limit", buf, context, 1));
+    }
+    return findings;
+  }
+  // Private terms can be short. The class scanner's large-blob threshold must
+  // not exempt a small encoded document or a value inside an allowlisted key.
+  const candidates = [...text.matchAll(/(?:[A-Za-z0-9+/_-]|\\n){4,}={0,2}/g)]
+    .map((m) => ({ raw: m[0], start: m.index }));
+  candidates.push(...blobCandidates(text));
+  // Consecutive wrapped base64 lines may each be too short to hold a full value.
+  for (const match of text.matchAll(/(?:[A-Za-z0-9+/_-]{4,}[ \t]*\r?\n[ \t]*)+[A-Za-z0-9+/_-]{2,}={0,2}/g)) {
+    candidates.push({ raw: match[0], start: match.index });
+  }
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const decoded = decodeBase64(candidate.raw);
+    if (!decoded) continue;
+    const id = sha256(decoded);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    findings.push(...scanPrivate(decoded, rules,
+      { ...context, via: step(context.via, "base64"), line: context.line ?? at(candidate.start) }, depth + 1));
+  }
+  return findings;
+}
+
+function scanInput(buf, source, allow, rules) {
+  const pathFindings = scanPrivate(Buffer.from(source), rules, { source: "<private-path>", line: 0 });
+  const label = pathFindings.length ? "<private-path>" : source;
+  return [...pathFindings, ...scanBuffer(buf, { source: label, allow }),
+    ...scanPrivate(buf, rules, { source: label })];
+}
+
+function scanFile(root, rel, allow, rules) {
   const abs = join(root, rel);
-  if (isLink(abs)) return scanText(readlinkSync(abs), { source: rel, allow });
-  return scanBuffer(readFileSync(abs), { source: rel, allow });
+  const buf = isLink(abs) ? Buffer.from(readlinkSync(abs)) : readFileSync(abs);
+  return scanInput(buf, rel, allow, rules);
 }
 
 function format(f) {
   const extra = [`length ${f.length}`];
   if (f.sha256) extra.push(`sha256 ${f.sha256}`);
+  if (f.rule) extra.push(`rule ${f.rule}`);
   return `${f.source}:${f.line} ${f.class}${f.via ? ` via ${f.via}` : ""} (${extra.join(", ")})`;
 }
 
@@ -612,7 +728,8 @@ function parseArgs(argv) {
     else if (a === "--label") opts.label = value();
     else if (a === "--root") opts.root = resolve(value());
     else if (a === "--allowlist") opts.allowlist = resolve(value());
-    else if (a === "--help" || a === "-h") throw new Error("usage: publication-guard.mjs [--root DIR] [--allowlist FILE] [--json] [--stdin [--label NAME]] [PATH...]");
+    else if (a === "--terms" || a === "--values") opts[a.slice(2)] = resolve(value());
+    else if (a === "--help" || a === "-h") throw new Error("usage: publication-guard.mjs [--root DIR] [--allowlist FILE] [--terms FILE] [--values FILE] [--json] [--stdin [--label NAME]] [PATH...]");
     else if (a.startsWith("-")) throw new Error(`unknown option ${a}`);
     else opts.paths.push(a);
   }
@@ -630,25 +747,30 @@ function defaultRoot() {
 function main(argv) {
   let opts;
   let allow;
+  let rules;
+  let root;
   try {
     opts = parseArgs(argv);
+    root = opts.root ?? defaultRoot();
+    rules = loadPrivateInputs(opts, root);
     allow = loadAllowlist(opts.allowlist ?? join(dirname(fileURLToPath(import.meta.url)), "publication-guard.allow.json"));
   } catch (err) {
-    process.stderr.write(`publication-guard: ${err.message}\n`);
+    const message = (opts?.terms || opts?.values) && !/^invalid --(?:terms|values) input:/.test(err.message)
+      ? "invalid scan configuration" : err.message;
+    process.stderr.write(`publication-guard: ${message}\n`);
     return 2;
   }
   const missing = opts.paths.filter((p) => !existsSync(resolve(p)) && !isLink(resolve(p)));
   if (missing.length > 0) {
-    process.stderr.write(`publication-guard: no such path: ${missing.join(", ")}\n`);
+    process.stderr.write(`publication-guard: no such path${opts.terms || opts.values ? "" : ": " + missing.join(", ")}\n`);
     return 2;
   }
   let findings;
   let scanned;
   if (opts.stdin) {
-    findings = scanBuffer(readFileSync(0), { source: opts.label, allow });
-    scanned = `stdin (${opts.label})`;
+    findings = scanInput(readFileSync(0), opts.label, allow, rules);
+    scanned = opts.terms || opts.values ? "stdin" : `stdin (${opts.label})`;
   } else {
-    const root = opts.root ?? defaultRoot();
     const files = opts.paths.length > 0
       ? opts.paths.flatMap((p) => {
         const out = [];
@@ -656,7 +778,14 @@ function main(argv) {
         return out;
       })
       : listScope(root, DEFAULT_SCOPE);
-    findings = files.flatMap((rel) => scanFile(root, rel, allow));
+    // Explicit paths may be outside root. Never scan the private corpus files.
+    if ([opts.terms, opts.values].filter(Boolean).some((p) => files.some((f) => {
+      try { return realpathSync(join(root, f)) === realpathSync(p); } catch { return false; }
+    }))) {
+      process.stderr.write("publication-guard: private corpus overlaps scan inputs\n");
+      return 2;
+    }
+    findings = files.flatMap((rel) => scanFile(root, rel, allow, rules));
     scanned = `${files.length} file(s)`;
   }
   if (opts.json) {
@@ -669,5 +798,10 @@ function main(argv) {
 }
 
 if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
-  process.exitCode = main(process.argv.slice(2));
+  try {
+    process.exitCode = main(process.argv.slice(2));
+  } catch {
+    process.stderr.write("publication-guard: cannot read scan input\n");
+    process.exitCode = 2;
+  }
 }
