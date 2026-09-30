@@ -42,6 +42,13 @@ template that changed since its policy was generated and init-data that does
 not hash to the recorded HOST_DATA. Nothing in this module rewrites a
 template or an image reference.
 
+Policy preparation can use `decodeGuestPolicy(annotation)` to read the exact
+versioned TOML envelope, Rego rules and policy data. `replaceGuestPolicy(annotation,
+policy)` changes only the policy text and returns new compressed init-data and
+its measured hash. It checks the TOML round trip and refuses ambiguous envelopes,
+extra content, invalid encoding and documents over 1 MiB. These helpers handle
+the envelope; the caller must still validate and harden the policy itself.
+
 Init-data is a launch parameter the host chooses, so HOST_DATA alone does
 not identify the guest software: a pull broker admitting only init-data
 releases the credentials to any non-debug guest launched with an admitted

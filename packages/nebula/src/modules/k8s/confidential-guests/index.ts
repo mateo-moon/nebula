@@ -174,3 +174,6 @@ export { SealedDisks, sealedDisksPlan } from "./sealed-disks";
 export type { SealedDisk, SealedDiskRole, SealedDisksPlan, SealedDisksProps } from "./sealed-disks";
 export { NriKeyInjector } from "./key-injector";
 export type { NriKeyBinding, NriKeyInjectorProps } from "./key-injector";
+
+export { decodeGuestPolicy, replaceGuestPolicy } from "./guest-policy";
+export type { DecodedGuestPolicy } from "./guest-policy";
