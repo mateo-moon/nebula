@@ -69,3 +69,24 @@ The secret scan (gitleaks) does not read the guard's hash allowlist
 (`scripts/publication-guard.allow.json`). A committed test key allowlisted
 there also needs its gitleaks fingerprint in `.gitleaksignore`, added in the
 same change.
+
+Private callers can add their own publication rules without storing them in this
+repository:
+
+```sh
+node scripts/publication-guard.mjs --terms "$PRIVATE_TERMS" --values "$PRIVATE_VALUES" path/to/candidate
+```
+
+Each file is a nonempty JSON array outside the scan root (maximum 16 MiB).
+`--terms` accepts literal strings, matched without case sensitivity, or objects
+with a JavaScript `pattern` and optional `flags` (`i`, `m`, `s`, `u`). `--values`
+accepts literal strings and also checks hex/base64 values as decoded bytes;
+hex text is case-insensitive. Omit an option when it is not needed.
+
+Private checks inspect filenames, symlink targets, binary data and bounded
+base64/gzip layers. Hitting the decoding limit is a refusal. Findings show rule
+numbers and locations, with private filenames redacted, and never quote a
+private match or hash it. The public hash allowlist cannot exempt private
+findings. Invalid files or a corpus overlapping the scan inputs exit with code
+2. Keep these files in private storage; CI in this repository uses only the
+built-in class scanner and synthetic tests.

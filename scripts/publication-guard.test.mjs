@@ -549,3 +549,142 @@ test("every workflow pins each action to a full commit SHA with its version note
   }
   assert.deepEqual(unpinnedActions(`\n${pinned.replace(" # v3.7.0", "")}`), ["docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9"]);
 });
+
+function privateFixture(t, terms, values) {
+  const root = tempDir(t);
+  const corpus = tempDir(t);
+  execFileSync("git", ["init", "-q", root]);
+  const termsPath = join(corpus, "terms.json");
+  const valuesPath = join(corpus, "values.json");
+  if (terms) writeFileSync(termsPath, JSON.stringify(terms));
+  if (values) writeFileSync(valuesPath, JSON.stringify(values));
+  const flags = ["--root", root, ...(terms ? ["--terms", termsPath] : []),
+    ...(values ? ["--values", valuesPath] : [])];
+  return { root, corpus, termsPath, valuesPath, flags,
+    run: (input, ...args) => spawnSync(process.execPath, [GUARD, ...flags, "--stdin", "--json", ...args],
+      { input, encoding: "utf8" }) };
+}
+
+test("private terms are external literal or regex rules with redacted findings", (t) => {
+  const literal = "mark." + randomBytes(9).toString("hex");
+  const pattern = "tenant-" + randomBytes(9).toString("hex");
+  const f = privateFixture(t, [literal, { pattern: `\\b${pattern}_[0-9]+\\b`, flags: "i" }]);
+  const result = f.run(`${literal.toUpperCase()} ${pattern}_42`);
+  assert.equal(result.status, 1, result.stderr);
+  const findings = JSON.parse(result.stdout).findings.filter((x) => x.class === "private-term");
+  assert.deepEqual(findings.map((x) => x.rule), [1, 2]);
+  assert.ok(findings.every((x) => !x.sha256));
+  for (const value of [literal, pattern]) assert.ok(!result.stdout.toLowerCase().includes(value));
+  assert.equal(f.run(literal.replace(".", "x")).status, 0, "literal punctuation is not a wildcard");
+  assert.equal(f.run("ordinary module content").status, 0);
+});
+
+test("short private terms survive nested base64, URL-safe base64 and gzip", (t) => {
+  const word = "mark" + randomBytes(5).toString("hex");
+  const f = privateFixture(t, [word]);
+  const plain = JSON.stringify({ x: word });
+  for (const input of [b64(word), b64(b64(plain)), Buffer.from(plain).toString("base64url"),
+    gzipSync(Buffer.from(plain)), gzipSync(Buffer.from(plain)).toString("base64"),
+    b64(gzipSync(Buffer.from(plain)).toString("base64"))]) {
+    const result = f.run(input);
+    assert.equal(result.status, 1, result.stderr);
+    assert.ok(JSON.parse(result.stdout).findings.some((x) => x.class === "private-term"), result.stdout);
+    assert.ok(!result.stdout.includes(word));
+  }
+});
+
+test("private values match text, mixed-case hex and decoded binary without hashes", (t) => {
+  const bytes = randomBytes(32);
+  const value = bytes.toString("hex");
+  const f = privateFixture(t, null, [value]);
+  for (const input of [value, value.slice(0, 19).toUpperCase() + value.slice(19),
+    bytes, Buffer.concat([Buffer.from("prefix"), bytes]).toString("base64"), b64(value)]) {
+    const result = f.run(input);
+    assert.equal(result.status, 1, result.stderr);
+    const found = JSON.parse(result.stdout).findings.filter((x) => x.class === "private-value");
+    assert.ok(found.length > 0, result.stdout);
+    assert.ok(found.every((x) => x.sha256 === undefined && x.rule === 1));
+    assert.ok(!result.stdout.toLowerCase().includes(value));
+  }
+  const other = randomBytes(32).toString("hex");
+  assert.equal(f.run(other).status, 0, "unrelated digest is not a private match");
+  const b64Fixture = privateFixture(t, null, [bytes.toString("base64")]);
+  assert.ok(JSON.parse(b64Fixture.run(bytes).stdout).findings.some((x) => x.class === "private-value"));
+});
+
+test("allowlisting a container never exempts its private contents", (t) => {
+  const bytes = randomBytes(32);
+  const f = privateFixture(t, null, [bytes.toString("hex")]);
+  const allow = join(f.root, "allow.json");
+  writeFileSync(allow, JSON.stringify({ version: 1, entries: [
+    { class: "binary-file", sha256: sha256(bytes), reason: "synthetic test" },
+  ] }));
+  const result = f.run(bytes, "--allowlist", allow);
+  assert.equal(result.status, 1);
+  assert.deepEqual(classes(JSON.parse(result.stdout).findings), ["private-value"]);
+  writeFileSync(allow, JSON.stringify({ version: 1, entries: [
+    { class: "private-value", sha256: sha256(bytes), reason: "synthetic test" },
+  ] }));
+  assert.equal(f.run(bytes, "--allowlist", allow).status, 2);
+});
+
+test("private path names, labels and missing paths are not printed", (t) => {
+  const word = "mark" + randomBytes(7).toString("hex");
+  const f = privateFixture(t, [word]);
+  const file = join(f.root, `${word}.txt`);
+  writeFileSync(file, "ordinary module content");
+  const run = (...args) => spawnSync(process.execPath, [GUARD, ...f.flags, ...args], { encoding: "utf8" });
+  for (const result of [run(file), run("--json", file), f.run("ordinary content", "--label", word),
+    run(join(f.root, word + ".missing"))]) {
+    assert.notEqual(result.status, 0);
+    assert.ok(!(result.stdout + result.stderr).includes(word), "private path escaped redaction");
+  }
+});
+
+test("missing, malformed, empty and invalid private corpora fail without quoting input", (t) => {
+  const word = "mark" + randomBytes(7).toString("hex");
+  const f = privateFixture(t, [word]);
+  for (const content of [word, "[]", "null", '[""]', JSON.stringify([{ pattern: word + "(" }]),
+    JSON.stringify([{ pattern: word, flags: "gg" }]), JSON.stringify([{ pattern: "" }]),
+    JSON.stringify([{ pattern: "a*" }]), JSON.stringify([{ pattern: word, extra: true }])]) {
+    writeFileSync(f.termsPath, content);
+    const result = f.run("ordinary module content");
+    assert.equal(result.status, 2, content);
+    assert.ok(!(result.stdout + result.stderr).includes(word));
+  }
+  rmSync(f.termsPath);
+  assert.equal(f.run("ordinary module content").status, 2);
+  const badValue = privateFixture(t, null, [{ value: word }]);
+  assert.equal(badValue.run("ordinary module content").status, 2);
+});
+
+test("corpus files inside the repository or explicitly selected for scanning are refused", (t) => {
+  const f = privateFixture(t, ["mark" + randomBytes(7).toString("hex")]);
+  const inside = join(f.root, "private.json");
+  writeFileSync(inside, readFileSync(f.termsPath));
+  const args = [GUARD, "--root", f.root, "--stdin", "--terms", inside];
+  assert.equal(spawnSync(process.execPath, args, { input: "content" }).status, 2);
+  const overlap = spawnSync(process.execPath, [GUARD, ...f.flags, f.corpus], { encoding: "utf8" });
+  assert.equal(overlap.status, 2);
+  assert.match(overlap.stderr, /overlaps scan inputs/);
+});
+
+test("wrapped encodings cannot split a private value into harmless chunks", (t) => {
+  const bytes = randomBytes(32);
+  const f = privateFixture(t, null, [bytes.toString("hex")]);
+  const encoded = bytes.toString("base64").match(/.{1,12}/g).join("\n");
+  const result = f.run(encoded);
+  assert.equal(result.status, 1);
+  assert.ok(JSON.parse(result.stdout).findings.some((x) => x.class === "private-value"), result.stdout);
+});
+
+test("decoding limits refuse an opaque remainder instead of passing it", (t) => {
+  const word = "mark" + randomBytes(8).toString("hex");
+  const f = privateFixture(t, [word]);
+  let encoded = word;
+  for (let i = 0; i < 6; i++) encoded = b64(encoded);
+  const result = f.run(encoded);
+  assert.equal(result.status, 1);
+  assert.ok(JSON.parse(result.stdout).findings.some((x) => x.class === "private-scan-limit"));
+  assert.ok(!result.stdout.includes(word));
+});
