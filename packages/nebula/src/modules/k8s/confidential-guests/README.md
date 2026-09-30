@@ -49,6 +49,22 @@ its measured hash. It checks the TOML round trip and refuses ambiguous envelopes
 extra content, invalid encoding and documents over 1 MiB. These helpers handle
 the envelope; the caller must still validate and harden the policy itself.
 
+`hardenGuestPolicy(pod, annotation, options)` performs the common hardening step.
+It requires the exact reviewed generator rules/settings, matches recipients to
+the Pod's digest-pinned images and command lines, denies exec, enforces read-only
+roots and no-new-privileges, removes the implicit service-account mount, and
+adds the declared device, image-pull, required-env and transport guards.
+`snpGuestPolicyGuards(devicePath, envRule)` loads the standard guard templates.
+Device ownership and shared ConfigMap readers are explicit options. The result
+is a `MeasuredArtifact`, ready for `measuredGuest`.
+
+The deployment must validate its Pod's complete role, mount, network and runtime
+boundaries before calling the hardener. Reviewed settings, guard text and the
+optional `refineRecipient` callback are trusted deployment inputs, not data to
+accept from a workload. The callback inspects a copy of each recipient and may
+apply deployment-specific mount checks or sandbox matching. Generator output
+that differs from those inputs is refused; no cluster or registry is contacted.
+
 Init-data is a launch parameter the host chooses, so HOST_DATA alone does
 not identify the guest software: a pull broker admitting only init-data
 releases the credentials to any non-debug guest launched with an admitted

@@ -22,7 +22,12 @@ Entry format:
 
 Entries:
 
-  (none)
+  packages/nebula/src/modules/k8s/confidential-guests/harden-policy.ts
+  packages/nebula/test/confidential-guests-hardening.test.ts
+    Copyright: Copyright (c) 2023 Microsoft Corporation.
+    License:   Apache-2.0
+    Source:    https://github.com/kata-containers/kata-containers, src/tools/genpolicy/rules.rego
+    Changes:   The device-rule text is used as an exact matching anchor in a new hardener and its tests.
 
 Generated code
 ==============

@@ -177,3 +177,5 @@ export type { NriKeyBinding, NriKeyInjectorProps } from "./key-injector";
 
 export { decodeGuestPolicy, replaceGuestPolicy } from "./guest-policy";
 export type { DecodedGuestPolicy } from "./guest-policy";
+export { checkGeneratedGuestSettings, hardenGuestPolicy, snpGuestPolicyGuards } from "./harden-policy";
+export type { GuestPolicyObject, GuestPolicyGuards, GuestPolicyHardening } from "./harden-policy";
