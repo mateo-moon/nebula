@@ -232,6 +232,19 @@ Git declares each ledger once. Set `lifecycleIgnoreDifferences(...)` (or
 `stack.ignoreDifferences()`) on the Argo CD Application so a sync never
 resets one.
 
+For an image-mode controller that requires ledger version 3, a **genuinely new**
+role can set `newLedgerVersion: 3`. This explicitly seeds an empty ledger with
+the declared budget epoch and an empty generation-binding list. The spec stays
+version 2; the selected runtime owns binding, recovery and migration semantics.
+No image, entrypoint, guest template or RBAC permission changes. Omitting this
+option preserves the existing render byte for byte.
+
+Do not use this option to replace a missing ledger or upgrade an existing one.
+Preserve its history and use the runtime's reviewed migration procedure first.
+Pair the ignore rule with `RespectIgnoreDifferences=true` on the Application;
+Git must not overwrite controller-owned `/data/state` during later syncs. The
+construct does not inspect a cluster or infer that an existing role is new.
+
 ### The image-mode controller contract
 
 A controller image run in image mode (`{ image, command? }`), and a log

@@ -182,6 +182,35 @@ test("the controllers' ledgers are ignored by Argo: imported ledgers first, then
   assert.deepEqual(both.map(e => e.name), ["a-v1", "b-v1", "a-lifecycle-ledger", "b-lifecycle-ledger"]);
 });
 
+test("an explicit new-role v3 seed changes only the ledger data and retains its Argo protection", () => {
+  const role = imageRoles()[1];
+  const props = lifecycleProps({ controller: { image: image("control") }, roles: [role] });
+  const before = render(props);
+  const after = render({ ...props, roles: [{ ...role, newLedgerVersion: 3 }] });
+  const seeded = after.docs.find(d => d.metadata.name === "operator-lifecycle-ledger");
+  assert.deepEqual(JSON.parse(seeded.data.state), { version: 3, epoch: 2, attempts: [], holder: null,
+    created: [], intent: null, rollout: null, phase: "initialized", message: null, bindings: [] });
+  assert.deepEqual(seeded.metadata.annotations, kept);
+  const withoutSeed = structuredClone(after.docs);
+  delete withoutSeed.find(d => d.metadata.name === "operator-lifecycle-ledger").data;
+  assert.deepEqual(withoutSeed, before.docs, "spec, image, entrypoint, RBAC and all other resources stay byte-equivalent");
+  assert.deepEqual(after.lifecycle.ignoreDifferences(), before.lifecycle.ignoreDifferences());
+  assert.deepEqual(after.lifecycle.ignoreDifferences()[0].jsonPointers, ["/data/state"]);
+  assert.equal(after.lifecycle.specs.operator.version, 2, "ledger schema is independent of the spec version");
+});
+
+test("v3 new-role initialization refuses legacy import, handoff, unsupported versions and over-budget roles", () => {
+  const props = lifecycleProps({ controller: { image: image("control") }, roles: [{ ...imageRoles()[1], newLedgerVersion: 3 }] });
+  for (const mutate of [(p: any) => p.controller = lifecycleProps().controller,
+    (p: any) => p.roles[0].newLedgerVersion = 2, (p: any) => p.roles[0].newLedgerVersion = "3",
+    (p: any) => p.roles[0].importedLedger = { name: "old-ledger", state: {} },
+    (p: any) => p.roles[0].stage = { name: "operator-stage", claim: "other-claim", containers: ["storage"] },
+    (p: any) => p.roles[0].previous = "m1", (p: any) => p.budget.limit = 4]) {
+    const changed = structuredClone(props); mutate(changed);
+    assert.throws(() => render(changed), /newLedgerVersion/);
+  }
+});
+
 test("the construct exposes what the admission fence and Services derive from it", () => {
   const { lifecycle } = render(lifecycleProps());
   assert.deepEqual(lifecycle.serviceAccounts, [

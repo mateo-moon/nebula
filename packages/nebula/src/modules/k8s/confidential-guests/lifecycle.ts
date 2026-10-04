@@ -78,6 +78,13 @@ export interface GuestLifecycleRole {
    * only: spec version 2 names no imported ledger, so image mode refuses it.
    */
   readonly importedLedger?: GuestLifecycleImportedLedger;
+  /**
+   * Explicit empty version-3 ledger for a genuinely new image-mode role.
+   * Never use to repair missing history or migrate an existing role. Existing
+   * ledgers need the runtime's reviewed migration; Argo must ignore /data/state.
+   * Omit to preserve the existing unseeded render.
+   */
+  readonly newLedgerVersion?: 3;
 }
 
 /** Controller code shipped as a ConfigMap and run on a pinned runtime image. */
@@ -320,6 +327,10 @@ function checkProps(props: GuestLifecycleProps): string[] {
       }
     }
     if (role.importedLedger) dnsSubdomain(OWNER, `role ${role.role} importedLedger name`, role.importedLedger.name);
+    if (role.newLedgerVersion !== undefined) {
+      if (role.newLedgerVersion !== 3 || isCode(props.controller) || role.importedLedger || role.stage || role.previous
+        || props.budget.limit > 3) fail(OWNER, `role ${role.role}: newLedgerVersion 3 needs an image-mode role without import or handoff and a budget of at most three`);
+    }
   }
   unique(OWNER, "claim", roles.flatMap(r => [r.claim, ...(r.stage ? [r.stage.claim] : [])]));
   unique(OWNER, "ConfigMap", roles.flatMap(r => {
@@ -455,7 +466,9 @@ export class GuestLifecycle extends Construct {
       const labels = { app: `${namespace}-${name}` };
       if (code) new KubeConfigMap(this, own.code, { metadata: meta(own.code, waveAnnotations(setup)), data: code });
       new KubeConfigMap(this, own.spec, { metadata: meta(own.spec, waveAnnotations(last)), data: { "spec.json": canonicalJson(specs[role.role]) } });
-      new KubeConfigMap(this, own.ledger, { metadata: meta(own.ledger, waveAnnotations(setup, true)) });
+      new KubeConfigMap(this, own.ledger, { metadata: meta(own.ledger, waveAnnotations(setup, true)),
+        ...(role.newLedgerVersion === 3 ? { data: { state: canonicalJson({ version: 3, epoch: props.budget.epoch,
+          attempts: [], holder: null, created: [], intent: null, rollout: null, phase: "initialized", message: null, bindings: [] }) } } : {}) });
       if (role.importedLedger) {
         new KubeConfigMap(this, role.importedLedger.name, { metadata: meta(role.importedLedger.name, waveAnnotations(setup, true)),
           data: { state: JSON.stringify(role.importedLedger.state) } });
