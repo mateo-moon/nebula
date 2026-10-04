@@ -1,4 +1,5 @@
 import { Construct } from "constructs";
+import { ApiObject } from "cdk8s";
 import { RepositoryV1Beta2 as Repository, RepositoryV1Beta2SpecDeletionPolicy as RepositorySpecDeletionPolicy } from "#imports/ecr.aws.upbound.io";
 import { Policy, RolePolicyAttachment } from "#imports/iam.aws.upbound.io";
 
@@ -13,6 +14,15 @@ export interface EcrRepositoryConfig {
   tags?: Record<string, string>;
   /** Existing AWS role names. Push includes pull, but never image deletion. */
   grants?: { roleName: string; access: "pull" | "push" }[];
+  /** Deny image writes from identities other than the declared push roles,
+   * including identities with separate IAM Allow policies. Requires a push grant.
+   */
+  exclusivePush?: boolean;
+  /** Deny image/repository deletion and new lifecycle-expiry policies.
+   * Existing lifecycle policies must be inspected and removed separately before
+   * claiming retention. Administrators able to change this policy remain trusted.
+   */
+  retainContent?: boolean;
 }
 
 /** Private, immutable image repository and repository-scoped IAM grants.
@@ -23,6 +33,7 @@ export interface EcrRepositoryConfig {
  */
 export class EcrRepository extends Construct {
   public readonly repository: Repository;
+  public readonly repositoryPolicy?: ApiObject;
   public readonly registry: string;
   public readonly repositoryUrl: string;
   public readonly repositoryArn: string;
@@ -39,6 +50,11 @@ export class EcrRepository extends Construct {
     if (new Set(grants.map(g => g.roleName)).size !== grants.length ||
         grants.some(g => !/^[\w+=,.@-]{1,64}$/.test(g.roleName) || !["pull", "push"].includes(g.access)))
       throw new Error("ECR grants require unique role names and pull or push access");
+    for (const option of [config.exclusivePush, config.retainContent]) {
+      if (option !== undefined && typeof option !== "boolean") throw new Error("ECR guardrails must be explicit booleans");
+    }
+    const writers = grants.filter(g => g.access === "push").map(g => `arn:aws:iam::${config.accountId}:role/${g.roleName}`);
+    if (config.exclusivePush && writers.length === 0) throw new Error("Exclusive ECR writes require at least one explicit push role");
 
     const providerConfigRef = { name: config.providerConfigRef ?? "default" };
     this.registry = `${config.accountId}.dkr.ecr.${config.region}.amazonaws.com`;
@@ -61,6 +77,33 @@ export class EcrRepository extends Construct {
         },
       },
     });
+    if (config.exclusivePush || config.retainContent) {
+      // RepositoryPolicy is a cluster-scoped ECR family resource. Its narrow
+      // schema is rendered here; the bundled repository binding covers only
+      // Repository, not this separate resource. Never place secrets in policy.
+      this.repositoryPolicy = new ApiObject(this, "repository-policy", {
+        apiVersion: "ecr.aws.upbound.io/v1beta1", kind: "RepositoryPolicy",
+        metadata: { name: `${config.name}-boundary`, annotations: { "crossplane.io/external-name": config.repositoryName } },
+        spec: { deletionPolicy: "Orphan", providerConfigRef,
+          forProvider: { region: config.region, repositoryRef: { name: config.name }, policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+              ...(config.exclusivePush ? [{
+                Sid: "OnlyDeclaredWriters", Effect: "Deny", Principal: "*", Resource: this.repositoryArn,
+                Action: ["ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
+                  "ecr:ReplicateImage", "ecr:BatchImportUpstreamImage"],
+                // IAM uses the role ARN here, not its changing STS session ARN.
+                Condition: { ArnNotEquals: { "aws:PrincipalArn": writers } },
+              }] : []),
+              ...(config.retainContent ? [{
+                Sid: "RetainRepositoryContent", Effect: "Deny", Principal: "*", Resource: this.repositoryArn,
+                Action: ["ecr:BatchDeleteImage", "ecr:DeleteRepository", "ecr:PutLifecyclePolicy"],
+              }] : []),
+            ],
+          }) },
+        },
+      });
+    }
     for (const [index, grant] of grants.entries()) {
       const name = `${config.name}-${grant.access}-${index}`;
       new Policy(this, `policy-${index}`, {
