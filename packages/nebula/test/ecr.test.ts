@@ -12,6 +12,8 @@ test("repository retains immutable private images; pull and publication grants a
   const chart = Testing.chart();
   const repo = new EcrRepository(chart, "images", config);
   const resources = Testing.synth(chart);
+  assert.equal(repo.repositoryPolicy, undefined);
+  assert.equal(resources.some(r => r.kind === "RepositoryPolicy"), false, "existing callers remain unchanged");
   const repository = resources.find(r => r.kind === "Repository");
   assert.equal(repository.apiVersion, "ecr.aws.upbound.io/v1beta2");
   assert.equal(repository.spec.deletionPolicy, "Orphan");
@@ -45,4 +47,57 @@ test("ECR uses the same pinned provider family and projected identity as other A
   assert.equal(provider.spec.runtimeConfigRef.name, "provider-aws-ecr-irsa");
   const runtime = resources.find(r => r.kind === "DeploymentRuntimeConfig");
   assert.equal(runtime.spec.deploymentTemplate.spec.template.spec.volumes[0].projected.sources[0].serviceAccountToken.audience, "sts.amazonaws.com");
+});
+
+test("explicit writer boundary denies other IAM identities without expanding grants", () => {
+  const chart = Testing.chart();
+  const repo = new EcrRepository(chart, "images", { ...config, exclusivePush: true, retainContent: true,
+    providerConfigRef: "registry-controller" });
+  assert.ok(repo.repositoryPolicy);
+  const resources = Testing.synth(chart), policy = resources.find(r => r.kind === "RepositoryPolicy");
+  assert.equal(resources.filter(r => r.kind === "RepositoryPolicy").length, 1);
+  assert.equal(policy.apiVersion, "ecr.aws.upbound.io/v1beta1");
+  assert.equal(policy.metadata.annotations["crossplane.io/external-name"], "team/app");
+  assert.equal(policy.spec.deletionPolicy, "Orphan");
+  assert.deepEqual(policy.spec.providerConfigRef, { name: "registry-controller" });
+  assert.deepEqual(policy.spec.forProvider.repositoryRef, { name: "app-images" });
+  assert.equal(policy.spec.forProvider.region, config.region);
+  const statements = JSON.parse(policy.spec.forProvider.policy).Statement;
+  assert.deepEqual(statements, [{
+    Sid: "OnlyDeclaredWriters", Effect: "Deny", Principal: "*", Resource: repo.repositoryArn,
+    Action: ["ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
+      "ecr:ReplicateImage", "ecr:BatchImportUpstreamImage"],
+    Condition: { ArnNotEquals: { "aws:PrincipalArn": ["arn:aws:iam::123456789012:role/publisher"] } },
+  }, {
+    Sid: "RetainRepositoryContent", Effect: "Deny", Principal: "*", Resource: repo.repositoryArn,
+    Action: ["ecr:BatchDeleteImage", "ecr:DeleteRepository", "ecr:PutLifecyclePolicy"],
+  }]);
+  // The boundary never grants access, creates keys, or modifies read permissions.
+  assert.equal(statements.some((s: any) => s.Effect === "Allow" || s.Action.some((a: string) => a.includes("Get"))), false);
+  const baseline = Testing.chart(); new EcrRepository(baseline, "images", { ...config, providerConfigRef: "registry-controller" });
+  assert.deepEqual(resources.filter(r => r.kind !== "RepositoryPolicy"), Testing.synth(baseline));
+  assert.equal(resources.some(r => r.kind === "LifecyclePolicy" || r.kind === "AccessKey" || r.kind === "User"), false);
+});
+
+test("writer and retention guardrails are independent, explicit and fail closed on ambiguous input", () => {
+  for (const patch of [{ exclusivePush: "true" }, { retainContent: "true" },
+    { exclusivePush: true, grants: [] }, { exclusivePush: true, grants: [{ roleName: "puller", access: "pull" }] }]) {
+    assert.throws(() => new EcrRepository(Testing.chart(), "images", { ...config, ...patch } as EcrRepositoryConfig));
+  }
+  for (const [patch, expected] of [
+    [{ exclusivePush: true }, ["OnlyDeclaredWriters"]],
+    [{ retainContent: true, grants: [] }, ["RetainRepositoryContent"]],
+  ] as const) {
+    const chart = Testing.chart();
+    new EcrRepository(chart, "images", { ...config, ...patch, grants: "grants" in patch ? [] : config.grants });
+    const policy = Testing.synth(chart).find(r => r.kind === "RepositoryPolicy");
+    assert.deepEqual(JSON.parse(policy.spec.forProvider.policy).Statement.map((s: any) => s.Sid), expected);
+  }
+  const chart = Testing.chart();
+  new EcrRepository(chart, "images", { ...config, exclusivePush: true, grants: [
+    { roleName: "first", access: "push" }, { roleName: "reader", access: "pull" }, { roleName: "second", access: "push" },
+  ] });
+  const policy = Testing.synth(chart).find(r => r.kind === "RepositoryPolicy");
+  assert.deepEqual(JSON.parse(policy.spec.forProvider.policy).Statement[0].Condition.ArnNotEquals["aws:PrincipalArn"],
+    ["arn:aws:iam::123456789012:role/first", "arn:aws:iam::123456789012:role/second"]);
 });
