@@ -87,16 +87,20 @@ export class EcrRepository extends Construct {
         spec: { deletionPolicy: "Orphan", providerConfigRef,
           forProvider: { region: config.region, repositoryRef: { name: config.name }, policy: JSON.stringify({
             Version: "2012-10-17",
+            // SetRepositoryPolicy scopes these statements to repositoryRef.
+            // Its service validator rejects an explicit Resource (including
+            // "*"), although generic IAM validation accepts it. IAM grants
+            // below still require the exact repository ARN.
             Statement: [
               ...(config.exclusivePush ? [{
-                Sid: "OnlyDeclaredWriters", Effect: "Deny", Principal: "*", Resource: this.repositoryArn,
+                Sid: "OnlyDeclaredWriters", Effect: "Deny", Principal: "*",
                 Action: ["ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
                   "ecr:ReplicateImage", "ecr:BatchImportUpstreamImage"],
                 // IAM uses the role ARN here, not its changing STS session ARN.
                 Condition: { ArnNotEquals: { "aws:PrincipalArn": writers } },
               }] : []),
               ...(config.retainContent ? [{
-                Sid: "RetainRepositoryContent", Effect: "Deny", Principal: "*", Resource: this.repositoryArn,
+                Sid: "RetainRepositoryContent", Effect: "Deny", Principal: "*",
                 Action: ["ecr:BatchDeleteImage", "ecr:DeleteRepository", "ecr:PutLifecyclePolicy"],
               }] : []),
             ],

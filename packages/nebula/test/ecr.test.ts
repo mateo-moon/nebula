@@ -64,14 +64,15 @@ test("explicit writer boundary denies other IAM identities without expanding gra
   assert.equal(policy.spec.forProvider.region, config.region);
   const statements = JSON.parse(policy.spec.forProvider.policy).Statement;
   assert.deepEqual(statements, [{
-    Sid: "OnlyDeclaredWriters", Effect: "Deny", Principal: "*", Resource: repo.repositoryArn,
+    Sid: "OnlyDeclaredWriters", Effect: "Deny", Principal: "*",
     Action: ["ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
       "ecr:ReplicateImage", "ecr:BatchImportUpstreamImage"],
     Condition: { ArnNotEquals: { "aws:PrincipalArn": ["arn:aws:iam::123456789012:role/publisher"] } },
   }, {
-    Sid: "RetainRepositoryContent", Effect: "Deny", Principal: "*", Resource: repo.repositoryArn,
+    Sid: "RetainRepositoryContent", Effect: "Deny", Principal: "*",
     Action: ["ecr:BatchDeleteImage", "ecr:DeleteRepository", "ecr:PutLifecyclePolicy"],
   }]);
+  assert.ok(statements.every((s: any) => !("Resource" in s)), "ECR scopes its repository policy at attachment, not with Resource");
   // The boundary never grants access, creates keys, or modifies read permissions.
   assert.equal(statements.some((s: any) => s.Effect === "Allow" || s.Action.some((a: string) => a.includes("Get"))), false);
   const baseline = Testing.chart(); new EcrRepository(baseline, "images", { ...config, providerConfigRef: "registry-controller" });
