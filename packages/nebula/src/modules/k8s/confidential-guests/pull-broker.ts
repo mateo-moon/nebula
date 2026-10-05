@@ -1,4 +1,5 @@
 import { Construct } from "constructs";
+import { parse as parseToml } from "smol-toml";
 import {
   IntOrString, KubeConfigMap, KubeDeployment, KubeNetworkPolicy, KubeService, Quantity,
 } from "cdk8s-plus-33/lib/imports/k8s";
@@ -32,6 +33,22 @@ export type InitDataAdmission =
 export type MeasurementAdmission =
   | { readonly form: "equals"; readonly value: string }
   | { readonly form: "in"; readonly values: readonly string[] };
+
+/**
+ * Opt-in admission for the built-in SNP verifier's authenticated claims.
+ * Every reported-TCB component is an independently checked byte; there are
+ * no implicit zero floors. This does not pin a chip, FMC, or the current,
+ * committed or launch TCB: the supported broker does not emit those claims.
+ * VMPL zero is enforced by its pinned verifier, not by this resource policy.
+ */
+export interface SnpBrokerAdmission {
+  readonly minimumReportedTcb: {
+    readonly bootloader: number;
+    readonly tee: number;
+    readonly snp: number;
+    readonly microcode: number;
+  };
+}
 
 /** A KBS resource path: repository, type and tag. */
 export type KbsResourcePath = readonly [repository: string, type: string, tag: string];
@@ -92,6 +109,16 @@ export interface AttestedPullBrokerProps {
    */
   readonly measurement?: MeasurementAdmission;
   /**
+   * Require a matching launch measurement, init-data, non-debug/non-migratable
+   * SNP guest and complete reported-TCB floors. Generates a matching CPU
+   * appraisal policy and requires an affirming EAR result before resource
+   * release. Requires the ephemeral issuer and built-in AS with LocalFs
+   * storage at /state; policy files are projected read-only. The broker's
+   * verifier and storage contract must be qualified by the caller (v0.21.0).
+   * Omit to preserve the existing broker's manifests and policy byte-for-byte.
+   */
+  readonly snpAdmission?: SnpBrokerAdmission;
+  /**
    * Secret with the registry credentials (`.dockerconfigjson`). The caller's
    * init container gets it at `/registry`; with `exposeAsResource` it is also
    * mounted read-only into the broker's local resource store as the resource,
@@ -110,7 +137,7 @@ export interface AttestedPullBrokerProps {
 const WHERE = "AttestedPullBroker";
 const PROPS_FIELDS = [
   "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "issuer", "initImage",
-  "initCommand", "policyReadOnly", "configToml", "resourcePath", "initData", "measurement", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
+  "initCommand", "policyReadOnly", "configToml", "resourcePath", "initData", "measurement", "snpAdmission", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
 ];
 const HOST_DATA = /^[a-f0-9]{64}$/;
 const MEASUREMENT = /^[a-f0-9]{96}$/;
@@ -147,6 +174,67 @@ function admission(what: string, claim: string, value: unknown, admitted: (value
   fail(WHERE, `${what} admission must be { form: "equals", value } or { form: "in", values: [at least one] }`);
 }
 
+const TCB_COMPONENTS = ["bootloader", "tee", "snp", "microcode"] as const;
+
+function snpRequirements(value: SnpBrokerAdmission, measurement?: MeasurementAdmission): string[] {
+  if (measurement === undefined) fail(WHERE, "snpAdmission requires measurement admission");
+  knownFields(WHERE, "snpAdmission", value, ["minimumReportedTcb"]);
+  const floors = knownFields(WHERE, "snpAdmission.minimumReportedTcb", value.minimumReportedTcb, TCB_COMPONENTS);
+  return [
+    "ev.snp.policy_migrate_ma == false",
+    ...TCB_COMPONENTS.flatMap(component => {
+      const floor = integer(WHERE, `snpAdmission.minimumReportedTcb.${component}`, floors[component], 0, 255);
+      const claim = `ev.snp.reported_tcb_${component}`;
+      // Rego orders unlike types too: a bare >= would admit strings/objects.
+      return [`is_number(${claim})`, `${claim} == floor(${claim})`, `${claim} >= ${floor}`, `${claim} <= 255`];
+    }),
+  ];
+}
+
+/**
+ * Built-in AS CPU appraisal, using the same acceptance requirements as the
+ * resource policy. Hardware signature/binding verification precedes appraisal.
+ * This is a broker owner's acceptance policy, not a new release authority or
+ * an assertion that HOST_DATA is a hardware hash of the running application.
+ */
+export function pullBrokerAppraisalPolicy(initData: InitDataAdmission, measurement: MeasurementAdmission, snpAdmission: SnpBrokerAdmission): string {
+  const conditions = [
+    admission("init-data", "ev.init_data", initData, hostData),
+    admission("measurement", "ev.snp.measurement", measurement, launchMeasurement),
+    "ev.snp.policy_debug_allowed == false",
+    ...snpRequirements(snpAdmission, measurement),
+  ];
+  return `package policy
+default trust_claims := {"executables": 33, "hardware": 97, "configuration": 36}
+extensions := []
+trust_claims := {"executables": 3, "hardware": 2, "configuration": 2} if {
+    ev := input
+    ${conditions.join("\n    ")}
+}
+`;
+}
+
+function validateSnpConfiguration(configToml: string): void {
+  let config: any;
+  try { config = parseToml(configToml, { unsafeKeyBehaviour: "throw" }); }
+  catch { fail(WHERE, "snpAdmission requires valid KBS TOML"); }
+  const service = config.attestation_service;
+  if (service?.type !== "coco_as_builtin" || (service.storage_type !== undefined && service.storage_type !== "LocalFs")
+      || config.storage_backend?.storage_type !== "LocalFs" || config.storage_backend?.backends?.local_fs?.dir_path !== "/state") {
+    fail(WHERE, "snpAdmission requires built-in AS and LocalFs storage at /state");
+  }
+  const signer = service.attestation_token_broker?.signer;
+  const token = config.attestation_token;
+  if (token?.insecure_header_jwk !== false || JSON.stringify(token.trusted_certs_paths) !== JSON.stringify(["/state/issuer/cert.pem"])
+      || (token.trusted_jwk_sets !== undefined && JSON.stringify(token.trusted_jwk_sets) !== "[]")
+      || (token.extra_teekey_paths !== undefined && JSON.stringify(token.extra_teekey_paths) !== "[]")
+      || signer?.key_path !== "/state/issuer/key.pem" || signer?.cert_path !== "/state/issuer/cert.pem"
+      || signer?.cert_url !== undefined) {
+    fail(WHERE, "snpAdmission requires only the local ephemeral issuer and rejects unendorsed token keys");
+  }
+  if (config.admin?.authorization_mode !== "DenyAll") fail(WHERE, "snpAdmission requires DenyAll administrative access");
+}
+
 /**
  * The KBS resource policy: release the resource only to SEV-SNP evidence
  * without the debug policy bit whose init-data hash is admitted and, when a
@@ -154,10 +242,14 @@ function admission(what: string, claim: string, value: unknown, admitted: (value
  * Init-data alone does not identify the guest software (see
  * {@link InitDataAdmission}); without a measurement the policy is as before.
  */
-export function pullBrokerPolicy(resourcePath: KbsResourcePath, initData: InitDataAdmission, measurement?: MeasurementAdmission): string {
+export function pullBrokerPolicy(resourcePath: KbsResourcePath, initData: InitDataAdmission, measurement?: MeasurementAdmission, snpAdmission?: SnpBrokerAdmission): string {
   const path = validResourcePath(resourcePath);
   const admitted = [admission("init-data", "ev.init_data", initData, hostData)];
   if (measurement !== undefined) admitted.push(admission("measurement", "ev.snp.measurement", measurement, launchMeasurement));
+  if (snpAdmission !== undefined) admitted.push(
+    'input.submods.cpu0["ear.status"] == "affirming"',
+    ...snpRequirements(snpAdmission, measurement),
+  );
   return `package policy
 default allow := false
 allow if {
@@ -183,6 +275,8 @@ allow if {
 export class AttestedPullBroker extends Construct {
   /** The rendered resource policy. */
   public readonly policy: string;
+  /** CPU appraisal mounted read-only when snpAdmission is enabled. */
+  public readonly appraisalPolicy?: string;
   /** SHA-256 of policy and configuration, as annotated on the broker Pods. */
   public readonly configSha256: string;
   /** The resource URI guests request (`kbs:///<repository>/<type>/<tag>`). */
@@ -216,6 +310,10 @@ export class AttestedPullBroker extends Construct {
     const initImage = ephemeral ? brokerImage : image(WHERE, "initImage", props.initImage);
     const initCommand = ephemeral ? ["/bin/sh", "-c", readConfidentialGuestAsset("pull-broker-issuer.sh")] : command(WHERE, "initCommand", props.initCommand);
     if (typeof props.configToml !== "string" || props.configToml.length === 0) fail(WHERE, `configToml is required`);
+    if (props.snpAdmission !== undefined) {
+      if (!ephemeral) fail(WHERE, "snpAdmission requires the ephemeral issuer");
+      validateSnpConfiguration(props.configToml);
+    }
     const resourcePath = validResourcePath(props.resourcePath);
     const secret = knownFields(WHERE, "pullSecret", props.pullSecret, ["name", "exposeAsResource"]);
     if (typeof secret.exposeAsResource !== "boolean") {
@@ -232,8 +330,11 @@ export class AttestedPullBroker extends Construct {
     const configWave = waveAnnotation(WHERE, "syncWaves.config", props.syncWaves?.config ?? -2);
     const brokerWave = waveAnnotation(WHERE, "syncWaves.broker", props.syncWaves?.broker ?? -1);
 
-    this.policy = pullBrokerPolicy(resourcePath, props.initData, props.measurement);
-    this.configSha256 = sha256Hex(this.policy + props.configToml);
+    this.policy = pullBrokerPolicy(resourcePath, props.initData, props.measurement, props.snpAdmission);
+    if (props.snpAdmission !== undefined) {
+      this.appraisalPolicy = pullBrokerAppraisalPolicy(props.initData, props.measurement!, props.snpAdmission);
+    }
+    this.configSha256 = sha256Hex(this.policy + props.configToml + (this.appraisalPolicy ?? ""));
     this.resourceUri = `kbs:///${resourcePath.join("/")}`;
     this.host = `${name}.${namespace}.svc`;
     this.port = port;
@@ -257,7 +358,8 @@ export class AttestedPullBroker extends Construct {
     });
     new KubeConfigMap(this, "configuration", {
       metadata: metadata(configMapName, configWave),
-      data: { "config.toml": props.configToml, "resource-policy.rego": this.policy },
+      data: { "config.toml": props.configToml, "resource-policy.rego": this.policy,
+        ...(this.appraisalPolicy ? { "default_cpu.rego": this.appraisalPolicy } : {}) },
     });
     new KubeService(this, "service", {
       metadata: metadata(name, configWave),
@@ -302,6 +404,12 @@ export class AttestedPullBroker extends Construct {
                 { name: "state", mountPath: "/state" },
                 { name: "configuration", mountPath: "/configuration", readOnly: true },
                 ...(policyReadOnly ? [{ name: "policy", mountPath: "/state/kbs", readOnly: true }] : []),
+                // Only CPU is projected: the AS initializes other device
+                // defaults in this directory. Existing policies are not
+                // overwritten at startup. subPath is safe here because the
+                // template hash rolls the Pod for every policy change.
+                ...(this.appraisalPolicy ? [{ name: "configuration", mountPath: "/state/attestation_service_policy/default_cpu.rego",
+                  subPath: "default_cpu.rego", readOnly: true }] : []),
                 ...(exposed ? [{ name: "registry-resource", mountPath: "/state/repository", readOnly: true }] : []),
               ],
             }],

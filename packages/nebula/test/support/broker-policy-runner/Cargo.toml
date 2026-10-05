@@ -1,0 +1,13 @@
+[package]
+name = "broker-policy-test-runner"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# Match the built-in attestation service in the supported KBS v0.21.0.
+# Test-only: none of these crates are shipped in the TypeScript package.
+regorus = { version = "=0.10.1", default-features = false, features = ["std"] }
+ear = "=0.5.0"
+serde_json = "=1.0.150"

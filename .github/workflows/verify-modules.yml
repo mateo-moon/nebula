@@ -35,6 +35,10 @@ jobs:
         run: pnpm test
       - run: pnpm exec tsc --noEmit
       - run: pnpm verify:policies
+      - name: Install pinned Rust for broker policy qualification
+        run: rustup toolchain install 1.98.1 --profile minimal && rustup override set 1.98.1
+      - name: Evaluate SNP admission with the broker's pinned policy and EAR engines
+        run: pnpm verify:broker-admission
 
   bridge:
     name: Bridge tests

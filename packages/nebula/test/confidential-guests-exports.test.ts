@@ -20,6 +20,7 @@ const RUNTIME_EXPORTS = [
   "snpGuestPolicyGuards",
   "isDigestImage",
   "provisionScript",
+  "pullBrokerAppraisalPolicy",
   "pullBrokerPolicy",
   "readConfidentialGuestAsset",
   "sealedDisksPlan",

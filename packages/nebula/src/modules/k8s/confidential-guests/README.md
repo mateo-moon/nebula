@@ -89,6 +89,63 @@ mounts the policy read-only for them too).
 Everything else (controller images, policies, Services, log collection) is
 unmeasured host-side configuration and can change without a new release.
 
+### SNP broker firmware admission
+
+For a qualified built-in KBS v0.21.0 verifier, add `snpAdmission` alongside
+`initData`, `measurement` and `issuer: "ephemeral"`:
+
+```typescript
+snpAdmission: {
+  minimumReportedTcb: {
+    bootloader: reviewed.bootloader,
+    tee: reviewed.tee,
+    snp: reviewed.snp,
+    microcode: reviewed.microcode,
+  },
+}
+```
+
+All four floors are required bytes (0–255); each is checked independently.
+Choose them from an independently reviewed firmware baseline, not by blindly
+accepting whatever the next peer reports. Zero is allowed only when explicitly
+chosen. A larger microcode value cannot compensate for an older bootloader.
+
+This opt-in profile generates two policies from the same inputs:
+
+1. The built-in attestation service appraises its authenticated SNP claims:
+   admitted launch measurement and init-data, debug and migration disabled,
+   and all four reported-TCB floors. Only a complete match produces the
+   affirmative executable/hardware/configuration trust vector.
+2. The resource policy requires `cpu0["ear.status"] == "affirming"` and
+   independently checks those same claims before releasing the exact resource.
+
+The default CPU appraisal is projected read-only at
+`/state/attestation_service_policy/default_cpu.rego`. The supported service
+preserves an existing policy on startup. Other device defaults can still be
+initialized in the surrounding in-memory directory. Both generated policies
+and the configuration enter the Pod-template hash; a policy change replaces
+the broker even though Kubernetes does not refresh a `subPath` mount.
+
+The profile requires built-in AS with LocalFs storage at `/state`, the local
+ephemeral issuer as the **only** token trust source, and denied administrative
+access. There is no policy-management endpoint to enable, release authority,
+or external reference-value service to populate. Missing claims, non-numeric
+or fractional firmware values, and non-affirming/missing status fail closed.
+Omitting the profile leaves existing manifests byte-identical.
+
+The verifier, not these Rego rules, checks signatures, key/report bindings and
+VMPL zero. Its v0.21.0 SNP output exposes the four **reported** TCB components;
+it does not expose chip identity, FMC, or current/committed/launch TCB vectors.
+This profile must not be represented as checking those absent fields. Peer
+acceptance through a separate attestation adapter remains a separate policy.
+Init-data is authenticated configuration, not a hardware hash of an application.
+
+`pnpm verify:broker-admission` executes the generated policies with pinned
+Regorus 0.10.1 and EAR 0.5.0, including the real trust-vector-to-status mapping.
+It needs Rust and its ordinary native build prerequisites. These are software
+policy tests; the caller must separately qualify its exact broker image,
+read-only mounts and actual hardware evidence before changing a deployment.
+
 ## The guest env contract
 
 A guest learns which deployment it belongs to from three measured
