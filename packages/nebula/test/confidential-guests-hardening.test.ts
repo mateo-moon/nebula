@@ -136,6 +136,7 @@ test("unreviewed defaults, recipients and authorization drift are refused", () =
     d => { d.containers[0].OCI.Process.Args = ["sh"]; },
     d => { d.containers[0].OCI.Process.NoNewPrivileges = false; },
     d => { d.containers[0].OCI.Process.User.UID = 1; },
+    d => { d.containers[0].OCI.Process.User.GID = 1; },
     d => { d.containers[0].OCI.Root.Readonly = false; },
     d => { d.containers[0].OCI.Mounts = []; },
     d => { d.containers[0].OCI.Linux.Devices = [native]; },
@@ -149,6 +150,48 @@ test("unreviewed defaults, recipients and authorization drift are refused", () =
     const { pod, data, options } = fixture();
     mutate(data);
     assert.throws(() => hardenGuestPolicy(pod, envelope(data), options), /guest policy:/, mutate.toString());
+  }
+});
+
+test("startup identities follow Pod defaults and per-container overrides without rewriting policy users", () => {
+  const { pod, data, options } = fixture();
+  const declared: GuestPolicyObject = pod;
+  declared.spec.securityContext = { runAsUser: 2100, runAsGroup: 2200, runAsNonRoot: true };
+  for (const recipient of data.containers.slice(0, -1)) recipient.OCI.Process.User = { UID: 2100, GID: 2200 };
+  // Init containers use the same override rules; explicit zero is not a missing value.
+  declared.spec.initContainers[0].securityContext = { runAsUser: 0, runAsGroup: 0, runAsNonRoot: false };
+  data.containers[0].OCI.Process.User = { UID: 0, GID: 0 };
+  declared.spec.containers[1].securityContext = { runAsUser: 2300 };
+  data.containers[2].OCI.Process.User = { UID: 2300, GID: 2200 };
+  const before = structuredClone({ pod, data, options });
+  const output = decodeGuestPolicy(hardenGuestPolicy(pod, envelope(data), options).ccInitData);
+  assert.deepEqual((output.data.containers as GuestPolicyObject[]).slice(0, -1).map(c => c.OCI.Process.User),
+    [{ UID: 0, GID: 0 }, { UID: 2100, GID: 2200 }, { UID: 2300, GID: 2200 }]);
+  assert.deepEqual({ pod, data, options }, before);
+  for (const field of ["UID", "GID"]) {
+    for (const changed of [0, 2400, "2300", null]) {
+      const drift = structuredClone(data);
+      drift.containers[2].OCI.Process.User[field] = changed;
+      assert.throws(() => hardenGuestPolicy(pod, envelope(drift), options), /startup identity drift/);
+    }
+  }
+});
+
+test("invalid or ambiguous declared startup identities fail closed", () => {
+  for (const scope of ["pod", "init", "container"]) {
+    const contexts: unknown[] = [null, [], { runAsNonRoot: true }, { runAsNonRoot: "true" }];
+    for (const field of ["runAsUser", "runAsGroup"]) {
+      for (const value of [-1, 1.5, "0", null, 0xffffffff, Number.MAX_SAFE_INTEGER + 1]) {
+        contexts.push({ [field]: value });
+      }
+    }
+    for (const context of contexts) {
+      const { pod, data, options } = fixture();
+      const declared: GuestPolicyObject = pod;
+      const target = scope === "pod" ? declared.spec : scope === "init" ? declared.spec.initContainers[0] : declared.spec.containers[1];
+      target.securityContext = context;
+      assert.throws(() => hardenGuestPolicy(pod, envelope(data), options), /guest policy:/);
+    }
   }
 });
 

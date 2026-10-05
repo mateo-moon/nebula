@@ -91,6 +91,26 @@ function omit(value: GuestPolicyObject, key: string): void {
   delete value[key];
 }
 
+/** Container overrides take precedence over Pod defaults, including explicit zero. */
+function startupIdentity(spec: GuestPolicyObject, source: GuestPolicyObject): { UID: number; GID: number } {
+  const contexts = [spec, source].map(value => value.securityContext === undefined ? {} : object(value.securityContext));
+  for (const context of contexts) {
+    for (const field of ["runAsUser", "runAsGroup"]) {
+      if (context[field] !== undefined) {
+        require(Number.isSafeInteger(context[field]) && context[field] >= 0 && context[field] < 0xffffffff,
+          `invalid ${field}`);
+      }
+    }
+    require(context.runAsNonRoot === undefined || typeof context.runAsNonRoot === "boolean", "invalid runAsNonRoot");
+  }
+  const effective = (field: string) => contexts[1][field] ?? contexts[0][field];
+  // Preserve the existing root-only expectation when no numeric identity is
+  // declared. Do not infer a different identity from an image's USER metadata.
+  const identity = { UID: effective("runAsUser") ?? 0, GID: effective("runAsGroup") ?? 0 };
+  require(effective("runAsNonRoot") !== true || identity.UID !== 0, "runAsNonRoot requires a declared non-root identity");
+  return identity;
+}
+
 /** Refuse widened defaults, including path prefixes that request-default checks alone miss. */
 export function checkGeneratedGuestSettings(data: GuestPolicyObject, settings: GuestPolicyObject): void {
   const sections = ["common", "sandbox", "request_defaults", "devices", "cluster_config"];
@@ -198,7 +218,9 @@ export function hardenGuestPolicy(pod: GuestPodManifest, ccInitData: string, opt
     equal(annotations[IMAGE], source.image, "generated image drift");
     equal(process.Args, [...source.command, ...(source.args ?? [])], "generated argv drift");
     require(object(oci.Root).Readonly === true && process.NoNewPrivileges === true, "root or privilege drift");
-    require(object(process.User).UID === 0 && object(process.User).GID === 0, "startup identity drift");
+    const identity = startupIdentity(spec, source);
+    const user = object(process.User);
+    require(user.UID === identity.UID && user.GID === identity.GID, "startup identity drift");
     const mounts = items(oci.Mounts).map(object);
     equal(mounts.filter(m => m.destination === TOKEN_MOUNT.destination), [TOKEN_MOUNT], "unexpected implicit token allowance");
     oci.Mounts = mounts.filter(m => m.destination !== TOKEN_MOUNT.destination);
