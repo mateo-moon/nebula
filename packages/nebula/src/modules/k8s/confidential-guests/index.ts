@@ -163,8 +163,8 @@ export type {
 } from "./stack";
 export { confidentialGuestAssetUrl, readConfidentialGuestAsset } from "./assets";
 export type { ConfidentialGuestAsset } from "./assets";
-export { AttestedPullBroker, pullBrokerPolicy } from "./pull-broker";
-export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath, MeasurementAdmission } from "./pull-broker";
+export { AttestedPullBroker, pullBrokerAppraisalPolicy, pullBrokerPolicy } from "./pull-broker";
+export type { AttestedPullBrokerProps, InitDataAdmission, KbsResourcePath, MeasurementAdmission, SnpBrokerAdmission } from "./pull-broker";
 export { validateDiskTable } from "./disk-table";
 export type { DiskEntry, DiskSize, DiskTable, RetainedDisk, RetiredDisk } from "./disk-table";
 export { defaultProvisionTemplate, provisionScript } from "./provision";
