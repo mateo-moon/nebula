@@ -102,6 +102,13 @@ export interface K0smotronControlPlaneConfig {
    */
   apiExtraArgs?: Record<string, string>;
   /**
+   * Ordered kube-apiserver arguments appended after extraArgs. Use for flags
+   * that must repeat (e.g. accepting a previous service-account issuer while
+   * issuing new tokens with the first issuer). Maps to k0sConfig.spec.api.rawArgs;
+   * the caller owns flag compatibility. Changing restarts the hosted CP pod.
+   */
+  apiRawArgs?: string[];
+  /**
    * kube-controller-manager extra args
    * (`k0sConfig.spec.controllerManager.extraArgs`), e.g.
    * `terminated-pod-gc-threshold`. k0smotron passes the block through untouched
@@ -247,8 +254,11 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             // minutes on 2026-08-11. k0smotron deep-merges its own
             // externalAddress/sans into this same block and leaves extraArgs
             // alone.
-            ...(this.config.apiExtraArgs
-              ? { api: { extraArgs: this.config.apiExtraArgs } }
+            ...(this.config.apiExtraArgs || this.config.apiRawArgs?.length
+              ? { api: {
+                  ...(this.config.apiExtraArgs ? { extraArgs: this.config.apiExtraArgs } : {}),
+                  ...(this.config.apiRawArgs?.length ? { rawArgs: this.config.apiRawArgs } : {}),
+                } }
               : {}),
             ...(this.config.controllerManagerExtraArgs
               ? { controllerManager: { extraArgs: this.config.controllerManagerExtraArgs } }
