@@ -63,6 +63,7 @@ test("AWS is selectable through the reusable CoCo module and a distinct RuntimeC
   for (const [key, value] of Object.entries({ CLOUD_PROVIDER: "aws", DISABLECVM: "false", USE_PUBLIC_IP: "false",
     SSH_KP_NAME: "", PODVM_DEVELOPER_MODE: "false", TLS_SKIP_VERIFY: "false", TLS_MIN_VERSION: "VersionTLS13",
     CLOUD_CONFIG_VERIFY: "true", ROOT_VOLUME_SIZE: "0", USE_PODVM_LAUNCHTEMPLATE: "true",
+    TUNNEL_TYPE: "vxlan", EXTERNAL_NETWORK_VIA_PODVM: "false", ENABLE_SCRATCH_SPACE: "false", INITDATA: "",
     PODVM_LAUNCHTEMPLATE_NAME: "coco-guest", PEERPODS_LIMIT_PER_NODE: "4" })) assert.equal(cm.data[key], value, key);
   assert.equal(calls.at(-1)?.version, "0.23.0");
   assert.equal(calls.at(-1)?.values["kata-as-coco-runtime"].defaultShim.amd64, "remote");

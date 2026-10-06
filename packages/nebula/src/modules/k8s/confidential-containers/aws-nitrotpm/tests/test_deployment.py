@@ -75,3 +75,23 @@ def test_kbs_cannot_start_with_missing_or_permissive_policy(flow, tmp_path):
         check_policy_seed(config, flow.profiles, "https://verifier.example", "https://kbs.example")
     policy.write_text(resource_policy(flow.profiles, "https://verifier.example", "https://kbs.example"))
     check_policy_seed(config, flow.profiles, "https://verifier.example", "https://kbs.example")
+
+
+def test_caa_transport_starts_automatically_with_no_mutable_command_or_policy_path():
+    root = Path(__file__).resolve().parents[1] / "image/root/usr/lib/systemd/system"
+    mount = (root / "run-peerpod.mount").read_text()
+    for option in ["Where=/run/peerpod", "Type=tmpfs", "mode=0700", "nosuid", "nodev", "noexec", "size=64K"]:
+        assert option in mount
+    service = (root / "aws-caa-transport.service").read_text()
+    assert "ExecStart=/usr/local/bin/aws-trustee-bootstrap --transport" in service
+    assert "Requires=run-peerpod.mount" in service
+    assert "ProtectSystem=strict" in service and "ReadWritePaths=/run/peerpod" in service
+    bootstrap = (root / "aws-trustee-bootstrap.service").read_text()
+    assert "Requires=run-nebula-secrets.mount aws-caa-transport.service" in bootstrap
+    assert "After=run-nebula-secrets.mount aws-caa-transport.service" in bootstrap
+    apf = (root / "agent-protocol-forwarder.service.d/90-attested-keys.conf").read_text()
+    assert "aws-caa-transport.service" in apf
+    assert "EnvironmentFile=\n" in apf and "ExecStart=\n" in apf
+    assert " -config /run/peerpod/apf.json " in apf
+    assert "$OPTIONS" not in apf and "$TLS_OPTIONS" not in apf and "disable-tls" not in apf
+    assert "ReadOnlyPaths=/run/peerpod" in apf

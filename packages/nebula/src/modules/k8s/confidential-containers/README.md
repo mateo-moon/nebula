@@ -4,6 +4,13 @@
 and the optional AWS immutable PodVM prototype belong to this reusable module;
 applications select the corresponding `RuntimeClasses` constant.
 
+The required AWS module must provision and operate every dependency from one
+declaration, without preparation/completion scripts or separate services, and
+protect keys from management-cluster admins. The [self-contained contract](aws-nitrotpm/SELF_CONTAINED.md)
+records that design and its unresolved trust bootstrap. **The current draft does
+not yet implement that lifecycle.** The API below is the prototype rendering
+interface, not the final self-contained installation API.
+
 The default installer is unchanged when `awsNitroTpm` is omitted. The AWS route
 uses the pinned CoCo 0.23.0 chart, one CAA backend per installer, private PodVMs,
 separate projected CAA/cleanup roles, finite capacity and digest-pinned controller
@@ -21,7 +28,7 @@ import {
   type AwsNitroTpmRuntimeConfig,
 } from "nebula-cdk8s";
 
-// Supply deployment-specific IDs and reviewed controller image digests.
+// Research interface only; requires inputs the final module must own.
 declare const awsPlatform: AwsNitroTpmRuntimeConfig;
 
 new ConfidentialContainers(chart, "coco", {
@@ -55,8 +62,8 @@ be baked into a separate approved immutable boot profile as appropriate.
 
 **AWS deployment remains unqualified.** A registered RuntimeClass or a launch
 template CPU option does not establish fresh SNP proof, immutable guest/policy
-binding or runtime isolation. The staged image still lacks a reviewed CAA
-transport provisioner and cannot run stock CAA as-is. Synthetic tests exercise
+binding or runtime isolation. The staged image now includes a restricted CAA
+transport provisioner, but has not been built or boot-qualified with stock CAA. Synthetic tests exercise
 protocols and refusals; they cannot approve real measurements. The
 [qualification gates](aws-nitrotpm/HANDOFF.md) must pass before releasing real
 keys or enabling confidential workloads. No permissive attestation fallback is

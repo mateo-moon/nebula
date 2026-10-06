@@ -113,6 +113,7 @@ export function awsNitroTpmValues(config: ConfidentialContainersConfig): Record<
         USE_PODVM_LAUNCHTEMPLATE: "true", PODVM_LAUNCHTEMPLATE_NAME: aws.launchTemplateName,
         DISABLECVM: "false", USE_PUBLIC_IP: "false", SSH_KP_NAME: "", PODVM_DEVELOPER_MODE: "false",
         TLS_SKIP_VERIFY: "false", CLOUD_CONFIG_VERIFY: "true", PEERPODS_LIMIT_PER_NODE: String(aws.peerPodsLimitPerNode),
+        TUNNEL_TYPE: "vxlan", EXTERNAL_NETWORK_VIA_PODVM: "false", ENABLE_SCRATCH_SPACE: "false", INITDATA: "",
         ROOT_VOLUME_SIZE: "0", // Preserve the launch template's encrypted root mapping.
       } },
     },

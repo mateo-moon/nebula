@@ -19,6 +19,8 @@ use std::{
 };
 use zeroize::{Zeroize, Zeroizing};
 
+pub mod transport;
+
 pub const CONFIG: &str = "/usr/share/nebula/bootstrap.json";
 pub const CA: &str = "/usr/share/nebula/tls-ca.crt";
 pub const SECRETS: &str = "/run/nebula/secrets";

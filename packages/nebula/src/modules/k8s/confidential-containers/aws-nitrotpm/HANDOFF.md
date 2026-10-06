@@ -2,6 +2,8 @@
 
 This prototype belongs to Nebula's reusable `ConfidentialContainers` module. The `awsNitroTpm` option installs the AWS peer VM backend and registers `kata-remote-aws-nitrotpm` with the `kata-remote` handler. Local SNP/TDX runtimes can coexist. Application-specific names, fleet counts and replica assumptions are absent from the runtime contract. No AWS resources were created.
 
+The accepted target is now the [self-contained module contract](SELF_CONTAINED.md), with no manual deployment steps or external service prerequisite and with management-cluster administrators outside the key trust boundary. The current rendering API does not meet it. Module-owned attested authority/bootstrap, authenticated build approval, persistent protected recovery and unattended reconciliation remain unimplemented.
+
 ## Result
 
 The local interoperability proof works with unmodified Trustee KBS at `3b7c99069a7c89ea51713dcf7cf98c16dbe2d3db` and stock guest-components at `17ad60d88f9b7e4b3b54d01200985ae72723e8ab`:
@@ -15,9 +17,9 @@ This validates protocol compatibility and local rejection behavior. It does not 
 - The Nebula module suite passes: 228 tests, with 3 existing optional chart-render skips. All 8 AWS module checks pass, including actual pinned-chart rendering, SNP/TDX coexistence, unchanged default inputs, separated controller credentials and launch-template refusals.
 - The packed package ships every tracked source/asset and loads through a clean consumer without import-time file access. The secret mount is `/run/nebula/secrets` with the portable `run-nebula-secrets.mount` unit.
 - Type checking, management-policy conventions, publication guard and its 32 checks pass; a separate secret scan finds no leaks. Only the exact public AWS root and unmodified public Helm archive are content-allowlisted.
-- 45 Python tests pass, including the actual stock KBS/client/offline-KBC integration test; no skips in the combined run.
-- 4 native Rust unit tests pass; Clippy passes with warnings denied.
-- 5 Linux Rust tests pass in an isolated container with private restricted tmpfs and a **test-only no-swap proc fixture**. This includes 0600 atomic writes, rejection of disk-backed/mutable paths and symlink staging.
+- 49 Python tests pass, including the actual stock KBS/client/offline-KBC integration test; no skips in the combined run.
+- 13 native Rust unit tests pass, including the restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied.
+- 15 Linux Rust tests pass in an isolated container with private restricted tmpfs and a **test-only no-swap proc fixture**. This includes 0600 atomic writes, rejection of disk-backed/mutable paths and symlink staging.
 - The actual swap-enabled local container first refused provisioning, as intended. The positive fixture test is not proof of no-swap guest operation.
 - Negative cases include PCR4/PCR12 changes or omission, wrong PCR digest/length/schema, stale/future evidence, invalid signatures/certificates, rogue roots, nonce/key substitution, persistent and concurrent replay, unknown/ambiguous workload approval, different resource requests, query overrides, wrong issuer/audience, untrusted JWT signer, wrong recipient private key, unavailable KBS and missing/permissive KBS startup policy.
 - Public AWS root fingerprint checked against its NitroTPM documentation. The separate stock Trustee build checkout is clean. All evidence is from local synthetic fixtures and separate pinned upstream builds.
@@ -38,19 +40,19 @@ This validates protocol compatibility and local rejection behavior. It does not 
 | --- | --- |
 | Full retained SNP/CVM requirement | Supported joint fresh SNP + NitroTPM verification bound to the same key/challenge/guest. NitroTPM and a launch-template CPU option alone do not prove SNP enablement. |
 | Immutable image | Offline Linux KIWI build and real boot; UKI/PCR4 + PCR12 and dm-verity bind policy, bootstrap, endpoint trust and complete root; changed root/policy/kernel args and overlays cannot obtain keys. No AMI has been built here. |
-| CAA transport | Replace the masked mutable `process-user-data` path with a reviewed restricted provisioner for network/forwarder setup. Reject policy/CDH/command/config overrides. Stock CAA lifecycle cannot yet use this candidate image. |
+| CAA transport | The restricted Rust provisioner and fixed APF startup now have local tests. Actual CAA create/network/TLS/readiness/delete against a built AMI remains unqualified; no policy/CDH/command/config overrides may be accepted. |
 | Actual Kata isolation | Exact application-generated guest policy embedded in the pinned policy-capable binary; tests deny exec/attach/streams/logs/diagnostics/debug/SetPolicy and unsafe CopyFile, containers, commands, env and mounts. No permissive fallback policy is supplied. |
 | Secrets and decrypted state | Swap/hibernation/dumps disabled in a real guest, no EBS-backed confidential scratch or image layers, authenticated read-only root, memory bounds, disk and snapshot inspection. The current CAA disk scratch path is masked. |
 | Workload API access | Measured authentication for intended application callers; Kubernetes RBAC/security groups alone cannot constrain an account operator. |
 | Identity and replicas | Decide whether copies intentionally share a workload key. Different key scopes require distinct approved boot profiles or another authenticated in-guest assignment proof. AWS document schema does not provide documented attested account/tenant identity. |
-| Service operations | Independent trusted verifier/KBS administration, protected signer/resource storage, TLS certificates, rate limits, durable transactional shared challenge store, revocation/rotation and unavailable-service tests. SQLite here is single-instance prototype storage. |
+| Service operations | Module-owned attested verifier/KBS protected from management admins, authenticated bootstrap/enrollment, protected durable signer/resource state, automatic certificates, rate limits, revocation/rotation and recovery tests. SQLite here is single-instance prototype storage. |
 | Real lifecycle | Multiple actual remote Kata replicas, CAA create/delete/cleanup, VM reboot/new keys, tamper tests and encrypted OCI workload start. These have not been exercised on AWS. |
 
 ## Module integration
 
 Use `ConfidentialContainers` with explicit typed `awsNitroTpm` platform settings; select `RuntimeClasses.AWS_NITRO_TPM` for approved application Pods. `awsNitroTpmLaunchTemplate` renders the matching management-cluster template, and `awsNitroTpmAssetsUrl` locates the shipped verifier/guest/image sources. The Python review contract names that class and its actual handler, without application replica or pairing inputs.
 
-The module installs the pinned stock CAA/cleanup lifecycle. The candidate image deliberately masks its mutable user-data and disk scratch paths; a reviewed replacement provisioner is still required before this candidate can serve real CAA workloads. Package placement and a named RuntimeClass do not complete that work.
+The module installs the pinned stock CAA/cleanup lifecycle. The candidate image masks stock mutable user-data and disk scratch paths. A restricted network/TLS provisioner now runs automatically, while memory-only decrypted storage and actual CAA boot/lifecycle remain unqualified. Package placement and a named RuntimeClass do not complete that work.
 
 Generate policy from each application's exact Pod, bake it and its bootstrap/endpoints/trust into an independently approved immutable boot profile, and retain the distinct profile/resource scopes enforced by the verifier and KBS. Do not repurpose local SNP init-data semantics or accept host-controlled policy annotations on this route. Existing callers which omit `awsNitroTpm` retain their current runtime installation behavior.
 

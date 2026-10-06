@@ -27,6 +27,8 @@ def stage(base_repo, caa_repo, policy_path, config_path, ca_path, binaries, outp
     require(status == "", "KIWI base must be clean")
     caa_revision = subprocess.check_output(["git", "-C", str(caa_repo), "rev-parse", "HEAD"], text=True).strip()
     require(caa_revision == CAA_REVISION, "unreviewed CAA service revision")
+    caa_status = subprocess.check_output(["git", "-C", str(caa_repo), "status", "--porcelain", "--untracked-files=all"], text=True)
+    require(caa_status == "", "CAA source must be clean")
     require(not output.exists(), "fresh output directory required")
     require(set(binaries) == BINARY_NAMES, "reviewed CoCo binary set required")
     config = json.loads(config_path.read_text())
@@ -86,7 +88,13 @@ def stage(base_repo, caa_repo, policy_path, config_path, ca_path, binaries, outp
     tree.write(output / "appliance.kiwi", encoding="utf-8", xml_declaration=True)
     preset = output / "root/usr/lib/systemd/system-preset/90-nebula.preset"
     preset.parent.mkdir(parents=True, exist_ok=True)
-    preset.write_text("enable run-nebula-secrets.mount\nenable aws-trustee-bootstrap.service\n")
+    preset.write_text("enable agent-protocol-forwarder.service\n")
+    # A preset alone does not enable a unit in this KIWI base. Install the boot
+    # dependency explicitly. APF pulls in transport, key bootstrap, mounts and
+    # Kata; Kata pulls in CDH and the stock network namespace service.
+    wants = units / "multi-user.target.wants"
+    wants.mkdir(parents=True, exist_ok=True)
+    (wants / "agent-protocol-forwarder.service").symlink_to("../agent-protocol-forwarder.service")
     manifest = {"base_revision": revision, "caa_revision": caa_revision, "policy_sha256": hashlib.sha256(policy).hexdigest(),
                 "binaries": {name: {k: v for k, v in item.items() if k != "path"} for name, item in binaries.items()},
                 "deployment_enabled": False, "reason": "CAA transport, storage, boot and SNP gates unqualified"}

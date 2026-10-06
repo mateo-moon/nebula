@@ -2,6 +2,8 @@
 
 These workload-neutral sources are part of Nebula's reusable `ConfidentialContainers` module. Select `RuntimeClasses.AWS_NITRO_TPM` (`kata-remote-aws-nitrotpm`) through the typed `awsNitroTpm` option. **Cloud deployment remains blocked pending qualification.** This directory implements and locally exercises the custom AWS verifier/passport issuer and guest bootstrap. It does not establish real AMI integrity, full CoCo runtime isolation or SEV-SNP enablement.
 
+The required end state is a [self-contained module](SELF_CONTAINED.md), with no manual installation steps and keys protected from management-cluster admins. The current installer and assets are incomplete research components; the commands below reproduce developer checks, not a deployment procedure.
+
 Read [PLAN.md](PLAN.md) for exact protocols, versions, trust boundaries, build ownership and qualification gates. Read [HANDOFF.md](HANDOFF.md) for tested results and integration decisions. No cloud credentials or confidential image keys are included.
 
 ## Components
@@ -10,7 +12,8 @@ Read [PLAN.md](PLAN.md) for exact protocols, versions, trust boundaries, build o
 - `guest/`: Rust bootstrap generates the recipient key in guest memory, calls stock `nitro-tpm-attest`, obtains a passport, and uses pinned stock `kbs_protocol` for encrypted key retrieval. It rejects mutable guest configuration, non-tmpfs or unsafe mounts, swap and symlink staging. JSON output is atomic, root-only and compatible with stock `offline_fs_kbc`. Sensitive errors are suppressed by the executable.
 - `deployment.py`: renders exact workload KBS authorization, hardened KBS config and a disabled integration contract. It names the reusable RuntimeClass and handler, without coupling approval to application replicas.
 - `kbs_launcher.py`: validates the preseeded resource policy before stock KBS startup. This prevents silent use of the broad upstream default policy. Runtime KBS storage remains part of the trusted service boundary.
-- `prepare_image.py`, `image/`: stage pinned AL2023 KIWI + selected stock CAA services, reviewed binary artifacts, fixed policy and endpoint trust. CAA mutable provisioning and disk scratch are masked pending replacements. The candidate requires an offline Linux image build and boot validation.
+- `prepare_image.py`, `image/`: stage pinned AL2023 KIWI + selected stock CAA services, reviewed binary artifacts, fixed policy and endpoint trust. Stock mutable provisioning and disk scratch are masked. The built-in Rust transport mode replaces network/TLS setup only; memory-only decrypted storage remains outstanding. The candidate requires an offline Linux image build and boot validation.
+- `guest/src/transport.rs`: automatically provisions only the pinned CAA network/TLS envelope through IMDSv2. It rejects extra files, mutable policy/configuration, credential injection, command directives, unknown fields and TLS downgrades, and writes only root-private tmpfs. Systemd gates APF on both transport and key provisioning and clears mutable APF command options.
 - `approved_profile.py`: converts patched AWS PCR compute output and exact policy bytes into a **non-approved** image-review candidate. An operator assertion is never an attestation claim.
 
 ## Reproduce local checks
