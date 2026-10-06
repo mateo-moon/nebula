@@ -347,6 +347,26 @@ test("the Helm and vals download sources are upstream; neighbouring names are no
   assert.deepEqual(classes(scan("ghcr.io/helmfiles/vals:1")), ["registry-namespace"]);
 });
 
+test("reviewed confidential-runtime research sources pass without allowing lookalikes", () => {
+  for (const url of [
+    "https://aws.amazon.com/blogs/aws/amazon-ec2-now-supports-nitrotpm-and-uefi-secure-boot/",
+    "https://docs.edgeless.systems/contrast/architecture/components/coordinator",
+    "https://openbao.org/docs/2.5.x/configuration/seal/pkcs11/",
+    "https://github.com/brave/nitriding-daemon",
+    "https://github.com/tpm2-software/tpm2-tools",
+  ]) assert.deepEqual(scan(url), [], url);
+  for (const url of [
+    "https://aws.amazon.com.acme-corp.io/blog",
+    "https://docs.edgeless.systems.acme-corp.io/contrast",
+    "https://private.edgeless.systems/research",
+    "https://openbao.org.acme-corp.io/docs",
+  ]) assert.deepEqual(classes(scan(url)), ["domain"], url);
+  for (const url of [
+    "https://github.com/brave-private/research",
+    "https://github.com/tpm2-software-fork/tpm2-tools",
+  ]) assert.deepEqual(classes(scan(url)), ["repository-owner"], url);
+});
+
 const WORKFLOWS = join(dirname(GUARD), "..", ".github", "workflows");
 // Splits a workflow into its jobs by indentation, whatever the indent width,
 // so a job cannot hide from the checks below by formatting alone.

@@ -2,7 +2,7 @@
 
 These workload-neutral sources are part of Nebula's reusable `ConfidentialContainers` module. Select `RuntimeClasses.AWS_NITRO_TPM` (`kata-remote-aws-nitrotpm`) through the typed `awsNitroTpm` option. **Cloud deployment remains blocked pending qualification.** This directory implements and locally exercises the custom AWS verifier/passport issuer and guest bootstrap. It does not establish real AMI integrity, full CoCo runtime isolation or SEV-SNP enablement.
 
-The required end state is a [self-contained module](SELF_CONTAINED.md), with no manual installation steps and keys protected from management-cluster admins. The current installer and assets are incomplete research components; the commands below reproduce developer checks, not a deployment procedure.
+The required end state is a [self-contained module](SELF_CONTAINED.md), with no manual installation steps and keys protected from management-cluster admins. The [architecture research](RESEARCH.md) recommends generic released images, signed measured workload configuration and a module-owned TPM-sealed authority. It compares alternatives, maps Nebula patterns and defines automatic recovery and qualification gates. The current installer and assets are incomplete research components; the commands below reproduce developer checks, not a deployment procedure.
 
 Read [PLAN.md](PLAN.md) for exact protocols, versions, trust boundaries, build ownership and qualification gates. Read [HANDOFF.md](HANDOFF.md) for tested results and integration decisions. No cloud credentials or confidential image keys are included.
 
@@ -45,6 +45,10 @@ cargo test --locked --manifest-path guest/Cargo.toml --lib -- --include-ignored
 The local container host has swap, so its unmodified environment correctly fails provisioning. The positive atomic-write test used a test-only read-only `/proc/swaps` fixture in an isolated container and actual private tmpfs; **this does not qualify host swap confidentiality or an AWS VM**. No running deployments or host swap settings were changed.
 
 ## Review-only outputs
+
+This section describes the existing per-workload prototype. The research proposes
+replacing that restriction with authenticated initdata on a generic image; it
+has not yet changed these tools or made their outputs deployable.
 
 Approved profile JSON maps workload IDs to `{profile, policy_sha256, pcrs, resources, reviewed}`. Required PCRs are `"4"` and `"12"`, each a 96-character SHA384 hex string. Distinct workloads cannot reuse the same boot identity. Resource paths are exact `repository/image_key/name` strings. Replicas of one approved workload share that workload's key authority and have independent ephemeral recipient keys.
 

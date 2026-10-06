@@ -2,7 +2,13 @@
 
 This prototype belongs to Nebula's reusable `ConfidentialContainers` module. The `awsNitroTpm` option installs the AWS peer VM backend and registers `kata-remote-aws-nitrotpm` with the `kata-remote` handler. Local SNP/TDX runtimes can coexist. Application-specific names, fleet counts and replica assumptions are absent from the runtime contract. No AWS resources were created.
 
-The accepted target is now the [self-contained module contract](SELF_CONTAINED.md), with no manual deployment steps or external service prerequisite and with management-cluster administrators outside the key trust boundary. The current rendering API does not meet it. Module-owned attested authority/bootstrap, authenticated build approval, persistent protected recovery and unattended reconciliation remain unimplemented.
+The accepted target is now the [self-contained module contract](SELF_CONTAINED.md), with no manual deployment steps or external service prerequisite and with management-cluster administrators outside the key trust boundary. The current rendering API does not meet it. The [architecture research](RESEARCH.md) recommends generic release-built images, signed measured workload descriptors, a module-owned attested authority and TPM-sealed replicated state. Released appliances, protected recovery and unattended reconciliation remain unimplemented.
+
+The research revisits the per-workload AMI/build requirement and the attestation
+trust profile; it does not change the prototype's behavior or qualify deployment.
+It also corrects the earlier broad instance-identity claim: AWS documents an
+instance ID in the signed NitroTPM module ID, but account/workload authorization
+and safe replica membership still need an authenticated protocol.
 
 ## Result
 
