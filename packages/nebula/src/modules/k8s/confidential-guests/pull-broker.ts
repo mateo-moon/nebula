@@ -101,6 +101,9 @@ export interface AttestedPullBrokerProps {
   readonly configToml: string;
   /** The resource the credentials are served as, e.g. `["default", "registry", "pull"]`. */
   readonly resourcePath: KbsResourcePath;
+  /** Additional keys from the same trusted broker Secret, subject to the
+   * same guest admission. Useful for native CoCo sealed-secret TLS files. */
+  readonly additionalResources?: readonly { readonly resourcePath: KbsResourcePath; readonly secretKey: string }[];
   readonly initData: InitDataAdmission;
   /**
    * Launch measurements admitted besides the init-data. Without it every
@@ -137,7 +140,7 @@ export interface AttestedPullBrokerProps {
 const WHERE = "AttestedPullBroker";
 const PROPS_FIELDS = [
   "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "issuer", "initImage",
-  "initCommand", "policyReadOnly", "configToml", "resourcePath", "initData", "measurement", "snpAdmission", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
+  "initCommand", "policyReadOnly", "configToml", "resourcePath", "additionalResources", "initData", "measurement", "snpAdmission", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
 ];
 const HOST_DATA = /^[a-f0-9]{64}$/;
 const MEASUREMENT = /^[a-f0-9]{96}$/;
@@ -330,7 +333,21 @@ export class AttestedPullBroker extends Construct {
     const configWave = waveAnnotation(WHERE, "syncWaves.config", props.syncWaves?.config ?? -2);
     const brokerWave = waveAnnotation(WHERE, "syncWaves.broker", props.syncWaves?.broker ?? -1);
 
-    this.policy = pullBrokerPolicy(resourcePath, props.initData, props.measurement, props.snpAdmission);
+    const additional = (props.additionalResources ?? []).map(resource => {
+      knownFields(WHERE, "additional resource", resource, ["resourcePath", "secretKey"]);
+      const path = validResourcePath(resource.resourcePath);
+      if (typeof resource.secretKey !== "string" || !/^[a-zA-Z0-9_.-]+$/.test(resource.secretKey)) {
+        fail(WHERE, "additional resource requires a valid Secret key");
+      }
+      return { path, secretKey: resource.secretKey };
+    });
+    if (additional.length && !secret.exposeAsResource) fail(WHERE, "additional resources require exposeAsResource");
+    if (new Set([resourcePath, ...additional.map(resource => resource.path)].map(path => path.join("/"))).size !== additional.length + 1) {
+      fail(WHERE, "resource paths must be distinct");
+    }
+    this.policy = pullBrokerPolicy(resourcePath, props.initData, props.measurement, props.snpAdmission) +
+      additional.map(resource => pullBrokerPolicy(resource.path, props.initData, props.measurement, props.snpAdmission)
+        .replace(/^package policy\ndefault allow := false\n/, "")).join("");
     if (props.snpAdmission !== undefined) {
       this.appraisalPolicy = pullBrokerAppraisalPolicy(props.initData, props.measurement!, props.snpAdmission);
     }
@@ -422,7 +439,8 @@ export class AttestedPullBroker extends Construct {
               // The KBS local store keeps a resource in one file named by its
               // path with each "/" written as \x2F.
               ...(exposed ? [{ name: "registry-resource", secret: { secretName, defaultMode: 0o400,
-                items: [{ key: ".dockerconfigjson", path: resourcePath.join("\\x2F") }] } }] : []),
+                items: [{ key: ".dockerconfigjson", path: resourcePath.join("\\x2F") },
+                  ...additional.map(resource => ({ key: resource.secretKey, path: resource.path.join("\\x2F") }))] } }] : []),
             ],
           },
         },
