@@ -129,7 +129,7 @@ def test_stock_kbs_passport_and_guest_consumption(flow, tmp_path):
         (tmp_path / "recipient-test.key").write_bytes(flow.recipient.private_bytes(
             serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
         cargo_env = {**os.environ, "NEBULA_INTEROP_FIXTURE": str(tmp_path)}
-        result = subprocess.run(["cargo", "+stable", "test", "--locked", "--offline", "--manifest-path", "guest/Cargo.toml",
+        result = subprocess.run(["cargo", "test", "--locked", "--offline", "--manifest-path", "guest/Cargo.toml",
                                  "--test", "passport_interop", "--", "--ignored", "--test-threads=1"],
                                 cwd=Path(__file__).resolve().parents[1], env=cargo_env, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]

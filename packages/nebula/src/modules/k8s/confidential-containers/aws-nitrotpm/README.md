@@ -25,7 +25,7 @@ cargo test --locked --manifest-path guest/Cargo.toml --lib
 cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
 ```
 
-For the actual stock KBS/client/offline-KBC interoperability test, make a **separate** Trustee source checkout at `3b7c99069a7c89ea51713dcf7cf98c16dbe2d3db` and build `cargo +stable build --locked -p kbs --no-default-features --bin kbs`. On macOS the build may need the local OpenSSL development path. Then run:
+Select Rust 1.98.1 for these checks, matching CI. For the actual stock KBS/client/offline-KBC interoperability test, make a **separate** Trustee source checkout at `3b7c99069a7c89ea51713dcf7cf98c16dbe2d3db` and build `cargo build --locked -p kbs --no-default-features --bin kbs` with that toolchain. On macOS the build may need the local OpenSSL development path. Then run:
 
 ```sh
 NEBULA_KBS_BINARY=/absolute/path/to/kbs .venv/bin/pytest -q tests/test_stock_kbs.py
