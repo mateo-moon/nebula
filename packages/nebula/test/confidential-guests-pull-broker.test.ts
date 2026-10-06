@@ -267,3 +267,22 @@ test("the broker publishes where guests reach it and the resource they request",
   assert.deepEqual(objects[1].spec.ingress[0].ports, [{ port: 8443, protocol: "TCP" }]);
   assert.deepEqual(objects[4].spec.template.spec.containers[0].ports, [{ name: "http", containerPort: 8443 }]);
 });
+
+test("additional sealed resources have the same attestation gate and read-only store", () => {
+  const { objects } = render(props({ issuer: "ephemeral", initImage: undefined, initCommand: undefined,
+    pullSecret: { name: "broker-resources", exposeAsResource: true },
+    additionalResources: [{ resourcePath: ["default", "tls", "client-key"], secretKey: "client-key.pem" }],
+  }));
+  const policy = objects.find(o => o.kind === "ConfigMap").data["resource-policy.rego"];
+  assert.equal((policy.match(/package policy/g) ?? []).length, 1);
+  assert.equal((policy.match(new RegExp(primary, "g")) ?? []).length, 2);
+  assert.equal((policy.match(/policy_debug_allowed == false/g) ?? []).length, 2);
+  assert.ok(policy.includes('["default", "tls", "client-key"]'));
+  const volume = objects.find(o => o.kind === "Deployment").spec.template.spec.volumes.find((v: any) => v.name === "registry-resource");
+  assert.deepEqual(volume.secret.items[1], { key: "client-key.pem", path: "default\\x2Ftls\\x2Fclient-key" });
+  for (const resource of [
+    { resourcePath: ["default", "registry", "pull"], secretKey: "key" },
+    { resourcePath: ["default", "tls", "key"], secretKey: "../key" },
+  ]) assert.throws(() => render(props({ pullSecret: { name: "resources", exposeAsResource: true }, additionalResources: [resource as any] })));
+  assert.throws(() => render(props({ additionalResources: [{ resourcePath: ["default", "tls", "key"], secretKey: "key" }] })));
+});
