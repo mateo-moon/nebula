@@ -49,7 +49,7 @@ export type ConfidentialGuestComponent = (scope: Construct, context: Confidentia
  * The stack does not derive the releases' launch measurements: pin them
  * with `measurement`.
  */
-export type ConfidentialGuestPullBroker = Omit<AttestedPullBrokerProps, "namespace" | "nodeName" | "labelDomain" | "initData">;
+export type ConfidentialGuestPullBroker = Omit<AttestedPullBrokerProps, "namespace" | "nodeName" | "nodeSelector" | "tolerations" | "labelDomain" | "initData">;
 /**
  * Sealed disks as the stack builds them, in its namespace on its node. Every
  * guest's claim (holder and stage boot) must be a live disk of the table.
@@ -106,7 +106,7 @@ export interface ConfidentialGuestStackProps {
 
 // What the stack sets on a component it builds from props.
 const STACK_SETS = {
-  pullBroker: ["namespace", "nodeName", "labelDomain", "initData"],
+  pullBroker: ["namespace", "nodeName", "nodeSelector", "tolerations", "labelDomain", "initData"],
   disks: ["namespace", "nodeName"],
   keyInjector: ["namespace", "nodeName", "targetNamespace"],
 } as const;

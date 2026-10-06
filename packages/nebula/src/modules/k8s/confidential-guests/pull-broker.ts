@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import { parse as parseToml } from "smol-toml";
 import {
-  IntOrString, KubeConfigMap, KubeDeployment, KubeNetworkPolicy, KubeService, Quantity,
+  IntOrString, KubeConfigMap, KubeDeployment, KubeNetworkPolicy, KubeService, Quantity, type Toleration,
 } from "cdk8s-plus-33/lib/imports/k8s";
 import { readConfidentialGuestAsset } from "./assets";
 import { sha256Hex } from "./canonical";
@@ -68,7 +68,13 @@ export interface AttestedPullBrokerProps {
   readonly podLabels: Readonly<Record<string, string>>;
   /** Labels of the guest Pods allowed to reach the broker. */
   readonly guestSelector: Readonly<Record<string, string>>;
-  readonly nodeName: string;
+  /** Legacy direct binding, which bypasses scheduling and node drains.
+   * Use nodeSelector instead for a broker on a managed worker. */
+  readonly nodeName?: string;
+  /** Scheduler-managed placement; mutually exclusive with nodeName. */
+  readonly nodeSelector?: Readonly<Record<string, string>>;
+  /** Native Kubernetes tolerations for scheduler-managed placement. */
+  readonly tolerations?: readonly Toleration[];
   /** Digest-pinned KBS image; it runs `/usr/local/bin/kbs --config-file /configuration/config.toml`. */
   readonly brokerImage: string;
   /**
@@ -139,7 +145,7 @@ export interface AttestedPullBrokerProps {
 
 const WHERE = "AttestedPullBroker";
 const PROPS_FIELDS = [
-  "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "issuer", "initImage",
+  "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "nodeSelector", "tolerations", "brokerImage", "issuer", "initImage",
   "initCommand", "policyReadOnly", "configToml", "resourcePath", "additionalResources", "initData", "measurement", "snpAdmission", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
 ];
 const HOST_DATA = /^[a-f0-9]{64}$/;
@@ -298,7 +304,14 @@ export class AttestedPullBroker extends Construct {
     const fromGuestsName = dnsSubdomain(WHERE, "networkPolicyNames.fromGuests", props.networkPolicyNames.fromGuests);
     const podLabels = labels(WHERE, "podLabels", props.podLabels);
     const guestSelector = labels(WHERE, "guestSelector", props.guestSelector);
-    const nodeName = dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    if ((props.nodeName !== undefined) === (props.nodeSelector !== undefined)) {
+      fail(WHERE, "provide exactly one of nodeName or nodeSelector");
+    }
+    const nodeName = props.nodeName === undefined ? undefined : dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    const nodeSelector = props.nodeSelector === undefined ? undefined : labels(WHERE, "nodeSelector", props.nodeSelector);
+    if (props.tolerations !== undefined && (nodeSelector === undefined || !Array.isArray(props.tolerations))) {
+      fail(WHERE, "tolerations require scheduler-managed nodeSelector placement and must be an array");
+    }
     const brokerImage = image(WHERE, "brokerImage", props.brokerImage);
     if (props.issuer !== undefined && props.issuer !== "ephemeral") fail(WHERE, `issuer must be "ephemeral" when given, got ${JSON.stringify(props.issuer)}`);
     const ephemeral = props.issuer === "ephemeral";
@@ -391,7 +404,8 @@ export class AttestedPullBroker extends Construct {
         template: {
           metadata: { labels: { ...podLabels }, annotations: { [`${domain}/config-sha256`]: this.configSha256 } },
           spec: {
-            nodeName,
+            ...(nodeName === undefined ? { nodeSelector: { ...nodeSelector } } : { nodeName }),
+            ...(props.tolerations === undefined ? {} : { tolerations: props.tolerations.map(toleration => ({ ...toleration })) }),
             automountServiceAccountToken: false,
             ...(imagePullSecrets ? { imagePullSecrets } : {}),
             initContainers: [{
