@@ -33,6 +33,15 @@ Helpers: `measuredGuest` (the synthesis gate for a measured template),
 `readGuestEnv`, with the frozen
 `NEUTRAL_WIRE`, `NEUTRAL_WORKLOAD_API` and `NEUTRAL_SEALED_STORAGE` names).
 
+For a standalone `AttestedPullBroker` on a managed worker, pass `nodeSelector`
+and optional native `tolerations` instead of `nodeName`. The scheduler then
+honors cordon and taints: while CAPI drains the worker, replacement broker Pods
+stay Pending until it can receive workloads again. The broker's admission
+policy, key resources and restricted container configuration do not change.
+Exactly one of `nodeName` or `nodeSelector` is required. Existing direct-bound
+brokers retain their rendered manifests; `ConfidentialGuestStack` still owns
+the placement of components built from its props.
+
 ## Measured and unmeasured inputs
 
 A guest template is measured: policy generation binds its canonical JSON and
