@@ -1,0 +1,27 @@
+[Unit]
+Description=Provision image keys from verified AWS evidence and Trustee
+Requires=run-nebula-secrets.mount
+After=run-nebula-secrets.mount network-online.target
+Wants=network-online.target
+Before=confidential-data-hub.service kata-agent.service agent-protocol-forwarder.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aws-trustee-bootstrap
+RemainAfterExit=yes
+UMask=0077
+LimitCORE=0
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/nebula/secrets
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StandardOutput=null
+StandardError=null
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

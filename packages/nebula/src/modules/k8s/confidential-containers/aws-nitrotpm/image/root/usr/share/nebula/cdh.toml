@@ -1,0 +1,10 @@
+[kbc]
+name = "offline_fs_kbc"
+url = "null"
+
+[image]
+work_dir = "/run/nebula-images"
+anonymous_fallback_on_unauthorized = false
+
+[log]
+level = "error"

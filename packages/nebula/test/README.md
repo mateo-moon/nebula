@@ -2,6 +2,13 @@
 
 `pnpm test` runs every `test/**/*.test.ts` file with the Node test runner.
 
+- `confidential-containers-aws.test.ts` renders the pinned public CoCo chart
+  offline, checks the named AWS RuntimeClass and local SNP/TDX coexistence,
+  controller credential separation, launch template and unsafe-input refusals.
+  The `aws-nitrotpm` CI job also runs the shipped Python/Rust prototype checks
+  against stock Trustee KBS and the stock guest client with synthetic evidence.
+  These checks do not qualify AWS deployment; see the module's handoff gates.
+
 - `ecr.test.ts` validates private ECR synthesis, repository retention, IAM
   access boundaries and keyless provider installation.
 - `k0smotron-control-plane.test.ts` checks where the hosted control plane's

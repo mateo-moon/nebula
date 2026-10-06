@@ -40,6 +40,37 @@ jobs:
       - name: Evaluate SNP admission with the broker's pinned policy and EAR engines
         run: pnpm verify:broker-admission
 
+  aws-nitrotpm:
+    name: AWS NitroTPM prototype protocols
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned test dependencies
+        run: pip install -r requirements.lock
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.98.1 --profile minimal && rustup override set 1.98.1
+      - name: Guest bootstrap checks
+        run: |
+          cargo fmt --manifest-path guest/Cargo.toml -- --check
+          cargo test --locked --manifest-path guest/Cargo.toml --lib
+          cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
+      - name: Build the unmodified pinned Trustee KBS
+        run: |
+          git clone https://github.com/confidential-containers/trustee.git "$RUNNER_TEMP/trustee"
+          git -C "$RUNNER_TEMP/trustee" checkout --detach 3b7c99069a7c89ea51713dcf7cf98c16dbe2d3db
+          cargo build --locked --manifest-path "$RUNNER_TEMP/trustee/Cargo.toml" -p kbs --no-default-features --bin kbs
+      - name: Synthetic evidence through stock KBS, guest client and offline KBC
+        run: NEBULA_KBS_BINARY="$RUNNER_TEMP/trustee/target/debug/kbs" python -m pytest -q tests
+
   bridge:
     name: Bridge tests
     runs-on: ubuntu-24.04

@@ -34,6 +34,9 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
+  "packages/nebula/src/modules/k8s/confidential-containers",
+  ":(glob)packages/nebula/test/confidential-containers*",
+  ":(glob)packages/nebula/test/confidential-containers*/**",
   "packages/nebula/src/modules/k8s/confidential-guests",
   "confidential-guests",
   ":(glob)packages/nebula/test/confidential-guests*",
@@ -77,6 +80,7 @@ const CODE_HOST_PATHS = new Set([
 ]);
 // Domains (and their subdomains) of upstream projects and standards bodies.
 const UPSTREAM_DOMAINS = [
+  "docs.aws.amazon.com", "sts.amazonaws.com",
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",

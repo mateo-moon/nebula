@@ -23,6 +23,11 @@ import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct } from "../../../core";
+import { awsNitroTpmValues, configureAwsNitroTpmRuntime, validateAwsNitroTpmConfig,
+  type AwsNitroTpmRuntimeConfig } from "./aws-nitrotpm-runtime";
+
+export { awsNitroTpmLaunchTemplate, awsNitroTpmAssetsUrl } from "./aws-nitrotpm-runtime";
+export type { AwsNitroTpmRuntimeConfig, AwsNitroTpmLaunchTemplateConfig } from "./aws-nitrotpm-runtime";
 
 /** Kubernetes distribution type */
 export type K8sDistribution = "k8s" | "k3s" | "rke2" | "k0s" | "microk8s";
@@ -73,6 +78,9 @@ export interface ConfidentialContainersConfig {
   imagePullPolicy?: "Always" | "IfNotPresent" | "Never";
   /** Additional Helm values to merge with defaults */
   values?: Record<string, unknown>;
+  /** AWS immutable PodVM prototype, installed as an additional kata-remote
+   * RuntimeClass. Registration does not qualify attestation or key release. */
+  awsNitroTpm?: AwsNitroTpmRuntimeConfig;
 }
 
 /**
@@ -88,6 +96,8 @@ export const RuntimeClasses = {
   INTEL_TDX: "kata-qemu-tdx",
   /** Development/testing runtime (no hardware TEE) */
   COCO_DEV: "kata-qemu-coco-dev",
+  /** AWS measured-boot prototype; retained SNP/runtime qualification is required. */
+  AWS_NITRO_TPM: "kata-remote-aws-nitrotpm",
 } as const;
 
 export class ConfidentialContainers extends BaseConstruct<ConfidentialContainersConfig> {
@@ -99,6 +109,7 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
     id: string,
     config: ConfidentialContainersConfig = {},
   ) {
+    if (config.awsNitroTpm) validateAwsNitroTpmConfig(config);
     super(scope, id, config);
 
     const namespaceName = this.config.namespace ?? "coco-system";
@@ -168,7 +179,9 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       };
     }
 
-    const chartValues = deepmerge(defaultValues, this.config.values ?? {});
+    const chartValues = this.config.awsNitroTpm
+      ? deepmerge(defaultValues, this.config.values ?? {}, awsNitroTpmValues(this.config))
+      : deepmerge(defaultValues, this.config.values ?? {});
 
     // Deploy Helm chart. This module extends BaseConstruct (not HelmModule) and
     // builds the Helm release directly because the chart is an OCI registry
@@ -179,10 +192,13 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       chart:
         "oci://ghcr.io/confidential-containers/charts/confidential-containers",
       releaseName: "confidential-containers",
-      version: this.config.version ?? "0.18.0",
+      version: this.config.version ?? (this.config.awsNitroTpm ? "0.23.0" : "0.18.0"),
       namespace: namespaceName,
       values: chartValues,
     });
+    if (this.config.awsNitroTpm) {
+      configureAwsNitroTpmRuntime(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
+    }
   }
 }
 

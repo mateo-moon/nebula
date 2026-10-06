@@ -1,0 +1,6 @@
+server_addr = "unix:///run/kata-containers/agent.sock"
+policy_file = "/usr/share/nebula/policy.rego"
+debug_console = false
+dev_mode = false
+tracing = false
+log_level = "error"

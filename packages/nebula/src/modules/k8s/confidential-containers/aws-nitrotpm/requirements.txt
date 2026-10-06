@@ -1,0 +1,7 @@
+cbor2==5.9.0
+pycose==1.1.0
+PyJWT==2.10.1
+pyOpenSSL==25.3.0
+cryptography==46.0.2
+pytest==8.4.2
+tomli==2.4.1

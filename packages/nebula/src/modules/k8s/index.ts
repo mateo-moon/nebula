@@ -241,12 +241,16 @@ export type { DeschedulerConfig, DeschedulerKind } from "./descheduler";
 export {
   ConfidentialContainers,
   RuntimeClasses,
+  awsNitroTpmLaunchTemplate,
+  awsNitroTpmAssetsUrl,
 } from "./confidential-containers";
 export type {
   ConfidentialContainersConfig,
   K8sDistribution,
   TeeShimConfig,
   CustomContainerdConfig,
+  AwsNitroTpmRuntimeConfig,
+  AwsNitroTpmLaunchTemplateConfig,
 } from "./confidential-containers";
 
 export {
