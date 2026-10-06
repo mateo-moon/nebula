@@ -21,15 +21,15 @@
  * @example
  * ```typescript
  * new Cilium(chart, "cilium", {
- *   ipv6: true,
- *   underlayProtocol: "ipv6", // mandatory cross-region
- *   mtu: 1400,                // the internet path, not the local NIC
+ *   // Dual-stack pods, IPv6 underlay and MTU 1400 are enforced by default.
  * });
  * ```
  */
 import { Construct } from "constructs";
 import { Helm } from "cdk8s";
+import { deepmerge } from "deepmerge-ts";
 import { HelmModule } from "../../../core";
+import { validateCiliumNetwork } from "./network";
 
 /**
  * Cilium's WireGuard UDP port — NOT Calico's 51820. A security group that
@@ -52,27 +52,41 @@ export interface CiliumConfig {
   version?: string;
   /** Helm repository URL. */
   repository?: string;
-  /** Dual-stack. Requires the cluster's k0s config to allocate v6 podCIDRs. */
-  ipv6?: boolean;
+  /**
+   * Both pod address families are mandatory. Kept for existing callers that
+   * explicitly enable IPv6; false is rejected. The control plane must allocate
+   * both pod CIDRs or the agent waits without starting pod networking.
+   */
+  ipv6?: true;
+  /**
+   * Node-to-node reachability, default "public" (internet / cross-VPC).
+   * Public meshes require on-link IPv6 node addresses, an IPv6 underlay and
+   * MTU <= 1400. AWS EIPs are NAT entrances, not on-link node identities.
+   * Use "private" only when EVERY node can route directly to every other
+   * node's private address. Pods remain dual-stack in either mode.
+   */
+  nodeConnectivity?: "public" | "private";
   /**
    * Tunnel MTU, applied to every interface Cilium owns.
    *
-   * LEAVING THIS UNSET IS WRONG ON ANY INTERNET-CROSSING MESH. Cilium derives
+   * Defaults to 1400 for public meshes, NIC discovery for private meshes.
+   * Cilium derives
    * the WireGuard MTU from the local NIC exactly as Calico does — on a 9001
    * jumbo host `cilium_wg0` lands at 8906, sized for a path that does not
-   * exist between regions. Set it from the worst path (1400 for a ~1500
-   * internet hop), not from what `ip link` reports.
+   * exist between regions. Public meshes reject MTUs above 1400; all explicit
+   * MTUs must be integers >= 1280.
    */
   mtu?: number;
   /**
    * Which family carries the tunnel between nodes.
    *
-   * "ipv6" is MANDATORY on a cross-region fleet: private v4 has no inter-region
+   * Defaults to "ipv6" for public meshes, "ipv4" for private meshes.
+   * "ipv6" is mandatory on a public fleet: private v4 has no inter-region
    * path and the AWS IPv6 GUA is on-link, making it the only mutually
    * reachable node identity. The chart's "auto" picks v4 and the mesh then
    * never forms — silently, since each node believes its own config.
    */
-  underlayProtocol?: "auto" | "ipv4" | "ipv6";
+  underlayProtocol?: "ipv4" | "ipv6";
   /** Encapsulation (defaults to vxlan). */
   tunnelProtocol?: "vxlan" | "geneve";
   /** WireGuard pod-to-pod encryption (defaults to true). */
@@ -178,12 +192,15 @@ export interface CiliumConfig {
    * module.
    *
    * The chart grants the matching `nodes/status: patch` RBAC itself. The
-   * annotation is written at agent bootstrap and the chart puts no config
-   * checksum on the DaemonSet, so flipping this does not backfill onto running
-   * agents — they have to be restarted.
+   * annotation is written at agent bootstrap. This module enables the chart's
+   * config checksum so changes roll the agents and backfill annotations.
    */
   annotateK8sNode?: boolean;
-  /** Additional Helm values, deep-merged over the defaults above. */
+  /**
+   * Additional Helm values, deep-merged before network validation. Disabling
+   * either family, replacing Kubernetes IPAM/CNI or bypassing the network
+   * contract through extraConfig/extraArgs/extraEnv is rejected.
+   */
   values?: Record<string, unknown>;
 }
 
@@ -194,8 +211,16 @@ export class Cilium extends HelmModule<CiliumConfig> {
     super(scope, id, config);
 
     const namespace = this.config.namespace ?? "kube-system";
-    const ipv6 = this.config.ipv6 ?? false;
-    const mtu = this.config.mtu;
+    if (this.config.ipv6 !== undefined && this.config.ipv6 !== true) {
+      throw new Error("Cilium: ipv6 cannot be disabled; configure dual-stack pod and service CIDRs on the control plane before installing Cilium.");
+    }
+    const nodeConnectivity = this.config.nodeConnectivity ?? "public";
+    if (nodeConnectivity !== "public" && nodeConnectivity !== "private") {
+      throw new Error('Cilium: nodeConnectivity must be "public" or "private".');
+    }
+    const underlayProtocol = this.config.underlayProtocol ??
+      (nodeConnectivity === "public" ? "ipv6" : "ipv4");
+    const mtu = this.config.mtu ?? (nodeConnectivity === "public" ? 1400 : undefined);
     const hubble = this.config.hubble ?? false;
     const envoy = this.config.envoy ?? false;
     const metrics = this.config.metrics ?? true;
@@ -222,25 +247,30 @@ export class Cilium extends HelmModule<CiliumConfig> {
       );
     }
 
-    this.helm = this.createHelmRelease({
-      namespace,
-      chart: "cilium",
-      releaseName: "cilium",
-      repo: this.config.repository ?? "https://helm.cilium.io",
-      version: this.config.version ?? "1.20.0",
-      defaultValues: {
+    const values = deepmerge(
+      {
         // Consume the podCIDRs k0s already allocates per node rather than
         // letting Cilium carve an independent pool the cluster disagrees with.
         ipam: { mode: "kubernetes" },
         ipv4: { enabled: true },
-        ipv6: { enabled: ipv6 },
+        ipv6: { enabled: true },
+        // Do not start on a node until the control plane has allocated BOTH
+        // families. Enabling IPv6 alone cannot convert a single-stack cluster.
+        k8s: { requireIPv4PodCIDR: true, requireIPv6PodCIDR: true },
+        cni: { install: true, exclusive: true, customConf: false, chainingMode: "none" },
+        // Otherwise a CiliumNodeConfig can silently undo the cluster contract.
+        daemon: { configSources: "config-map:cilium-config" },
+        agent: true,
+        sleepAfterInit: false,
+        // ConfigMap edits alone do not restart agents. Reconcile the running
+        // agent configuration whenever the rendered network settings change.
+        rollOutCiliumPods: true,
 
         // Pod CIDRs are not natively routable between regions, so encapsulate.
         routingMode: "tunnel",
         tunnelProtocol: this.config.tunnelProtocol ?? "vxlan",
-        ...(this.config.underlayProtocol
-          ? { underlayProtocol: this.config.underlayProtocol }
-          : {}),
+        underlayProtocol,
+        preferIpv6: underlayProtocol === "ipv6",
 
         encryption: {
           enabled: this.config.encryption ?? true,
@@ -255,7 +285,7 @@ export class Cilium extends HelmModule<CiliumConfig> {
 
         annotateK8sNode: this.config.annotateK8sNode ?? true,
 
-        ...(mtu ? { MTU: mtu } : {}),
+        ...(mtu !== undefined ? { MTU: mtu } : {}),
 
         ...(this.config.healthChecking === false
           ? { healthChecking: false }
@@ -330,7 +360,16 @@ export class Cilium extends HelmModule<CiliumConfig> {
           ? {}
           : { tls: { secretsNamespace: { create: false, name: namespace } } }),
       },
-      values: this.config.values,
+      this.config.values ?? {},
+    );
+    validateCiliumNetwork(values, nodeConnectivity);
+    this.helm = this.createHelmRelease({
+      namespace,
+      chart: "cilium",
+      releaseName: "cilium",
+      repo: this.config.repository ?? "https://helm.cilium.io",
+      version: this.config.version ?? "1.20.0",
+      defaultValues: values,
     });
   }
 }

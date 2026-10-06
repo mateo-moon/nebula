@@ -35,6 +35,7 @@
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
+import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { resolveSecrets } from "../../../utils/secrets";
 import { syncWave } from "../../../core";
@@ -1054,10 +1055,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
             // the SSH provisioning entrance and, where named, the P2P
             // endpoint. The GUA is delivered by RA/DHCPv6 — bounded wait,
             // then record it.
-            preK0sCommands: [
-              `sh -c 'TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300"); curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 > /run/node-ip'`,
-              `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/{print \\$2; exit}" | cut -d/ -f1); [ -n "$IP6" ] && break; sleep 2; done; echo "$IP6" > /run/node-ip6'`,
-            ],
+            preK0sCommands: [...NODE_IP_DISCOVERY_COMMANDS],
             // Commands are executed through the node's shell (SSH exec), so
             // the $(cat ...) substitutes there — the address never appears
             // in git.
