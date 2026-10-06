@@ -262,11 +262,13 @@ export const DEFAULT_PRESTART_COMMANDS: readonly string[] = [
  * literals into the systemd unit.
  *
  * The v6 GUA arrives by RA/DHCPv6, so that read waits for it instead of
- * assuming it has landed by the time cloud-init reaches this point.
+ * assuming it has landed by the time cloud-init reaches this point. Missing
+ * addresses fail bootstrap; never join with an empty second --node-ip family.
+ * Read the NIC addresses, not a cloud public-IPv4 NAT/EIP identity.
  */
 export const NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
-  `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1 > /run/node-ip'`,
-  `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/{print \\$2; exit}" | cut -d/ -f1); [ -n "$IP6" ] && break; sleep 2; done; echo "$IP6" > /run/node-ip6'`,
+  `sh -ec 'IFACE=$(ip -4 route show default | awk "{print \\$5}" | head -1); test -n "$IFACE" || { echo "dual-stack bootstrap: no IPv4 default-route interface" >&2; exit 1; }; IP4=$(ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1); test -n "$IP4" || { echo "dual-stack bootstrap: no on-link IPv4 address on $IFACE" >&2; exit 1; }; echo "$IP4" > /run/node-ip'`,
+  `sh -ec 'IFACE=$(ip -4 route show default | awk "{print \\$5}" | head -1); test -n "$IFACE" || { echo "dual-stack bootstrap: no IPv4 default-route interface" >&2; exit 1; }; for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/ && !/ tentative| dadfailed| deprecated/{print \\$2; exit}" | cut -d/ -f1); if [ -n "$IP6" ]; then echo "$IP6" > /run/node-ip6; exit 0; fi; sleep 2; done; echo "dual-stack bootstrap: no usable on-link IPv6 address on $IFACE after 60 seconds; configure IPv6 before joining" >&2; exit 1'`,
 ];
 
 /**

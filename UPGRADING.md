@@ -22,6 +22,19 @@ landed alongside these changes; the items below are the **behavior-changing** on
 
 ## Default-behavior changes (review your config before upgrading)
 
+- **Cilium now requires dual-stack pods.** Both address families and both
+  Kubernetes pod-CIDR waits are enforced after Helm values are merged. Public
+  node connectivity is the default: IPv6 underlay, IPv6 preference and MTU
+  1400. Fully routed private networks must state `nodeConnectivity: "private"`
+  to retain IPv4 transport and NIC MTU discovery. `ipv6: false`, automatic
+  transport and overrides that bypass this contract fail at construction.
+  Agent configuration changes now trigger a rollout. Prepare control-plane
+  CIDRs and worker IPv6 before adopting this revision on an IPv4-only cluster;
+  existing pod sandboxes must be recreated to gain both addresses. AWS fleet
+  and hosted-pool bootstrap now fail if either NIC address is missing, rather
+  than joining after an IPv6 timeout. See the
+  [Cilium migration and composition guide](packages/nebula/src/modules/k8s/cilium/README.md).
+
 - **Default GKE toleration removed.** The `components.gke.io/gke-managed-components`
   toleration is no longer added by default across `argocd`, `ingress-nginx`,
   `descheduler`, `external-dns`, `prometheus-operator`, and `cluster-api-operator`
