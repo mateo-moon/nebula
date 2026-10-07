@@ -103,8 +103,9 @@ version before activating the migration.
    finalizer, and its restored Delete policy cleans up the cloud template.
    Leaving Orphan after activation would leak that template. Retained EIP/data
    declarations must keep their own Prune/Delete=false protections and
-   no-Delete cloud policies; an EIP's cloud-retain option alone does not protect
-   the Kubernetes binding from Argo pruning.
+   no-Delete cloud policies. `addEip(..., { retain: true })` emits both the cloud
+   retention policy and these Argo guards so workload ownership cannot prune
+   the Kubernetes binding while leaving the cloud address orphaned.
 
 The handoff mechanics were checked against Crossplane v2.1.3, Argo v3.3.0,
 go-templating v0.9.0 and auto-ready v0.4.2. Local execution of the installed

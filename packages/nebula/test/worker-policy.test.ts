@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { ApiObject, Testing } from "cdk8s";
 import { applyClusterResourcePolicy, workloadWorker, WORKLOAD_OWNER } from "../src/modules/k8s/argocd/worker-policy";
+import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 const SYNC_OPTIONS = "argocd.argoproj.io/sync-options";
 const SYNC_WAVE = "argocd.argoproj.io/sync-wave";
 const workerKinds = [
@@ -75,6 +76,36 @@ test("explicit resource retention and confirmation are preserved on app-owned wo
   for (const r of Testing.synth(chart)) {
     assert.equal(r.metadata.annotations[SYNC_OPTIONS], `Prune=${r.metadata.name},Delete=false,ServerSideApply=true`);
   }
+});
+
+test("retained fleet EIPs preserve Kubernetes bindings through workload ownership policy", () => {
+  const dir = mkdtempSync(join(tmpdir(), "retained-eip-"));
+  try {
+    writeFileSync(join(dir, "index.ts"), "");
+    const chart = Testing.chart();
+    workloadWorker(chart, "stage-example", dir, () => {
+      const fleet = new AwsWorkerFleet(chart, "fleet", {
+        namePrefix: "test", clusterName: "test", k0sVersion: "v1.36.3+k0s.2",
+        sshPublicKey: "fixture-public-key", sshSecretName: "test-ssh",
+        dataVgName: "test-vg", tagDomain: "example.test", eipPurpose: "test-worker",
+      });
+      fleet.addEip("retained", "eu-central-1", { existing: true, retain: true });
+      fleet.addEip("ordinary", "eu-central-1");
+    });
+    const before = Testing.synth(chart);
+    assert.equal(before.find(resource => resource.metadata.name === "ordinary")!.metadata.annotations[SYNC_OPTIONS], undefined);
+    applyClusterResourcePolicy(chart);
+    const resources = Testing.synth(chart);
+    const retained = resources.find(resource => resource.metadata.name === "retained")!;
+    const ordinary = resources.find(resource => resource.metadata.name === "ordinary")!;
+    assert.equal(retained.metadata.annotations[SYNC_OPTIONS], "Prune=false,Delete=false");
+    assert.equal(retained.metadata.annotations[WORKLOAD_OWNER], "stage-example");
+    assert.equal(retained.spec.deletionPolicy, "Orphan");
+    assert.ok(!retained.spec.managementPolicies.includes("Create"));
+    assert.ok(!retained.spec.managementPolicies.includes("Delete"));
+    assert.equal(ordinary.metadata.annotations[SYNC_OPTIONS], "Prune=true,Delete=true");
+    assert.deepEqual(ordinary.spec, before.find(resource => resource.metadata.name === "ordinary")!.spec);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("worker options cannot collapse or invert deletion ordering", () => {

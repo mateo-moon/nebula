@@ -93,7 +93,8 @@ export interface AwsWorkerFleetEipOptions {
   allocationId?: string;
   /** Require the existing MR binding; never allocate a replacement address. */
   existing?: boolean;
-  /** Keep the public identity even if the owning Kubernetes object is removed. */
+  /** Retain the cloud address and protect its Kubernetes binding from Argo
+   * pruning or Application deletion. */
   retain?: boolean;
 }
 
@@ -398,8 +399,11 @@ export class AwsWorkerFleet extends Construct {
     new Eip(this, `${name}-eip`, {
       metadata: {
         name,
-        ...(allocationId
-          ? { annotations: { "crossplane.io/external-name": allocationId } }
+        ...(allocationId || options.retain
+          ? { annotations: {
+              ...(allocationId ? { "crossplane.io/external-name": allocationId } : {}),
+              ...(options.retain ? { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } : {}),
+            } }
           : {}),
       },
       spec: {
