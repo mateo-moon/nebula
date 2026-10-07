@@ -70,6 +70,15 @@ function-auto-ready. The configured AWS provider needs the corresponding S3
 read/update permissions. Requests use the provider's regular reconciliation poll
 interval; there is no one-shot Job or manual publishing step.
 
+Continuous reconciliation adds S3 API requests even when versioning is preserved
+and document contents do not change. Estimate that usage from the deployed AWS
+provider's poll/sync intervals and the region's request prices before enabling
+the publisher. Each issuer observes one bucket, versioning configuration, public
+access block, bucket policy and two objects; a resource refresh can make several
+AWS calls. Content hashes avoid routine object rewrites, but rotations and drift
+repair can add writes. Preserving versioning avoids enabling retained versions;
+it does not make API requests free. See [S3 pricing](https://aws.amazon.com/s3/pricing/).
+
 Tests execute the emitted template using Go's template engine, Sprig v3.3.0 and
 yaml.v3, matching function-go-templating v0.9.0. Test dependencies are pinned in
 `test/support/oidc-template/go.mod` and `go.sum`; Go 1.23+ is required.

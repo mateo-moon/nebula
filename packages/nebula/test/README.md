@@ -11,10 +11,14 @@ The packed-package test also needs package-registry access or a warm pnpm store.
 - `argocd-discovery`, `worker-policy`, and `baremetal-and-registration` cover
   additional discovery roots without ownership changes, duplicate-name refusal,
   application/worker retention and exact baremetal/native admission graphs.
-- `worker-observed-identity` and `worker-fleet-attachment` execute the emitted
-  worker template and bootstrap: exact retained bindings, wrong/missing region
-  or AZ, lost external names, transient observation loss, attachment ownership,
-  exact disk serial selection and refusal to initialize retained storage.
+- `worker-observed-identity`, `worker-observed-network` and
+  `worker-fleet-attachment` execute the emitted worker template and bootstrap:
+  exact retained bindings, wrong/missing region or AZ, lost external names,
+  resolved security-group values, explicit readiness failures and transient
+  observation loss. Retain/activate cases check complete-spec preservation,
+  recorded UID/external binding, controller ownership and Argo tracking handoff.
+  Bootstrap cases check attachment ownership, exact disk serial selection and
+  refusal to initialize retained storage.
 - `cluster-nat-ingress` executes Go/Sprig against healthy, missing, mismatched,
   reordered and rotating CAPA observations. Existing rule identity and obsolete
   source revocation are checked separately from data-resource retention.

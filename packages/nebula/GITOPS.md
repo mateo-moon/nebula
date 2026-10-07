@@ -52,7 +52,7 @@ network policy for a caller.
 
 | API | Inputs and guardrails |
 | --- | --- |
-| `AwsWorkerFleet` with `observedIdentity`, `AwsWorkerLaunchTemplateSetup` | Named EIP/EBS managed resources, region/AZ and bootstrap configuration; validates retained external bindings before composing a named LaunchTemplate. See the [worker adoption contract](src/modules/infra/aws/worker-launch-template.md). |
+| `AwsWorkerFleet` with `observedIdentity`, `AwsWorkerLaunchTemplateSetup` | Named EIP/EBS/security-group resources, region/AZ and bootstrap configuration; validates external bindings and resolved network values before composing a named LaunchTemplate. Existing templates use an explicit retain-then-activate ownership handoff, optionally one worker at a time. See the [worker adoption contract](src/modules/infra/aws/worker-launch-template.md). |
 | `AwsWorkerFleetRegion.ingressRules` | Explicit IPv4, IPv6 or security-group source policies. Omission preserves existing default ingress; an empty list removes automatic ingress. |
 | `AwsClusterNatIngress`, `AwsClusterNatIngressSetup` | Observes CAPA `AWSCluster.status.networkStatus.natGatewaysIPs`; requires healthy, exact cluster observations, preserves matched rule names and revokes obsolete sources only after a valid observation. See [NAT adoption and rotation](src/modules/infra/aws/cluster-nat-ingress/README.md). |
 | `AwsImageRegistry`, `AwsServiceAccountRegistryIdentity` | Reusable repositories, scoped IAM/OIDC identity, credential refresh/distribution and mirroring, with explicit deployment settings. See [registry configuration](src/modules/infra/aws/image-registry/README.md). |
