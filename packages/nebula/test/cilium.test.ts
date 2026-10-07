@@ -71,6 +71,21 @@ test("explicit private reachability keeps IPv4 transport and NIC MTU, with dual-
   });
 });
 
+test("explicit private IPv4 profile changes only the enabled family and CIDR wait", () => {
+  withHelm(render => {
+    const dualStack = render({ nodeConnectivity: "private" });
+    const ipv4 = render({ nodeConnectivity: "private", podAddressFamilies: "ipv4" });
+    assert.deepEqual(ipv4, {
+      ...dualStack,
+      ipv6: { enabled: false },
+      k8s: { requireIPv4PodCIDR: true, requireIPv6PodCIDR: false },
+    });
+    assert.equal(ipv4.underlayProtocol, "ipv4");
+    assert.equal(ipv4.preferIpv6, false);
+    assert.equal(ipv4.daemon.configSources, "config-map:cilium-config");
+  });
+});
+
 test("existing explicit dual-stack configuration and unrelated overrides still render", () => {
   withHelm(render => {
     const values = render({
@@ -123,6 +138,9 @@ for (const [name, values] of [
 
 const invalid: [string, unknown, RegExp][] = [
   ["typed single-stack", { ipv6: false }, /ipv6 cannot be disabled/],
+  ["unknown pod families", { podAddressFamilies: "ipv6" }, /podAddressFamilies/],
+  ["IPv4 without private topology", { podAddressFamilies: "ipv4" }, /explicit nodeConnectivity/],
+  ["public IPv4 pods", { nodeConnectivity: "public", podAddressFamilies: "ipv4" }, /explicit nodeConnectivity/],
   ["invalid topology", { nodeConnectivity: "auto" }, /nodeConnectivity/],
   ["public IPv4", { underlayProtocol: "ipv4" }, /public node connectivity requires/],
   ["auto transport", { underlayProtocol: "auto" }, /underlayProtocol/],
@@ -177,6 +195,28 @@ for (const [name, config, message] of invalid) {
     });
   });
 }
+
+for (const [name, config, message] of [
+  ["legacy IPv6 enable flag", { ipv6: true }, /cannot enable ipv6/],
+  ["IPv6 inventory", { nodeIpv6Overrides }, /nodeIpv6Overrides/],
+  ["IPv6 transport", { underlayProtocol: "ipv6" }, /underlayProtocol/],
+  ["raw IPv6 transport", { values: { underlayProtocol: "ipv6" } }, /underlayProtocol/],
+  ["raw IPv6 enabled", { values: { ipv6: { enabled: true } } }, /ipv6.enabled/],
+  ["raw IPv6 CIDR wait", { values: { k8s: { requireIPv6PodCIDR: true } } }, /requireIPv6PodCIDR/],
+  ["raw IPv4 disabled", { values: { ipv4: { enabled: false } } }, /ipv4.enabled/],
+  ["raw IPv4 CIDR wait disabled", { values: { k8s: { requireIPv4PodCIDR: false } } }, /requireIPv4PodCIDR/],
+  ["prefer IPv6", { values: { preferIpv6: true } }, /preferIpv6/],
+  ["alternate IPAM", { values: { ipam: { mode: "cluster-pool" } } }, /ipam.mode/],
+  ["node source override", { values: { daemon: { configSources: "cilium-node-config" } } }, /daemon.configSources/],
+  ["ConfigMap bypass", { values: { extraConfig: { "enable-ipv6": "true" } } }, /extraConfig/],
+  ["argument bypass", { values: { extraArgs: ["--enable-ipv6=true"] } }, /extraArgs/],
+  ["environment bypass", { values: { extraEnv: [{ name: "CILIUM_ENABLE_IPV6", value: "true" }] } }, /extraEnv/],
+] as const) test(`reject private IPv4 ${name} before Helm`, () => {
+  withHelm((render, called) => {
+    assert.throws(() => render({ nodeConnectivity: "private", podAddressFamilies: "ipv4", ...config }), message);
+    assert.equal(called(), false);
+  });
+});
 
 test("hosted cluster composition supplies both pod and service ranges", () => {
   const chart = Testing.chart();
@@ -244,5 +284,29 @@ test("pinned Helm chart limits build-config to selector-scoped ipv6-node invento
     assert.equal(data["enable-ipv6"], "true");
     assert.equal(data["k8s-require-ipv6-pod-cidr"], "true");
     assert.equal(data["underlay-protocol"], "ipv6");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("pinned Helm chart preserves private IPv4 without an IPv6 CIDR requirement", { skip: !process.env.CILIUM_TEST_CHART }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "cilium-ipv4-chart-"));
+  try {
+    const values = withHelm(render => render({ nodeConnectivity: "private", podAddressFamilies: "ipv4" }));
+    const path = join(dir, "values.json");
+    writeFileSync(path, JSON.stringify(values));
+    const manifest = execFileSync("helm", ["template", "cilium", process.env.CILIUM_TEST_CHART!, "--namespace", "kube-system", "-f", path], { encoding: "utf8" });
+    const objects = parseAllDocuments(manifest).map(doc => { assert.deepEqual(doc.errors, []); return doc.toJSON(); });
+    const data = objects.find(o => o.kind === "ConfigMap" && o.metadata.name === "cilium-config").data;
+    assert.equal(data["enable-ipv4"], "true");
+    assert.equal(data["enable-ipv6"], "false");
+    assert.equal(data["k8s-require-ipv4-pod-cidr"], "true");
+    assert.equal(data["k8s-require-ipv6-pod-cidr"], "false");
+    assert.equal(data.ipam, "kubernetes");
+    assert.equal(data["underlay-protocol"], "ipv4");
+    assert.equal(data["tunnel-protocol"], "vxlan");
+    assert.equal(data["prefer-ipv6"], undefined);
+    assert.equal(data.mtu, undefined);
+    const template = objects.find(o => o.kind === "DaemonSet" && o.metadata.name === "cilium").spec.template;
+    assert.match(template.metadata.annotations["cilium.io/cilium-configmap-checksum"], /^[a-f0-9]{64}$/);
+    assert.ok(!template.spec.initContainers.some((c: any) => c.name === "config"));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

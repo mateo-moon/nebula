@@ -63,6 +63,7 @@ network policy for a caller.
 | `GiteaBranchProtection` | Secret-referenced credentials and explicit policy fields; observes/creates/updates an exact repository branch rule without deleting external protection. See [repository policy reconciliation](src/modules/infra/gitea/README.md). |
 | `AwsDlm` | Optional managed-resource name, role binding/description and tags let an existing backup policy retain its identities while adopting the typed API. |
 | `Cilium.nodeIpv6Overrides` | Existing named CiliumNodeConfigs with exact hostname/address inventory, native deny admission and only the `ipv6-node` override key. See [Cilium prerequisites and qualification](src/modules/k8s/cilium/README.md#retained-nodes-with-an-inventory-ipv6-address). |
+| `Cilium.podAddressFamilies` | Defaults to dual-stack. An explicit `ipv4` profile requires private node connectivity and IPv4 transport, preserving a retained private IPv4 topology without migrating its control plane. See [private IPv4 prerequisites](src/modules/k8s/cilium/README.md#retained-private-ipv4-clusters). |
 
 ## Staged adoption
 

@@ -1,8 +1,8 @@
 # Cilium networking contract
 
 `Cilium` installs the CNI for a cluster whose k0s network provider is `custom`.
-Every Cilium-managed pod receives IPv4 and IPv6. Both families, Kubernetes
-IPAM, and waiting for both node pod CIDRs are mandatory. `hostNetwork` pods
+By default, every Cilium-managed pod receives IPv4 and IPv6. Kubernetes IPAM
+and waiting for each enabled node pod CIDR are mandatory. `hostNetwork` pods
 use the node's addresses; Cilium does not allocate addresses to those pods.
 
 The default node transport follows the public-mesh configuration:
@@ -32,12 +32,45 @@ new Cilium(chart, "cilium", {
 
 Public meshes reject IPv4/automatic transport and MTUs outside 1280–1400.
 Private meshes can use IPv4 or IPv6 transport and a larger, explicit MTU.
-Neither permits single-stack pods. The old `ipv6: true` spelling still works;
-`ipv6: false` fails both typing and construction.
+Public meshes always require dual-stack pods. The old `ipv6: true` spelling
+still works for dual-stack; `ipv6: false` fails both typing and construction.
+
+### Retained private IPv4 clusters
+
+An existing IPv4 cluster with mutually routable private node addresses can
+preserve that topology through an explicit profile:
+
+```typescript
+new Cilium(chart, "cilium", {
+  nodeConnectivity: "private",
+  podAddressFamilies: "ipv4",
+  underlayProtocol: "ipv4",
+});
+```
+
+This profile enables IPv4, disables IPv6, requires the IPv4 pod CIDR and
+disables the IPv6 CIDR wait. It keeps Kubernetes IPAM, the Cilium CNI,
+WireGuard, tunnel routing and NIC-derived MTU. The profile rejects public
+connectivity, IPv6 transport, `ipv6: true`, `nodeIpv6Overrides` and raw Helm
+overrides that contradict its network settings. It creates no additional
+cloud resources or capacity.
+
+This option does not migrate the control plane, workers, Services or existing
+pod sandboxes between address families. Use it to preserve an already
+qualified private IPv4 installation; compare complete manifests before
+updating the module pin. The explicit CIDR-wait flags and configuration-source
+restrictions may change the ConfigMap and roll the agents through its chart
+checksum. Public meshes retain the default dual-stack contract.
+
+The pinned [Cilium chart ConfigMap template](https://github.com/cilium/cilium/blob/v1.20.0/install/kubernetes/cilium/templates/cilium-configmap.yaml)
+renders the family and CIDR-wait values directly. The real-chart test checks
+IPv4 enabled, IPv6 disabled, IPv4 wait enabled, IPv6 wait disabled, IPv4 VXLAN
+transport and no explicit MTU.
 
 ## Compose the control plane and workers
 
-The CNI cannot create control-plane CIDRs or assign IPv6 to a host NIC. These
+For the default dual-stack profile, the CNI cannot create control-plane CIDRs
+or assign IPv6 to a host NIC. These
 must be configured together, even when separate GitOps applications own them:
 
 ```typescript
@@ -67,8 +100,9 @@ addresses, never a cloud public-IPv4 metadata address.
 
 ## Overrides and adoption
 
-Validation runs **after** merging Helm values. It rejects disabled address
-families, alternate IPAM, custom/chained CNIs, disabling either CIDR wait,
+Validation runs **after** merging Helm values. It rejects address families
+that conflict with the selected profile, alternate IPAM, custom/chained CNIs,
+disabling an enabled family's CIDR wait,
 unsafe transport/MTU choices, and network overrides through `extraConfig`,
 `extraArgs` or `extraEnv`. By default the agent reads only `cilium-config`, so a
 `CiliumNodeConfig` cannot silently change its address-family contract.
@@ -76,10 +110,11 @@ Unrelated values such as metrics and resource sizing remain configurable.
 The chart's configuration checksum is enabled, so configuration changes
 roll Cilium agents rather than leaving them on stale settings.
 
-This is a breaking change for existing IPv4-only consumers. Keep their
-previous module revision until the cluster migration is prepared. Do not
-apply only the new Cilium manifests to an IPv4-only cluster: agents will wait
-for the missing IPv6 pod CIDRs. Configure or recreate the control plane and
+The default dual-stack profile is a breaking change for existing IPv4-only
+consumers. Qualify the private IPv4 profile above or keep the previous module
+revision until a deliberate cluster migration is prepared. Do not apply the
+default dual-stack manifests to an IPv4-only cluster: agents will wait for
+the missing IPv6 pod CIDRs. Configure or recreate the control plane and
 workers according to the cluster's supported migration procedure, preserve
 data volumes, and recreate existing pod sandboxes to obtain both addresses.
 Restarting Cilium alone does not add a second address to existing pods.
@@ -162,7 +197,7 @@ cd packages/nebula
 CILIUM_TEST_CHART=/tmp/cilium-1.20.0.tgz node --import tsx --test test/cilium.test.ts test/cilium-node-ipv6-overrides.test.ts test/dual-stack-workers.test.ts
 ```
 
-These render tests verify both agent family flags, both CIDR wait flags,
+These render tests verify the selected agent family flags and CIDR wait flags,
 IPAM, transport selection and the agent's configuration source and checksum,
 including the real chart's selector-scoped build-config source/allowlist.
 Admission tests execute the CEL expressions against valid and altered objects.
