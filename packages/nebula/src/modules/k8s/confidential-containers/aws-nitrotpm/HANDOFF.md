@@ -29,7 +29,7 @@ This validates protocol compatibility and local rejection behavior. It does not 
 
 ## Checks completed
 
-- The Nebula module suite passes: 235 tests, with 3 existing optional chart-render skips. All 8 AWS rendering checks and 6 signed-workload checks pass, including Node-to-Rust verification of Unicode/control bytes and all four DSSE base64 variants.
+- The Nebula module suite passes after integration with the current main branch: 294 tests, with 5 optional chart/Envoy integration skips. All 8 AWS rendering checks and 6 signed-workload checks pass, including Node-to-Rust verification of Unicode/control bytes and all four DSSE base64 variants. CI runs the Envoy integration separately with its pinned image.
 - The packed package ships every tracked source/asset and loads through a clean consumer without import-time file access. Explicit package exclusions and injected cache fixtures prevent local Rust/Python build state from entering the tarball. The secret mount is `/run/nebula/secrets` with the portable `run-nebula-secrets.mount` unit.
 - Type checking, management-policy conventions, publication guard and its 33 checks pass; a separate secret scan finds no leaks. Only the exact public AWS root and unmodified public Helm archive are content-allowlisted.
 - 49 Python protocol tests pass, including the actual stock KBS/client/offline-KBC integration test. The software-TPM experiments require their separate isolated test environment and do not count as part of this result.

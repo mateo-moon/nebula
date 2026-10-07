@@ -9,6 +9,12 @@
   against stock Trustee KBS and the stock guest client with synthetic evidence.
   These checks do not qualify AWS deployment; see the module's handoff gates.
 
+- `cilium.test.ts` checks mandatory dual-stack pod allocation, public/private
+  node transport, final Helm-value validation and override refusals. Set
+  `CILIUM_TEST_CHART` to the pinned chart archive to also qualify the actual
+  rendered ConfigMap and DaemonSet without contacting a cluster.
+  `dual-stack-workers.test.ts` executes the emitted address discovery with
+  simulated NICs and proves missing/unusable IPv6 fails before worker join.
 - `ecr.test.ts` validates private ECR synthesis, repository retention, IAM
   access boundaries and keyless provider installation.
 - `k0smotron-control-plane.test.ts` checks where the hosted control plane's

@@ -34,6 +34,10 @@ jobs:
       - name: Tests (including the packed-tarball import test)
         run: pnpm test
       - run: pnpm exec tsc --noEmit
+      - name: Real Envoy mutual TLS qualification
+        env:
+          ENVOY_TEST_IMAGE: docker.io/envoyproxy/envoy@sha256:43b69cf424922cd5d1086cc019dc89197e58d58deac89d36b3c8b67f1a9e8523 # v1.39.2 amd64
+        run: pnpm exec tsx --test test/envoy.integration.test.ts
       - run: pnpm verify:policies
       - name: Install pinned Rust for broker policy qualification
         run: rustup toolchain install 1.98.1 --profile minimal && rustup override set 1.98.1
