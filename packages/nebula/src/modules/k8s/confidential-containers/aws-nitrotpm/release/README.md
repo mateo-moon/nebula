@@ -32,6 +32,10 @@ policy is authenticated and measured after boot, without making the root mutable
 Nitro tools. Release IDs commit role, expected PCRs and minimum firmware policy.
 No running guest's observed PCR is accepted as a reference. Committed source is
 required for image releases; dirty build provenance cannot be published.
+PCR4 must identify a measured boot image. PCR12 may be the exact reset value
+computed by NitroTPM-Tools for a UKI without external parameters; the verifier
+still compares it exactly. Image staging/build directories must be fresh so
+retries cannot silently reuse a previous policy, binary or staging script.
 
 `complete.py` assembles `catalog.candidate.json` from real disk/client receipts
 and the published controller digest. Hardware qualification promotes those exact

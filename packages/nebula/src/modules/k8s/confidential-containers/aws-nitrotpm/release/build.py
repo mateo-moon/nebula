@@ -48,6 +48,21 @@ def json_file(path, value):
     path.write_text(json.dumps(value, separators=(",", ":")) + "\n")
 
 
+def uki_measurements(measured):
+    require(measured.get("HashAlgorithm") == "SHA384", "SHA384 build measurements required")
+    result = {}
+    for field in ("PCR4", "PCR12"):
+        value = measured.get(field)
+        require(isinstance(value, str) and len(value) == 96 and
+                all(c in "0123456789abcdefABCDEF" for c in value), "invalid UKI measurement")
+        result[field.lower()] = value.lower()
+    # The Nitro tool emits reset PCR12 for a UKI without external parameters.
+    # A reset boot-image PCR4 is never an image identity. Runtime verification
+    # still compares both full values, including the expected reset PCR12.
+    require(result["pcr4"] != "0" * 96, "missing UKI boot measurement")
+    return result
+
+
 def binaries(source, work):
     work.mkdir(parents=True, exist_ok=True)
     out = work / "binaries"; out.mkdir(exist_ok=True)
@@ -99,17 +114,14 @@ def images(source, work, canary, repository, tag, policy):
     result = {"version": 1}
     for role in ("authority", "runtime"):
         description, build = work / (role + "-description"), work / (role + "-image")
-        if not description.exists():
-            stage(base, caa, inputs if role == "runtime" else {"aws-trustee-bootstrap": inputs["aws-trustee-bootstrap"]},
-                source / "trust/amd-milan-asvk.pem", canary, RELEASEVER, role, description)
+        require(not description.exists() and not build.exists(), "fresh image build directories required")
+        stage(base, caa, inputs if role == "runtime" else {"aws-trustee-bootstrap": inputs["aws-trustee-bootstrap"]},
+            source / "trust/amd-milan-asvk.pem", canary, RELEASEVER, role, description)
         run("kiwi-ng", "system", "build", "--description", description, "--target-dir", build)
         disks = list(build.glob("*.raw")); require(len(disks) == 1, "one appliance disk required")
         disk = disks[0]
         measured = json.loads((build / "pcr_measurements.json").read_text())["Measurements"]
-        require(measured["HashAlgorithm"].startswith("SHA384"), "SHA384 build measurements required")
-        profile = {"minimumTcb": policy, "pcr4": measured["PCR4"].lower(), "pcr12": measured["PCR12"].lower(), "role": role, "version": 1}
-        for field in ("pcr4", "pcr12"):
-            require(len(profile[field]) == 96 and all(c in "0123456789abcdef" for c in profile[field]) and set(profile[field]) != {"0"}, "invalid UKI measurement")
+        profile = {"minimumTcb": policy, **uki_measurements(measured), "role": role, "version": 1}
         release = hashlib.sha256(json.dumps(profile, separators=(",", ":")).encode()).hexdigest()
         profile.pop("version"); profile["release"] = release
         target = out / f"{role}.raw.gz"

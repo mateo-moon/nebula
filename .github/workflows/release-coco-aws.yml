@@ -82,6 +82,7 @@ jobs:
           persist-credentials: false
       - name: Prepare the isolated software image builder
         run: |
+          python3 -m unittest discover -s "$COCO_SOURCE/release"
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           docker build -f "$COCO_SOURCE/release/builder.Dockerfile" -t nebula-coco-builder "$COCO_SOURCE/release"
           mkdir -p "$RUNNER_TEMP/coco-build" "$RUNNER_TEMP/coco-cargo" "$RUNNER_TEMP/coco-auth"

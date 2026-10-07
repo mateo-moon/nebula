@@ -93,3 +93,19 @@ test("release measurements, firmware floors, raw disk and client artifacts are c
     assert.throws(() => validateAwsCocoRelease(release));
   }
 });
+
+test("the UKI reset PCR12 is pinned while an unmeasured boot image is refused", () => {
+  const updateCommitments = (release: AwsCocoRelease): AwsCocoRelease => {
+    const authority = { ...release.authority, profile: { ...release.authority.profile, release: awsCocoProfileId(release.authority.profile) } };
+    const runtime = { ...release.runtime, profile: { ...release.runtime.profile, release: awsCocoProfileId(release.runtime.profile) } };
+    return { ...release, authority, runtime, id: createHash("sha256").update(`${authority.profile.release}\n${runtime.profile.release}\n`).digest("hex") };
+  };
+  const base = fixture();
+  const release = updateCommitments({ ...base,
+    authority: { ...base.authority, profile: { ...base.authority.profile, pcr12: "0".repeat(96) } },
+    runtime: { ...base.runtime, profile: { ...base.runtime.profile, pcr12: "0".repeat(96) } } });
+  validateAwsCocoRelease(release);
+  const unmeasured = updateCommitments({ ...release,
+    authority: { ...release.authority, profile: { ...release.authority.profile, pcr4: "0".repeat(96) } } });
+  assert.throws(() => validateAwsCocoRelease(unmeasured), /profile commitment/);
+});

@@ -63,6 +63,7 @@ jobs:
       - name: Reconciliation, interrupted operations and owned cleanup
         run: |
           python -m unittest discover -s control
+          python -m unittest discover -s release
           python -m py_compile release/build.py release/canary.py release/complete.py release/stage.py
       - name: Install pinned Rust
         run: |

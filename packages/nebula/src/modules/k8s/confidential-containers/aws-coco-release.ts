@@ -38,7 +38,10 @@ export function validateAwsCocoRelease(release: AwsCocoRelease): void {
     const { profile, artifact } = release[role];
     object(profile, ["release", "role", "pcr4", "pcr12", "minimumTcb"], "release profile");
     object(profile.minimumTcb, ["bootloader", "tee", "snp", "microcode"], "TCB policy");
-    requireValue(profile.role === role && [profile.pcr4, profile.pcr12].every(pcr => /^[a-f0-9]{96}$/.test(pcr) && !/^0+$/.test(pcr)) &&
+    // AWS's UKI tool expects the reset value in PCR12 when no external boot
+    // parameters were supplied. It is still pinned and compared exactly.
+    requireValue(profile.role === role && [profile.pcr4, profile.pcr12].every(pcr => /^[a-f0-9]{96}$/.test(pcr)) &&
+      !/^0+$/.test(profile.pcr4) &&
       Object.values(profile.minimumTcb).every(value => Number.isInteger(value) && value >= 0 && value <= 255) &&
       profile.minimumTcb.bootloader > 0 && profile.minimumTcb.microcode > 0 &&
       profile.minimumTcb.snp >= 27 && awsCocoProfileId(profile) === profile.release, "release profile commitment mismatch");
