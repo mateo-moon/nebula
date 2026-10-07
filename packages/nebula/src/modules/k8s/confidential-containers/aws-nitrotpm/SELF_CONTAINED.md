@@ -125,9 +125,18 @@ Local validation includes real synthetic COSE/SNP signatures and certificate
 chains, real TLS with channel-key substitution rejection, actual OpenRaft
 elections/snapshots/partitions/replacement, TPM journal fault injection, Node/Rust
 signed-contract interoperability, AWS SDK request-shape tests, controller failure
-paths and real Helm synthesis. The complete Linux fixture currently passes 62
+paths and real Helm synthesis. The complete Linux fixture currently passes 64
 Rust tests, including software-TPM tests. These tests do not qualify AWS firmware,
 EC2 persistence guarantees, the full boot services or end-to-end isolation.
+
+The assembled Linux appliances also pass offline systemd dependency checks and
+start their bootstrap executables using the libraries included in each image.
+The CI-built Apple Silicon owner client passes the Node/Rust signed-contract
+checks. Live Kubernetes validation accepts the managed resource schemas and
+rejects a changed immutable enrollment. The real AWS provider creates the scoped
+test users, policies and credential Secrets, and ordinary Crossplane deletion
+removes the fixture's users, role, instance profile and policies. These checks
+remain separate from complete attested guest boot and recovery acceptance.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,
