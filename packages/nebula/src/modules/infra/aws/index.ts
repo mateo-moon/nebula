@@ -12,6 +12,8 @@ export { S3Bucket } from "./s3";
 export type { S3BucketConfig } from "./s3";
 export { EcrRepository } from "./ecr";
 export type { EcrRepositoryConfig } from "./ecr";
+export { AwsServiceAccountRegistryIdentity } from "./service-account-registry-identity";
+export type { AwsServiceAccountRegistryIdentityConfig } from "./service-account-registry-identity";
 export { AwsDlm } from "./dlm";
 export type { AwsDlmConfig, DlmSnapshotSchedule } from "./dlm";
 export { AwsK0sCluster } from "./k0s-cluster";
