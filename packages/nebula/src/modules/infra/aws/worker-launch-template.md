@@ -36,6 +36,15 @@ The default legacy mode remains unchanged. Moving an already deployed raw
 LaunchTemplate into a composition is a distinct GitOps migration, not a file
 rename. Perform it through reviewed, verified stages:
 
+Crossplane v2 applies composed resources using server-side apply with a field
+manager unique to the XR and forced ownership. Its controller explicitly relies
+on Kubernetes merging owner references and rejecting a different existing
+controller reference ([controller source, v2.0.2](https://github.com/crossplane/crossplane/blob/v2.0.2/internal/controller/apiextensions/composite/composition_functions.go#L500)).
+A named LT with no controller owner can therefore be adopted without a new
+Kubernetes UID; external-name owned by the AWS provider is omitted from the new
+composition's metadata and preserved. Verify those conditions on the deployed
+version before activating the migration.
+
 1. Install the setup and protect existing LaunchTemplate MRs from Argo pruning
    and Application deletion. Preserve all EIP/EBS external-name bindings and
    data retention policies. Verify the protective annotations on the live MRs.
@@ -60,3 +69,13 @@ worker hostname and node affinity. Do not replace a worker merely to migrate
 its declarative ownership. The unit tests exercise emitted Go templates and
 bootstrap shell with fake observations/APIs; adoption and rollout still need
 an integration check against the deployed controller versions.
+
+Expected intentional LT changes when enabling observed mode are the cloud-init
+body: fail on bootstrap command errors, select the data disk by its observed
+serial, refuse to initialize retained disks, resize only that disk and enforce
+DeleteOnTermination=false on its attachment. The template's name, AMI, instance
+type, IAM profile, network interfaces and root disk settings remain the declared
+values; the ASG name and its `$Latest` template reference remain unchanged.
+These changes create an LT version, not an automatic instance refresh. Keep the
+directory-only phase on its previously qualified deployment dependency if the
+new Nebula pin also contains unrelated network/bootstrap updates.
