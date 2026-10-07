@@ -81,11 +81,15 @@ jobs:
           binaries = [item["executable"] for item in messages if item.get("reason") == "compiler-artifact" and item.get("executable") and item["target"]["kind"] == ["lib"] and item["profile"]["test"]]
           assert len(binaries) == 1, "exactly one Rust library test binary required"
           shutil.copy2(binaries[0], sys.argv[2])
+          # Only synthetic test keys: model a nonswappable guest without changing
+          # the hosted runner's swap. Production still checks its real /proc.
+          pathlib.Path(sys.argv[2]).with_name("swaps").write_text("Filename\tType\tSize\tUsed\tPriority\n")
           PY
           docker build -f guest/tests/tpm.Dockerfile -t nebula-authority-tpm-test guest/tests
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
             --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
             --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=128m \
+            -v "$RUNNER_TEMP/nebula-tpm-test/swaps:/proc/swaps:ro" \
             -v "$RUNNER_TEMP/nebula-tpm-test:/tests:ro" -e NEBULA_SWTPM_TEST=1 \
             nebula-authority-tpm-test /tests/guest-tests --ignored tpm_state::tests::emulator_
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

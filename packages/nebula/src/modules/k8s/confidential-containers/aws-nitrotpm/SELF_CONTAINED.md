@@ -222,9 +222,10 @@ wrong deployment, cloning, clearing, PCR changes, poisoned writes, locking,
 missing seals/NV, unsafe NV redefinition and unavailable transport. Two unit
 tests reject unsafe public definitions. CI runs the compiled Rust tests in a
 confined Ubuntu container with swtpm and tpm2-tools; these are developer checks,
-not module installation steps. The local Linux run uses an explicitly test-only
-no-swap fixture because the desktop VM has swap. Native entry-point environment
-validation is not bypassed in production.
+not module installation steps. Local and CI positive fixtures model a
+nonswappable guest using an explicitly test-only `/proc/swaps` file; they do not
+change the host's swap configuration or qualify real guest memory protection.
+Native entry-point environment validation is not bypassed in production.
 
 This remains a local component, not a replicated service or permission to release
 keys. Trusted deployment/boot inputs, authenticated genesis, Raft membership,
