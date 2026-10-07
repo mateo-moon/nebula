@@ -21,6 +21,9 @@ export interface AwsClusterNatIngressConfig {
    * from Argo pruning before removing their direct declarations. Initial
    * adoption waits for every name to match the desired group/protocol/ports. */
   existingRuleNames?: string[];
+  /** Existing rules require a retained ownership handoff before activation.
+   * Retain preserves their complete cloud specs and does not add NAT sources. */
+  handoff?: "retain" | "activate";
   awsProviderConfigName?: string;
   kubeProviderConfigName?: string;
 }
@@ -38,11 +41,16 @@ export class AwsClusterNatIngress extends Construct {
       throw new Error("NAT ingress requires DNS resource names; the XR prefix must be at most 40 characters");
     if (new Set(config.existingRuleNames).size !== (config.existingRuleNames ?? []).length)
       throw new Error("NAT ingress adoption names must be unique");
+    if (Boolean(config.existingRuleNames?.length) !== Boolean(config.handoff))
+      throw new Error("Existing NAT ingress rules require an explicit retain/activate handoff");
+    if (config.handoff && !["retain", "activate"].includes(config.handoff))
+      throw new Error("Invalid NAT ingress handoff phase");
     if (!["tcp", "udp"].includes(config.ipProtocol ?? "tcp") ||
         [config.fromPort, config.toPort ?? config.fromPort].some(port => !Number.isInteger(port) || port < 1 || port > 65535) ||
         config.fromPort > (config.toPort ?? config.fromPort)) throw new Error("Invalid NAT ingress protocol or ports");
     this.xr = new ApiObject(this, "xr", {
-      apiVersion: "nebula.io/v1alpha1", kind: "XAwsClusterNatIngress", metadata: { name: config.name },
+      apiVersion: "nebula.io/v1alpha1", kind: "XAwsClusterNatIngress", metadata: { name: config.name,
+        ...(config.handoff === "retain" ? { annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } } : {}) },
       spec: { crossplane: { compositionRef: { name: "aws-cluster-nat-ingress" } }, ...config,
         awsClusterNamespace: config.awsClusterNamespace ?? "default", awsClusterRegion: config.awsClusterRegion ?? config.region,
         ipProtocol: config.ipProtocol ?? "tcp", toPort: config.toPort ?? config.fromPort,
@@ -71,15 +79,24 @@ export class AwsClusterNatIngressSetup extends Construct {
                 region: string, securityGroupName: string, ipProtocol: { type: "string", enum: ["tcp", "udp"] },
                 fromPort: { type: "integer", minimum: 1, maximum: 65535 }, toPort: { type: "integer", minimum: 1, maximum: 65535 },
                 description: { type: "string" }, existingRuleNames: { type: "array", items: string, "x-kubernetes-list-type": "set" },
+                handoff: { type: "string", enum: ["retain", "activate"] },
                 awsProviderConfigName: string, kubeProviderConfigName: string },
               "x-kubernetes-validations": [
                 { rule: "self.fromPort <= self.toPort", message: "fromPort must not exceed toPort" },
-                ...["name", "region", "securityGroupName", "awsProviderConfigName"].map(field => ({
+                { rule: "(size(self.existingRuleNames) > 0) == has(self.handoff)", message: "Existing rules require an explicit ownership handoff" },
+                { rule: "!has(oldSelf.handoff) || has(self.handoff)", message: "An ownership handoff cannot be removed" },
+                { rule: "!has(oldSelf.handoff) || oldSelf.handoff != 'activate' || self.handoff == 'activate'", message: "An activated handoff cannot return to retain" },
+                ...["name", "region", "securityGroupName", "awsProviderConfigName", "existingRuleNames", "ipProtocol", "fromPort", "toPort"].map(field => ({
                   rule: `self.${field} == oldSelf.${field}`, message: `${field} is immutable; migrate ingress ownership explicitly`,
                 })),
               ],
             },
-            status: { type: "object", properties: { adoptionComplete: { type: "boolean" }, sourcesReady: { type: "boolean" } } },
+            status: { type: "object", properties: { adoptionComplete: { type: "boolean" }, sourcesReady: { type: "boolean" },
+              ownershipReady: { type: "boolean" }, rulesReady: { type: "boolean" }, handoffActive: { type: "boolean" },
+              handoff: { type: "object", additionalProperties: { type: "object", properties: {
+                uid: string, externalName: string,
+              }, required: ["uid", "externalName"] } },
+            } },
           },
         } } }],
       },
