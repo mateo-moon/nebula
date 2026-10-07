@@ -52,6 +52,14 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.deepEqual(Object.keys(runtime.spec).sort(), ["deployment", "genesis", "placement", "region", "release"]);
   assert.equal(objects.filter(value => value.kind === "AccessKey").length, 3);
   assert.ok(!objects.some(value => value.kind === "Secret"));
+  assert.ok(!objects.some(value => value.metadata.annotations?.["helm.sh/hook"] === "post-delete"), "cleanup must finish before the module namespace is deleted");
+  assert.ok(!objects.some(value => value.metadata.annotations?.["helm.sh/resource-policy"] === "keep"), "normal pruning must own all installer resources");
+  const installer = objects.find(value => value.kind === "DaemonSet" && value.metadata.name === "kata-as-coco-runtime")!;
+  assert.equal(installer.metadata.annotations["argocd.argoproj.io/sync-options"], "PrunePropagationPolicy=foreground");
+  for (const [kind, suffix] of [["ServiceAccount", "sa"], ["ClusterRole", "role"], ["ClusterRoleBinding", "rb"]]) {
+    const resource = objects.find(value => value.kind === kind && value.metadata.name === `kata-as-coco-runtime-${suffix}`)!;
+    assert.equal(resource.metadata.annotations["argocd.argoproj.io/sync-wave"], "-4", "installer permissions must outlive its Pods and precede namespace deletion");
+  }
   assert.ok(!objects.some(value => value.apiVersion.startsWith("cert-manager.io/")), "managed admission must not require an external certificate controller");
   assert.ok(objects.some(value => value.kind === "CustomResourceDefinition" && value.metadata.name === "peerpods.confidentialcontainers.org" &&
     value.metadata.annotations["argocd.argoproj.io/sync-wave"] === "-10"), "cleanup controller must receive its CRD before starting");

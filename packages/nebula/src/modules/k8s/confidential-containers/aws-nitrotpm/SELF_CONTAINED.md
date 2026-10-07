@@ -124,6 +124,10 @@ preserved. Nebula's ordered sync/prune keeps the controller/credentials availabl
 while cleanup runs. Do not force-remove finalizers or tear down the platform
 provider first. Those destructive administrative actions cannot be repaired by
 a controller that no longer exists.
+The Kata installer uses foreground deletion and keeps its API permissions in an
+earlier wave, so its Pods finish host cleanup before those permissions disappear.
+Normal pruning then removes the permissions and namespace; no post-delete Job
+has to run inside a namespace that has already been deleted.
 
 Release/enrollment changes are immutable. A software upgrade must first add an
 authenticated release transition; replacing the authority AMI in place is

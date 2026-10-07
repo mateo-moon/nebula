@@ -165,6 +165,25 @@ export class ManagedAwsCoco extends Construct {
 
   configureHelm(helm: Helm, nodeSelector: Readonly<Record<string, string>>, runtimeClass: string): void {
     const resources = helm.apiObjects;
+    // Keep the installer's API access until its DaemonSet has finished host
+    // cleanup. Ordered pruning replaces Helm's retained RBAC/post-delete Job,
+    // which would otherwise try to run after our namespace had been removed.
+    const installer = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "kata-as-coco-runtime");
+    requireValue(installer, "upstream Kata installer contract changed");
+    installer.addJsonPatch(JsonPatch.add("/metadata/annotations", { ...installer.toJson().metadata?.annotations,
+      "argocd.argoproj.io/sync-options": "PrunePropagationPolicy=foreground" }));
+    for (const [kind, suffix] of [["ServiceAccount", "sa"], ["ClusterRole", "role"], ["ClusterRoleBinding", "rb"]]) {
+      const resource = resources.find(value => value.kind === kind && value.name === `kata-as-coco-runtime-${suffix}`);
+      requireValue(resource?.toJson().metadata?.annotations?.["helm.sh/resource-policy"] === "keep", "upstream Kata RBAC contract changed");
+      resource!.addJsonPatch(JsonPatch.remove("/metadata/annotations/helm.sh~1resource-policy"),
+        JsonPatch.add("/metadata/annotations/argocd.argoproj.io~1sync-wave", "-4"));
+    }
+    for (const [kind, suffix] of [["ServiceAccount", "sa-cleanup"], ["ClusterRole", "cleanup-role"],
+      ["ClusterRoleBinding", "cleanup-rb"], ["Job", "rb-cleanup"]]) {
+      const resource = resources.find(value => value.kind === kind && value.name === `kata-as-coco-runtime-${suffix}`);
+      requireValue(resource?.toJson().metadata?.annotations?.["helm.sh/hook"] === "post-delete", "upstream Kata cleanup contract changed");
+      helm.node.tryRemoveChild(resource!.node.id);
+    }
     const config = resources.find(resource => resource.kind === "ConfigMap" && resource.name === "peer-pods-cm");
     const caa = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "cloud-api-adaptor-daemonset");
     const cleanup = resources.find(resource => resource.kind === "Deployment" && resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl");
