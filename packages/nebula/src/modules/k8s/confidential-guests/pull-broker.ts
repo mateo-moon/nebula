@@ -1,7 +1,8 @@
 import { Construct } from "constructs";
-import { parse as parseToml } from "smol-toml";
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import { createPublicKey } from "node:crypto";
 import {
-  IntOrString, KubeConfigMap, KubeDeployment, KubeNetworkPolicy, KubeService, Quantity,
+  IntOrString, KubeConfigMap, KubeDeployment, KubeNetworkPolicy, KubeService, Quantity, type Toleration,
 } from "cdk8s-plus-33/lib/imports/k8s";
 import { readConfidentialGuestAsset } from "./assets";
 import { sha256Hex } from "./canonical";
@@ -68,7 +69,13 @@ export interface AttestedPullBrokerProps {
   readonly podLabels: Readonly<Record<string, string>>;
   /** Labels of the guest Pods allowed to reach the broker. */
   readonly guestSelector: Readonly<Record<string, string>>;
-  readonly nodeName: string;
+  /** Legacy direct binding, which bypasses scheduling and node drains.
+   * Use nodeSelector instead for a broker on a managed worker. */
+  readonly nodeName?: string;
+  /** Scheduler-managed placement; mutually exclusive with nodeName. */
+  readonly nodeSelector?: Readonly<Record<string, string>>;
+  /** Native Kubernetes tolerations for scheduler-managed placement. */
+  readonly tolerations?: readonly Toleration[];
   /** Digest-pinned KBS image; it runs `/usr/local/bin/kbs --config-file /configuration/config.toml`. */
   readonly brokerImage: string;
   /**
@@ -104,6 +111,17 @@ export interface AttestedPullBrokerProps {
   /** Additional keys from the same trusted broker Secret, subject to the
    * same guest admission. Useful for native CoCo sealed-secret TLS files. */
   readonly additionalResources?: readonly { readonly resourcePath: KbsResourcePath; readonly secretKey: string }[];
+  /** Native v0.21.0 admin JWT/ACL uploads to an existing persistent claim.
+   * Only these exact paths are writable. Projected credentials and both
+   * attestation policies remain read-only. The caller must expose the admin
+   * interface through authenticated TLS and provision the retained PVC. */
+  readonly resourceUploads?: {
+    readonly claimName: string;
+    readonly paths: readonly KbsResourcePath[];
+    readonly publicKeyPem: string;
+    readonly issuer: string;
+    readonly audience: string;
+  };
   readonly initData: InitDataAdmission;
   /**
    * Launch measurements admitted besides the init-data. Without it every
@@ -139,8 +157,8 @@ export interface AttestedPullBrokerProps {
 
 const WHERE = "AttestedPullBroker";
 const PROPS_FIELDS = [
-  "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "brokerImage", "issuer", "initImage",
-  "initCommand", "policyReadOnly", "configToml", "resourcePath", "additionalResources", "initData", "measurement", "snpAdmission", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
+  "namespace", "name", "configMapName", "networkPolicyNames", "podLabels", "guestSelector", "nodeName", "nodeSelector", "tolerations", "brokerImage", "issuer", "initImage",
+  "initCommand", "policyReadOnly", "configToml", "resourcePath", "additionalResources", "resourceUploads", "initData", "measurement", "snpAdmission", "pullSecret", "labelDomain", "imagePullSecrets", "port", "syncWaves",
 ];
 const HOST_DATA = /^[a-f0-9]{64}$/;
 const MEASUREMENT = /^[a-f0-9]{96}$/;
@@ -298,7 +316,14 @@ export class AttestedPullBroker extends Construct {
     const fromGuestsName = dnsSubdomain(WHERE, "networkPolicyNames.fromGuests", props.networkPolicyNames.fromGuests);
     const podLabels = labels(WHERE, "podLabels", props.podLabels);
     const guestSelector = labels(WHERE, "guestSelector", props.guestSelector);
-    const nodeName = dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    if ((props.nodeName !== undefined) === (props.nodeSelector !== undefined)) {
+      fail(WHERE, "provide exactly one of nodeName or nodeSelector");
+    }
+    const nodeName = props.nodeName === undefined ? undefined : dnsSubdomain(WHERE, "nodeName", props.nodeName);
+    const nodeSelector = props.nodeSelector === undefined ? undefined : labels(WHERE, "nodeSelector", props.nodeSelector);
+    if (props.tolerations !== undefined && (nodeSelector === undefined || !Array.isArray(props.tolerations))) {
+      fail(WHERE, "tolerations require scheduler-managed nodeSelector placement and must be an array");
+    }
     const brokerImage = image(WHERE, "brokerImage", props.brokerImage);
     if (props.issuer !== undefined && props.issuer !== "ephemeral") fail(WHERE, `issuer must be "ephemeral" when given, got ${JSON.stringify(props.issuer)}`);
     const ephemeral = props.issuer === "ephemeral";
@@ -342,16 +367,42 @@ export class AttestedPullBroker extends Construct {
       return { path, secretKey: resource.secretKey };
     });
     if (additional.length && !secret.exposeAsResource) fail(WHERE, "additional resources require exposeAsResource");
-    if (new Set([resourcePath, ...additional.map(resource => resource.path)].map(path => path.join("/"))).size !== additional.length + 1) {
+    let configToml = props.configToml;
+    const uploads = props.resourceUploads;
+    let uploadPaths: KbsResourcePath[] = [];
+    if (uploads !== undefined) {
+      knownFields(WHERE, "resourceUploads", uploads, ["claimName", "paths", "publicKeyPem", "issuer", "audience"]);
+      if (!props.snpAdmission || !policyReadOnly || !ephemeral || !secret.exposeAsResource) {
+        fail(WHERE, "resourceUploads requires strict SNP admission, ephemeral issuer and read-only projected policies and credentials");
+      }
+      dnsSubdomain(WHERE, "resourceUploads.claimName", uploads.claimName);
+      dnsSubdomain(WHERE, "resourceUploads.issuer", uploads.issuer);
+      dnsSubdomain(WHERE, "resourceUploads.audience", uploads.audience);
+      try {
+        if (!uploads.publicKeyPem.startsWith("-----BEGIN PUBLIC KEY-----") || createPublicKey(uploads.publicKeyPem).asymmetricKeyType !== "rsa") throw new Error();
+      } catch { fail(WHERE, "resourceUploads requires a PEM RSA public key, never a private key"); }
+      if (!Array.isArray(uploads.paths) || !uploads.paths.length) fail(WHERE, "resourceUploads requires exact resource paths");
+      uploadPaths = uploads.paths.map(validResourcePath);
+      const config: any = parseToml(configToml);
+      config.admin = {
+        authorization_mode: "AuthenticatedAuthorization",
+        authentication: { bearer_jwt: { identity_providers: [{ issuer: uploads.issuer, audience: uploads.audience,
+          public_key_uri: "/configuration/upload-public.pem" }] } },
+        authorization: { regex_acl: { acls: [{ role: "image-uploader",
+          allowed_endpoints: `^/kbs/v0/resource/(${uploadPaths.map(path => path.join("/").replaceAll(".", "\\.")).join("|")})$` }] } },
+      };
+      configToml = stringifyToml(config);
+    }
+    if (new Set([resourcePath, ...additional.map(resource => resource.path), ...uploadPaths].map(path => path.join("/"))).size !== additional.length + uploadPaths.length + 1) {
       fail(WHERE, "resource paths must be distinct");
     }
     this.policy = pullBrokerPolicy(resourcePath, props.initData, props.measurement, props.snpAdmission) +
-      additional.map(resource => pullBrokerPolicy(resource.path, props.initData, props.measurement, props.snpAdmission)
+      [...additional.map(resource => resource.path), ...uploadPaths].map(path => pullBrokerPolicy(path, props.initData, props.measurement, props.snpAdmission)
         .replace(/^package policy\ndefault allow := false\n/, "")).join("");
     if (props.snpAdmission !== undefined) {
       this.appraisalPolicy = pullBrokerAppraisalPolicy(props.initData, props.measurement!, props.snpAdmission);
     }
-    this.configSha256 = sha256Hex(this.policy + props.configToml + (this.appraisalPolicy ?? ""));
+    this.configSha256 = sha256Hex(this.policy + configToml + (this.appraisalPolicy ?? "") + (uploads?.publicKeyPem ?? ""));
     this.resourceUri = `kbs:///${resourcePath.join("/")}`;
     this.host = `${name}.${namespace}.svc`;
     this.port = port;
@@ -375,7 +426,8 @@ export class AttestedPullBroker extends Construct {
     });
     new KubeConfigMap(this, "configuration", {
       metadata: metadata(configMapName, configWave),
-      data: { "config.toml": props.configToml, "resource-policy.rego": this.policy,
+      data: { "config.toml": configToml, "resource-policy.rego": this.policy,
+        ...(uploads ? { "upload-public.pem": uploads.publicKeyPem } : {}),
         ...(this.appraisalPolicy ? { "default_cpu.rego": this.appraisalPolicy } : {}) },
     });
     new KubeService(this, "service", {
@@ -391,7 +443,8 @@ export class AttestedPullBroker extends Construct {
         template: {
           metadata: { labels: { ...podLabels }, annotations: { [`${domain}/config-sha256`]: this.configSha256 } },
           spec: {
-            nodeName,
+            ...(nodeName === undefined ? { nodeSelector: { ...nodeSelector } } : { nodeName }),
+            ...(props.tolerations === undefined ? {} : { tolerations: props.tolerations.map(toleration => ({ ...toleration })) }),
             automountServiceAccountToken: false,
             ...(imagePullSecrets ? { imagePullSecrets } : {}),
             initContainers: [{
@@ -427,13 +480,18 @@ export class AttestedPullBroker extends Construct {
                 // template hash rolls the Pod for every policy change.
                 ...(this.appraisalPolicy ? [{ name: "configuration", mountPath: "/state/attestation_service_policy/default_cpu.rego",
                   subPath: "default_cpu.rego", readOnly: true }] : []),
-                ...(exposed ? [{ name: "registry-resource", mountPath: "/state/repository", readOnly: true }] : []),
+                ...(uploads ? [{ name: "uploaded-resources", mountPath: "/state/repository" },
+                  ...[{ path: resourcePath, secretKey: ".dockerconfigjson" }, ...additional].map(resource => ({
+                    name: "registry-resource", mountPath: `/state/repository/${resource.path.join("\\x2F")}`,
+                    subPath: resource.path.join("\\x2F"), readOnly: true,
+                  }))] : exposed ? [{ name: "registry-resource", mountPath: "/state/repository", readOnly: true }] : []),
               ],
             }],
             volumes: [
               { name: "state", emptyDir: { medium: "Memory", sizeLimit: Quantity.fromString("64Mi") } },
               ...(ephemeral ? [] : [{ name: "registry", secret: { secretName, defaultMode: 0o400 } }]),
               { name: "configuration", configMap: { name: configMapName } },
+              ...(uploads ? [{ name: "uploaded-resources", persistentVolumeClaim: { claimName: uploads.claimName } }] : []),
               ...(policyReadOnly ? [{ name: "policy", configMap: { name: configMapName,
                 items: [{ key: "resource-policy.rego", path: "resource-policy.rego" }] } }] : []),
               // The KBS local store keeps a resource in one file named by its

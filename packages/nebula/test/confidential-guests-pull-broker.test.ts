@@ -36,6 +36,23 @@ const props = (change: Partial<AttestedPullBrokerProps> = {}): AttestedPullBroke
 });
 const render = (value: AttestedPullBrokerProps) => synthOf(chart => new AttestedPullBroker(chart, "broker", value));
 
+test("scheduler placement preserves broker security and policies while respecting managed-worker drains", () => {
+  const legacy = render(props()).objects;
+  const nodeSelector = { "kubernetes.io/hostname": "worker-1" };
+  const tolerations = [{ key: "workload", operator: "Equal", value: "tool-node", effect: "NoSchedule" }];
+  const scheduled = render(props({ nodeName: undefined, nodeSelector, tolerations })).objects;
+  const expected = structuredClone(legacy);
+  const pod = expected.find(object => object.kind === "Deployment").spec.template.spec;
+  delete pod.nodeName;
+  pod.nodeSelector = nodeSelector;
+  pod.tolerations = tolerations;
+  assert.deepEqual(scheduled, expected, "only scheduling fields may change; credentials and key-release policy stay identical");
+  assert.throws(() => render(props({ nodeSelector })), /exactly one/);
+  assert.throws(() => render(props({ nodeName: undefined })), /exactly one/);
+  assert.throws(() => render(props({ nodeName: undefined, nodeSelector: {} })), /nodeSelector/);
+  assert.throws(() => render(props({ tolerations })), /scheduler-managed/);
+});
+
 const policyFor = (...conditions: string[]) => "package policy\ndefault allow := false\nallow if {\n    data.plugin == \"resource\"\n"
   + "    data[\"resource-path\"] == [\"default\", \"registry\", \"pull\"]\n"
   + "    ev := input.submods.cpu0[\"ear.veraison.annotated-evidence\"]\n"
