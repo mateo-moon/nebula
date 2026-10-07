@@ -1,5 +1,6 @@
 import { ApiObject } from "cdk8s";
 import { Construct } from "constructs";
+import { RETAINED_REQUEST_POLICIES } from "../../../utils/crossplane-policies";
 
 export interface GiteaBranchProtectionConfig {
   /** HTTPS Gitea API origin, for example https://git.example.com. */
@@ -43,7 +44,7 @@ export class GiteaBranchProtection extends Construct {
       metadata: { name: id },
       spec: {
         deletionPolicy: "Orphan",
-        managementPolicies: ["Observe", "Create", "Update"],
+        managementPolicies: RETAINED_REQUEST_POLICIES,
         forProvider: {
           headers,
           payload: { baseUrl, body: JSON.stringify({ ...config.rule, rule_name: config.branch }) },

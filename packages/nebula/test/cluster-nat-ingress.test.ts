@@ -14,7 +14,7 @@ const dir = mkdtempSync(join(tmpdir(), "nat-template-"));
 const binary = join(dir, "render");
 execFileSync("go", ["build", "-o", binary, "."], {
   cwd: fileURLToPath(new URL("./support/oidc-template", import.meta.url)),
-  env: { ...process.env, GOCACHE: join(tmpdir(), "nebula-oidc-go-cache"), GOTOOLCHAIN: "local", GOPROXY: "off" }, timeout: 120000,
+  env: { ...process.env, GOCACHE: join(tmpdir(), "nebula-oidc-go-cache"), GOTOOLCHAIN: "local" }, timeout: 120000,
 });
 after(() => rmSync(dir, { recursive: true, force: true }));
 const observer = (manifest: any) => ({ resource: { status: {

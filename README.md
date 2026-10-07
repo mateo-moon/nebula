@@ -20,6 +20,10 @@ Nebula is a universal tool designed for deploying and maintaining crypto nodes a
 
 ## **Architecture**
 
+The current cdk8s package's reusable GitOps constructs and retained-resource
+migration APIs are documented in the [GitOps composition guide](packages/nebula/GITOPS.md).
+The Pulumi workflow below remains available for existing deployments.
+
 Nebula's architecture is based on a series of fundamental steps:
 
 1. **Provisioning**: Setting up bare-metal or cloud-based instances using Pulumi IaC.
