@@ -1,0 +1,42 @@
+#cloud-config
+
+write_files:
+  - path: /run/peerpod/apf.json
+    content: |
+      {
+          "pod-name": "sample-0",
+          "pod-namespace": "workloads",
+          "pod-network": {
+              "dedicated": false,
+              "external-net-via-pod-vm": false,
+              "index": 2,
+              "interface": "eth0",
+              "mtu": 1450,
+              "neighbors": [
+                  {
+                      "dev": "eth0",
+                      "hw-addr": "02:00:00:00:00:01",
+                      "ip": "192.0.2.1",
+                      "state": "permanent"
+                  }
+              ],
+              "pod-hw-addr": "02:00:00:00:00:04",
+              "podip": "192.0.2.4/24",
+              "routes": [
+                  {
+                      "dev": "eth0",
+                      "dst": "",
+                      "gw": "192.0.2.1",
+                      "protocol": "boot"
+                  }
+              ],
+              "tunnel-type": "vxlan",
+              "vxlan-id": 42,
+              "vxlan-port": 4789,
+              "worker-node-ip": "198.51.100.2/24"
+          },
+          "tls-client-ca": "TEST_CLIENT_CA",
+          "tls-min-version": "VersionTLS13",
+          "tls-server-cert": "TEST_SERVER_CERT",
+          "tls-server-key": "TEST_SERVER_KEY"
+      }

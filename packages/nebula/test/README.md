@@ -2,6 +2,13 @@
 
 `pnpm test` runs every `test/**/*.test.ts` file with the Node test runner.
 
+- `confidential-containers-aws.test.ts` renders the pinned public CoCo chart
+  offline, checks the named AWS RuntimeClass and local SNP/TDX coexistence,
+  controller credential separation, launch template and unsafe-input refusals.
+  The `aws-nitrotpm` CI job also runs the shipped Python/Rust prototype checks
+  against stock Trustee KBS and the stock guest client with synthetic evidence.
+  These checks do not qualify AWS deployment; see the module's handoff gates.
+
 - `cilium.test.ts` checks mandatory dual-stack pod allocation, public/private
   node transport, final Helm-value validation and override refusals. Set
   `CILIUM_TEST_CHART` to the pinned chart archive to also qualify the actual

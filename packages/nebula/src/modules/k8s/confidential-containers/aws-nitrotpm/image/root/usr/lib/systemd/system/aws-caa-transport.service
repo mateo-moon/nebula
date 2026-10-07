@@ -1,0 +1,27 @@
+[Unit]
+Description=Validate and install only CAA network and TLS transport data
+Requires=run-peerpod.mount
+After=run-peerpod.mount network-online.target
+Wants=network-online.target
+Before=agent-protocol-forwarder.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aws-trustee-bootstrap --transport
+RemainAfterExit=yes
+UMask=0077
+LimitCORE=0
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/peerpod
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET
+StandardOutput=null
+StandardError=null
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

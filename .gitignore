@@ -20,3 +20,16 @@ pulumi/tests/.pulumi-backend-*
 pulumi/tests/Pulumi.test-*.yaml
 pulumi/tests/scenarios/.test-*.txt
 pulumi/tests/scenarios/.test-*
+
+# Local AWS NitroTPM prototype validation/build outputs
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/.venv*/
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/__pycache__/
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/.pytest_cache/
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/target*/
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/work/
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.sqlite*
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.pem
+!packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/trust/amd-milan-ark.pem
+!packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/trust/amd-milan-asvk.pem
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.key
+packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.cbor

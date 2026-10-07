@@ -347,6 +347,26 @@ test("the Helm and vals download sources are upstream; neighbouring names are no
   assert.deepEqual(classes(scan("ghcr.io/helmfiles/vals:1")), ["registry-namespace"]);
 });
 
+test("reviewed confidential-runtime research sources pass without allowing lookalikes", () => {
+  for (const url of [
+    "https://aws.amazon.com/blogs/aws/amazon-ec2-now-supports-nitrotpm-and-uefi-secure-boot/",
+    "https://docs.edgeless.systems/contrast/architecture/components/coordinator",
+    "https://openbao.org/docs/2.5.x/configuration/seal/pkcs11/",
+    "https://github.com/brave/nitriding-daemon",
+    "https://github.com/tpm2-software/tpm2-tools",
+  ]) assert.deepEqual(scan(url), [], url);
+  for (const url of [
+    "https://aws.amazon.com.acme-corp.io/blog",
+    "https://docs.edgeless.systems.acme-corp.io/contrast",
+    "https://private.edgeless.systems/research",
+    "https://openbao.org.acme-corp.io/docs",
+  ]) assert.deepEqual(classes(scan(url)), ["domain"], url);
+  for (const url of [
+    "https://github.com/brave-private/research",
+    "https://github.com/tpm2-software-fork/tpm2-tools",
+  ]) assert.deepEqual(classes(scan(url)), ["repository-owner"], url);
+});
+
 const WORKFLOWS = join(dirname(GUARD), "..", ".github", "workflows");
 // Splits a workflow into its jobs by indentation, whatever the indent width,
 // so a job cannot hide from the checks below by formatting alone.
@@ -514,8 +534,62 @@ test("the publisher detector sees jobs at any indent and every publishing form",
   assert.deepEqual([...jobsOf(wf(`${quiet}  other:\n    steps:\n      - run: true\n`)).keys()], ["test", "other"]);
 });
 
-test("every workflow that publishes (by the detector above) is one of the guarded image workflows", () => {
-  const guarded = new Set(IMAGES.map((i) => i.workflow));
+const APPLIANCE_WORKFLOW = "release-coco-aws.yml";
+// Appliance releases compile pinned public dependencies and assemble disks,
+// unlike a single Docker build context. They remain unqualified prereleases;
+// non-main candidates require an explicit maintainer workflow dispatch.
+const applianceWorkflowViolations = (workflow) => {
+  const errors = [], jobs = jobsOf(workflow);
+  const check = (ok, reason) => { if (!ok) errors.push(reason); };
+  const gate = "\n    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'\n";
+  const guard = jobs.get("guard") ?? "";
+  const triggers = triggersOf(workflow);
+  check(triggers.includes("    branches: [main]\n") && triggers.includes("  workflow_dispatch: {}\n") &&
+    [...triggers.matchAll(/^ {2}([^\s:]+):/gm)].every(([, event]) => ["push", "workflow_dispatch"].includes(event)) &&
+    !/\b(?:tags|branches-ignore|tags-ignore)\s*:/.test(triggers), "only main pushes and explicit candidate dispatches");
+  check(workflow.includes(`\n      - .github/workflows/${APPLIANCE_WORKFLOW}\n`), "workflow changes rerun the gate");
+  check(guard.includes(gate) && !/continue-on-error|\n\s+if:/.test(guard.replace(gate, "\n")), "mandatory source gate");
+  check(guard.includes("\n        run: node scripts/publication-guard.mjs packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm\n"), "all appliance sources are scanned");
+  check(!publishingJobs(jobs).includes("guard"), "gate cannot publish");
+  for (const name of ["client", ...publishingJobs(jobs)]) {
+    const job = jobs.get(name) ?? "";
+    check(/\n\s+needs:\s*(?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\s*\n/.test(job), `${name} needs the gate`);
+    check(!/continue-on-error|\n\s+if:/.test(job), `${name} cannot bypass the gate`);
+  }
+  for (const job of jobs.values()) {
+    check(!/\n\s+(?:ref|repository):|\binputs\.|github\.event\.inputs/.test(job), "same committed source, no dispatch-supplied build inputs");
+  }
+  check((jobs.get("appliances") ?? "").includes('-v "$PWD:/source:ro"'), "guest source mounted read-only");
+  const candidate = jobs.get("candidate") ?? "";
+  check(candidate.includes('gh release create "coco-aws-$GITHUB_SHA"') && candidate.includes('--target "$GITHUB_SHA"') &&
+    candidate.includes("--prerelease --latest=false"), "only commit-addressed unqualified candidates are published");
+  check(candidate.includes('--notes-file "$COCO_SOURCE/release/CANDIDATE.md"'), "qualification limit accompanies release");
+  return errors;
+};
+
+test("appliance candidates scan sources before compiling or publishing and cannot imply qualification", () => {
+  const workflow = readFileSync(join(WORKFLOWS, APPLIANCE_WORKFLOW), "utf8");
+  assert.deepEqual(applianceWorkflowViolations(workflow), []);
+  for (const [from, to] of [
+    ["    branches: [main]", "    branches: [main, feature]"],
+    ["  workflow_dispatch: {}", "  pull_request_target: {}"],
+    ["    needs: guard", "    needs: []"],
+    ["    needs: [guard, client, appliances]", "    needs: [client, appliances]"],
+    ["    needs: guard", "    needs: guard\n    if: always()"],
+    ["    name: Publication guard (appliance sources)", "    name: Publication guard (appliance sources)\n    continue-on-error: true"],
+    ["publication-guard.mjs packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm", "publication-guard.mjs docker"],
+    ["          persist-credentials: false", "          persist-credentials: false\n          ref: main"],
+    ["--prerelease --latest=false", "--latest=true"],
+    ['--target "$GITHUB_SHA"', '--target main'],
+    ['gh release create "coco-aws-$GITHUB_SHA"', 'gh release create latest'],
+  ]) {
+    assert.ok(workflow.includes(from), from);
+    assert.notDeepEqual(applianceWorkflowViolations(workflow.replace(from, to)), [], from);
+  }
+});
+
+test("every publishing workflow has a tested publication gate", () => {
+  const guarded = new Set([...IMAGES.map((i) => i.workflow), APPLIANCE_WORKFLOW]);
   for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
     const publishing = publishingJobs(jobsOf(readFileSync(join(WORKFLOWS, file), "utf8")));
     if (publishing.length > 0) assert.ok(guarded.has(file), `${file} publishes (${publishing.join(", ")}) without a guarded image entry`);

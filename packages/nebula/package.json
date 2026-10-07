@@ -58,6 +58,14 @@
   "files": [
     "src/",
     "imports/",
+    "!src/**/target/**",
+    "!src/**/target-*/**",
+    "!src/**/__pycache__/**",
+    "!src/**/.pytest_cache/**",
+    "!src/**/.venv/**",
+    "!src/**/.venv-*/**",
+    "!src/**/*.pyc",
+    "!src/**/*.pyo",
     "tsconfig.json",
     "LICENSE",
     "NOTICE"

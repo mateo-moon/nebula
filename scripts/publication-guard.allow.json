@@ -2,6 +2,26 @@
   "version": 1,
   "entries": [
     {
+      "class": "public-key",
+      "sha256": "f282914e450cfceb39697cc54c5d70ae4b982989164be20b1c5ba62fe7e87850",
+      "reason": "Public AMD Milan ARK from sev 7.1.0 src/certs/snp/builtin/milan/ark.pem; compiled hardware trust root, no private material"
+    },
+    {
+      "class": "public-key",
+      "sha256": "3feef03dde297d5e8f493d300fc71d6e2ecfeae2813401677279fcb137e6bbcd",
+      "reason": "Public AMD Milan ASVK from kdsintf.amd.com/vlek/v1/Milan/cert_chain; verified against the compiled ARK, not a new trust root"
+    },
+    {
+      "class": "public-key",
+      "sha256": "6eb9688305e4bbca67f44b59c29a0661ae930f09b5945b5d1d9ae01125c8d6c0",
+      "reason": "Public AWS Nitro root G1 PEM from the official NitroTPM validation documentation; DER SHA256 is pinned by the verifier"
+    },
+    {
+      "class": "binary-file",
+      "sha256": "38d2f6e579bc2ca5a3e8afb1cae8e0f6f458b19c4175d4e7ffd42a5d3c1f23d3",
+      "reason": "Unmodified public CoCo 0.23.0 Helm archive, including upstream Apache-2.0 license and subcharts; source and OCI digest documented next to the offline fixture"
+    },
+    {
       "class": "hex-64-bytes",
       "sha256": "37945a3519275d66b3206a6939c9bf641969320e0357db8eacecb6da3545fa40",
       "reason": "HOST_DATA test vectors: base64 of gzip of 1 MiB and 1 MiB + 1 zero bytes (decompressed-at-limit, decompressed-over-limit)"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Private volatile CAA transport configuration
+Before=aws-caa-transport.service agent-protocol-forwarder.service
+
+[Mount]
+What=tmpfs
+Where=/run/peerpod
+Type=tmpfs
+Options=mode=0700,nosuid,nodev,noexec,size=64K
+
+[Install]
+WantedBy=multi-user.target

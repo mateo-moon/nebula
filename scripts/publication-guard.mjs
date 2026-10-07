@@ -34,6 +34,9 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
+  "packages/nebula/src/modules/k8s/confidential-containers",
+  ":(glob)packages/nebula/test/confidential-containers*",
+  ":(glob)packages/nebula/test/confidential-containers*/**",
   "packages/nebula/src/modules/k8s/confidential-guests",
   "confidential-guests",
   ":(glob)packages/nebula/test/confidential-guests*",
@@ -69,6 +72,7 @@ const UPSTREAM_OWNERS = new Set([
   "github", "nodejs", "microsoft", "pnpm", "privatenumber", "eemeli", "rust-lang", "rustls", "rustcrypto",
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
   "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
+  "brave", "tpm2-software",
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
@@ -77,6 +81,7 @@ const CODE_HOST_PATHS = new Set([
 ]);
 // Domains (and their subdomains) of upstream projects and standards bodies.
 const UPSTREAM_DOMAINS = [
+  "docs.aws.amazon.com", "sts.amazonaws.com", "ec2.amazonaws.com", "cdn.amazonlinux.com",
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
@@ -85,7 +90,7 @@ const UPSTREAM_DOMAINS = [
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
-  "helm.sh",
+  "helm.sh", "aws.amazon.com", "docs.edgeless.systems", "openbao.org",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts

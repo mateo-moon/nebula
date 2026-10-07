@@ -44,6 +44,104 @@ jobs:
       - name: Evaluate SNP admission with the broker's pinned policy and EAR engines
         run: pnpm verify:broker-admission
 
+  aws-nitrotpm:
+    name: AWS CoCo protocols and lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned test dependencies
+        run: pip install -r requirements.lock -r control/requirements.lock
+      - name: Reconciliation, interrupted operations and owned cleanup
+        run: |
+          python -m unittest discover -s control
+          python -m unittest discover -s release
+          python -m py_compile release/build.py release/canary.py release/complete.py release/stage.py
+      - name: Install pinned Rust
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup component add --toolchain 1.98.1 rustfmt clippy
+          rustup override set 1.98.1
+      - name: Guest bootstrap checks
+        run: |
+          cargo fmt --manifest-path guest/Cargo.toml -- --check
+          cargo test --locked --manifest-path guest/Cargo.toml --lib
+          cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
+          cargo build --locked --manifest-path guest/Cargo.toml --bin aws-trustee-bootstrap
+      - name: Exercise protected journal and owner history against isolated software TPMs
+        run: |
+          cargo test --locked --manifest-path guest/Cargo.toml --lib --no-run --message-format=json > "$RUNNER_TEMP/nebula-guest-tests.jsonl"
+          mkdir -p "$RUNNER_TEMP/nebula-tpm-test"
+          python - "$RUNNER_TEMP/nebula-guest-tests.jsonl" "$RUNNER_TEMP/nebula-tpm-test/guest-tests" <<'PY'
+          import json, pathlib, shutil, sys
+          messages = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          binaries = [item["executable"] for item in messages if item.get("reason") == "compiler-artifact" and item.get("executable") and item["target"]["kind"] == ["lib"] and item["profile"]["test"]]
+          assert len(binaries) == 1, "exactly one Rust library test binary required"
+          shutil.copy2(binaries[0], sys.argv[2])
+          # Only synthetic test keys: model a nonswappable guest without changing
+          # the hosted runner's swap. Production still checks its real /proc.
+          pathlib.Path(sys.argv[2]).with_name("swaps").write_text("Filename\tType\tSize\tUsed\tPriority\n")
+          PY
+          docker build -f guest/tests/tpm.Dockerfile -t nebula-authority-tpm-test guest/tests
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
+            --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=128m \
+            -v "$RUNNER_TEMP/nebula-tpm-test/swaps:/proc/swaps:ro" \
+            -v "$RUNNER_TEMP/nebula-tpm-test:/tests:ro" -e NEBULA_SWTPM_TEST=1 \
+            nebula-authority-tpm-test /tests/guest-tests --ignored emulator_
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Verify Node-signed workloads and owner history with the actual Rust guest
+        working-directory: packages/nebula
+        run: |
+          npm install -g pnpm@11.9.0
+          pnpm install --frozen-lockfile
+          NEBULA_GUEST_BINARY="$PWD/src/modules/k8s/confidential-containers/aws-nitrotpm/guest/target/debug/aws-trustee-bootstrap" node --import tsx --test test/confidential-containers-workload.test.ts test/confidential-containers-authority.test.ts
+      - name: Build the unmodified pinned Trustee KBS
+        run: |
+          git clone https://github.com/confidential-containers/trustee.git "$RUNNER_TEMP/trustee"
+          git -C "$RUNNER_TEMP/trustee" checkout --detach 3b7c99069a7c89ea51713dcf7cf98c16dbe2d3db
+          cargo build --locked --manifest-path "$RUNNER_TEMP/trustee/Cargo.toml" -p kbs --no-default-features --bin kbs
+      - name: Synthetic evidence through stock KBS, guest client and offline KBC
+        run: NEBULA_KBS_BINARY="$RUNNER_TEMP/trustee/target/debug/kbs" python -m pytest -q tests
+
+  aws-tpm-state:
+    name: AWS authority software TPM experiments
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Use container confinement and a private memory fixture. The host's swtpm
+    # AppArmor profile does not permit /dev/shm; do not disable that profile.
+    container:
+      image: ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 # 24.04
+      options: --security-opt no-new-privileges --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=128m
+    defaults:
+      run:
+        working-directory: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+    steps:
+      - name: Install isolated TPM emulator and Python
+        working-directory: /tmp
+        run: |
+          apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
+          DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y --no-install-recommends git ca-certificates python3-venv swtpm tpm2-tools libtss2-tcti-swtpm0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned test dependencies
+        run: |
+          python3 -m venv /opt/tpm-tests
+          /opt/tpm-tests/bin/pip install -r requirements.lock
+      - name: Check seal, NV history, graceful/abrupt restart, cloning and boot rejection
+        run: NEBULA_SWTPM_TEST=1 /opt/tpm-tests/bin/python -m pytest -q tests/test_tpm_persistence.py
+
   bridge:
     name: Bridge tests
     runs-on: ubuntu-24.04
