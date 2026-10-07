@@ -733,7 +733,16 @@ TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metad
 IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
 retry aws ec2 associate-address --region ${r} --instance-id "$IID" --allocation-id ${node.allocationId} --allow-reassociation
 retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --no-source-dest-check
-${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume-id ${vol} --device /dev/sdf; do sleep 10; done` : ""}
+${vol ? `# Attachment requests are asynchronous and may race another reconciler.
+# Accept an existing attachment only after AWS confirms this instance owns it.
+while :; do
+  ATTACHMENT_STATE=$(aws ec2 describe-volumes --region ${r} --volume-ids ${vol} --query "Volumes[0].Attachments[?InstanceId=='$IID'].State | [0]" --output text) || { sleep 10; continue; }
+  [ "$ATTACHMENT_STATE" = "attached" ] && break
+  if [ "$ATTACHMENT_STATE" = "None" ]; then
+    aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume-id ${vol} --device /dev/sdf || true
+  fi
+  sleep 10
+done` : ""}
 `;
   }
 
