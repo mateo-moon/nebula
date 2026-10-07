@@ -100,6 +100,19 @@ test("stale status cannot override a changed resource binding or observed locati
   }
 });
 
+test("restored status without retained external bindings cannot create replacement workers", () => {
+  const restored = structuredClone({ eip, "data-volume": volume });
+  delete (restored.eip.resource.status.atProvider.manifest.metadata as any).annotations;
+  delete (restored["data-volume"].resource.status.atProvider.manifest.metadata as any).annotations;
+  assert.equal(templateOf(render(restored)), undefined);
+  assert.equal(templateOf(render({})), undefined);
+  for (const resource of resources.filter(resource => ["EIP", "EBSVolume"].includes(resource.kind))) {
+    assert.equal(resource.spec.deletionPolicy, "Orphan");
+    assert.ok(!resource.spec.managementPolicies.some((policy: string) => ["Create", "Delete"].includes(policy)));
+  }
+  assert.ok(templateOf(render({ eip, "data-volume": volume })), "valid restored bindings can resume composition");
+});
+
 test("valid observations produce the named LT with the exact IDs and attachment confirmation", () => {
   const result = render({ eip, "data-volume": volume });
   const template = templateOf(result)!;

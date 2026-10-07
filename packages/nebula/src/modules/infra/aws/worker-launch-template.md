@@ -20,7 +20,8 @@ cloud resources after all Kubernetes state has been lost. Back up those
 bindings with the management cluster; do not switch retained data to
 `createFresh` during recovery.
 
-The composition checks names, regions, volume AZ and ID syntax before
+The composition checks names, desired and observed regions/AZ, external-name
+binding equality, the EIP allocation ID and ID syntax before
 rendering a LaunchTemplate. An ASG referencing its name cannot launch a fresh
 instance until that template exists. Temporary observation loss preserves a
 previously composed template instead of removing it from desired state.
@@ -79,3 +80,44 @@ values; the ASG name and its `$Latest` template reference remain unchanged.
 These changes create an LT version, not an automatic instance refresh. Keep the
 directory-only phase on its previously qualified deployment dependency if the
 new Nebula pin also contains unrelated network/bootstrap updates.
+
+## Management-state recovery contract
+
+Observed mode removes copied cloud IDs from workload source; it does not make
+an existing disk or address discoverable after all Crossplane state is lost.
+`existing: true` is deliberately not a tag search. Provider-aws EIP/EBS managed
+resources require their external identity; the existing Nebula composition
+patterns observe Kubernetes resources and do not perform EC2 inventory queries.
+
+Before relying on this mode, retain a verified, consistent management-state
+backup containing the named EIP/EBS/LT managed resources and their
+`crossplane.io/external-name` annotations, the composed-resource ownership
+graph, provider configurations/credential references, and the required SSH and
+cluster credential Secrets. A data-volume snapshot alone is not that backup.
+This module does not install or verify a management backup system.
+
+The supported restore sequence is a recovery of that saved management state,
+followed by the already-declared GitOps configuration. Restore the original
+resource names and ownership graph before enabling composed worker changes.
+Keep retained resources on no-Create/no-Delete policies throughout recovery.
+Provider reconciliation must re-observe the cloud bindings; stale restored
+status is not a substitute for confirmation that the external-name, account,
+region and volume AZ still match. A Kubernetes-object restore that changes
+UIDs must rebuild owner references consistently through its restore mechanism;
+do not point a restored managed resource at an unrelated live XR.
+
+When no valid binding backup exists, recovery remains blocked. The tests prove
+that missing observations and missing/mismatched bindings cannot create a new
+LaunchTemplate, while retained volume/address declarations cannot Create or
+Delete cloud resources. Do not substitute `createFresh`, guess a volume from
+attachment order, or copy an arbitrary discovered ID to make a sync pass.
+
+A future declarative importer needs a separate read-only EC2 discovery contract:
+use the expected AWS account and region, exact stable node/resource tags, and
+the declared EBS AZ; consume every result page and accept exactly one match.
+Reject zero/multiple matches, conflicting existing bindings, unexpected
+encryption/key settings or resource kinds. Publish the binding only to the
+original named MR and preserve no-Create/no-Delete policies. Never select the
+newest match or allocate a replacement on a lookup failure. Such an importer
+is not implemented by these named-resource observers, and recovery from an
+empty management cluster without a backup is not a completed capability.
