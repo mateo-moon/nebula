@@ -45,7 +45,7 @@ jobs:
         run: pnpm verify:broker-admission
 
   aws-nitrotpm:
-    name: AWS NitroTPM prototype protocols
+    name: AWS CoCo protocols and lifecycle
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -59,7 +59,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install pinned test dependencies
-        run: pip install -r requirements.lock
+        run: pip install -r requirements.lock -r control/requirements.lock
+      - name: Reconciliation, interrupted operations and owned cleanup
+        run: |
+          python -m unittest discover -s control
+          python -m py_compile release/build.py release/canary.py release/complete.py release/stage.py
       - name: Install pinned Rust
         run: |
           rustup toolchain install 1.98.1 --profile minimal

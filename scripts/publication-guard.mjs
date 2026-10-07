@@ -81,7 +81,7 @@ const CODE_HOST_PATHS = new Set([
 ]);
 // Domains (and their subdomains) of upstream projects and standards bodies.
 const UPSTREAM_DOMAINS = [
-  "docs.aws.amazon.com", "sts.amazonaws.com",
+  "docs.aws.amazon.com", "sts.amazonaws.com", "ec2.amazonaws.com", "cdn.amazonlinux.com",
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",

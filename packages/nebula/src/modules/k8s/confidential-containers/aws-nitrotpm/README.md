@@ -1,10 +1,21 @@
 # AWS NitroTPM runtime assets
 
-These workload-neutral sources are part of Nebula's reusable `ConfidentialContainers` module. Select `RuntimeClasses.AWS_NITRO_TPM` (`kata-remote-aws-nitrotpm`) through the typed `awsNitroTpm` option. **Cloud deployment remains blocked pending qualification.** This directory implements and locally exercises the custom AWS verifier/passport issuer and guest bootstrap. It does not establish real AMI integrity, full CoCo runtime isolation or SEV-SNP enablement.
+These sources implement the managed AWS alternative runtime in Nebula's reusable
+`ConfidentialContainers` module. The [module API](../README.md) and
+[self-contained lifecycle](SELF_CONTAINED.md) describe the automatic installation
+path. `control/` reconciles owned AWS infrastructure, `release/` builds generic
+immutable appliances, and `guest/` implements attested enrollment, protected
+replication/recovery, workload policy measurement and key delivery.
 
-The required end state is a [self-contained module](SELF_CONTAINED.md), with no manual installation steps and keys protected from management-cluster admins. The [architecture research](RESEARCH.md) recommends generic released images, signed measured workload configuration and a module-owned TPM-sealed authority. It compares alternatives, maps Nebula patterns and defines automatic recovery and qualification gates. The current installer and assets are incomplete research components; the commands below reproduce developer checks, not a deployment procedure.
+The complete guest components and encrypted canary now build from pinned public
+sources. Full immutable-appliance hardware qualification and default catalog
+publication are still in progress. A successful build or Kubernetes readiness
+field alone is not proof of confidential execution.
 
-Read [PLAN.md](PLAN.md) for exact protocols, versions, trust boundaries, build ownership and qualification gates. Read [HANDOFF.md](HANDOFF.md) for tested results and integration decisions. No cloud credentials or confidential image keys are included.
+The Python programs listed below are retained prototype/developer tools. Module
+users do not run them. Their external verifier/KBS and prepared-image workflow is
+superseded by managed mode; their regression tests remain useful for protocol
+compatibility. No private cloud credentials or customer keys ship in the module.
 
 ## Components
 

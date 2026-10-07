@@ -21,6 +21,9 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub mod activation;
 pub mod authority;
+pub mod boot;
+pub mod evidence;
+pub mod owner_client;
 pub mod protected_state;
 pub mod tpm_state;
 pub mod transport;

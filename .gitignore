@@ -29,5 +29,7 @@ packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/target*/
 packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/work/
 packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.sqlite*
 packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.pem
+!packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/trust/amd-milan-ark.pem
+!packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/trust/amd-milan-asvk.pem
 packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.key
 packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/**/*.cbor

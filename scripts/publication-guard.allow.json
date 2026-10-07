@@ -3,6 +3,16 @@
   "entries": [
     {
       "class": "public-key",
+      "sha256": "f282914e450cfceb39697cc54c5d70ae4b982989164be20b1c5ba62fe7e87850",
+      "reason": "Public AMD Milan ARK from sev 7.1.0 src/certs/snp/builtin/milan/ark.pem; compiled hardware trust root, no private material"
+    },
+    {
+      "class": "public-key",
+      "sha256": "3feef03dde297d5e8f493d300fc71d6e2ecfeae2813401677279fcb137e6bbcd",
+      "reason": "Public AMD Milan ASVK from kdsintf.amd.com/vlek/v1/Milan/cert_chain; verified against the compiled ARK, not a new trust root"
+    },
+    {
+      "class": "public-key",
       "sha256": "6eb9688305e4bbca67f44b59c29a0661ae930f09b5945b5d1d9ae01125c8d6c0",
       "reason": "Public AWS Nitro root G1 PEM from the official NitroTPM validation documentation; DER SHA256 is pinned by the verifier"
     },

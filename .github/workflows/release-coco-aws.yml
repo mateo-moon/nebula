@@ -1,0 +1,137 @@
+name: Build AWS CoCo appliances
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [codex/coco-aws-nitrotpm-runtime]
+    paths:
+      - packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/guest/**
+      - packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/control/**
+      - packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/release/**
+      - packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm/trust/**
+      - .github/workflows/release-coco-aws.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coco-appliances-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  COCO_SOURCE: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+
+jobs:
+  client:
+    name: Owner client (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: darwin-arm64
+          - runner: macos-15-intel
+            platform: darwin-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build the attested owner client
+        env:
+          CLIENT_PLATFORM: ${{ matrix.platform }}
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          cargo +1.98.1 build --release --locked --manifest-path "$COCO_SOURCE/guest/Cargo.toml" --bin aws-trustee-bootstrap
+          mkdir -p "$RUNNER_TEMP/clients"
+          cp "$COCO_SOURCE/guest/target/release/aws-trustee-bootstrap" "$RUNNER_TEMP/clients/aws-coco-client-$CLIENT_PLATFORM"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: client-${{ matrix.platform }}
+          path: ${{ runner.temp }}/clients/*
+          retention-days: 3
+          if-no-files-found: error
+
+  appliances:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Prepare the isolated software image builder
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          docker build -f "$COCO_SOURCE/release/builder.Dockerfile" -t nebula-coco-builder "$COCO_SOURCE/release"
+          mkdir -p "$RUNNER_TEMP/coco-build" "$RUNNER_TEMP/coco-cargo" "$RUNNER_TEMP/coco-auth"
+      - name: Build pinned guest components
+        run: |
+          docker run --rm -v "$PWD:/source:ro" -v "$RUNNER_TEMP/coco-build:/build" -v "$RUNNER_TEMP/coco-cargo:/cargo" \
+            -e CARGO_HOME=/cargo -e CARGO_BUILD_JOBS=4 -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/source \
+            nebula-coco-builder python3.12 "/source/$COCO_SOURCE/release/build.py" binaries --work /build
+      - name: Build encrypted installation probe and policy
+        run: |
+          image_repository="ghcr.io/${GITHUB_REPOSITORY,,}-coco-canary"
+          docker run --rm -v "$PWD:/source:ro" -v "$RUNNER_TEMP/coco-build:/build" \
+            nebula-coco-builder python3.12 "/source/$COCO_SOURCE/release/canary.py" --work /build --repository "$image_repository"
+      - name: Build immutable appliances and derive UKI measurements
+        run: |
+          docker run --rm --privileged -v /dev:/dev -v "$PWD:/source:ro" -v "$RUNNER_TEMP/coco-build:/build" \
+            -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/source \
+            nebula-coco-builder python3.12 "/source/$COCO_SOURCE/release/build.py" images --work /build \
+            --canary /build/canary.json --repository "$GITHUB_REPOSITORY" --tag "coco-aws-$GITHUB_SHA" \
+            --firmware-policy "/source/$COCO_SOURCE/release/firmware-policy.json"
+      - name: Package controller and publish content-addressed OCI artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/coco-auth
+        run: |
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          image_repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker run --rm -v "$RUNNER_TEMP/coco-auth:/auth:ro" -v "$RUNNER_TEMP/coco-build:/build:ro" \
+            nebula-coco-builder skopeo copy --authfile /auth/config.json --preserve-digests \
+            oci:/build/canary-encrypted:canary "docker://$image_repository-coco-canary:$GITHUB_SHA"
+          cp -r "$COCO_SOURCE/control" "$RUNNER_TEMP/coco-build/control"
+          docker build -f "$COCO_SOURCE/release/controller.Dockerfile" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t "$image_repository-coco-controller:$GITHUB_SHA" "$RUNNER_TEMP/coco-build"
+          docker push "$image_repository-coco-controller:$GITHUB_SHA"
+          docker inspect "$image_repository-coco-controller:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/coco-build/release/controller-image.txt"
+          cp "$RUNNER_TEMP/coco-build/canary.json" "$RUNNER_TEMP/coco-build/release/canary.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: appliances
+          path: ${{ runner.temp }}/coco-build/release/*
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+
+  candidate:
+    needs: [client, appliances]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          path: ${{ runner.temp }}/coco-release
+          merge-multiple: true
+      - name: Verify receipts and publish an explicitly unqualified candidate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          controller_image="$(cat "$RUNNER_TEMP/coco-release/controller-image.txt")"
+          python3 "$COCO_SOURCE/release/complete.py" --directory "$RUNNER_TEMP/coco-release" \
+            --repository "$GITHUB_REPOSITORY" --tag "coco-aws-$GITHUB_SHA" --controller "$controller_image"
+          gh release create "coco-aws-$GITHUB_SHA" "$RUNNER_TEMP/coco-release"/* --target "$GITHUB_SHA" \
+            --prerelease --latest=false --title "AWS CoCo candidate $GITHUB_SHA" \
+            --notes-file "$COCO_SOURCE/release/CANDIDATE.md"

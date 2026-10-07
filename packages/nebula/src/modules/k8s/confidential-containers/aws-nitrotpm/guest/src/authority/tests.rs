@@ -3,7 +3,7 @@ use crate::workload::{EnvelopeSignature, signed_bytes};
 use ed25519_dalek::Signer;
 use std::{cell::RefCell, rc::Rc};
 
-fn key(value: u8) -> SigningKey {
+pub(super) fn key(value: u8) -> SigningKey {
     SigningKey::from_bytes(&[value; 32])
 }
 
@@ -19,7 +19,7 @@ fn owners(keys: &[&SigningKey], threshold: usize) -> Owners {
     }
 }
 
-fn signed(kind: &str, payload: &[u8], keys: &[&SigningKey]) -> Envelope {
+pub(super) fn signed(kind: &str, payload: &[u8], keys: &[&SigningKey]) -> Envelope {
     let message = signed_bytes(kind, payload, MAX_BYTES).unwrap();
     Envelope {
         payload_type: kind.into(),
@@ -34,7 +34,7 @@ fn signed(kind: &str, payload: &[u8], keys: &[&SigningKey]) -> Envelope {
     }
 }
 
-fn genesis() -> Genesis {
+pub(super) fn genesis() -> Genesis {
     Genesis {
         authority_release: "a".repeat(64),
         nonce: "b".repeat(64),
@@ -55,7 +55,7 @@ fn update(status: &LocalStatus, incoming: Owners) -> OwnerUpdate {
     }
 }
 
-fn rotation(status: &LocalStatus) -> Envelope {
+pub(super) fn rotation(status: &LocalStatus) -> Envelope {
     let update = update(status, owners(&[&key(2), &key(3)], 2));
     signed(
         OWNERS_TYPE,

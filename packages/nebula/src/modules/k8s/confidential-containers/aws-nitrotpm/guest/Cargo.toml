@@ -9,18 +9,27 @@ aes-gcm = { version = "0.11.1", features = ["zeroize"] }
 anyhow = "1.0"
 async-trait = "0.1"
 base64 = "0.22"
+ciborium = "0.2.2"
 ed25519-dalek = { version = "2.2", default-features = false, features = ["std", "zeroize"] }
+hmac = "0.12.1"
 kbs_protocol = { git = "https://github.com/confidential-containers/guest-components.git", rev = "17ad60d88f9b7e4b3b54d01200985ae72723e8ab", default-features = false, features = ["passport", "rust-crypto"] }
 libc = "0.2"
+openraft = { version = "=0.9.25", features = ["serde", "storage-v2"] }
+openssl = "0.10.81"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 rsa = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10.9"
 tempfile = "3"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time", "net", "io-util"] }
+tokio-openssl = "0.6.5"
 url = "2"
+x509-parser = "0.18"
 zeroize = "1"
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+sev = { version = "=7.1.0", default-features = false, features = ["snp", "openssl"] }
 
 [dev-dependencies]
 # Actual stock offline_fs_kbc used only by the interoperability test.

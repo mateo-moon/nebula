@@ -260,6 +260,14 @@ export {
   encodeAwsAuthorityOwnerUpdate,
   awsAuthorityOwnerSigningBytes,
   verifyAwsAuthorityOwnerUpdate,
+  awsCocoRelease,
+  awsCocoProfileId,
+  createAwsCocoEnrollment,
+  publishAwsCocoWorkload,
+  AWS_KEY_GRANT_PAYLOAD_TYPE,
+  encodeAwsKeyGrant,
+  awsKeyGrantSigningBytes,
+  verifyAwsKeyGrant,
 } from "./confidential-containers";
 export type {
   ConfidentialContainersConfig,
@@ -276,6 +284,12 @@ export type {
   CustomContainerdConfig,
   AwsNitroTpmRuntimeConfig,
   AwsNitroTpmLaunchTemplateConfig,
+  AwsCocoManagedConfig,
+  AwsCocoRelease,
+  AwsCocoProfile,
+  AwsCocoArtifact,
+  AwsCocoSigner,
+  AwsKeyGrant,
 } from "./confidential-containers";
 
 export {

@@ -269,6 +269,62 @@ pub async fn provision() -> Result<()> {
     write_configuration(Path::new(DIRECTORY), &config)
 }
 
+/// Fixed IMDSv2 origin, no proxies/redirects. Metadata selects public boot
+/// intent and routing only; it never supplies a signing key or an approval.
+pub(crate) async fn metadata(path: &str, limit: usize) -> Result<Zeroizing<Vec<u8>>> {
+    ensure!(
+        path == "user-data"
+            || path == "meta-data/local-ipv4"
+            || path == "meta-data/placement/region"
+            || path == "meta-data/iam/security-credentials/"
+            || path
+                .strip_prefix("meta-data/iam/security-credentials/")
+                .is_some_and(|name| !name.is_empty()
+                    && name.len() <= 64
+                    && name
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"+=,.@_-".contains(&b)))
+            || ["nebula-coco-bucket", "nebula-coco-deployment"]
+                .iter()
+                .any(|tag| path == format!("meta-data/tags/instance/{tag}")),
+        "unsupported metadata field"
+    );
+    ensure!(limit <= 16384, "metadata bound too large");
+    let http = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
+        .build()?;
+    let token = bounded_body(
+        http.put(format!("{METADATA}/api/token"))
+            .header("X-aws-ec2-metadata-token-ttl-seconds", "60")
+            .send()
+            .await?,
+        4096,
+    )
+    .await?;
+    ensure!(
+        !token.is_empty() && token.iter().all(|b| (0x21..=0x7e).contains(b)),
+        "invalid IMDSv2 token"
+    );
+    bounded_body(
+        http.get(format!("{METADATA}/{path}"))
+            .header("X-aws-ec2-metadata-token", std::str::from_utf8(&token)?)
+            .send()
+            .await?,
+        limit,
+    )
+    .await
+}
+
+pub(crate) fn pod_identity() -> Result<(String, String)> {
+    let data = std::fs::read(CONFIG)?;
+    ensure!(data.len() <= LIMIT, "oversize CAA transport");
+    let config: Forwarder = serde_json::from_slice(&data)?;
+    config.validate()?;
+    Ok((config.pod_namespace, config.pod_name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

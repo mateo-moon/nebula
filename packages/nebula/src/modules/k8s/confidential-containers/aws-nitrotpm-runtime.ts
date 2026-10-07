@@ -2,6 +2,7 @@ import { ApiObject, Helm, JsonPatch } from "cdk8s";
 import { Construct } from "constructs";
 import * as awsEc2 from "../../../../imports/ec2.aws.upbound.io";
 import type { ConfidentialContainersConfig } from "./index";
+import { isManagedAwsCoco, validateManagedAwsCoco } from "./aws-coco-managed";
 
 /** Platform inputs only. Workload policies and key approvals live in the
  * measured guest and independent verifier/KBS, never in host annotations. */
@@ -55,17 +56,20 @@ function validateRuntime(config: AwsNitroTpmRuntimeConfig): void {
   const role = new RegExp(`^arn:aws:iam::${config.accountId}:role/[A-Za-z0-9_+=,.@/-]+$`);
   requireConfig(role.test(config.caaRoleArn) && role.test(config.cleanupRoleArn) && config.caaRoleArn !== config.cleanupRoleArn,
     "distinct CAA/cleanup web-identity roles in the selected account required");
-  for (const [image, name] of [[config.caaImage, "cloud-api-adaptor"], [config.cleanupImage, "peerpodctrl"]]) {
+  for (const [image, names] of [[config.caaImage, ["cloud-api-adaptor"]], [config.cleanupImage, ["peerpod-ctrl", "peerpodctrl"]]] as const) {
     requireConfig(typeof image === "string" && ["ghcr.io", "quay.io"].some(host => {
-      const prefix = `${host}/confidential-containers/${name}@sha256:`;
-      return image.startsWith(prefix) && /^[a-f0-9]{64}$/.test(image.slice(prefix.length));
+      return names.some(name => {
+        const prefix = `${host}/confidential-containers/${name}@sha256:`;
+        return image.startsWith(prefix) && /^[a-f0-9]{64}$/.test(image.slice(prefix.length));
+      });
     }),
       "official digest-pinned CAA/cleanup images required");
   }
 }
 
 export function validateAwsNitroTpmConfig(config: ConfidentialContainersConfig): void {
-  validateRuntime(config.awsNitroTpm!);
+  if (isManagedAwsCoco(config.awsNitroTpm)) validateManagedAwsCoco(config.awsNitroTpm);
+  else validateRuntime(config.awsNitroTpm!);
   requireConfig(config.version === undefined || config.version === "0.23.0", "chart 0.23.0 is the qualified rendering contract");
   requireConfig(config.debug !== true, "debug is disabled for the AWS runtime");
   requireConfig(config.nodeSelector && Object.keys(config.nodeSelector).length > 0 &&
@@ -83,7 +87,11 @@ export function validateAwsNitroTpmConfig(config: ConfidentialContainersConfig):
 
 /** Merge last so general values cannot change the AWS trust/transport inputs. */
 export function awsNitroTpmValues(config: ConfidentialContainersConfig): Record<string, unknown> {
-  const aws = config.awsNitroTpm!;
+  const input = config.awsNitroTpm!;
+  const managed = isManagedAwsCoco(input);
+  const aws = managed ? { region: input.region ?? "eu-west-1", subnetId: "", securityGroupIds: [], imageId: "",
+    instanceType: "c6a.large", launchTemplateName: "", peerPodsLimitPerNode: input.peerPodsLimitPerNode ?? 2 } : input;
+  const managedTags = managed ? `NebulaCocoDeployment=${validateManagedAwsCoco(input).deployment},NebulaCocoComponent=runtime` : undefined;
   return {
     "kata-as-coco-runtime": {
       deploymentMode: "daemonset", debug: false, devkit: false,
@@ -115,13 +123,13 @@ export function awsNitroTpmValues(config: ConfidentialContainersConfig): Record<
         TLS_SKIP_VERIFY: "false", CLOUD_CONFIG_VERIFY: "true", PEERPODS_LIMIT_PER_NODE: String(aws.peerPodsLimitPerNode),
         TUNNEL_TYPE: "vxlan", EXTERNAL_NETWORK_VIA_PODVM: "false", ENABLE_SCRATCH_SPACE: "false", INITDATA: "",
         ROOT_VOLUME_SIZE: "0", // Preserve the launch template's encrypted root mapping.
+        ...(managedTags ? { TAGS: managedTags } : {}),
       } },
     },
   };
 }
 
-export function configureAwsNitroTpmRuntime(helm: Helm, config: ConfidentialContainersConfig, runtimeClass: string): void {
-  const aws = config.awsNitroTpm!;
+export function configureAwsRemoteClass(helm: Helm, config: ConfidentialContainersConfig, runtimeClass: string): void {
   const resources = helm.apiObjects;
   const remote = resources.filter(resource => resource.kind === "RuntimeClass" && resource.name === "kata-remote");
   requireConfig(remote.length === (config.createRuntimeClasses === false ? 0 : 1), "upstream remote RuntimeClass contract changed");
@@ -134,6 +142,13 @@ export function configureAwsNitroTpmRuntime(helm: Helm, config: ConfidentialCont
       remote[0].addJsonPatch(JsonPatch.add(`/scheduling/nodeSelector/${key.replace(/~/g, "~0").replace(/\//g, "~1")}`, value));
     }
   }
+}
+
+export function configureAwsNitroTpmRuntime(helm: Helm, config: ConfidentialContainersConfig, runtimeClass: string): void {
+  requireConfig(!isManagedAwsCoco(config.awsNitroTpm), "managed credentials are configured by the module controller");
+  const aws = config.awsNitroTpm!;
+  configureAwsRemoteClass(helm, config, runtimeClass);
+  const resources = helm.apiObjects;
   const caa = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "cloud-api-adaptor-daemonset");
   const cleanup = resources.find(resource => resource.kind === "Deployment" &&
     resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl");

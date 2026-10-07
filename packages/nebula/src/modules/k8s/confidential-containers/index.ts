@@ -23,8 +23,17 @@ import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct } from "../../../core";
-import { awsNitroTpmValues, configureAwsNitroTpmRuntime, validateAwsNitroTpmConfig,
+import { awsNitroTpmValues, configureAwsNitroTpmRuntime, configureAwsRemoteClass, validateAwsNitroTpmConfig,
   type AwsNitroTpmRuntimeConfig } from "./aws-nitrotpm-runtime";
+import { ManagedAwsCoco, isManagedAwsCoco, type AwsCocoManagedConfig } from "./aws-coco-managed";
+
+export type { AwsCocoManagedConfig } from "./aws-coco-managed";
+export { awsCocoRelease, awsCocoProfileId } from "./aws-coco-release";
+export type { AwsCocoRelease, AwsCocoProfile, AwsCocoArtifact } from "./aws-coco-release";
+export { AWS_KEY_GRANT_PAYLOAD_TYPE, encodeAwsKeyGrant, awsKeyGrantSigningBytes, verifyAwsKeyGrant } from "./aws-key-grant";
+export type { AwsKeyGrant } from "./aws-key-grant";
+export { createAwsCocoEnrollment, publishAwsCocoWorkload } from "./aws-coco-publisher";
+export type { AwsCocoSigner } from "./aws-coco-publisher";
 
 export { awsNitroTpmLaunchTemplate, awsNitroTpmAssetsUrl } from "./aws-nitrotpm-runtime";
 export type { AwsNitroTpmRuntimeConfig, AwsNitroTpmLaunchTemplateConfig } from "./aws-nitrotpm-runtime";
@@ -84,9 +93,9 @@ export interface ConfidentialContainersConfig {
   imagePullPolicy?: "Always" | "IfNotPresent" | "Never";
   /** Additional Helm values to merge with defaults */
   values?: Record<string, unknown>;
-  /** AWS immutable PodVM prototype, installed as an additional kata-remote
-   * RuntimeClass. Registration does not qualify attestation or key release. */
-  awsNitroTpm?: AwsNitroTpmRuntimeConfig;
+  /** Additional AWS runtime. Managed mode owns image import, infrastructure,
+   * attested authority enrollment and recovery through the module lifecycle. */
+  awsNitroTpm?: AwsNitroTpmRuntimeConfig | AwsCocoManagedConfig;
 }
 
 /**
@@ -102,13 +111,14 @@ export const RuntimeClasses = {
   INTEL_TDX: "kata-qemu-tdx",
   /** Development/testing runtime (no hardware TEE) */
   COCO_DEV: "kata-qemu-coco-dev",
-  /** AWS measured-boot prototype; retained SNP/runtime qualification is required. */
+  /** Module-managed AWS NitroTPM/SNP PodVMs; use a qualified appliance release. */
   AWS_NITRO_TPM: "kata-remote-aws-nitrotpm",
 } as const;
 
 export class ConfidentialContainers extends BaseConstruct<ConfidentialContainersConfig> {
   public readonly namespace: kplus.Namespace;
   public readonly helm: Helm;
+  public readonly awsRuntime?: ManagedAwsCoco;
 
   constructor(
     scope: Construct,
@@ -122,8 +132,12 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
 
     // Create namespace
     this.namespace = new kplus.Namespace(this, "namespace", {
-      metadata: { name: namespaceName },
+      metadata: { name: namespaceName, ...(isManagedAwsCoco(this.config.awsNitroTpm)
+        ? { annotations: { "argocd.argoproj.io/sync-wave": "-20" } } : {}) },
     });
+    if (isManagedAwsCoco(this.config.awsNitroTpm)) {
+      this.awsRuntime = new ManagedAwsCoco(this, "aws-runtime", namespaceName, this.config.awsNitroTpm);
+    }
 
     // Build shims configuration — map simple boolean flags to chart's expected structure.
     // The chart expects shims.<name>.enabled (with full objects), not simple booleans.
@@ -203,7 +217,10 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       values: chartValues,
     });
     if (this.config.awsNitroTpm) {
-      configureAwsNitroTpmRuntime(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
+      if (this.awsRuntime) {
+        configureAwsRemoteClass(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
+        this.awsRuntime.configureHelm(this.helm);
+      } else configureAwsNitroTpmRuntime(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
     }
   }
 }

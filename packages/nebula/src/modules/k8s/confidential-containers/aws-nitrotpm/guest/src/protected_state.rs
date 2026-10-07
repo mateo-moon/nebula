@@ -220,10 +220,40 @@ impl<A: Anchor> Journal<A> {
         self.poisoned = true;
         let _ = self.anchor.extend(self.current, digest);
         ensure!(self.anchor.read()? == next, "anchor commit not confirmed");
+        let previous = self.current;
         self.current = next;
         self.sequence = sequence;
         self.poisoned = false;
+        // Only the confirmed hardware head can select recoverable state. Keep
+        // that record and its immediate predecessor; collect older ciphertext
+        // and failed-write orphans so routine consensus cannot fill the disk.
+        // Collection is best effort after commit: its failure must not turn a
+        // successfully anchored operation into a false negative response.
+        let _ = self.collect_records(previous);
         Ok(sequence)
+    }
+
+    fn collect_records(&self, previous: Digest384) -> Result<()> {
+        let current = name(&self.current);
+        let previous = name(&previous);
+        for entry in fs::read_dir(&self.directory)? {
+            let entry = entry?;
+            let file = entry.file_name();
+            let Some(file) = file.to_str() else {
+                continue;
+            };
+            let owned = file.strip_suffix(".state").is_some_and(|hash| {
+                hash.len() == 96
+                    && hash
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            });
+            if owned && file != current && file != previous && entry.file_type()?.is_file() {
+                fs::remove_file(entry.path())?;
+            }
+        }
+        File::open(&self.directory)?.sync_all()?;
+        Ok(())
     }
 }
 
@@ -302,6 +332,31 @@ mod tests {
             let bytes = fs::read(file.unwrap().path()).unwrap();
             assert!(!bytes.windows(6).any(|window| window == b"secret"));
         }
+    }
+    #[test]
+    fn commits_keep_two_ciphertexts_and_do_not_collect_unrelated_files() {
+        let (directory, anchor) = setup();
+        fs::write(directory.path().join("seal.json"), b"public seal blobs").unwrap();
+        let (mut journal, _) = open(directory.path(), anchor.clone()).unwrap();
+        for n in 0..24 {
+            journal.commit(format!("state-{n}").as_bytes()).unwrap();
+        }
+        let records: Vec<_> = fs::read_dir(directory.path())
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.unwrap();
+                (entry.path().extension().is_some_and(|ext| ext == "state")).then_some(entry.path())
+            })
+            .collect();
+        assert_eq!(records.len(), 2);
+        assert!(records.contains(&directory.path().join(name(&anchor.0.borrow().value))));
+        assert_eq!(
+            fs::read(directory.path().join("seal.json")).unwrap(),
+            b"public seal blobs"
+        );
+        drop(journal);
+        let (_, current) = open(directory.path(), anchor).unwrap();
+        assert_eq!(current.unwrap().bytes.as_slice(), b"state-23");
     }
     #[test]
     fn replay_tamper_wrong_key_and_wrong_deployment_fail_closed() {

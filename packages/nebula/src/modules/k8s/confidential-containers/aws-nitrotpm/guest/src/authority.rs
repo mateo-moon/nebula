@@ -15,6 +15,15 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use zeroize::Zeroizing;
 
+pub(crate) mod replication;
+pub use replication::{
+    Enrollment, OwnerRequest, OwnerResponse, ProtectedReplicas, ReplicaConfig, fetch_runtime_keys,
+};
+mod publication;
+pub use publication::{
+    Approval, GRANT_TYPE, Grant, ImageKey, ImageKeys, MAX_GRANT_BYTES, Publication,
+};
+
 pub const GENESIS_TYPE: &str = "application/vnd.nebula.aws-coco-genesis.v1+json";
 pub const OWNERS_TYPE: &str = "application/vnd.nebula.aws-coco-owners.v1+json";
 pub const MAX_BYTES: usize = 16 * 1024;
@@ -141,7 +150,7 @@ pub struct LocalStatus {
     pub owners: Owners,
 }
 
-fn public_identity(encoded: &str) -> Result<String> {
+pub(crate) fn public_identity(encoded: &str) -> Result<String> {
     let bytes = decode(encoded, 32)?;
     ensure!(
         bytes.len() == 32 && STANDARD.encode(&bytes) == encoded,
@@ -237,7 +246,7 @@ impl Ledger {
 
 // Private trait: production construction always uses the protected TPM journal.
 // Unit tests inject lost replies/storage failure without a public bypass switch.
-trait Store {
+pub(crate) trait Store {
     fn commit(&mut self, bytes: &[u8]) -> Result<u64>;
 }
 impl Store for TpmJournal {
