@@ -93,6 +93,8 @@ export {
   ORCHESTRATOR_MODEL_CONFIG,
   ORCHESTRATOR_MODEL,
   declareModelConfigs,
+  declareOllamaModelConfig,
+  type OllamaModelConfig,
   type ModelSecretRef,
 } from "./kagent/models";
 
@@ -514,3 +516,7 @@ export { applyWorkloadAppPolicy } from "./argocd/app-policy";
 export { CiliumNodeRegistration } from "./cilium/node-registration";
 export type { CiliumNodeRegistrationConfig } from "./cilium/node-registration";
 export * from "./host-reconciliation";
+export { OAuth2Proxy } from "./oauth2-proxy";
+export type { OAuth2ProxyConfig } from "./oauth2-proxy";
+export { Ollama } from "./ollama";
+export type { OllamaConfig } from "./ollama";
