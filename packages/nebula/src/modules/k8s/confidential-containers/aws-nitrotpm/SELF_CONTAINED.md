@@ -169,8 +169,10 @@ commands and `/dev/tpmrm0`, with no environment-selected TPM or shell command.
 The calling boot code must already have authenticated owner state and generation
 from the protected authority. The current boot units **do not invoke this
 component**: sourcing that trust from a ConfigMap would violate the contract.
-Actual PCR15 behavior and the generic image's Kata startup still need hardware
-qualification. The existing strict user-data parser remains unchanged.
+A [separate hardware probe](HARDWARE_QUALIFICATION.md) confirmed exact PCR15
+extension and reset refusal on the tested NitroTPM. The actual Rust adapter and
+the generic image's Kata startup still need qualification. The existing strict
+user-data parser remains unchanged.
 
 ## Implemented component: encrypted local authority journal
 
@@ -203,6 +205,9 @@ an empty journal. Test secrets live in
 the disposable fixture; these commands are not module-user operations. Emulator
 results establish TCG command behavior, not NitroTPM's AWS persistence guarantees,
 write limits, snapshot behavior or support for the proposed recovery protocol.
+The separate [AWS hardware experiment](HARDWARE_QUALIFICATION.md) records which
+local mechanics have now been observed on NitroTPM. It does not implement the
+production backend or complete the replicated authority's recovery protocol.
 
 ## Evidence references
 

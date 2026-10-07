@@ -2,6 +2,10 @@
 
 Research date: 6 October 2026. Repository baseline: `78900be`.
 
+Hardware follow-up: [7 October NitroTPM experiments](HARDWARE_QUALIFICATION.md).
+The follow-up qualifies specific local mechanics; the release gates below still
+require the actual immutable appliances and integrated authority protocol.
+
 **Recommendation, not a shipped implementation:** keep the reusable CoCo
 RuntimeClass, distribute generic immutable guest images with each Nebula release,
 and let the module provision a small attested authority with instance-bound
@@ -494,8 +498,9 @@ a management-cluster recovery Secret or a manual operation.
 - Remove the deployment-time attested builder from the default design. Add one
   only for a separately justified custom-build use case.
 
-No AWS resources were created for this R&D. Existing local tests establish
-prototype protocol behavior only. The remaining uncertainty is concentrated
-in the protected state protocol, generic-policy binding and real AWS lifecycle;
-the required tests above are release engineering responsibilities, not manual
-steps assigned to module users.
+The initial research used local fixtures. The subsequent bounded AWS experiment
+is recorded in [HARDWARE_QUALIFICATION.md](HARDWARE_QUALIFICATION.md), with its
+scope, observations and cleanup. The remaining uncertainty is concentrated in
+the integrated protected-state protocol, generic-policy binding and complete
+AWS runtime lifecycle. The required tests above are release engineering
+responsibilities, not manual steps assigned to module users.

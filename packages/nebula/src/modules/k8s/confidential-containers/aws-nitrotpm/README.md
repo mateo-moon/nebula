@@ -18,6 +18,7 @@ Read [PLAN.md](PLAN.md) for exact protocols, versions, trust boundaries, build o
 - `guest/src/activation.rs`: protected policy installation and one confirmed PCR15 extension before activation succeeds. It has a fixed TPM device adapter and refusal tests, but is not wired into the current boot units pending authenticated authority enrollment and hardware qualification.
 - `guest/src/protected_state.rs`: encrypted immutable authority-state records, durable-before-anchor ordering, rollback refusal and recovery after lost replies. Hardware sealing/anchor authorization and the replicated authority remain unimplemented.
 - `tests/test_tpm_persistence.py`: isolated software-TPM CI experiments for PCR seals, protected NV writes/deletion, graceful/abrupt restart, copied sealed blobs, clear, PCR15 and unwritten NV state. Eight experiments pass locally with exact TPM rejection-code assertions. These are developer qualification tests, not user setup scripts or proof of NitroTPM behavior.
+- `HARDWARE_QUALIFICATION.md`: separate disposable AWS observations for local TPM mechanics, with explicit limits, costs and cleanup. The mutable test image is not a released runtime or authority appliance.
 - `approved_profile.py`: converts patched AWS PCR compute output and exact policy bytes into a **non-approved** image-review candidate. An operator assertion is never an attestation claim.
 
 ## Reproduce local checks

@@ -1,6 +1,6 @@
 # AWS immutable PodVM and Trustee passport prototype
 
-Status: isolated research/prototype. No AWS resources or live cluster changes are authorized here. Registration of the prototype RuntimeClass is not deployment qualification. Neither an AMI nor a real NitroTPM document has been qualified.
+Status: isolated research/prototype. Separately authorized disposable AWS experiments are recorded in [HARDWARE_QUALIFICATION.md](HARDWARE_QUALIFICATION.md); no live cluster was changed. Registration of the prototype RuntimeClass is not deployment qualification. Neither a production appliance nor a real NitroTPM attestation document has been qualified.
 
 The required module contract is now [self-contained installation and lifecycle](SELF_CONTAINED.md), including protection from **management-cluster administrators**. That document and the [architecture research](RESEARCH.md) supersede the caller-operated build/review/service setup below as the deployment design. The research proposes generic images, measured signed initdata and an explicit AWS-Nitro trust profile; the current prototype still uses per-workload images and its existing qualification gates. These protocols and staging tools remain research components until the module owns the complete lifecycle; running them manually is not an acceptable installation requirement.
 
