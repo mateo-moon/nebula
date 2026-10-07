@@ -14,10 +14,10 @@ const config: GiteaBranchProtectionConfig = {
 function manifest(value = config) {
   return new GiteaBranchProtection(new Chart(new App(), "test"), "repository-main", value).request.toJson();
 }
-function compare(observed: Record<string, unknown>) {
+function compare(observed: Record<string, unknown>, statusCode = 200) {
   const fp = manifest().spec.forProvider;
   return execFileSync("jq", ["-r", fp.expectedResponseCheck.logic], {
-    input: JSON.stringify({ payload: { body: JSON.parse(fp.payload.body) }, response: { body: observed } }), encoding: "utf8",
+    input: JSON.stringify({ payload: { body: JSON.parse(fp.payload.body) }, response: { statusCode, body: observed } }), encoding: "utf8",
   }).trim() === "true";
 }
 
@@ -40,6 +40,8 @@ test("checks false/empty values, every required check and missing fields while a
   }
   const missing = { ...config.rule }; delete missing.enable_force_push;
   assert.equal(compare(missing), false);
+  assert.equal(compare(config.rule, 403), false);
+  assert.equal(compare(config.rule, 500), false);
 });
 
 test("rejects credential-bearing origins and mismatched rule identities", () => {
