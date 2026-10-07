@@ -30,6 +30,8 @@ import { Helm } from "cdk8s";
 import { deepmerge } from "deepmerge-ts";
 import { HelmModule } from "../../../core";
 import { validateCiliumNetwork } from "./network";
+import { CiliumNodeIpv6Overrides, type CiliumNodeIpv6OverridesConfig } from "./node-ipv6-overrides";
+export type { CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./node-ipv6-overrides";
 
 /**
  * Cilium's WireGuard UDP port — NOT Calico's 51820. A security group that
@@ -66,6 +68,11 @@ export interface CiliumConfig {
    * node's private address. Pods remain dual-stack in either mode.
    */
   nodeConnectivity?: "public" | "private";
+  /** Retained node IPv6 identities, applied through selector-scoped native
+   * CiliumNodeConfigs. Installs exact-inventory validating admission and permits
+   * only ipv6-node overrides. Requires CiliumNodeConfig CRDs already installed;
+   * first-install clusters should publish both NIC addresses through kubelet. */
+  nodeIpv6Overrides?: CiliumNodeIpv6OverridesConfig;
   /**
    * Tunnel MTU, applied to every interface Cilium owns.
    *
@@ -220,6 +227,9 @@ export class Cilium extends HelmModule<CiliumConfig> {
     }
     const underlayProtocol = this.config.underlayProtocol ??
       (nodeConnectivity === "public" ? "ipv6" : "ipv4");
+    const nodeOverrides = this.config.nodeIpv6Overrides
+      ? new CiliumNodeIpv6Overrides(this, "node-ipv6", this.config.nodeIpv6Overrides, namespace, nodeConnectivity)
+      : undefined;
     const mtu = this.config.mtu ?? (nodeConnectivity === "public" ? 1400 : undefined);
     const hubble = this.config.hubble ?? false;
     const envoy = this.config.envoy ?? false;
@@ -247,7 +257,7 @@ export class Cilium extends HelmModule<CiliumConfig> {
       );
     }
 
-    const values = deepmerge(
+    const values: Record<string, unknown> = deepmerge(
       {
         // Consume the podCIDRs k0s already allocates per node rather than
         // letting Cilium carve an independent pool the cluster disagrees with.
@@ -259,7 +269,9 @@ export class Cilium extends HelmModule<CiliumConfig> {
         k8s: { requireIPv4PodCIDR: true, requireIPv6PodCIDR: true },
         cni: { install: true, exclusive: true, customConf: false, chainingMode: "none" },
         // Otherwise a CiliumNodeConfig can silently undo the cluster contract.
-        daemon: { configSources: "config-map:cilium-config" },
+        daemon: nodeOverrides
+          ? { configSources: nodeOverrides.configSources, allowedConfigOverrides: "ipv6-node" }
+          : { configSources: "config-map:cilium-config" },
         agent: true,
         sleepAfterInit: false,
         // ConfigMap edits alone do not restart agents. Reconcile the running
@@ -362,7 +374,17 @@ export class Cilium extends HelmModule<CiliumConfig> {
       },
       this.config.values ?? {},
     );
-    validateCiliumNetwork(values, nodeConnectivity);
+    if (nodeOverrides) {
+      if (values.podAnnotations !== undefined && (values.podAnnotations === null ||
+          typeof values.podAnnotations !== "object" || Array.isArray(values.podAnnotations))) {
+        throw new Error("Cilium: values.podAnnotations must be an object.");
+      }
+      values.podAnnotations = {
+        ...((values.podAnnotations ?? {}) as Record<string, string>),
+        "nebula.sh/cilium-node-ipv6-checksum": nodeOverrides.checksum,
+      };
+    }
+    validateCiliumNetwork(values, nodeConnectivity, nodeOverrides?.configSources);
     this.helm = this.createHelmRelease({
       namespace,
       chart: "cilium",

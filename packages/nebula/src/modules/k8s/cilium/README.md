@@ -70,7 +70,7 @@ addresses, never a cloud public-IPv4 metadata address.
 Validation runs **after** merging Helm values. It rejects disabled address
 families, alternate IPAM, custom/chained CNIs, disabling either CIDR wait,
 unsafe transport/MTU choices, and network overrides through `extraConfig`,
-`extraArgs` or `extraEnv`. The agent reads only `cilium-config`, so a
+`extraArgs` or `extraEnv`. By default the agent reads only `cilium-config`, so a
 `CiliumNodeConfig` cannot silently change its address-family contract.
 Unrelated values such as metrics and resource sizing remain configurable.
 The chart's configuration checksum is enabled, so configuration changes
@@ -84,7 +84,8 @@ workers according to the cluster's supported migration procedure, preserve
 data volumes, and recreate existing pod sandboxes to obtain both addresses.
 Restarting Cilium alone does not add a second address to existing pods.
 
-Verify that every node has both `.spec.podCIDRs` families, every public-mesh
+Verify that every node has both pod CIDR families (in `.spec.podCIDRs` or the
+supported Cilium host-scope Node annotations), every public-mesh
 node advertises reachable IPv6, and newly created non-host-network pods have
 both `.status.podIPs` families. Check cross-node traffic over **both** pod
 families and WireGuard handshakes. Services have their own `ipFamilyPolicy`;
@@ -92,6 +93,62 @@ this contract does not convert existing Services to dual-stack.
 
 See upstream [Kubernetes IPAM](https://docs.cilium.io/en/stable/network/concepts/ipam/kubernetes/)
 and [routing](https://docs.cilium.io/en/stable/network/concepts/routing/).
+
+### Retained nodes with an inventory IPv6 address
+
+A retained kubelet may publish only IPv4 even though its host already owns a
+routable IPv6 address. The narrow compatibility API preserves that existing
+IPv6 identity without permitting other per-node network overrides:
+
+```typescript
+new Cilium(chart, "cilium", {
+  nodeIpv6Overrides: {
+    nodes: [{ name: "retained-worker-1", nodeName: "worker-1", ipv6: "2001:db8:1::2" }],
+    // Optional: policyName: "cilium-node-ipv6-inventory"
+  },
+});
+```
+
+Use the real on-link address; the example uses a documentation prefix. Names,
+hostnames and addresses must be unique. Public connectivity accepts global
+unicast IPv6; private connectivity also accepts ULA. The module preserves
+each supplied CiliumNodeConfig name, hostname selector and literal address.
+It adds a deterministic inventory checksum to the pod template, preserving
+other caller annotations, so a Git change rolls agents onto the new inventory.
+
+The source is `config-map:cilium-config,cilium-node-config:<namespace>` and
+the Helm allowlist is exactly `ipv6-node`. Cilium 1.20's namespace lookup
+evaluates node selectors. Its named-resource lookup bypasses those selectors,
+so specifying `<namespace>/<config-name>` globally would incorrectly give
+every agent the same address. The constructor rejects that source substitution
+and any expansion of the override allowlist. See the upstream
+[resolver](https://github.com/cilium/cilium/blob/v1.20.0/pkg/option/resolver/resolver.go),
+[build-config command](https://github.com/cilium/cilium/blob/v1.20.0/cilium-dbg/cmd/build-config.go)
+and [chart init container](https://github.com/cilium/cilium/blob/v1.20.0/install/kubernetes/cilium/templates/cilium-agent/daemonset.yaml).
+
+A native ValidatingAdmissionPolicy and Deny binding apply at Argo waves -4
+and -3, ahead of the preserved CiliumNodeConfigs at -2 and chart resources at
+the default wave. CREATE/UPDATE in the Cilium namespace must match the exact
+declared name, sole `ipv6-node` default and exact hostname selector; broader
+selectors or extra defaults fail closed. Other namespaces remain unaffected.
+
+This API requires the CiliumNodeConfig CRD to exist already and Kubernetes
+ValidatingAdmissionPolicy v1 support. The Cilium operator installs its CRDs;
+this compatibility path is for an existing Cilium installation. New workers
+should publish both NIC addresses through kubelet instead. Before the first
+sync, verify that existing CiliumNodeConfigs in the target namespace are
+exactly the declared inventory: admission does not retroactively validate
+existing objects, and namespace discovery would still read an old unlisted
+object. Keep the previous qualified pin until that comparison is complete.
+
+This option does not change IPAM or relax the pod-family contract. Cilium's
+[Kubernetes host-scope IPAM](https://docs.cilium.io/en/stable/network/concepts/ipam/kubernetes/)
+accepts `network.cilium.io/ipv6-pod-cidr` Node annotations as well as
+`spec.podCIDRs`, and automatically requires a CIDR for each enabled family.
+A retained IPv4 control plane with a reviewed native annotation admission
+policy can therefore supply the IPv6 pod range without disabling the CIDR
+wait. The address inventory above supplies node transport identity, not pod
+CIDRs. Existing pod sandboxes still require their normal migration checks.
 
 ## Validation
 
@@ -102,9 +159,11 @@ IPv6. For an offline render against the pinned real Helm chart:
 ```sh
 helm pull cilium --repo https://helm.cilium.io --version 1.20.0 --destination /tmp
 cd packages/nebula
-CILIUM_TEST_CHART=/tmp/cilium-1.20.0.tgz node --import tsx --test test/cilium.test.ts test/dual-stack-workers.test.ts
+CILIUM_TEST_CHART=/tmp/cilium-1.20.0.tgz node --import tsx --test test/cilium.test.ts test/cilium-node-ipv6-overrides.test.ts test/dual-stack-workers.test.ts
 ```
 
 These render tests verify both agent family flags, both CIDR wait flags,
-IPAM, transport selection and the agent's configuration source and checksum.
+IPAM, transport selection and the agent's configuration source and checksum,
+including the real chart's selector-scoped build-config source/allowlist.
+Admission tests execute the CEL expressions against valid and altered objects.
 They do not replace a staged cluster rollout and connectivity checks.

@@ -6,7 +6,7 @@ const NETWORK_OPTIONS = new Set([
   "ipv4-node", "ipv6-node", "ipv4-range", "ipv6-range", "ipv6-cluster-alloc-cidr",
   "custom-cni-conf", "read-cni-conf", "write-cni-conf-when-ready",
   "cni-chaining-mode", "cni-chaining-target", "cni-exclusive",
-  "config", "config-dir",
+  "config", "config-dir", "config-sources", "config-sources-overrides",
 ]);
 
 function record(value: unknown, path: string): Record<string, unknown> {
@@ -19,6 +19,7 @@ function record(value: unknown, path: string): Record<string, unknown> {
 export function validateCiliumNetwork(
   values: Record<string, unknown>,
   connectivity: "public" | "private",
+  nodeIpv6ConfigSources?: string,
 ): void {
   const requireValue = (path: string, expected: unknown) => {
     let actual: unknown = values;
@@ -37,7 +38,8 @@ export function validateCiliumNetwork(
   requireValue("cni.exclusive", true);
   requireValue("cni.customConf", false);
   requireValue("cni.chainingMode", "none");
-  requireValue("daemon.configSources", "config-map:cilium-config");
+  requireValue("daemon.configSources", nodeIpv6ConfigSources ?? "config-map:cilium-config");
+  if (nodeIpv6ConfigSources) requireValue("daemon.allowedConfigOverrides", "ipv6-node");
   requireValue("agent", true);
   requireValue("sleepAfterInit", false);
   requireValue("rollOutCiliumPods", true);

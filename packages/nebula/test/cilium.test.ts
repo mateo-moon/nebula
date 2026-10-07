@@ -95,6 +95,32 @@ test("existing explicit dual-stack configuration and unrelated overrides still r
   });
 });
 
+const nodeIpv6Overrides = { nodes: [{ name: "retained-worker-1", nodeName: "worker-1", ipv6: "2001:db8:1::2" }] };
+test("declared IPv6 inventory enables only selector-scoped IPv6 overrides and preserves caller annotations", () => {
+  withHelm(render => {
+    const values = render({ nodeIpv6Overrides, values: { podAnnotations: { "example.test/settings": "unchanged" } } });
+    assert.deepEqual(values.daemon, {
+      configSources: "config-map:cilium-config,cilium-node-config:kube-system", allowedConfigOverrides: "ipv6-node",
+    });
+    assert.equal(values.podAnnotations["example.test/settings"], "unchanged");
+    assert.match(values.podAnnotations["nebula.sh/cilium-node-ipv6-checksum"], /^[a-f0-9]{64}$/);
+    assert.equal(values.k8s.requireIPv6PodCIDR, true);
+    assert.equal(values.underlayProtocol, "ipv6");
+  });
+});
+
+for (const [name, values] of [
+  ["named source bypassing selectors", { daemon: { configSources: "config-map:cilium-config,cilium-node-config:kube-system/retained-worker-1" } }],
+  ["arbitrary override keys", { daemon: { allowedConfigOverrides: "ipv6-node,enable-ipv6" } }],
+  ["removed override allowlist", { daemon: { allowedConfigOverrides: null } }],
+  ["environment source replacement", { extraEnv: [{ name: "CILIUM_CONFIG_SOURCES", value: "[]" }] }],
+] as const) test(`reject inventory ${name} before Helm`, () => {
+  withHelm((render, called) => {
+    assert.throws(() => render({ nodeIpv6Overrides, values }), /daemon|extraEnv/);
+    assert.equal(called(), false);
+  });
+});
+
 const invalid: [string, unknown, RegExp][] = [
   ["typed single-stack", { ipv6: false }, /ipv6 cannot be disabled/],
   ["invalid topology", { nodeConnectivity: "auto" }, /nodeConnectivity/],
@@ -197,4 +223,26 @@ test("pinned Helm chart emits enforced agent settings", { skip: !process.env.CIL
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("pinned Helm chart limits build-config to selector-scoped ipv6-node inventory", { skip: !process.env.CILIUM_TEST_CHART }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "cilium-inventory-chart-"));
+  try {
+    const values = withHelm(render => render({ nodeIpv6Overrides }));
+    const path = join(dir, "values.json");
+    writeFileSync(path, JSON.stringify(values));
+    const manifest = execFileSync("helm", ["template", "cilium", process.env.CILIUM_TEST_CHART!, "--namespace", "kube-system", "-f", path], { encoding: "utf8" });
+    const objects = parseAllDocuments(manifest).map(doc => { assert.deepEqual(doc.errors, []); return doc.toJSON(); });
+    const template = objects.find(o => o.kind === "DaemonSet" && o.metadata.name === "cilium").spec.template;
+    assert.equal(template.metadata.annotations["nebula.sh/cilium-node-ipv6-checksum"], values.podAnnotations["nebula.sh/cilium-node-ipv6-checksum"]);
+    assert.deepEqual(template.spec.initContainers.find((c: any) => c.name === "config").command, [
+      "cilium-dbg", "build-config", "--source=config-map:cilium-config,cilium-node-config:kube-system", "--allow-config-keys=ipv6-node",
+    ]);
+    assert.deepEqual(template.spec.volumes.find((v: any) => v.name === "tmp"), { name: "tmp", emptyDir: {} });
+    assert.ok(template.spec.containers[0].volumeMounts.some((v: any) => v.name === "tmp" && v.mountPath === "/tmp"));
+    const data = objects.find(o => o.kind === "ConfigMap" && o.metadata.name === "cilium-config").data;
+    assert.equal(data["enable-ipv6"], "true");
+    assert.equal(data["k8s-require-ipv6-pod-cidr"], "true");
+    assert.equal(data["underlay-protocol"], "ipv6");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
