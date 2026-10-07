@@ -14,6 +14,8 @@ export { EcrRepository } from "./ecr";
 export type { EcrRepositoryConfig } from "./ecr";
 export { AwsServiceAccountRegistryIdentity } from "./service-account-registry-identity";
 export type { AwsServiceAccountRegistryIdentityConfig } from "./service-account-registry-identity";
+export { AwsImageRegistry } from "./image-registry";
+export type { AwsImageRegistryConfig, AwsImageRegistryRepository } from "./image-registry";
 export { AwsDlm } from "./dlm";
 export type { AwsDlmConfig, DlmSnapshotSchedule } from "./dlm";
 export { AwsK0sCluster } from "./k0s-cluster";
