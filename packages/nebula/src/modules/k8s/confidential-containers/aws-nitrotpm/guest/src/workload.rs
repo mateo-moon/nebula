@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 pub const PAYLOAD_TYPE: &str = "application/vnd.nebula.aws-coco-workload.v1+json";
 pub const MAX_BYTES: usize = 256 * 1024;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Owners {
     pub keys: Vec<String>,
@@ -46,7 +46,7 @@ pub struct Descriptor {
     pub workload: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Envelope {
     pub payload_type: String,
@@ -54,7 +54,7 @@ pub struct Envelope {
     pub signatures: Vec<EnvelopeSignature>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct EnvelopeSignature {
     pub keyid: String,
@@ -70,18 +70,18 @@ pub struct Verified {
     pub signer_ids: Vec<String>,
 }
 
-fn hex(bytes: impl AsRef<[u8]>) -> String {
+pub(crate) fn hex(bytes: impl AsRef<[u8]>) -> String {
     bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn digest(value: &str) -> bool {
+pub(crate) fn digest(value: &str) -> bool {
     value.len() == 64
         && value
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn decode(value: &str, max: usize) -> Result<Vec<u8>> {
+pub(crate) fn decode(value: &str, max: usize) -> Result<Vec<u8>> {
     ensure!(
         !value.is_empty() && value.len() <= max.div_ceil(3) * 4,
         "encoded field size invalid"
@@ -187,22 +187,20 @@ impl Descriptor {
 }
 
 pub fn signing_bytes(payload: &[u8]) -> Result<Vec<u8>> {
+    signed_bytes(PAYLOAD_TYPE, payload, MAX_BYTES)
+}
+
+pub(crate) fn signed_bytes(kind: &str, payload: &[u8], max: usize) -> Result<Vec<u8>> {
     ensure!(
-        !payload.is_empty() && payload.len() <= MAX_BYTES,
+        !payload.is_empty() && payload.len() <= max,
         "payload size invalid"
     );
-    let mut bytes = format!(
-        "DSSEv1 {} {} {} ",
-        PAYLOAD_TYPE.len(),
-        PAYLOAD_TYPE,
-        payload.len()
-    )
-    .into_bytes();
+    let mut bytes = format!("DSSEv1 {} {} {} ", kind.len(), kind, payload.len()).into_bytes();
     bytes.extend_from_slice(payload);
     Ok(bytes)
 }
 
-pub fn verify(envelope: &Envelope, owners: &Owners, expected: &Expectation) -> Result<Verified> {
+fn owner_keys(owners: &Owners) -> Result<Vec<(String, VerifyingKey)>> {
     ensure!(
         !owners.keys.is_empty()
             && owners.keys.len() <= 16
@@ -222,14 +220,34 @@ pub fn verify(envelope: &Envelope, owners: &Owners, expected: &Expectation) -> R
         ensure!(!key.is_weak(), "weak owner key");
         keys.push((hex(Sha256::digest(&raw)), key));
     }
+    Ok(keys)
+}
+
+impl Owners {
+    pub fn validate(&self) -> Result<()> {
+        owner_keys(self)?;
+        Ok(())
+    }
+}
+
+/// Shared bounded DSSE/Ed25519 verification; each caller fixes its domain and
+/// limits. Returned bytes are the exact bytes authenticated by the signatures.
+pub(crate) fn verify_envelope(
+    envelope: &Envelope,
+    owners: &Owners,
+    kind: &str,
+    max: usize,
+    max_signatures: usize,
+) -> Result<(Vec<u8>, Vec<String>)> {
+    let keys = owner_keys(owners)?;
     ensure!(
-        envelope.payload_type == PAYLOAD_TYPE
+        envelope.payload_type == kind
             && !envelope.signatures.is_empty()
-            && envelope.signatures.len() <= 16,
+            && envelope.signatures.len() <= max_signatures,
         "invalid envelope type or signatures"
     );
-    let payload = decode(&envelope.payload, MAX_BYTES)?;
-    let message = signing_bytes(&payload)?;
+    let payload = decode(&envelope.payload, max)?;
+    let message = signed_bytes(kind, &payload, max)?;
     let mut accepted = BTreeSet::new();
     for entry in &envelope.signatures {
         ensure!(digest(&entry.keyid), "invalid signer hint");
@@ -244,6 +262,11 @@ pub fn verify(envelope: &Envelope, owners: &Owners, expected: &Expectation) -> R
         accepted.len() >= owners.threshold,
         "owner signature threshold not met"
     );
+    Ok((payload, accepted.into_iter().collect()))
+}
+
+pub fn verify(envelope: &Envelope, owners: &Owners, expected: &Expectation) -> Result<Verified> {
+    let (payload, signer_ids) = verify_envelope(envelope, owners, PAYLOAD_TYPE, MAX_BYTES, 16)?;
     // Deserialize the same verified bytes. Typed deserialization rejects duplicate fields.
     let descriptor: Descriptor = serde_json::from_slice(&payload).context("invalid descriptor")?;
     ensure!(descriptor.encode()? == payload, "noncanonical descriptor");
@@ -264,7 +287,7 @@ pub fn verify(envelope: &Envelope, owners: &Owners, expected: &Expectation) -> R
         descriptor,
         descriptor_sha384: hex(measurement),
         pcr15: hex(pcr),
-        signer_ids: accepted.into_iter().collect(),
+        signer_ids,
     })
 }
 

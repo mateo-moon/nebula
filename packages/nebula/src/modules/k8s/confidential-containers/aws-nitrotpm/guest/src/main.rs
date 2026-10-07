@@ -6,6 +6,11 @@ async fn main() {
             eprintln!("workload verification failed");
             std::process::exit(1);
         }
+    } else if args.as_slice() == ["--verify-authority"] {
+        if aws_trustee_bootstrap::authority::verify_stdin().is_err() {
+            eprintln!("authority verification failed");
+            std::process::exit(1);
+        }
     } else if args.as_slice() == ["--transport"] {
         if aws_trustee_bootstrap::transport::provision().await.is_err() {
             eprintln!("CAA transport provisioning failed; guest services remain stopped");

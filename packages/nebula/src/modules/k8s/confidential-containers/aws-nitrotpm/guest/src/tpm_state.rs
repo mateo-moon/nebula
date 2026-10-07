@@ -690,4 +690,4 @@ impl Anchor for HardwareAnchor {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

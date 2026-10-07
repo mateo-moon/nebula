@@ -91,10 +91,10 @@ outputs and secrets under management-admin control; that is insufficient.
    insufficient. Regenerating keys on every restart also fails the lifecycle
    contract for existing encrypted data.
 
-The released appliances, evidence-bound service authentication, workload-owner
-enrollment, end-to-end generic policy binding, evidence locality and protected recovery are
+The released appliances, evidence-bound service authentication, attested
+workload-owner enrollment, end-to-end generic policy binding, evidence locality and replicated recovery are
 **not implemented or qualified in this draft**. Local descriptor, activation and
-encrypted-journal components below are prerequisites. There is no production digest or measurement to
+encrypted-journal and local owner-history components below are prerequisites. There is no production digest or measurement to
 fill in yet. A controller that waits indefinitely for an operator to supply
 these values would not be a self-contained implementation.
 
@@ -228,8 +228,8 @@ change the host's swap configuration or qualify real guest memory protection.
 Native entry-point environment validation is not bypassed in production.
 
 This remains a local component, not a replicated service or permission to release
-keys. Trusted deployment/boot inputs, authenticated genesis, Raft membership,
-quorum read barriers, rotation and attested replacement are still required.
+keys. Trusted deployment/boot inputs, evidence-authenticated enrollment, Raft
+membership, quorum read barriers and attested replacement are still required.
 No boot unit or configuration shortcut activates this backend before that trust
 exists. Returning an empty local journal never authorizes replacing an existing
 deployment's keys.
@@ -250,6 +250,57 @@ The separate [AWS hardware experiment](HARDWARE_QUALIFICATION.md) records which
 local mechanics have now been observed on NitroTPM. It predates the Rust backend
 and does not qualify that implementation, its commit crash points, write limits,
 or the replicated authority's recovery protocol.
+
+## Implemented component: local owner enrollment and rotation
+
+`../aws-authority.ts` and `guest/src/authority.rs` define separate bounded DSSE
+profiles for genesis and owner updates. Genesis commits a public deployment
+nonce, authority software release, allowed runtime releases and the complete
+sorted owner set/threshold. The deployment ID is SHA256 of the canonical
+payload. Verification checks this independently authenticated commitment before
+trusting embedded keys, then verifies the owner threshold and accepted release.
+A controller that supplies both genesis and its hash has established no trust.
+
+The local `ProtectedOwners` facade verifies genesis before provisioning its TPM
+journal, generates a private Ed25519 service identity inside the protected
+process and commits it with the owner ledger before returning public status.
+The seed is kept in zeroing buffers and the TPM-backed encrypted journal; it
+never appears in public status. Recovery requires both the original authority
+identity and deployment commitment, as well as the authenticated boot/release
+identity. Empty state cannot silently generate a replacement identity. A copied
+genesis on a fresh instance produces a different identity and cannot claim the
+original lineage merely by presenting the same deployment ID.
+
+Each owner update binds the original identity, deployment, next generation and
+current history hash. It requires threshold signatures from **both** outgoing
+and incoming owners over the same exact bytes, proving possession of incoming
+keys. The TPM journal must confirm the new state before acknowledgment. An
+ambiguous commit disables status and further updates until protected recovery;
+recovery selects the committed owner set. An exact accepted retry is a no-op,
+still requiring current-owner signatures. Stale/forked updates and revoked
+owner signatures cannot advance the ledger. Owner rotation preserves the service
+identity; it does not rotate workload keys or authorize key release.
+
+This component owns its local journal exclusively. A future replicated service
+must integrate it into one ordered state machine and provide attestation,
+membership, durable identity continuity and a fresh quorum read barrier for
+authorization. Independent local enrollments do not create a shared authority.
+Loss of all authenticated continuity cannot be repaired by trusting a new
+identity from management state. Initial enrollment, identity pinning and
+replacement must be automatic parts of that service protocol, not manual
+steps added to the module contract.
+
+The TypeScript helpers prepare/verify public release intent. Their public
+status projection is not proof of a live service or its freshness. The guest's
+`--verify-authority` diagnostic accepts only bounded public inputs and writes
+public status; it creates no keys and touches no TPM. CI compares Node-signed
+genesis/update chains, encodings, rejected changes and retries with the actual
+Rust executable. Nine Rust unit tests cover commitments, thresholds, continuity,
+revocation, malformed records, failed writes and lost responses. An additional
+isolated software-TPM test exercises actual sealed enrollment, rotation,
+restart/recovery, idempotent retry and rollback refusal. No boot unit enables
+this local facade and no operator bootstrap command is introduced. The actual
+facade still requires qualification in the immutable NitroTPM appliance.
 
 ## Evidence references
 

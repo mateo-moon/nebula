@@ -30,6 +30,10 @@ export { awsNitroTpmLaunchTemplate, awsNitroTpmAssetsUrl } from "./aws-nitrotpm-
 export type { AwsNitroTpmRuntimeConfig, AwsNitroTpmLaunchTemplateConfig } from "./aws-nitrotpm-runtime";
 export { AWS_WORKLOAD_PAYLOAD_TYPE, encodeAwsWorkload, awsWorkloadSigningBytes, verifyAwsWorkload } from "./aws-workload";
 export type { AwsWorkloadOwners, AwsWorkloadDescriptor, AwsWorkloadExpectation, VerifiedAwsWorkload } from "./aws-workload";
+export { AWS_AUTHORITY_GENESIS_PAYLOAD_TYPE, AWS_AUTHORITY_OWNERS_PAYLOAD_TYPE,
+  encodeAwsAuthorityGenesis, awsAuthorityDeploymentId, awsAuthorityGenesisSigningBytes, verifyAwsAuthorityGenesis,
+  initialAwsAuthorityStatus, encodeAwsAuthorityOwnerUpdate, awsAuthorityOwnerSigningBytes, verifyAwsAuthorityOwnerUpdate } from "./aws-authority";
+export type { AwsAuthorityOwners, AwsAuthorityGenesis, AwsAuthorityOwnerUpdate, AwsAuthorityLocalStatus } from "./aws-authority";
 
 /** Kubernetes distribution type */
 export type K8sDistribution = "k8s" | "k3s" | "rke2" | "k0s" | "microk8s";

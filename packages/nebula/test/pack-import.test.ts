@@ -129,7 +129,9 @@ test("importing the package root does no file I/O beyond module loading", () => 
   const installed = realpathSync(join(consumer, "node_modules", "nebula-cdk8s"));
   const result = probeImport({ cwd: consumer, entryDir: consumer, specifier: "nebula-cdk8s" });
   assert.ok(result.exports.includes("BaseConstruct"), "package root did not load");
-  for (const name of ["encodeAwsWorkload", "awsWorkloadSigningBytes", "verifyAwsWorkload"]) {
+  for (const name of ["encodeAwsWorkload", "awsWorkloadSigningBytes", "verifyAwsWorkload",
+    "encodeAwsAuthorityGenesis", "awsAuthorityDeploymentId", "awsAuthorityGenesisSigningBytes", "verifyAwsAuthorityGenesis",
+    "initialAwsAuthorityStatus", "encodeAwsAuthorityOwnerUpdate", "awsAuthorityOwnerSigningBytes", "verifyAwsAuthorityOwnerUpdate"]) {
     assert.ok(result.exports.includes(name), `package root did not export ${name}`);
   }
   assert.ok(result.events.some(e => e.kind === "read"), "the probe recorded no reads at all; it may be blind");

@@ -71,7 +71,7 @@ jobs:
           cargo test --locked --manifest-path guest/Cargo.toml --lib
           cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
           cargo build --locked --manifest-path guest/Cargo.toml --bin aws-trustee-bootstrap
-      - name: Exercise the Rust journal against isolated software TPMs
+      - name: Exercise protected journal and owner history against isolated software TPMs
         run: |
           cargo test --locked --manifest-path guest/Cargo.toml --lib --no-run --message-format=json > "$RUNNER_TEMP/nebula-guest-tests.jsonl"
           mkdir -p "$RUNNER_TEMP/nebula-tpm-test"
@@ -91,16 +91,16 @@ jobs:
             --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=128m \
             -v "$RUNNER_TEMP/nebula-tpm-test/swaps:/proc/swaps:ro" \
             -v "$RUNNER_TEMP/nebula-tpm-test:/tests:ro" -e NEBULA_SWTPM_TEST=1 \
-            nebula-authority-tpm-test /tests/guest-tests --ignored tpm_state::tests::emulator_
+            nebula-authority-tpm-test /tests/guest-tests --ignored emulator_
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
-      - name: Verify Node-signed workloads with the actual Rust guest
+      - name: Verify Node-signed workloads and owner history with the actual Rust guest
         working-directory: packages/nebula
         run: |
           npm install -g pnpm@11.9.0
           pnpm install --frozen-lockfile
-          NEBULA_GUEST_BINARY="$PWD/src/modules/k8s/confidential-containers/aws-nitrotpm/guest/target/debug/aws-trustee-bootstrap" node --import tsx --test test/confidential-containers-workload.test.ts
+          NEBULA_GUEST_BINARY="$PWD/src/modules/k8s/confidential-containers/aws-nitrotpm/guest/target/debug/aws-trustee-bootstrap" node --import tsx --test test/confidential-containers-workload.test.ts test/confidential-containers-authority.test.ts
       - name: Build the unmodified pinned Trustee KBS
         run: |
           git clone https://github.com/confidential-containers/trustee.git "$RUNNER_TEMP/trustee"

@@ -10,13 +10,17 @@ It also corrects the earlier broad instance-identity claim: AWS documents an
 instance ID in the signed NitroTPM module ID, but account/workload authorization
 and safe replica membership still need an authenticated protocol.
 
-Implementation now includes matching TypeScript/Rust signed workload descriptors,
-a measured-policy activation component and an encrypted local authority journal.
+Implementation now includes matching TypeScript/Rust signed workload, genesis
+and owner-update profiles, measured-policy activation and an encrypted local
+authority journal. Local enrollment persists the private authority identity;
+owner rotation requires both owner sets and confirmed TPM history. Recovery
+retains the original identity and requires independent continuity pins.
 Activation is not wired into boot without authenticated owner state. The journal
 now has a TPM seal/NV adapter with separate new-member provisioning and recovery,
 strict public-definition checks and a single hardware lock. The production
 facade exposes no keys, reset procedure, remote TPM setting or operator command.
-Five isolated Rust/software-TPM tests exercise the actual backend and journal;
+Six isolated Rust/software-TPM tests exercise the actual backend, journal and
+owner rotation across restart/rollback;
 the separate eight Python experiments check the lower-level command policies.
 Neither test group touches a host TPM. None of these components
 supplies a deployment-ready release or eliminates the remaining lifecycle work.
@@ -32,14 +36,14 @@ This validates protocol compatibility and local rejection behavior. It does not 
 
 ## Checks completed
 
-- The Nebula module suite passes after integration with the current main branch: 294 tests, with 5 optional chart/Envoy integration skips. All 8 AWS rendering checks and 6 signed-workload checks pass, including Node-to-Rust verification of Unicode/control bytes and all four DSSE base64 variants. CI runs the Envoy integration separately with its pinned image.
+- The Nebula module suite passes after integration with the current main branch: 300 tests, with 5 optional chart/Envoy integration skips. All 8 AWS rendering checks, 6 signed-workload checks and 6 owner-history checks pass. Cross-language cases invoke the actual Rust binary, including accepted/rejected owner-update chains, exact retries, workload Unicode/control bytes and all four DSSE base64 variants. CI runs the Envoy integration separately with its pinned image.
 - The packed package ships every tracked source/asset and loads through a clean consumer without import-time file access. Explicit package exclusions and injected cache fixtures prevent local Rust/Python build state from entering the tarball. The secret mount is `/run/nebula/secrets` with the portable `run-nebula-secrets.mount` unit.
 - Type checking, management-policy conventions, publication guard and its 33 checks pass; a separate secret scan finds no leaks. Only the exact public AWS root and unmodified public Helm archive are content-allowlisted.
 - 49 Python protocol tests pass, including the actual stock KBS/client/offline-KBC integration test. The software-TPM experiments require their separate isolated test environment and do not count as part of this result.
 - Eight software-TPM experiments pass in a disposable native ARM64 Ubuntu 24.04 container with swtpm 0.7.3 and tpm2-tools 5.6. They cover graceful and abrupt restart, PCR4/PCR12 changes, cloning, clearing, PCR15 and unwritten NV state. Negative checks require the exact TPM rejection code; command, transport or resource errors cannot count as successful rejection. The emulator sandbox stayed enabled. No host TPM or cloud resources were used.
 - Real NitroTPM mechanics pass on shared-tenancy `c6a.large` in Ireland: preserved secrets/history after reboot, stop/start and a stop that skips OS shutdown; cloned-disk and TPM-clear refusal; PCR4/PCR12 rejection; exact PCR15 measurement/reset refusal; and detection of an older root-volume snapshot by the surviving newer TPM history. A 16-write sample measured 138.8–154.8 ms per NV-extend CLI call. The [hardware report](HARDWARE_QUALIFICATION.md) records the collector repair, scope and cleanup. This mutable test image does not qualify immutable boot, the Rust hardware adapter, fresh attestation or quorum recovery.
-- 29 native Rust unit tests pass, including workload signatures, activation ordering, encrypted journal crash/replay handling, strict TPM public-definition checks, restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied. Five emulator tests are opt-in on Linux.
-- All 36 Linux Rust tests pass, including five new actual TPM/journal integration tests and the two normally ignored tmpfs checks, in an isolated native ARM64 container with private restricted tmpfs and a **test-only no-swap proc fixture**. Recovery, rollback/substitution refusal, graceful/abrupt restart, cloning/clearing, changed boot, missing/unsafe NV, unavailable transport and a single hardware writer are covered. Local tpm2-tools 5.4 and the CI runtime's 5.6 presentation are checked. This does not qualify the Rust adapter on NitroTPM or generic image boot; activation's PCR tests still use an internal mock.
+- 38 native Rust unit tests pass, including signed genesis/rotation, workload signatures, activation ordering, encrypted journal crash/replay handling, strict TPM public-definition checks, restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied. Six emulator tests are opt-in on Linux. Owner tests cover independent commitments, both signature thresholds (including disjoint 16-of-16 sets), revoked keys, identity continuity, ambiguous writes, exact retries and malformed recovery records.
+- All 46 Linux Rust tests pass, including six actual TPM/journal/owner-history integration tests and two tmpfs checks, in an isolated native ARM64 container with private restricted tmpfs and a **test-only no-swap proc fixture**. Recovery, rollback/substitution refusal, graceful/abrupt restart, cloning/clearing, changed boot, missing/unsafe NV, unavailable transport and a single hardware writer are covered. Local tpm2-tools 5.4 and the CI runtime's 5.6 presentation are checked. This does not qualify the Rust adapter on NitroTPM or generic image boot; activation's PCR tests still use an internal mock.
 - The actual swap-enabled local container first refused provisioning, as intended. The positive fixture test is not proof of no-swap guest operation.
 - Negative cases include PCR4/PCR12 changes or omission, wrong PCR digest/length/schema, stale/future evidence, invalid signatures/certificates, rogue roots, nonce/key substitution, persistent and concurrent replay, unknown/ambiguous workload approval, different resource requests, query overrides, wrong issuer/audience, untrusted JWT signer, wrong recipient private key, unavailable KBS and missing/permissive KBS startup policy.
 - Public AWS root fingerprint checked against its NitroTPM documentation. The separate stock Trustee build checkout is clean. Attestation-protocol evidence remains synthetic; the separate hardware experiments exercise local TPM commands, not signed-document verification.

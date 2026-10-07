@@ -2,7 +2,7 @@ use super::*;
 // Parallel fork/exec briefly inherits other tests' flock descriptors until
 // CLOEXEC takes effect. Serialize process-based fixtures; contention itself is
 // tested explicitly with two drivers pointing at the same emulated hardware.
-static EMULATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static EMULATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
 use std::{
     net::{TcpListener, TcpStream},
     os::unix::fs::PermissionsExt,
@@ -87,7 +87,7 @@ fn sealed_public_rejects_password_auth_migration_and_different_policy() {
     assert!(check_seal_public(&public[..79], &policy).is_err());
 }
 
-struct Emulator {
+pub(crate) struct Emulator {
     root: tempfile::TempDir,
     port: u16,
     process: Option<Child>,
@@ -95,7 +95,7 @@ struct Emulator {
 }
 
 impl Emulator {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         assert_eq!(
             std::env::var("NEBULA_SWTPM_TEST").as_deref(),
             Ok("1"),
@@ -145,7 +145,7 @@ impl Emulator {
     fn endpoint(&self) -> String {
         format!("swtpm:host=127.0.0.1,port={}", self.port)
     }
-    fn disk(&self) -> std::path::PathBuf {
+    pub(crate) fn disk(&self) -> std::path::PathBuf {
         self.root.path().join("disk")
     }
     fn driver(&self) -> Driver {
@@ -214,13 +214,28 @@ impl Emulator {
     }
 
     fn provision(&self) -> TpmJournal {
-        provision(&self.disk(), [7; 32], &self.boot, self.driver()).unwrap()
+        self.provision_for([7; 32])
     }
     fn recover(&self) -> Result<(TpmJournal, Option<Snapshot>)> {
-        recover(&self.disk(), [7; 32], &self.boot, self.driver())
+        self.recover_for([7; 32])
     }
 
-    fn value(&self) -> Vec<u8> {
+    pub(crate) fn provision_for(&self, deployment: [u8; 32]) -> TpmJournal {
+        provision(&self.disk(), deployment, &self.boot, self.driver()).unwrap()
+    }
+    pub(crate) fn recover_for(
+        &self,
+        deployment: [u8; 32],
+    ) -> Result<(TpmJournal, Option<Snapshot>)> {
+        recover(&self.disk(), deployment, &self.boot, self.driver())
+    }
+    pub(crate) fn restart(&mut self) {
+        self.command("tpm2_shutdown", &["-c"]);
+        self.stop();
+        self.start();
+    }
+
+    pub(crate) fn value(&self) -> Vec<u8> {
         self.command(
             "tpm2_nvread",
             &[INDEX, "-C", INDEX, "-s", "48", "-o", "value"],
