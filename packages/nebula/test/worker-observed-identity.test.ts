@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Testing } from "cdk8s";
-import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
+import { AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS, AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 import { AwsWorkerLaunchTemplateSetup, WORKER_LAUNCH_TEMPLATE } from "../src/modules/infra/aws/worker-launch-template";
 
 const dir = mkdtempSync(join(tmpdir(), "worker-template-"));
@@ -16,13 +16,14 @@ execFileSync("go", ["build", "-o", binary, "."],
     env: { ...process.env, GOCACHE: join(tmpdir(), "nebula-worker-go-cache"), GOTOOLCHAIN: "local", GOPROXY: "off" }, timeout: 120000 });
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-function manifests(dataVolume: "existing" | "fresh" | "none" = "existing") {
+function manifests(dataVolume: "existing" | "fresh" | "none" = "existing", preK0sCommands?: readonly string[]) {
   const chart = Testing.chart();
   new AwsWorkerLaunchTemplateSetup(chart, "setup");
   const fleet = new AwsWorkerFleet(chart, "fleet", {
     namePrefix: "test", clusterName: "test", k0sVersion: "v1.36.3+k0s.2", observedIdentity: true,
     sshPublicKey: "fixture-public-key", sshSecretName: "test-ssh",
     dataVgName: "test-vg", tagDomain: "example.test", eipPurpose: "test-worker",
+    preK0sCommands,
   });
   fleet.addEip("test-node", "eu-central-1", { existing: true, retain: true });
   fleet.addNode({ geo: "eu", region: "eu-central-1", az: "eu-central-1a",
@@ -63,6 +64,16 @@ function render(observed: Record<string, any>, composite = xr) {
   return out.split(/^---$/m).map(s => s.trim()).filter(Boolean).map(s => JSON.parse(s));
 }
 const templateOf = (objects: any[]) => objects.find(r => r.kind === "LaunchTemplate");
+
+test("ownership handoff can preserve bootstrap commands without changing any other worker resource", () => {
+  const baseline = manifests();
+  const commands = AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS;
+  const preserved = manifests("existing", commands);
+  const bootstrap = preserved.find(r => r.kind === "K0sWorkerConfigTemplate")!;
+  assert.deepEqual(bootstrap.spec.template.spec.preK0sCommands, commands);
+  bootstrap.spec.template.spec.preK0sCommands = baseline.find(r => r.kind === "K0sWorkerConfigTemplate")!.spec.template.spec.preK0sCommands;
+  assert.deepEqual(preserved, baseline);
+});
 
 test("observed workers declare no cloud IDs, and retained disks/addresses cannot recreate or delete", () => {
   assert.ok(!resources.some(r => r.kind === "LaunchTemplate"));

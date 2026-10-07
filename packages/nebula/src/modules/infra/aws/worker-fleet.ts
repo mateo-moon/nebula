@@ -67,6 +67,14 @@ import {
   RolePolicyAttachment,
 } from "#imports/iam.aws.upbound.io";
 
+/** Original AWS worker address discovery: IMDSv2 private IPv4 and on-link IPv6.
+ * Select this preset when retaining an existing fleet during ownership adoption;
+ * replacing its bootstrap commands is a separate worker rollout. */
+export const AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
+  "sh -c 'TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\"); curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4 > /run/node-ip'",
+  "sh -c 'IFACE=$(ip route show default | awk \"{print \\$5}\" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev \"$IFACE\" scope global 2>/dev/null | awk \"/inet6/{print \\$2; exit}\" | cut -d/ -f1); [ -n \"$IP6\" ] && break; sleep 2; done; echo \"$IP6\" > /run/node-ip6'"
+];
+
 export interface AwsWorkerFleetPort {
   port: number;
   protocol: string;
@@ -127,6 +135,11 @@ export interface AwsWorkerFleetOptions {
    *  keep the k0s default (v4 kube-dns) — cross-region pods then depend on
    *  cross-region v4 pod routing, which private node identity does not have. */
   clusterDns?: string;
+  /** Complete pre-k0s commands. Existing fleets can preserve their current
+   * bootstrap during a resource ownership handoff, then adopt newer discovery
+   * commands in a separately reviewed rollout. Defaults to dual-stack on-link
+   * address discovery. These commands must populate /run/node-ip{,6}. */
+  preK0sCommands?: readonly string[];
   /** Namespace for the adoption objects (default "default"). */
   namespace?: string;
   /** Crossplane ProviderConfig (default "default"). */
@@ -1191,7 +1204,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
             // the SSH provisioning entrance and, where named, the P2P
             // endpoint. The GUA is delivered by RA/DHCPv6 — bounded wait,
             // then record it.
-            preK0sCommands: [...NODE_IP_DISCOVERY_COMMANDS],
+            preK0sCommands: [...(o.preK0sCommands ?? NODE_IP_DISCOVERY_COMMANDS)],
             // Commands are executed through the node's shell (SSH exec), so
             // the $(cat ...) substitutes there — the address never appears
             // in git.
