@@ -194,7 +194,12 @@ key rotation and attested replacement are still required.
 `tests/test_tpm_persistence.py` runs only in an explicitly selected, disposable
 software-TPM CI environment. It exercises a PCR-bound seal, owner-authorized
 deletion protection, policy-only NV extension, preserved-TPM restart, changed
-PCR4/PCR12, TPM clear, and non-resettable PCR15 measurement. Test secrets live in
+PCR4/PCR12, TPM clear, cloned sealed blobs, and non-resettable PCR15 measurement.
+Both graceful shutdown and abrupt process termination preserve acknowledged
+test state. Each negative assertion checks the intended TPM response code.
+A newly defined index is explicitly unwritten: the hardware adapter must
+authenticate its public definition/flags rather than treat any failed read as
+an empty journal. Test secrets live in
 the disposable fixture; these commands are not module-user operations. Emulator
 results establish TCG command behavior, not NitroTPM's AWS persistence guarantees,
 write limits, snapshot behavior or support for the proposed recovery protocol.
