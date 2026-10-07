@@ -10,6 +10,7 @@ const SYNC_WAVE = "argocd.argoproj.io/sync-wave";
 const workerKinds = [
   ["ec2.aws.upbound.io/v1beta1", "EIP"],
   ["ec2.aws.upbound.io/v1beta1", "LaunchTemplate"],
+  ["nebula.io/v1alpha1", "XAwsWorkerLaunchTemplate"],
   ["nebula.io/v1alpha1", "XWorker"],
   ["autoscaling.aws.upbound.io/v1beta1", "AutoscalingGroup"],
   ["bootstrap.cluster.x-k8s.io/v1beta2", "K0sWorkerConfigTemplate"],
@@ -41,7 +42,7 @@ test("app-owned workers prune in drain-before-termination order; shared resource
     applyClusterResourcePolicy(chart);
     assert.deepEqual(Testing.synth(chart), first);
     const owned = first.filter(r => r.metadata.annotations[WORKLOAD_OWNER] && workerKinds.some(([, kind]) => r.kind === kind));
-    assert.equal(owned.length, 7);
+    assert.equal(owned.length, 8);
     for (const r of owned) assert.equal(r.metadata.annotations[SYNC_OPTIONS], "Prune=true,Delete=true", r.kind);
     const wave = (kind: string) => Number(owned.find(r => r.kind === kind).metadata.annotations[SYNC_WAVE]);
     assert.equal(wave("MachineDeployment"), 7);
@@ -50,6 +51,8 @@ test("app-owned workers prune in drain-before-termination order; shared resource
     assert.ok(wave("RemoteMachineTemplate") > wave("AutoscalingGroup"));
     assert.ok(wave("AutoscalingGroup") > wave("XWorker"));
     assert.ok(wave("XWorker") > wave("LaunchTemplate"));
+    assert.equal(wave("XAwsWorkerLaunchTemplate"), -3);
+    assert.equal(wave("XAwsWorkerLaunchTemplate"), wave("LaunchTemplate"));
     assert.ok(wave("LaunchTemplate") > wave("EIP"));
     for (const name of ["system-worker", "data", "unknown"]) {
       const r = first.find(r => r.metadata.name === name);
@@ -85,4 +88,3 @@ test("worker options cannot collapse or invert deletion ordering", () => {
     assert.throws(() => applyClusterResourcePolicy(chart), /PruneLast|positive sync wave/);
   }
 });
-

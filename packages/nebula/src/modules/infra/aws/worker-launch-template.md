@@ -4,9 +4,11 @@ Install `AwsWorkerLaunchTemplateSetup` once on management. It follows the
 existing `WorkerSetup` and `EipDnsRecordSetup` model: read-only
 provider-kubernetes Objects observe named AWS managed resources, then a
 composition supplies their cloud-assigned IDs to the worker LaunchTemplate.
-The provider-kubernetes identity needs read access to EIPs and EBSVolumes.
+The provider-kubernetes identity needs read access to EIPs, EBSVolumes,
+SecurityGroups and LaunchTemplates. These observers create no cloud services.
 
-Enable `observedIdentity: true` on `AwsWorkerFleet`. Keep declaring the EIP by
+Enable `observedIdentity: true` on `AwsWorkerFleet`, or override it on an
+individual node to migrate one worker at a time. Keep declaring the EIP by
 its stable managed-resource name. A new data disk uses
 `dataVolume: { sizeGi: 100, createFresh: true }`; an already bound retained disk
 uses `dataVolume: { sizeGi: 100, existing: true }`. Both preserve the existing
@@ -22,9 +24,26 @@ bindings with the management cluster; do not switch retained data to
 
 The composition checks names, desired and observed regions/AZ, external-name
 binding equality, the EIP allocation ID and ID syntax before
-rendering a LaunchTemplate. An ASG referencing its name cannot launch a fresh
+rendering a LaunchTemplate. Both the observers and their source resources must
+report Ready and Synced; an observed generation, when supplied, must be current.
+All observed AWS resources must use the LT's ProviderConfig. That provider's
+credentials are the account boundary; the module does not independently check
+a numeric AWS account ID, and recovery must verify that credential binding.
+The named security group supplies the resolved `securityGroups` value alongside
+`securityGroupRefs`, preserving the complete atomic network-interface array
+under server-side apply. No copied security-group ID is needed in source.
+An ASG referencing its name cannot launch a fresh
 instance until that template exists. Temporary observation loss preserves a
 previously composed template instead of removing it from desired state.
+Invalid observations explicitly mark desired resources not ready, so
+`function-auto-ready` cannot mistake a healthy observer with invalid bindings
+for a ready worker. The XR exposes `status.bindingsReady` and
+`status.ownershipReady` and `status.launchTemplateReady`; check these alongside
+its Ready/Synced conditions. The current LT must have reconciled its current
+generation even when a provider-kubernetes observer still holds an older
+healthy snapshot. After a spec change, allow both provider poll cycles to
+propagate; verify the LT's current generation and Synced observation again
+before treating an activation as complete.
 Bootstrap waits for AWS-confirmed attachment to its own instance, disables
 DeleteOnTermination for that data attachment and identifies the disk by EBS
 serial. Existing disks must already contain the expected single-disk VG;
@@ -40,7 +59,7 @@ rename. Perform it through reviewed, verified stages:
 Crossplane v2 applies composed resources using server-side apply with a field
 manager unique to the XR and forced ownership. Its controller explicitly relies
 on Kubernetes merging owner references and rejecting a different existing
-controller reference ([controller source, v2.0.2](https://github.com/crossplane/crossplane/blob/v2.0.2/internal/controller/apiextensions/composite/composition_functions.go#L500)).
+controller reference ([controller source, v2.1.3](https://github.com/crossplane/crossplane/blob/v2.1.3/internal/controller/apiextensions/composite/composition_functions.go#L543)).
 A named LT with no controller owner can therefore be adopted without a new
 Kubernetes UID; external-name owned by the AWS provider is omitted from the new
 composition's metadata and preserved. Verify those conditions on the deployed
@@ -53,16 +72,47 @@ version before activating the migration.
    its Git value. Use resource-scoped Argo ignoreDifferences together with
    RespectIgnoreDifferences, and verify the binding remains on a sync. Merely
    deleting an annotation from Git is not a safe adoption operation.
-3. Enable observed mode for one worker. Keep its LT, ASG, data MR, EIP, pool,
-   MachineDeployment, hostname, namespace, VG and PVC names unchanged. Confirm
-   the same LT MR UID and external ID now have the intended XR owner and that
-   the bootstrap contains the original observed identities. A raw LT protected
-   in the previous stage must not be pruned during this transition.
-4. Remove obsolete Argo tracking only through the verified ownership handoff;
-   do not leave two reconcilers applying different desired LT specs. Keep
-   future worker deletion ordered: drain MachineDeployment before ASG, then
-   XWorker, XAwsWorkerLaunchTemplate and worker-owned EIP. Shared identities and
-   data remain protected.
+3. Enable `observedIdentity: true` and `launchTemplateHandoff: "retain"` on
+   one worker. This replaces the raw LT declaration with an
+   `XAwsWorkerLaunchTemplate` at the same sync wave, while the old raw resource
+   remains protected from pruning. The composition first observes the existing
+   LT, records its UID and external ID in `status.handoff`, and adopts that
+   named resource with Orphan and no Create/Delete. Every existing cloud-spec
+   field, including bootstrap bytes, remains unchanged in this stage. Missing
+   resources, conflicting bindings and another controller owner fail closed.
+   The retained XR itself carries Prune/Delete=false until activation, so
+   removing its directory during the handoff cannot garbage-collect its LT MR
+   and lose the retained cloud binding.
+4. Verify the same LT UID and external ID have the intended XR controller
+   owner, the XR reports bindings/ownership ready, and Argo no longer desires
+   the raw LT. Then change only `launchTemplateHandoff` to `"activate"` in Git.
+   Activation requires the recorded UID and binding to match the observed LT
+   owned by this XR. One composed-resource apply sets all four obsolete Argo
+   tracking/sync/compare/wave annotations to empty strings and restores
+   deletionPolicy Delete plus the Delete management policy. Create stays off
+   for an adopted template. Empty tracking is unparseable by Argo's annotation
+   tracker, so it stops treating the raw LT as application-owned; the
+   composition never copies the old tracking identity or provider external ID.
+   Null annotation values are invalid in go-templating v0.9.0; omission alone
+   would leave the old manager's value. Do not remove or revert handoff mode
+   after activation.
+5. The XR remains application-owned at wave -3. Keep foreground pruning and
+   the existing reverse-wave order: drain MachineDeployment, remove its
+   bootstrap/remote templates, then ASG, XWorker and XAwsWorkerLaunchTemplate.
+   Kubernetes foreground garbage collection waits on the LT's provider
+   finalizer, and its restored Delete policy cleans up the cloud template.
+   Leaving Orphan after activation would leak that template. Retained EIP/data
+   declarations must keep their own Prune/Delete=false protections and
+   no-Delete cloud policies; an EIP's cloud-retain option alone does not protect
+   the Kubernetes binding from Argo pruning.
+
+The handoff mechanics were checked against Crossplane v2.1.3, Argo v3.3.0,
+go-templating v0.9.0 and auto-ready v0.4.2. Local execution of the installed
+Go-template function preserves the empty annotation strings. Forced SSA server
+dry runs against existing templates preserve UID, external ID, provider
+finalizers and every unchanged cloud field while moving those annotation keys
+to the composed field manager. These checks do not substitute for verifying
+the prerequisite protections and observed owner on a real GitOps rollout.
 
 Publishing a new LT version does not refresh a running ASG instance. A runtime
 replacement is separately observable and must preserve data attachment,

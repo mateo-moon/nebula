@@ -185,6 +185,11 @@ export interface AwsWorkerFleetRegion {
 export interface AwsWorkerFleetNode {
   /** Node name — hostname AND k8s node name AND MR name. */
   name: string;
+  /** Override the fleet default to migrate one existing worker at a time. */
+  observedIdentity?: boolean;
+  /** Adopt an existing LT with retention first; activate its normal deletion
+   * lifecycle only after the observed ownership and cloud binding match. */
+  launchTemplateHandoff?: "retain" | "activate";
   /** Per-resource metadata for a staged GitOps ownership handoff. This does
    * not change the EC2 launch specification or trigger instance replacement. */
   launchTemplateAnnotations?: Record<string, string>;
@@ -681,13 +686,17 @@ export class AwsWorkerFleet extends Construct {
     return p;
   }
 
+  private usesObservedIdentity(node: AwsWorkerFleetNode): boolean {
+    return node.observedIdentity ?? this.options.observedIdentity ?? false;
+  }
+
   private userData(node: AwsWorkerFleetNode, region: AwsWorkerFleetRegion): string {
     const o = this.options;
     // Data volume -> LVM VG. create-if-absent ONLY: on instance replacement
     // the volume re-attaches carrying its data — vgcreate on a populated PV
     // would destroy exactly what this design preserves.
     const lvmSection = node.dataVolume
-      ? this.options.observedIdentity ? this.observedVolumeInit(node.dataVolume) : `
+      ? this.usesObservedIdentity(node) ? this.observedVolumeInit(node.dataVolume) : `
 ROOT_PART=$(findmnt -no SOURCE /)
 ROOT_DISK=/dev/$(lsblk -no PKNAME "$ROOT_PART")
 DEV=""
@@ -728,7 +737,7 @@ systemctl enable --now pvresize.timer
 `
       : "";
     return `#!/bin/bash
-${this.options.observedIdentity ? "set -ex" : "set -x"}
+${this.usesObservedIdentity(node) ? "set -ex" : "set -x"}
 exec >> /var/log/${o.namePrefix}-worker-init.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
 hostnamectl set-hostname ${node.name}
@@ -824,9 +833,9 @@ systemctl enable --now pvresize.timer
   ): string {
     const r = region.region;
     const vol = node.dataVolume
-      ? (this.options.observedIdentity ? WORKER_VOLUME_PLACEHOLDER : node.dataVolume.volumeId)
+      ? (this.usesObservedIdentity(node) ? WORKER_VOLUME_PLACEHOLDER : node.dataVolume.volumeId)
       : undefined;
-    const allocationId = this.options.observedIdentity ? WORKER_EIP_PLACEHOLDER : node.allocationId;
+    const allocationId = this.usesObservedIdentity(node) ? WORKER_EIP_PLACEHOLDER : node.allocationId;
     return `
 TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
 IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
@@ -842,7 +851,7 @@ while :; do
   fi
   sleep 10
 done
-${this.options.observedIdentity ? `DATA_DEVICE=$(aws ec2 describe-volumes --region ${r} --volume-ids ${vol} --query "Volumes[0].Attachments[?InstanceId=='$IID'].Device | [0]" --output text)
+${this.usesObservedIdentity(node) ? `DATA_DEVICE=$(aws ec2 describe-volumes --region ${r} --volume-ids ${vol} --query "Volumes[0].Attachments[?InstanceId=='$IID'].Device | [0]" --output text)
 case "$DATA_DEVICE" in /dev/sd[f-z]|/dev/xvd[f-z]) ;; *) echo 'Unexpected data-volume attachment device' >&2; exit 1;; esac
 retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --block-device-mappings "[{\\\"DeviceName\\\":\\\"$DATA_DEVICE\\\",\\\"Ebs\\\":{\\\"DeleteOnTermination\\\":false}}]"` : ""}` : ""}
 `;
@@ -862,6 +871,8 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
     const o = this.options;
     const p = this.prefix(region);
     const dv = node.dataVolume;
+    if (node.launchTemplateHandoff && !this.usesObservedIdentity(node))
+      throw new Error(`${node.name}: launchTemplateHandoff requires observedIdentity`);
     if (dv && [Boolean(dv.volumeId), dv.createFresh === true, dv.existing === true].filter(Boolean).length !== 1)
       throw new Error(`${node.name}: dataVolume requires exactly one of volumeId, existing or createFresh`);
     const dataVolumeMrName = dv ? (dv.mrName ?? `${node.name}-data`) : undefined;
@@ -901,9 +912,9 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
         },
       });
     }
-    if (!o.observedIdentity && !node.allocationId)
+    if (!this.usesObservedIdentity(node) && !node.allocationId)
       throw new Error(`${node.name}: a worker node requires allocationId`);
-    if (!o.observedIdentity && dv && !("volumeId" in dv && dv.volumeId))
+    if (!this.usesObservedIdentity(node) && dv && !("volumeId" in dv && dv.volumeId))
       throw new Error(
         `${node.name}: a worker node's dataVolume must be an adopted volumeId`,
       );
@@ -1046,10 +1057,12 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
         providerConfigRef: this.pcRef,
       },
     };
-    if (o.observedIdentity) {
+    if (this.usesObservedIdentity(node)) {
       new AwsWorkerLaunchTemplate(this, `${node.name}-launch-template`, {
         eipName: node.eipName ?? node.name,
+        securityGroupName: `${p}-sg`,
         ...(node.dataVolume ? { dataVolumeName: node.dataVolume.mrName ?? `${node.name}-data` } : {}),
+        ...(node.launchTemplateHandoff ? { handoff: node.launchTemplateHandoff } : {}),
         availabilityZone: region.az,
         kubeProviderConfigName: o.kubeProviderConfigName,
         launchTemplate,
