@@ -5,6 +5,9 @@ users. `.github/workflows/release-coco-aws.yml` builds the guest components,
 encrypted canary/policy, immutable authority/runtime disks, controller image and
 three owner-client platforms, then publishes an explicitly unqualified candidate.
 The module imports approved released disks automatically using EBS direct APIs.
+Publication requires the source guard. Main-branch pushes build candidates;
+maintainers can explicitly dispatch a candidate build for another committed
+revision. These builds receive no deployment credentials or workload keys.
 
 `build.py binaries` pins Kata, guest-components and CAA source revisions and
 builds against the same pinned AL2023 userspace as the appliances. Kata has

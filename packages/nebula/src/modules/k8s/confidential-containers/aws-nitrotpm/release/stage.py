@@ -37,6 +37,15 @@ def stage(base, caa, binaries, asvk, canary, releasever, role, output):
     names = {"aws-trustee-bootstrap"} | ({"kata-agent", "confidential-data-hub", "agent-protocol-forwarder"} if role == "runtime" else set())
     require(set(binaries) == names, "unexpected appliance binary set")
     shutil.copytree(base / BASE_DESCRIPTION, output)
+    # KIWI already runs this build hook as root. The upstream example's sudo
+    # invokes PAM inside the isolated builder and can fail without a host login
+    # database. Call the same measured-image tool directly; guest contents and
+    # its measurement algorithm are unchanged by this build-only adjustment.
+    hook = output / "edit_boot_install.sh"
+    original = hook.read_text()
+    invocation = 'if sudo "$root_mount/usr/bin/nitro-tpm-pcr-compute"'
+    require(original.count(invocation) == 1, "upstream measurement hook changed")
+    hook.write_text(original.replace(invocation, 'if "$root_mount/usr/bin/nitro-tpm-pcr-compute"'))
     root = output / "root"
     overlay = Path(__file__).resolve().parents[1] / "image/root"
     for relative in ("etc/systemd/journald.conf.d/90-no-disk.conf", "etc/systemd/coredump.conf.d/90-no-dump.conf"):
@@ -79,8 +88,8 @@ def stage(base, caa, binaries, asvk, canary, releasever, role, output):
     # executable/configuration paths would defeat require_readonly_file().
     image.set("filesystem", "ext4")
     for key in list(image.attrib):
-        if key.startswith("overlayroot"): del image.attrib[key]
-    image.set("kernelcmdline", "ro rd.shell=0 systemd.getty_auto=false rd.kiwi.verity_options=panic-on-corruption")
+        if key.startswith("overlayroot") or key == "erofscompression": del image.attrib[key]
+    image.set("kernelcmdline", "ro console=ttyS0,115200n8 rd.shell=0 systemd.getty_auto=false rd.kiwi.verity_options=panic-on-corruption")
     tree.find("./repository/source").set("path", f"https://cdn.amazonlinux.com/al2023/core/mirrors/{releasever}/$basearch/mirror.list")
     packages = tree.find('./packages[@type="image"]')
     for item in packages.findall("namedCollection"):

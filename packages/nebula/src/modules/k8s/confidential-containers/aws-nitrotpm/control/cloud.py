@@ -455,7 +455,7 @@ class Cloud:
                     {"ResourceType": "volume", "Tags": self.tags("runtime-root")}]})
         return name
 
-    def delete(self):
+    def delete(self, cursors=None):
         """One deletion pass, solely over tags in this installation's namespace.
 
         The Kubernetes finalizer is retained until all owned AWS dependencies
@@ -468,6 +468,10 @@ class Cloud:
             values = self.items(operation, key, **parameters)
             changed |= bool(values)
             return values
+        # CAA always launches through this template. Remove it before sweeping
+        # instances so a queued Pod cannot recreate a guest during teardown.
+        for template in inventory('describe_launch_templates', 'LaunchTemplates', Filters=self.filters()):
+            self.remove("delete_launch_template", LaunchTemplateId=self.owned(template)["LaunchTemplateId"])
         reservations = self.items('describe_instances', 'Reservations', Filters=self.filters())
         if any(instance["State"]["Name"] == "shutting-down" for reservation in reservations for instance in reservation["Instances"]):
             raise Pending("TerminatingOwnedGuests")
@@ -482,8 +486,6 @@ class Cloud:
             if volume["State"] != "available":
                 raise Pending("DetachingOwnedVolumes")
             self.remove("delete_volume", VolumeId=volume["VolumeId"])
-        for template in inventory('describe_launch_templates', 'LaunchTemplates', Filters=self.filters()):
-            self.remove("delete_launch_template", LaunchTemplateId=self.owned(template)["LaunchTemplateId"])
         for image in inventory('describe_images', 'Images', Owners=["self"], Filters=self.filters()):
             self.remove("deregister_image", ImageId=self.owned(image)["ImageId"])
         for snapshot in inventory('describe_snapshots', 'Snapshots', OwnerIds=["self"], Filters=self.filters()):
@@ -524,8 +526,15 @@ class Cloud:
                 self.ec2.detach_internet_gateway(InternetGatewayId=gateway["InternetGatewayId"], VpcId=attachment["VpcId"])
             self.remove("delete_internet_gateway", InternetGatewayId=gateway["InternetGatewayId"])
         try:
-            tags = self.s3.get_bucket_tagging(Bucket=self.bucket)["TagSet"]
-            require({tag["Key"]: tag["Value"] for tag in tags}.get(OWNER) == self.deployment, "foreign bucket refused")
+            try:
+                tags = self.s3.get_bucket_tagging(Bucket=self.bucket)["TagSet"]
+                require({tag["Key"]: tag["Value"] for tag in tags}.get(OWNER) == self.deployment, "foreign bucket refused")
+            except ClientError as error:
+                # Deletion can interrupt the same create-before-tag gap that
+                # storage() resumes. Never create a bucket just to delete it.
+                if not absent(error, "NoSuchTagSet") or (cursors or {}).get("creatingBucket") != self.bucket:
+                    raise
+                self.s3.head_bucket(Bucket=self.bucket, ExpectedBucketOwner=self.account)
             for page in self.s3.get_paginator("list_objects_v2").paginate(Bucket=self.bucket):
                 objects = [{"Key": item["Key"]} for item in page.get("Contents", [])]
                 if objects:

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import hashlib
 import unittest
+from unittest.mock import MagicMock
 
 import boto3
 from botocore.stub import Stubber, ANY
@@ -59,11 +60,33 @@ class CloudTests(unittest.TestCase):
     def test_owned_inventory_reads_every_page_and_deletion_waits_for_termination(self):
         cloud = self.make_cloud()
         with Stubber(cloud.ec2) as ec2:
+            ec2.add_response("describe_launch_templates", {"LaunchTemplates": [{"LaunchTemplateId": "lt-0123456789abcdef0",
+                "Tags": cloud.tags("runtime-template")} ]}, {"Filters": cloud.filters()})
+            ec2.add_response("delete_launch_template", {}, {"LaunchTemplateId": "lt-0123456789abcdef0"})
             ec2.add_response("describe_instances", {"Reservations": [], "NextToken": "second-page"}, {"Filters": cloud.filters()})
             ec2.add_response("describe_instances", {"Reservations": [{"Instances": [{"InstanceId": "i-0123456789abcdef0",
                 "State": {"Name": "shutting-down"}, "Tags": cloud.tags("authority-0")}]}]}, {"Filters": cloud.filters(), "NextToken": "second-page"})
             with self.assertRaisesRegex(Pending, "TerminatingOwnedGuests"): cloud.delete()
             ec2.assert_no_pending_responses()
+
+    def test_bucket_cleanup_recovers_only_a_recorded_interrupted_creation(self):
+        for recorded in (False, True):
+            with self.subTest(recorded=recorded):
+                cloud = self.make_cloud()
+                cloud.items = MagicMock(return_value=[])
+                with Stubber(cloud.s3) as s3:
+                    s3.add_client_error("get_bucket_tagging", service_error_code="NoSuchTagSet",
+                        expected_params={"Bucket": cloud.bucket})
+                    if recorded:
+                        s3.add_response("head_bucket", {}, {"Bucket": cloud.bucket, "ExpectedBucketOwner": cloud.account})
+                        s3.add_response("list_objects_v2", {"IsTruncated": False}, {"Bucket": cloud.bucket})
+                        s3.add_response("delete_bucket", {}, {"Bucket": cloud.bucket})
+                        with self.assertRaisesRegex(Pending, "ConfirmingOwnedResourcesDeleted"):
+                            cloud.delete({"creatingBucket": cloud.bucket})
+                    else:
+                        from botocore.exceptions import ClientError
+                        with self.assertRaises(ClientError): cloud.delete({})
+                    s3.assert_no_pending_responses()
 
     def test_foreign_and_ambiguous_resources_cannot_be_adopted(self):
         cloud = self.make_cloud()

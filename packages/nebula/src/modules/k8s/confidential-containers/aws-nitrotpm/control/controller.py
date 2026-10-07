@@ -228,7 +228,7 @@ class Controller:
         try:
             if metadata.get("deletionTimestamp"):
                 self.checkpoint("Deleting", cursors)
-                cloud.delete()
+                cloud.delete(cursors)
                 self.kube.patch(self.path, {"metadata": {"resourceVersion": self.obj["metadata"]["resourceVersion"],
                     "finalizers": [f for f in finalizers if f != FINALIZER]}})
                 return

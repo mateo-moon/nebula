@@ -68,7 +68,10 @@ function validateRuntime(config: AwsNitroTpmRuntimeConfig): void {
 }
 
 export function validateAwsNitroTpmConfig(config: ConfidentialContainersConfig): void {
-  if (isManagedAwsCoco(config.awsNitroTpm)) validateManagedAwsCoco(config.awsNitroTpm);
+  if (isManagedAwsCoco(config.awsNitroTpm)) {
+    requireConfig(config.createRuntimeClasses !== false, "managed AWS deployment requires its runtime class for automatic installation verification");
+    validateManagedAwsCoco(config.awsNitroTpm);
+  }
   else validateRuntime(config.awsNitroTpm!);
   requireConfig(config.version === undefined || config.version === "0.23.0", "chart 0.23.0 is the qualified rendering contract");
   requireConfig(config.debug !== true, "debug is disabled for the AWS runtime");

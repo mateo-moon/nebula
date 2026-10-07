@@ -71,6 +71,10 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.equal(controller.spec.template.spec.serviceAccountName, runtime.metadata.name);
   assert.ok(Number(runtime.metadata.annotations["argocd.argoproj.io/sync-wave"]) > Number(controller.metadata.annotations["argocd.argoproj.io/sync-wave"]));
   assert.ok(Number(runtime.metadata.annotations["argocd.argoproj.io/sync-wave"]) < 0, "declaration must precede waiting CAA pods");
+  assert.throws(() => new ConfidentialContainers(chart, "missing-class", { createRuntimeClasses: false,
+    nodeSelector: { "example.com/workers": "true" }, awsNitroTpm: { mode: "managed", release, enrollment,
+      placement: { vpcId: "vpc-0123456789abcdef0", workerSecurityGroupIds: ["sg-0123456789abcdef0"] } } }),
+    /requires its runtime class/);
 });
 
 test("release measurements, firmware floors, raw disk and client artifacts are committed before use", () => {
