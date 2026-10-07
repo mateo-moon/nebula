@@ -160,7 +160,7 @@ export class ManagedAwsCoco extends Construct {
       } });
   }
 
-  configureHelm(helm: Helm): void {
+  configureHelm(helm: Helm, nodeSelector: Readonly<Record<string, string>>): void {
     const resources = helm.apiObjects;
     const caa = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "cloud-api-adaptor-daemonset");
     const cleanup = resources.find(resource => resource.kind === "Deployment" && resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl");
@@ -171,7 +171,8 @@ export class ManagedAwsCoco extends Construct {
       name: "NEBULA_CLEANUP_DEPLOYMENT", value: cleanup.name }));
     for (const [resource, purpose, image] of [[caa, "caa", this.release.caaImage], [cleanup, "cleanup", this.release.cleanupImage]] as const) {
       const spec = resource.toJson().spec.template.spec;
-      resource.addJsonPatch(JsonPatch.replace("/spec/template/spec/containers/0/image", image),
+      resource.addJsonPatch(JsonPatch.add("/spec/template/spec/nodeSelector", { ...nodeSelector, "kubernetes.io/arch": "amd64" }),
+        JsonPatch.replace("/spec/template/spec/containers/0/image", image),
         JsonPatch.replace("/spec/template/spec/containers/0/envFrom", spec.containers[0].envFrom.filter((value: any) => !value.secretRef)));
       for (const [name, key] of [["AWS_ACCESS_KEY_ID", "username"], ["AWS_SECRET_ACCESS_KEY", "password"]]) {
         resource.addJsonPatch(JsonPatch.add("/spec/template/spec/containers/0/env/-", { name,

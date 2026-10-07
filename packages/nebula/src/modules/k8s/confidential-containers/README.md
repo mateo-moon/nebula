@@ -18,7 +18,8 @@ import {
 declare const owners: AwsAuthorityOwners;
 declare const signers: readonly AwsCocoSigner[];
 declare const deploymentNonce: string;
-declare const platform: { vpcId: string; workerSecurityGroupIds: string[] };
+declare const platform: { vpcId: string; workerSecurityGroupIds: string[];
+  workerNodeSelector: Record<string, string> };
 
 const enrollment = await createAwsCocoEnrollment({
   nonce: deploymentNonce, owners, signers,
@@ -26,10 +27,11 @@ const enrollment = await createAwsCocoEnrollment({
 
 const coco = new ConfidentialContainers(chart, "coco", {
   namespace: "coco-system",
+  nodeSelector: platform.workerNodeSelector,
   shims: { snp: false, tdx: false, cocoDev: false },
   awsNitroTpm: {
     mode: "managed",
-    placement: platform,
+    placement: { vpcId: platform.vpcId, workerSecurityGroupIds: platform.workerSecurityGroupIds },
     enrollment,
     // Defaults: existing AWS provider/account, eu-west-1, c6a.large,
     // three authority replicas and at most two PodVMs per worker.

@@ -219,7 +219,7 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
     if (this.config.awsNitroTpm) {
       if (this.awsRuntime) {
         configureAwsRemoteClass(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
-        this.awsRuntime.configureHelm(this.helm);
+        this.awsRuntime.configureHelm(this.helm, this.config.nodeSelector!);
       } else configureAwsNitroTpmRuntime(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
     }
   }

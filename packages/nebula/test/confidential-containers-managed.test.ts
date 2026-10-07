@@ -65,6 +65,9 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.ok(env.some((item: any) => item.name === "AWS_ACCESS_KEY_ID" && item.valueFrom.secretKeyRef.key === "username"));
   assert.ok(!env.some((item: any) => item.name === "AWS_ROLE_ARN"));
   assert.ok(caa.spec.template.spec.initContainers.some((item: any) => item.name === "managed-image-ready"));
+  const cleanup = objects.find(value => value.kind === "Deployment" && value.metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl")!;
+  for (const resource of [caa, cleanup]) assert.deepEqual(resource.spec.template.spec.nodeSelector,
+    { "example.com/workers": "true", "kubernetes.io/arch": "amd64" });
   assert.ok(objects.some(value => value.kind === "RuntimeClass" && value.metadata.name === RuntimeClasses.AWS_NITRO_TPM));
   const controller = objects.find(value => value.kind === "Deployment" && value.metadata.name.startsWith("nebula-coco-"))!;
   assert.equal(controller.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem, true);
