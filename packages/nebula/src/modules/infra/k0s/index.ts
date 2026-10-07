@@ -38,3 +38,6 @@ export type {
   K0smotronClusterConfig,
   K0smotronClusterControlPlane,
 } from "./k0smotron-cluster";
+
+export { BaremetalFleet, baremetalWorker } from "./baremetal";
+export type { BaremetalFleetOptions, BaremetalNode } from "./baremetal";
