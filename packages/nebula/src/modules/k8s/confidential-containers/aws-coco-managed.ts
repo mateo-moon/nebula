@@ -162,9 +162,17 @@ export class ManagedAwsCoco extends Construct {
 
   configureHelm(helm: Helm, nodeSelector: Readonly<Record<string, string>>): void {
     const resources = helm.apiObjects;
+    const config = resources.find(resource => resource.kind === "ConfigMap" && resource.name === "peer-pods-cm");
     const caa = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "cloud-api-adaptor-daemonset");
     const cleanup = resources.find(resource => resource.kind === "Deployment" && resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl");
-    requireValue(caa && cleanup, "upstream peerpods contract changed");
+    requireValue(config && caa && cleanup, "upstream peerpods contract changed");
+    // GitOps owns the static settings; the controller owns these discovered
+    // values. Even empty placeholders would make Argo self-heal overwrite them.
+    // Removing them also works with plain apply, without caller-supplied ignores.
+    for (const key of ["AWS_SUBNET_ID", "AWS_SG_IDS", "PODVM_AMI_ID", "PODVM_LAUNCHTEMPLATE_NAME"]) {
+      requireValue(Object.hasOwn(config.toJson().data, key), "upstream peerpods configuration changed");
+      config.addJsonPatch(JsonPatch.remove(`/data/${key}`));
+    }
     this.role.addJsonPatch(JsonPatch.add("/rules/-", { apiGroups: ["apps"], resources: ["deployments"],
       resourceNames: [cleanup.name], verbs: ["get", "patch"] }));
     this.controller.addJsonPatch(JsonPatch.add("/spec/template/spec/containers/0/env/-", {

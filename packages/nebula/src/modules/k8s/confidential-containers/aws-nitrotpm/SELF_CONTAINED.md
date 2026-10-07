@@ -3,8 +3,9 @@
 The managed implementation lives in `../aws-coco-managed.ts`, `control/`,
 `guest/src/boot.rs`, `guest/src/evidence/`, `guest/src/authority/replication/`
 and `release/`. It replaces the prototype's manual installation procedure.
-Software integration tests pass; complete immutable-appliance hardware
-qualification and catalog publication are still in progress.
+Software integration tests pass and a public candidate release is available;
+complete immutable-appliance hardware qualification and promotion into the
+default catalog remain pending.
 
 ## Installation contract
 
@@ -105,6 +106,9 @@ cloud mutations. Retries do not re-upload a completed snapshot or allocate a
 second state volume after losing an AWS response. API inventories paginate;
 foreign/ambiguous ownership is refused. Credential changes automatically roll
 CAA/cleanup, while the controller reads its projected credential files afresh.
+Git declares static CAA settings only. Discovered cloud IDs and rollout stamps
+belong to the controller, so normal GitOps reconciliation preserves them without
+requiring application-level ignore rules.
 
 The CR finalizer remains until owned cloud resources have disappeared, including
 instances, imported images/snapshots, state disks, interfaces, addresses, network
@@ -132,11 +136,21 @@ EC2 persistence guarantees, the full boot services or end-to-end isolation.
 The assembled Linux appliances also pass offline systemd dependency checks and
 start their bootstrap executables using the libraries included in each image.
 The CI-built Apple Silicon owner client passes the Node/Rust signed-contract
-checks. Live Kubernetes validation accepts the managed resource schemas and
+checks. The published candidate passes anonymous download checks for both disks,
+all three owner clients and
+all four container manifests, including compressed and expanded disk digests.
+Live Kubernetes validation accepts the managed resource schemas and
 rejects a changed immutable enrollment. The real AWS provider creates the scoped
 test users, policies and credential Secrets, and ordinary Crossplane deletion
-removes the fixture's users, role, instance profile and policies. These checks
-remain separate from complete attested guest boot and recovery acceptance.
+removes the fixture's users, role, instance profile and policies. The actual
+EBS sparse uploader passes encrypted snapshot completion and byte/checksum
+readback. These checks remain separate from complete attested guest boot and
+recovery acceptance.
+
+Argo CD 3.3.0's diff engine preserves controller-discovered cloud IDs and restart
+annotations in the rendered resources with both client-side and server-side
+apply. Negative checks reproduce drift from the old empty placeholders and
+still detect changes to declared security settings.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,

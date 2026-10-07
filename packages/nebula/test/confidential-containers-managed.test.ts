@@ -58,7 +58,11 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   const guestPolicy = objects.find(value => value.kind === "Policy" && value.metadata.name.endsWith("guest-boot"))!;
   assert.deepEqual(JSON.parse(guestPolicy.spec.forProvider.policy).Statement[0].Action, ["s3:GetObject"]);
   const cm = objects.find(value => value.kind === "ConfigMap" && value.metadata.name === "peer-pods-cm")!;
-  assert.equal(cm.data.PODVM_AMI_ID, "");
+  for (const key of ["AWS_SUBNET_ID", "AWS_SG_IDS", "PODVM_AMI_ID", "PODVM_LAUNCHTEMPLATE_NAME"]) {
+    assert.ok(!Object.hasOwn(cm.data, key), `${key} must remain controller-owned across GitOps syncs`);
+  }
+  assert.equal(cm.data.AWS_REGION, "eu-west-1");
+  assert.equal(cm.data.PODVM_INSTANCE_TYPE, "c6a.large");
   assert.match(cm.data.TAGS, /NebulaCocoDeployment=[a-f0-9]{64},NebulaCocoComponent=runtime/);
   const caa = objects.find(value => value.kind === "DaemonSet" && value.metadata.name === "cloud-api-adaptor-daemonset")!;
   const env = caa.spec.template.spec.containers[0].env;
@@ -68,6 +72,8 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   const cleanup = objects.find(value => value.kind === "Deployment" && value.metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl")!;
   for (const resource of [caa, cleanup]) assert.deepEqual(resource.spec.template.spec.nodeSelector,
     { "example.com/workers": "true", "kubernetes.io/arch": "amd64" });
+  assert.equal(caa.spec.template.metadata.annotations?.["coco.nebula.io/config"], undefined);
+  assert.equal(cleanup.spec.template.metadata.annotations?.["coco.nebula.io/credentials"], undefined);
   assert.ok(objects.some(value => value.kind === "RuntimeClass" && value.metadata.name === RuntimeClasses.AWS_NITRO_TPM));
   const controller = objects.find(value => value.kind === "Deployment" && value.metadata.name.startsWith("nebula-coco-"))!;
   assert.equal(controller.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem, true);
