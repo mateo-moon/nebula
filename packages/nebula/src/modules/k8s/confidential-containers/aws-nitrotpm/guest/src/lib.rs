@@ -21,6 +21,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub mod activation;
 pub mod protected_state;
+pub mod tpm_state;
 pub mod transport;
 pub mod workload;
 

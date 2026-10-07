@@ -1,7 +1,8 @@
 //! Experimental local persistence beneath the authority's eventual replicated log.
 //!
-//! This implements encrypted disk records and commit ordering, NOT a TPM seal,
-//! TPM authorization policy, consensus protocol or permission to release keys.
+//! This implements encrypted disk records and commit ordering. `tpm_state`
+//! supplies the local seal and protected anchor; neither implements consensus
+//! or permission to release keys.
 //! `Anchor` must be backed by protected, non-replayable hardware state. An EBS
 //! file, Kubernetes object or unsigned controller value cannot implement it.
 use aes_gcm::{

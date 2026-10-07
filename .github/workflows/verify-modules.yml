@@ -71,6 +71,23 @@ jobs:
           cargo test --locked --manifest-path guest/Cargo.toml --lib
           cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
           cargo build --locked --manifest-path guest/Cargo.toml --bin aws-trustee-bootstrap
+      - name: Exercise the Rust journal against isolated software TPMs
+        run: |
+          cargo test --locked --manifest-path guest/Cargo.toml --lib --no-run --message-format=json > "$RUNNER_TEMP/nebula-guest-tests.jsonl"
+          mkdir -p "$RUNNER_TEMP/nebula-tpm-test"
+          python - "$RUNNER_TEMP/nebula-guest-tests.jsonl" "$RUNNER_TEMP/nebula-tpm-test/guest-tests" <<'PY'
+          import json, pathlib, shutil, sys
+          messages = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          binaries = [item["executable"] for item in messages if item.get("reason") == "compiler-artifact" and item.get("executable") and item["target"]["kind"] == ["lib"] and item["profile"]["test"]]
+          assert len(binaries) == 1, "exactly one Rust library test binary required"
+          shutil.copy2(binaries[0], sys.argv[2])
+          PY
+          docker build -f guest/tests/tpm.Dockerfile -t nebula-authority-tpm-test guest/tests
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
+            --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=128m \
+            -v "$RUNNER_TEMP/nebula-tpm-test:/tests:ro" -e NEBULA_SWTPM_TEST=1 \
+            nebula-authority-tpm-test /tests/guest-tests --ignored tpm_state::tests::emulator_
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"

@@ -2,7 +2,7 @@
 
 This prototype belongs to Nebula's reusable `ConfidentialContainers` module. The `awsNitroTpm` option installs the AWS peer VM backend and registers `kata-remote-aws-nitrotpm` with the `kata-remote` handler. Local SNP/TDX runtimes can coexist. Application-specific names, fleet counts and replica assumptions are absent from the runtime contract. Disposable AWS hardware experiments are recorded in [HARDWARE_QUALIFICATION.md](HARDWARE_QUALIFICATION.md); no live cluster was changed.
 
-The accepted target is now the [self-contained module contract](SELF_CONTAINED.md), with no manual deployment steps or external service prerequisite and with management-cluster administrators outside the key trust boundary. The current rendering API does not meet it. The [architecture research](RESEARCH.md) recommends generic release-built images, signed measured workload descriptors, a module-owned attested authority and TPM-sealed replicated state. Released appliances, protected recovery and unattended reconciliation remain unimplemented.
+The accepted target is now the [self-contained module contract](SELF_CONTAINED.md), with no manual deployment steps or external service prerequisite and with management-cluster administrators outside the key trust boundary. The current rendering API does not meet it. The [architecture research](RESEARCH.md) recommends generic release-built images, signed measured workload descriptors, a module-owned attested authority and TPM-sealed replicated state. Local TPM/journal recovery is implemented and emulator-tested; released appliances, authenticated quorum recovery and unattended reconciliation remain unimplemented.
 
 The research revisits the per-workload AMI/build requirement and the attestation
 trust profile; the staged prototype boot behavior remains unqualified.
@@ -13,9 +13,12 @@ and safe replica membership still need an authenticated protocol.
 Implementation now includes matching TypeScript/Rust signed workload descriptors,
 a measured-policy activation component and an encrypted local authority journal.
 Activation is not wired into boot without authenticated owner state. The journal
-requires an actual protected TPM anchor and seal; it is not a quorum authority.
-The new isolated software-TPM CI experiments exercise the proposed command and
-authorization policies without touching a host TPM. None of these components
+now has a TPM seal/NV adapter with separate new-member provisioning and recovery,
+strict public-definition checks and a single hardware lock. The production
+facade exposes no keys, reset procedure, remote TPM setting or operator command.
+Five isolated Rust/software-TPM tests exercise the actual backend and journal;
+the separate eight Python experiments check the lower-level command policies.
+Neither test group touches a host TPM. None of these components
 supplies a deployment-ready release or eliminates the remaining lifecycle work.
 See [implementation boundaries](SELF_CONTAINED.md#implemented-components-signed-workload-and-measured-activation).
 
@@ -35,12 +38,12 @@ This validates protocol compatibility and local rejection behavior. It does not 
 - 49 Python protocol tests pass, including the actual stock KBS/client/offline-KBC integration test. The software-TPM experiments require their separate isolated test environment and do not count as part of this result.
 - Eight software-TPM experiments pass in a disposable native ARM64 Ubuntu 24.04 container with swtpm 0.7.3 and tpm2-tools 5.6. They cover graceful and abrupt restart, PCR4/PCR12 changes, cloning, clearing, PCR15 and unwritten NV state. Negative checks require the exact TPM rejection code; command, transport or resource errors cannot count as successful rejection. The emulator sandbox stayed enabled. No host TPM or cloud resources were used.
 - Real NitroTPM mechanics pass on shared-tenancy `c6a.large` in Ireland: preserved secrets/history after reboot, stop/start and a stop that skips OS shutdown; cloned-disk and TPM-clear refusal; PCR4/PCR12 rejection; exact PCR15 measurement/reset refusal; and detection of an older root-volume snapshot by the surviving newer TPM history. A 16-write sample measured 138.8–154.8 ms per NV-extend CLI call. The [hardware report](HARDWARE_QUALIFICATION.md) records the collector repair, scope and cleanup. This mutable test image does not qualify immutable boot, the Rust hardware adapter, fresh attestation or quorum recovery.
-- 27 native Rust unit tests pass, including workload signatures, activation ordering, encrypted journal crash/replay handling, restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied.
-- All 29 Linux Rust tests pass, including the two normally ignored tmpfs checks, in an isolated native ARM64 container with private restricted tmpfs and a **test-only no-swap proc fixture**. This includes 0600 atomic writes, rejection of disk-backed/mutable paths and symlink staging. Activation's PCR tests use an internal mock; these results do not qualify the hardware adapter or generic image boot.
+- 29 native Rust unit tests pass, including workload signatures, activation ordering, encrypted journal crash/replay handling, strict TPM public-definition checks, restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied. Five emulator tests are opt-in on Linux.
+- All 36 Linux Rust tests pass, including five new actual TPM/journal integration tests and the two normally ignored tmpfs checks, in an isolated native ARM64 container with private restricted tmpfs and a **test-only no-swap proc fixture**. Recovery, rollback/substitution refusal, graceful/abrupt restart, cloning/clearing, changed boot, missing/unsafe NV, unavailable transport and a single hardware writer are covered. Local tpm2-tools 5.4 and the CI runtime's 5.6 presentation are checked. This does not qualify the Rust adapter on NitroTPM or generic image boot; activation's PCR tests still use an internal mock.
 - The actual swap-enabled local container first refused provisioning, as intended. The positive fixture test is not proof of no-swap guest operation.
 - Negative cases include PCR4/PCR12 changes or omission, wrong PCR digest/length/schema, stale/future evidence, invalid signatures/certificates, rogue roots, nonce/key substitution, persistent and concurrent replay, unknown/ambiguous workload approval, different resource requests, query overrides, wrong issuer/audience, untrusted JWT signer, wrong recipient private key, unavailable KBS and missing/permissive KBS startup policy.
 - Public AWS root fingerprint checked against its NitroTPM documentation. The separate stock Trustee build checkout is clean. Attestation-protocol evidence remains synthetic; the separate hardware experiments exercise local TPM commands, not signed-document verification.
-- A freshly defined NV extend index reports `TPM_RC_NV_UNINITIALIZED` until its first extension, on both the emulator and the tested NitroTPM. The future hardware adapter must validate the index definition and unwritten flag, and distinguish that state from missing/corrupt history or transport failure. Arbitrary read errors must never become an empty journal. Hardware observations and their limits are recorded separately; crashes during commits, capacity and write limits remain unqualified.
+- A freshly defined NV extend index reports `TPM_RC_NV_UNINITIALIZED` until its first extension, on both the emulator and the tested NitroTPM. The Rust adapter now validates the exact definition, computed TPM Name and unwritten flag. Missing/corrupt history or transport failure cannot become an empty journal. Hardware observations and their limits are recorded separately; actual backend commit crash points, capacity and write limits remain unqualified.
 
 ## Details learned from the stock implementations
 
@@ -58,7 +61,7 @@ This validates protocol compatibility and local rejection behavior. It does not 
 | --- | --- |
 | Full retained SNP/CVM requirement | Supported joint fresh SNP + NitroTPM verification bound to the same key/challenge/guest. NitroTPM and a launch-template CPU option alone do not prove SNP enablement. |
 | Immutable image | Offline Linux KIWI build and real boot; UKI/PCR4 + PCR12 and dm-verity bind policy, bootstrap, endpoint trust and complete root; changed root/policy/kernel args and overlays cannot obtain keys. The disposable mutable test AMI is not this appliance. |
-| Protected local persistence | Integrate and qualify the actual sealing/NV backend with the encrypted Rust journal, validate index definitions and crash points, and establish usable write limits. The separate hardware probe is a mechanics fixture. |
+| Protected local persistence | Qualify the integrated Rust sealing/NV backend on NitroTPM, including provisioning/commit crash points and usable write limits. Local software-TPM tests cover the actual backend; the earlier AWS probe only qualifies mechanics. Interrupted new-member provisioning must be replaced automatically through authenticated enrollment; recovery never resets existing state. |
 | CAA transport | The restricted Rust provisioner and fixed APF startup now have local tests. Actual CAA create/network/TLS/readiness/delete against a built AMI remains unqualified; no policy/CDH/command/config overrides may be accepted. |
 | Actual Kata isolation | Exact application-generated guest policy embedded in the pinned policy-capable binary; tests deny exec/attach/streams/logs/diagnostics/debug/SetPolicy and unsafe CopyFile, containers, commands, env and mounts. No permissive fallback policy is supplied. |
 | Secrets and decrypted state | Swap/hibernation/dumps disabled in a real guest, no EBS-backed confidential scratch or image layers, authenticated read-only root, memory bounds, disk and snapshot inspection. The current CAA disk scratch path is masked. |

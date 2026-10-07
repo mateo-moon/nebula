@@ -186,12 +186,52 @@ old-record substitution, a missing current record or a wrong sealing key fails.
 Lost write replies are resolved by reading the anchor, without retrying the
 extension; an unresolved commit requires recovery. The local writer is locked.
 
-This is not yet a TPM seal backend or a replicated service. Its `Anchor` trait
-must be implemented by protected hardware, never a management object or EBS
-file. The encryption key must be unsealed inside the measured authority.
-Returning an empty local journal never authorizes replacing an existing
-deployment's keys. Raft membership, quorum read barriers, authenticated genesis,
-key rotation and attested replacement are still required.
+`guest/src/tpm_state.rs` now supplies the local TPM backend through `TpmJournal`.
+It seals a random journal key, owner credential and deployment binding under a
+non-migratable TPM object. Unsealing requires approved PCR4/PCR12 and the Unseal
+command. The owner credential prevents deleting/redefining history; NV writes
+require the same approved boot and NV_Extend policy. Recovery checks the sealed
+object's exact attributes/policy, its parent, deployment and owner credential.
+It then validates the NV index, SHA384 algorithm, size, numeric permissions,
+authorization policy and computed TPM Name, including its written flag. Only a
+valid unwritten definition becomes an empty local journal; a missing index or
+failed read is an error.
+
+The facade has separate new-member provisioning and recovery methods and does
+not export either credential. Recovery cannot create an index, rotate a key or
+reset the TPM. Provisioning persists encrypted seal blobs before protecting the
+owner hierarchy, and an interrupted attempt cannot acknowledge state or silently
+repeat genesis. The future enrollment controller must automatically replace an
+uncommitted member after an incomplete provision; there is no operator reset
+procedure. Once state has been acknowledged, loss of its protected history must
+follow attested quorum replacement, never local reinitialization.
+
+Production entry points select only `/dev/tpmrm0`. A single hardware lock covers
+all state directories and must also be used by other authority TPM users.
+Fixed tools run without a shell or inherited environment, with time/output/file
+bounds, suppressed diagnostics and private permissions. Cleartext staging is
+limited to root-private, restricted tmpfs with swap forbidden; Rust buffers are
+zeroed on drop. The measured appliance must additionally disable crash/core
+collection and every operator shell/debug path. The driver only flushes transient
+handles created during its exclusive session, retaining the initial inventory.
+The supported tool presentation is strict: unexpected output fails closed.
+
+Five isolated Rust/software-TPM integration tests exercise provisioning, actual
+unseal-to-journal recovery, graceful/abrupt restart, disk rollback/substitution,
+wrong deployment, cloning, clearing, PCR changes, poisoned writes, locking,
+missing seals/NV, unsafe NV redefinition and unavailable transport. Two unit
+tests reject unsafe public definitions. CI runs the compiled Rust tests in a
+confined Ubuntu container with swtpm and tpm2-tools; these are developer checks,
+not module installation steps. The local Linux run uses an explicitly test-only
+no-swap fixture because the desktop VM has swap. Native entry-point environment
+validation is not bypassed in production.
+
+This remains a local component, not a replicated service or permission to release
+keys. Trusted deployment/boot inputs, authenticated genesis, Raft membership,
+quorum read barriers, rotation and attested replacement are still required.
+No boot unit or configuration shortcut activates this backend before that trust
+exists. Returning an empty local journal never authorizes replacing an existing
+deployment's keys.
 
 `tests/test_tpm_persistence.py` runs only in an explicitly selected, disposable
 software-TPM CI environment. It exercises a PCR-bound seal, owner-authorized
@@ -199,15 +239,16 @@ deletion protection, policy-only NV extension, preserved-TPM restart, changed
 PCR4/PCR12, TPM clear, cloned sealed blobs, and non-resettable PCR15 measurement.
 Both graceful shutdown and abrupt process termination preserve acknowledged
 test state. Each negative assertion checks the intended TPM response code.
-A newly defined index is explicitly unwritten: the hardware adapter must
-authenticate its public definition/flags rather than treat any failed read as
-an empty journal. Test secrets live in
+A newly defined index is explicitly unwritten: the Rust adapter now authenticates
+its public definition/flags rather than treating a failed read as an empty journal.
+Test secrets live in
 the disposable fixture; these commands are not module-user operations. Emulator
 results establish TCG command behavior, not NitroTPM's AWS persistence guarantees,
 write limits, snapshot behavior or support for the proposed recovery protocol.
 The separate [AWS hardware experiment](HARDWARE_QUALIFICATION.md) records which
-local mechanics have now been observed on NitroTPM. It does not implement the
-production backend or complete the replicated authority's recovery protocol.
+local mechanics have now been observed on NitroTPM. It predates the Rust backend
+and does not qualify that implementation, its commit crash points, write limits,
+or the replicated authority's recovery protocol.
 
 ## Evidence references
 
