@@ -36,12 +36,18 @@ export const WORKER_LAUNCH_TEMPLATE = `
 {{- $region := $spec.launchTemplate.spec.forProvider.region }}
 {{- $ready := and (regexMatch "^eipalloc-[0-9a-f]+$" $allocation)
   (eq (dig "metadata" "name" "" $eip) $spec.eipName)
-  (eq (dig "spec" "forProvider" "region" "" $eip) $region) }}
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $eip) $allocation)
+  (eq (dig "status" "atProvider" "allocationId" "" $eip) $allocation)
+  (eq (dig "spec" "forProvider" "region" "" $eip) $region)
+  (eq (dig "status" "atProvider" "region" "" $eip) $region) }}
 {{- if $spec.dataVolumeName }}
 {{- $ready = and $ready (regexMatch "^vol-[0-9a-f]+$" $volumeId)
   (eq (dig "metadata" "name" "" $volume) $spec.dataVolumeName)
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $volume) $volumeId)
   (eq (dig "spec" "forProvider" "region" "" $volume) $region)
-  (eq (dig "spec" "forProvider" "availabilityZone" "" $volume) $spec.availabilityZone) }}
+  (eq (dig "status" "atProvider" "region" "" $volume) $region)
+  (eq (dig "spec" "forProvider" "availabilityZone" "" $volume) $spec.availabilityZone)
+  (eq (dig "status" "atProvider" "availabilityZone" "" $volume) $spec.availabilityZone) }}
 {{- end }}
 {{- $template := dict }}
 {{- if $ready }}

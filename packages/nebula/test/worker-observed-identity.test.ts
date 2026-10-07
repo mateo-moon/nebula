@@ -35,12 +35,14 @@ function manifests(dataVolume: "existing" | "fresh" | "none" = "existing") {
 const resources = manifests();
 const xr = resources.find(r => r.kind === "XAwsWorkerLaunchTemplate")!;
 const eip = { resource: { status: { atProvider: { manifest: {
-  metadata: { name: "test-node" }, spec: { forProvider: { region: "eu-central-1" } },
-  status: { atProvider: { id: "eipalloc-0123456789abcdef0" } },
+  metadata: { name: "test-node", annotations: { "crossplane.io/external-name": "eipalloc-0123456789abcdef0" } },
+  spec: { forProvider: { region: "eu-central-1" } },
+  status: { atProvider: { id: "eipalloc-0123456789abcdef0", allocationId: "eipalloc-0123456789abcdef0", region: "eu-central-1" } },
 } } } } };
 const volume = { resource: { status: { atProvider: { manifest: {
-  metadata: { name: "test-node-data" }, spec: { forProvider: { region: "eu-central-1", availabilityZone: "eu-central-1a" } },
-  status: { atProvider: { id: "vol-0123456789abcdef0" } },
+  metadata: { name: "test-node-data", annotations: { "crossplane.io/external-name": "vol-0123456789abcdef0" } },
+  spec: { forProvider: { region: "eu-central-1", availabilityZone: "eu-central-1a" } },
+  status: { atProvider: { id: "vol-0123456789abcdef0", region: "eu-central-1", availabilityZone: "eu-central-1a" } },
 } } } } };
 function render(observed: Record<string, any>, composite = xr) {
   const out = execFileSync(binary, [], { input: JSON.stringify({ template: WORKER_LAUNCH_TEMPLATE,
@@ -79,6 +81,22 @@ test("missing, empty, wrong-name and wrong-zone observations cannot create a tem
     if (mismatch === "zone") manifest.spec.forProvider.availabilityZone = "eu-central-1b";
     if (mismatch === "region") manifest.spec.forProvider.region = "us-east-1";
     assert.equal(templateOf(render({ eip, "data-volume": wrong })), undefined);
+  }
+});
+
+test("stale status cannot override a changed resource binding or observed location", () => {
+  for (const kind of ["eip", "data-volume"] as const) {
+    for (const mismatch of ["binding", "region", "provider-identity"]) {
+      const observed = structuredClone({ eip, "data-volume": volume });
+      const manifest: any = observed[kind].resource.status.atProvider.manifest;
+      if (mismatch === "binding") manifest.metadata.annotations["crossplane.io/external-name"] = "changed";
+      if (mismatch === "region") manifest.status.atProvider.region = "us-east-1";
+      if (mismatch === "provider-identity") {
+        if (kind === "eip") manifest.status.atProvider.allocationId = "eipalloc-deadbeef";
+        else manifest.status.atProvider.availabilityZone = "eu-central-1b";
+      }
+      assert.equal(templateOf(render(observed)), undefined);
+    }
   }
 });
 
