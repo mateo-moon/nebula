@@ -106,6 +106,14 @@ jobs:
           # KIWI must run as root; return only its public release outputs to
           # the runner before the host writes publication receipts.
           sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/coco-build/release"
+          cp "$RUNNER_TEMP/coco-build/canary.json" "$RUNNER_TEMP/coco-build/release/canary.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: appliances
+          path: ${{ runner.temp }}/coco-build/release/*
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
       - name: Package controller and publish content-addressed OCI artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -123,13 +131,10 @@ jobs:
             -t "$image_repository-coco-controller:$GITHUB_SHA" "$RUNNER_TEMP/coco-build"
           docker push "$image_repository-coco-controller:$GITHUB_SHA"
           docker inspect "$image_repository-coco-controller:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/coco-build/release/controller-image.txt"
-          cp "$RUNNER_TEMP/coco-build/canary.json" "$RUNNER_TEMP/coco-build/release/canary.json"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        if: always()
         with:
-          name: appliances
-          path: ${{ runner.temp }}/coco-build/release/*
-          compression-level: 0
+          name: controller
+          path: ${{ runner.temp }}/coco-build/release/controller-image.txt
           retention-days: 3
           if-no-files-found: error
 
