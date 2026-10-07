@@ -4,7 +4,7 @@ RUN dnf --releasever=2023.12.20260930 install -y python3.12 python3.12-pip ca-ce
     && dnf clean all
 COPY control/requirements.lock /app/requirements.lock
 RUN python3.12 -m pip install --no-cache-dir --requirement /app/requirements.lock
-COPY control/cloud.py control/controller.py control/kube.py /app/
+COPY control/admission.py control/cloud.py control/controller.py control/kube.py /app/
 COPY binaries/aws-trustee-bootstrap /usr/local/bin/aws-trustee-bootstrap
 COPY release/core.json /usr/share/nebula/release.json
 RUN ln -s /usr/bin/python3.12 /usr/local/bin/python3

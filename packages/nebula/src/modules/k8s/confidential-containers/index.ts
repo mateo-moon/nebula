@@ -19,7 +19,7 @@
  * @see https://github.com/confidential-containers/charts
  */
 import { Construct } from "constructs";
-import { Helm } from "cdk8s";
+import { Helm, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import { BaseConstruct } from "../../../core";
@@ -215,11 +215,18 @@ export class ConfidentialContainers extends BaseConstruct<ConfidentialContainers
       version: this.config.version ?? (this.config.awsNitroTpm ? "0.23.0" : "0.18.0"),
       namespace: namespaceName,
       values: chartValues,
+      ...(this.config.awsNitroTpm ? { helmFlags: ["--include-crds"] } : {}),
     });
+    if (this.config.awsNitroTpm) {
+      for (const resource of this.helm.apiObjects.filter(resource => resource.kind === "CustomResourceDefinition")) {
+        resource.addJsonPatch(JsonPatch.add("/metadata/annotations", { ...resource.toJson().metadata?.annotations,
+          "argocd.argoproj.io/sync-wave": "-10" }));
+      }
+    }
     if (this.config.awsNitroTpm) {
       if (this.awsRuntime) {
         configureAwsRemoteClass(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
-        this.awsRuntime.configureHelm(this.helm, this.config.nodeSelector!);
+        this.awsRuntime.configureHelm(this.helm, this.config.nodeSelector!, RuntimeClasses.AWS_NITRO_TPM);
       } else configureAwsNitroTpmRuntime(this.helm, this.config, RuntimeClasses.AWS_NITRO_TPM);
     }
   }

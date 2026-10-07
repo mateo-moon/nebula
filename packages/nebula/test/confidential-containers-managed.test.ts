@@ -52,11 +52,17 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.deepEqual(Object.keys(runtime.spec).sort(), ["deployment", "genesis", "placement", "region", "release"]);
   assert.equal(objects.filter(value => value.kind === "AccessKey").length, 3);
   assert.ok(!objects.some(value => value.kind === "Secret"));
+  assert.ok(!objects.some(value => value.apiVersion.startsWith("cert-manager.io/")), "managed admission must not require an external certificate controller");
+  assert.ok(objects.some(value => value.kind === "CustomResourceDefinition" && value.metadata.name === "peerpods.confidentialcontainers.org" &&
+    value.metadata.annotations["argocd.argoproj.io/sync-wave"] === "-10"), "cleanup controller must receive its CRD before starting");
   assert.ok(objects.filter(value => value.apiVersion === "iam.aws.upbound.io/v1beta1").every(value => value.spec.providerConfigRef.name === "default"));
   assert.ok(objects.filter(value => ["Role", "Policy", "User", "InstanceProfile"].includes(value.kind) && value.apiVersion.startsWith("iam.")).every(value =>
     value.metadata.annotations["crossplane.io/external-name"] && !value.spec.forProvider.name));
   const guestPolicy = objects.find(value => value.kind === "Policy" && value.metadata.name.endsWith("guest-boot"))!;
   assert.deepEqual(JSON.parse(guestPolicy.spec.forProvider.policy).Statement[0].Action, ["s3:GetObject"]);
+  const controllerPolicy = objects.find(value => value.kind === "Policy" && value.metadata.name.endsWith("controller-policy"))!;
+  const bucketPolicy = JSON.parse(controllerPolicy.spec.forProvider.policy).Statement.find((statement: any) => statement.Action.includes("s3:CreateBucket"));
+  assert.ok(bucketPolicy.Action.includes("s3:PutBucketOwnershipControls"), "AWS requires ownership permission with BucketOwnerEnforced creation");
   const cm = objects.find(value => value.kind === "ConfigMap" && value.metadata.name === "peer-pods-cm")!;
   for (const key of ["AWS_SUBNET_ID", "AWS_SG_IDS", "PODVM_AMI_ID", "PODVM_LAUNCHTEMPLATE_NAME"]) {
     assert.ok(!Object.hasOwn(cm.data, key), `${key} must remain controller-owned across GitOps syncs`);
@@ -74,6 +80,19 @@ test("managed mode owns provisioning and credential bridges without synthesizing
     { "example.com/workers": "true", "kubernetes.io/arch": "amd64" });
   assert.equal(caa.spec.template.metadata.annotations?.["coco.nebula.io/config"], undefined);
   assert.equal(cleanup.spec.template.metadata.annotations?.["coco.nebula.io/credentials"], undefined);
+  const admission = objects.find(value => value.kind === "Deployment" && value.metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpods-webhook")!;
+  const webhook = objects.find(value => value.kind === "MutatingWebhookConfiguration")!;
+  const service = objects.find(value => value.kind === "Service" && value.metadata.name === "peer-pods-webhook-webhook-service")!;
+  assert.equal(admission.metadata.namespace, "coco-system");
+  assert.equal(admission.spec.template.spec.volumes.find((value: any) => value.name === "cert").secret.secretName, runtime.metadata.name + "-admission");
+  assert.ok(admission.spec.template.spec.containers[0].env.some((value: any) => value.name === "TARGET_RUNTIMECLASS" && value.value === RuntimeClasses.AWS_NITRO_TPM));
+  assert.deepEqual(service.spec.selector, admission.spec.selector.matchLabels);
+  assert.notDeepEqual(admission.spec.selector.matchLabels, cleanup.spec.selector.matchLabels, "same-namespace controllers need distinct selectors");
+  assert.equal(webhook.webhooks[0].failurePolicy, "Fail");
+  assert.deepEqual(webhook.webhooks[0].matchConditions, [{ name: "aws-confidential-runtime", expression:
+    `has(object.spec.runtimeClassName) && object.spec.runtimeClassName == ${JSON.stringify(RuntimeClasses.AWS_NITRO_TPM)}` }]);
+  assert.equal(webhook.webhooks[0].namespaceSelector, undefined, "the installation canary uses the module namespace");
+  assert.equal(webhook.webhooks[0].clientConfig.caBundle, undefined, "CA rotation remains controller-owned");
   assert.ok(objects.some(value => value.kind === "RuntimeClass" && value.metadata.name === RuntimeClasses.AWS_NITRO_TPM));
   const controller = objects.find(value => value.kind === "Deployment" && value.metadata.name.startsWith("nebula-coco-"))!;
   assert.equal(controller.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem, true);

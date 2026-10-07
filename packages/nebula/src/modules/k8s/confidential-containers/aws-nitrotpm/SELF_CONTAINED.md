@@ -25,6 +25,13 @@ three c6a.large authority instances; each workload gets its own c6a.large PodVM.
 Public IPs provide registry egress without requiring a separately operated NAT.
 The authority's publisher endpoint authenticates signed owner operations;
 replica traffic and PodVM transport have separate restricted network rules.
+The module also installs the peer-pod CRD and manages admission certificates
+without an external cert-manager. Renewal publishes overlapping CA trust before
+changing the serving key, and removes old trust only after every webhook replica
+finishes its rollout. Persisted checkpoints make interrupted renewal resumable.
+Admission intercepts only this module's RuntimeClass and keeps fail-closed
+behavior; unrelated Pods and the controller can start while TLS is being set up.
+These Kubernetes-visible TLS keys protect admission transport, not workload data.
 
 ## Where the automatic steps happen
 
@@ -151,6 +158,11 @@ Argo CD 3.3.0's diff engine preserves controller-discovered cloud IDs and restar
 annotations in the rendered resources with both client-side and server-side
 apply. Negative checks reproduce drift from the old empty placeholders and
 still detect changes to declared security settings.
+
+The controller suite includes real admission TLS hostname verification and
+lost-response recovery at each certificate-rotation checkpoint. Live deployment
+also verified creation of all module IAM resources, including the guest role's
+instance-profile attachment. Full hardware acceptance remains pending below.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,

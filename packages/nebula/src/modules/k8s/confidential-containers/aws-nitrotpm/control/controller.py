@@ -1,5 +1,6 @@
-"""Reconcile the reusable module. All persisted data is public intent/status.
+"""Reconcile module infrastructure and public enrollment/status.
 
+Infrastructure credentials and admission TLS use Kubernetes Secrets.
 Workload keys enter the authority only through the separately authenticated
 owner publisher, never through this controller, its CR, or Kubernetes Secrets.
 """
@@ -16,7 +17,8 @@ import time
 from datetime import datetime, timezone, timedelta
 
 import boto3
-from botocore.exceptions import ClientError
+import admission
+from botocore.exceptions import BotoCoreError, ClientError
 from cloud import Cloud, Pending, require
 from kube import Kube, ApiError, credential_environment
 
@@ -24,6 +26,16 @@ FINALIZER = "coco.nebula.io/aws-resources"
 RUNTIME_CLASS = "kata-remote-aws-nitrotpm"
 APPROVAL_ANNOTATION = "coco.nebula.io/approval"
 LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+
+
+def diagnostic(error):
+    """Bounded error codes only; never messages, response bodies or credentials."""
+    if isinstance(error, ClientError):
+        token = lambda value: value if isinstance(value, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{0,63}", value) else "Unknown"
+        return {"category": "AWS", "operation": token(error.operation_name), "code": token(error.response.get("Error", {}).get("Code"))}
+    if isinstance(error, ApiError):
+        return {"category": "Kubernetes", "status": error.status if isinstance(error.status, int) and 100 <= error.status <= 599 else 0}
+    return {"category": "Local", "code": type(error).__name__}
 
 
 class Lease:
@@ -107,7 +119,7 @@ class Controller:
     def checkpoint(self, phase, cursors, **public):
         old = next((item for item in self.obj.get("status", {}).get("conditions", []) if item["type"] == "Ready"), {})
         transition = old.get("lastTransitionTime") if old.get("reason") == phase else None
-        status = {**self.obj.get("status", {}), **public, "phase": phase, "cursors": cursors,
+        status = {**self.obj.get("status", {}), "diagnostic": None, **public, "phase": phase, "cursors": cursors,
                   "observedGeneration": self.obj["metadata"]["generation"],
                   "conditions": [{"type": "Ready", "status": "True" if phase == "Ready" else "False", "reason": phase,
                                   "lastTransitionTime": transition or datetime.now(timezone.utc).isoformat()}]}
@@ -232,6 +244,8 @@ class Controller:
                 self.kube.patch(self.path, {"metadata": {"resourceVersion": self.obj["metadata"]["resourceVersion"],
                     "finalizers": [f for f in finalizers if f != FINALIZER]}})
                 return
+            admission_ready = admission.reconcile(self.kube, self.obj, os.environ["NEBULA_WEBHOOK_SERVICE"],
+                os.environ["NEBULA_WEBHOOK_DEPLOYMENT"], os.environ["NEBULA_WEBHOOK_CONFIGURATION"])
             cloud.storage(cursors)
             images = {role: cloud.image(role, self.release[role]["artifact"], cursors) for role in ("authority", "runtime")}
             subnets = cloud.network()
@@ -269,6 +283,7 @@ class Controller:
             values = {"AWS_REGION": spec["region"], "AWS_SUBNET_ID": subnets[0]["SubnetId"], "AWS_SG_IDS": runtime_group,
                       "PODVM_AMI_ID": images["runtime"], "PODVM_INSTANCE_TYPE": "c6a.large", "PODVM_LAUNCHTEMPLATE_NAME": template}
             self.peer_config(cloud, values)
+            if not admission_ready: raise Pending("WaitingForAdmissionCertificate")
             passed, canary_key = self.canary(cloud, common, addresses, cursors)
             self.pod_intents(cloud, common, [canary_key])
             # Kubernetes readiness reports installation progress. It is never
@@ -296,10 +311,10 @@ def main():
             if not lease.started: lease.start()
             lease.require_current()
             controller.reconcile()
-        except (ApiError, ClientError, ValueError, OSError, KeyError, Pending):
-            # Fixed diagnostic only. Never serialize API responses or credentials.
+        except (ApiError, BotoCoreError, ClientError, ValueError, OSError, KeyError, Pending) as error:
+            # Codes identify a failed API without exposing its response payload.
             if controller.obj:
-                try: controller.checkpoint("ReconciliationRetry", controller.obj.get("status", {}).get("cursors", {}))
+                try: controller.checkpoint("ReconciliationRetry", controller.obj.get("status", {}).get("cursors", {}), diagnostic=diagnostic(error))
                 except (ApiError, OSError): pass
         time.sleep(10)
 

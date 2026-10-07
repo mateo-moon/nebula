@@ -116,6 +116,8 @@ export function awsNitroTpmValues(config: ConfidentialContainersConfig): Record<
     },
     peerpods: {
       enabled: true, provider: "aws", "kata-deploy": { enabled: false },
+      webhook: { webhook: { targetRuntimeClass: "kata-remote-aws-nitrotpm" }, tlsMinVersion: "VersionTLS13",
+        ...(managed ? { certManager: { enabled: false }, namespaceOverride: "" } : {}) },
       secrets: { mode: "reference", existingSecretName: "" },
       tlsProfile: { minVersion: "VersionTLS13" }, limit: String(aws.peerPodsLimitPerNode),
       providerConfigs: { aws: {

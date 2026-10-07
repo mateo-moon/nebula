@@ -43,6 +43,7 @@ export class ManagedAwsCoco extends Construct {
   readonly resource: ApiObject;
   private readonly controller: ApiObject;
   private readonly role: ApiObject;
+  private readonly clusterRole: ApiObject;
   readonly release: AwsCocoRelease;
   readonly deployment: string;
   readonly name: string;
@@ -89,7 +90,7 @@ export class ManagedAwsCoco extends Construct {
       controller: [read, terminate, pass, allowed(controllerActions, "*", regional),
         allowed(["iam:GetInstanceProfile"], `arn:aws:iam::*:instance-profile/${guestName}`),
         allowed(["ebs:StartSnapshot", "ebs:PutSnapshotBlock", "ebs:CompleteSnapshot"], `arn:aws:ec2:${region}::snapshot/*`, regional),
-        allowed(["s3:CreateBucket", "s3:GetBucketTagging", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:PutEncryptionConfiguration", "s3:ListBucket", "s3:DeleteBucket"], `arn:aws:s3:::${this.name}-*`),
+        allowed(["s3:CreateBucket", "s3:PutBucketOwnershipControls", "s3:GetBucketTagging", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:PutEncryptionConfiguration", "s3:ListBucket", "s3:DeleteBucket"], `arn:aws:s3:::${this.name}-*`),
         allowed(["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], `arn:aws:s3:::${this.name}-*/boot/${this.deployment}/*`)],
       caa: [read, terminate, pass, allowed(["ec2:RunInstances", "ec2:CreateTags"], "*", regional)],
       cleanup: [read, terminate],
@@ -125,7 +126,7 @@ export class ManagedAwsCoco extends Construct {
     });
     namespaced("v1", "ServiceAccount", this.name, {});
     namespaced("coordination.k8s.io/v1", "Lease", this.name, { spec: {} });
-    new ApiObject(this, "rbac", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "ClusterRole", metadata: { name: this.name, annotations: { "argocd.argoproj.io/sync-wave": "-3" } }, rules: [
+    this.clusterRole = new ApiObject(this, "rbac", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "ClusterRole", metadata: { name: this.name, annotations: { "argocd.argoproj.io/sync-wave": "-3" } }, rules: [
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       { apiGroups: [""], resources: ["configmaps"], verbs: ["get"] },
     ] });
@@ -139,6 +140,8 @@ export class ManagedAwsCoco extends Construct {
       { apiGroups: [""], resources: ["pods"], verbs: ["create"] },
       { apiGroups: [""], resources: ["pods"], resourceNames: ["nebula-runtime-canary"], verbs: ["delete"] },
       { apiGroups: [""], resources: ["secrets"], resourceNames: [this.credentialNames.caa, this.credentialNames.cleanup], verbs: ["get"] },
+      { apiGroups: [""], resources: ["secrets"], resourceNames: [this.name + "-admission"], verbs: ["get", "patch"] },
+      { apiGroups: [""], resources: ["secrets"], verbs: ["create"] },
     ] });
     namespaced("rbac.authorization.k8s.io/v1", "RoleBinding", this.name, {
       roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: this.name }, subjects: [{ kind: "ServiceAccount", name: this.name, namespace }],
@@ -160,7 +163,7 @@ export class ManagedAwsCoco extends Construct {
       } });
   }
 
-  configureHelm(helm: Helm, nodeSelector: Readonly<Record<string, string>>): void {
+  configureHelm(helm: Helm, nodeSelector: Readonly<Record<string, string>>, runtimeClass: string): void {
     const resources = helm.apiObjects;
     const config = resources.find(resource => resource.kind === "ConfigMap" && resource.name === "peer-pods-cm");
     const caa = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "cloud-api-adaptor-daemonset");
@@ -172,6 +175,31 @@ export class ManagedAwsCoco extends Construct {
     for (const key of ["AWS_SUBNET_ID", "AWS_SG_IDS", "PODVM_AMI_ID", "PODVM_LAUNCHTEMPLATE_NAME"]) {
       requireValue(Object.hasOwn(config.toJson().data, key), "upstream peerpods configuration changed");
       config.addJsonPatch(JsonPatch.remove(`/data/${key}`));
+    }
+    const webhook = resources.find(resource => resource.kind === "MutatingWebhookConfiguration" && resource.name === "peer-pods-webhook-mutating-webhook-configuration");
+    const admission = resources.find(resource => resource.kind === "Deployment" && resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpods-webhook");
+    const service = resources.find(resource => resource.kind === "Service" && resource.name === "peer-pods-webhook-webhook-service");
+    requireValue(webhook && admission && service && admission.toJson().metadata.namespace === this.namespace, "upstream admission contract changed");
+    const label = "peer-pods-webhook-controller-manager";
+    admission.addJsonPatch(JsonPatch.replace("/spec/selector/matchLabels/control-plane", label),
+      JsonPatch.replace("/spec/template/metadata/labels/control-plane", label),
+      JsonPatch.add("/spec/template/spec/nodeSelector", { "kubernetes.io/arch": "amd64" }),
+      JsonPatch.add("/spec/strategy", { type: "RollingUpdate", rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }));
+    service.addJsonPatch(JsonPatch.replace("/spec/selector/control-plane", label));
+    const volumes = admission.toJson().spec.template.spec.volumes;
+    const cert = volumes.findIndex((volume: any) => volume.name === "cert");
+    requireValue(cert >= 0, "upstream admission certificate mount changed");
+    admission.addJsonPatch(JsonPatch.replace(`/spec/template/spec/volumes/${cert}/secret/secretName`, this.name + "-admission"));
+    // Restrict interception to this RuntimeClass. A missing/rotating certificate
+    // must never prevent the controller or unrelated cluster Pods from starting.
+    webhook.addJsonPatch(JsonPatch.remove("/webhooks/0/namespaceSelector"), JsonPatch.add("/webhooks/0/matchConditions", [{
+      name: "aws-confidential-runtime", expression: `has(object.spec.runtimeClassName) && object.spec.runtimeClassName == ${JSON.stringify(runtimeClass)}`,
+    }]));
+    this.clusterRole.addJsonPatch(JsonPatch.add("/rules/-", { apiGroups: ["admissionregistration.k8s.io"], resources: ["mutatingwebhookconfigurations"],
+      resourceNames: [webhook.name], verbs: ["get", "patch"] }));
+    this.role.addJsonPatch(JsonPatch.add("/rules/-", { apiGroups: ["apps"], resources: ["deployments"], resourceNames: [admission.name], verbs: ["get", "patch"] }));
+    for (const [name, value] of [["NEBULA_WEBHOOK_SERVICE", service.name], ["NEBULA_WEBHOOK_DEPLOYMENT", admission.name], ["NEBULA_WEBHOOK_CONFIGURATION", webhook.name]]) {
+      this.controller.addJsonPatch(JsonPatch.add("/spec/template/spec/containers/0/env/-", { name, value }));
     }
     this.role.addJsonPatch(JsonPatch.add("/rules/-", { apiGroups: ["apps"], resources: ["deployments"],
       resourceNames: [cleanup.name], verbs: ["get", "patch"] }));

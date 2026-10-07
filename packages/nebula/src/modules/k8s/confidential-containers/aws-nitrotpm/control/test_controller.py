@@ -10,6 +10,8 @@ from datetime import datetime, timezone, timedelta
 import controller as reconciler
 from controller import Controller, FINALIZER, Lease
 from cloud import Pending
+from botocore.exceptions import ClientError
+from kube import ApiError
 
 
 def fixture():
@@ -41,7 +43,20 @@ class KubeFixture:
 
 
 class ControllerTests(unittest.TestCase):
+    def test_diagnostics_never_include_error_messages_or_response_data(self):
+        error = ClientError({"Error": {"Code": "AccessDenied", "Message": "private payload"}, "Credentials": "private material"}, "CreateBucket")
+        self.assertEqual(reconciler.diagnostic(error), {"category": "AWS", "operation": "CreateBucket", "code": "AccessDenied"})
+        error.response["Error"]["Code"] = "untrusted/response/payload"
+        self.assertEqual(reconciler.diagnostic(error)["code"], "Unknown")
+        self.assertEqual(reconciler.diagnostic(ValueError("private material")), {"category": "Local", "code": "ValueError"})
+        self.assertEqual(reconciler.diagnostic(ApiError(403)), {"category": "Kubernetes", "status": 403})
+
     def setup_controller(self, health=None):
+        environment = patch.dict(reconciler.os.environ, {"NEBULA_WEBHOOK_SERVICE": "example", "NEBULA_WEBHOOK_DEPLOYMENT": "example",
+                                                        "NEBULA_WEBHOOK_CONFIGURATION": "example"})
+        environment.start(); self.addCleanup(environment.stop)
+        admission = patch.object(reconciler.admission, "reconcile", return_value=True)
+        admission.start(); self.addCleanup(admission.stop)
         obj, release = fixture()
         kube = KubeFixture(obj)
         verifier = MagicMock(return_value=health)
@@ -94,6 +109,15 @@ class ControllerTests(unittest.TestCase):
         with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
         self.assertTrue(all(not call.kwargs["allow_replace"] for call in cloud.authority.call_args_list))
         self.assertEqual(kube.obj["status"]["phase"], "WaitingForAuthorityQuorum")
+
+    def test_admission_must_be_ready_before_starting_the_encrypted_canary(self):
+        health = {"voters": {str(i): {} for i in range(3)}, "joint": False, "replacing": False,
+                  "status": {"authorityIdentity": "d" * 64}}
+        kube, controller, cloud, _ = self.setup_controller(health)
+        reconciler.admission.reconcile.return_value = False
+        with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+        self.assertEqual(kube.obj["status"]["phase"], "WaitingForAdmissionCertificate")
+        controller.canary.assert_not_called()
 
     def test_delete_retains_finalizer_until_owned_cloud_cleanup_finishes(self):
         kube, controller, cloud, _ = self.setup_controller()
