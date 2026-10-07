@@ -26,6 +26,11 @@ export interface AwsKubernetesOidcPublicationConfig {
   kubeProviderConfigName?: string;
   httpProviderConfigName?: string;
   awsProviderConfigName?: string;
+  /** Preserve optional public metadata already advertised by an existing issuer. */
+  discovery?: {
+    authorizationEndpoint?: "urn:kubernetes:programmatic_authorization";
+    claimsSupported?: string[];
+  };
   /** Explicit bootstrap only. Existing issuer buckets are observed and never recreated. */
   createBucket?: boolean;
   tags?: Record<string, string>;
@@ -97,6 +102,10 @@ export class AwsKubernetesOidcPublicationSetup extends Construct {
                 sourceSecretName: string, sourceSecretNamespace: string, sourceSecretKey: string,
                 apiServerUrl: string, tlsSecretNamespace: string,
                 kubeProviderConfigName: string, httpProviderConfigName: string, awsProviderConfigName: string,
+                discovery: { type: "object", properties: {
+                  authorizationEndpoint: { type: "string", enum: ["urn:kubernetes:programmatic_authorization"] },
+                  claimsSupported: { type: "array", minItems: 1, maxItems: 32, items: { type: "string", minLength: 1, maxLength: 128 } },
+                } },
                 createBucket: { type: "boolean" }, tags: { type: "object", additionalProperties: { type: "string" } },
               },
               "x-kubernetes-validations": [

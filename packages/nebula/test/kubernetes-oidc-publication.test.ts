@@ -184,6 +184,17 @@ test("rotation updates stable object identities and supports overlap then old-ke
   }
 });
 
+test("adoption can preserve existing Kubernetes discovery metadata explicitly", () => {
+  const composite = structuredClone(xr);
+  composite.spec.discovery = { authorizationEndpoint: "urn:kubernetes:programmatic_authorization", claimsSupported: ["sub", "iss"] };
+  const result = render(observations(), composite);
+  const discovery = JSON.parse(named(result, "discovery").spec.forProvider.content);
+  assert.equal(discovery.authorization_endpoint, "urn:kubernetes:programmatic_authorization");
+  assert.deepEqual(discovery.claims_supported, ["sub", "iss"]);
+  assert.equal(discovery.issuer, config.issuerUrl);
+  assert.equal(discovery.jwks_uri, `${config.issuerUrl}/keys.json`);
+});
+
 test("non-public, malformed, oversized, duplicate and weak JWKS fail closed", () => {
   const invalid = [null, [], {}, { keys: [] }, { keys: [first], extra: true }, { keys: [first, first] },
     { keys: Array.from({ length: 9 }, (_, i) => ({ ...first, kid: `key${i}` })) },

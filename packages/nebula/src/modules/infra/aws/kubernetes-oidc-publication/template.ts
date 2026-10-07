@@ -182,6 +182,9 @@ export const KUBERNETES_OIDC_PUBLICATION_TEMPLATE = String.raw`
   (eq (include "ready" (dig "resource" (dict) (get $resources "bucket" | default dict))) "true") -}}
 {{- $discovery := dict "issuer" $spec.issuerUrl "jwks_uri" (printf "%s/keys.json" $spec.issuerUrl)
   "response_types_supported" (list "id_token") "subject_types_supported" (list "public") "id_token_signing_alg_values_supported" (list "RS256") -}}
+{{- $metadata := $spec.discovery | default dict -}}
+{{- if $metadata.authorizationEndpoint -}}{{- $_ := set $discovery "authorization_endpoint" $metadata.authorizationEndpoint -}}{{- end -}}
+{{- if $metadata.claimsSupported -}}{{- $_ := set $discovery "claims_supported" $metadata.claimsSupported -}}{{- end -}}
 {{- range $key, $path := dict "discovery" ".well-known/openid-configuration" "keys" "keys.json" -}}
 {{- $name := printf "%s-%s" $prefix $key -}}
 {{- if $valid -}}
