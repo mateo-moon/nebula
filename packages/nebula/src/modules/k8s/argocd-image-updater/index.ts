@@ -24,6 +24,8 @@ import { Construct } from "constructs";
 import { Helm } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { HelmModule, type Toleration } from "../../../core";
+export { configureArgocdPluginImageUpdate } from "./plugin-policy";
+export type { ArgocdPluginImageUpdateConfig } from "./plugin-policy";
 
 export interface ArgocdImageUpdaterRegistry {
   /** Registry display name */

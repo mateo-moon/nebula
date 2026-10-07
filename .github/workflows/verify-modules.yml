@@ -32,6 +32,8 @@ jobs:
       - run: npm install -g pnpm@11.9.0
       - run: pnpm install --frozen-lockfile
       - name: Tests (including the packed-tarball import test)
+        env:
+          ECR_READER_CONTAINER_TEST: "1"
         run: pnpm test
       - run: pnpm exec tsc --noEmit
       - name: Real Envoy mutual TLS qualification

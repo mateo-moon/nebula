@@ -409,10 +409,11 @@ export type {
   SignedReleasesProps,
 } from "./confidential-guests";
 
-export { ArgocdImageUpdater } from "./argocd-image-updater";
+export { ArgocdImageUpdater, configureArgocdPluginImageUpdate } from "./argocd-image-updater";
 export type {
   ArgocdImageUpdaterConfig,
   ArgocdImageUpdaterRegistry,
+  ArgocdPluginImageUpdateConfig,
 } from "./argocd-image-updater";
 
 export { CloudNativePg } from "./cloudnative-pg";

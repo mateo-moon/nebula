@@ -16,6 +16,8 @@ export { AwsServiceAccountRegistryIdentity } from "./service-account-registry-id
 export type { AwsServiceAccountRegistryIdentityConfig } from "./service-account-registry-identity";
 export { AwsImageRegistry } from "./image-registry";
 export type { AwsImageRegistryConfig, AwsImageRegistryRepository } from "./image-registry";
+export { addAwsEcrScaledJobReader, registryReaderRunnerConfig, ECR_READER_AWS_CLI_IMAGE, ECR_READER_TOOLS_IMAGE } from "./ecr-scaled-job-reader";
+export type { AwsEcrScaledJobReaderConfig } from "./ecr-scaled-job-reader";
 export { AwsKubernetesOidcPublication, AwsKubernetesOidcPublicationSetup } from "./kubernetes-oidc-publication";
 export type { AwsKubernetesOidcPublicationConfig } from "./kubernetes-oidc-publication";
 export { AwsClusterNatIngress, AwsClusterNatIngressSetup } from "./cluster-nat-ingress";
@@ -170,7 +172,7 @@ export class Aws extends BaseConstruct<AwsConfig> {
 }
 
 export { DualStackSubnetSetup, DualStackSubnet } from "./dualstack-subnet";
-export { AwsWorkerFleet } from "./worker-fleet";
+export { AwsWorkerFleet, AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS } from "./worker-fleet";
 export type {
   AwsWorkerFleetOptions,
   AwsWorkerFleetEipOptions,

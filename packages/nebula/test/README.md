@@ -29,6 +29,12 @@ The packed-package test also needs package-registry access or a warm pnpm store.
   refresh failure and namespace credential distribution.
 - `gitea-branch-protection` uses actual jq to evaluate exact/changed fields and
   HTTP failures. `dlm` verifies adoption preserves existing resource identities.
+- `ecr-reader` checks selected-job credential isolation and unchanged resources;
+  `ecr-reader-token` executes the STS/ECR exchange with fake AWS responses and
+  checks failure-output secrecy. `ecr-reader-credentials` runs the exact jq
+  validator against valid and rejected tokens; `ECR_READER_CONTAINER_TEST=1`
+  also qualifies the pinned non-root tool containers. CI enables this tier.
+  `argocd-plugin-image-update` checks exact-Application RBAC and digest/CMP policy.
 
 - `cilium.test.ts` checks mandatory dual-stack pod allocation, public/private
   node transport, final Helm-value validation and override refusals. Set
