@@ -503,3 +503,8 @@ export {
   PVC_AUTORESIZER_PROMETHEUS_URL,
 } from "./pvc-autoresizer";
 export type { PvcAutoresizerConfig } from "./pvc-autoresizer";
+
+export { confidentialProject } from "./argocd/confidential-project";
+export type { ConfidentialProjectConfig } from "./argocd/confidential-project";
+export { workloadWorker, applyClusterResourcePolicy, WORKLOAD_OWNER } from "./argocd/worker-policy";
+export type { WorkerResourcePolicyOptions } from "./argocd/worker-policy";
