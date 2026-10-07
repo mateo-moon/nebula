@@ -253,9 +253,10 @@ function ownedFixture() {
   fixture.composite.status = { handoff: statusOf(first).handoff };
   const owned = templateOf(first)!;
   owned.metadata.uid = fixture.existing.metadata.uid;
+  owned.metadata.generation = 1;
   owned.metadata.annotations["crossplane.io/external-name"] = fixture.existing.metadata.annotations["crossplane.io/external-name"];
   owned.metadata.ownerReferences = [{ controller: true, uid: xr.metadata.uid, kind: xr.kind, name: xr.metadata.name }];
-  owned.status = fixture.existing.status;
+  owned.status = { ...fixture.existing.status, conditions: [conditions[0], { type: "Synced", status: "True", observedGeneration: 1 }] };
   return { ...fixture, owned, observations: { ...fixture.observations, "adoption-source": observe(owned), "launch-template": { resource: owned } } };
 }
 
@@ -360,6 +361,25 @@ test("activation waits for the current LT generation even when the observer stil
   const reconciled = render(observations, composite);
   assert.equal(statusOf(reconciled).launchTemplateReady, true);
   assert.equal(statusOf(reconciled).handoffActive, true);
+});
+
+test("missing LT reconciliation generation holds retention and activation until the provider acknowledges it", () => {
+  for (const handoff of ["retain", "activate"]) {
+    const { composite, owned, observations } = ownedFixture();
+    composite.spec.handoff = handoff;
+    owned.status.conditions = structuredClone(conditions);
+    const pending = render(observations, composite);
+    assert.equal(statusOf(pending).ownershipReady, true);
+    assert.equal(statusOf(pending).launchTemplateReady, false);
+    assert.equal(statusOf(pending).handoffActive, false);
+    assert.deepEqual(templateOf(pending)!.spec, owned.spec);
+    for (const object of pending.filter(r => r.kind === "Object" || r.kind === "LaunchTemplate"))
+      assert.equal(object.metadata.annotations["gotemplating.fn.crossplane.io/ready"], "False");
+    owned.status.conditions[1].observedGeneration = owned.metadata.generation;
+    const reconciled = render(observations, composite);
+    assert.equal(statusOf(reconciled).launchTemplateReady, true);
+    assert.equal(statusOf(reconciled).handoffActive, handoff === "activate");
+  }
 });
 
 test("observation loss after activation preserves deletion policy and detached tracking without garbage collection", () => {

@@ -39,9 +39,12 @@ Invalid observations explicitly mark desired resources not ready, so
 `function-auto-ready` cannot mistake a healthy observer with invalid bindings
 for a ready worker. The XR exposes `status.bindingsReady` and
 `status.ownershipReady` and `status.launchTemplateReady`; check these alongside
-its Ready/Synced conditions. The current LT must have reconciled its current
-generation even when a provider-kubernetes observer still holds an older
-healthy snapshot. After a spec change, allow both provider poll cycles to
+its Ready/Synced conditions. An owned LT requires an explicit
+`Synced.observedGeneration` equal to its current `metadata.generation`, even
+when a provider-kubernetes observer still holds an older healthy snapshot.
+Missing legacy generation markers hold readiness and activation false while
+retention continues to preserve the complete LT spec. After a spec change,
+allow both provider poll cycles to
 propagate; verify the LT's current generation and Synced observation again
 before treating an activation as complete.
 Bootstrap waits for AWS-confirmed attachment to its own instance, disables
@@ -84,7 +87,7 @@ version before activating the migration.
    removing its directory during the handoff cannot garbage-collect its LT MR
    and lose the retained cloud binding.
 4. Verify the same LT UID and external ID have the intended XR controller
-   owner, the XR reports bindings/ownership ready, and Argo no longer desires
+   owner, the XR reports bindings/ownership/template ready, and Argo no longer desires
    the raw LT. Then change only `launchTemplateHandoff` to `"activate"` in Git.
    Activation requires the recorded UID and binding to match the observed LT
    owned by this XR. One composed-resource apply sets all four obsolete Argo

@@ -85,7 +85,13 @@ ${WORKER_NETWORK_OBSERVATION}
 {{- $previousOwned = and $previousOwned (eq (dig "metadata" "name" "" $previous) $spec.launchTemplate.metadata.name)
   (eq (dig "apiVersion" "" $previous) "ec2.aws.upbound.io/v1beta1") (eq (dig "kind" "" $previous) "LaunchTemplate")
   (not (dig "metadata" "deletionTimestamp" "" $previous)) }}
-{{- $templateReady := and $previousOwned (eq (include "worker.ready" $previous) "true") }}
+{{- $currentTemplateGeneration := false }}
+{{- range (dig "status" "conditions" (list) $previous) }}
+{{- if and (eq .type "Synced") (eq .status "True") (hasKey . "observedGeneration")
+  (gt (int (dig "metadata" "generation" 0 $previous)) 0)
+  (eq (toString .observedGeneration) (toString (dig "metadata" "generation" 0 $previous))) }}{{ $currentTemplateGeneration = true }}{{ end }}
+{{- end }}
+{{- $templateReady := and $previousOwned $currentTemplateGeneration (eq (include "worker.ready" $previous) "true") }}
 {{- $baseline := deepCopy (dig "status" "handoff" (dict) $xr) }}
 {{- $ownershipReady := $previousOwned }}
 {{- $source := dict }}
