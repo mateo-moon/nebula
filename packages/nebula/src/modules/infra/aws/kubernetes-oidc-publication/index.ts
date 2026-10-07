@@ -33,6 +33,10 @@ export interface AwsKubernetesOidcPublicationConfig {
   };
   /** Explicit bootstrap only. Existing issuer buckets are observed and never recreated. */
   createBucket?: boolean;
+  /** Preserve the bucket's current versioning state by default. "enabled"
+   * explicitly manages versioning and retains old object versions, which may
+   * add storage charges. Use it only for an already approved versioned bucket. */
+  versioning?: "preserve" | "enabled";
   tags?: Record<string, string>;
 }
 
@@ -50,6 +54,8 @@ export class AwsKubernetesOidcPublication extends Construct {
       throw new Error("OIDC publication requires an AWS region and account ID");
     if (config.issuerUrl !== `https://${config.bucketName}.s3.${config.region}.amazonaws.com`)
       throw new Error("OIDC issuer must exactly match the regional HTTPS bucket origin");
+    if (config.versioning !== undefined && config.versioning !== "preserve" && config.versioning !== "enabled")
+      throw new Error('OIDC versioning must be "preserve" or explicitly "enabled"');
     if (config.apiServerUrl) {
       const url = new URL(config.apiServerUrl);
       if (url.protocol !== "https:" || url.origin !== config.apiServerUrl || url.username || url.password)
@@ -69,6 +75,7 @@ export class AwsKubernetesOidcPublication extends Construct {
         httpProviderConfigName: config.httpProviderConfigName ?? "default",
         awsProviderConfigName: config.awsProviderConfigName ?? "default",
         createBucket: config.createBucket ?? false,
+        versioning: config.versioning ?? "preserve",
         tags: config.tags ?? {},
       },
     });
@@ -107,6 +114,7 @@ export class AwsKubernetesOidcPublicationSetup extends Construct {
                   claimsSupported: { type: "array", minItems: 1, maxItems: 32, items: { type: "string", minLength: 1, maxLength: 128 } },
                 } },
                 createBucket: { type: "boolean" }, tags: { type: "object", additionalProperties: { type: "string" } },
+                versioning: { type: "string", enum: ["preserve", "enabled"], default: "preserve" },
               },
               "x-kubernetes-validations": [
                 { rule: "self.issuerUrl == 'https://' + self.bucketName + '.s3.' + self.region + '.amazonaws.com'", message: "issuer must match the regional HTTPS bucket origin" },

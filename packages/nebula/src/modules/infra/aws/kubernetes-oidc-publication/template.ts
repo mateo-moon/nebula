@@ -1,7 +1,8 @@
 /** Executed by function-go-templating, not by a local renderer or cloud CLI.
  * Private kubeconfig material is copied only into a Kubernetes Secret. Only a
  * strict public JWKS can reach S3. Stable object names update in place on rotation;
- * bucket versioning and no Delete policies preserve previous document versions. */
+ * no Delete policies retain the objects. Bucket versioning is managed only when
+ * explicitly enabled; the default observes its existing state without changing it. */
 export const KUBERNETES_OIDC_PUBLICATION_TEMPLATE = String.raw`
 {{- define "emit" -}}
 ---
@@ -36,12 +37,16 @@ export const KUBERNETES_OIDC_PUBLICATION_TEMPLATE = String.raw`
 {{- $annotation := "gotemplating.fn.crossplane.io/composition-resource-name" -}}
 {{- $retained := list "Observe" "Create" "Update" "LateInitialize" -}}
 {{- $prefix := $spec.name -}}
+{{- $manageVersioning := eq ($spec.versioning | default "preserve") "enabled" -}}
+{{- $versioningId := printf "%s,%s" $spec.bucketName $spec.accountId -}}
 {{- $versioning := dig "resource" (dict) (get $resources "versioning" | default dict) -}}
 {{- $versions := dig "status" "atProvider" "versioningConfiguration" (list) $versioning -}}
 {{- $versioned := false -}}
 {{- if $versions -}}{{- $versioned = eq ((index $versions 0).status | default "") "Enabled" -}}{{- end -}}
-{{- $versioningReady := and $versioned (eq (include "ready" $versioning) "true")
+{{- $versioningReady := and (or (not $manageVersioning) $versioned) (eq (include "ready" $versioning) "true")
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $versioning) $versioningId)
   (eq (dig "spec" "forProvider" "expectedBucketOwner" "" $versioning) $spec.accountId)
+  (eq (dig "status" "atProvider" "expectedBucketOwner" "" $versioning) $spec.accountId)
   (eq (dig "spec" "forProvider" "bucket" "" $versioning) $spec.bucketName) -}}
 {{- $bucketPolicies := list "Observe" -}}
 {{- if $spec.createBucket -}}{{- $bucketPolicies = $retained -}}{{- end -}}
@@ -52,17 +57,22 @@ export const KUBERNETES_OIDC_PUBLICATION_TEMPLATE = String.raw`
 {{ template "emit" $bucket }}
 {{- range $key, $kind := dict "versioning" "BucketVersioning" "public-access" "BucketPublicAccessBlock" -}}
 {{- $for := dict "region" $spec.region "bucket" $spec.bucketName -}}
+{{- $policies := $retained -}}
+{{- $externalName := $spec.bucketName -}}
 {{- if eq $key "versioning" -}}
+{{- $externalName = $versioningId -}}
 {{- $_ := set $for "expectedBucketOwner" $spec.accountId -}}
+{{- if $manageVersioning -}}
 {{- $_ := set $for "versioningConfiguration" (list (dict "status" "Enabled")) -}}
+{{- else -}}{{- $policies = list "Observe" -}}{{- end -}}
 {{- else -}}
 {{- $_ := set $for "blockPublicAcls" true -}}{{- $_ := set $for "ignorePublicAcls" true -}}
 {{- $_ := set $for "blockPublicPolicy" false -}}{{- $_ := set $for "restrictPublicBuckets" false -}}
 {{- end -}}
 {{- if or (eq $key "versioning") $versioningReady -}}
 {{ template "emit" (dict "apiVersion" "s3.aws.upbound.io/v1beta1" "kind" $kind
-  "metadata" (dict "name" (printf "%s-%s" $prefix $key) "annotations" (dict $annotation $key "crossplane.io/external-name" $spec.bucketName))
-  "spec" (dict "deletionPolicy" "Orphan" "managementPolicies" $retained "providerConfigRef" (dict "name" $spec.awsProviderConfigName) "forProvider" $for)) }}
+  "metadata" (dict "name" (printf "%s-%s" $prefix $key) "annotations" (dict $annotation $key "crossplane.io/external-name" $externalName))
+  "spec" (dict "deletionPolicy" "Orphan" "managementPolicies" $policies "providerConfigRef" (dict "name" $spec.awsProviderConfigName) "forProvider" $for)) }}
 {{- else -}}
 {{ template "preserve" (dict "resources" $resources "key" $key "name" (printf "%s-%s" $prefix $key)) }}
 {{- end -}}

@@ -25,6 +25,7 @@ const config = {
   name: "test-oidc", bucketName: "example-retained-oidc", region: "eu-central-1", accountId: "123456789012",
   issuerUrl: "https://example-retained-oidc.s3.eu-central-1.amazonaws.com",
   sourceSecretName: "child-kubeconfig", sourceSecretNamespace: "clusters",
+  versioning: "enabled" as const,
 };
 new AwsKubernetesOidcPublication(chart, "publication", config);
 const manifests = Testing.synth(chart);
@@ -57,8 +58,10 @@ function observations(jwks: unknown = { keys: [first] }): Record<string, any> {
       requestDetails: { method: "GET", url: "https://child.example.test:6443/openid/v1/jwks" } } } },
     bucket: { resource: { status: healthy } },
     "public-access": { resource: { status: healthy } },
-    versioning: { resource: { spec: { forProvider: { bucket: config.bucketName, expectedBucketOwner: config.accountId } },
-      status: { ...healthy, atProvider: { versioningConfiguration: [{ status: "Enabled" }] } } } },
+    versioning: { resource: {
+      metadata: { annotations: { "crossplane.io/external-name": `${config.bucketName},${config.accountId}` } },
+      spec: { forProvider: { bucket: config.bucketName, expectedBucketOwner: config.accountId } },
+      status: { ...healthy, atProvider: { expectedBucketOwner: config.accountId, versioningConfiguration: [{ status: "Enabled" }] } } } },
     policy: { resource: { status: healthy } },
   };
 }
@@ -103,6 +106,59 @@ test("fresh bucket creation requires an explicit declaration and never enables d
   assert.ok(!bucket.spec.managementPolicies.includes("Delete"));
   assert.equal(bucket.spec.deletionPolicy, "Orphan");
   assert.equal(bucket.spec.forProvider.forceDestroy, false);
+});
+
+test("versioning defaults to observation and preserves unversioned, suspended and enabled buckets", () => {
+  const chart = Testing.chart();
+  const { versioning: _versioning, ...preservedConfig } = config;
+  new AwsKubernetesOidcPublication(chart, "preserve", preservedConfig);
+  const composite = Testing.synth(chart)[0];
+  assert.equal(composite.spec.versioning, "preserve");
+  for (const versions of [[], [{ status: "Disabled" }], [{ status: "Suspended" }], [{ status: "Enabled" }]]) {
+    const observed = observations();
+    observed.versioning.resource.status.atProvider.versioningConfiguration = versions;
+    const result = render(observed, composite);
+    const versioning = named(result, "versioning");
+    assert.deepEqual(versioning.spec.managementPolicies, ["Observe"]);
+    assert.equal(versioning.spec.deletionPolicy, "Orphan");
+    assert.equal(versioning.spec.forProvider.expectedBucketOwner, config.accountId);
+    assert.equal(versioning.metadata.annotations["crossplane.io/external-name"], `${config.bucketName},${config.accountId}`);
+    assert.equal(versioning.spec.forProvider.versioningConfiguration, undefined);
+    assert.equal(publicationReady(result), true);
+    assert.equal(objects(result).length, 2);
+  }
+  const noExplicitMode = structuredClone(composite);
+  delete noExplicitMode.spec.versioning;
+  assert.deepEqual(named(render(observations(), noExplicitMode), "versioning").spec.managementPolicies, ["Observe"]);
+});
+
+test("preserved versioning still gates publication on successful expected-owner observation", () => {
+  const preserved = structuredClone(xr); preserved.spec.versioning = "preserve";
+  for (const mutate of [
+    (o: any) => { delete o.versioning; },
+    (o: any) => { o.versioning.resource.status.conditions[1].status = "False"; },
+    (o: any) => { o.versioning.resource.spec.forProvider.expectedBucketOwner = "999999999999"; },
+    (o: any) => { o.versioning.resource.status.atProvider.expectedBucketOwner = ""; },
+    (o: any) => { o.versioning.resource.metadata.annotations["crossplane.io/external-name"] = config.bucketName; },
+    (o: any) => { o.versioning.resource.spec.forProvider.bucket = "another-bucket"; },
+  ]) {
+    const observed = structuredClone(observations()); mutate(observed);
+    const result = render(observed, preserved);
+    assert.equal(publicationReady(result), false);
+    assert.equal(objects(result).length, 0);
+    assert.equal(named(result, "public-access"), undefined);
+    assert.equal(named(result, "policy"), undefined);
+  }
+});
+
+test("managed versioning must be explicit and continues to require observed Enabled", () => {
+  const versioning = named(render(observations()), "versioning");
+  assert.ok(versioning.spec.managementPolicies.includes("Update"));
+  assert.deepEqual(versioning.spec.forProvider.versioningConfiguration, [{ status: "Enabled" }]);
+  for (const versions of [[], [{ status: "Suspended" }], [{ status: "Disabled" }]]) {
+    const observed = observations(); observed.versioning.resource.status.atProvider.versioningConfiguration = versions;
+    assert.equal(publicationReady(render(observed)), false);
+  }
 });
 
 test("selected kubeconfig context becomes an mTLS secret; requests are GET only with verified TLS", () => {
