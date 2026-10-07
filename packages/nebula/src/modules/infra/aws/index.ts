@@ -16,6 +16,8 @@ export { AwsServiceAccountRegistryIdentity } from "./service-account-registry-id
 export type { AwsServiceAccountRegistryIdentityConfig } from "./service-account-registry-identity";
 export { AwsImageRegistry } from "./image-registry";
 export type { AwsImageRegistryConfig, AwsImageRegistryRepository } from "./image-registry";
+export { AwsKubernetesOidcPublication, AwsKubernetesOidcPublicationSetup } from "./kubernetes-oidc-publication";
+export type { AwsKubernetesOidcPublicationConfig } from "./kubernetes-oidc-publication";
 export { AwsDlm } from "./dlm";
 export type { AwsDlmConfig, DlmSnapshotSchedule } from "./dlm";
 export { AwsK0sCluster } from "./k0s-cluster";
