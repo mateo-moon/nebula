@@ -22,7 +22,13 @@ test("all packaged host scripts are valid shell and substitutions cannot execute
   assert.throws(() => pinnedLoopAttachScript({ backingDirectory: "/var/lib/$(touch bad)", logPrefix: "disks" }), /plain absolute path/);
   assert.throws(() => loopbackVolumeGroupScript({ logPrefix: "bad;touch bad" }), /plain label/);
   assert.throws(() => kernelPinScript({ ...pin, provenance: "first\nsecond" }), /one nonempty line/);
+  assert.throws(() => kernelPinScript({ ...pin, provenance: String.raw`reviewed\nGRUB_TIMEOUT=0` }), /without backslashes/);
+  assert.throws(() => kernelPinScript({ ...pin, pinFile: "etc/default/grub" }), /GRUB defaults drop-in/);
   assert(kernelPinScript({ ...pin, provenance: "$(touch bad) `touch bad`" }).includes('echo "# \\$(touch bad) \\`touch bad\\`"'));
+  assert(kernelPinScript({ ...pin, pinFile: "etc/default/grub.d/__PROVENANCE__.cfg" })
+    .includes("pin=$root/etc/default/grub.d/__PROVENANCE__.cfg"));
+  assert(pinnedLoopAttachScript({ backingDirectory: "/var/lib/__LOG_PREFIX__", logPrefix: "other" })
+    .includes("mkdir -p /hostfs/var/lib/__LOG_PREFIX__"));
 });
 
 test("volume-group controller retains placement, explicit grow acknowledgement and read-only readiness", () => {
@@ -69,4 +75,16 @@ test("host guards isolate apply permissions from periodic checks without adding 
   assert.equal(kernel.containers[0].securityContext.privileged, undefined);
   const policy = resources.find(resource => resource.metadata.name === "policy-guard")!.spec.template.spec;
   assert(policy.initContainers[0].env.find((entry: any) => entry.name === "APT_POLICY").value.startsWith("// Reviewed host policy\n"));
+});
+
+test("policy inputs cannot introduce extra apt or sysctl directives", () => {
+  const config = { ...host, name: "policy", provenance: "Reviewed policy", upgradeBlacklist: ["linux-"],
+    sysctls: { "fs.inotify.max_user_watches": "524288" } };
+  for (const change of [
+    { provenance: "first\nsecond" }, { provenance: "nul\0byte" },
+    { upgradeBlacklist: ['linux-"; }; injected { "'] }, { upgradeBlacklist: ["linux-\nother"] },
+    { sysctls: { "fs.inotify.max_user_watches\nother": "524288" } },
+    { sysctls: { "fs.inotify.max_user_watches": "524288\nnet.ipv4.ip_forward = 1" } },
+    { sysctls: { "fs.inotify.max_user_watches": "524288\0" } },
+  ]) assert.throws(() => new DebianHostPolicy(chart(), "bad", { ...config, ...change }), /provenance|blacklist|sysctls/);
 });

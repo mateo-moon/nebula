@@ -39,7 +39,7 @@ export class LoopbackVolumeGroup extends Construct {
     ];
     const securityContext = { privileged: true, runAsUser: 0 };
     const volumeMounts = [{ name: "host-proc", mountPath: "/host/proc", readOnly: true }];
-    
+
     new KubeDaemonSet(this, "daemonset", {
       metadata: { name: config.name, namespace: config.namespace },
       spec: {

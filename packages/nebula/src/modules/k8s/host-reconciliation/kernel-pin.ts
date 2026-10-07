@@ -13,6 +13,8 @@ export class HostKernelPin extends Construct {
   constructor(scope: Construct, id: string, config: HostKernelPinConfig) {
     super(scope, id);
     validateHostReconciler(config);
+    if (!["on", "off"].includes(config.freeze)) throw new Error("freeze must be on or off");
+    if (!/^[a-zA-Z0-9._>-]+$/.test(config.kernel) || !/^[a-zA-Z0-9._>-]+$/.test(config.grubEntry)) throw new Error("kernel and GRUB entry must be plain identifiers");
     const pinScript = kernelPinScript(config);
     const pinEnv = [
       { name: "FREEZE", value: config.freeze },

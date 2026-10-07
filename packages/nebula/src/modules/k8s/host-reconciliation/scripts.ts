@@ -31,10 +31,14 @@ export interface HostKernelPinScriptOptions {
 }
 
 export function kernelPinScript(options: HostKernelPinScriptOptions): string {
-  if (!options.provenance || /[\r\n\0]/.test(options.provenance)) throw new Error("kernel pin provenance must be one nonempty line");
+  if (!/^etc\/default\/grub\.d\/[a-zA-Z0-9._-]+\.cfg$/.test(options.pinFile)) throw new Error("kernel pin file must be a GRUB defaults drop-in");
+  // POSIX echo implementations may expand backslash escapes in their input.
+  // Refuse them so a comment cannot become a second GRUB directive.
+  if (!options.provenance || /[\\\r\n\0]/.test(options.provenance)) throw new Error("kernel pin provenance must be one nonempty line without backslashes");
   const provenance = options.provenance.replace(/[\\"$`]/g, character => `\\${character}`);
-  return asset("kernel-pin.sh").replaceAll("__PIN_FILE__", path(options.pinFile, false))
-    .replaceAll("__PROVENANCE__", () => provenance);
+  const pinFile = path(options.pinFile, false);
+  return asset("kernel-pin.sh").replace(/__PIN_FILE__|__PROVENANCE__/g,
+    token => token === "__PIN_FILE__" ? pinFile : provenance);
 }
 
 export function hostConfigurationPolicyScript(): string {
@@ -49,7 +53,7 @@ export interface PinnedLoopAttachScriptOptions {
 /** Existing sparse files are never truncated. PORTAL_LOOP_POOL and
  * PORTAL_VOLUMES retain the script's established environment contract. */
 export function pinnedLoopAttachScript(options: PinnedLoopAttachScriptOptions): string {
-  return asset("pinned-loop-attach.sh")
-    .replaceAll("__BACKING_DIRECTORY__", path(options.backingDirectory, true))
-    .replaceAll("__LOG_PREFIX__", label(options.logPrefix));
+  const directory = path(options.backingDirectory, true), logPrefix = label(options.logPrefix);
+  return asset("pinned-loop-attach.sh").replace(/__BACKING_DIRECTORY__|__LOG_PREFIX__/g,
+    token => token === "__BACKING_DIRECTORY__" ? directory : logPrefix);
 }

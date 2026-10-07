@@ -13,6 +13,12 @@ export class HostPackageFreeze extends Construct {
   constructor(scope: Construct, id: string, config: HostPackageFreezeConfig) {
     super(scope, id);
     validateHostReconciler(config);
+    if (!["on", "off"].includes(config.freeze)) throw new Error("freeze must be on or off");
+    if (!config.packages.length || !config.packages.every(value => /^[a-z0-9][a-z0-9.+:-]*$/.test(value))) throw new Error("package freeze requires explicit plain package names");
+    for (const [path, hash] of Object.entries(config.frozenFiles)) {
+      if (!/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(path) || path.split("/").some(part => part === "." || part === "..")
+        || !/^[a-f0-9]{64}$/.test(hash)) throw new Error("frozen files require relative paths and SHA-256 hashes");
+    }
     const script = packageFreezeScript();
     const env = [
       { name: "FREEZE", value: config.freeze },

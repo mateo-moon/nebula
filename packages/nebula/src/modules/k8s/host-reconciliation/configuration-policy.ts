@@ -13,6 +13,13 @@ export class DebianHostPolicy extends Construct {
   constructor(scope: Construct, id: string, config: DebianHostPolicyConfig) {
     super(scope, id);
     validateHostReconciler(config);
+    if (!config.provenance || /[\r\n\0]/.test(config.provenance)) throw new Error("host policy provenance must be one nonempty line");
+    if (!config.upgradeBlacklist.every(value => /^[a-zA-Z0-9.+*?:_-]+$/.test(value))) throw new Error("upgrade blacklist entries must be plain package patterns");
+    for (const [key, value] of Object.entries(config.sysctls)) {
+      if (!/^[a-zA-Z0-9_.-]+$/.test(key) || !/^-?[0-9]+(?:[ \t]+-?[0-9]+)*$/.test(value)) {
+        throw new Error("sysctls require plain keys and integer values");
+      }
+    }
     const policyScript = hostConfigurationPolicyScript();
     const policyEnv = [
       {
