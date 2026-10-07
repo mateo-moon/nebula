@@ -508,3 +508,5 @@ export { confidentialProject } from "./argocd/confidential-project";
 export type { ConfidentialProjectConfig } from "./argocd/confidential-project";
 export { workloadWorker, applyClusterResourcePolicy, WORKLOAD_OWNER } from "./argocd/worker-policy";
 export type { WorkerResourcePolicyOptions } from "./argocd/worker-policy";
+
+export { applyWorkloadAppPolicy } from "./argocd/app-policy";

@@ -15,6 +15,7 @@ const SYNC_WAVE = "argocd.argoproj.io/sync-wave";
 const WORKER_WAVES: Record<string, number> = {
   "ec2.aws.upbound.io/EIP": -4,
   "ec2.aws.upbound.io/LaunchTemplate": -3,
+  "nebula.io/XAwsWorkerLaunchTemplate": -3,
   "nebula.io/XWorker": -2,
   "autoscaling.aws.upbound.io/AutoscalingGroup": -1,
   "bootstrap.cluster.x-k8s.io/K0sWorkerConfigTemplate": 0,

@@ -164,9 +164,13 @@ export { DualStackSubnetSetup, DualStackSubnet } from "./dualstack-subnet";
 export { AwsWorkerFleet } from "./worker-fleet";
 export type {
   AwsWorkerFleetOptions,
+  AwsWorkerFleetEipOptions,
   AwsWorkerFleetRegion,
   AwsWorkerFleetNode,
   AwsWorkerFleetPort,
   AwsWorkerFleetCni,
 } from "./worker-fleet";
 export type { DualStackSubnetConfig } from "./dualstack-subnet";
+
+export { AwsWorkerLaunchTemplateSetup, AwsWorkerLaunchTemplate } from "./worker-launch-template";
+export type { AwsWorkerLaunchTemplateConfig } from "./worker-launch-template";

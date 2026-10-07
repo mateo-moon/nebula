@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { Testing } from "cdk8s";
 import { ArgoCdAppTier } from "../src/modules/k8s/argocd/app-tier";
 import { confidentialProject } from "../src/modules/k8s/argocd/confidential-project";
+import { applyWorkloadAppPolicy } from "../src/modules/k8s/argocd/app-policy";
 
 test("splitting cluster services across roots changes only their source path", () => {
   const root = mkdtempSync(join(tmpdir(), "app-discovery-"));
@@ -50,4 +51,30 @@ test("confidential projects require exact dedicated access and only grant get/sy
   for (const override of [{ name: "platform" }, { name: "default" }, { namespace: "default" },
     { allowedUsers: ["*"] }, { repoUrl: "*" }, { clusterName: "*" }])
     assert.throws(() => confidentialProject(Testing.chart(), "invalid", { ...config, ...override }), /exact source/);
+});
+
+test("service deletion cascades while cluster/meta and explicit protection retain their Applications", () => {
+  const chart = Testing.chart();
+  const tier = new ArgoCdAppTier(chart, "tier", {
+    repoUrl: "https://example.test/repo.git", targetRevision: "main",
+    discovery: { mode: "registry", modules: [
+      { mod: "service" }, { mod: "cluster", syncPolicyPreset: "capi" },
+      { mod: "meta", syncPolicyPreset: "meta" },
+      { mod: "protected", syncPolicy: { deleteProtection: true } },
+      { mod: "paused", syncPolicy: { prune: false } },
+    ] },
+  });
+  tier.applications[0].metadata.addFinalizers("example.test/cleanup");
+  applyWorkloadAppPolicy(tier);
+  const once = Testing.synth(chart);
+  applyWorkloadAppPolicy(tier);
+  assert.deepEqual(Testing.synth(chart), once);
+  for (const application of once) {
+    if (application.metadata.name === "service") {
+      assert.deepEqual(application.metadata.finalizers, ["example.test/cleanup", "resources-finalizer.argocd.argoproj.io"]);
+    } else {
+      assert.equal(application.metadata.finalizers, undefined);
+      assert.equal(application.metadata.annotations["argocd.argoproj.io/sync-options"], "Prune=false,Delete=false");
+    }
+  }
 });
