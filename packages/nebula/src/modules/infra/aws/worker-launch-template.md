@@ -155,7 +155,10 @@ Provider reconciliation must re-observe the cloud bindings; stale restored
 status is not a substitute for confirmation that the external-name, account,
 region and volume AZ still match. A Kubernetes-object restore that changes
 UIDs must rebuild owner references consistently through its restore mechanism;
-do not point a restored managed resource at an unrelated live XR.
+it must also remap the recorded `status.handoff.uid` ledger consistently. An
+identity-preserving management-state restore avoids that remapping. Stale ledger
+UIDs deliberately block handoff; the composition does not infer a new binding.
+Do not point a restored managed resource at an unrelated live XR.
 
 When no valid binding backup exists, recovery remains blocked. The tests prove
 that missing observations and missing/mismatched bindings cannot create a new
