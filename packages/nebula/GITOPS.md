@@ -43,6 +43,7 @@ without moving a workload to another Application owner.
 | `isMainModule(import.meta.url)` | Lets environment entry points export settings without synthesizing when another module imports them. |
 | `BaremetalFleet`, `baremetalWorker` | Composes existing named remote-machine inventory, bootstrap templates and worker deployments without changing the host identity. |
 | `CiliumNodeRegistration` | Native admission for exact kubelet/node inventory and host-scope IPv6 pod CIDR annotations. |
+| `measuredFragments`, `measuredProxy` | Preserve measured Envoy command/argument bytes while keeping literals below the policy parser's line bound. See [measured proxy arguments](src/modules/k8s/envoy/README.md). |
 
 Keep meaningful deployment settings in the deployment repository. Generic
 constructs do not choose an account, host, subnet, worker allocation or public

@@ -2,7 +2,7 @@
  * Kubernetes modules for deploying common infrastructure components.
  */
 
-export { EnvoyTcpProxy } from "./envoy";
+export { EnvoyTcpProxy, measuredFragments, measuredProxy } from "./envoy";
 export type { EnvoyTcpProxyConfig, EnvoyTcpRoute, EnvoyTlsFiles } from "./envoy";
 
 export { Crossplane } from "./crossplane";
