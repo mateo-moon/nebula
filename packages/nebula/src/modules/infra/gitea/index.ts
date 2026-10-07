@@ -56,7 +56,10 @@ export class GiteaBranchProtection extends Construct {
             type: "CUSTOM",
             // Check every declared field, including false and empty values.
             // Lists such as required checks and teams are sets in Gitea.
-            logic: 'def normalize: if type == "array" then sort else . end; (.response.statusCode >= 200 and .response.statusCode < 300) and (.response.body as $observed | .payload.body | to_entries | all(.[]; . as $field | ($observed | has($field.key)) and (($observed[$field.key] | normalize) == ($field.value | normalize))))',
+            // A failed HTTP observation is not policy drift. Returning false
+            // would permit an UPDATE while provider-http still reports Ready;
+            // fail Observe instead so authorization/server failures surface.
+            logic: 'def normalize: if type == "array" then sort else . end; if .response.statusCode < 200 or .response.statusCode >= 300 then error("branch-protection observation failed with HTTP " + (.response.statusCode | tostring)) else .response.body as $observed | .payload.body | to_entries | all(.[]; . as $field | ($observed | has($field.key)) and (($observed[$field.key] | normalize) == ($field.value | normalize))) end',
           },
         },
         providerConfigRef: { name: config.httpProviderConfigName },

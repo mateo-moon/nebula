@@ -17,7 +17,7 @@ function manifest(value = config) {
 function compare(observed: Record<string, unknown>, statusCode = 200) {
   const fp = manifest().spec.forProvider;
   return execFileSync("jq", ["-r", fp.expectedResponseCheck.logic], {
-    input: JSON.stringify({ payload: { body: JSON.parse(fp.payload.body) }, response: { statusCode, body: observed } }), encoding: "utf8",
+    input: JSON.stringify({ payload: { body: JSON.parse(fp.payload.body) }, response: { statusCode, body: observed } }), encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
   }).trim() === "true";
 }
 
@@ -40,8 +40,8 @@ test("checks false/empty values, every required check and missing fields while a
   }
   const missing = { ...config.rule }; delete missing.enable_force_push;
   assert.equal(compare(missing), false);
-  assert.equal(compare(config.rule, 403), false);
-  assert.equal(compare(config.rule, 500), false);
+  assert.throws(() => compare(config.rule, 403), /observation failed with HTTP 403/);
+  assert.throws(() => compare(config.rule, 500), /observation failed with HTTP 500/);
 });
 
 test("rejects credential-bearing origins and mismatched rule identities", () => {
