@@ -125,6 +125,25 @@ test("activation detaches obsolete Argo controls while preserving existing cloud
   assert.equal(rules(activeRules()).length, 3);
 });
 
+test("owned rules require an explicit current provider generation throughout handoff and active reconciliation", () => {
+  for (const phase of ["retain", "activate", "detaching", "active"]) {
+    const composite = phase === "retain" ? { ...xr, status: statusOf(retained()) }
+      : phase === "active" ? activeXr() : activateXr();
+    const owned = structuredClone(current(phase === "active" ? activeRules() : phase === "detaching" ? activation() : retained()));
+    const pendingRule = owned["rule-original-rule"].resource;
+    delete pendingRule.status.conditions[1].observedGeneration;
+    const pending = render({ ...observations, ...owned }, composite);
+    assert.equal(statusOf(pending).rulesReady, false, phase);
+    assert.equal(statusOf(pending).handoffActive, false, phase);
+    if (phase !== "active") assert.equal(statusOf(pending).adoptionComplete, false, phase);
+    for (const rule of rules(pending)) assert.deepEqual(rule.spec, owned[`rule-${rule.metadata.name}`].resource.spec);
+    assert.equal(rules(pending).length, Object.keys(owned).length);
+    assert.ok(pending.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"));
+    pendingRule.status.conditions[1].observedGeneration = pendingRule.metadata.generation;
+    assert.equal(statusOf(render({ ...observations, ...owned }, composite)).rulesReady, true, phase);
+  }
+});
+
 test("source removal during activation detaches the obsolete rule before permitting cloud revocation", () => {
   const changed = structuredClone(observations);
   changed.cluster.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs = ["192.0.2.10"];

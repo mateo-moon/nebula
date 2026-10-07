@@ -98,7 +98,13 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- $isOwned := and (eq (printf "rule-%s" $name) $key) (eq (include "nat.owned" (dict "rule" $rule "xr" $xr)) "true") -}}
 {{- if $isOwned -}}
 {{- $_ := set $owned $name $rule -}}
-{{- $matches := eq (include "nat.rule" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true" -}}
+{{- $currentGeneration := false -}}
+{{- range (dig "status" "conditions" (list) $rule) -}}
+{{- if and (eq .type "Synced") (eq .status "True") (hasKey . "observedGeneration")
+  (gt (int (dig "metadata" "generation" 0 $rule)) 0)
+  (eq (toString .observedGeneration) (toString (dig "metadata" "generation" 0 $rule))) -}}{{- $currentGeneration = true -}}{{- end -}}
+{{- end -}}
+{{- $matches := and $currentGeneration (eq (include "nat.rule" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true") -}}
 {{- if hasKey $baseline $name -}}
 {{- $saved := get $baseline $name -}}
 {{- $matches = and $matches (eq $rule.metadata.uid $saved.uid) (eq (get $rule.metadata.annotations "crossplane.io/external-name") $saved.externalName) -}}

@@ -48,7 +48,10 @@ lifecycle to Orphan with Observe/Update/LateInitialize, and records each UID and
 external binding in XR status. No cloud IDs enter Git. Retention does not add,
 reassign or revoke NAT sources even if CAPA already observes a different set.
 After the provider's next poll, `status.ownershipReady` and `status.rulesReady`
-confirm the current rules are healthy and controlled by this XR. A missing or
+confirm the current rules are healthy and controlled by this XR. Every owned
+rule must explicitly report `Synced.observedGeneration` equal to its positive
+`metadata.generation`; a missing legacy marker cannot advance activation,
+detachment or later source reconciliation. A missing or
 stale observation preserves the previous desired rules and explicitly holds
 function-auto-ready readiness false.
 
