@@ -38,6 +38,7 @@ import { Worker } from "../k0s/worker";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
+import { workerIngressRules, type AwsWorkerFleetIngressRule } from "./worker-ingress";
 import { resolveSecrets } from "../../../utils/secrets";
 import { syncWave } from "../../../core";
 import { CILIUM_WIREGUARD_PORT } from "../../k8s/cilium";
@@ -175,6 +176,10 @@ export interface AwsWorkerFleetRegion {
   subnetCidr: string;
   /** Extra publicly open ports (e.g. P2P ports on nodes that need them). */
   extraOpenPorts?: AwsWorkerFleetPort[];
+  /** Complete native ingress policy. When supplied (including []), replaces
+   * automatic public/CNI ports. Include the CNI mesh ports explicitly. Omit to
+   * preserve legacy defaults. Stable rule names support staged adoption. */
+  ingressRules?: AwsWorkerFleetIngressRule[];
 }
 
 export interface AwsWorkerFleetNode {
@@ -604,7 +609,9 @@ export class AwsWorkerFleet extends Construct {
       ...(cfg.extraOpenPorts ?? []),
       ...CNI_MESH_PORTS[this.options.cni ?? "calico"],
     ];
-    rules.forEach((r) => {
+    if (cfg.ingressRules !== undefined) {
+      workerIngressRules(this, cfg.ingressRules, cfg.region, `${p}-sg`, this.pcRef.name);
+    } else rules.forEach((r) => {
       (
         [
           ["any", { cidrIpv4: "0.0.0.0/0" }],
