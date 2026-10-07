@@ -89,6 +89,12 @@ export interface K0smotronClusterConfig<M> {
   controlPlane?: K0smotronClusterControlPlane;
   /** Worker pools keyed by pool name (each a MachineDeployment). */
   workerPools?: Record<string, K0sWorkerPool<M>>;
+  /** Optional discovery-command override for dual-stack worker pools. Omit for
+   * checked NIC discovery; use RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS to retain
+   * existing bootstrap bytes while adopting the module. Commands must write
+   * /run/node-ip and /run/node-ip6 consumed by the unchanged kubelet arguments.
+   * This replaces discovery only, preserving default and pool prestart hooks. */
+  workerNodeIpDiscoveryCommands?: readonly string[];
   /** Infrastructure provider adapter for the WORKERS (AWS now; GCP/others later). */
   provider: K0sInfraProvider<M>;
 }
@@ -215,7 +221,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
               ...(wargs.length ? { args: wargs } : {}),
               preK0SCommands: [
                 ...DEFAULT_PRESTART_COMMANDS,
-                ...(dualStack ? NODE_IP_DISCOVERY_COMMANDS : []),
+                ...(dualStack ? this.config.workerNodeIpDiscoveryCommands ?? NODE_IP_DISCOVERY_COMMANDS : []),
                 ...(pool.extraPreStartCommands ?? []),
               ],
             },

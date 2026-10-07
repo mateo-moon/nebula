@@ -2,12 +2,49 @@
 
 `pnpm test` runs every `test/**/*.test.ts` file with the Node test runner.
 
+Use Node 24, pnpm and Go (the template fixture declares its version in
+`support/oidc-template/go.mod`). A first run downloads checksum-pinned Go
+dependencies for the actual Go/Sprig template evaluator; an offline run needs
+a warm module cache. Docker enables the registry shell-script qualification.
+The packed-package test also needs package-registry access or a warm pnpm store.
+
+- `argocd-discovery`, `worker-policy`, and `baremetal-and-registration` cover
+  additional discovery roots without ownership changes, duplicate-name refusal,
+  application/worker retention and exact baremetal/native admission graphs.
+- `worker-observed-identity`, `worker-observed-network` and
+  `worker-fleet-attachment` execute the emitted worker template and bootstrap:
+  exact retained bindings, wrong/missing region or AZ, lost external names,
+  resolved security-group values, explicit readiness failures and transient
+  observation loss. Retain/activate cases check complete-spec preservation,
+  recorded UID/external binding, controller ownership and Argo tracking handoff.
+  Bootstrap cases check attachment ownership, exact disk serial selection and
+  refusal to initialize retained storage.
+- `cluster-nat-ingress` executes Go/Sprig against healthy, missing, mismatched,
+  reordered and rotating CAPA observations. Existing rule identity and obsolete
+  source revocation are checked separately from data-resource retention.
+- `kubernetes-oidc-publication` executes Go/Sprig with active-context kubeconfigs,
+  validated RSA JWKS, malformed/private key inputs, failed observations and key
+  rotation. `image-registry`, `image-registry-runtime`, and
+  `service-account-registry-identity` cover emitted IAM boundaries, scripts,
+  refresh failure and namespace credential distribution.
+- `gitea-branch-protection` uses actual jq to evaluate exact/changed fields and
+  HTTP failures. `dlm` verifies adoption preserves existing resource identities.
+- `ecr-reader` checks selected-job credential isolation and unchanged resources;
+  `ecr-reader-token` executes the STS/ECR exchange with fake AWS responses and
+  checks failure-output secrecy. `ecr-reader-credentials` runs the exact jq
+  validator against valid and rejected tokens; `ECR_READER_CONTAINER_TEST=1`
+  also qualifies the pinned non-root tool containers. CI enables this tier.
+  `argocd-plugin-image-update` checks exact-Application RBAC and digest/CMP policy.
+
 - `cilium.test.ts` checks mandatory dual-stack pod allocation, public/private
   node transport, final Helm-value validation and override refusals. Set
   `CILIUM_TEST_CHART` to the pinned chart archive to also qualify the actual
   rendered ConfigMap and DaemonSet without contacting a cluster.
   `dual-stack-workers.test.ts` executes the emitted address discovery with
   simulated NICs and proves missing/unusable IPv6 fails before worker join.
+  `cilium-node-ipv6-overrides.test.ts` executes native admission CEL against
+  matching and altered inventory; the real chart qualification verifies the
+  namespace config source and sole `ipv6-node` allowlist.
 - `ecr.test.ts` validates private ECR synthesis, repository retention, IAM
   access boundaries and keyless provider installation.
 - `k0smotron-control-plane.test.ts` checks where the hosted control plane's

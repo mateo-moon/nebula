@@ -6,12 +6,12 @@ const NETWORK_OPTIONS = new Set([
   "ipv4-node", "ipv6-node", "ipv4-range", "ipv6-range", "ipv6-cluster-alloc-cidr",
   "custom-cni-conf", "read-cni-conf", "write-cni-conf-when-ready",
   "cni-chaining-mode", "cni-chaining-target", "cni-exclusive",
-  "config", "config-dir",
+  "config", "config-dir", "config-sources", "config-sources-overrides",
 ]);
 
 function record(value: unknown, path: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`Cilium: ${path} must be an object; the dual-stack network configuration cannot be replaced.`);
+    throw new Error(`Cilium: ${path} must be an object; the selected network configuration cannot be replaced.`);
   }
   return value as Record<string, unknown>;
 }
@@ -19,25 +19,29 @@ function record(value: unknown, path: string): Record<string, unknown> {
 export function validateCiliumNetwork(
   values: Record<string, unknown>,
   connectivity: "public" | "private",
+  nodeIpv6ConfigSources?: string,
+  podAddressFamilies: "dual-stack" | "ipv4" = "dual-stack",
 ): void {
+  const enableIpv6 = podAddressFamilies === "dual-stack";
   const requireValue = (path: string, expected: unknown) => {
     let actual: unknown = values;
     for (const key of path.split(".")) actual = record(actual, path)[key];
     if (actual !== expected) {
-      throw new Error(`Cilium: values.${path} must be ${JSON.stringify(expected)}; the module requires dual-stack pods with Kubernetes IPAM and the Cilium CNI.`);
+      throw new Error(`Cilium: values.${path} must be ${JSON.stringify(expected)}; the ${podAddressFamilies} profile requires Kubernetes IPAM and the Cilium CNI.`);
     }
   };
   requireValue("ipv4.enabled", true);
-  requireValue("ipv6.enabled", true);
+  requireValue("ipv6.enabled", enableIpv6);
   requireValue("ipam.mode", "kubernetes");
   requireValue("k8s.requireIPv4PodCIDR", true);
-  requireValue("k8s.requireIPv6PodCIDR", true);
+  requireValue("k8s.requireIPv6PodCIDR", enableIpv6);
   requireValue("routingMode", "tunnel");
   requireValue("cni.install", true);
   requireValue("cni.exclusive", true);
   requireValue("cni.customConf", false);
   requireValue("cni.chainingMode", "none");
-  requireValue("daemon.configSources", "config-map:cilium-config");
+  requireValue("daemon.configSources", nodeIpv6ConfigSources ?? "config-map:cilium-config");
+  if (nodeIpv6ConfigSources) requireValue("daemon.allowedConfigOverrides", "ipv6-node");
   requireValue("agent", true);
   requireValue("sleepAfterInit", false);
   requireValue("rollOutCiliumPods", true);
@@ -45,7 +49,7 @@ export function validateCiliumNetwork(
   const cni = record(values.cni, "values.cni");
   for (const key of ["configMap", "readCniConf", "chainingTarget"]) {
     if (cni[key] !== undefined && cni[key] !== null && cni[key] !== "") {
-      throw new Error(`Cilium: values.cni.${key} replaces pod address allocation; custom or chained CNI configurations cannot enforce dual-stack pods.`);
+      throw new Error(`Cilium: values.cni.${key} replaces pod address allocation; custom or chained CNI configurations cannot enforce the selected pod families.`);
     }
   }
   if (values.underlayProtocol !== "ipv4" && values.underlayProtocol !== "ipv6") {
@@ -55,6 +59,10 @@ export function validateCiliumNetwork(
     throw new Error('Cilium: public node connectivity requires underlayProtocol "ipv6" and on-link IPv6 node addresses. AWS public IPv4/EIPs are NAT addresses. Use nodeConnectivity "private" only when every node private address is mutually routable.');
   }
   if (connectivity === "public") requireValue("preferIpv6", true);
+  if (!enableIpv6) {
+    requireValue("underlayProtocol", "ipv4");
+    requireValue("preferIpv6", false);
+  }
   if (values.tunnelProtocol !== "vxlan" && values.tunnelProtocol !== "geneve") {
     throw new Error('Cilium: tunnelProtocol must be "vxlan" or "geneve".');
   }

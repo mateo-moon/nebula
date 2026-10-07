@@ -111,3 +111,25 @@ export class EnvoyTcpProxy {
     };
   }
 }
+
+/** Split measured argv literals below the pinned policy parser's line bound.
+ * Concatenation preserves the existing bootstrap representation exactly. */
+export function measuredFragments(text: string): string[] {
+  const pieces: string[] = [];
+  while (text.length) {
+    let size = Math.min(text.length, 650);
+    while (JSON.stringify(text.slice(0, size)).length > 700) size--;
+    pieces.push(text.slice(0, size)); text = text.slice(size);
+  }
+  return pieces;
+}
+
+/** Preserve the proxy container and measured bootstrap, joining argv as literal
+ * data before exec. No ConfigMap, shell evaluation of arguments or extra pod. */
+export function measuredProxy(envoy: EnvoyTcpProxy): Container {
+  const { ports, ...container } = envoy.container;
+  return { ...container, ...(ports?.length ? { ports } : {}),
+    command: ["/bin/sh", "-ec", 'exec /usr/local/bin/envoy --config-yaml "$(printf \'%s\' "$@")" --disable-hot-restart --concurrency 1 --log-level warning', "envoy-bootstrap"],
+    args: measuredFragments(JSON.stringify(envoy.bootstrap)),
+  };
+}

@@ -64,6 +64,13 @@ export const FOLLOWER_POLICIES: readonly string[] = [
  *  persist and no leak class to guard against. */
 export const OBSERVE_POLICIES: readonly string[] = ["Observe"];
 
+/** HTTP requests that reconcile an explicit, stable URL and must never remove
+ * its external policy. Unlike an Upjet async-created resource, provider-http
+ * Request does not acquire an external identity through LateInitialize. */
+export const RETAINED_REQUEST_POLICIES: readonly string[] = [
+  "Observe", "Create", "Update",
+];
+
 /**
  * Data that outlives every k8s object (EBSVolume).
  *

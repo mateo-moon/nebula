@@ -20,6 +20,14 @@ The module deliberately leaves certificate issuance, attestation policy,
 rotation and resource storage to the deployment. Plain Kubernetes Secrets
 are suitable only when the host is trusted.
 
+Use `measuredProxy(proxy)` when the pinned policy parser needs shorter source
+lines. It keeps the same container, bootstrap and Envoy flags, fragments the
+serialized configuration into argv literals of at most 650 characters and 700
+JSON-literal characters, then joins them with a literal `printf` before `exec`.
+`measuredFragments(text)` exposes the same fragmentation for other measured
+arguments. Adopting these helpers from identical deployment code preserves
+the command/args bytes and does not add a container or change TLS identities.
+
 Application ports must bind to loopback, or be blocked from remote traffic by
 the deployment. A NetworkPolicy is useful defense in depth, but its labels
 do not establish a cryptographic identity. Plaintext exists at each endpoint;

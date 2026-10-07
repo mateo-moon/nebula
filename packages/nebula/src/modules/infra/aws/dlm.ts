@@ -1,11 +1,6 @@
 /**
  * Scheduled EBS snapshots via Data Lifecycle Manager.
  *
- * The estate ran with NO backups of any kind — a 2026-08-02 sweep found zero
- * snapshots in every region. Large stateful data volumes are the exposure that matters:
- * a lost 768Gi volume is days of resync, and until now nothing but the single
- * AZ-local copy stood behind it.
- *
  * DLM rather than AWS Backup: this is EBS-only, tag-targeted, needs no vault,
  * and the schedule is the whole feature. AWS Backup earns its extra surface
  * (vaults, restore testing, cross-account) only once there is something other
@@ -45,6 +40,9 @@ export interface DlmSnapshotSchedule {
   /** Schedule id. The LifecyclePolicy MR is named `<config.name>-<name>`, so
    *  this is also how an existing policy is adopted without churn. */
   name: string;
+  /** Existing LifecyclePolicy MR name (default `<config.name>-<name>`).
+   * Preserve this independently of the AWS schedule name during adoption. */
+  resourceName?: string;
   /**
    * DLM's own name for the schedule (default: {@link name}).
    *
@@ -61,9 +59,9 @@ export interface DlmSnapshotSchedule {
   description?: string;
   region: string;
   /**
-   * Volumes carrying ALL of these tags are snapshotted. DLM matches key AND
-   * value exactly, so a per-node tag (e.g. `<domain>/node: stage-eu-tool-1`)
-   * cannot be a target — use a constant marker tag.
+   * Volumes carrying ANY of these exact key/value pairs are snapshotted.
+   * Use one constant marker tag to select a fleet; adding tags broadens scope.
+   * https://docs.aws.amazon.com/ebs/latest/userguide/dlm-elements.html
    */
   targetTags: Record<string, string>;
   /** Hours between snapshots — one of 1,2,3,4,6,8,12,24 (default 24). */
@@ -86,10 +84,17 @@ export interface AwsDlmConfig {
   /** Execution-role name (default `<name>-dlm-role`). Set it to adopt a role
    *  that already exists — the MR keeps its name, so nothing is recreated. */
   roleName?: string;
+  /** AWS role binding (default roleName). Null leaves the provider-owned
+   * external-name annotation unmanaged when adopting an existing MR. */
+  roleExternalName?: string | null;
+  /** Execution-role description. Null preserves an existing unmanaged value. */
+  roleDescription?: string | null;
   schedules: DlmSnapshotSchedule[];
   /** Crossplane ProviderConfig (default "default"). */
   providerConfigRef?: string;
-  tags?: Record<string, string>;
+  /** Extra resource tags, including the default nebula.sh/role=dlm marker.
+   * Null omits desired tags entirely when adopting untagged resources. */
+  tags?: Record<string, string> | null;
 }
 
 /**
@@ -109,19 +114,22 @@ export class AwsDlm extends Construct {
 
     const providerConfigRef = { name: config.providerConfigRef ?? "default" };
     this.roleName = config.roleName ?? `${config.name}-dlm-role`;
-    const tags = { ...config.tags, "nebula.sh/role": "dlm" };
+    const tags = config.tags === null ? undefined : { ...config.tags, "nebula.sh/role": "dlm" };
+    const roleExternalName = config.roleExternalName === undefined ? this.roleName : config.roleExternalName;
+    const roleDescription = config.roleDescription === undefined
+      ? "Nebula EBS snapshot lifecycle (DLM) execution role" : config.roleDescription;
 
     // Deterministic AWS name via external-name, matching AwsIam: the policies
     // below reference the role by name, so a generated name would not resolve.
     new CpRole(this, "dlm-role", {
       metadata: {
         name: this.roleName,
-        annotations: { "crossplane.io/external-name": this.roleName },
+        ...(roleExternalName === null ? {} : { annotations: { "crossplane.io/external-name": roleExternalName } }),
       },
       spec: {
         forProvider: {
           assumeRolePolicy: DLM_ASSUME_ROLE_POLICY,
-          description: "Nebula EBS snapshot lifecycle (DLM) execution role",
+          ...(roleDescription === null ? {} : { description: roleDescription }),
           tags,
         },
         providerConfigRef,
@@ -142,7 +150,13 @@ export class AwsDlm extends Construct {
       },
     });
 
+    const resourceNames = new Set<string>();
     for (const s of config.schedules) {
+      const resourceName = s.resourceName ?? `${config.name}-${s.name}`;
+      if (resourceNames.has(resourceName)) {
+        throw new Error(`DLM schedule "${s.name}": duplicate resourceName "${resourceName}"`);
+      }
+      resourceNames.add(resourceName);
       const interval = s.intervalHours ?? 24;
       if (!VALID_INTERVALS.includes(interval)) {
         throw new Error(
@@ -150,7 +164,7 @@ export class AwsDlm extends Construct {
             `${VALID_INTERVALS.join(", ")} (got ${interval})`,
         );
       }
-      const description = s.description ?? `${config.name}-${s.name}`;
+      const description = s.description ?? resourceName;
       if (!/^[0-9A-Za-z _-]*$/.test(description)) {
         // DLM rejects anything else, and the API error names the field but
         // not the offending character.
@@ -166,7 +180,7 @@ export class AwsDlm extends Construct {
       }
 
       new LifecyclePolicyV1Beta2(this, `dlm-${s.name}`, {
-        metadata: { name: `${config.name}-${s.name}` },
+        metadata: { name: resourceName },
         spec: {
           forProvider: {
             region: s.region,

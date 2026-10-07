@@ -30,6 +30,8 @@ import { Helm } from "cdk8s";
 import { deepmerge } from "deepmerge-ts";
 import { HelmModule } from "../../../core";
 import { validateCiliumNetwork } from "./network";
+import { CiliumNodeIpv6Overrides, type CiliumNodeIpv6OverridesConfig } from "./node-ipv6-overrides";
+export type { CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./node-ipv6-overrides";
 
 /**
  * Cilium's WireGuard UDP port — NOT Calico's 51820. A security group that
@@ -53,19 +55,27 @@ export interface CiliumConfig {
   /** Helm repository URL. */
   repository?: string;
   /**
-   * Both pod address families are mandatory. Kept for existing callers that
-   * explicitly enable IPv6; false is rejected. The control plane must allocate
-   * both pod CIDRs or the agent waits without starting pod networking.
+   * Enable-only compatibility spelling for dual-stack pods. For a retained
+   * private IPv4 cluster, use podAddressFamilies: "ipv4" instead.
    */
   ipv6?: true;
+  /** Pod address families, default "dual-stack". The explicit "ipv4" profile
+   * requires private node connectivity and IPv4 transport. It preserves an
+   * existing IPv4 cluster without attempting a control-plane family migration. */
+  podAddressFamilies?: "dual-stack" | "ipv4";
   /**
    * Node-to-node reachability, default "public" (internet / cross-VPC).
    * Public meshes require on-link IPv6 node addresses, an IPv6 underlay and
    * MTU <= 1400. AWS EIPs are NAT entrances, not on-link node identities.
    * Use "private" only when EVERY node can route directly to every other
-   * node's private address. Pods remain dual-stack in either mode.
+   * node's private address. Pods default to dual-stack in either mode.
    */
   nodeConnectivity?: "public" | "private";
+  /** Retained node IPv6 identities, applied through selector-scoped native
+   * CiliumNodeConfigs. Installs exact-inventory validating admission and permits
+   * only ipv6-node overrides. Requires CiliumNodeConfig CRDs already installed;
+   * first-install clusters should publish both NIC addresses through kubelet. */
+  nodeIpv6Overrides?: CiliumNodeIpv6OverridesConfig;
   /**
    * Tunnel MTU, applied to every interface Cilium owns.
    *
@@ -212,14 +222,30 @@ export class Cilium extends HelmModule<CiliumConfig> {
 
     const namespace = this.config.namespace ?? "kube-system";
     if (this.config.ipv6 !== undefined && this.config.ipv6 !== true) {
-      throw new Error("Cilium: ipv6 cannot be disabled; configure dual-stack pod and service CIDRs on the control plane before installing Cilium.");
+      throw new Error('Cilium: ipv6 cannot be disabled through the legacy flag; use podAddressFamilies "ipv4" with explicit private node connectivity for a retained IPv4 cluster.');
     }
     const nodeConnectivity = this.config.nodeConnectivity ?? "public";
     if (nodeConnectivity !== "public" && nodeConnectivity !== "private") {
       throw new Error('Cilium: nodeConnectivity must be "public" or "private".');
     }
+    const podAddressFamilies = this.config.podAddressFamilies ?? "dual-stack";
+    if (podAddressFamilies !== "dual-stack" && podAddressFamilies !== "ipv4") {
+      throw new Error('Cilium: podAddressFamilies must be "dual-stack" or "ipv4".');
+    }
+    const enableIpv6 = podAddressFamilies === "dual-stack";
+    if (!enableIpv6) {
+      if (nodeConnectivity !== "private") {
+        throw new Error('Cilium: podAddressFamilies "ipv4" requires explicit nodeConnectivity "private".');
+      }
+      if (this.config.ipv6 !== undefined || this.config.nodeIpv6Overrides !== undefined) {
+        throw new Error('Cilium: podAddressFamilies "ipv4" cannot enable ipv6 or nodeIpv6Overrides.');
+      }
+    }
     const underlayProtocol = this.config.underlayProtocol ??
       (nodeConnectivity === "public" ? "ipv6" : "ipv4");
+    const nodeOverrides = this.config.nodeIpv6Overrides
+      ? new CiliumNodeIpv6Overrides(this, "node-ipv6", this.config.nodeIpv6Overrides, namespace, nodeConnectivity)
+      : undefined;
     const mtu = this.config.mtu ?? (nodeConnectivity === "public" ? 1400 : undefined);
     const hubble = this.config.hubble ?? false;
     const envoy = this.config.envoy ?? false;
@@ -247,19 +273,21 @@ export class Cilium extends HelmModule<CiliumConfig> {
       );
     }
 
-    const values = deepmerge(
+    const values: Record<string, unknown> = deepmerge(
       {
         // Consume the podCIDRs k0s already allocates per node rather than
         // letting Cilium carve an independent pool the cluster disagrees with.
         ipam: { mode: "kubernetes" },
         ipv4: { enabled: true },
-        ipv6: { enabled: true },
-        // Do not start on a node until the control plane has allocated BOTH
-        // families. Enabling IPv6 alone cannot convert a single-stack cluster.
-        k8s: { requireIPv4PodCIDR: true, requireIPv6PodCIDR: true },
+        ipv6: { enabled: enableIpv6 },
+        // Wait for every enabled family. Enabling IPv6 cannot itself convert
+        // the control plane or existing pod sandboxes to dual-stack.
+        k8s: { requireIPv4PodCIDR: true, requireIPv6PodCIDR: enableIpv6 },
         cni: { install: true, exclusive: true, customConf: false, chainingMode: "none" },
         // Otherwise a CiliumNodeConfig can silently undo the cluster contract.
-        daemon: { configSources: "config-map:cilium-config" },
+        daemon: nodeOverrides
+          ? { configSources: nodeOverrides.configSources, allowedConfigOverrides: "ipv6-node" }
+          : { configSources: "config-map:cilium-config" },
         agent: true,
         sleepAfterInit: false,
         // ConfigMap edits alone do not restart agents. Reconcile the running
@@ -362,7 +390,17 @@ export class Cilium extends HelmModule<CiliumConfig> {
       },
       this.config.values ?? {},
     );
-    validateCiliumNetwork(values, nodeConnectivity);
+    if (nodeOverrides) {
+      if (values.podAnnotations !== undefined && (values.podAnnotations === null ||
+          typeof values.podAnnotations !== "object" || Array.isArray(values.podAnnotations))) {
+        throw new Error("Cilium: values.podAnnotations must be an object.");
+      }
+      values.podAnnotations = {
+        ...((values.podAnnotations ?? {}) as Record<string, string>),
+        "nebula.sh/cilium-node-ipv6-checksum": nodeOverrides.checksum,
+      };
+    }
+    validateCiliumNetwork(values, nodeConnectivity, nodeOverrides?.configSources, podAddressFamilies);
     this.helm = this.createHelmRelease({
       namespace,
       chart: "cilium",

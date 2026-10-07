@@ -37,6 +37,8 @@ import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { DualStackSubnet } from "./dualstack-subnet";
+import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
+import { workerIngressRules, type AwsWorkerFleetIngressRule } from "./worker-ingress";
 import { resolveSecrets } from "../../../utils/secrets";
 import { syncWave } from "../../../core";
 import { CILIUM_WIREGUARD_PORT } from "../../k8s/cilium";
@@ -49,6 +51,7 @@ import {
 import {
   Eip,
   EipSpecManagementPolicies,
+  EipSpecDeletionPolicy,
   InternetGateway,
   Route,
   RouteTable,
@@ -64,6 +67,14 @@ import {
   RolePolicyAttachment,
 } from "#imports/iam.aws.upbound.io";
 
+/** Original AWS worker address discovery: IMDSv2 private IPv4 and on-link IPv6.
+ * Select this preset when retaining an existing fleet during ownership adoption;
+ * replacing its bootstrap commands is a separate worker rollout. */
+export const AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
+  "sh -c 'TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\"); curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4 > /run/node-ip'",
+  "sh -c 'IFACE=$(ip route show default | awk \"{print \\$5}\" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev \"$IFACE\" scope global 2>/dev/null | awk \"/inet6/{print \\$2; exit}\" | cut -d/ -f1); [ -n \"$IP6\" ] && break; sleep 2; done; echo \"$IP6\" > /run/node-ip6'"
+];
+
 export interface AwsWorkerFleetPort {
   port: number;
   protocol: string;
@@ -77,9 +88,25 @@ export interface AwsWorkerFleetPort {
   protocolV6?: string;
 }
 
+export interface AwsWorkerFleetEipOptions {
+  /** One-time adoption; omit when the existing MR already owns its binding. */
+  allocationId?: string;
+  /** Require the existing MR binding; never allocate a replacement address. */
+  existing?: boolean;
+  /** Retain the cloud address and protect its Kubernetes binding from Argo
+   * pruning or Application deletion. */
+  retain?: boolean;
+}
+
 export interface AwsWorkerFleetOptions {
   /** Resource-name prefix, e.g. "stage" — regions become `<prefix>-<geo>-…`. */
   namePrefix: string;
+  /** Resolve cloud IDs from named managed resources through
+   * AwsWorkerLaunchTemplateSetup. Existing installations require the documented
+   * ownership handoff before enabling this option. Legacy rendering is unchanged. */
+  observedIdentity?: boolean;
+  /** Read-only provider-kubernetes config used for the named observations. */
+  kubeProviderConfigName?: string;
   /** CAPI cluster name (Machine.clusterName + cluster label + elb tag). */
   clusterName: string;
   /** k0s version for K0sWorkerConfig/Machine, e.g. "v1.33.12+k0s.0". */
@@ -109,6 +136,11 @@ export interface AwsWorkerFleetOptions {
    *  keep the k0s default (v4 kube-dns) — cross-region pods then depend on
    *  cross-region v4 pod routing, which private node identity does not have. */
   clusterDns?: string;
+  /** Complete pre-k0s commands. Existing fleets can preserve their current
+   * bootstrap during a resource ownership handoff, then adopt newer discovery
+   * commands in a separately reviewed rollout. Defaults to dual-stack on-link
+   * address discovery. These commands must populate /run/node-ip{,6}. */
+  preK0sCommands?: readonly string[];
   /** Namespace for the adoption objects (default "default"). */
   namespace?: string;
   /** Crossplane ProviderConfig (default "default"). */
@@ -158,11 +190,23 @@ export interface AwsWorkerFleetRegion {
   subnetCidr: string;
   /** Extra publicly open ports (e.g. P2P ports on nodes that need them). */
   extraOpenPorts?: AwsWorkerFleetPort[];
+  /** Complete native ingress policy. When supplied (including []), replaces
+   * automatic public/CNI ports. Include the CNI mesh ports explicitly. Omit to
+   * preserve legacy defaults. Stable rule names support staged adoption. */
+  ingressRules?: AwsWorkerFleetIngressRule[];
 }
 
 export interface AwsWorkerFleetNode {
   /** Node name — hostname AND k8s node name AND MR name. */
   name: string;
+  /** Override the fleet default to migrate one existing worker at a time. */
+  observedIdentity?: boolean;
+  /** Adopt an existing LT with retention first; activate its normal deletion
+   * lifecycle only after the observed ownership and cloud binding match. */
+  launchTemplateHandoff?: "retain" | "activate";
+  /** Per-resource metadata for a staged GitOps ownership handoff. This does
+   * not change the EC2 launch specification or trigger instance replacement. */
+  launchTemplateAnnotations?: Record<string, string>;
   ami: string;
   instanceType: string;
   /** kubelet --node-labels (geo/topology labels are added from the region). */
@@ -183,8 +227,9 @@ export interface AwsWorkerFleetNode {
      *  data volume exists because losing it costs days of resync). */
     snapshot?: boolean;
   } & (
-    | { volumeId: string; createFresh?: never }
-    | { createFresh: true; volumeId?: never }
+    | { volumeId: string; createFresh?: never; existing?: never }
+    | { createFresh: true; volumeId?: never; existing?: never }
+    | { existing: true; volumeId?: never; createFresh?: never }
   );
   /** Existing EIP allocation to adopt as this node's Eip MR (external-name).
    *  Stable id, safe in git — same pattern as dns adoptZoneId. Omit on a
@@ -348,17 +393,24 @@ export class AwsWorkerFleet extends Construct {
    * LateInitialize instead cost 16 stray EIPs. allocationId adopts an
    * existing address (external-name).
    */
-  addEip(name: string, region: string, allocationId?: string) {
+  addEip(name: string, region: string, identity?: string | AwsWorkerFleetEipOptions) {
+    const options = typeof identity === "string" ? { allocationId: identity } : identity ?? {};
+    const allocationId = options.allocationId;
     new Eip(this, `${name}-eip`, {
       metadata: {
         name,
-        ...(allocationId
-          ? { annotations: { "crossplane.io/external-name": allocationId } }
+        ...(allocationId || options.retain
+          ? { annotations: {
+              ...(allocationId ? { "crossplane.io/external-name": allocationId } : {}),
+              ...(options.retain ? { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } : {}),
+            } }
           : {}),
       },
       spec: {
         managementPolicies:
-          asPolicies<EipSpecManagementPolicies>(OWNED_POLICIES),
+          asPolicies<EipSpecManagementPolicies>(OWNED_POLICIES.filter(policy =>
+            !(options.existing && policy === "Create") && !(options.retain && policy === "Delete"))),
+        ...(options.retain ? { deletionPolicy: EipSpecDeletionPolicy.ORPHAN } : {}),
         forProvider: {
           region,
           domain: "vpc",
@@ -579,7 +631,9 @@ export class AwsWorkerFleet extends Construct {
       ...(cfg.extraOpenPorts ?? []),
       ...CNI_MESH_PORTS[this.options.cni ?? "calico"],
     ];
-    rules.forEach((r) => {
+    if (cfg.ingressRules !== undefined) {
+      workerIngressRules(this, cfg.ingressRules, cfg.region, `${p}-sg`, this.pcRef.name);
+    } else rules.forEach((r) => {
       (
         [
           ["any", { cidrIpv4: "0.0.0.0/0" }],
@@ -649,13 +703,17 @@ export class AwsWorkerFleet extends Construct {
     return p;
   }
 
+  private usesObservedIdentity(node: AwsWorkerFleetNode): boolean {
+    return node.observedIdentity ?? this.options.observedIdentity ?? false;
+  }
+
   private userData(node: AwsWorkerFleetNode, region: AwsWorkerFleetRegion): string {
     const o = this.options;
     // Data volume -> LVM VG. create-if-absent ONLY: on instance replacement
     // the volume re-attaches carrying its data — vgcreate on a populated PV
     // would destroy exactly what this design preserves.
     const lvmSection = node.dataVolume
-      ? `
+      ? this.usesObservedIdentity(node) ? this.observedVolumeInit(node.dataVolume) : `
 ROOT_PART=$(findmnt -no SOURCE /)
 ROOT_DISK=/dev/$(lsblk -no PKNAME "$ROOT_PART")
 DEV=""
@@ -696,7 +754,7 @@ systemctl enable --now pvresize.timer
 `
       : "";
     return `#!/bin/bash
-set -x
+${this.usesObservedIdentity(node) ? "set -ex" : "set -x"}
 exec >> /var/log/${o.namePrefix}-worker-init.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
 hostnamectl set-hostname ${node.name}
@@ -716,6 +774,69 @@ retry apt-get install -y -qq lvm2 curl awscli
 ${this.selfAssemblySection(node, region)}${lvmSection}`;
   }
 
+  /** Existing disks must already contain the expected VG. Only an explicitly
+   * fresh disk may be initialized; select it by EBS serial, never by ordering
+   * among all non-root disks. A missing or ambiguous serial fails closed. */
+  private observedVolumeInit(volume: NonNullable<AwsWorkerFleetNode["dataVolume"]>): string {
+    const vg = this.options.dataVgName;
+    return `
+ROOT_PART=$(findmnt -no SOURCE /)
+ROOT_DISK=/dev/$(lsblk -no PKNAME "$ROOT_PART")
+DATA_SERIAL=$(printf '%s' '${WORKER_VOLUME_PLACEHOLDER}' | tr -d '-')
+DEV=""
+for i in $(seq 1 90); do
+  DEV=$(lsblk -dnpo NAME,SERIAL | awk -v serial="$DATA_SERIAL" '$2==serial{print $1}')
+  [ -n "$DEV" ] && break
+  sleep 10
+done
+[ -n "$DEV" ] && [ "$(printf '%s\\n' "$DEV" | wc -l)" -eq 1 ] && [ "$DEV" != "$ROOT_DISK" ] || {
+  echo 'The observed EBS disk is missing, ambiguous, or the root disk; refusing LVM changes' >&2; exit 1;
+}
+GROUP=$(pvs --noheadings -o vg_name "$DEV" 2>/dev/null | xargs || true)
+if [ "$GROUP" != '${vg}' ]; then
+  ${volume.createFresh ? `[ -z "$GROUP" ] && [ -z "$(wipefs --noheadings --output TYPE "$DEV")" ] || {
+    echo 'Fresh disk has existing storage metadata; refusing initialization' >&2; exit 1;
+  }
+  ! vgs '${vg}' >/dev/null 2>&1 || { echo 'Expected VG already exists on another disk' >&2; exit 1; }
+  pvcreate "$DEV"
+  vgcreate '${vg}' "$DEV"` : `echo 'Retained disk does not contain the expected VG; refusing initialization' >&2; exit 1`}
+fi
+[ "$(vgs --noheadings -o pv_count '${vg}' | xargs)" = 1 ] || {
+  echo 'Expected VG spans other disks; refusing changes' >&2; exit 1;
+}
+vgchange -ay '${vg}'
+# Grow only the positively identified EBS physical volume.
+cat > /usr/local/bin/pvresize-all <<'PVEOF'
+#!/bin/sh
+set -eu
+SERIAL=$(printf '%s' '${WORKER_VOLUME_PLACEHOLDER}' | tr -d '-')
+DEV=$(lsblk -dnpo NAME,SERIAL | awk -v serial="$SERIAL" '$2==serial{print $1}')
+[ -n "$DEV" ] && [ "$(printf '%s\\n' "$DEV" | wc -l)" -eq 1 ]
+[ "$(pvs --noheadings -o vg_name "$DEV" | xargs)" = '${vg}' ]
+pvresize "$DEV"
+PVEOF
+chmod +x /usr/local/bin/pvresize-all
+cat > /etc/systemd/system/pvresize.service <<'PVEOF'
+[Unit]
+Description=resize the retained worker EBS physical volume
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pvresize-all
+PVEOF
+cat > /etc/systemd/system/pvresize.timer <<'PVEOF'
+[Unit]
+Description=periodic EBS physical volume resize
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+[Install]
+WantedBy=timers.target
+PVEOF
+systemctl daemon-reload
+systemctl enable --now pvresize.timer
+`;
+  }
+
   /**
    * Boot self-assembly: the node claims its own identity with
    * the node role over IMDS — EIP association FIRST (the provisioner's SSH
@@ -728,13 +849,28 @@ ${this.selfAssemblySection(node, region)}${lvmSection}`;
     region: AwsWorkerFleetRegion,
   ): string {
     const r = region.region;
-    const vol = node.dataVolume && "volumeId" in node.dataVolume ? node.dataVolume.volumeId : undefined;
+    const vol = node.dataVolume
+      ? (this.usesObservedIdentity(node) ? WORKER_VOLUME_PLACEHOLDER : node.dataVolume.volumeId)
+      : undefined;
+    const allocationId = this.usesObservedIdentity(node) ? WORKER_EIP_PLACEHOLDER : node.allocationId;
     return `
 TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
 IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-retry aws ec2 associate-address --region ${r} --instance-id "$IID" --allocation-id ${node.allocationId} --allow-reassociation
+retry aws ec2 associate-address --region ${r} --instance-id "$IID" --allocation-id ${allocationId} --allow-reassociation
 retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --no-source-dest-check
-${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume-id ${vol} --device /dev/sdf; do sleep 10; done` : ""}
+${vol ? `# Attachment requests are asynchronous and may race another reconciler.
+# Accept an existing attachment only after AWS confirms this instance owns it.
+while :; do
+  ATTACHMENT_STATE=$(aws ec2 describe-volumes --region ${r} --volume-ids ${vol} --query "Volumes[0].Attachments[?InstanceId=='$IID'].State | [0]" --output text) || { sleep 10; continue; }
+  [ "$ATTACHMENT_STATE" = "attached" ] && break
+  if [ "$ATTACHMENT_STATE" = "None" ]; then
+    aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume-id ${vol} --device /dev/sdf || true
+  fi
+  sleep 10
+done
+${this.usesObservedIdentity(node) ? `DATA_DEVICE=$(aws ec2 describe-volumes --region ${r} --volume-ids ${vol} --query "Volumes[0].Attachments[?InstanceId=='$IID'].Device | [0]" --output text)
+case "$DATA_DEVICE" in /dev/sd[f-z]|/dev/xvd[f-z]) ;; *) echo 'Unexpected data-volume attachment device' >&2; exit 1;; esac
+retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --block-device-mappings "[{\\\"DeviceName\\\":\\\"$DATA_DEVICE\\\",\\\"Ebs\\\":{\\\"DeleteOnTermination\\\":false}}]"` : ""}` : ""}
 `;
   }
 
@@ -752,6 +888,10 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
     const o = this.options;
     const p = this.prefix(region);
     const dv = node.dataVolume;
+    if (node.launchTemplateHandoff && !this.usesObservedIdentity(node))
+      throw new Error(`${node.name}: launchTemplateHandoff requires observedIdentity`);
+    if (dv && [Boolean(dv.volumeId), dv.createFresh === true, dv.existing === true].filter(Boolean).length !== 1)
+      throw new Error(`${node.name}: dataVolume requires exactly one of volumeId, existing or createFresh`);
     const dataVolumeMrName = dv ? (dv.mrName ?? `${node.name}-data`) : undefined;
     if (dv && dataVolumeMrName) {
       new ApiObject(this, `${node.name}-data-volume`, {
@@ -789,9 +929,9 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
         },
       });
     }
-    if (!node.allocationId)
+    if (!this.usesObservedIdentity(node) && !node.allocationId)
       throw new Error(`${node.name}: a worker node requires allocationId`);
-    if (dv && !("volumeId" in dv && dv.volumeId))
+    if (!this.usesObservedIdentity(node) && dv && !("volumeId" in dv && dv.volumeId))
       throw new Error(
         `${node.name}: a worker node's dataVolume must be an adopted volumeId`,
       );
@@ -840,10 +980,10 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
     // A fresh name sidesteps the whole thing — nothing to observe, nothing to
     // late-initialize, nothing to clear.
     const ltName = mixedTypes ? `${node.name}-mixed` : node.name;
-    new ApiObject(this, `${node.name}-launch-template`, {
+    const launchTemplate = {
       apiVersion: "ec2.aws.upbound.io/v1beta1",
       kind: "LaunchTemplate",
-      metadata: { name: ltName },
+      metadata: { name: ltName, ...(node.launchTemplateAnnotations ? { annotations: node.launchTemplateAnnotations } : {}) },
       spec: {
         deletionPolicy: "Delete",
         // Update IS on here (unlike the Instance MR): LT updates are
@@ -933,7 +1073,20 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
         },
         providerConfigRef: this.pcRef,
       },
-    });
+    };
+    if (this.usesObservedIdentity(node)) {
+      new AwsWorkerLaunchTemplate(this, `${node.name}-launch-template`, {
+        eipName: node.eipName ?? node.name,
+        securityGroupName: `${p}-sg`,
+        ...(node.dataVolume ? { dataVolumeName: node.dataVolume.mrName ?? `${node.name}-data` } : {}),
+        ...(node.launchTemplateHandoff ? { handoff: node.launchTemplateHandoff } : {}),
+        availabilityZone: region.az,
+        kubeProviderConfigName: o.kubeProviderConfigName,
+        launchTemplate,
+      });
+    } else {
+      new ApiObject(this, `${node.name}-launch-template`, launchTemplate);
+    }
     new ApiObject(this, `${node.name}-asg`, {
       apiVersion: "autoscaling.aws.upbound.io/v1beta1",
       kind: "AutoscalingGroup",
@@ -1055,7 +1208,7 @@ ${vol ? `until aws ec2 attach-volume --region ${r} --instance-id "$IID" --volume
             // the SSH provisioning entrance and, where named, the P2P
             // endpoint. The GUA is delivered by RA/DHCPv6 — bounded wait,
             // then record it.
-            preK0sCommands: [...NODE_IP_DISCOVERY_COMMANDS],
+            preK0sCommands: [...(o.preK0sCommands ?? NODE_IP_DISCOVERY_COMMANDS)],
             // Commands are executed through the node's shell (SSH exec), so
             // the $(cat ...) substitutes there — the address never appears
             // in git.

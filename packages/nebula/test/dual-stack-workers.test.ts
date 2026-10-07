@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Testing } from "cdk8s";
-import { NODE_IP_DISCOVERY_COMMANDS, withNodeIpArgs } from "../src/modules/infra/k0s/cluster";
+import { ApiObject, Testing } from "cdk8s";
+import { DEFAULT_PRESTART_COMMANDS, NODE_IP_DISCOVERY_COMMANDS, withNodeIpArgs, type K0sInfraProvider } from "../src/modules/infra/k0s/cluster";
+import { K0smotronCluster, RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS } from "../src/modules/infra/k0s";
 import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 
 // Execute the emitted POSIX shell, replacing only its output directory and the
@@ -104,4 +106,48 @@ test("AWS fleets use the checked discovery and advertise both families in either
 test("hosted worker pools keep other kubelet arguments when adding both addresses", () => {
   const args = withNodeIpArgs(['--kubelet-extra-args="--max-pods=100"']);
   assert.deepEqual(args, ['--kubelet-extra-args="--node-ip=$(cat /run/node-ip),$(cat /run/node-ip6) --max-pods=100"']);
+});
+
+test("retained hosted NIC discovery preserves baseline bytes and changes only the selected bootstrap commands", () => {
+  // SHA256 of the two previously qualified NIC command strings, in order.
+  assert.equal(createHash("sha256").update(JSON.stringify(RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS)).digest("hex"),
+    "0ae9c7eb786f408135332084096a10c32540a4707141574234a064969f33d46c");
+  const provider: K0sInfraProvider<object> = {
+    infraClusterApiGroup: "infrastructure.cluster.x-k8s.io", infraClusterKind: "ExampleCluster",
+    emitInfraCluster: (scope, ctx) => {
+      new ApiObject(scope, "infra-cluster", { apiVersion: "infrastructure.cluster.x-k8s.io/v1beta1", kind: "ExampleCluster",
+        metadata: { name: ctx.clusterName, namespace: ctx.namespace }, spec: {} });
+    },
+    emitMachineTemplate: (scope, id, ctx) => {
+      const ref = { apiVersion: "infrastructure.cluster.x-k8s.io/v1beta1", kind: "ExampleMachineTemplate", name: ctx.baseName };
+      new ApiObject(scope, id, { apiVersion: ref.apiVersion, kind: ref.kind,
+        metadata: { name: ref.name, namespace: ctx.namespace }, spec: ctx.machine });
+      return ref;
+    },
+  };
+  const render = (commands?: readonly string[], dualStack = true) => {
+    const chart = Testing.chart();
+    new K0smotronCluster(chart, "example", {
+      name: "example", provider, networkProvider: "custom",
+      ...(dualStack ? { dualStack: { ipv6PodCidr: "2001:db8:1::/56", ipv6ServiceCidr: "2001:db8:2::/112" } } : {}),
+      workerNodeIpDiscoveryCommands: commands,
+      workerPools: Object.fromEntries(["first", "second"].map(name => [name, {
+        machine: { image: "existing" }, replicas: 1, extraPreStartCommands: [`echo ${name}`],
+      }])),
+    });
+    return Testing.synth(chart);
+  };
+  const defaults = render();
+  const retained = render(RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS);
+  assert.equal(defaults.filter(r => r.kind === "K0sWorkerConfigTemplate").length, 2);
+  const expected = structuredClone(defaults);
+  for (const resource of expected.filter(r => r.kind === "K0sWorkerConfigTemplate")) {
+    const bootstrap = resource.spec.template.spec;
+    const tail = bootstrap.preK0sCommands.slice(DEFAULT_PRESTART_COMMANDS.length + NODE_IP_DISCOVERY_COMMANDS.length);
+    assert.deepEqual(bootstrap.preK0sCommands, [...DEFAULT_PRESTART_COMMANDS, ...NODE_IP_DISCOVERY_COMMANDS, ...tail]);
+    bootstrap.preK0sCommands = [...DEFAULT_PRESTART_COMMANDS, ...RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS, ...tail];
+  }
+  assert.deepEqual(retained, expected);
+  // An IPv4-only cluster has no injected discovery, so its render is unchanged.
+  assert.deepEqual(render(RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS, false), render(undefined, false));
 });

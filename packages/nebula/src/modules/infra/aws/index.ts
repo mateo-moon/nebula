@@ -12,6 +12,17 @@ export { S3Bucket } from "./s3";
 export type { S3BucketConfig } from "./s3";
 export { EcrRepository } from "./ecr";
 export type { EcrRepositoryConfig } from "./ecr";
+export { AwsServiceAccountRegistryIdentity } from "./service-account-registry-identity";
+export type { AwsServiceAccountRegistryIdentityConfig } from "./service-account-registry-identity";
+export { AwsImageRegistry } from "./image-registry";
+export type { AwsImageRegistryConfig, AwsImageRegistryRepository } from "./image-registry";
+export { addAwsEcrScaledJobReader, registryReaderRunnerConfig, ECR_READER_AWS_CLI_IMAGE, ECR_READER_TOOLS_IMAGE } from "./ecr-scaled-job-reader";
+export type { AwsEcrScaledJobReaderConfig } from "./ecr-scaled-job-reader";
+export { AwsKubernetesOidcPublication, AwsKubernetesOidcPublicationSetup } from "./kubernetes-oidc-publication";
+export type { AwsKubernetesOidcPublicationConfig } from "./kubernetes-oidc-publication";
+export { AwsClusterNatIngress, AwsClusterNatIngressSetup } from "./cluster-nat-ingress";
+export type { AwsClusterNatIngressConfig } from "./cluster-nat-ingress";
+export type { AwsWorkerFleetIngressRule } from "./worker-ingress";
 export { AwsDlm } from "./dlm";
 export type { AwsDlmConfig, DlmSnapshotSchedule } from "./dlm";
 export { AwsK0sCluster } from "./k0s-cluster";
@@ -161,12 +172,16 @@ export class Aws extends BaseConstruct<AwsConfig> {
 }
 
 export { DualStackSubnetSetup, DualStackSubnet } from "./dualstack-subnet";
-export { AwsWorkerFleet } from "./worker-fleet";
+export { AwsWorkerFleet, AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS } from "./worker-fleet";
 export type {
   AwsWorkerFleetOptions,
+  AwsWorkerFleetEipOptions,
   AwsWorkerFleetRegion,
   AwsWorkerFleetNode,
   AwsWorkerFleetPort,
   AwsWorkerFleetCni,
 } from "./worker-fleet";
 export type { DualStackSubnetConfig } from "./dualstack-subnet";
+
+export { AwsWorkerLaunchTemplateSetup, AwsWorkerLaunchTemplate } from "./worker-launch-template";
+export type { AwsWorkerLaunchTemplateConfig } from "./worker-launch-template";

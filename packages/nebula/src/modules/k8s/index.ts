@@ -2,7 +2,7 @@
  * Kubernetes modules for deploying common infrastructure components.
  */
 
-export { EnvoyTcpProxy } from "./envoy";
+export { EnvoyTcpProxy, measuredFragments, measuredProxy } from "./envoy";
 export type { EnvoyTcpProxyConfig, EnvoyTcpRoute, EnvoyTlsFiles } from "./envoy";
 
 export { Crossplane } from "./crossplane";
@@ -409,10 +409,11 @@ export type {
   SignedReleasesProps,
 } from "./confidential-guests";
 
-export { ArgocdImageUpdater } from "./argocd-image-updater";
+export { ArgocdImageUpdater, configureArgocdPluginImageUpdate } from "./argocd-image-updater";
 export type {
   ArgocdImageUpdaterConfig,
   ArgocdImageUpdaterRegistry,
+  ArgocdPluginImageUpdateConfig,
 } from "./argocd-image-updater";
 
 export { CloudNativePg } from "./cloudnative-pg";
@@ -463,7 +464,7 @@ export type { ImagePullSecretConfig } from "./image-pull-secret";
 
 export { Calico } from "./calico";
 export { Cilium, CILIUM_WIREGUARD_PORT, IPV6_MIN_MTU } from "./cilium";
-export type { CiliumConfig } from "./cilium";
+export type { CiliumConfig, CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./cilium";
 export { CorednsV6Face } from "./coredns-v6-face";
 export type { CorednsV6FaceOptions } from "./coredns-v6-face";
 export {
@@ -503,3 +504,12 @@ export {
   PVC_AUTORESIZER_PROMETHEUS_URL,
 } from "./pvc-autoresizer";
 export type { PvcAutoresizerConfig } from "./pvc-autoresizer";
+
+export { confidentialProject } from "./argocd/confidential-project";
+export type { ConfidentialProjectConfig } from "./argocd/confidential-project";
+export { workloadWorker, applyClusterResourcePolicy, WORKLOAD_OWNER } from "./argocd/worker-policy";
+export type { WorkerResourcePolicyOptions } from "./argocd/worker-policy";
+
+export { applyWorkloadAppPolicy } from "./argocd/app-policy";
+export { CiliumNodeRegistration } from "./cilium/node-registration";
+export type { CiliumNodeRegistrationConfig } from "./cilium/node-registration";

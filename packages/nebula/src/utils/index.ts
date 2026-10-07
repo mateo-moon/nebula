@@ -11,3 +11,4 @@ export {
   asPolicies,
 } from './crossplane-policies';
 export { mergeKsmValues } from './ksm';
+export { isMainModule } from "./module-entry";

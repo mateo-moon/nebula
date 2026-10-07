@@ -330,6 +330,12 @@ export interface ArgoCdAppTierSingleClusterDiscovery {
   dir: string;
   /** Repo directory the tree lives under (defaults to basename(dir)) */
   pathDir?: string;
+  /** Additional service roots owned by this same cluster tier. Each direct
+   * subdirectory becomes `<clusterName>-<module>`, exactly as services under
+   * `dir` do. Useful for separating cluster substrate from workload manifests
+   * without changing Application ownership. Module names must be unique
+   * across all roots. The CAPI clusterApp is discovered only under `dir`. */
+  serviceDirectories?: { dir: string; pathDir?: string }[];
   /** Value of the `nebula/tier` label (defaults like the clusters mode). */
   tier?: string;
   /** Render the CAPI-definition Application (defaults to off) */
@@ -547,11 +553,21 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
       ? (discovery.clusterApp.subdir ?? "cluster")
       : undefined;
     const labels = { "nebula/tier": tier, "nebula/env": cluster };
-    for (const mod of listDirs(discovery.dir)) {
-      if (discovery.clusterApp && mod === clusterSubdir) {
+    const modules = [
+      ...listDirs(discovery.dir).map(mod => ({ mod, path: `${pathDir}/${mod}`, primary: true })),
+      ...(discovery.serviceDirectories ?? []).flatMap(root =>
+        listDirs(root.dir).map(mod => ({ mod, path: `${root.pathDir ?? basename(root.dir)}/${mod}`, primary: false }))),
+    ];
+    const names = new Set<string>();
+    for (const { mod } of modules) {
+      if (names.has(mod)) throw new Error(`${cluster}: duplicate service module ${mod} across discovery directories`);
+      names.add(mod);
+    }
+    for (const { mod, path, primary } of modules) {
+      if (primary && discovery.clusterApp && mod === clusterSubdir) {
         this.createApplication({
           name: `${discovery.clusterApp.namePrefix ?? "cluster-"}${cluster}`,
-          path: `${pathDir}/${mod}`,
+          path,
           labels,
           destination: discovery.clusterApp.destination ?? {
             server: ARGOCD_IN_CLUSTER_SERVER,
@@ -565,7 +581,7 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
       } else {
         this.createApplication({
           name: `${cluster}-${mod}`,
-          path: `${pathDir}/${mod}`,
+          path,
           labels,
           destination: { name: cluster },
           preset:

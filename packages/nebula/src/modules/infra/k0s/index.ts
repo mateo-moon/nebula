@@ -16,7 +16,7 @@ export type { K0sCalicoConfig, ResolvedK0sCalico } from "./calico";
 export { WorkerSetup, Worker } from "./worker";
 export type { WorkerConfig } from "./worker";
 export { SshK0sProvider } from "./ssh-provider";
-export { K0sCluster, renderK0sWorkerArgs } from "./cluster";
+export { K0sCluster, renderK0sWorkerArgs, RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS } from "./cluster";
 export type {
   K0sClusterConfig,
   K0sControlPlaneOptions,
@@ -38,3 +38,6 @@ export type {
   K0smotronClusterConfig,
   K0smotronClusterControlPlane,
 } from "./k0smotron-cluster";
+
+export { BaremetalFleet, baremetalWorker } from "./baremetal";
+export type { BaremetalFleetOptions, BaremetalNode } from "./baremetal";
