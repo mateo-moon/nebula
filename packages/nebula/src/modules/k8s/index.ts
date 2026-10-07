@@ -513,3 +513,4 @@ export type { WorkerResourcePolicyOptions } from "./argocd/worker-policy";
 export { applyWorkloadAppPolicy } from "./argocd/app-policy";
 export { CiliumNodeRegistration } from "./cilium/node-registration";
 export type { CiliumNodeRegistrationConfig } from "./cilium/node-registration";
+export * from "./host-reconciliation";
