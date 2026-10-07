@@ -7,7 +7,27 @@
  * and a stronger model for the orchestrator + change-author.
  */
 import type { Chart } from "cdk8s";
-import { KAGENT_WAVE, modelConfig } from "./crd";
+import { ApiObject } from "cdk8s";
+import type { Construct } from "constructs";
+import { KAGENT_API, KAGENT_WAVE, modelConfig } from "./crd";
+
+export interface OllamaModelConfig {
+  namespace: string;
+  name: string;
+  model: string;
+  host: string;
+  annotations?: Record<string, string>;
+}
+
+/** Reference an existing Ollama endpoint without introducing API-key fields or model-pull jobs. */
+export function declareOllamaModelConfig(scope: Construct, id: string, config: OllamaModelConfig): ApiObject {
+  return new ApiObject(scope, id, {
+    apiVersion: KAGENT_API, kind: "ModelConfig",
+    metadata: { name: config.name, namespace: config.namespace,
+      annotations: { "argocd.argoproj.io/sync-wave": String(KAGENT_WAVE.DEPENDENCY), ...config.annotations } },
+    spec: { provider: "Ollama", model: config.model, ollama: { host: config.host } },
+  });
+}
 
 /** Chart-created default (Anthropic, claude-haiku-4-5). */
 export const DEFAULT_MODEL_CONFIG = "default-model-config";

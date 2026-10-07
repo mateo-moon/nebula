@@ -121,3 +121,17 @@ test("importing the package root does no file I/O beyond module loading", () => 
   const found = importTimeViolations(result.events, scope).map(e => `${e.kind} ${e.op} ${e.path}`);
   assert.deepEqual(found, [], "importing the package root did file I/O of its own");
 });
+
+test("the packed host reconciliation accessors can read all five lazy assets", () => {
+  const entry = join(consumer, "host-scripts.mjs");
+  writeFileSync(entry, `import {
+    loopbackVolumeGroupScript, packageFreezeScript, kernelPinScript,
+    hostConfigurationPolicyScript, pinnedLoopAttachScript,
+  } from "nebula-cdk8s";
+  const scripts = [loopbackVolumeGroupScript({logPrefix:"data-vg"}), packageFreezeScript(),
+    kernelPinScript({pinFile:"etc/default/grub.d/zz-reviewed.cfg", provenance:"Reviewed kernel"}),
+    hostConfigurationPolicyScript(), pinnedLoopAttachScript({backingDirectory:"/var/lib/disks",logPrefix:"disks"})];
+  console.log(JSON.stringify(scripts.map(script => script.startsWith("set -eu\\n") && script.length > 500)));
+  `);
+  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), [true, true, true, true, true]);
+});
