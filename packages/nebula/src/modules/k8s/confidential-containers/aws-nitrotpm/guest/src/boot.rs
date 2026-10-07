@@ -110,6 +110,30 @@ async fn command(tool: &str, args: &[&str]) -> Result<std::process::Output> {
     ensure!(result.stdout.len() <= 4096, "unexpected storage response");
     Ok(result)
 }
+
+fn state_mount_ready(output: &[u8], device: &Path, directory: &Path) -> Result<bool> {
+    let output = std::str::from_utf8(output)?;
+    let fields: Vec<_> = output.split_whitespace().collect();
+    ensure!(fields.len() == 2, "unexpected state mount response");
+    if fields[0] == "ext4" {
+        ensure!(
+            std::fs::canonicalize(fields[1])? == std::fs::canonicalize(device)?,
+            "unexpected mounted state disk"
+        );
+        return Ok(true);
+    }
+    // ProtectSystem/StateDirectory bind-mount the empty directory from /var's
+    // tmpfs into this service's namespace. It is a mount point already, but is
+    // not the attached state volume. Mount over only that empty volatile
+    // placeholder; never accept another disk or hide existing journal files.
+    ensure!(fields[0] == "tmpfs", "unexpected state filesystem");
+    ensure!(
+        std::fs::read_dir(directory)?.next().is_none(),
+        "state placeholder is not empty"
+    );
+    Ok(false)
+}
+
 async fn mount_state(volume: &str) -> Result<()> {
     ensure!(
         volume.strip_prefix("vol-").is_some_and(|id| id.len() == 17
@@ -129,16 +153,18 @@ async fn mount_state(volume: &str) -> Result<()> {
     );
     let mounted = command(
         "/usr/bin/findmnt",
-        &["-n", "-o", "SOURCE", "--mountpoint", STATE],
+        &["-n", "-o", "FSTYPE,SOURCE", "--mountpoint", STATE],
     )
     .await?;
     if mounted.status.success() {
-        let source = std::str::from_utf8(&mounted.stdout)?.trim();
+        if state_mount_ready(&mounted.stdout, Path::new(&device), Path::new(STATE))? {
+            return Ok(());
+        }
+    } else {
         ensure!(
-            std::fs::canonicalize(source)? == std::fs::canonicalize(&device)?,
-            "unexpected mounted state disk"
+            mounted.status.code() == Some(1) && std::fs::read_dir(STATE)?.next().is_none(),
+            "state mount inspection failed"
         );
-        return Ok(());
     }
     let result = command(
         "/usr/sbin/blkid",
@@ -391,4 +417,40 @@ async fn fetch_approval(
     ensure!(payload == grant.encode()?, "noncanonical grant");
     approval.verify_descriptor(&intent.descriptor, &intent.common.authority_profile.release)?;
     Ok(approval)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::state_mount_ready;
+
+    #[test]
+    fn empty_systemd_tmpfs_binding_is_a_placeholder_not_the_state_disk() {
+        let directory = tempfile::tempdir().unwrap();
+        let disk = directory.path().join("device");
+        let state = directory.path().join("state");
+        std::fs::write(&disk, []).unwrap();
+        std::fs::create_dir(&state).unwrap();
+        assert!(!state_mount_ready(b"tmpfs tmpfs[/lib/nebula]\n", &disk, &state).unwrap());
+        let mounted = format!("ext4 {}\n", disk.display());
+        assert!(state_mount_ready(mounted.as_bytes(), &disk, &state).unwrap());
+        std::fs::write(state.join("unexpected-journal"), b"must not be hidden").unwrap();
+        assert!(state_mount_ready(b"tmpfs tmpfs[/lib/nebula]\n", &disk, &state).is_err());
+    }
+
+    #[test]
+    fn foreign_disk_or_bind_mount_is_not_a_recovery_shortcut() {
+        let directory = tempfile::tempdir().unwrap();
+        let disk = directory.path().join("device");
+        let foreign = directory.path().join("other-device");
+        std::fs::write(&disk, []).unwrap();
+        std::fs::write(&foreign, []).unwrap();
+        for source in [
+            format!("ext4 {}", foreign.display()),
+            format!("ext4 {}[/subdir]", disk.display()),
+            "xfs /dev/foreign".into(),
+            "tmpfs".into(),
+        ] {
+            assert!(state_mount_ready(source.as_bytes(), &disk, directory.path()).is_err());
+        }
+    }
 }
