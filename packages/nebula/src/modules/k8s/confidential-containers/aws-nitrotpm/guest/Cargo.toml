@@ -5,15 +5,18 @@ edition = "2024"
 publish = false
 
 [dependencies]
+aes-gcm = { version = "0.11.1", features = ["zeroize"] }
 anyhow = "1.0"
 async-trait = "0.1"
 base64 = "0.22"
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std"] }
 kbs_protocol = { git = "https://github.com/confidential-containers/guest-components.git", rev = "17ad60d88f9b7e4b3b54d01200985ae72723e8ab", default-features = false, features = ["passport", "rust-crypto"] }
 libc = "0.2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 rsa = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10.9"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time"] }
 url = "2"

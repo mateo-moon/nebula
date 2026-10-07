@@ -29,6 +29,7 @@ let work: string;
 let tarball: string;
 let shipped: Set<string>;
 let consumer: string;
+let buildFixture: string;
 
 const run = (cmd: string, args: string[], cwd: string) =>
   execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "true" } });
@@ -37,6 +38,14 @@ before(() => {
   work = mkdtempSync(join(tmpdir(), "nebula-pack-"));
   const packOut = join(work, "pack");
   mkdirSync(packOut);
+  // Exercise the exclusions even in a clean CI checkout. No real build output
+  // or credentials are needed to catch accidental cache publication.
+  buildFixture = mkdtempSync(join(pkgDir, "src", ".pack-cache-fixture-"));
+  for (const directory of ["target", "target-linux", "__pycache__", ".pytest_cache", ".venv", ".venv-test"]) {
+    mkdirSync(join(buildFixture, directory));
+    writeFileSync(join(buildFixture, directory, "local-build-output"), "must not ship\n");
+  }
+  writeFileSync(join(buildFixture, "cache.pyc"), "must not ship\n");
   run("pnpm", ["pack", "--pack-destination", packOut], pkgDir);
   const tgz = readdirSync(packOut).filter(f => f.endsWith(".tgz"));
   assert.equal(tgz.length, 1, `expected one tarball, got ${tgz.join(", ")}`);
@@ -63,6 +72,7 @@ before(() => {
 }, { timeout: 240_000 });
 
 after(() => {
+  if (buildFixture) rmSync(buildFixture, { recursive: true, force: true });
   if (work) rmSync(work, { recursive: true, force: true });
 });
 
@@ -72,6 +82,11 @@ test("the tarball ships every tracked file under src/ and imports/", () => {
   const missing = tracked.filter(f => !shipped.has(f));
   assert.deepEqual(missing, [], "tracked files missing from the packed tarball");
   assert.ok(shipped.has("package.json"));
+});
+
+test("the tarball excludes local Rust build output and Python caches", () => {
+  const generated = [...shipped].filter(file => /\/(?:target(?:-[^/]+)?|__pycache__|\.pytest_cache|\.venv(?:-[^/]+)?)\//.test(file) || /\.py[co]$/.test(file));
+  assert.deepEqual(generated, [], "local build state must not be distributed");
 });
 
 test("every package.json `files` entry that exists ships", () => {
@@ -114,6 +129,9 @@ test("importing the package root does no file I/O beyond module loading", () => 
   const installed = realpathSync(join(consumer, "node_modules", "nebula-cdk8s"));
   const result = probeImport({ cwd: consumer, entryDir: consumer, specifier: "nebula-cdk8s" });
   assert.ok(result.exports.includes("BaseConstruct"), "package root did not load");
+  for (const name of ["encodeAwsWorkload", "awsWorkloadSigningBytes", "verifyAwsWorkload"]) {
+    assert.ok(result.exports.includes(name), `package root did not export ${name}`);
+  }
   assert.ok(result.events.some(e => e.kind === "read"), "the probe recorded no reads at all; it may be blind");
   assert.ok(result.events.some(e => e.kind === "load" && realpathSync(e.path).startsWith(`${installed}/src/`)),
     "the probe saw no package module load; the load hook may be blind");

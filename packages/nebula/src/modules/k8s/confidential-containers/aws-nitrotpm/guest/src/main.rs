@@ -1,7 +1,12 @@
 #[tokio::main]
 async fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.as_slice() == ["--transport"] {
+    if args.as_slice() == ["--verify-workload"] {
+        if aws_trustee_bootstrap::workload::verify_stdin().is_err() {
+            eprintln!("workload verification failed");
+            std::process::exit(1);
+        }
+    } else if args.as_slice() == ["--transport"] {
         if aws_trustee_bootstrap::transport::provision().await.is_err() {
             eprintln!("CAA transport provisioning failed; guest services remain stopped");
             std::process::exit(1);

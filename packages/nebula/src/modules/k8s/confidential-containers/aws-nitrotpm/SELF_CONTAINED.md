@@ -92,8 +92,9 @@ outputs and secrets under management-admin control; that is insufficient.
    contract for existing encrypted data.
 
 The released appliances, evidence-bound service authentication, workload-owner
-enrollment, generic policy binding, evidence locality and protected recovery are
-**not implemented or qualified in this draft**. There is no production digest or measurement to
+enrollment, end-to-end generic policy binding, evidence locality and protected recovery are
+**not implemented or qualified in this draft**. Local descriptor, activation and
+encrypted-journal components below are prerequisites. There is no production digest or measurement to
 fill in yet. A controller that waits indefinitely for an operator to supply
 these values would not be a self-contained implementation.
 
@@ -140,6 +141,63 @@ This closes a source-level transport gap. It has local parser, HTTP and
 filesystem tests, but does not implement the lifecycle or qualify an AWS boot.
 Public encrypted images are the transport contract here; private registry
 authorization needs a separately measured in-guest path.
+
+## Implemented components: signed workload and measured activation
+
+`../aws-workload.ts` and `guest/src/workload.rs` implement the same bounded DSSE
+Ed25519 threshold-signature contract. The signed payload binds deployment,
+workload, generation, runtime release, authority release, exact policy bytes,
+policy SHA256, immutable OCI references and exact image-key resource paths.
+The application profile requires canonical JSON; duplicate fields, extra fields,
+invalid Unicode and alternative payload encodings cannot change what is signed.
+DSSE's standard and URL-safe base64 encodings, with or without padding, decode
+to the same authenticated bytes. Owners are canonical public Ed25519 keys;
+private keys never enter the module. `keyid` only selects a verification key.
+
+The exported TypeScript helpers support release publishers and preflight. The
+guest independently uses strict signature verification. Its `--verify-workload`
+mode is a bounded diagnostic with public inputs and outputs, not an installation
+step or an authority-enrollment interface. CI sends Node-signed descriptors to
+the actual guest executable and compares the decoded policy and measurements.
+
+`guest/src/activation.rs` installs the verified policy into protected tmpfs and
+extends SHA384 of the exact payload into SHA384 PCR15. It requires an unused PCR,
+refuses policy replacement, and returns success only after confirming the PCR.
+Only one activation attempt is allowed per boot; crashes and ambiguous TPM
+responses cannot cause a blind second extension. Its device adapter uses fixed
+commands and `/dev/tpmrm0`, with no environment-selected TPM or shell command.
+The calling boot code must already have authenticated owner state and generation
+from the protected authority. The current boot units **do not invoke this
+component**: sourcing that trust from a ConfigMap would violate the contract.
+Actual PCR15 behavior and the generic image's Kata startup still need hardware
+qualification. The existing strict user-data parser remains unchanged.
+
+## Implemented component: encrypted local authority journal
+
+`guest/src/protected_state.rs` implements the disk/anchor commit protocol beneath
+the future replicated authority. It encrypts bounded state with AES-256-GCM,
+authenticates deployment, sequence and previous anchor, and fsyncs an immutable
+ciphertext record and its directory before extending the protected anchor.
+Recovery selects only the record matching that anchor; no disk head pointer,
+timestamp or controller status can select an older record. State tampering,
+old-record substitution, a missing current record or a wrong sealing key fails.
+Lost write replies are resolved by reading the anchor, without retrying the
+extension; an unresolved commit requires recovery. The local writer is locked.
+
+This is not yet a TPM seal backend or a replicated service. Its `Anchor` trait
+must be implemented by protected hardware, never a management object or EBS
+file. The encryption key must be unsealed inside the measured authority.
+Returning an empty local journal never authorizes replacing an existing
+deployment's keys. Raft membership, quorum read barriers, authenticated genesis,
+key rotation and attested replacement are still required.
+
+`tests/test_tpm_persistence.py` runs only in an explicitly selected, disposable
+software-TPM CI environment. It exercises a PCR-bound seal, owner-authorized
+deletion protection, policy-only NV extension, preserved-TPM restart, changed
+PCR4/PCR12, TPM clear, and non-resettable PCR15 measurement. Test secrets live in
+the disposable fixture; these commands are not module-user operations. Emulator
+results establish TCG command behavior, not NitroTPM's AWS persistence guarantees,
+write limits, snapshot behavior or support for the proposed recovery protocol.
 
 ## Evidence references
 

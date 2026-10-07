@@ -66,6 +66,16 @@ jobs:
           cargo fmt --manifest-path guest/Cargo.toml -- --check
           cargo test --locked --manifest-path guest/Cargo.toml --lib
           cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
+          cargo build --locked --manifest-path guest/Cargo.toml --bin aws-trustee-bootstrap
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Verify Node-signed workloads with the actual Rust guest
+        working-directory: packages/nebula
+        run: |
+          npm install -g pnpm@11.9.0
+          pnpm install --frozen-lockfile
+          NEBULA_GUEST_BINARY="$PWD/src/modules/k8s/confidential-containers/aws-nitrotpm/guest/target/debug/aws-trustee-bootstrap" node --import tsx --test test/confidential-containers-workload.test.ts
       - name: Build the unmodified pinned Trustee KBS
         run: |
           git clone https://github.com/confidential-containers/trustee.git "$RUNNER_TEMP/trustee"
@@ -73,6 +83,28 @@ jobs:
           cargo build --locked --manifest-path "$RUNNER_TEMP/trustee/Cargo.toml" -p kbs --no-default-features --bin kbs
       - name: Synthetic evidence through stock KBS, guest client and offline KBC
         run: NEBULA_KBS_BINARY="$RUNNER_TEMP/trustee/target/debug/kbs" python -m pytest -q tests
+
+  aws-tpm-state:
+    name: AWS authority software TPM experiments
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install isolated TPM emulator and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends swtpm tpm2-tools libtss2-tcti-swtpm0
+          pip install -r requirements.lock
+      - name: Check seal, NV history, restart, changed boot and clear behavior
+        run: NEBULA_SWTPM_TEST=1 python -m pytest -q tests/test_tpm_persistence.py
 
   bridge:
     name: Bridge tests

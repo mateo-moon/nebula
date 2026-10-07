@@ -243,9 +243,17 @@ export {
   RuntimeClasses,
   awsNitroTpmLaunchTemplate,
   awsNitroTpmAssetsUrl,
+  AWS_WORKLOAD_PAYLOAD_TYPE,
+  encodeAwsWorkload,
+  awsWorkloadSigningBytes,
+  verifyAwsWorkload,
 } from "./confidential-containers";
 export type {
   ConfidentialContainersConfig,
+  AwsWorkloadOwners,
+  AwsWorkloadDescriptor,
+  AwsWorkloadExpectation,
+  VerifiedAwsWorkload,
   K8sDistribution,
   TeeShimConfig,
   CustomContainerdConfig,

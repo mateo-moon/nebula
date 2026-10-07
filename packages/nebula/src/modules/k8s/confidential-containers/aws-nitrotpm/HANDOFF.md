@@ -1,14 +1,23 @@
-# Integration handoff — 6 October 2026
+# Integration handoff — 7 October 2026
 
 This prototype belongs to Nebula's reusable `ConfidentialContainers` module. The `awsNitroTpm` option installs the AWS peer VM backend and registers `kata-remote-aws-nitrotpm` with the `kata-remote` handler. Local SNP/TDX runtimes can coexist. Application-specific names, fleet counts and replica assumptions are absent from the runtime contract. No AWS resources were created.
 
 The accepted target is now the [self-contained module contract](SELF_CONTAINED.md), with no manual deployment steps or external service prerequisite and with management-cluster administrators outside the key trust boundary. The current rendering API does not meet it. The [architecture research](RESEARCH.md) recommends generic release-built images, signed measured workload descriptors, a module-owned attested authority and TPM-sealed replicated state. Released appliances, protected recovery and unattended reconciliation remain unimplemented.
 
 The research revisits the per-workload AMI/build requirement and the attestation
-trust profile; it does not change the prototype's behavior or qualify deployment.
+trust profile; the staged prototype boot behavior remains unqualified.
 It also corrects the earlier broad instance-identity claim: AWS documents an
 instance ID in the signed NitroTPM module ID, but account/workload authorization
 and safe replica membership still need an authenticated protocol.
+
+Implementation now includes matching TypeScript/Rust signed workload descriptors,
+a measured-policy activation component and an encrypted local authority journal.
+Activation is not wired into boot without authenticated owner state. The journal
+requires an actual protected TPM anchor and seal; it is not a quorum authority.
+The new isolated software-TPM CI experiments exercise the proposed command and
+authorization policies without touching a host TPM. None of these components
+supplies a deployment-ready release or eliminates the remaining lifecycle work.
+See [implementation boundaries](SELF_CONTAINED.md#implemented-components-signed-workload-and-measured-activation).
 
 ## Result
 
@@ -20,12 +29,13 @@ This validates protocol compatibility and local rejection behavior. It does not 
 
 ## Checks completed
 
-- The Nebula module suite passes: 228 tests, with 3 existing optional chart-render skips. All 8 AWS module checks pass, including actual pinned-chart rendering, SNP/TDX coexistence, unchanged default inputs, separated controller credentials and launch-template refusals.
-- The packed package ships every tracked source/asset and loads through a clean consumer without import-time file access. The secret mount is `/run/nebula/secrets` with the portable `run-nebula-secrets.mount` unit.
-- Type checking, management-policy conventions, publication guard and its 32 checks pass; a separate secret scan finds no leaks. Only the exact public AWS root and unmodified public Helm archive are content-allowlisted.
-- 49 Python tests pass, including the actual stock KBS/client/offline-KBC integration test; no skips in the combined run.
-- 13 native Rust unit tests pass, including the restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied.
-- 15 Linux Rust tests pass in an isolated container with private restricted tmpfs and a **test-only no-swap proc fixture**. This includes 0600 atomic writes, rejection of disk-backed/mutable paths and symlink staging.
+- The Nebula module suite passes: 235 tests, with 3 existing optional chart-render skips. All 8 AWS rendering checks and 6 signed-workload checks pass, including Node-to-Rust verification of Unicode/control bytes and all four DSSE base64 variants.
+- The packed package ships every tracked source/asset and loads through a clean consumer without import-time file access. Explicit package exclusions and injected cache fixtures prevent local Rust/Python build state from entering the tarball. The secret mount is `/run/nebula/secrets` with the portable `run-nebula-secrets.mount` unit.
+- Type checking, management-policy conventions, publication guard and its 33 checks pass; a separate secret scan finds no leaks. Only the exact public AWS root and unmodified public Helm archive are content-allowlisted.
+- 49 Python protocol tests pass, including the actual stock KBS/client/offline-KBC integration test. The software-TPM experiments require their separate isolated test environment and do not count as part of this result.
+- The six new software-TPM experiments have not yet executed: the available local Linux runtime is unresponsive. Their CI job is defined, but neither emulator nor real NitroTPM persistence has been qualified by this change.
+- 27 native Rust unit tests pass, including workload signatures, activation ordering, encrypted journal crash/replay handling, restricted CAA envelope and loopback IMDSv2 protocol checks; Clippy passes with warnings denied.
+- The earlier transport/bootstrap baseline also passed 15 Linux Rust tests in an isolated container with private restricted tmpfs and a **test-only no-swap proc fixture**. This includes 0600 atomic writes, rejection of disk-backed/mutable paths and symlink staging; it does not qualify the new generic activation path.
 - The actual swap-enabled local container first refused provisioning, as intended. The positive fixture test is not proof of no-swap guest operation.
 - Negative cases include PCR4/PCR12 changes or omission, wrong PCR digest/length/schema, stale/future evidence, invalid signatures/certificates, rogue roots, nonce/key substitution, persistent and concurrent replay, unknown/ambiguous workload approval, different resource requests, query overrides, wrong issuer/audience, untrusted JWT signer, wrong recipient private key, unavailable KBS and missing/permissive KBS startup policy.
 - Public AWS root fingerprint checked against its NitroTPM documentation. The separate stock Trustee build checkout is clean. All evidence is from local synthetic fixtures and separate pinned upstream builds.

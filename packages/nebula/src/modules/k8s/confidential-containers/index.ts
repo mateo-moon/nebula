@@ -28,6 +28,8 @@ import { awsNitroTpmValues, configureAwsNitroTpmRuntime, validateAwsNitroTpmConf
 
 export { awsNitroTpmLaunchTemplate, awsNitroTpmAssetsUrl } from "./aws-nitrotpm-runtime";
 export type { AwsNitroTpmRuntimeConfig, AwsNitroTpmLaunchTemplateConfig } from "./aws-nitrotpm-runtime";
+export { AWS_WORKLOAD_PAYLOAD_TYPE, encodeAwsWorkload, awsWorkloadSigningBytes, verifyAwsWorkload } from "./aws-workload";
+export type { AwsWorkloadOwners, AwsWorkloadDescriptor, AwsWorkloadExpectation, VerifiedAwsWorkload } from "./aws-workload";
 
 /** Kubernetes distribution type */
 export type K8sDistribution = "k8s" | "k3s" | "rke2" | "k0s" | "microk8s";

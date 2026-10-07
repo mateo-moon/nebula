@@ -19,7 +19,10 @@ use std::{
 };
 use zeroize::{Zeroize, Zeroizing};
 
+pub mod activation;
+pub mod protected_state;
 pub mod transport;
+pub mod workload;
 
 pub const CONFIG: &str = "/usr/share/nebula/bootstrap.json";
 pub const CA: &str = "/usr/share/nebula/tls-ca.crt";
