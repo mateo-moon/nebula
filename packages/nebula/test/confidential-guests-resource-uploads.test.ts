@@ -6,7 +6,8 @@ import { AttestedPullBroker, type AttestedPullBrokerProps } from "../src/modules
 import { synthOf } from "./support/cdk8s-render";
 import { initData, measurement, snpAdmission } from "./support/snp-broker";
 
-const publicKeyPem = generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey.export({ type: "spki", format: "pem" }).toString();
+const authority = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const publicKeyPem = authority.publicKey.export({ type: "spki", format: "pem" }).toString();
 const props: AttestedPullBrokerProps = {
   namespace: "guests", name: "kbs", configMapName: "kbs-config",
   networkPolicyNames: { ingressBoundary: "deny", fromGuests: "guest" },
@@ -47,7 +48,7 @@ test("uploads reject missing SNP protections, collisions, wildcard paths and pri
     { snpAdmission: undefined }, { resourceUploads: { ...props.resourceUploads!, paths: [props.resourcePath] } },
     { resourceUploads: { ...props.resourceUploads!, paths: [["default", "key", "*"]] } },
     { resourceUploads: { ...props.resourceUploads!, paths: [] } },
-    { resourceUploads: { ...props.resourceUploads!, publicKeyPem: "-----BEGIN PRIVATE KEY-----" } },
+    { resourceUploads: { ...props.resourceUploads!, publicKeyPem: authority.privateKey.export({ type: "pkcs8", format: "pem" }).toString() } },
     { configToml: props.configToml.replace("DenyAll", "InsecureAllowAll") },
   ]) assert.throws(() => render({ ...props, ...change } as AttestedPullBrokerProps));
 });
