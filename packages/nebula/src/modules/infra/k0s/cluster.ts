@@ -271,6 +271,15 @@ export const NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
   `sh -ec 'IFACE=$(ip -4 route show default | awk "{print \\$5}" | head -1); test -n "$IFACE" || { echo "dual-stack bootstrap: no IPv4 default-route interface" >&2; exit 1; }; for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/ && !/ tentative| dadfailed| deprecated/{print \\$2; exit}" | cut -d/ -f1); if [ -n "$IP6" ]; then echo "$IP6" > /run/node-ip6; exit 0; fi; sleep 2; done; echo "dual-stack bootstrap: no usable on-link IPv6 address on $IFACE after 60 seconds; configure IPv6 before joining" >&2; exit 1'`,
 ];
 
+/** Previous NIC discovery bytes for retained worker templates. Use only when
+ * preserving a qualified bootstrap during module adoption. Unlike the default
+ * checked discovery, this preset can write an empty or tentative IPv6 address;
+ * switching to checked discovery is a separate worker rollout. */
+export const RETAINED_NIC_NODE_IP_DISCOVERY_COMMANDS: readonly string[] = [
+  `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1 > /run/node-ip'`,
+  `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); for i in $(seq 1 30); do IP6=$(ip -6 addr show dev "$IFACE" scope global 2>/dev/null | awk "/inet6/{print \\$2; exit}" | cut -d/ -f1); [ -n "$IP6" ] && break; sleep 2; done; echo "$IP6" > /run/node-ip6'`,
+];
+
 /**
  * Add `--node-ip` (from {@link NODE_IP_DISCOVERY_COMMANDS}) to a worker's k0s
  * args, folding it into an existing `--kubelet-extra-args` rather than adding
