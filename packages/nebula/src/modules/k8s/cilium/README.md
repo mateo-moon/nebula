@@ -65,6 +65,11 @@ missing or IPv6 has not become usable within 60 seconds; tentative, failed
 DAD and deprecated IPv6 addresses are excluded. Discovery reads NIC
 addresses, never a cloud public-IPv4 metadata address.
 
+Custom bare-metal compositions can import `NODE_IP_DISCOVERY_COMMANDS`,
+`DEFAULT_PRESTART_COMMANDS` and `withNodeIpArgs` from `nebula-cdk8s` to reuse
+that same checked bootstrap. These helpers do not migrate existing Node CIDRs
+or restart existing workers; coordinate that operation separately.
+
 ## Overrides and adoption
 
 Validation runs **after** merging Helm values. It rejects disabled address
