@@ -186,12 +186,18 @@ attester communicates only fixed failure exit categories; error chains and reque
 or authentication bytes remain suppressed. A rebuilt candidate must diagnose and
 resolve the collection failure before full quorum/runtime/recovery acceptance.
 A fresh diagnostic candidate reproduced the two-of-three evidence result with
-no manual startup intervention. Its fixed console code identifies NitroTPM
-endorsement-key handling on the first replica; both image imports and recovery
-from controller interruption passed again. More specific endorsement operation,
-authorization and capacity classifications now distinguish that helper's failure
-paths without exposing raw errors or altering verification. This remains an
-unresolved hardware integration failure, not an approved runtime release.
+no manual startup intervention. Its fixed console code narrowed the failure to
+owner authorization when persisting the temporary NitroTPM endorsement key.
+Both image imports and recovery from controller interruption passed again.
+Investigation found that `tpm2-tools` parses credential files as password text,
+while the Nitro collector consumes the original binary owner secret. Embedded
+NUL bytes, trailing CR/LF and password prefixes could therefore change the actual
+TPM credential. Provisioning and recovery now use explicit hex encoding in a
+private tmpfs file, with a zeroizing encoding buffer. A software-TPM regression
+fails before this fix and passes for all four affected input cases afterward,
+independently checking the stored credential and rejection of empty authorization.
+The fixed appliance still needs a fresh hardware run; no authority identity,
+runtime qualification or default catalog has been approved.
 Normal deletion of earlier failed deployments removed all owned cloud and IAM
 resources, independently verified after the finalizer completed.
 

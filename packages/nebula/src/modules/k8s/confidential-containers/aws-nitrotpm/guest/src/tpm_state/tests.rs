@@ -259,6 +259,57 @@ impl Drop for Emulator {
 
 #[test]
 #[ignore = "isolated Linux swtpm fixture with restricted tmpfs and no swap"]
+fn emulator_owner_auth_file_preserves_binary_bytes() {
+    let _serial = EMULATION.lock().unwrap();
+    let mut embedded_nul = [0xa5; 32];
+    embedded_nul[15] = 0;
+    let mut leading_nul = [0xa5; 32];
+    leading_nul[0] = 0;
+    let mut line_endings = [0xa5; 32];
+    line_endings[30..].copy_from_slice(b"\r\n");
+    let mut prefix = [b'a'; 32];
+    prefix[..4].copy_from_slice(b"hex:");
+    for owner in [embedded_nul, leading_nul, line_endings, prefix] {
+        let emulator = Emulator::new();
+        let driver = emulator.driver();
+        driver.write_owner_auth(&owner).unwrap();
+        driver
+            .run("tpm2_changeauth", &["-c", "o", "file:owner.auth"])
+            .unwrap();
+        driver.remove("owner.auth").unwrap();
+        // These are public synthetic fixtures only. An independent explicit
+        // hex argument checks the actual TPM credential, so reading the same
+        // incorrectly encoded file twice cannot conceal a truncated password.
+        let expected = format!("hex:{}", hex(&owner));
+        driver
+            .run(
+                "tpm2_createprimary",
+                &[
+                    "-C",
+                    "o",
+                    "-P",
+                    &expected,
+                    "-G",
+                    "ecc",
+                    "-c",
+                    "owner-check.ctx",
+                ],
+            )
+            .unwrap();
+        driver.flush_owned().unwrap();
+        assert!(
+            driver
+                .run(
+                    "tpm2_createprimary",
+                    &["-C", "o", "-G", "ecc", "-c", "empty-owner.ctx"],
+                )
+                .is_err()
+        );
+    }
+}
+
+#[test]
+#[ignore = "isolated Linux swtpm fixture with restricted tmpfs and no swap"]
 fn emulator_accepts_release_reset_pcr12_but_binds_both_boot_measurements() {
     let _serial = EMULATION.lock().unwrap();
     let mut emulator = Emulator::with_pcr12(false);

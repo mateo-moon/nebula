@@ -191,6 +191,23 @@ impl Driver {
         write_private(&self.scratch.path().join(name), bytes)
     }
 
+    fn write_owner_auth(&self, bytes: &[u8]) -> Result<()> {
+        ensure!(bytes.len() == 32, "invalid owner authorization size");
+        // tpm2-tools parses file: contents as its password mini-language:
+        // raw NUL bytes truncate strings and trailing CR/LF is stripped. Use
+        // an explicit hex payload so the TPM receives exactly the same bytes
+        // that are sealed in the journal and passed to the Nitro attester.
+        // Keep the encoding in zeroizing memory and the file in private tmpfs.
+        const DIGITS: &[u8; 16] = b"0123456789abcdef";
+        let mut encoded = Zeroizing::new(Vec::with_capacity(68));
+        encoded.extend_from_slice(b"hex:");
+        for byte in bytes {
+            encoded.push(DIGITS[usize::from(byte >> 4)]);
+            encoded.push(DIGITS[usize::from(byte & 15)]);
+        }
+        self.write("owner.auth", &encoded)
+    }
+
     fn read(&self, name: &str) -> Result<Zeroizing<Vec<u8>>> {
         read_file(&self.scratch.path().join(name))
     }
@@ -506,7 +523,7 @@ fn provision(
     // authorization is changed. A failed provision never releases a journal.
     write_private(&directory.join("seal.json"), &serde_json::to_vec(&blobs)?)?;
     File::open(directory)?.sync_all()?;
-    driver.write("owner.auth", &secrets[64..])?;
+    driver.write_owner_auth(&secrets[64..])?;
     driver.run("tpm2_changeauth", &["-c", "o", "file:owner.auth"])?;
     driver.write("nv.policy", &nv_policy)?;
     driver.run(
@@ -600,7 +617,7 @@ fn recover(
     cleanup?;
     // Authenticate the sealed owner credential with a transient primary. No
     // owner-auth reset, persistent eviction or NV creation is allowed here.
-    driver.write("owner.auth", &secrets[64..])?;
+    driver.write_owner_auth(&secrets[64..])?;
     let owner = driver.run(
         "tpm2_createprimary",
         &[

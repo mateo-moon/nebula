@@ -26,6 +26,12 @@ ESAPI authorization whenever the raw Nitro vendor command recreates its context.
 The guest passes it over an anonymous pipe under the journal writer's lock;
 it never resets owner authorization or places the secret in arguments, environment
 variables, logs or persistent files. Runtime guests retain empty authorization.
+The protected journal writes `hex:`-encoded owner authorization to its private
+tmpfs files for `tpm2-tools`: that tool parses file contents as password text,
+including NUL termination, trailing CR/LF stripping and prefix interpretation.
+An explicit encoding preserves all 32 random bytes during provisioning and
+recovery, matching the binary credential sent to the Nitro collector. The
+encoding buffer is zeroized; it is never placed in a process argument.
 Failures use fixed process exit categories for endorsement, message-buffer,
 vendor-request, TPM and response processing. The collector emits only a fixed
 SNP/Nitro failure code, at most once per minute; upstream errors and request bytes
