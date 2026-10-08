@@ -43,6 +43,10 @@ jobs:
           curl --fail --location --retry 3 https://releases.crossplane.io/stable/v2.1.3/bin/linux_amd64/crank --output "$RUNNER_TEMP/crossplane"
           printf 'fe3ac3abde4ed48df87583c2392f1a17cb968115f58511243dc29783c0350013  %s\n' "$RUNNER_TEMP/crossplane" | sha256sum --check
           chmod +x "$RUNNER_TEMP/crossplane"
+      - name: Pull composition function runtimes
+        run: |
+          docker pull xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.9.0
+          docker pull xpkg.upbound.io/crossplane-contrib/function-auto-ready:v0.4.2
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"
