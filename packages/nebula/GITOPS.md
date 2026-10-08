@@ -42,7 +42,7 @@ without moving a workload to another Application owner.
 | `workloadWorker(...)`, `applyClusterResourcePolicy(chart, options)` | Marks explicitly workload-owned workers, orders their deletion and preserves data/shared-resource retention. Existing owner annotation keys are configurable. |
 | `isMainModule(import.meta.url)` | Lets environment entry points export settings without synthesizing when another module imports them. |
 | `BaremetalFleet`, `baremetalWorker` | Composes existing named remote-machine inventory, bootstrap templates and worker deployments without changing the host identity. |
-| `SshBaremetalFleet`, `SshBaremetalProvisioner` | Provider-independent fresh OS installation over privileged SSH, durable installation state, optional native Cilium allocation and verified handoff to pooled k0s enrollment. See [SSH provisioning](src/modules/infra/baremetal/README.md) for supported installer profiles and qualification requirements. |
+| `SshBaremetalSetup`, `SshBaremetalFleet` | Crossplane XRD + shared Composition and IP-only host XRs. A bounded SSH installation Job records verification before Crossplane publishes the retained pooled k0s enrollment graph. See [SSH provisioning](src/modules/infra/baremetal/README.md) for supported installer profiles and qualification requirements. |
 | `CiliumNodeRegistration` | Native admission for exact kubelet/node inventory and host-scope IPv6 pod CIDR annotations. |
 | `measuredFragments`, `measuredProxy` | Preserve measured Envoy command/argument bytes while keeping literals below the policy parser's line bound. See [measured proxy arguments](src/modules/k8s/envoy/README.md). |
 

@@ -12,8 +12,8 @@ def canonical(value):
 
 
 def fingerprint(spec):
-    # Changing k0s configuration must never authorize another OS installation.
-    fields = ("address", "hostname", "ssh", "installation", "ipv6PodCidr", "workloadKubeconfigSecretName")
+    # Enrollment and workload credentials never enter the installation request.
+    fields = ("address", "hostname", "ssh", "installation")
     return hashlib.sha256(canonical({key: spec.get(key) for key in fields}).encode()).hexdigest()
 
 
@@ -49,17 +49,6 @@ def validate_spec(spec):
     for address in p.get("dnsServers", []):
         if ipaddress.ip_address(address).is_loopback:
             raise ValueError("loopback resolvers cannot be transferred to the installer")
-    if bool(spec.get("ipv6PodCidr")) != bool(spec.get("workloadKubeconfigSecretName")):
-        raise ValueError("pod allocation requires workload access")
-    if spec.get("ipv6PodCidr"):
-        net = ipaddress.ip_network(spec["ipv6PodCidr"])
-        if net.version != 6 or net.prefixlen != 64:
-            raise ValueError("IPv6 pod allocation must be a /64")
-    expected = {"PooledRemoteMachine", "RemoteMachineTemplate", "K0sWorkerConfigTemplate", "MachineDeployment"}
-    if len(spec["enrollment"]) != 4 or {r["kind"] for r in spec["enrollment"]} != expected:
-        raise ValueError("enrollment must contain exactly the four pooled CAPI resources")
-    if any(r["metadata"]["name"] != spec["hostname"] for r in spec["enrollment"]):
-        raise ValueError("enrollment names must match the installed hostname")
 
 
 def select_disk(disks, root_disks, policy):

@@ -139,15 +139,20 @@ test("the packed host reconciliation accessors can read all five lazy assets", (
 test("the packed SSH provisioner can load its Python runtime assets", () => {
   const entry = join(consumer, "baremetal-scripts.mjs");
   writeFileSync(entry, `import { createRequire } from "node:module";
-    import { SshBaremetalProvisioner } from "nebula-cdk8s";
+    import { SshBaremetalSetup } from "nebula-cdk8s";
     const require = createRequire(import.meta.url);
     const { Testing } = createRequire(require.resolve("nebula-cdk8s"))("cdk8s");
     const chart = Testing.chart();
-    new SshBaremetalProvisioner(chart, "provisioner", {
-      namespace: "default", image: "registry.example.test/provisioner@sha256:" + "3".repeat(64), secretNames: ["worker-ssh"],
+    new SshBaremetalSetup(chart, "provisioner", {
+      namespace: "default", image: "registry.example.test/provisioner@sha256:" + "3".repeat(64), clusterName: "test", k0sVersion: "v1.36.3+k0s.2", sshSecretName: "worker-ssh", tagDomain: "example.test",
+      trustOnFirstUse: true, defaults: { geo: "eu", region: "dc1", zone: "dc1" },
+      installation: { suite: "trixie", mirror: { hostname: "deb.debian.org", directory: "/debian" },
+        kernel: { url: "https://images.example.test/kernel", sha256: "1".repeat(64) },
+        initrd: { url: "https://images.example.test/initrd", sha256: "2".repeat(64) },
+        disk: { minSizeGiB: 32 }, rootSizeGiB: 16, volumeGroup: "worker-vg" },
     });
     const scripts = Testing.synth(chart).find(resource => resource.kind === "ConfigMap").data;
     console.log(JSON.stringify(Object.keys(scripts).sort()));
   `);
-  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), ["controller.py", "host.py", "installer.py"]);
+  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), ["host.py", "installer.py", "runner.py"]);
 });

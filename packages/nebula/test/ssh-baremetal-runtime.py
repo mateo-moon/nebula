@@ -11,7 +11,7 @@ from unittest.mock import patch
 import types
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/modules/infra/baremetal"))
-import controller
+import runner
 import installer
 
 host_agent = types.ModuleType("host_agent")
@@ -25,8 +25,7 @@ SPEC = {
         "kernel": {"url": "https://images.example.test/kernel", "sha256": "1" * 64},
         "initrd": {"url": "https://images.example.test/initrd", "sha256": "2" * 64},
         "disk": {"minSizeGiB": 32}, "rootSizeGiB": 16, "volumeGroup": "worker-vg", "timeoutSeconds": 3600, "dualStack": True},
-    "enrollment": [{"apiVersion": version, "kind": kind, "metadata": {"name": "bm-192-0-2-10", "namespace": "default"}, "spec": {}}
-                   for kind, (version, _) in list(controller.KINDS.items())[:4]],
+
 }
 FACTS = {"bootId": "source-boot", "uefi": True, "disk": {"byId": "/dev/disk/by-id/virtio-test"},
          "network": {"mac": "02:00:00:00:00:10", "addresses": ["192.0.2.10/24", "2001:db8::10/64"],
@@ -34,26 +33,17 @@ FACTS = {"bootId": "source-boot", "uefi": True, "disk": {"byId": "/dev/disk/by-i
 
 
 class FakeAPI:
-    def __init__(self, host):
-        self.host, self.objects, self.actions = copy.deepcopy(host), {}, []
+    def __init__(self, resource):
+        self.resource, self.actions = copy.deepcopy(resource), []
 
     def request(self, method, path, value=None, content_type=None):
         self.actions.append((method, path))
-        if "sshbaremetalhosts/" in path:
-            if method == "PATCH":
-                if value["metadata"]["resourceVersion"] != self.host["metadata"]["resourceVersion"]:
-                    raise RuntimeError("conflict")
-                self.host["metadata"]["resourceVersion"] = str(int(self.host["metadata"]["resourceVersion"]) + 1)
-                if "status" in value:
-                    self.host["status"] = copy.deepcopy(value["status"])
-                if "finalizers" in value["metadata"]:
-                    self.host["metadata"]["finalizers"] = value["metadata"]["finalizers"]
-            return copy.deepcopy(self.host)
-        key = path.split("?", 1)[0]
-        if method == "GET":
-            return copy.deepcopy(self.objects.get(key))
-        self.objects[key] = copy.deepcopy(value)
-        return copy.deepcopy(value)
+        if method == "PATCH":
+            if value["metadata"]["resourceVersion"] != self.resource["metadata"]["resourceVersion"]:
+                raise RuntimeError("conflict")
+            self.resource["metadata"]["resourceVersion"] = str(int(self.resource["metadata"]["resourceVersion"]) + 1)
+            self.resource["data"].update(copy.deepcopy(value["data"]))
+        return copy.deepcopy(self.resource)
 
 
 class FakeSSH:
@@ -84,76 +74,93 @@ class FakeSSH:
 class Qualification(unittest.TestCase):
     def setUp(self):
         FakeSSH.installed, FakeSSH.crash_commit, FakeSSH.calls, FakeSSH.original_boot = False, False, [], "source-boot"
-        self.host = {"metadata": {"name": SPEC["hostname"], "namespace": "default", "uid": "request-123", "resourceVersion": "1", "generation": 1}, "spec": copy.deepcopy(SPEC)}
-        self.api = FakeAPI(self.host)
+        self.request = {"uid": "request-123", "spec": copy.deepcopy(SPEC)}
+        self.api = FakeAPI({"metadata": {"resourceVersion": "1"}, "data": {"uid": "request-123", "requestHash": "hash-123"}})
+        self.journal = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
 
     def step(self, clock=lambda: 100):
-        controller.reconcile(self.api, self.host, FakeSSH, clock)
+        return runner.advance(self.journal, FakeSSH, clock)
 
-    def test_no_pool_before_verified_os_and_resume_after_crash(self):
-        for _ in range(3):
+    def test_job_restart_resumes_without_installing_twice(self):
+        for _ in range(2):
             self.step()
-        self.assertEqual(self.host["status"]["phase"], "Staged")
+        self.assertEqual(self.journal.status["phase"], "Staged")
         FakeSSH.crash_commit = True
         with self.assertRaises(RuntimeError):
             self.step()
-        self.assertEqual(self.host["status"]["phase"], "Installing")
-        self.assertEqual(self.api.objects, {})
+        self.assertEqual(self.api.resource["data"]["phase"], "Installing")
         FakeSSH.crash_commit = False
+        self.journal = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
         self.step()
         self.assertEqual(FakeSSH.calls.count("stage"), 1)
-        self.assertEqual(self.api.objects, {})
         FakeSSH.installed = True
-        self.step()
-        self.assertEqual(self.host["status"]["phase"], "OSReady")
-        self.step()
-        self.assertEqual(len(self.api.objects), 4)
-        self.assertEqual(self.host["status"]["phase"], "Enrolling")
-        self.step()
+        self.assertTrue(self.step())
+        self.assertEqual(self.journal.status["phase"], "OSReady")
+        self.assertEqual(self.api.resource["data"]["verifiedRequestHash"], "hash-123")
+        self.assertTrue(self.step())
         self.assertEqual(FakeSSH.calls.count("stage"), 1)
         self.assertEqual(FakeSSH.calls.count("commit"), 2)
+        self.assertTrue(all(path == "/api/v1/namespaces/default/configmaps/host-state" for _, path in self.api.actions))
 
     def test_changed_profile_deadline_and_unknown_boot_never_reinstall(self):
-        for _ in range(4):
+        for _ in range(3):
             self.step()
         FakeSSH.original_boot = "unexpected-reboot"
         self.step()
         self.assertEqual(FakeSSH.calls.count("commit"), 1)
         with self.assertRaisesRegex(ValueError, "deadline"):
             self.step(lambda: 5000)
-        self.host["spec"]["installation"]["rootSizeGiB"] = 20
+        self.request["spec"]["installation"]["rootSizeGiB"] = 20
         with self.assertRaisesRegex(ValueError, "changed"):
             self.step()
         self.assertEqual(FakeSSH.calls.count("stage"), 1)
-        self.assertEqual(self.api.objects, {})
 
     def test_management_binding_loss_fails_closed(self):
-        self.step()
         class InstalledSSH(FakeSSH):
             def call(self, *args, **kwargs):
                 return {"installed": {"uid": "old-request"}}
         with self.assertRaisesRegex(ValueError, "restore management state"):
-            controller.reconcile(self.api, self.host, InstalledSSH)
-        self.assertEqual(self.api.objects, {})
-
-    def test_deletion_retains_host_and_existing_enrollment(self):
-        self.host["metadata"]["deletionTimestamp"] = "2026-01-01T00:00:00Z"
-        self.step()
-        self.assertEqual(self.api.actions, [])
+            runner.advance(self.journal, InstalledSSH)
+        for field in ("uid", "requestHash"):
+            previous = self.api.resource["data"][field]
+            self.api.resource["data"][field] = "foreign"
+            with self.assertRaisesRegex(ValueError, "another request"):
+                runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
+            self.api.resource["data"][field] = previous
         self.assertEqual(FakeSSH.calls, [])
 
-    def test_reserved_pool_and_foreign_resources_cannot_be_overwritten(self):
-        pool = SPEC["enrollment"][0]
-        path = "/apis/infrastructure.cluster.x-k8s.io/v1beta2/namespaces/default/pooledremotemachines/" + SPEC["hostname"]
-        self.api.objects[path] = copy.deepcopy(pool)
-        with self.assertRaisesRegex(ValueError, "another request"):
-            controller.apply_bound(self.api, pool, self.host)
-        self.api.objects[path]["metadata"]["annotations"] = {controller.BINDING: "request-123"}
-        self.api.objects[path]["status"] = {"reserved": True}
-        changed = copy.deepcopy(pool)
-        changed["spec"] = {"machine": {"address": "198.51.100.20"}}
-        with self.assertRaisesRegex(ValueError, "reserved"):
-            controller.apply_bound(self.api, changed, self.host)
+    def test_concurrent_journal_update_cannot_commit(self):
+        for _ in range(2): self.step()
+        self.api.resource["metadata"]["resourceVersion"] = "99"
+        with self.assertRaisesRegex(RuntimeError, "conflict"): self.step()
+        self.assertNotIn("commit", FakeSSH.calls)
+
+    def test_terminal_error_is_persisted_across_pods(self):
+        self.journal.save(terminalError=True, lastError="inspection required")
+        resumed = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
+        with self.assertRaisesRegex(ValueError, "blocked"): runner.advance(resumed, FakeSSH)
+        self.assertEqual(FakeSSH.calls, [])
+
+    def test_mounted_keys_stay_private_and_pinned_trust_cannot_fall_back_to_tofu(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            credentials = Path(tmp) / "credentials"
+            scratch = Path(tmp) / "scratch"
+            scratch.mkdir()
+            for name in ("initial", "worker", "known-hosts"):
+                (credentials / name).mkdir(parents=True)
+                (credentials / name / "value").write_text("fixture" if name != "known-hosts" else "")
+            host = {"spec": copy.deepcopy(SPEC), "metadata": {"uid": "request-123"}}
+            host["spec"]["ssh"].pop("trustOnFirstUse")
+            host["spec"]["ssh"]["knownHostsSecretName"] = "pinned"
+            with self.assertRaisesRegex(ValueError, "empty"):
+                runner.SSH(host, scratch, credentials)
+            (credentials / "known-hosts" / "value").write_text("bm-192-0-2-10 ssh-ed25519 AAAA\n")
+            ssh = runner.SSH(host, scratch, credentials)
+            self.assertTrue(ssh.strict)
+            self.assertEqual((scratch / "initial").stat().st_mode & 0o777, 0o600)
+            host["status"] = {"phase": "Installing"}
+            with self.assertRaisesRegex(ValueError, "recorded SSH host keys"):
+                runner.SSH(host, scratch, credentials)
 
     def test_disk_selection_rejects_ambiguity_and_small_disks(self):
         disk = {"type": "disk", "path": "/dev/vda", "size": 64 * 1024**3, "serial": "first"}
@@ -211,7 +218,7 @@ class Qualification(unittest.TestCase):
         self.assertEqual(gzip.decompress(gzip.compress(archive)), archive)
 
     def test_bootstrap_shell_is_valid(self):
-        subprocess.run(["sh", "-n"], input=controller.BOOTSTRAP, text=True, check=True)
+        subprocess.run(["sh", "-n"], input=runner.BOOTSTRAP, text=True, check=True)
 
     def test_installed_storage_must_match_before_capi_handoff(self):
         receipt = {"uid": "request-123", "fingerprint": installer.fingerprint(SPEC), "sourceBootId": "source-boot"}
@@ -246,28 +253,6 @@ class Qualification(unittest.TestCase):
             self.assertFalse(destination.exists())
             self.assertFalse(destination.with_suffix(".download").exists())
 
-    def test_stale_capi_readiness_does_not_complete_an_updated_machine(self):
-        self.host["metadata"]["finalizers"] = [controller.RETAIN]
-        self.host["status"] = {"phase": "Enrolling", "fingerprint": installer.fingerprint(SPEC)}
-        self.api = FakeAPI(self.host)
-        original = self.api.request
-        def observed(method, path, value=None, content_type=None):
-            result = original(method, path, value, content_type)
-            if method == "GET" and "/machinedeployments/" in path and result:
-                result["metadata"]["generation"] = 2
-                result["status"] = {"observedGeneration": 1, "readyReplicas": 1,
-                    "conditions": [{"type": "MachinesReady", "status": "True", "observedGeneration": 1}]}
-            return result
-        self.api.request = observed
-        self.step()
-        self.assertEqual(self.host["status"]["phase"], "Enrolling")
-
-    def test_network_admission_cannot_precreate_nodes(self):
-        self.host["spec"]["ipv6PodCidr"] = "2001:db8:c000:20a::/64"
-        policies = list(controller.network_admission(self.host))
-        self.assertEqual(len(policies), 4)
-        self.assertTrue(all(p["kind"] != "Node" for p in policies))
-        self.assertIn('system:node:', policies[2]["spec"]["validations"][0]["expression"])
 
 
 if __name__ == "__main__":

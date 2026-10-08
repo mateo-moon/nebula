@@ -11,11 +11,10 @@ The packed-package test also needs package-registry access or a warm pnpm store.
 - `argocd-discovery`, `worker-policy`, and `baremetal-and-registration` cover
   additional discovery roots without ownership changes, duplicate-name refusal,
   application/worker retention and exact baremetal/native admission graphs.
-- `ssh-baremetal` executes the provider-independent install state machine and
-  Debian initramfs renderer through Python 3: reboot interruption, missing
-  management bindings, installation deadlines, disk selection, profile changes,
-  retained pool ownership and private payload permissions. It also checks the
-  generated GitOps declaration, scoped credentials and deferred CAPI graph.
+- `ssh-baremetal` executes the actual Go/Sprig XRD composition and Python Job
+  runtime: verified-OS gates, stale observations, retained enrollment, workload
+  admission, current-generation readiness, exact progress permissions, reboot
+  interruption, lost bindings, deadlines, disk selection and private payloads.
   The opt-in `python3 -B test/ssh-baremetal-vm.py --artifacts <directory>` creates
   a disposable QEMU disk and tests a real SSH/kexec reinstall. It requires QEMU,
   outbound Debian archive access, and the matching pinned `linux`/`initrd.gz`

@@ -1,6 +1,6 @@
 """Executed as root over SSH, never imported for side effects.
 
-The controller prepends installer.py when sending this agent to the host. The
+The installation Job prepends installer.py when sending this agent to the host. The
 staging directory and installed receipt bind an operation to one request UID.
 """
 import gzip
