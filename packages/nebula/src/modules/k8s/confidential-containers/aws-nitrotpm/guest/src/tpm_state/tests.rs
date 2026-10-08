@@ -96,6 +96,10 @@ pub(crate) struct Emulator {
 
 impl Emulator {
     pub(crate) fn new() -> Self {
+        Self::with_pcr12(true)
+    }
+
+    fn with_pcr12(measured_pcr12: bool) -> Self {
         assert_eq!(
             std::env::var("NEBULA_SWTPM_TEST").as_deref(),
             Ok("1"),
@@ -135,7 +139,7 @@ impl Emulator {
             process: None,
             boot: BootPolicy {
                 pcr4: measured(4),
-                pcr12: measured(12),
+                pcr12: if measured_pcr12 { measured(12) } else { EMPTY },
             },
         };
         instance.start();
@@ -199,6 +203,9 @@ impl Emulator {
         }
         self.command("tpm2_startup", &["-c"]);
         for pcr in [4u8, 12] {
+            if pcr == 12 && self.boot.pcr12 == EMPTY {
+                continue;
+            }
             self.command(
                 "tpm2_pcrextend",
                 &[&format!("{pcr}:sha384={}", hex(&[pcr; 48]))],
@@ -248,6 +255,46 @@ impl Drop for Emulator {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+#[test]
+#[ignore = "isolated Linux swtpm fixture with restricted tmpfs and no swap"]
+fn emulator_accepts_release_reset_pcr12_but_binds_both_boot_measurements() {
+    let _serial = EMULATION.lock().unwrap();
+    let mut emulator = Emulator::with_pcr12(false);
+    let driver = emulator.driver();
+    for pcr4 in [EMPTY, [1; 48]] {
+        let wrong_boot = BootPolicy { pcr4, pcr12: EMPTY };
+        assert!(driver.check_boot(&wrong_boot).is_err());
+    }
+    drop(driver);
+
+    let mut journal = emulator.provision();
+    journal.commit(b"UKI-bound state").unwrap();
+    drop(journal);
+    emulator.restart();
+    let (mut journal, snapshot) = emulator.recover().unwrap();
+    let snapshot = snapshot.unwrap();
+    assert_eq!(snapshot.sequence, 1);
+    assert_eq!(&*snapshot.bytes, b"UKI-bound state");
+
+    // Reset is an exact approved value, not a wildcard. Changing PCR12 must
+    // prevent both journal advancement and recovery of the sealed key.
+    let before = emulator.value();
+    emulator.command("tpm2_pcrextend", &[&format!("12:sha384={}", hex(&[1; 48]))]);
+    assert!(journal.commit(b"changed boot").is_err());
+    assert_eq!(emulator.value(), before);
+    drop(journal);
+    assert!(
+        emulator
+            .recover()
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("authority boot mismatch")
+    );
+    emulator.restart();
+    assert_eq!(emulator.recover().unwrap().1.unwrap().sequence, 1);
 }
 
 #[test]

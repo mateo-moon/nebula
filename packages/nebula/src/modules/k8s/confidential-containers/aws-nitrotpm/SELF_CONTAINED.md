@@ -166,7 +166,15 @@ still detect changes to declared security settings.
 The controller suite includes real admission TLS hostname verification and
 lost-response recovery at each certificate-rotation checkpoint. Live deployment
 also verified creation of all module IAM resources, including the guest role's
-instance-profile attachment. Full hardware acceptance remains pending below.
+instance-profile attachment. Both released disks were imported automatically;
+an interrupted controller resumed the active import without duplicate snapshots.
+The immutable authority image booted and mounted its owned state volume, but
+protected service startup exposed a reset-PCR12 storage-policy mismatch. The
+storage policy now permits the release's exact reset value while retaining
+nonzero PCR4, exact comparison of both PCRs and both PCR policy bindings. A new
+appliance build and hardware acceptance are still required. Normal deletion of
+the failed deployment removed all owned cloud and IAM resources, independently
+verified after the finalizer completed.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,

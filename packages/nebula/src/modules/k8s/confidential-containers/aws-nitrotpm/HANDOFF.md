@@ -1,4 +1,13 @@
-# Integration handoff — 7 October 2026
+# Archived prototype handoff — 7 October 2026
+
+This records the original explicit-AMI prototype before managed mode was
+implemented. Its progress statements, test counts and deployment instructions
+are historical. For the current implementation and remaining hardware release
+gates, use the [module API](../README.md) and
+[self-contained lifecycle](SELF_CONTAINED.md). Managed mode now implements
+release builds, attested enrollment, replicated recovery and infrastructure
+reconciliation; full appliance acceptance and default catalog promotion remain
+pending.
 
 This prototype belongs to Nebula's reusable `ConfidentialContainers` module. The `awsNitroTpm` option installs the AWS peer VM backend and registers `kata-remote-aws-nitrotpm` with the `kata-remote` handler. Local SNP/TDX runtimes can coexist. Application-specific names, fleet counts and replica assumptions are absent from the runtime contract. Disposable AWS hardware experiments are recorded in [HARDWARE_QUALIFICATION.md](HARDWARE_QUALIFICATION.md); no live cluster was changed.
 

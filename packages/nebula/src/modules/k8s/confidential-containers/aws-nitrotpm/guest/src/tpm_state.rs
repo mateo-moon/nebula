@@ -301,10 +301,10 @@ impl Driver {
     }
 
     fn check_boot(&self, boot: &BootPolicy) -> Result<()> {
-        ensure!(
-            boot.pcr4 != EMPTY && boot.pcr12 != EMPTY,
-            "measured authority boot required"
-        );
+        // The immutable UKI can leave PCR12 at its reset value. PCR4 must
+        // identify a measured boot; both PCRs still match the release exactly
+        // and remain bound into the sealing and journal policies below.
+        ensure!(boot.pcr4 != EMPTY, "measured authority boot required");
         let mut expected = boot.pcr4.to_vec();
         expected.extend_from_slice(&boot.pcr12);
         self.write("approved.pcr", &expected)?;

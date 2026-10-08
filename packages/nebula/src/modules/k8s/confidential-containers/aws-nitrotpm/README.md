@@ -12,25 +12,31 @@ sources. Full immutable-appliance hardware qualification and default catalog
 publication are still in progress. A successful build or Kubernetes readiness
 field alone is not proof of confidential execution.
 
-The Python programs listed below are retained prototype/developer tools. Module
-users do not run them. Their external verifier/KBS and prepared-image workflow is
-superseded by managed mode; their regression tests remain useful for protocol
-compatibility. No private cloud credentials or customer keys ship in the module.
+The Python programs in `control/` run automatically inside the module controller.
+Those in `release/` run in the software publisher's build pipeline. The top-level
+Python programs are retained prototype/developer tools; module users do not run
+them. Their external verifier/KBS and prepared-image workflow is superseded by
+managed mode. No private cloud credentials or customer keys ship in the module.
 
-## Components
+## Managed components
+
+- `../aws-coco-managed.ts`, `control/`: render and reconcile the module-owned infrastructure, admission certificates, image imports, authority cohort, runtime configuration, readiness canary and finalizer cleanup. Cloud IDs are discovered automatically.
+- `release/`: build and publish pinned generic appliances, encrypted canary, controller and owner clients. Offline UKI measurements define the candidate profiles; hardware acceptance is required before a catalog becomes the package default.
+- `guest/src/boot.rs`, `guest/src/transport.rs`: automatic authority/runtime entry points, public intent discovery and restricted CAA network/TLS provisioning. The transport cannot supply policy, commands, credentials or extra files.
+- `guest/src/evidence/`: fresh NitroTPM and AMD SNP/VLEK verification bound to the same TLS channel, release, deployment and role. Live hardware qualification remains pending.
+- `../aws-workload.ts`, `guest/src/workload.rs`, `guest/src/activation.rs`: signed workload descriptors and protected policy activation with one confirmed PCR15 extension. Managed runtime boot authenticates current authority approval before activation, then uses a new attested channel to request keys.
+- `../aws-authority.ts`, `guest/src/authority/`: owner-signed genesis/rotation, attested service enrollment, replicated keys and owner history. Fresh quorum reads gate key release; replacement joins through attested learner catch-up and joint membership.
+- `guest/src/protected_state.rs`, `guest/src/tpm_state.rs`: encrypted authority journals, PCR-bound TPM seals and protected NV history. Managed authority boot provisions or recovers this backend. Software-TPM tests cover restart, rollback, cloning, changed boot and unsafe/missing state; complete NitroTPM appliance qualification is still required.
+- `HARDWARE_QUALIFICATION.md`: earlier disposable AWS observations for local TPM mechanics. The mutable test image is not a released runtime or authority appliance.
+
+## Retained prototype and developer tools
 
 - `verifier.py`: validates AWS-native NitroTPM COSE ES384 documents against the pinned public AWS root, exact SHA384 PCR4/PCR12 approvals, fresh single-use persistent challenges and RSA recipient binding; issues certificate-backed ES256 Trustee passports. No production sample-root option.
-- `guest/`: Rust bootstrap generates the recipient key in guest memory, calls stock `nitro-tpm-attest`, obtains a passport, and uses pinned stock `kbs_protocol` for encrypted key retrieval. It rejects mutable guest configuration, non-tmpfs or unsafe mounts, swap and symlink staging. JSON output is atomic, root-only and compatible with stock `offline_fs_kbc`. Sensitive errors are suppressed by the executable.
+- The original `guest/` prototype entry point generates the recipient key in guest memory, calls stock `nitro-tpm-attest`, obtains a passport, and uses pinned stock `kbs_protocol` for encrypted key retrieval. It rejects mutable guest configuration, non-tmpfs or unsafe mounts, swap and symlink staging. JSON output is atomic, root-only and compatible with stock `offline_fs_kbc`. Sensitive errors are suppressed by the executable.
 - `deployment.py`: renders exact workload KBS authorization, hardened KBS config and a disabled integration contract. It names the reusable RuntimeClass and handler, without coupling approval to application replicas.
 - `kbs_launcher.py`: validates the preseeded resource policy before stock KBS startup. This prevents silent use of the broad upstream default policy. Runtime KBS storage remains part of the trusted service boundary.
 - `prepare_image.py`, `image/`: stage pinned AL2023 KIWI + selected stock CAA services, reviewed binary artifacts, fixed policy and endpoint trust. Stock mutable provisioning and disk scratch are masked. The built-in Rust transport mode replaces network/TLS setup only; memory-only decrypted storage remains outstanding. The candidate requires an offline Linux image build and boot validation.
-- `guest/src/transport.rs`: automatically provisions only the pinned CAA network/TLS envelope through IMDSv2. It rejects extra files, mutable policy/configuration, credential injection, command directives, unknown fields and TLS downgrades, and writes only root-private tmpfs. Systemd gates APF on both transport and key provisioning and clears mutable APF command options.
-- `../aws-workload.ts`, `guest/src/workload.rs`: public signed workload descriptors, Ed25519 thresholds and exact cross-language policy/measurement binding. The guest's diagnostic verifier is tested with actual Node-signed payloads. Trusted owner enrollment is not supplied by a ConfigMap.
-- `guest/src/activation.rs`: protected policy installation and one confirmed PCR15 extension before activation succeeds. It has a fixed TPM device adapter and refusal tests, but is not wired into the current boot units pending authenticated authority enrollment and hardware qualification.
-- `guest/src/protected_state.rs`, `guest/src/tpm_state.rs`: encrypted immutable authority-state records connected to a PCR-bound TPM seal and policy-only NV history. Recovery checks the exact hardware definition and rejects rollback, copied seals, missing state and changed boot. The actual Rust backend has isolated software-TPM tests; it is not activated by boot units and still needs qualification on NitroTPM.
-- `../aws-authority.ts`, `guest/src/authority.rs`: matching signed genesis and owner-rotation profiles plus local TPM-backed owner history. Genesis binds an independently authenticated deployment commitment; rotations require both owner thresholds and the current history/identity. The private service identity survives recovery, and an ambiguous commit blocks further use until recovery. Public helpers and `--verify-authority` are developer preflight, not installation commands. Attested enrollment, replicated membership and automatic continuity remain unimplemented.
 - `tests/test_tpm_persistence.py`: isolated software-TPM CI experiments for PCR seals, protected NV writes/deletion, graceful/abrupt restart, copied sealed blobs, clear, PCR15 and unwritten NV state. Eight experiments pass locally with exact TPM rejection-code assertions. These are developer qualification tests, not user setup scripts or proof of NitroTPM behavior.
-- `HARDWARE_QUALIFICATION.md`: separate disposable AWS observations for local TPM mechanics, with explicit limits, costs and cleanup. The mutable test image is not a released runtime or authority appliance.
 - `approved_profile.py`: converts patched AWS PCR compute output and exact policy bytes into a **non-approved** image-review candidate. An operator assertion is never an attestation claim.
 
 ## Reproduce local checks
@@ -63,9 +69,9 @@ The local container host has swap, so its unmodified environment correctly fails
 
 ## Review-only outputs
 
-This section describes the existing per-workload prototype. The research proposes
-replacing that restriction with authenticated initdata on a generic image; it
-has not yet changed these tools or made their outputs deployable.
+This section describes the retained per-workload prototype. Managed mode uses
+generic released images and authenticated workload intent instead. These older
+tools remain review utilities; their outputs are not a managed installation.
 
 Approved profile JSON maps workload IDs to `{profile, policy_sha256, pcrs, resources, reviewed}`. Required PCRs are `"4"` and `"12"`, each a 96-character SHA384 hex string. Distinct workloads cannot reuse the same boot identity. Resource paths are exact `repository/image_key/name` strings. Replicas of one approved workload share that workload's key authority and have independent ephemeral recipient keys.
 
