@@ -88,6 +88,19 @@ class CloudTests(unittest.TestCase):
                         with self.assertRaises(ClientError): cloud.delete({})
                     s3.assert_no_pending_responses()
 
+    def test_peerpod_inventory_includes_terminated_guests_and_checks_ownership_on_every_page(self):
+        cloud = self.make_cloud()
+        filters = {"Filters": cloud.filters("runtime")}
+        with Stubber(cloud.ec2) as ec2:
+            ec2.add_response("describe_instances", {"Reservations": [], "NextToken": "next"}, filters)
+            ec2.add_response("describe_instances", {"Reservations": [{"Instances": [{"InstanceId": "i-0123456789abcdef0",
+                "State": {"Name": "terminated"}, "Tags": cloud.tags("runtime")}]}]}, {**filters, "NextToken": "next"})
+            self.assertEqual(cloud.runtime_instances(), {"i-0123456789abcdef0"})
+            ec2.add_response("describe_instances", {"Reservations": [{"Instances": [{"InstanceId": "i-0123456789abcdef1",
+                "Tags": cloud.tags("authority-0")}]}]}, filters)
+            with self.assertRaisesRegex(ValueError, "foreign resource"): cloud.runtime_instances()
+            ec2.assert_no_pending_responses()
+
     def test_foreign_and_ambiguous_resources_cannot_be_adopted(self):
         cloud = self.make_cloud()
         for resource in [{}, {"Tags": [{"Key": "NebulaCocoDeployment", "Value": "other"}]}]:

@@ -58,7 +58,7 @@ pub async fn run(mode: &str) -> Result<()> {
     };
     channel.send(&request).await?;
     let status: OwnerResponse =
-        tokio::time::timeout(Duration::from_secs(15), channel.receive()).await??;
+        tokio::time::timeout(Duration::from_secs(30), channel.receive()).await??;
     let public = match &status {
         OwnerResponse::Status(public)
         | OwnerResponse::Health { status: public, .. }

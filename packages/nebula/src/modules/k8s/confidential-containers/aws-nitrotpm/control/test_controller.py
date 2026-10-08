@@ -34,7 +34,24 @@ class KubeFixture:
     def __init__(self, obj):
         self.obj = obj
         self.patches = []
-    def get(self, _): return copy.deepcopy(self.obj)
+        self.resources = {}
+        self.deletes = []
+        self.lose_delete_reply = False
+    def get(self, path):
+        if "/awsconfidentialruntimes/" in path: return copy.deepcopy(self.obj)
+        if path not in self.resources: raise ApiError(404)
+        return copy.deepcopy(self.resources[path])
+    def items(self, path):
+        if path == "/apis/confidentialcontainers.org/v1alpha1/peerpods":
+            return [copy.deepcopy(obj) for key, obj in self.resources.items() if "/peerpods/" in key]
+        return [copy.deepcopy(obj) for key, obj in self.resources.items() if key.startswith(path + "/")]
+    def request(self, method, path, value):
+        assert method == "DELETE"
+        obj = self.resources[path]
+        assert value["preconditions"] == {key: obj["metadata"][key] for key in ("uid", "resourceVersion")}
+        self.deletes.append(path)
+        obj["metadata"]["deletionTimestamp"] = "2026-10-08T00:00:00Z"
+        if self.lose_delete_reply: raise OSError("injected lost reply")
     def patch(self, path, value):
         self.patches.append((path, copy.deepcopy(value)))
         for key, update in value.items(): self.obj.setdefault(key, {}).update(copy.deepcopy(update))
@@ -68,6 +85,7 @@ class ControllerTests(unittest.TestCase):
         cloud.group.return_value = "sg-0123456789abcdef1"
         cloud.authority.return_value = {"InstanceId": "i-0123456789abcdef0"}
         cloud.runtime_template.return_value = "example-runtime"
+        cloud.runtime_instances.return_value = set()
         controller.canary = MagicMock(return_value=(True, "boot/canary"))
         controller.pod_intents = MagicMock()
         controller.peer_config = MagicMock()
@@ -130,6 +148,88 @@ class ControllerTests(unittest.TestCase):
         cloud.delete.side_effect = None
         with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
         self.assertEqual(kube.obj["metadata"]["finalizers"], ["another-controller"])
+
+    def deleting(self):
+        kube, controller, cloud, _ = self.setup_controller()
+        kube.obj["metadata"].update({"finalizers": [FINALIZER], "deletionTimestamp": "2026-10-08T00:00:00Z"})
+        path = "/apis/confidentialcontainers.org/v1alpha1/namespaces/example/peerpods/owned-resource"
+        kube.resources[path] = {"metadata": {"name": "owned-resource", "namespace": "example", "uid": "owned-uid", "resourceVersion": "4",
+            "finalizers": ["peer.pod/finalizer"]}, "spec": {"cloudProvider": "aws", "instanceID": "i-0123456789abcdef0"}}
+        cloud.runtime_instances.return_value = {"i-0123456789abcdef0"}
+        return kube, controller, cloud, path
+
+    def test_peerpod_finalizer_must_finish_before_cloud_cleanup_and_runtime_release(self):
+        kube, controller, cloud, path = self.deleting()
+        foreign = path.replace("owned-resource", "foreign-resource")
+        kube.resources[foreign] = copy.deepcopy(kube.resources[path])
+        kube.resources[foreign]["metadata"].update(name="foreign-resource", uid="foreign-uid")
+        kube.resources[foreign]["spec"]["instanceID"] = "i-0123456789abcdef1"
+        with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+        self.assertEqual(kube.deletes, [path])
+        self.assertEqual(kube.resources[path]["metadata"]["finalizers"], ["peer.pod/finalizer"])
+        self.assertEqual(kube.obj["status"]["phase"], "DrainingPeerPods")
+        self.assertEqual(kube.obj["metadata"]["finalizers"], [FINALIZER])
+        cloud.stop_runtime_launches.assert_called_once()
+        cloud.delete.assert_not_called()
+        # AWS can forget the terminated guest while Kubernetes is still waiting.
+        cloud.runtime_instances.return_value = set()
+        with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+        cloud.delete.assert_not_called()
+        del kube.resources[path]  # Only the normal cleanup controller completes it.
+        with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+        cloud.delete.assert_called_once()
+        self.assertEqual(kube.obj["metadata"]["finalizers"], [])
+        self.assertNotIn("deletionTimestamp", kube.resources[foreign]["metadata"])
+
+    def test_peerpod_deletion_resumes_after_lost_reply_and_controller_restart(self):
+        kube, controller, cloud, path = self.deleting()
+        kube.lose_delete_reply = True
+        with patch.object(reconciler, "Cloud", return_value=cloud), self.assertRaises(OSError): controller.reconcile()
+        self.assertEqual(kube.obj["status"]["cursors"]["deletingPeerPods"]["example/owned-resource"]["uid"], "owned-uid")
+        cloud.delete.assert_not_called()
+        kube.lose_delete_reply = False
+        cloud.runtime_instances.return_value = set()
+        restarted = Controller(kube, "example", controller.release, lambda: None)
+        with patch.object(reconciler, "Cloud", return_value=cloud): restarted.reconcile()
+        self.assertEqual(kube.deletes, [path], "an already deleting object needs no repeated Delete")
+        self.assertEqual(kube.obj["metadata"]["finalizers"], [FINALIZER])
+        del kube.resources[path]
+        with patch.object(reconciler, "Cloud", return_value=cloud): restarted.reconcile()
+        self.assertEqual(kube.obj["metadata"]["finalizers"], [])
+
+    def test_recorded_peerpod_name_cannot_delete_a_replacement_uid_or_instance(self):
+        for changed in ("uid", "instance"):
+            with self.subTest(changed=changed):
+                kube, controller, cloud, path = self.deleting()
+                with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+                kube.resources[path]["metadata"].pop("deletionTimestamp")
+                if changed == "uid": kube.resources[path]["metadata"]["uid"] = "replacement-uid"
+                else: kube.resources[path]["spec"]["instanceID"] = "i-0123456789abcdef1"
+                cloud.runtime_instances.return_value = set()
+                with patch.object(reconciler, "Cloud", return_value=cloud), self.assertRaisesRegex(ValueError, "identity changed"):
+                    controller.reconcile()
+                self.assertEqual(kube.deletes, [path])
+                cloud.delete.assert_not_called()
+                self.assertEqual(kube.obj["metadata"]["finalizers"], [FINALIZER])
+
+    def test_owned_peerpods_are_drained_in_workload_namespaces(self):
+        kube, controller, cloud, path = self.deleting()
+        other = path.replace("namespaces/example/", "namespaces/workloads/")
+        kube.resources[other] = copy.deepcopy(kube.resources[path])
+        kube.resources[other]["metadata"].update(namespace="workloads", uid="workload-uid")
+        with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+        self.assertCountEqual(kube.deletes, [path, other])
+        self.assertEqual(len(kube.obj["status"]["cursors"]["deletingPeerPods"]), 2)
+        self.assertEqual(kube.obj["metadata"]["finalizers"], [FINALIZER])
+
+    def test_deletion_only_stops_canary_owned_by_this_runtime_uid(self):
+        for owner in ("fixture-uid", "another-runtime-uid"):
+            with self.subTest(owner=owner):
+                kube, controller, cloud, _ = self.deleting()
+                path = "/api/v1/namespaces/example/pods/nebula-runtime-canary"
+                kube.resources[path] = {"metadata": {"uid": "canary-uid", "resourceVersion": "8", "ownerReferences": [{"uid": owner}]}}
+                with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+                self.assertEqual(path in kube.deletes, owner == "fixture-uid")
 
     def test_live_controller_lease_cannot_be_stolen_and_expired_holder_cannot_call_aws(self):
         kube = MagicMock(namespace="example")

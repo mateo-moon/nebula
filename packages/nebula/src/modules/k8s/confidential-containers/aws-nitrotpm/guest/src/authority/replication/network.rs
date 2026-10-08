@@ -19,6 +19,33 @@ use std::{
 };
 use tokio::net::TcpListener;
 
+#[cfg(test)]
+#[path = "wire_tests.rs"]
+mod wire_tests;
+
+pub(super) fn consensus_config(deployment: String) -> Result<Arc<openraft::Config>> {
+    Ok(Arc::new(
+        openraft::Config {
+            cluster_name: deployment,
+            // OpenRaft also uses heartbeat_interval as the read-index RPC
+            // deadline. Each RPC establishes fresh mutual hardware evidence;
+            // the former five-second budget cancelled responding majorities.
+            election_timeout_min: 40000,
+            election_timeout_max: 60000,
+            heartbeat_interval: 10000,
+            install_snapshot_timeout: 45000,
+            snapshot_max_chunk_size: 64 * 1024,
+            max_payload_entries: 16,
+            snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(16),
+            replication_lag_threshold: 32,
+            max_in_snapshot_log_to_keep: 0,
+            purge_batch_size: 1,
+            ..Default::default()
+        }
+        .validate()?,
+    ))
+}
+
 /// Public boot intent. The signed genesis commits to profile.release, which is
 /// itself a digest of the complete measurement and firmware-verification policy.
 pub struct ReplicaConfig {
@@ -376,23 +403,7 @@ impl ProtectedReplicas {
         });
         let public = host.store.replica_public_key().await?;
         let id = u64::from_str_radix(&public_identity(&public)?[..16], 16)?;
-        let settings = Arc::new(
-            openraft::Config {
-                cluster_name: host.deployment.clone(),
-                election_timeout_min: 20000,
-                election_timeout_max: 30000,
-                heartbeat_interval: 5000,
-                install_snapshot_timeout: 45000,
-                snapshot_max_chunk_size: 64 * 1024,
-                max_payload_entries: 16,
-                snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(16),
-                replication_lag_threshold: 32,
-                max_in_snapshot_log_to_keep: 0,
-                purge_batch_size: 1,
-                ..Default::default()
-            }
-            .validate()?,
-        );
+        let settings = consensus_config(host.deployment.clone())?;
         let raft = Consensus::new(
             id,
             settings,
@@ -813,7 +824,10 @@ impl ProtectedReplicas {
                         let service = self.clone();
                         maintenance.spawn(async move {
                             let _ = tokio::time::timeout(Duration::from_secs(120), async {
-                                service.finish_initialization().await?;
+                                let initialized = service.host.store.inspect(|data| Ok(data.machine.authority.is_some())).await?;
+                                if !initialized {
+                                    service.finish_initialization().await?;
+                                }
                                 service.reconcile_replacement().await
                             }).await;
                         });
@@ -984,6 +998,15 @@ pub(super) async fn reconcile_replacement<S: Store + Send + 'static>(
     store: &ReplicaStore<S>,
     raft: &Consensus,
 ) -> Result<()> {
+    // An idle maintenance tick is not an authorization request. Avoid repeated
+    // hardware-attested quorum rounds when there is no protected intent to
+    // continue. If work exists, re-read it only AFTER a fresh quorum barrier.
+    if !store
+        .inspect(|data| Ok(data.machine.replacement.is_some()))
+        .await?
+    {
+        return Ok(());
+    }
     raft.ensure_linearizable().await?;
     let Some(intent) = store
         .inspect(|data| Ok(data.machine.replacement.clone()))

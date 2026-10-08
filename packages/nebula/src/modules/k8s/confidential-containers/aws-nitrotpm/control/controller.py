@@ -75,7 +75,7 @@ def inspect_authority(addresses, profile, deployment, identity=None, binary="/us
     def inspect(address):
         config = {"address": address + ":9444", "profile": profile, "deployment": deployment, "expectedIdentity": identity}
         result = subprocess.run([binary, "--inspect-authority"], input=(json.dumps(config) + "\n").encode(),
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=50, check=False)
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=70, check=False)
         require(result.returncode == 0 and len(result.stdout) < 16384, "attested quorum unavailable")
         answer = json.loads(result.stdout)
         require(answer["kind"] == "health" and answer["body"]["status"]["deployment"] == deployment, "invalid attested health")
@@ -144,6 +144,67 @@ class Controller:
         if cleanup["spec"]["template"]["metadata"].get("annotations", {}).get("coco.nebula.io/credentials") != credentials:
             self.kube.patch(path, {"spec": {"template": {"metadata": {"annotations": {"coco.nebula.io/credentials": credentials}}}}})
 
+    def drain_peerpods(self, cloud, cursors):
+        """Let the live cleanup controller finish each owned PeerPod finalizer.
+
+        Record exact Kubernetes identities before requesting deletion. The
+        checkpoint survives a lost Delete reply and AWS forgetting a terminated
+        instance; a reused name never authorizes deletion of a different object.
+        """
+        cloud.stop_runtime_launches()
+        owned = cloud.runtime_instances()
+        collection = "/apis/confidentialcontainers.org/v1alpha1/peerpods"
+        recorded = cursors.setdefault("deletingPeerPods", {})
+        try:
+            peers = list(self.kube.items(collection))
+        except ApiError as error:
+            if error.status != 404 or recorded: raise
+            peers = []  # Installation may have stopped before the CRD existed.
+        changed = False
+        for peer in peers:
+            metadata, spec = peer["metadata"], peer["spec"]
+            if spec.get("cloudProvider") != "aws" or spec.get("instanceID") not in owned: continue
+            name, namespace, uid = metadata["name"], metadata["namespace"], metadata["uid"]
+            require(LABEL.fullmatch(namespace) and re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", name), "invalid peer-pod name")
+            reference = namespace + "/" + name
+            expected = {"uid": uid, "instance": spec["instanceID"]}
+            require(reference not in recorded or recorded[reference] == expected, "peer-pod identity changed during deletion")
+            if reference not in recorded:
+                recorded[reference] = expected
+                changed = True
+        if changed: self.checkpoint("DrainingPeerPods", cursors)
+
+        # Stop the module-owned canary too. User Pods belong to their own
+        # controllers and are never deleted as a side effect of this sweep.
+        canary = f"/api/v1/namespaces/{self.kube.namespace}/pods/nebula-runtime-canary"
+        try:
+            pod = self.kube.get(canary)
+            if any(ref.get("uid") == self.obj["metadata"]["uid"] for ref in pod["metadata"].get("ownerReferences", [])):
+                self.delete_exact(canary, pod)
+        except ApiError as error:
+            if error.status != 404: raise
+
+        pending = False
+        for reference, expected in recorded.items():
+            namespace, name = reference.split("/")
+            require(LABEL.fullmatch(namespace) and re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", name), "invalid recorded peer-pod name")
+            path = f"/apis/confidentialcontainers.org/v1alpha1/namespaces/{namespace}/peerpods/{name}"
+            try:
+                peer = self.kube.get(path)
+                require(peer["metadata"]["uid"] == expected["uid"] and
+                        peer["spec"].get("cloudProvider") == "aws" and
+                        peer["spec"].get("instanceID") == expected["instance"], "peer-pod identity changed during deletion")
+                self.delete_exact(path, peer)
+                pending = True  # Confirm disappearance on a subsequent pass.
+            except ApiError as error:
+                if error.status != 404: raise
+        if pending: raise Pending("DrainingPeerPods")
+
+    def delete_exact(self, path, obj):
+        if obj["metadata"].get("deletionTimestamp"): return
+        self.kube.request("DELETE", path, {"apiVersion": "v1", "kind": "DeleteOptions", "preconditions": {
+            "uid": obj["metadata"]["uid"], "resourceVersion": obj["metadata"]["resourceVersion"]}})
+
     def pod_intents(self, cloud, common, active=None):
         active = set(active or ())
         for pod in self.kube.items("/api/v1/pods"):
@@ -185,7 +246,7 @@ class Controller:
                 result = subprocess.run(["/usr/local/bin/aws-trustee-bootstrap", "--canary-intent"],
                     input=(json.dumps({"address": address + ":9444", "profile": common["authorityProfile"],
                         "deployment": common["deployment"], "expectedIdentity": cursors["authorityIdentity"]}) + "\n").encode(),
-                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=50, check=False)
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=70, check=False)
                 require(result.returncode == 0 and len(result.stdout) < 512 * 1024, "canary enrollment unavailable")
                 response = json.loads(result.stdout)
                 require(response["kind"] == "canary", "invalid canary response")
@@ -240,6 +301,7 @@ class Controller:
         try:
             if metadata.get("deletionTimestamp"):
                 self.checkpoint("Deleting", cursors)
+                self.drain_peerpods(cloud, cursors)
                 cloud.delete(cursors)
                 self.kube.patch(self.path, {"metadata": {"resourceVersion": self.obj["metadata"]["resourceVersion"],
                     "finalizers": [f for f in finalizers if f != FINALIZER]}})

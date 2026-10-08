@@ -455,6 +455,20 @@ class Cloud:
                     {"ResourceType": "volume", "Tags": self.tags("runtime-root")}]})
         return name
 
+    def stop_runtime_launches(self):
+        """Close the CAA launch path before draining Kubernetes or AWS state."""
+        templates = self.items('describe_launch_templates', 'LaunchTemplates', Filters=self.filters())
+        for template in templates:
+            self.remove("delete_launch_template", LaunchTemplateId=self.owned(template)["LaunchTemplateId"])
+        return bool(templates)
+
+    def runtime_instances(self):
+        # Include terminated instances: their PeerPod finalizers can still need
+        # the cleanup controller after the VM has disappeared.
+        return {self.owned(instance, "runtime")["InstanceId"]
+                for reservation in self.items('describe_instances', 'Reservations', Filters=self.filters("runtime"))
+                for instance in reservation["Instances"]}
+
     def delete(self, cursors=None):
         """One deletion pass, solely over tags in this installation's namespace.
 
@@ -462,16 +476,12 @@ class Cloud:
         have disappeared. Existing platform VPCs, worker groups and gateways are
         never swept by name or by an account-wide delete.
         """
-        changed = False
+        changed = self.stop_runtime_launches()
         def inventory(operation, key, **parameters):
             nonlocal changed
             values = self.items(operation, key, **parameters)
             changed |= bool(values)
             return values
-        # CAA always launches through this template. Remove it before sweeping
-        # instances so a queued Pod cannot recreate a guest during teardown.
-        for template in inventory('describe_launch_templates', 'LaunchTemplates', Filters=self.filters()):
-            self.remove("delete_launch_template", LaunchTemplateId=self.owned(template)["LaunchTemplateId"])
         reservations = self.items('describe_instances', 'Reservations', Filters=self.filters())
         if any(instance["State"]["Name"] == "shutting-down" for reservation in reservations for instance in reservation["Instances"]):
             raise Pending("TerminatingOwnedGuests")

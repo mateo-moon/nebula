@@ -62,6 +62,7 @@ struct Routes {
     nodes: BTreeMap<u64, (Peer, Consensus)>,
     isolated: BTreeSet<u64>,
     snapshots: usize,
+    append_delay: Duration,
 }
 #[derive(Clone, Default)]
 struct Router(Arc<Mutex<Routes>>);
@@ -108,6 +109,8 @@ impl RaftNetwork<Types> for Connection {
         rpc: AppendEntriesRequest<Types>,
         _: RPCOption,
     ) -> Result<AppendEntriesResponse<u64>, RPCError<u64, Peer, RaftError<u64>>> {
+        let delay = self.router.0.lock().unwrap().append_delay;
+        tokio::time::sleep(delay).await;
         self.destination()?
             .append_entries(rpc)
             .await
@@ -151,6 +154,7 @@ struct Node {
 struct Cluster {
     router: Router,
     nodes: BTreeMap<u64, Node>,
+    settings: Arc<Config>,
 }
 impl Cluster {
     fn config() -> Arc<Config> {
@@ -182,7 +186,7 @@ impl Cluster {
         let id = peer.id().unwrap();
         let raft = Consensus::new(
             id,
-            Self::config(),
+            self.settings.clone(),
             Factory {
                 source: id,
                 router: self.router.clone(),
@@ -214,9 +218,13 @@ impl Cluster {
         id
     }
     async fn new() -> Self {
+        Self::with_config(Self::config()).await
+    }
+    async fn with_config(settings: Arc<Config>) -> Self {
         let mut cluster = Self {
             router: Router::default(),
             nodes: BTreeMap::new(),
+            settings,
         };
         for _ in 0..3 {
             cluster.add().await;
@@ -307,7 +315,7 @@ impl Cluster {
             node.store = node.disk.restore();
             node.raft = Consensus::new(
                 *id,
-                Self::config(),
+                self.settings.clone(),
                 Factory {
                     source: *id,
                     router: self.router.clone(),
@@ -325,6 +333,37 @@ impl Cluster {
                 .insert(*id, (node.peer.clone(), node.raft.clone()));
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn production_quorum_budget_allows_attestation_latency_but_refuses_partition() {
+    let cluster =
+        Cluster::with_config(network::consensus_config("latency-fixture".into()).unwrap()).await;
+    let leader = cluster.leader().await;
+    let node = &cluster.nodes[&leader];
+    let before = node.store.current_status(&node.raft).await.unwrap();
+    // Model the time spent establishing a fresh mutual-attestation connection,
+    // without replacing OpenRaft's actual quorum check with a mock success.
+    cluster.router.0.lock().unwrap().append_delay = Duration::from_secs(6);
+    let result = node.store.current_status(&node.raft).await;
+    assert!(
+        result.is_ok(),
+        "a responding majority exceeded the production RPC budget: {result:?}"
+    );
+    assert_eq!(result.unwrap(), before);
+    cluster.router.0.lock().unwrap().isolated.insert(leader);
+    tokio::time::timeout(
+        Duration::from_millis(100),
+        network::reconcile_replacement(&node.store, &node.raft),
+    )
+    .await
+    .expect("idle housekeeping must not start another attested quorum round")
+    .unwrap();
+    assert!(
+        node.store.current_status(&node.raft).await.is_err(),
+        "a cached successful read must not authorize an isolated leader"
+    );
+    cluster.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

@@ -587,7 +587,7 @@ impl<S: Store + Send + 'static> ReplicaStore<S> {
     /// policy. The returned status alone is public information, not a capability.
     pub async fn current_status(&self, raft: &Consensus) -> Result<LocalStatus> {
         tokio::time::timeout(
-            std::time::Duration::from_secs(10),
+            std::time::Duration::from_secs(20),
             raft.ensure_linearizable(),
         )
         .await

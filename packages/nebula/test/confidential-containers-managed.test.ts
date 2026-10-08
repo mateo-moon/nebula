@@ -84,6 +84,17 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.ok(!env.some((item: any) => item.name === "AWS_ROLE_ARN"));
   assert.ok(caa.spec.template.spec.initContainers.some((item: any) => item.name === "managed-image-ready"));
   const cleanup = objects.find(value => value.kind === "Deployment" && value.metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl")!;
+  const wave = (resource: any) => Number(resource.metadata.annotations?.["argocd.argoproj.io/sync-wave"] ?? 0);
+  assert.ok(wave(cleanup) < wave(runtime), "reverse pruning must keep the cleanup controller alive until the runtime finishes");
+  for (const dependency of objects.filter(value => value.metadata.name.startsWith("peerpodctrl-") && value !== cleanup)) {
+    assert.ok(wave(dependency) < wave(cleanup), "cleanup permissions/services must outlive its controller");
+  }
+  assert.ok(wave(cm) < wave(cleanup), "static region configuration must exist before cleanup starts and survive its deletion");
+  assert.ok(wave(caa) > wave(runtime), "image-dependent CAA startup must not block runtime provisioning");
+  const managedRole = objects.find(value => value.kind === "ClusterRole" && value.metadata.name === runtime.metadata.name)!;
+  assert.deepEqual(managedRole.rules.find((rule: any) => rule.resources.includes("peerpods")), {
+    apiGroups: ["confidentialcontainers.org"], resources: ["peerpods"], verbs: ["get", "list", "delete"],
+  }, "the module requests normal peer-pod deletion without permission to strip finalizers");
   for (const resource of [caa, cleanup]) assert.deepEqual(resource.spec.template.spec.nodeSelector,
     { "example.com/workers": "true", "kubernetes.io/arch": "amd64" });
   assert.equal(caa.spec.template.metadata.annotations?.["coco.nebula.io/config"], undefined);

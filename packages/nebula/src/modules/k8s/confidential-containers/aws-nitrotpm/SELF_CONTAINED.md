@@ -117,7 +117,17 @@ Git declares static CAA settings only. Discovered cloud IDs and rollout stamps
 belong to the controller, so normal GitOps reconciliation preserves them without
 requiring application-level ignore rules.
 
-The CR finalizer remains until owned cloud resources have disappeared, including
+The CR finalizer first closes the runtime launch path and drains PeerPods whose
+instance tags identify this deployment, including records in workload namespaces.
+It checkpoints each exact Kubernetes UID before requesting deletion and waits
+for the cleanup controller to complete the normal finalizer. Retries survive a
+lost Delete response or AWS forgetting a terminated instance. Reused names or
+changed instance identities are refused; foreign records are left untouched.
+The cleanup controller and its static configuration/permissions install before
+the runtime declaration, so reverse pruning keeps them available during draining.
+Image-dependent CAA startup still follows that declaration.
+
+The CR finalizer then remains until owned cloud resources have disappeared, including
 instances, imported images/snapshots, state disks, interfaces, addresses, network
 rules and boot storage. Existing platform VPCs, worker groups and gateways are
 preserved. Nebula's ordered sync/prune keeps the controller/credentials available
@@ -173,33 +183,34 @@ and starts its protected service. Explicit support for the documented SNP
 report version 5 passes synthetic signature/rejection tests, verification of
 three earlier captured hardware reports, and fresh evidence-bound TLS checks.
 Firmware minimums and build-derived PCR pins are unchanged.
-The rebuilt candidate also passed anonymous artifact checks and another live
-controller-interruption/import test. All three SNP-enabled authorities and their
-state volumes were created automatically. Two peers produced valid fresh evidence;
-the first peer repeatedly closed the connection during evidence collection, before
-sending its proof. A diagnostic reboot did not restore enrollment. This is a failed
-automatic installation, not quorum or runtime qualification; no authority identity
-or default catalog was approved.
-The collector now classifies SNP request/endorsement and NitroTPM collection
-failures with fixed console codes, limited to one message per minute. The patched
-attester communicates only fixed failure exit categories; error chains and request
-or authentication bytes remain suppressed. A rebuilt candidate must diagnose and
-resolve the collection failure before full quorum/runtime/recovery acceptance.
-A fresh diagnostic candidate reproduced the two-of-three evidence result with
-no manual startup intervention. Its fixed console code narrowed the failure to
-owner authorization when persisting the temporary NitroTPM endorsement key.
-Both image imports and recovery from controller interruption passed again.
-Investigation found that `tpm2-tools` parses credential files as password text,
+`tpm2-tools` parses credential files as password text,
 while the Nitro collector consumes the original binary owner secret. Embedded
 NUL bytes, trailing CR/LF and password prefixes could therefore change the actual
 TPM credential. Provisioning and recovery now use explicit hex encoding in a
 private tmpfs file, with a zeroizing encoding buffer. A software-TPM regression
 fails before this fix and passes for all four affected input cases afterward,
 independently checking the stored credential and rejection of empty authorization.
-The fixed appliance still needs a fresh hardware run; no authority identity,
-runtime qualification or default catalog has been approved.
-Normal deletion of earlier failed deployments removed all owned cloud and IAM
-resources, independently verified after the finalizer completed.
+The fixed appliance produced fresh valid evidence from all three distinct Nitro
+modules with the same protected authority identity. Both image imports and
+controller-interruption recovery passed. The module automatically launched its
+canary PodVM, but stable quorum health and successful encrypted Pod execution
+were not established. A diagnostic parser's reordered JSON caused a separate
+decoding error; normal production wire round trips pass without a codec change.
+
+A controlled test using real OpenRaft reproduces cancellation of a responding
+majority when connection latency exceeds the old five-second RPC budget. The
+revised bounded budget passes that test and still refuses an isolated leader.
+Idle maintenance skips redundant quorum rounds when no protected initialization
+or replacement work exists; authorization continues to require fresh quorum.
+These changes still require qualification in a new immutable appliance.
+
+The same hardware run exposed a cleanup-controller ordering failure: a PeerPod
+finalizer survived removal of its controller. Restoring only cleanup resources
+allowed normal finalization without stripping any finalizer. Independent AWS
+inventories verified removal of all module and disposable test resources.
+The corrected ordering and UID-bound drain pass controller and synthesis tests;
+ordinary deletion without repair remains a required hardware acceptance gate.
+No authority identity, workload keys or default catalog were approved in this run.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,

@@ -129,6 +129,7 @@ export class ManagedAwsCoco extends Construct {
     this.clusterRole = new ApiObject(this, "rbac", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "ClusterRole", metadata: { name: this.name, annotations: { "argocd.argoproj.io/sync-wave": "-3" } }, rules: [
       { apiGroups: [""], resources: ["pods"], verbs: ["get", "list"] },
       { apiGroups: [""], resources: ["configmaps"], verbs: ["get"] },
+      { apiGroups: ["confidentialcontainers.org"], resources: ["peerpods"], verbs: ["get", "list", "delete"] },
     ] });
     new ApiObject(this, "rbac-binding", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "ClusterRoleBinding", metadata: { name: this.name, annotations: { "argocd.argoproj.io/sync-wave": "-3" } },
       roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "ClusterRole", name: this.name }, subjects: [{ kind: "ServiceAccount", name: this.name, namespace }] });
@@ -188,6 +189,15 @@ export class ManagedAwsCoco extends Construct {
     const caa = resources.find(resource => resource.kind === "DaemonSet" && resource.name === "cloud-api-adaptor-daemonset");
     const cleanup = resources.find(resource => resource.kind === "Deployment" && resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpodctrl");
     requireValue(config && caa && cleanup, "upstream peerpods contract changed");
+    // The cleanup controller starts with static region/credentials; it does not
+    // depend on the imported image. Keep it and its permissions/configuration
+    // alive while the runtime's finalizer drains PeerPods during reverse pruning.
+    for (const resource of resources.filter(value => value.name.startsWith("peerpodctrl-"))) {
+      resource.addJsonPatch(JsonPatch.add("/metadata/annotations", { ...resource.toJson().metadata?.annotations,
+        "argocd.argoproj.io/sync-wave": resource === cleanup ? "-2" : "-3" }));
+    }
+    config.addJsonPatch(JsonPatch.add("/metadata/annotations", { ...config.toJson().metadata?.annotations,
+      "argocd.argoproj.io/sync-wave": "-3" }));
     // GitOps owns the static settings; the controller owns these discovered
     // values. Even empty placeholders would make Argo self-heal overwrite them.
     // Removing them also works with plain apply, without caller-supplied ignores.
