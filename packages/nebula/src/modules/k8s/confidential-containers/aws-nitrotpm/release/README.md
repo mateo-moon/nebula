@@ -43,6 +43,16 @@ reviewed executable digests, a read-only dm-verity root, disabled operator/debug
 services, volatile image/key/policy storage and fixed systemd entry points.
 Authority EBS storage holds only encrypted TPM-bound journal records. Runtime
 policy is authenticated and measured after boot, without making the root mutable.
+Initial journal provisioning requires the module's persistent-key and NV slots
+to be unused and still authenticates the initial owner hierarchy. Existing system
+endorsement keys are preserved; unrelated handles are never used as authority
+trust inputs. Losing the state disk does not authorize clearing or reprovisioning
+an enrolled TPM.
+
+Appliance startup failures emit a fixed `NEBULA_STARTUP_FAILURE` stage code to
+the EC2 console. These codes are operational hints, not attestation or readiness
+proofs. General service output remains suppressed: keys, credentials, PCR values,
+cloud responses and raw error chains are never included in these diagnostics.
 
 `build.py images` derives SHA384 PCR4/PCR12 from the built UKIs using the upstream
 Nitro tools. Release IDs commit role, expected PCRs and minimum firmware policy.

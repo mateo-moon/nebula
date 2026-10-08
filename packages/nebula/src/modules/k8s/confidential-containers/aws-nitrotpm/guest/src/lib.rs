@@ -25,6 +25,7 @@ pub mod boot;
 pub mod evidence;
 pub mod owner_client;
 pub mod protected_state;
+pub mod startup;
 pub mod tpm_state;
 pub mod transport;
 pub mod workload;

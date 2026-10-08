@@ -5,6 +5,7 @@
 //! calling this module. It exclusively owns this TPM; all appliance TPM users
 //! must take the same lock. Recovery never provisions, clears or replaces state.
 use crate::protected_state::{Anchor, Digest384, EMPTY, Journal, Snapshot};
+use crate::startup::{Stage, at};
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use rsa::rand_core::{OsRng, RngCore};
@@ -53,7 +54,10 @@ impl TpmJournal {
     /// An interrupted provisioner cannot acknowledge state; the enrollment
     /// protocol must replace that uncommitted member, not reset a live journal.
     pub fn provision(directory: &Path, deployment: [u8; 32], boot: &BootPolicy) -> Result<Self> {
-        provision(directory, deployment, boot, Driver::hardware()?)
+        at(
+            Stage::TpmProvisioning,
+            provision(directory, deployment, boot, Driver::hardware()?),
+        )
     }
 
     /// A restart must use this method. Missing state, wrong boot, TPM clear,
@@ -63,7 +67,10 @@ impl TpmJournal {
         deployment: [u8; 32],
         boot: &BootPolicy,
     ) -> Result<(Self, Option<Snapshot>)> {
-        recover(directory, deployment, boot, Driver::hardware()?)
+        at(
+            Stage::TpmRecovery,
+            recover(directory, deployment, boot, Driver::hardware()?),
+        )
     }
 
     pub fn commit(&mut self, bytes: &[u8]) -> Result<u64> {
@@ -155,8 +162,14 @@ struct Driver {
 
 impl Driver {
     fn hardware() -> Result<Self> {
-        crate::require_memory_directory(Path::new(MEMORY))?;
-        Self::new(Path::new(MEMORY), "device:/dev/tpmrm0".into())
+        at(
+            Stage::TpmEnvironment,
+            crate::require_memory_directory(Path::new(MEMORY)),
+        )?;
+        at(
+            Stage::TpmEnvironment,
+            Self::new(Path::new(MEMORY), "device:/dev/tpmrm0".into()),
+        )
     }
 
     fn new(memory: &Path, endpoint: String) -> Result<Self> {
@@ -167,7 +180,10 @@ impl Driver {
             endpoint,
             initial_transients: None,
         };
-        driver.initial_transients = Some(driver.handles("handles-transient")?);
+        driver.initial_transients = Some(at(
+            Stage::TpmInventory,
+            driver.handles("handles-transient"),
+        )?);
         Ok(driver)
     }
 
@@ -320,10 +336,14 @@ impl Driver {
         expected.extend_from_slice(&boot.pcr12);
         self.write("approved.pcr", &expected)?;
         self.run("tpm2_pcrread", &[PCRS, "-o", "boot.pcr"])?;
-        ensure!(
-            *self.read("boot.pcr")? == expected,
-            "authority boot mismatch"
-        );
+        let actual = self.read("boot.pcr")?;
+        ensure!(actual.len() == expected.len(), "invalid boot measurements");
+        if actual[..48] != boot.pcr4 {
+            return Err(anyhow::anyhow!("authority boot mismatch").context(Stage::BootPcr4));
+        }
+        if actual[48..] != boot.pcr12 {
+            return Err(anyhow::anyhow!("authority boot mismatch").context(Stage::BootPcr12));
+        }
         Ok(())
     }
 
@@ -414,12 +434,23 @@ fn provision(
         fs::read_dir(directory)?.next().is_none(),
         "new authority directory required"
     );
-    driver.check_boot(boot)?;
-    ensure!(
-        driver.handles("handles-persistent")?.is_empty()
-            && driver.handles("handles-nv-index")?.is_empty(),
-        "unprovisioned TPM required"
-    );
+    at(Stage::BootMeasurements, driver.check_boot(boot))?;
+    at(
+        Stage::TpmInventory,
+        (|| {
+            // NitroTPM can already contain system endorsement keys. They are
+            // neither our persistence nor trust inputs. Leave every unrelated
+            // handle untouched, but never adopt/replace either module slot.
+            // Provisioning below still requires the initial empty owner auth;
+            // a lost disk on a protected TPM cannot reset its owner credential.
+            ensure!(
+                !driver.handles("handles-persistent")?.contains(PARENT)
+                    && !driver.handles("handles-nv-index")?.contains(INDEX),
+                "module TPM state already exists"
+            );
+            Ok::<_, anyhow::Error>(())
+        })(),
+    )?;
     // Persist intent before hardware mutation. Never silently repeat genesis.
     write_private(
         &directory.join("provisioning"),
@@ -517,7 +548,7 @@ fn recover(
     driver: Driver,
 ) -> Result<(TpmJournal, Option<Snapshot>)> {
     private_directory(directory)?;
-    driver.check_boot(boot)?;
+    at(Stage::BootMeasurements, driver.check_boot(boot))?;
     let (seal_policy, nv_policy) = driver.policies()?;
     let blobs: SealedBlobs = serde_json::from_slice(&read_file(&directory.join("seal.json"))?)?;
     let public = STANDARD.decode(blobs.public)?;

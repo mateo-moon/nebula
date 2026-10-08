@@ -290,6 +290,7 @@ fn emulator_accepts_release_reset_pcr12_but_binds_both_boot_measurements() {
             .recover()
             .err()
             .unwrap()
+            .root_cause()
             .to_string()
             .contains("authority boot mismatch")
     );
@@ -342,6 +343,92 @@ fn emulator_recovers_encrypted_journal_after_restart_and_refuses_disk_rollback()
 
 #[test]
 #[ignore = "isolated Linux swtpm fixture with restricted tmpfs and no swap"]
+fn emulator_preserves_system_keys_and_rejects_occupied_module_slots() {
+    let _serial = EMULATION.lock().unwrap();
+    let mut emulator = Emulator::new();
+    let system_keys = ["0x81010001", "0x81010016"];
+    let install_key = |emulator: &Emulator, handle: &str| {
+        emulator.command(
+            "tpm2_createprimary",
+            &["-C", "e", "-G", "ecc", "-c", "system.ctx"],
+        );
+        emulator.command(
+            "tpm2_evictcontrol",
+            &["-C", "o", "-c", "system.ctx", handle],
+        );
+        emulator.command("tpm2_flushcontext", &["-t"]);
+        emulator.command("tpm2_readpublic", &["-c", handle, "-n", "system.name"]);
+        fs::read(emulator.root.path().join("system.name")).unwrap()
+    };
+    let names: Vec<_> = system_keys
+        .iter()
+        .map(|handle| install_key(&emulator, handle))
+        .collect();
+    let mut journal = emulator.provision();
+    journal.commit(b"state alongside system keys").unwrap();
+    drop(journal);
+    emulator.restart();
+    let (journal, snapshot) = emulator.recover().unwrap();
+    assert_eq!(&*snapshot.unwrap().bytes, b"state alongside system keys");
+    drop(journal);
+    for (handle, name) in system_keys.iter().zip(names) {
+        emulator.command("tpm2_readpublic", &["-c", handle, "-n", "system.name"]);
+        assert_eq!(
+            fs::read(emulator.root.path().join("system.name")).unwrap(),
+            name
+        );
+    }
+    // Discarding a journal directory must not turn the same hardware into a
+    // fresh member, even when unrelated system keys coexist with our state.
+    let empty = emulator.root.path().join("empty");
+    fs::create_dir(&empty).unwrap();
+    fs::set_permissions(&empty, fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(provision(&empty, [7; 32], &emulator.boot, emulator.driver()).is_err());
+    assert!(fs::read_dir(empty).unwrap().next().is_none());
+
+    for occupied in [PARENT, INDEX] {
+        let emulator = Emulator::new();
+        if occupied == PARENT {
+            install_key(&emulator, PARENT);
+        } else {
+            emulator.command("tpm2_nvdefine", &[INDEX, "-C", "o", "-s", "48"]);
+        }
+        assert!(provision(&emulator.disk(), [7; 32], &emulator.boot, emulator.driver()).is_err());
+        assert!(fs::read_dir(emulator.disk()).unwrap().next().is_none());
+        assert!(
+            emulator
+                .driver()
+                .handles(if occupied == PARENT {
+                    "handles-persistent"
+                } else {
+                    "handles-nv-index"
+                })
+                .unwrap()
+                .contains(occupied)
+        );
+    }
+    let emulator = Emulator::new();
+    write_private(&emulator.root.path().join("existing-owner.auth"), &[19; 32]).unwrap();
+    emulator.command("tpm2_changeauth", &["-c", "o", "file:existing-owner.auth"]);
+    assert!(provision(&emulator.disk(), [7; 32], &emulator.boot, emulator.driver()).is_err());
+    // Failed initial authentication must not clear or replace the owner secret.
+    emulator.command(
+        "tpm2_createprimary",
+        &[
+            "-C",
+            "o",
+            "-P",
+            "file:existing-owner.auth",
+            "-G",
+            "ecc",
+            "-c",
+            "owner-still-protected.ctx",
+        ],
+    );
+}
+
+#[test]
+#[ignore = "isolated Linux swtpm fixture with restricted tmpfs and no swap"]
 fn emulator_rejects_changed_boot_and_never_advances_the_journal_on_failed_extend() {
     let _serial = EMULATION.lock().unwrap();
     for pcr in [4, 12] {
@@ -362,6 +449,7 @@ fn emulator_rejects_changed_boot_and_never_advances_the_journal_on_failed_extend
                 .recover()
                 .err()
                 .unwrap()
+                .root_cause()
                 .to_string()
                 .contains("authority boot mismatch")
         );

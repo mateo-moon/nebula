@@ -4,6 +4,7 @@ use crate::{
     activation,
     authority::{self, OwnerRequest, OwnerResponse},
     evidence::{self, Claims, ReleaseProfile, Role},
+    startup::{Stage, at},
     transport,
     workload::{self, Envelope, Expectation},
 };
@@ -203,26 +204,40 @@ async fn mount_state(volume: &str) -> Result<()> {
 }
 
 pub async fn run_authority() -> Result<()> {
-    let intent: AuthorityIntent =
-        serde_json::from_slice(&transport::metadata("user-data", 16384).await?)?;
+    let intent: AuthorityIntent = at(
+        Stage::AuthorityIntent,
+        serde_json::from_slice(&at(
+            Stage::AuthorityIntent,
+            transport::metadata("user-data", 16384).await,
+        )?),
+    )?;
     ensure!(
         intent.version == 1 && workload::digest(&intent.deployment),
         "invalid authority boot intent"
     );
-    let bytes = s3::configuration(&format!("boot/{}/authority.json", intent.deployment)).await?;
-    let common: Common = serde_json::from_slice(&bytes)?;
-    common.validate()?;
+    let bytes = at(
+        Stage::AuthorityConfiguration,
+        s3::configuration(&format!("boot/{}/authority.json", intent.deployment)).await,
+    )?;
+    let common: Common = at(
+        Stage::AuthorityConfiguration,
+        serde_json::from_slice(&bytes),
+    )?;
+    at(Stage::AuthorityConfiguration, common.validate())?;
     ensure!(
         common.deployment == intent.deployment,
         "deployment mismatch"
     );
-    let local = transport::metadata("meta-data/local-ipv4", 32).await?;
+    let local = at(
+        Stage::AuthorityMembership,
+        transport::metadata("meta-data/local-ipv4", 32).await,
+    )?;
     let local: Ipv4Addr = std::str::from_utf8(&local)?.parse()?;
     ensure!(
         common.peers.contains(&local),
         "authority is outside the discovery cohort"
     );
-    mount_state(&intent.state_volume).await?;
+    at(Stage::StateDisk, mount_state(&intent.state_volume).await)?;
     use std::os::unix::fs::DirBuilderExt;
     let directory = Path::new(STATE).join("authority");
     match std::fs::DirBuilder::new().mode(0o700).create(&directory) {
@@ -230,17 +245,20 @@ pub async fn run_authority() -> Result<()> {
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => (),
         Err(error) => return Err(error.into()),
     }
-    let replicas = authority::ProtectedReplicas::open(authority::ReplicaConfig {
-        directory,
-        genesis: common.genesis,
-        deployment: common.deployment,
-        profile: common.authority_profile,
-        runtime_profiles: common.runtime_profiles,
-        address: (local, REPLICA_PORT).into(),
-        publisher_address: (local, OWNER_PORT).into(),
-        asvk: asvk()?,
-    })
-    .await?;
+    let replicas = at(
+        Stage::AuthorityState,
+        authority::ProtectedReplicas::open(authority::ReplicaConfig {
+            directory,
+            genesis: common.genesis,
+            deployment: common.deployment,
+            profile: common.authority_profile,
+            runtime_profiles: common.runtime_profiles,
+            address: (local, REPLICA_PORT).into(),
+            publisher_address: (local, OWNER_PORT).into(),
+            asvk: at(Stage::TrustRoot, asvk())?,
+        })
+        .await,
+    )?;
     let peers: Vec<_> = common
         .peers
         .iter()

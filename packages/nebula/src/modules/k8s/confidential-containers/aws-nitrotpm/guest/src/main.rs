@@ -17,7 +17,8 @@ async fn main() {
         } else {
             aws_trustee_bootstrap::boot::run_runtime().await
         };
-        if result.is_err() {
+        if let Err(error) = result {
+            aws_trustee_bootstrap::startup::report(&error);
             eprintln!("protected appliance startup failed; no runtime is activated");
             std::process::exit(1);
         }
