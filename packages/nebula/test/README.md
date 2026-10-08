@@ -18,6 +18,11 @@ The packed-package test also needs package-registry access or a warm pnpm store.
   UEFI qualification covers hardware/layout matching, full variable backups,
   single-write updates, immutable flags, partial-write recovery, firmware reboot
   checkpoints and capability checks using temporary files and injected faults.
+  With `BAREMETAL_CROSSPLANE_CLI=/path/to/crossplane`, the same test file also runs
+  the full pipeline in Docker using Crossplane CLI 2.1.3 and the installed function
+  versions. CI enables this tier with a checksum-verified CLI. It checks actual
+  XR Ready conditions through installation, UEFI/admission gates, enrollment,
+  intent changes and observation loss, without contacting a cluster or host.
   The opt-in `python3 -B test/baremetal-vm.py --artifacts <directory>` creates
   a disposable QEMU disk and tests a real SSH/kexec reinstall. It requires QEMU,
   outbound Debian archive access, and the matching pinned `linux`/`initrd.gz`

@@ -29,6 +29,38 @@ and `provider-kubernetes`. There is no custom controller or cluster-wide host
 watcher. The Job installs the OS and verifies optional UEFI settings; it has no permission to
 create CAPI resources, update XRs, read Secrets through the API or list hosts.
 
+## Composition contract
+
+The pipeline follows Crossplane's [desired-state contract](https://docs.crossplane.io/latest/composition/compositions/#desired-state):
+render only fields this module owns, use stable composition resource names, and
+keep published resources in every subsequent desired graph. Publication is
+remembered through both XR status and observed children, including recovery when
+only part of a graph was applied before the XR status checkpoint. Observation
+loss clears readiness without withdrawing resources.
+
+Explicit readiness checks compare the intended fields against both the provider
+Object's manifest and its observed native resource. Extra API-server defaults
+are accepted; mismatched intent and resources being deleted are not ready.
+Enrollment requires the verified Job and state; worker readiness also requires
+current admission, pool and bootstrap configuration. `function-auto-ready`
+preserves these explicit decisions. The function only renders resources and XR
+status; SSH side effects belong to the bounded Job.
+
+The XRD defaults to [manual revision updates](https://docs.crossplane.io/latest/composition/composite-resource-definitions/#defaultcompositionupdatepolicy),
+including for declarations created outside the TypeScript API. Existing workers
+remain on their selected revision until an operator explicitly changes it.
+Bound installation changes are rejected, and the existing Job retains its
+original declared template rather than taking new image/scripts mid-install.
+
+Cluster scope is intentional for this platform API: it composes cluster-scoped
+provider-kubernetes Objects and optional Node admission policy resources.
+Objects also provide the observe/create/update and orphan policies needed for
+retained installation evidence and remote workload access. Provider permissions
+remain scoped to the configured management namespace; the Job gets a separate
+per-worker Role. This implementation uses the repository's Crossplane 2.1.3 and
+function versions, without depending on newer protocol features from the latest
+documentation.
+
 ## One-time setup
 
 1. Use Crossplane 2.x (repository default 2.1.3), provider-kubernetes 0.17.0,
@@ -322,6 +354,20 @@ qualifies variable writes against temporary files with ioctl fault injection,
 including metadata preservation, immutable-flag recovery, partial updates,
 missing backups, reboot checkpoints and effective kernel checks. It never writes
 to the test runner's firmware.
+
+The opt-in full-pipeline test uses Crossplane CLI 2.1.3 with the real
+`function-go-templating:v0.9.0` and `function-auto-ready:v0.4.2` containers:
+
+```sh
+BAREMETAL_CROSSPLANE_CLI=/path/to/crossplane \
+  node --import tsx --test test/baremetal-worker.test.ts
+```
+
+It follows Crossplane's [local rendering workflow](https://docs.crossplane.io/latest/composition/compositions/#test-a-composition)
+and covers pending installation, missing UEFI evidence, incorrect admission,
+enrollment, ready workers, changed bootstrap intent and lost observations.
+CI enables it using a checksum-verified CLI. It requires Docker and function
+registry access on the first run and never contacts a Kubernetes API or host.
 
 `test/baremetal-vm.py` is an opt-in integration test restricted to its own
 new disposable QEMU disk. It creates a source OS and exercises SSH discovery,

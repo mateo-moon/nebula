@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import { readFileSync } from "node:fs";
 import {
-  CompositeResourceDefinitionV2, CompositeResourceDefinitionV2SpecScope,
+  CompositeResourceDefinitionV2, CompositeResourceDefinitionV2SpecScope, CompositeResourceDefinitionV2SpecDefaultCompositionUpdatePolicy,
   Composition, CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 import { baremetalEnrollmentManifests } from "./baremetal/enrollment";
@@ -222,6 +222,7 @@ export class BaremetalSetup extends Construct {
       spec: {
         group: "nebula.io", names: { kind: "XBaremetalWorker", plural: "xbaremetalworkers" },
         scope: CompositeResourceDefinitionV2SpecScope.CLUSTER,
+        defaultCompositionUpdatePolicy: CompositeResourceDefinitionV2SpecDefaultCompositionUpdatePolicy.MANUAL,
         versions: [{ name: "v1alpha1", served: true, referenceable: true, schema: { openApiv3Schema: {
           type: "object", properties: {
             spec: { type: "object", required: ["address"], properties: {

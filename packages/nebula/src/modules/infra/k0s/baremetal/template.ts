@@ -1,4 +1,4 @@
-/** Crossplane owns the resource graph. The Job only installs and verifies an OS.
+/** Crossplane owns the resource graph. The Job installs and verifies OS/firmware.
  * Keep the template executable in function-go-templating and in the Go test harness. */
 export function baremetalWorkerTemplate(profile: Record<string, unknown>): string {
   return `{{- $profile := ${JSON.stringify(JSON.stringify(profile))} | fromJson -}}\n` + TEMPLATE;
@@ -33,16 +33,25 @@ const TEMPLATE = String.raw`
 {{- else -}}{{- $ok = eq (.expected | toJson) (.actual | toJson) -}}{{- end -}}
 {{- $ok -}}
 {{- end -}}
+{{- /* Ready=True on a provider Object is insufficient when it still observes
+       an older manifest. Compare only our desired fields; never adopt observed
+       defaults, status or controller-owned metadata into the desired graph. */ -}}
+{{- define "current" -}}
+{{- $actual := dig "status" "atProvider" "manifest" (dict) .observed -}}
+{{- and (eq (include "ready" .observed) "true")
+  (not (dig "metadata" "deletionTimestamp" "" .observed))
+  (not (dig "metadata" "deletionTimestamp" "" $actual))
+  (eq (dig "spec" "providerConfigRef" "name" "" .observed) .provider)
+  (eq (dig "metadata" "namespace" "" $actual) (.manifest.metadata.namespace | default ""))
+  (eq (dig "metadata" "annotations" "baremetal.nebula.io/request-uid" "" $actual) .uid)
+  (eq (include "subset" (dict "expected" .manifest "actual" $actual)) "true")
+  (eq (include "subset" (dict "expected" .manifest "actual" (dig "spec" "forProvider" "manifest" (dict) .observed))) "true") -}}
+{{- end -}}
 {{- define "object" -}}
 {{- $old := dig "resource" (dict) (get .resources .key | default dict) -}}
-{{- $actual := dig "status" "atProvider" "manifest" (dict) $old -}}
 {{- $gate := true -}}{{- if hasKey . "gate" -}}{{- $gate = .gate -}}{{- end -}}
-{{- $ready := and $gate (eq (include "ready" $old) "true")
-  (eq (dig "spec" "providerConfigRef" "name" "" $old) .provider)
-  (eq (dig "metadata" "name" "" $actual) .manifest.metadata.name)
-  (eq (dig "metadata" "namespace" "" $actual) (.manifest.metadata.namespace | default ""))
-  (eq (dig "metadata" "annotations" "baremetal.nebula.io/request-uid" "" $actual) .uid) -}}
 {{- $_ := set .manifest.metadata "annotations" (merge (.manifest.metadata.annotations | default dict) (dict "baremetal.nebula.io/request-uid" .uid)) -}}
+{{- $ready := and $gate (eq (include "current" (dict "observed" $old "manifest" .manifest "provider" .provider "uid" .uid)) "true") -}}
 {{- $spec := dict "deletionPolicy" "Orphan" "managementPolicies" .policies
   "providerConfigRef" (dict "name" .provider) "forProvider" (dict "manifest" .manifest) -}}
 {{- if .readiness -}}{{- $_ := set $spec "readiness" .readiness -}}{{- end -}}
@@ -97,7 +106,7 @@ const TEMPLATE = String.raw`
 {{- end -}}
 {{- $bound := and (eq ($data.uid | default "") $uid) (eq ($data.requestHash | default "") $hash) -}}
 {{- $uefiReady := or (not $profile.installation.uefi) (and $bound (eq ($progress.uefiVerified | default false) true)) -}}
-{{- $osReady := and $bound $complete (not $jobFailed) $uefiReady (eq ($data.verifiedRequestHash | default "") $hash)
+{{- $osReady := and $bound $complete (not $jobFailed) (not ($progress.terminalError | default false)) $uefiReady (eq ($data.verifiedRequestHash | default "") $hash)
   (eq ($data.phase | default "") "OSReady") (eq (include "ready" $state) "true") (eq (include "ready" $job) "true")
   (eq (dig "spec" "providerConfigRef" "name" "" $state) $profile.kubeProviderConfigName)
   (eq (dig "spec" "providerConfigRef" "name" "" $job) $profile.kubeProviderConfigName)
@@ -146,11 +155,16 @@ const TEMPLATE = String.raw`
 {{- /* The Job is immutable after creation, including image/scripts across a revision change. */ -}}
 {{- $existingJob := dig "spec" "forProvider" "manifest" (dict) $job -}}
 {{- if $existingJob -}}{{- $jobDesired = deepCopy $existingJob -}}{{- end -}}
+{{- $osReady = and $osReady
+  (eq (include "current" (dict "observed" $job "manifest" $jobDesired "provider" $profile.kubeProviderConfigName "uid" $uid)) "true")
+  (eq (include "current" (dict "observed" $state "provider" $profile.kubeProviderConfigName "uid" $uid "manifest"
+    (dict "apiVersion" "v1" "kind" "ConfigMap" "metadata" (dict "name" $stateName "namespace" $namespace) "data" (dict "uid" $uid "requestHash" $hash)))) "true") -}}
 {{ template "object" (merge (dict "key" "install" "policies" $snapshot "gate" $osReady "manifest" $jobDesired
   "readiness" (dict "policy" "DeriveFromCelQuery" "celQuery" "has(object.status) && has(object.status.conditions) && object.status.conditions.exists(c, c.type == 'Complete' && c.status == 'True')")) $context) }}
 
 {{- $cidr := "" -}}
-{{- $admissionPublished := dig "status" "admissionPublished" false $xr -}}
+{{- $admissionPublished := or (dig "status" "admissionPublished" false $xr)
+  (hasKey $resources "cidr-policy") (hasKey $resources "cidr-binding") (hasKey $resources "identity-policy") (hasKey $resources "identity-binding") -}}
 {{- $admissionReady := true -}}
 {{- if $profile.ipv6PodCidrPrefix -}}
 {{- $octets := splitList "." $xr.spec.address -}}
@@ -178,13 +192,10 @@ const TEMPLATE = String.raw`
 {{- $resourceKey := printf "%s-%s" $key $suffix -}}
 {{- $actualKind := $kind -}}{{- if eq $suffix "binding" -}}{{- $actualKind = printf "%sBinding" $kind -}}{{- end -}}
 {{- $observed := dig "resource" (dict) (get $resources $resourceKey | default dict) -}}
-{{- $admissionReady = and $admissionReady (eq (include "ready" $observed) "true")
-  (eq (dig "status" "atProvider" "manifest" "metadata" "annotations" "baremetal.nebula.io/request-uid" "" $observed) $uid)
-  (eq (dig "status" "atProvider" "manifest" "metadata" "name" "" $observed) $policyName)
-  (eq (include "subset" (dict "expected" $spec "actual" (dig "status" "atProvider" "manifest" "spec" (dict) $observed))) "true")
-  (eq (dig "spec" "providerConfigRef" "name" "" $observed) $profile.workloadKubeProviderConfigName) -}}
+{{- $manifest := dict "apiVersion" "admissionregistration.k8s.io/v1" "kind" $actualKind "metadata" (dict "name" $policyName) "spec" $spec -}}
+{{- $admissionReady = and $admissionReady (eq (include "current" (dict "observed" $observed "manifest" $manifest "provider" $profile.workloadKubeProviderConfigName "uid" $uid)) "true") -}}
 {{ template "object" (merge (dict "key" $resourceKey "policies" $retained "provider" $profile.workloadKubeProviderConfigName "manifest"
-  (dict "apiVersion" "admissionregistration.k8s.io/v1" "kind" $actualKind "metadata" (dict "name" $policyName) "spec" $spec)) $context) }}
+  $manifest) $context) }}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -192,9 +203,11 @@ const TEMPLATE = String.raw`
 
 {{- /* Latch publication, not readiness: a temporarily absent observation must
        not withdraw an existing pool or MachineDeployment from desired state. */ -}}
-{{- $enrollmentPublished := or (dig "status" "enrollmentPublished" false $xr) (and $osReady $admissionReady) -}}
+{{- $enrollmentPublished := or (dig "status" "enrollmentPublished" false $xr) (and $osReady $admissionReady)
+  (hasKey $resources "pool") (hasKey $resources "remote-template") (hasKey $resources "bootstrap-template") (hasKey $resources "worker") -}}
 {{- $workerReady := false -}}
 {{- if $enrollmentPublished -}}
+{{- $enrollmentReady := and $osReady $admissionReady -}}
 {{- range $index, $resource := $profile.enrollment -}}
 {{- $manifest := $resource | toJson | replace "\"NEBULA_HOSTNAME\"" ($hostname | toJson) | replace "\"NEBULA_ADDRESS\"" ($xr.spec.address | toJson) | fromJson -}}
 {{- $key := index (list "pool" "remote-template" "bootstrap-template" "worker") $index -}}
@@ -205,16 +218,17 @@ const TEMPLATE = String.raw`
 {{- end -}}
 {{- $readiness := dict -}}
 {{- $gate := and $osReady $admissionReady -}}
+{{- $observed := dig "resource" (dict) (get $resources $key | default dict) -}}
+{{- $enrollmentReady = and $enrollmentReady (eq (include "current" (dict "observed" $observed "manifest" $manifest "provider" $profile.kubeProviderConfigName "uid" $uid)) "true") -}}
 {{- if eq $key "worker" -}}
 {{- $readiness = dict "policy" "DeriveFromCelQuery" "celQuery" "has(object.status) && has(object.status.observedGeneration) && object.status.observedGeneration == object.metadata.generation && has(object.status.readyReplicas) && object.status.readyReplicas == object.spec.replicas && has(object.status.conditions) && object.status.conditions.exists(c, c.type == 'MachinesReady' && c.status == 'True' && has(c.observedGeneration) && c.observedGeneration == object.metadata.generation)" -}}
-{{- $observed := dig "resource" (dict) (get $resources $key | default dict) -}}
 {{- $actual := dig "status" "atProvider" "manifest" (dict) $observed -}}
 {{- $generation := dig "metadata" "generation" 0 $actual | int64 -}}
 {{- $machinesReady := false -}}
 {{- range (dig "status" "conditions" (list) $actual) -}}
 {{- if and (eq .type "MachinesReady") (eq .status "True") (eq (.observedGeneration | default 0 | int64) $generation) -}}{{- $machinesReady = true -}}{{- end -}}
 {{- end -}}
-{{- $workerReady = and $osReady $admissionReady (eq (include "ready" $observed) "true")
+{{- $workerReady = and $enrollmentReady (eq (include "ready" $observed) "true")
   $machinesReady (eq (dig "spec" "providerConfigRef" "name" "" $observed) $profile.kubeProviderConfigName)
   (eq (dig "metadata" "name" "" $actual) $hostname) (eq (dig "metadata" "namespace" "" $actual) $namespace)
   (eq (dig "metadata" "annotations" "baremetal.nebula.io/request-uid" "" $actual) $uid)

@@ -3,11 +3,12 @@ import test, { after } from "node:test";
 import { Testing } from "cdk8s";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluate } from "@marcbachmann/cel-js";
+import { parseAllDocuments } from "yaml";
 import { BaremetalFleet, BaremetalSetup, baremetalWorker, type BaremetalSetupOptions } from "../src/modules/infra/k0s/baremetal";
 import type { BaremetalUefiConfiguration } from "../src/modules/infra/k0s/baremetal/uefi";
 
@@ -55,6 +56,7 @@ const key = (r: any) => r.metadata?.annotations?.["gotemplating.fn.crossplane.io
 const named = (rs: any[], name: string) => rs.find(r => key(r) === name);
 const native = (rs: any[], name: string) => named(rs, name)?.spec.forProvider.manifest;
 const status = (rs: any[]) => rs.find(r => r.kind === "XBaremetalWorker")!.status;
+const readiness = (rs: any[], name: string) => named(rs, name)?.metadata.annotations["gotemplating.fn.crossplane.io/ready"];
 function observe(rs: any[]): Record<string, any> {
   return Object.fromEntries(rs.filter(r => r.kind === "Object").map(r => [key(r), { resource: { ...structuredClone(r),
     status: { ...structuredClone(healthy), atProvider: { manifest: structuredClone(r.spec.forProvider.manifest) } },
@@ -74,6 +76,7 @@ test("the baremetal worker XR follows Setup/Composition with immutable identity 
   assert.deepEqual(fixture.xr.spec, { address: "192.0.2.10", crossplane: { compositionRef: { name: "baremetal-worker" }, compositionUpdatePolicy: "Manual" } });
   assert.equal(fixture.xr.metadata.namespace, undefined);
   assert.equal(fixture.resources.filter(r => r.kind === "CompositeResourceDefinition").length, 1);
+  assert.equal(fixture.resources.find(r => r.kind === "CompositeResourceDefinition")!.spec.defaultCompositionUpdatePolicy, "Manual");
   assert.ok(!fixture.resources.some(r => ["Deployment", "CustomResourceDefinition"].includes(r.kind)));
   const schema = fixture.resources.find(r => r.kind === "CompositeResourceDefinition")!.spec.versions[0].schema.openAPIV3Schema;
   assert.deepEqual(schema.properties.spec.required, ["address"]);
@@ -166,6 +169,10 @@ test("pool publication requires a completed Job and verification bound to this r
     (o: any) => { o.state.resource.spec.providerConfigRef.name = "foreign"; },
     (o: any) => { o.install.resource.spec.providerConfigRef.name = "foreign"; },
     (o: any) => { o.install.resource.status.atProvider.manifest.metadata.namespace = "foreign"; },
+    (o: any) => { o.install.resource.spec.forProvider.manifest.spec.template.spec.containers[0].image = "changed"; },
+    (o: any) => { o.install.resource.status.atProvider.manifest.metadata.deletionTimestamp = "2026-01-01T00:00:00Z"; },
+    (o: any) => { o.state.resource.status.atProvider.manifest.metadata.deletionTimestamp = "2026-01-01T00:00:00Z"; },
+    (o: any) => { o.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ terminalError: true }); },
   ]) {
     const observed = installed(); mutate(observed);
     const rs = render(observed);
@@ -241,7 +248,9 @@ test("Cilium admission uses the workload ProviderConfig and gates first pooled h
   const observed = { ...observe(first), ...ready };
   const wrong = structuredClone(observed);
   wrong["cidr-policy"].resource.status.atProvider.manifest.spec.mutations[0].applyConfiguration.expression = "wrong allocation";
-  assert.equal(native(render(wrong, network.xr, network.template), "pool"), undefined);
+  const waiting = render(wrong, network.xr, network.template);
+  assert.equal(native(waiting, "pool"), undefined);
+  assert.equal(readiness(waiting, "cidr-policy"), "False");
   // API-server defaults must not prevent observation of the requested policy.
   observed["cidr-policy"].resource.status.atProvider.manifest.spec.matchConstraints.namespaceSelector = {};
   const second = render(observed, { ...network.xr, status: status(first) }, network.template);
@@ -249,6 +258,112 @@ test("Cilium admission uses the workload ProviderConfig and gates first pooled h
   const lost = render({}, { ...network.xr, status: status(second) }, network.template);
   for (const name of ["cidr-policy", "cidr-binding", "identity-policy", "identity-binding", "pool", "worker"]) assert.deepEqual(native(lost, name), native(second, name));
   assert.equal(status(lost).workerReady, false);
+});
+
+test("readiness requires current owned intent and ignores unrelated controller defaults", () => {
+  const initial = render(installed());
+  const observed = { ...observe(initial), ...installed() };
+  const worker = observed.worker.resource.status.atProvider.manifest;
+  worker.metadata.generation = 2;
+  worker.status = { observedGeneration: 2, readyReplicas: 1,
+    conditions: [{ type: "MachinesReady", status: "True", observedGeneration: 2 }] };
+  assert.equal(status(render(observed)).workerReady, true);
+  for (const mutate of [
+    (o: any) => { o["bootstrap-template"].resource.status.atProvider.manifest.spec.template.spec.args = ["--labels=stale"]; },
+    (o: any) => { o.pool.resource.spec.forProvider.manifest.spec.machine.address = "192.0.2.99"; },
+    (o: any) => { o.worker.resource.status.atProvider.manifest.spec.replicas = 2; },
+    (o: any) => { o.worker.resource.metadata.deletionTimestamp = "2026-01-01T00:00:00Z"; },
+    (o: any) => { o.worker.resource.status.atProvider.manifest.metadata.deletionTimestamp = "2026-01-01T00:00:00Z"; },
+  ]) {
+    const stale = structuredClone(observed); mutate(stale);
+    const result = render(stale);
+    assert.equal(status(result).workerReady, false);
+    assert.equal(readiness(result, "worker"), "False");
+  }
+  const changed = { ...fixture.xr, spec: { ...fixture.xr.spec, nodeLabels: { purpose: "updated" } } };
+  assert.equal(status(render(observed, changed)).workerReady, false);
+  worker.metadata.labels = { ...worker.metadata.labels, "controller.example.test/default": "injected" };
+  worker.spec.controllerDefault = "preserved-by-server-side-apply";
+  const result = render(observed);
+  assert.equal(status(result).workerReady, true);
+  assert.equal(native(result, "worker").spec.controllerDefault, undefined);
+  assert.equal(native(result, "worker").metadata.generation, undefined);
+  assert.equal(native(result, "worker").metadata.labels?.["controller.example.test/default"], undefined);
+  assert.equal(native(result, "worker").status, undefined);
+});
+
+test("partially applied graphs survive a missing XR publication checkpoint", () => {
+  const complete = render(installed());
+  for (const key of ["pool", "remote-template", "bootstrap-template", "worker"]) {
+    const observed = observe(complete);
+    const recovered = render({ [key]: observed[key] });
+    for (const name of ["pool", "remote-template", "bootstrap-template", "worker"])
+      assert.deepEqual(native(recovered, name), native(complete, name));
+    assert.equal(status(recovered).workerReady, false);
+  }
+  const network = setup({ ...options, ipv6PodCidrPrefix: "2001:db8::", workloadKubeProviderConfigName: "workload" });
+  const admission = render(installed(network.template), network.xr, network.template);
+  for (const key of ["cidr-policy", "cidr-binding", "identity-policy", "identity-binding"]) {
+    const observed = observe(admission);
+    const recovered = render({ [key]: observed[key] }, network.xr, network.template);
+    for (const name of ["cidr-policy", "cidr-binding", "identity-policy", "identity-binding"])
+      assert.deepEqual(native(recovered, name), native(admission, name));
+    assert.equal(native(recovered, "pool"), undefined);
+  }
+});
+
+test("Crossplane CLI runs the pinned function pipeline with real readiness semantics", {
+  skip: !process.env.BAREMETAL_CROSSPLANE_CLI, timeout: 240_000,
+}, () => {
+  const functions = [
+    ["function-go-templating", "v0.9.0"], ["function-auto-ready", "v0.4.2"],
+  ].map(([name, version]) => ({ apiVersion: "pkg.crossplane.io/v1", kind: "Function",
+    metadata: { name, annotations: { "render.crossplane.io/runtime-docker-pull-policy": "IfNotPresent" } },
+    spec: { package: `xpkg.upbound.io/crossplane-contrib/${name}:${version}` },
+  }));
+  const network = setup({ ...options, installation: { ...options.installation, uefi },
+    ipv6PodCidrPrefix: "2001:db8::", workloadKubeProviderConfigName: "workload" });
+  const file = (name: string, objects: any[]) => {
+    const path = join(dir, name + ".yaml"); writeFileSync(path, objects.map(o => JSON.stringify(o)).join("\n---\n")); return path;
+  };
+  const composition = file("composition", network.resources.filter(r => r.kind === "Composition"));
+  const fn = file("functions", functions);
+  const fullRender = (observed: Record<string, any>, xr = network.xr) => {
+    const input = Object.entries(observed).map(([name, entry]) => {
+      const resource = structuredClone(entry.resource);
+      resource.metadata.annotations = { "crossplane.io/composition-resource-name": name };
+      return resource;
+    });
+    const output = execFileSync(process.env.BAREMETAL_CROSSPLANE_CLI!, ["render", file("xr", [xr]), composition, fn,
+      "--observed-resources=" + file("observed", input), "--include-full-xr", "--timeout=90s"],
+      { encoding: "utf8", timeout: 100_000, stdio: ["ignore", "pipe", "pipe"] });
+    return parseAllDocuments(output).map(d => d.toJSON());
+  };
+  const ready = (rs: any[]) => rs.find(r => r.kind === "XBaremetalWorker").status.conditions.find((c: any) => c.type === "Ready").status;
+  const count = (rs: any[]) => rs.filter(r => r.kind === "Object").length;
+  assert.equal(ready(fullRender({})), "False");
+  const observed = installed(network.template);
+  assert.equal(ready(fullRender(observed)), "False", "OS verification cannot bypass UEFI");
+  observed.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ phase: "OSReady", uefiVerified: true });
+  const admission = render(observed, network.xr, network.template);
+  const policies = { ...observe(admission), ...observed };
+  const wrong = structuredClone(policies);
+  wrong["cidr-policy"].resource.status.atProvider.manifest.spec.failurePolicy = "Ignore";
+  const blocked = fullRender(wrong);
+  assert.equal(count(blocked), 10); assert.equal(ready(blocked), "False", "auto-ready must preserve explicit policy failure");
+  const enrolling = fullRender(policies);
+  assert.equal(count(enrolling), 14); assert.equal(ready(enrolling), "False");
+  const graph = render(policies, network.xr, network.template);
+  const all = { ...observe(graph), ...policies };
+  const worker = all.worker.resource.status.atProvider.manifest;
+  worker.metadata.generation = 1;
+  worker.status = { observedGeneration: 1, readyReplicas: 1,
+    conditions: [{ type: "MachinesReady", status: "True", observedGeneration: 1 }] };
+  assert.equal(ready(fullRender(all)), "True");
+  const updated = { ...network.xr, spec: { ...network.xr.spec, nodeLabels: { purpose: "updated" } } };
+  assert.equal(ready(fullRender(all, updated)), "False", "old ready worker cannot acknowledge new bootstrap intent");
+  const lost = fullRender({}, { ...network.xr, status: status(graph) });
+  assert.equal(count(lost), 14); assert.equal(ready(lost), "False");
 });
 
 test("custom SSH port and pinned known hosts survive installation and handoff", () => {
