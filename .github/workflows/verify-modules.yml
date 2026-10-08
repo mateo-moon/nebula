@@ -45,8 +45,15 @@ jobs:
           chmod +x "$RUNNER_TEMP/crossplane"
       - name: Pull composition function runtimes
         run: |
-          docker pull xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.9.0
-          docker pull xpkg.upbound.io/crossplane-contrib/function-auto-ready:v0.4.2
+          for image in \
+            xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.9.0 \
+            xpkg.upbound.io/crossplane-contrib/function-auto-ready:v0.4.2; do
+            for attempt in 1 2 3; do
+              if docker pull "$image"; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              sleep "$((attempt * 15))"
+            done
+          done
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"
