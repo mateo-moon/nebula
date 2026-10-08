@@ -1,6 +1,9 @@
+import { OWNED_RESOURCE_ACKNOWLEDGEMENT } from "../owned-resource-acknowledgement";
+
 /** CAPA supplies NAT addresses; staged adoption preserves existing rules until
  * their controller ownership and retained cloud bindings have been observed. */
 export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
+${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- define "emit" }}
 ---
 {{ . | toJson }}
@@ -20,10 +23,10 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- if and (.controller | default false) (ne (dig "metadata" "uid" "" $xr) "") (eq .uid $xr.metadata.uid) (eq .kind $xr.kind) (eq .name $xr.metadata.name) -}}{{- $owned = true -}}{{- end -}}
 {{- end -}}{{- $owned -}}
 {{- end -}}
-{{- define "nat.rule" -}}
+{{- define "nat.identity" -}}
 {{- $rule := .rule -}}{{- $spec := .spec -}}{{- $for := dig "spec" "forProvider" (dict) $rule -}}
 {{- $at := dig "status" "atProvider" (dict) $rule -}}{{- $id := dig "metadata" "annotations" "crossplane.io/external-name" "" $rule -}}
-{{- $ready := and (eq (include "nat.ready" $rule) "true")
+{{- $ready := and (not (dig "metadata" "deletionTimestamp" "" $rule))
   (eq (dig "apiVersion" "" $rule) "ec2.aws.upbound.io/v1beta1") (eq (dig "kind" "" $rule) "SecurityGroupIngressRule")
   (eq (dig "metadata" "name" "" $rule) .name) (ne (dig "metadata" "uid" "" $rule) "")
   (regexMatch "^sgr-[0-9a-f]+$" $id) (eq (get $at "id") $id) (eq (get $at "securityGroupRuleId") $id)
@@ -40,6 +43,13 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- range (dig "metadata" "ownerReferences" (list) $rule) -}}
 {{- if and (.controller | default false) (or (ne .uid $.xr.metadata.uid) (ne .kind $.xr.kind) (ne .name $.xr.metadata.name)) -}}{{- $ready = false -}}{{- end -}}
 {{- end -}}{{- $ready -}}
+{{- end -}}
+{{- define "nat.rule" -}}
+{{- and (eq (include "nat.ready" .rule) "true") (eq (include "nat.identity" .) "true") -}}
+{{- end -}}
+{{- define "nat.retiring" -}}
+{{- and (eq (.spec.deletionPolicy | default "") "Delete")
+  (eq (join "," (sortAlpha (uniq (.spec.managementPolicies | default list)))) "Delete,Observe") -}}
 {{- end -}}
 {{- $xr := .observed.composite.resource -}}{{- $spec := $xr.spec -}}
 {{- $resources := .observed.resources | default dict -}}
@@ -73,6 +83,7 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- $_ := set $wanted $ip true -}}
 {{- end -}}{{- end -}}{{- end -}}
 {{- $observers := list -}}{{- $sources := dict -}}{{- $known := dict -}}{{- $owned := dict -}}
+{{- $identityVerified := dict -}}{{- $retirementIntent := dict -}}
 {{- $sourceReady := true -}}{{- $ownershipReady := true -}}{{- $rulesReady := true -}}{{- $detached := true -}}
 {{- if not $adoptionComplete -}}
 {{- range $name := $spec.existingRuleNames -}}
@@ -98,13 +109,27 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- $isOwned := and (eq (printf "rule-%s" $name) $key) (eq (include "nat.owned" (dict "rule" $rule "xr" $xr)) "true") -}}
 {{- if $isOwned -}}
 {{- $_ := set $owned $name $rule -}}
+{{- $identity := eq (include "nat.identity" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true" -}}
+{{- if hasKey $baseline $name -}}
+{{- $saved := get $baseline $name -}}
+{{- $identity = and $identity (eq $rule.metadata.uid ($saved.uid | default ""))
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $rule) ($saved.externalName | default "")) -}}
+{{- else -}}
+{{- $ip := dig "spec" "forProvider" "cidrIpv4" "" $rule | trimSuffix "/32" -}}
+{{- $identity = and $identity (not (has $name $spec.existingRuleNames))
+  (eq $name (printf "%s-%s" $spec.name ($ip | sha256sum | trunc 12))) -}}
+{{- end -}}
+{{- $_ := set $identityVerified $name $identity -}}
+{{- $acknowledgement := include "owned.acknowledgement" (dict "observed" $rule "identityVerified" $identity) | fromJson -}}
+{{- $_ := set $retirementIntent $name (and (hasKey $baseline $name) $acknowledgement.retiring) -}}
+{{- if $acknowledgement.hold -}}{{- $rulesReady = false -}}{{- end -}}
 {{- $currentGeneration := false -}}
 {{- range (dig "status" "conditions" (list) $rule) -}}
 {{- if and (eq .type "Synced") (eq .status "True") (hasKey . "observedGeneration")
   (gt (int (dig "metadata" "generation" 0 $rule)) 0)
   (eq (toString .observedGeneration) (toString (dig "metadata" "generation" 0 $rule))) -}}{{- $currentGeneration = true -}}{{- end -}}
 {{- end -}}
-{{- $matches := and $currentGeneration (eq (include "nat.rule" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true") -}}
+{{- $matches := and $currentGeneration (not $acknowledgement.hold) (eq (include "nat.rule" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true") -}}
 {{- if hasKey $baseline $name -}}
 {{- $saved := get $baseline $name -}}
 {{- $matches = and $matches (eq $rule.metadata.uid $saved.uid) (eq (get $rule.metadata.annotations "crossplane.io/external-name") $saved.externalName) -}}
@@ -119,13 +144,13 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- range list "argocd.argoproj.io/tracking-id" "argocd.argoproj.io/sync-options" "argocd.argoproj.io/compare-options" "argocd.argoproj.io/sync-wave" -}}
 {{- if ne (dig "metadata" "annotations" . "unresolved" $current) "" -}}{{- $detached = false -}}{{- end -}}
 {{- end -}}
-{{- if or (ne $current.spec.deletionPolicy "Delete") (not (has "Delete" $current.spec.managementPolicies))
-  (has "Create" $current.spec.managementPolicies) (has "*" $current.spec.managementPolicies) -}}{{- $detached = false -}}{{- end -}}
+{{- if or (ne $current.spec.deletionPolicy "Orphan")
+  (ne (join "," (sortAlpha (uniq ($current.spec.managementPolicies | default list)))) "LateInitialize,Observe,Update") -}}{{- $detached = false -}}{{- end -}}
 {{- end -}}{{- end -}}
 {{- if and (eq $handoff "activate") $sourceReady $ownershipReady $rulesReady $detached -}}{{- $adoptionComplete = true -}}{{- end -}}
 {{- $valid = and $valid $rulesReady (or (not $handoff) $adoptionComplete $sourceReady) -}}
 {{- $activate := and (eq $handoff "activate") $valid (or $adoptionComplete $ownershipReady) -}}
-{{- $desired := dict -}}
+{{- $desired := dict -}}{{- $policyPending := false -}}
 {{- if and (eq $handoff "retain") $valid -}}
 {{- range $name, $source := $sources -}}
 {{- $rule := dict "apiVersion" $source.apiVersion "kind" $source.kind "metadata" (dict "name" $name "annotations" (dict
@@ -134,29 +159,52 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- $_ := set $desired $name $rule -}}
 {{- end -}}
 {{- else if and $activate (not $adoptionComplete) -}}
-{{- /* Detach every baseline before any source change can delete an Orphan rule. */ -}}
+{{- /* Detach every baseline before changing the source set. */ -}}
 {{- range $name := $spec.existingRuleNames -}}
 {{- $source := get $known $name -}}{{- $ruleSpec := deepCopy $source.spec -}}
-{{- $_ := set $ruleSpec "deletionPolicy" "Delete" -}}{{- $_ := set $ruleSpec "managementPolicies" (list "Observe" "Update" "Delete" "LateInitialize") -}}
+{{- $_ := set $ruleSpec "deletionPolicy" "Orphan" -}}{{- $_ := set $ruleSpec "managementPolicies" (list "Observe" "Update" "LateInitialize") -}}
 {{- $annotations := dict -}}
 {{- range list "argocd.argoproj.io/tracking-id" "argocd.argoproj.io/sync-options" "argocd.argoproj.io/compare-options" "argocd.argoproj.io/sync-wave" -}}{{- $_ := set $annotations . "" -}}{{- end -}}
 {{- $_ := set $desired $name (dict "apiVersion" $source.apiVersion "kind" $source.kind "metadata" (dict "name" $name "annotations" $annotations) "spec" $ruleSpec) -}}
 {{- end -}}
 {{- else if or (and (not $handoff) $valid) $activate -}}
-{{- $assignments := dict -}}{{- $used := dict -}}
+{{- $assignments := dict -}}{{- $used := dict -}}{{- $retiringIPs := dict -}}{{- $nameCollision := false -}}
 {{- range $name := keys $known | sortAlpha -}}
-{{- $ip := dig "spec" "forProvider" "cidrIpv4" "" (get $known $name) | trimSuffix "/32" -}}
-{{- if and (hasKey $wanted $ip) (not (hasKey $used $ip)) -}}
+{{- $previous := get $known $name -}}
+{{- $ip := dig "spec" "forProvider" "cidrIpv4" "" $previous | trimSuffix "/32" -}}
+{{- $retiring := get $retirementIntent $name | default false -}}
+{{- if $retiring -}}
+{{- /* Retirement is irreversible once the delete-only policy is observed.
+      A returned source gets a fresh hashed rule only after this MR is gone. */ -}}
+{{- $_ := set $retiringIPs $ip true -}}
+{{- if ne (include "nat.retiring" $previous) "true" -}}
+{{- /* A probe temporarily removes Delete. Never omit that rule until its
+      actual delete-only policy and current acknowledgement are restored. */ -}}
+{{- $_ := set $desired $name (include "owned.acknowledgement-preserve" (dict "observed" $previous) | fromJson) -}}
+{{- $policyPending = true -}}
+{{- end -}}
+{{- else if and (hasKey $wanted $ip) (not (hasKey $used $ip)) -}}
 {{- $_ := set $assignments $name $ip -}}{{- $_ := set $used $ip true -}}
+{{- else if hasKey $baseline $name -}}
+{{- /* Prepare revocation without mutating any cloud field. The strict owned
+      generation gate must observe this supported policy before omission. */ -}}
+{{- $retiringSpec := deepCopy $previous.spec -}}
+{{- $policyPending = true -}}
+{{- $_ := set $retiringSpec "deletionPolicy" "Delete" -}}
+{{- $_ := set $retiringSpec "managementPolicies" (list "Observe" "Delete") -}}
+{{- $annotations := dict -}}
+{{- range list "argocd.argoproj.io/tracking-id" "argocd.argoproj.io/sync-options" "argocd.argoproj.io/compare-options" "argocd.argoproj.io/sync-wave" -}}{{- $_ := set $annotations . "" -}}{{- end -}}
+{{- $_ := set $desired $name (dict "apiVersion" $previous.apiVersion "kind" $previous.kind "metadata" (dict "name" $name "annotations" $annotations) "spec" $retiringSpec) -}}
 {{- end -}}{{- end -}}
 {{- range $ip := keys $wanted | sortAlpha -}}
-{{- if not (hasKey $used $ip) -}}
-{{- $name := "" -}}
-{{- range $candidate := keys $known | sortAlpha -}}
-{{- if and (not $name) (not (hasKey $assignments $candidate)) -}}{{- $name = $candidate -}}{{- end -}}
-{{- end -}}
-{{- if not $name -}}{{- $name = printf "%s-%s" $spec.name ($ip | sha256sum | trunc 12) -}}{{- end -}}
+{{- if and (not (hasKey $used $ip)) (not (hasKey $retiringIPs $ip)) -}}
+{{- $name := printf "%s-%s" $spec.name ($ip | sha256sum | trunc 12) -}}
+{{- if or (hasKey $baseline $name) (hasKey $assignments $name)
+  (and (hasKey $owned $name) (ne (dig "spec" "forProvider" "cidrIpv4" "" (get $owned $name)) (printf "%s/32" $ip))) -}}
+{{- $nameCollision = true -}}
+{{- else -}}
 {{- $_ := set $assignments $name $ip -}}{{- $_ := set $used $ip true -}}
+{{- end -}}
 {{- end -}}{{- end -}}
 {{- range $name, $ip := $assignments -}}
 {{- $previous := get $known $name | default dict -}}
@@ -169,7 +217,10 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- $_ := set $ruleSpec "forProvider" $for -}}{{- $_ := set $ruleSpec "providerConfigRef" (dict "name" $spec.awsProviderConfigName) -}}
 {{- $_ := set $ruleSpec "deletionPolicy" "Delete" -}}
 {{- $policies := list "Observe" "Create" "Update" "Delete" "LateInitialize" -}}
-{{- if hasKey $baseline $name -}}{{- $policies = list "Observe" "Update" "Delete" "LateInitialize" -}}{{- end -}}
+{{- if hasKey $baseline $name -}}
+{{- $_ := set $ruleSpec "deletionPolicy" "Orphan" -}}
+{{- $policies = list "Observe" "Update" "LateInitialize" -}}
+{{- end -}}
 {{- $_ := set $ruleSpec "managementPolicies" $policies -}}
 {{- $annotations := dict -}}
 {{- if hasKey $baseline $name -}}
@@ -178,6 +229,14 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- $_ := set $desired $name (dict "apiVersion" "ec2.aws.upbound.io/v1beta1" "kind" "SecurityGroupIngressRule"
   "metadata" (dict "name" $name "annotations" $annotations) "spec" $ruleSpec) -}}
 {{- end -}}
+{{- if $nameCollision -}}
+{{- $valid = false -}}{{- $activate = false -}}{{- $desired = dict -}}
+{{- range $name, $rule := $owned -}}
+{{- $annotations := dict -}}{{- range $key, $value := ($rule.metadata.annotations | default dict) -}}
+{{- if hasPrefix "argocd.argoproj.io/" $key -}}{{- $_ := set $annotations $key $value -}}{{- end -}}{{- end -}}
+{{- $_ := set $desired $name (dict "apiVersion" $rule.apiVersion "kind" $rule.kind "metadata" (dict "name" $name "annotations" $annotations) "spec" $rule.spec) -}}
+{{- end -}}
+{{- end -}}
 {{- else -}}
 {{- /* Preserve owned resources on observation loss; omission would delete them. */ -}}
 {{- range $name, $rule := $owned -}}
@@ -185,9 +244,28 @@ export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 {{- range $key, $value := ($rule.metadata.annotations | default dict) -}}
 {{- if hasPrefix "argocd.argoproj.io/" $key -}}{{- $_ := set $annotations $key $value -}}{{- end -}}
 {{- end -}}
-{{- $_ := set $desired $name (dict "apiVersion" $rule.apiVersion "kind" $rule.kind "metadata" (dict "name" $name "annotations" $annotations) "spec" $rule.spec) -}}
+{{- $ruleSpec := deepCopy $rule.spec -}}
+{{- $saved := get $baseline $name | default dict -}}
+{{- $repairIdentity := and (eq $handoff "activate") (not (empty $saved))
+  (eq (include "nat.identity" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true")
+  (eq $rule.metadata.uid ($saved.uid | default ""))
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $rule) ($saved.externalName | default "")) -}}
+{{- if and $repairIdentity (eq ($ruleSpec.deletionPolicy | default "") "Delete")
+  (eq (join "," (sortAlpha (uniq ($ruleSpec.managementPolicies | default list)))) "Delete,LateInitialize,Observe,Update") -}}
+{{- $_ := set $ruleSpec "deletionPolicy" "Orphan" -}}
+{{- $_ := set $ruleSpec "managementPolicies" (list "Observe" "Update" "LateInitialize") -}}
+{{- end -}}
+{{- $_ := set $desired $name (dict "apiVersion" $rule.apiVersion "kind" $rule.kind "metadata" (dict "name" $name "annotations" $annotations) "spec" $ruleSpec) -}}
 {{- end -}}{{- end -}}
-{{- $guardsReady := and $valid (gt (len $desired) 0) (eq (len $known) (len $desired)) (or (not $handoff) $adoptionComplete $ownershipReady) -}}
+{{- $acknowledgementHold := false -}}
+{{- range $name, $rule := $desired -}}
+{{- if hasKey $owned $name -}}
+{{- $acknowledgement := include "owned.acknowledgement" (dict "observed" (get $owned $name) "desired" $rule "identityVerified" (get $identityVerified $name | default false)) | fromJson -}}
+{{- $_ := set $desired $name $acknowledgement.resource -}}
+{{- if $acknowledgement.hold -}}{{- $acknowledgementHold = true -}}{{- end -}}
+{{- end -}}{{- end -}}
+{{- if $acknowledgementHold -}}{{- $rulesReady = false -}}{{- $activate = false -}}{{- end -}}
+{{- $guardsReady := and $valid (not $policyPending) (not $acknowledgementHold) (gt (len $desired) 0) (eq (len $known) (len $desired)) (or (not $handoff) $adoptionComplete $ownershipReady) -}}
 {{- if and (eq $handoff "activate") (not $adoptionComplete) -}}{{- $guardsReady = false -}}{{- end -}}
 {{- $observers = append $observers (dict "apiVersion" "kubernetes.crossplane.io/v1alpha2" "kind" "Object"
   "metadata" (dict "annotations" (dict $annotation "cluster"))

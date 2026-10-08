@@ -1,6 +1,7 @@
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import { WORKER_NETWORK_OBSERVATION } from "./worker-network-observation";
+import { OWNED_RESOURCE_ACKNOWLEDGEMENT } from "./owned-resource-acknowledgement";
 import {
   CompositeResourceDefinitionV2, CompositeResourceDefinitionV2SpecScope,
   Composition, CompositionSpecMode,
@@ -14,6 +15,7 @@ export const WORKER_VOLUME_PLACEHOLDER = "__NEBULA_WORKER_EBS_VOLUME_ID__";
  * of observations, retain the previous LT desired state: omitting an already
  * composed resource would ask Crossplane to delete it. */
 export const WORKER_LAUNCH_TEMPLATE = `
+${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- define "worker.ready" -}}
 {{- $ready := false -}}{{- $synced := false -}}{{- $object := . -}}
 {{- range (dig "status" "conditions" (list) $object) -}}
@@ -123,6 +125,17 @@ ${WORKER_NETWORK_OBSERVATION}
   (eq (dig "status" "atProvider" "id" "" $previous) ($baseline.externalName | default "")) }}
 {{- $ready = and $ready $sourceReady $baselineMatches }}
 {{- end }}
+{{- $ownedIdentityReady := and $previousOwned (ne $handoff "") (not (empty $baseline))
+  (eq $previous.metadata.uid ($baseline.uid | default ""))
+  (regexMatch "^lt-[0-9a-f]+$" ($baseline.externalName | default ""))
+  (eq (dig "metadata" "annotations" "crossplane.io/external-name" "" $previous) ($baseline.externalName | default ""))
+  (eq (dig "status" "atProvider" "id" "" $previous) ($baseline.externalName | default ""))
+  (eq (dig "spec" "forProvider" "name" "" $previous) $spec.launchTemplate.metadata.name)
+  (eq (dig "status" "atProvider" "name" "" $previous) $spec.launchTemplate.metadata.name)
+  (eq (dig "spec" "forProvider" "region" "" $previous) $region)
+  (eq (dig "status" "atProvider" "region" "" $previous) $region)
+  (eq (dig "spec" "providerConfigRef" "name" "" $previous) $spec.launchTemplate.spec.providerConfigRef.name) }}
+{{- $repairIdentity := and (eq $handoff "activate") $ownedIdentityReady }}
 {{- $template := dict }}
 {{- $activate := and (eq $handoff "activate") $ready $ownershipReady $templateReady }}
 {{- if and (eq $handoff "retain") $ready }}
@@ -137,8 +150,8 @@ ${WORKER_NETWORK_OBSERVATION}
 {{- $_ := set $template.spec.forProvider "userData" ($script | b64enc) }}
 {{- range $template.spec.forProvider.networkInterfaces }}{{ $_ := set . "securityGroups" (list $securityGroupId) }}{{ end }}
 {{- if $activate }}
-{{- $_ := set $template.spec "deletionPolicy" "Delete" }}
-{{- $_ := set $template.spec "managementPolicies" (list "Observe" "Update" "Delete" "LateInitialize") }}
+{{- $_ := set $template.spec "deletionPolicy" "Orphan" }}
+{{- $_ := set $template.spec "managementPolicies" (list "Observe" "Update" "LateInitialize") }}
 {{- $annotations := get $template.metadata "annotations" | default dict }}
 {{- range list "argocd.argoproj.io/tracking-id" "argocd.argoproj.io/sync-options" "argocd.argoproj.io/compare-options" "argocd.argoproj.io/sync-wave" }}{{ $_ := set $annotations . "" }}{{ end }}
 {{- $_ := set $template.metadata "annotations" $annotations }}
@@ -149,9 +162,23 @@ ${WORKER_NETWORK_OBSERVATION}
 {{- if or (hasPrefix "argocd.argoproj.io/" $key) (hasKey ($spec.launchTemplate.metadata.annotations | default dict) $key) }}{{ $_ := set $annotations $key $value }}{{ end }}
 {{- end }}
 {{- $template = dict "apiVersion" $previous.apiVersion "kind" $previous.kind
-  "metadata" (dict "name" $previous.metadata.name "annotations" $annotations) "spec" $previous.spec }}
+  "metadata" (dict "name" $previous.metadata.name "annotations" $annotations) "spec" (deepCopy $previous.spec) }}
+{{- /* Repair only the unsupported policy emitted by the earlier handoff.
+      Identity validation is independent of health: the invalid policy itself
+      prevents a healthy reconciliation. No cloud field or binding is changed. */ -}}
+{{- if and $repairIdentity (eq ($previous.spec.deletionPolicy | default "") "Delete")
+  (eq (join "," (sortAlpha (uniq ($previous.spec.managementPolicies | default list)))) "Delete,LateInitialize,Observe,Update") }}
+{{- $_ := set $template.spec "deletionPolicy" "Orphan" }}
+{{- $_ := set $template.spec "managementPolicies" (list "Observe" "Update" "LateInitialize") }}
 {{- end }}
-{{- $guardsReady := and $ready $templateReady (or (not $handoff) $ownershipReady) }}
+{{- end }}
+{{- $acknowledgementHold := false }}
+{{- if and $template $previousOwned }}
+{{- $acknowledgement := include "owned.acknowledgement" (dict "observed" $previous "desired" $template "identityVerified" $ownedIdentityReady) | fromJson }}
+{{- $template = $acknowledgement.resource }}{{- $acknowledgementHold = $acknowledgement.hold }}
+{{- end }}
+{{- if $acknowledgementHold }}{{- $templateReady = false }}{{- $activate = false }}{{- end }}
+{{- $guardsReady := and $ready $templateReady (not $acknowledgementHold) (or (not $handoff) $ownershipReady) }}
 {{- range $observers }}
 {{- if not $guardsReady }}{{ $_ := set .metadata.annotations "gotemplating.fn.crossplane.io/ready" "False" }}{{ end }}
 ---
@@ -255,7 +282,7 @@ export class AwsWorkerLaunchTemplate extends Construct {
       apiVersion: "nebula.io/v1alpha1", kind: "XAwsWorkerLaunchTemplate",
       metadata: {
         name: config.launchTemplate.metadata.name,
-        ...(config.handoff === "retain" ? { annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } } : {}),
+        ...(config.handoff ? { annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } } : {}),
       },
       spec: {
         crossplane: { compositionRef: { name: "aws-worker-launch-template" } },

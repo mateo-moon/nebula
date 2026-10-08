@@ -9,6 +9,8 @@ import { Testing } from "cdk8s";
 import { AwsClusterNatIngress, AwsClusterNatIngressSetup, CLUSTER_NAT_INGRESS_TEMPLATE } from "../src/modules/infra/aws/cluster-nat-ingress";
 import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 import type { AwsWorkerFleetIngressRule } from "../src/modules/infra/aws/worker-ingress";
+import { assertProviderPolicies, supportsProviderPolicies, policySourceSha256 } from "./support/provider-management-policies";
+import { createHash } from "node:crypto";
 
 const dir = mkdtempSync(join(tmpdir(), "nat-template-"));
 const binary = join(dir, "render");
@@ -58,10 +60,31 @@ function current(objects: any[]) {
       ownerReferences: [{ apiVersion: xr.apiVersion, kind: xr.kind, name: xr.metadata.name, uid: xr.metadata.uid, controller: true }] };
     resource.metadata.annotations["crossplane.io/external-name"] ??= `sgr-abc${i}`;
     resource.spec.forProvider.securityGroupId ??= "sg-0123";
-    resource.status = { conditions, atProvider: { ...resource.spec.forProvider,
+    resource.status = { conditions: structuredClone(conditions), atProvider: { ...resource.spec.forProvider,
       id: resource.metadata.annotations["crossplane.io/external-name"], securityGroupRuleId: resource.metadata.annotations["crossplane.io/external-name"] } };
     return [resource.metadata.annotations[annotation], { resource }];
   }));
+}
+// Model observed provider acknowledgements without copying the probe's desired
+// description into cloud status. The runtime test separately proves that the
+// pause/read-only/restore sequence makes no corresponding cloud mutation.
+function acknowledge(previous: Record<string, any>, desired: any[]) {
+  const observations: Record<string, any> = {};
+  for (const resource of rules(desired)) {
+    const key = resource.metadata.annotations[annotation];
+    const before = previous[key]?.resource;
+    assert.ok(before, `acknowledgement fixture requires an existing ${key}`);
+    const next = structuredClone(before);
+    next.spec = structuredClone(resource.spec);
+    next.metadata.annotations = { ...next.metadata.annotations, ...resource.metadata.annotations };
+    if (!("crossplane.io/paused" in resource.metadata.annotations)) delete next.metadata.annotations["crossplane.io/paused"];
+    if (JSON.stringify(next.spec) !== JSON.stringify(before.spec)) next.metadata.generation++;
+    const paused = next.metadata.annotations["crossplane.io/paused"] === "true";
+    next.status.conditions = [conditions[0], { type: "Synced", status: paused ? "False" : "True",
+      reason: paused ? "ReconcilePaused" : "ReconcileSuccess", observedGeneration: next.metadata.generation }];
+    observations[key] = { resource: next };
+  }
+  return observations;
 }
 const retained = () => render(observations);
 const activateXr = () => ({ ...structuredClone(xr), spec: { ...xr.spec, handoff: "activate" }, status: statusOf(retained()) });
@@ -115,8 +138,8 @@ test("activation detaches obsolete Argo controls while preserving existing cloud
     assert.deepEqual(rule.spec.initProvider, source.spec.initProvider);
     for (const key of ["tracking-id", "sync-options", "compare-options", "sync-wave"])
       assert.equal(rule.metadata.annotations[`argocd.argoproj.io/${key}`], "");
-    assert.equal(rule.spec.deletionPolicy, "Delete");
-    assert.deepEqual(rule.spec.managementPolicies, ["Observe", "Update", "Delete", "LateInitialize"]);
+    assert.equal(rule.spec.deletionPolicy, "Orphan");
+    assert.deepEqual(rule.spec.managementPolicies, ["Observe", "Update", "LateInitialize"]);
   }
   const reordered = structuredClone(observations);
   reordered.cluster.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs.reverse();
@@ -136,7 +159,16 @@ test("owned rules require an explicit current provider generation throughout han
     assert.equal(statusOf(pending).rulesReady, false, phase);
     assert.equal(statusOf(pending).handoffActive, false, phase);
     if (phase !== "active") assert.equal(statusOf(pending).adoptionComplete, false, phase);
-    for (const rule of rules(pending)) assert.deepEqual(rule.spec, owned[`rule-${rule.metadata.name}`].resource.spec);
+    for (const rule of rules(pending)) {
+      const before = owned[`rule-${rule.metadata.name}`].resource;
+      if (rule.metadata.name === pendingRule.metadata.name) {
+        const record = JSON.parse(rule.metadata.annotations["nebula.io/observed-generation-repair"]);
+        assert.equal(record.phase, "pause");
+        assert.equal(rule.metadata.annotations["crossplane.io/paused"], "true");
+        assert.deepEqual(rule.spec, { ...before.spec, deletionPolicy: "Orphan", managementPolicies: ["Observe", "LateInitialize"],
+          forProvider: { ...before.spec.forProvider, description: record.probeDescription } });
+      } else assert.deepEqual(rule.spec, before.spec);
+    }
     assert.equal(rules(pending).length, Object.keys(owned).length);
     assert.ok(pending.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"));
     pendingRule.status.conditions[1].observedGeneration = pendingRule.metadata.generation;
@@ -144,17 +176,25 @@ test("owned rules require an explicit current provider generation throughout han
   }
 });
 
-test("source removal during activation detaches the obsolete rule before permitting cloud revocation", () => {
+test("source removal during activation detaches and acknowledges delete-only retirement before revocation", () => {
   const changed = structuredClone(observations);
   changed.cluster.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs = ["192.0.2.10"];
   const detached = render({ ...changed, ...current(retained()) }, activateXr());
-  assert.equal(rules(detached).length, 2, "do not orphan a rule whose Delete policy has not applied");
+  assert.equal(rules(detached).length, 2, "detach every baseline before source reconciliation");
   for (const rule of rules(detached)) {
-    assert.equal(rule.spec.deletionPolicy, "Delete");
-    assert.ok(rule.spec.managementPolicies.includes("Delete"));
+    assert.equal(rule.spec.deletionPolicy, "Orphan");
+    assert.deepEqual(rule.spec.managementPolicies, ["Observe", "Update", "LateInitialize"]);
     assert.equal(rule.metadata.annotations["argocd.argoproj.io/tracking-id"], "");
   }
-  const reconciled = rules(render({ ...changed, ...current(detached) }, activateXr()));
+  const retiring = render({ ...changed, ...current(detached) }, activateXr());
+  const obsolete = rules(retiring).find(rule => rule.metadata.name === "original-rule")!;
+  assert.deepEqual(obsolete.spec.forProvider, rules(detached).find(rule => rule.metadata.name === "original-rule")!.spec.forProvider);
+  assert.equal(obsolete.spec.deletionPolicy, "Delete");
+  assert.deepEqual(obsolete.spec.managementPolicies, ["Observe", "Delete"]);
+  assertProviderPolicies(retiring);
+  assert.ok(retiring.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"),
+    "equal observed/desired rule counts do not acknowledge the newly changed lifecycle");
+  const reconciled = rules(render({ ...changed, ...current(retiring) }, { ...activateXr(), status: statusOf(retiring) }));
   assert.deepEqual(reconciled.map(r => r.metadata.name), ["second-rule"]);
 });
 
@@ -197,10 +237,14 @@ test("active rotation revokes obsolete sources without waiting on removed adopti
   const changed = structuredClone(cluster);
   changed.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs = ["192.0.2.30", "192.0.2.10", "192.0.2.40"];
   const rotated = rules(render({ cluster: changed, ...current(activeRules()) }, activeXr()));
-  assert.equal(rotated.find(rule => rule.metadata.name === "original-rule").spec.forProvider.cidrIpv4, "192.0.2.40/32");
+  assert.equal(rotated.find(rule => rule.metadata.name === "original-rule").spec.forProvider.cidrIpv4, "192.0.2.20/32");
+  assert.deepEqual(rotated.find(rule => rule.metadata.name === "original-rule").spec.managementPolicies, ["Observe", "Delete"]);
+  assert.ok(rotated.some(rule => rule.metadata.name.startsWith("worker-ssh-") && rule.spec.forProvider.cidrIpv4 === "192.0.2.40/32"));
   assert.equal(rotated.find(rule => rule.metadata.name === "second-rule").spec.forProvider.cidrIpv4, "192.0.2.10/32");
   changed.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs = ["192.0.2.30"];
-  const remaining = rules(render({ cluster: changed, ...current(rotated) }, activeXr()));
+  const retiring = rules(render({ cluster: changed, ...current(rotated) }, activeXr()));
+  assert.deepEqual(retiring.find(rule => rule.metadata.name === "second-rule").spec.managementPolicies, ["Observe", "Delete"]);
+  const remaining = rules(render({ cluster: changed, ...current(retiring) }, activeXr()));
   assert.equal(remaining.length, 1);
   changed.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs.push("192.0.2.50");
   const expanded = render({ cluster: changed, ...current(remaining) }, activeXr());
@@ -208,6 +252,151 @@ test("active rotation revokes obsolete sources without waiting on removed adopti
   assert.ok(!expanded.some(r => r.kind === "Object" && r.metadata.annotations[annotation].startsWith("existing-")));
   const settled = render({ cluster: changed, ...current(expanded) }, activeXr());
   assert.ok(settled.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] !== "False"));
+});
+
+test("all lifecycle phases use exact supported sets from installed runtime v2.2.0", () => {
+  assert.equal(policySourceSha256, "0a998840d49b2214d7ebc374ba12c9c4d0988161831e3eaeb8adc56333963fe0");
+  assert.equal(supportsProviderPolicies(["Observe", "Update", "Delete", "LateInitialize"]), false);
+  assert.equal(supportsProviderPolicies(["Observe", "Update", "Delete"]), false);
+  for (const result of [retained(), activation(), activeRules()]) assertProviderPolicies(result);
+  assert.equal(supportsProviderPolicies(["Observe", "Delete"]), true);
+  assert.equal(supportsProviderPolicies(["Observe", "LateInitialize"]), true);
+});
+
+test("returned sources finish adopted-rule retirement before receiving a fresh hashed rule", () => {
+  const changed = structuredClone(cluster);
+  changed.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs = ["192.0.2.10", "192.0.2.30"];
+  const retiring = render({ cluster: changed, ...current(activeRules()) }, activeXr());
+  const old = rules(retiring).find(rule => rule.metadata.name === "original-rule")!;
+  assert.deepEqual(old.spec.managementPolicies, ["Observe", "Delete"]);
+  const observed = current(retiring);
+  const pending = observed["rule-original-rule"].resource;
+  pending.metadata.generation = 2;
+  const held = render({ cluster, ...observed }, activeXr());
+  assert.deepEqual(rules(held).find(rule => rule.metadata.name === "original-rule")!.spec, pending.spec,
+    "a returning IP cannot reverse an observed retirement policy, even before acknowledgement");
+  assert.ok(rules(held).every(rule => rule.metadata.name !== `worker-ssh-${createHash("sha256").update("192.0.2.20").digest("hex").slice(0, 12)}`));
+  pending.status.conditions = [conditions[0], { type: "Synced", status: "True", observedGeneration: 2 }];
+  const deleting = render({ cluster, ...observed }, activeXr());
+  assert.ok(!rules(deleting).some(rule => rule.metadata.name === "original-rule"));
+  assert.ok(!rules(deleting).some(rule => rule.spec.forProvider.cidrIpv4 === "192.0.2.20/32"), "wait for old MR removal before creating a duplicate cloud authorization");
+  const returned = rules(render({ cluster, ...current(deleting) }, activeXr()));
+  assert.ok(!returned.some(rule => rule.metadata.name === "original-rule"));
+  assert.ok(returned.some(rule => rule.metadata.name.startsWith("worker-ssh-") && rule.spec.forProvider.cidrIpv4 === "192.0.2.20/32"));
+  assertProviderPolicies(returned);
+});
+
+test("a hashed source name colliding with a saved baseline cannot overwrite or recreate it", () => {
+  const composite = activeXr();
+  const collision = `worker-ssh-${createHash("sha256").update("192.0.2.30").digest("hex").slice(0, 12)}`;
+  composite.status.handoff[collision] = { uid: "retired-baseline", externalName: "sgr-dead" };
+  const previous = current(activation());
+  const result = render({ cluster, ...previous }, composite);
+  assert.equal(statusOf(result).handoffActive, false);
+  assert.equal(rules(result).length, 2);
+  for (const rule of rules(result)) assert.deepEqual(rule.spec, previous[`rule-${rule.metadata.name}`].resource.spec);
+  assert.ok(result.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"));
+});
+
+test("policy-error recovery is limited to the recorded owned rule and preserves its full cloud spec", () => {
+  for (const mismatch of ["none", "uid", "external-name", "observed-id", "provider", "region", "group", "cidr", "deleted", "owner", "different-policy"]) {
+    const composite = activateXr();
+    const previous = current(activation());
+    const rule = previous["rule-original-rule"].resource;
+    rule.spec.deletionPolicy = "Delete";
+    rule.spec.managementPolicies = ["Observe", "Update", "Delete", "LateInitialize"];
+    rule.status.conditions = [conditions[0], { type: "Synced", status: "False", observedGeneration: 1 }];
+    if (mismatch === "uid") rule.metadata.uid = "different";
+    if (mismatch === "external-name") rule.metadata.annotations["crossplane.io/external-name"] = "sgr-dead";
+    if (mismatch === "observed-id") rule.status.atProvider.id = "sgr-dead";
+    if (mismatch === "provider") rule.spec.providerConfigRef.name = "different";
+    if (mismatch === "region") rule.status.atProvider.region = "us-east-1";
+    if (mismatch === "group") rule.spec.forProvider.securityGroupIdRef.name = "different";
+    if (mismatch === "cidr") rule.status.atProvider.cidrIpv4 = "0.0.0.0/0";
+    if (mismatch === "deleted") rule.metadata.deletionTimestamp = "2026-10-08T00:00:00Z";
+    if (mismatch === "owner") rule.metadata.ownerReferences[0].uid = "different";
+    if (mismatch === "different-policy") rule.spec.managementPolicies = ["Observe", "Update", "Delete"];
+    const before = structuredClone(rule.spec);
+    const result = render({ ...observations, ...previous }, composite);
+    const repaired = rules(result).find(value => value.metadata.name === "original-rule");
+    if (mismatch === "none") {
+      assert.deepEqual(repaired.spec, { ...before, deletionPolicy: "Orphan", managementPolicies: ["Observe", "Update", "LateInitialize"] });
+      assertProviderPolicies(result);
+    } else if (repaired) assert.deepEqual(repaired.spec, before, mismatch);
+    assert.equal(statusOf(result).handoffActive, false, mismatch);
+    assert.ok(result.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"), mismatch);
+  }
+});
+
+test("missing-generation recovery pauses and restores an existing rule before any source reconciliation", () => {
+  for (const name of ["original-rule", `worker-ssh-${createHash("sha256").update("192.0.2.30").digest("hex").slice(0, 12)}`]) {
+    let observed = current(activeRules());
+    const key = `rule-${name}`;
+    delete observed[key].resource.status.conditions[1].observedGeneration;
+    const original = structuredClone(observed[key].resource.spec);
+    const phases = new Set<string>();
+    let recovered = false;
+    for (let step = 0; step < 9; step++) {
+      const result = render({ cluster, ...observed }, activeXr());
+      const selected = rules(result).find(rule => rule.metadata.name === name)!;
+      const record = JSON.parse(selected.metadata.annotations["nebula.io/observed-generation-repair"]);
+      phases.add(record.phase);
+      assert.equal(rules(result).length, 3, "a probe cannot add or remove rules");
+      const unaffected = structuredClone(selected.spec);
+      unaffected.managementPolicies = original.managementPolicies;
+      unaffected.deletionPolicy = original.deletionPolicy;
+      unaffected.forProvider.description = original.forProvider.description;
+      assert.deepEqual(unaffected, original);
+      assertProviderPolicies(result);
+      if (record.phase !== "complete") {
+        assert.ok(result.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"));
+      }
+      if (record.phase === "complete" && selected.metadata.annotations["gotemplating.fn.crossplane.io/ready"] !== "False") {
+        assert.deepEqual(selected.spec, original);
+        recovered = true;
+        break;
+      }
+      observed = acknowledge(observed, result);
+    }
+    assert.ok(recovered, name);
+    for (const phase of ["pause", "probe", "restore", "complete"]) assert.ok(phases.has(phase), `${name}: ${phase}`);
+  }
+});
+
+test("a completed normal probe cannot undo later retirement when the source returns during a second probe", () => {
+  let observed = current(activeRules());
+  const key = "rule-original-rule";
+  delete observed[key].resource.status.conditions[1].observedGeneration;
+  for (let step = 0; step < 8; step++) observed = acknowledge(observed, render({ cluster, ...observed }, activeXr()));
+  assert.equal(JSON.parse(observed[key].resource.metadata.annotations["nebula.io/observed-generation-repair"]).phase, "complete");
+  const removed = structuredClone(cluster);
+  removed.resource.status.atProvider.manifest.status.networkStatus.natGatewaysIPs = ["192.0.2.10", "192.0.2.30"];
+  observed = acknowledge(observed, render({ cluster: removed, ...observed }, activeXr()));
+  assert.deepEqual(observed[key].resource.spec.managementPolicies, ["Observe", "Delete"]);
+  delete observed[key].resource.status.conditions[1].observedGeneration;
+  let omitted = false;
+  for (let step = 0; step < 10; step++) {
+    const result = render({ cluster, ...observed }, activeXr());
+    assert.ok(!rules(result).some(rule => rule.metadata.name !== "original-rule" && rule.spec.forProvider.cidrIpv4 === "192.0.2.20/32"),
+      "no hash replacement before the retiring MR is gone");
+    const original = rules(result).find(rule => rule.metadata.name === "original-rule");
+    if (!original) {
+      assert.deepEqual(observed[key].resource.spec.managementPolicies, ["Observe", "Delete"]);
+      assert.equal(observed[key].resource.spec.deletionPolicy, "Delete");
+      assert.equal(observed[key].resource.status.conditions[1].observedGeneration, observed[key].resource.metadata.generation);
+      observed = acknowledge(observed, result);
+      omitted = true;
+      break;
+    }
+    const record = JSON.parse(original.metadata.annotations["nebula.io/observed-generation-repair"]);
+    assert.deepEqual(record.restorePolicies, ["Observe", "Delete"], "a repeated probe records the actual retirement lifecycle");
+    assert.ok(!original.spec.managementPolicies.includes("Update"), "a returning source cannot cancel retirement");
+    observed = acknowledge(observed, result);
+  }
+  assert.ok(omitted);
+  const replaced = rules(render({ cluster, ...observed }, activeXr()));
+  assert.ok(replaced.some(rule => rule.metadata.name.startsWith("worker-ssh-") && rule.spec.forProvider.cidrIpv4 === "192.0.2.20/32"));
+  assert.ok(!replaced.some(rule => rule.metadata.name === "original-rule"));
 });
 
 function fleetRegion(ingressRules?: AwsWorkerFleetIngressRule[]) {
