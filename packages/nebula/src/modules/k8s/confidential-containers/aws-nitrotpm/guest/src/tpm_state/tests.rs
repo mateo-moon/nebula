@@ -623,7 +623,11 @@ fn emulator_rejects_missing_and_redefined_nv_instead_of_treating_them_as_empty()
                 ],
             )?;
             let fake = driver.read("unsealed")?;
-            write_private(&emulator.root.path().join("owner.auth"), &fake[64..])
+            driver.write_owner_auth(&fake[64..])?;
+            write_private(
+                &emulator.root.path().join("owner.auth"),
+                &driver.read("owner.auth")?,
+            )
         })
         .unwrap();
     drop(driver);
