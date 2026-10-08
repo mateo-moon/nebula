@@ -20,6 +20,15 @@ pub(crate) enum Stage {
     TransportMetadata,
     TransportConfiguration,
     TransportPersist,
+    RuntimeEnvironment,
+    RuntimeIdentity,
+    RuntimeIntent,
+    RuntimeConfiguration,
+    RuntimeApproval,
+    RuntimeActivation,
+    RuntimeEvidence,
+    RuntimeKeyRelease,
+    RuntimeKeyPersist,
     TpmEnvironment,
     TpmInventory,
     BootMeasurements,
@@ -79,6 +88,15 @@ impl Stage {
             Self::TransportMetadata => "NEBULA_STARTUP_FAILURE:transport-metadata\n",
             Self::TransportConfiguration => "NEBULA_STARTUP_FAILURE:transport-configuration\n",
             Self::TransportPersist => "NEBULA_STARTUP_FAILURE:transport-persist\n",
+            Self::RuntimeEnvironment => "NEBULA_STARTUP_FAILURE:runtime-environment\n",
+            Self::RuntimeIdentity => "NEBULA_STARTUP_FAILURE:runtime-identity\n",
+            Self::RuntimeIntent => "NEBULA_STARTUP_FAILURE:runtime-intent\n",
+            Self::RuntimeConfiguration => "NEBULA_STARTUP_FAILURE:runtime-configuration\n",
+            Self::RuntimeApproval => "NEBULA_STARTUP_FAILURE:runtime-approval\n",
+            Self::RuntimeActivation => "NEBULA_STARTUP_FAILURE:runtime-activation\n",
+            Self::RuntimeEvidence => "NEBULA_STARTUP_FAILURE:runtime-evidence\n",
+            Self::RuntimeKeyRelease => "NEBULA_STARTUP_FAILURE:runtime-key-release\n",
+            Self::RuntimeKeyPersist => "NEBULA_STARTUP_FAILURE:runtime-key-persist\n",
             Self::TpmEnvironment => "NEBULA_STARTUP_FAILURE:tpm-environment\n",
             Self::TpmInventory => "NEBULA_STARTUP_FAILURE:tpm-inventory\n",
             Self::BootMeasurements => "NEBULA_STARTUP_FAILURE:boot-measurements\n",
@@ -196,6 +214,26 @@ pub(crate) fn report_evidence(error: &Error) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_diagnostics_classify_steps_without_disclosing_keys_or_intent() {
+        for (stage, label) in [
+            (Stage::RuntimeEnvironment, "runtime-environment"),
+            (Stage::RuntimeIdentity, "runtime-identity"),
+            (Stage::RuntimeIntent, "runtime-intent"),
+            (Stage::RuntimeConfiguration, "runtime-configuration"),
+            (Stage::RuntimeApproval, "runtime-approval"),
+            (Stage::RuntimeActivation, "runtime-activation"),
+            (Stage::RuntimeEvidence, "runtime-evidence"),
+            (Stage::RuntimeKeyRelease, "runtime-key-release"),
+            (Stage::RuntimeKeyPersist, "runtime-key-persist"),
+        ] {
+            let error = anyhow::anyhow!("synthetic private image key and public boot intent");
+            let inner = at::<(), _>(stage, Err(error));
+            let error = at(Stage::RuntimeConfiguration, inner).unwrap_err();
+            assert_eq!(message(&error), format!("NEBULA_STARTUP_FAILURE:{label}\n"));
+        }
+    }
 
     #[test]
     fn public_diagnostics_preserve_inner_stage_and_never_format_error_data() {

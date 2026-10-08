@@ -285,11 +285,20 @@ pub async fn run_authority() -> Result<()> {
 /// Before activation this connection returns public approval only. After one
 /// confirmed PCR extension, a new mutual-evidence channel may request keys.
 pub async fn run_runtime() -> Result<()> {
-    crate::require_memory_directory(Path::new(crate::SECRETS))?;
-    let (namespace, pod) = transport::pod_identity()?;
-    let deployment =
-        transport::metadata("meta-data/tags/instance/nebula-coco-deployment", 64).await?;
-    let deployment = std::str::from_utf8(&deployment)?;
+    at(Stage::RuntimeConfiguration, provision_runtime().await)
+}
+
+async fn provision_runtime() -> Result<()> {
+    at(
+        Stage::RuntimeEnvironment,
+        crate::require_memory_directory(Path::new(crate::SECRETS)),
+    )?;
+    let (namespace, pod) = at(Stage::RuntimeIdentity, transport::pod_identity())?;
+    let deployment = at(
+        Stage::RuntimeIdentity,
+        transport::metadata("meta-data/tags/instance/nebula-coco-deployment", 64).await,
+    )?;
+    let deployment = at(Stage::RuntimeIdentity, std::str::from_utf8(&deployment))?;
     ensure!(workload::digest(deployment), "invalid runtime deployment");
     // The controller and peer-pod creation reconcile independently. Wait for
     // public intent before extending PCR 15; a retry after activation must never
@@ -303,8 +312,10 @@ pub async fn run_runtime() -> Result<()> {
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
-    let intent: RuntimeIntent =
-        serde_json::from_slice(&configuration.context("public runtime intent unavailable")?)?;
+    let intent: RuntimeIntent = serde_json::from_slice(&at(
+        Stage::RuntimeIntent,
+        configuration.context("public runtime intent unavailable"),
+    )?)?;
     intent.common.validate()?;
     ensure!(
         intent.common.deployment == deployment,
@@ -341,7 +352,10 @@ pub async fn run_runtime() -> Result<()> {
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
-    let approval = approved.context("authority approval unavailable")?;
+    let approval = at(
+        Stage::RuntimeApproval,
+        approved.context("authority approval unavailable"),
+    )?;
     let expected = Expectation {
         deployment: deployment.into(),
         workload: grant.workload.clone(),
@@ -349,22 +363,31 @@ pub async fn run_runtime() -> Result<()> {
         runtime_release: grant.runtime_release.clone(),
         authority_release: intent.common.authority_profile.release.clone(),
     };
-    let active = activation::activate(&intent.descriptor, &approval.owners, &expected).await?;
-    let channel =
-        Arc::new(tokio::task::spawn_blocking(evidence::ChannelIdentity::generate).await??);
-    let collector = evidence::Collector::new(
-        channel,
-        Claims {
-            authority_identity: grant.authority_identity.clone(),
-            deployment: deployment.into(),
-            policy: active.verified().descriptor_sha384.clone(),
-            release: profile.release.clone(),
-            replica_public_key: String::new(),
-            role: Role::Runtime,
-            tls_sha256: String::new(),
-            version: 1,
-        },
-        asvk()?,
+    let active = at(
+        Stage::RuntimeActivation,
+        activation::activate(&intent.descriptor, &approval.owners, &expected).await,
+    )?;
+    let channel = at(
+        Stage::RuntimeEvidence,
+        tokio::task::spawn_blocking(evidence::ChannelIdentity::generate).await,
+    )?;
+    let channel = Arc::new(at(Stage::RuntimeEvidence, channel)?);
+    let collector = at(
+        Stage::RuntimeEvidence,
+        evidence::Collector::new(
+            channel,
+            Claims {
+                authority_identity: grant.authority_identity.clone(),
+                deployment: deployment.into(),
+                policy: active.verified().descriptor_sha384.clone(),
+                release: profile.release.clone(),
+                replica_public_key: String::new(),
+                role: Role::Runtime,
+                tls_sha256: String::new(),
+                version: 1,
+            },
+            at(Stage::RuntimeEvidence, asvk())?,
+        ),
     )?;
     for _ in 0..30 {
         for address in intent.common.replicas() {
@@ -379,21 +402,45 @@ pub async fn run_runtime() -> Result<()> {
             )
             .await
             {
-                ensure!(keys.len() == grant.resources.len() && keys.iter().all(|(path, key)| grant.resources.get(path) == Some(&key.commitment())),
-                    "resource commitment mismatch");
-                let resources = crate::SecretResources(
-                    keys.iter()
-                        .map(|(path, key)| (path.clone(), key.encoded()))
-                        .collect(),
-                );
-                crate::write_resources(Path::new(crate::RESOURCE_FILE), &resources.0)?;
+                at(
+                    Stage::RuntimeKeyRelease,
+                    persist_runtime_keys(&grant.resources, &keys),
+                )?;
                 return Ok(());
             }
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
-    anyhow::bail!("current authority quorum did not release workload keys")
+    at(
+        Stage::RuntimeKeyRelease,
+        Err(anyhow::anyhow!(
+            "current authority quorum did not release workload keys"
+        )),
+    )
 }
+
+fn persist_runtime_keys(
+    expected: &std::collections::BTreeMap<String, String>,
+    keys: &authority::ImageKeys,
+) -> Result<()> {
+    ensure!(
+        keys.len() == expected.len()
+            && keys
+                .iter()
+                .all(|(path, key)| expected.get(path) == Some(&key.commitment())),
+        "resource commitment mismatch"
+    );
+    let resources = crate::SecretResources(
+        keys.iter()
+            .map(|(path, key)| (path.clone(), key.encoded()))
+            .collect(),
+    );
+    at(
+        Stage::RuntimeKeyPersist,
+        crate::write_resources(Path::new(crate::SECRETS), &resources.0),
+    )
+}
+
 async fn fetch_approval(
     address: SocketAddr,
     intent: &RuntimeIntent,
@@ -440,6 +487,48 @@ async fn fetch_approval(
 #[cfg(test)]
 mod tests {
     use super::state_mount_ready;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires an isolated root-owned /run/nebula/secrets tmpfs"]
+    fn managed_runtime_keys_reach_protected_tmpfs_only_for_exact_commitments() {
+        use super::persist_runtime_keys;
+        use crate::authority::ImageKey;
+        use std::{collections::BTreeMap, fs, os::unix::fs::MetadataExt, path::Path};
+
+        let name = "default/image_key/test-workload".to_string();
+        let key = ImageKey::from_bytes([0x5a; 32]);
+        let expected = BTreeMap::from([(name.clone(), key.commitment())]);
+        let good = BTreeMap::from([(name.clone(), key)]);
+        let wrong = BTreeMap::from([(name.clone(), ImageKey::from_bytes([0x6b; 32]))]);
+        let extra = BTreeMap::from([
+            (name.clone(), ImageKey::from_bytes([0x5a; 32])),
+            (
+                "other/image_key/test-workload".into(),
+                ImageKey::from_bytes([0x5a; 32]),
+            ),
+        ]);
+        assert!(!Path::new(crate::RESOURCE_FILE).exists());
+        for refused in [&wrong, &extra, &BTreeMap::new()] {
+            assert!(persist_runtime_keys(&expected, refused).is_err());
+            assert!(!Path::new(crate::RESOURCE_FILE).exists());
+        }
+        persist_runtime_keys(&expected, &good).unwrap();
+        let metadata = fs::metadata(crate::RESOURCE_FILE).unwrap();
+        assert!(metadata.is_file());
+        assert_eq!(metadata.uid(), 0);
+        assert_eq!(metadata.mode() & 0o777, 0o600);
+        let actual: BTreeMap<String, String> =
+            serde_json::from_slice(&fs::read(crate::RESOURCE_FILE).unwrap()).unwrap();
+        assert_eq!(
+            actual,
+            BTreeMap::from([(name.clone(), good[&name].encoded())])
+        );
+        let saved = fs::read(crate::RESOURCE_FILE).unwrap();
+        assert!(persist_runtime_keys(&expected, &wrong).is_err());
+        assert_eq!(fs::read(crate::RESOURCE_FILE).unwrap(), saved);
+        fs::remove_file(crate::RESOURCE_FILE).unwrap();
+    }
 
     #[test]
     fn empty_systemd_tmpfs_binding_is_a_placeholder_not_the_state_disk() {

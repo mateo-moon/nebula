@@ -76,7 +76,7 @@ jobs:
           cargo test --locked --manifest-path guest/Cargo.toml --lib
           cargo clippy --locked --manifest-path guest/Cargo.toml --all-targets -- -D warnings
           cargo build --locked --manifest-path guest/Cargo.toml --bin aws-trustee-bootstrap
-      - name: Exercise protected journal and owner history against isolated software TPMs
+      - name: Exercise protected journals and runtime key storage in isolated Linux
         run: |
           cargo test --locked --manifest-path guest/Cargo.toml --lib --no-run --message-format=json > "$RUNNER_TEMP/nebula-guest-tests.jsonl"
           mkdir -p "$RUNNER_TEMP/nebula-tpm-test"
@@ -97,6 +97,12 @@ jobs:
             -v "$RUNNER_TEMP/nebula-tpm-test/swaps:/proc/swaps:ro" \
             -v "$RUNNER_TEMP/nebula-tpm-test:/tests:ro" -e NEBULA_SWTPM_TEST=1 \
             nebula-authority-tpm-test /tests/guest-tests --ignored emulator_
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
+            --tmpfs /run/nebula/secrets:rw,nosuid,nodev,noexec,mode=0700,size=2m \
+            -v "$RUNNER_TEMP/nebula-tpm-test/swaps:/proc/swaps:ro" \
+            -v "$RUNNER_TEMP/nebula-tpm-test:/tests:ro" \
+            nebula-authority-tpm-test /tests/guest-tests --ignored --test-threads=1 tmpfs
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"

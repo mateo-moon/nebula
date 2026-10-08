@@ -209,7 +209,7 @@ majority when connection latency exceeds the old five-second RPC budget. The
 revised bounded budget passes that test and still refuses an isolated leader.
 Idle maintenance skips redundant quorum rounds when no protected initialization
 or replacement work exists; authorization continues to require fresh quorum.
-These changes still require qualification in a new immutable appliance.
+The subsequent candidate includes these quorum and transport corrections.
 
 The same hardware run exposed a cleanup-controller ordering failure: a PeerPod
 finalizer survived removal of its controller. Restoring only cleanup resources
@@ -218,6 +218,28 @@ inventories verified removal of all module and disposable test resources.
 The corrected ordering and UID-bound drain pass controller and synthesis tests;
 ordinary deletion without repair remains a required hardware acceptance gate.
 No authority identity, workload keys or default catalog were approved in this run.
+
+A subsequent immutable candidate completes the normal module synchronization
+waves, both imports and interrupted-import recovery. Its three distinct Nitro
+replicas form a stable, freshly attested authority. The released owner client
+publishes a synthetic workload key and rejects unsigned policy changes, signed
+descriptors outside the grant, wrong key commitments, different releases and
+different deployments, each with successful positive controls. A simultaneous
+reboot of all three original instances preserves the protected authority identity
+and recovers a fresh quorum with new guest process keys.
+
+The runtime transport now completes, but the next bootstrap service fails and
+the encrypted canary has not succeeded. Inspection found a definite managed-path
+bug: the key writer expects the protected directory, but received the resource
+filename. A regression executing that actual path on an isolated Linux tmpfs
+fails before the correction and passes afterward. It also checks exact key
+commitments, private file permissions and refusal to overwrite the file with
+unauthorized keys. CI now exercises this path and the existing atomic-write and
+symlink rejection checks. Fixed runtime stage codes identify subsequent startup
+failures without exposing key bytes, boot intent or underlying error text.
+The observed hardware failure had only an unclassified code, so the corrected
+candidate still requires a fresh immutable-appliance run; no default catalog has
+been promoted.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,
