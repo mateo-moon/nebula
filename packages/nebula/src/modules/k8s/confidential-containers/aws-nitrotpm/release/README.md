@@ -30,6 +30,10 @@ Failures use fixed process exit categories for endorsement, message-buffer,
 vendor-request, TPM and response processing. The collector emits only a fixed
 SNP/Nitro failure code, at most once per minute; upstream errors and request bytes
 never reach the console. These diagnostics do not relax evidence verification.
+Endorsement failures further distinguish device access, primary creation,
+persistence, authorization, lockout, object/session capacity and public-key
+encoding. Their process exit codes are mapped to fixed labels; no TPM error
+text, raw response, handle value or authorization byte is printed.
 Builds reject any upstream change beyond that exact patch, record its digest
 with the binary's provenance, and preserve upstream license notices in the image.
 CI exercises wrong credentials and authenticated object cleanup across context

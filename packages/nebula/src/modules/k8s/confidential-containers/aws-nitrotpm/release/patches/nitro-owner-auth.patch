@@ -23,7 +23,7 @@ index 9462e82a7ff4ce1ae24d409ea304508132f7d56b..180e57119aa99e242f1471167d9a924a
  [build-dependencies]
  semver = "1.0"
 diff --git a/nitro-tpm-attest/src/lib.rs b/nitro-tpm-attest/src/lib.rs
-index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..22acdca9161058f755d0927ebe2baf4bbbcc9c89 100644
+index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..ead23a7f31d40dd6f15800ce1fb88df558377587 100644
 --- a/nitro-tpm-attest/src/lib.rs
 +++ b/nitro-tpm-attest/src/lib.rs
 @@ -1,5 +1,6 @@
@@ -33,7 +33,67 @@ index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..22acdca9161058f755d0927ebe2baf4b
  
  //! Abstraction for the TPM2 AWS NSM Vendor Command
  //!
-@@ -34,6 +35,21 @@ pub fn attestation_document(
+@@ -29,11 +30,81 @@ pub enum Error {
+     Tss(#[from] tss_esapi::Error),
+ }
+ 
++impl Error {
++    /// A finite public diagnostic code; never serialize an error or its inputs.
++    pub fn diagnostic_exit_code(&self) -> i32 {
++        use tss::endorsement_key::Error as Ek;
++        match self {
++            Self::EndorsementKey(error) => match error {
++                Ek::PersistentHandleCapacity => 70,
++                Ek::TpmManager(_) => 71,
++                Ek::CreatePrimary(error) => endorsement_tss_code(*error, 80, 72),
++                Ek::Persist(error) => endorsement_tss_code(*error, 81, 73),
++                Ek::Tss(error) => endorsement_tss_code(*error, 82, 74),
++                Ek::AwsLc(_) => 84,
++                Ek::Asn1Der(_) => 85,
++            },
++            Self::MessageBuffer(_) => 65,
++            Self::NsmRequest(_) => 66,
++            Self::Tss(_) => 67,
++            Self::NsmErrorResponse(_) => 68,
++            Self::InvalidNsmResponse => 69,
++        }
++    }
++}
++
++fn endorsement_tss_code(error: tss_esapi::Error, fallback: i32, authentication: i32) -> i32 {
++    use tss_esapi::constants::Tss2ResponseCodeKind as Kind;
++    match error {
++        tss_esapi::Error::WrapperError(_) => 83,
++        tss_esapi::Error::Tss2Error(code) => match code.kind() {
++            Some(Kind::AuthFail | Kind::BadAuth | Kind::AuthMissing | Kind::AuthUnavailable) => {
++                authentication
++            }
++            Some(Kind::Lockout) => 75,
++            Some(Kind::ObjectMemory | Kind::ObjectHandles) => 76,
++            Some(Kind::SessionMemory | Kind::SessionHandles) => 77,
++            Some(Kind::Memory | Kind::NvSpace) => 78,
++            Some(
++                Kind::Handle
++                | Kind::NvDefined
++                | Kind::ReferenceH0
++                | Kind::ReferenceH1
++                | Kind::ReferenceH2,
++            ) => 79,
++            Some(
++                Kind::Size
++                | Kind::Value
++                | Kind::KeySize
++                | Kind::Attributes
++                | Kind::Scheme
++                | Kind::Symmetric,
++            ) => 86,
++            _ => fallback,
++        },
++    }
++}
++
+ /// Request a NitroTPM attestation document
+ pub fn attestation_document(
      user_data: Option<Vec<u8>>,
      nonce: Option<Vec<u8>>,
      public_key: Option<Vec<u8>>,
@@ -55,7 +115,7 @@ index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..22acdca9161058f755d0927ebe2baf4b
  ) -> Result<Vec<u8>, Error> {
      let nsm_request = nsm_api::Request::Attestation {
          user_data: user_data.map(Into::into),
-@@ -43,7 +59,7 @@ pub fn attestation_document(
+@@ -43,7 +114,7 @@ pub fn attestation_document(
  
      let tpm_device_path =
          std::path::PathBuf::from(std::env::var_os("TPM_DEVICE").unwrap_or("/dev/tpm0".into()));
@@ -65,7 +125,7 @@ index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..22acdca9161058f755d0927ebe2baf4b
      let endorsement_key = tss::EndorsementKey::new(&tpm_manager)?;
      let (message_buffer, message_buffer_name) =
 diff --git a/nitro-tpm-attest/src/main.rs b/nitro-tpm-attest/src/main.rs
-index 9bcbfc41f57c181826d33f448f1508b71953a906..9cbb78d05d52a10baefec47ea5816de2ffb6e0cc 100644
+index 9bcbfc41f57c181826d33f448f1508b71953a906..ae1f8c7aed89f0617acd785d85129671aebecefc 100644
 --- a/nitro-tpm-attest/src/main.rs
 +++ b/nitro-tpm-attest/src/main.rs
 @@ -1,5 +1,6 @@
@@ -85,7 +145,7 @@ index 9bcbfc41f57c181826d33f448f1508b71953a906..9cbb78d05d52a10baefec47ea5816de2
  }
  
  fn main() -> anyhow::Result<()> {
-@@ -22,8 +26,30 @@ fn main() -> anyhow::Result<()> {
+@@ -22,8 +26,23 @@ fn main() -> anyhow::Result<()> {
      let nonce = arguments.nonce.map(std::fs::read).transpose()?;
      let public_key = arguments.public_key.map(std::fs::read).transpose()?;
  
@@ -106,20 +166,13 @@ index 9bcbfc41f57c181826d33f448f1508b71953a906..9cbb78d05d52a10baefec47ea5816de2
 +        Ok(document) => document,
 +        // Only fixed process exit categories cross the collector boundary.
 +        // Never print an upstream error chain, authorization or request bytes.
-+        Err(error) => std::process::exit(match error {
-+            nitro_tpm_attest::Error::EndorsementKey(_) => 64,
-+            nitro_tpm_attest::Error::MessageBuffer(_) => 65,
-+            nitro_tpm_attest::Error::NsmRequest(_) => 66,
-+            nitro_tpm_attest::Error::Tss(_) => 67,
-+            nitro_tpm_attest::Error::NsmErrorResponse(_) => 68,
-+            nitro_tpm_attest::Error::InvalidNsmResponse => 69,
-+        }),
++        Err(error) => std::process::exit(error.diagnostic_exit_code()),
 +    };
  
      std::io::Write::write_all(&mut std::io::stdout(), &attestation_document)?;
  
 diff --git a/nitro-tpm-attest/src/tpm_manager.rs b/nitro-tpm-attest/src/tpm_manager.rs
-index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..c59b6106d27e5cfce6b0126f3a4337495a2e48f7 100644
+index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..807613abd203d7a022ec8e7e77fd29f19e99d6cc 100644
 --- a/nitro-tpm-attest/src/tpm_manager.rs
 +++ b/nitro-tpm-attest/src/tpm_manager.rs
 @@ -1,5 +1,6 @@
@@ -175,7 +228,7 @@ index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..c59b6106d27e5cfce6b0126f3a433749
  
          Ok(match self.mode {
              Mode::Tss(ref mut context) => context,
-@@ -73,3 +92,97 @@ impl TpmManager {
+@@ -73,3 +92,102 @@ impl TpmManager {
          })
      }
  }
@@ -227,8 +280,12 @@ index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..c59b6106d27e5cfce6b0126f3a433749
 +            Ok(_) => panic!("empty owner authorization accepted"),
 +            Err(error) => error,
 +        };
++        let error = crate::Error::EndorsementKey(error);
++        assert_eq!(error.diagnostic_exit_code(), 73);
 +        match error {
-+            crate::tss::endorsement_key::Error::Tss(tss_esapi::Error::Tss2Error(code)) => {
++            crate::Error::EndorsementKey(crate::tss::endorsement_key::Error::Persist(
++                tss_esapi::Error::Tss2Error(code),
++            )) => {
 +                assert!(matches!(
 +                    code.kind(),
 +                    Some(Tss2ResponseCodeKind::BadAuth | Tss2ResponseCodeKind::AuthFail)
@@ -239,6 +296,7 @@ index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..c59b6106d27e5cfce6b0126f3a433749
 +        drop(empty);
 +        let manager = make(owner.clone());
 +        let endorsement = EndorsementKey::new(&manager).unwrap();
++        endorsement.public_encryption_key().unwrap();
 +        let request = crate::nsm_api::Request::Attestation {
 +            user_data: None,
 +            nonce: None,
@@ -273,6 +331,73 @@ index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..c59b6106d27e5cfce6b0126f3a433749
 +        assert!(EndorsementKey::new(&empty).is_err());
 +    }
 +}
+diff --git a/nitro-tpm-attest/src/tss/endorsement_key.rs b/nitro-tpm-attest/src/tss/endorsement_key.rs
+index 6b0b4bd75eaa05e5d84ba9a2c480be9c136fa61a..ff647b262ff8e37d977b02a9b456bb780f510f5f 100644
+--- a/nitro-tpm-attest/src/tss/endorsement_key.rs
++++ b/nitro-tpm-attest/src/tss/endorsement_key.rs
+@@ -1,5 +1,6 @@
+ // Copyright 2025 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
++// Modified by Nebula to classify public TPM operation failures without logging inputs.
+ 
+ //! Persists the endorsement key handle, so it is not flushed by tss-esapi-rs and is usable by the
+ //! raw command
+@@ -14,6 +15,10 @@ pub enum Error {
+     TpmManager(#[from] crate::tpm_manager::Error),
+     #[error(transparent)]
+     Tss(#[from] tss_esapi::Error),
++    #[error("endorsement primary creation failed")]
++    CreatePrimary(#[source] tss_esapi::Error),
++    #[error("endorsement persistence failed")]
++    Persist(#[source] tss_esapi::Error),
+     #[error(transparent)]
+     AwsLc(#[from] aws_lc_rs::error::KeyRejected),
+     #[error(transparent)]
+@@ -49,24 +54,28 @@ impl<'a> EndorsementKey<'a> {
+             .try_into()?;
+ 
+         let endorsement_key_create_result = context.execute_with_nullauth_session(|context| {
+-            let endorsement_key_create_result = context.create_primary(
+-                tss_esapi::interface_types::resource_handles::Hierarchy::Endorsement,
+-                endorsement_key_template,
+-                None,
+-                None,
+-                None,
+-                None,
+-            )?;
++            let endorsement_key_create_result = context
++                .create_primary(
++                    tss_esapi::interface_types::resource_handles::Hierarchy::Endorsement,
++                    endorsement_key_template,
++                    None,
++                    None,
++                    None,
++                    None,
++                )
++                .map_err(Error::CreatePrimary)?;
+ 
+-            context.evict_control(
+-                tss_esapi::interface_types::resource_handles::Provision::Owner,
+-                endorsement_key_create_result.key_handle.into(),
+-                tss_esapi::interface_types::dynamic_handles::Persistent::Persistent(
+-                    persistent_tpm_handle,
+-                ),
+-            )?;
++            context
++                .evict_control(
++                    tss_esapi::interface_types::resource_handles::Provision::Owner,
++                    endorsement_key_create_result.key_handle.into(),
++                    tss_esapi::interface_types::dynamic_handles::Persistent::Persistent(
++                        persistent_tpm_handle,
++                    ),
++                )
++                .map_err(Error::Persist)?;
+ 
+-            Ok::<_, tss_esapi::Error>(endorsement_key_create_result)
++            Ok::<_, Error>(endorsement_key_create_result)
+         })?;
+ 
+         Ok(Self {
 diff --git a/nitro-tpm-attest/src/tss/message_buffer.rs b/nitro-tpm-attest/src/tss/message_buffer.rs
 index d2a89ff666dc20a270ab34cea8b05ab93a3d6ec3..613b579196803b70e285b6b0738448730c7d94c7 100644
 --- a/nitro-tpm-attest/src/tss/message_buffer.rs

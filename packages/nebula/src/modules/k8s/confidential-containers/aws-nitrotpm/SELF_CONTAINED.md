@@ -185,6 +185,13 @@ failures with fixed console codes, limited to one message per minute. The patche
 attester communicates only fixed failure exit categories; error chains and request
 or authentication bytes remain suppressed. A rebuilt candidate must diagnose and
 resolve the collection failure before full quorum/runtime/recovery acceptance.
+A fresh diagnostic candidate reproduced the two-of-three evidence result with
+no manual startup intervention. Its fixed console code identifies NitroTPM
+endorsement-key handling on the first replica; both image imports and recovery
+from controller interruption passed again. More specific endorsement operation,
+authorization and capacity classifications now distinguish that helper's failure
+paths without exposing raw errors or altering verification. This remains an
+unresolved hardware integration failure, not an approved runtime release.
 Normal deletion of earlier failed deployments removed all owned cloud and IAM
 resources, independently verified after the finalizer completed.
 
