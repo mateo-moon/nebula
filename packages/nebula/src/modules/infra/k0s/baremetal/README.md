@@ -1,13 +1,15 @@
-# SSH baremetal provisioning with Crossplane
+# Baremetal workers with Crossplane
 
-`SshBaremetalSetup` installs a shared `XSshBaremetalHost` XRD and Composition,
-following the `WorkerSetup` / `EipDnsRecordSetup` split. `SshBaremetalFleet`
-declares one XR per IP. The shared composition contains the SSH credentials'
-references, installation profile and CAPI settings. No provider API is involved.
-`BaremetalFleet` remains the enrollment-only API for already prepared hosts.
+`BaremetalSetup` installs a shared `XBaremetalWorker` XRD and Composition,
+following the `WorkerSetup` / `EipDnsRecordSetup` split. `baremetalWorker` and
+`BaremetalFleet.addNode` declare one worker XR per IP. Its lifecycle discovers
+the source OS, installs the desired OS, verifies it and enrolls the worker in k0s.
+The shared composition contains SSH credential references, the installation
+profile and CAPI settings. This single baremetal API uses privileged SSH with
+any server supplier.
 
 ```text
-Git IP → XSshBaremetalHost → Crossplane Composition
+Git IP → XBaremetalWorker → Crossplane Composition
                               ├─ immutable request + durable progress ConfigMaps
                               ├─ scoped ServiceAccount / Role / RoleBinding
                               └─ bounded SSH installation Job
@@ -35,14 +37,14 @@ create CAPI resources, update XRs, read Secrets through the API or list hosts.
    content-addressed scripts ConfigMap; Jobs run as a non-root container with a
    read-only root filesystem. Keep old script ConfigMaps while hosts reference
    their CompositionRevisions.
-3. Install `SshBaremetalSetup` once. It emits the XRD, composition, scripts and a
+3. Install `BaremetalSetup` once. It emits the XRD, composition, scripts and a
    namespace Role/RoleBinding for the existing provider-kubernetes ServiceAccount
    (`crossplane-system/provider-kubernetes` by default). The local ProviderConfig
    should use that InjectedIdentity. For a different identity, configure the
    corresponding SA and grant the equivalent permissions in the target namespace.
 4. Supply privileged SSH: root or an account with passwordless sudo. Private
    keys use Secret key `value`. Supply `knownHostsSecretName`, key `known_hosts`,
-   with aliases equal to the derived `bm-<IPv4-with-dashes>` hostname. Alternatively,
+   with aliases equal to the installed hostname (`bm-<IPv4-with-dashes>` by default). Alternatively,
    explicitly choose `trustOnFirstUse: true`. The first authenticated key is
    persisted before staging; later connections pin that key. Host private keys
    stay on the target server and are carried locally into the new OS.
@@ -55,10 +57,10 @@ create CAPI resources, update XRs, read Secrets through the API or list hosts.
 Settings and credentials belong in the deployment repository:
 
 ```ts
-import { SshBaremetalFleet, SshBaremetalSetup } from "nebula-cdk8s";
+import { BaremetalFleet, BaremetalSetup } from "nebula-cdk8s";
 
-new SshBaremetalSetup(chart, "baremetal-setup", {
-  name: "ssh-baremetal",
+new BaremetalSetup(chart, "baremetal-setup", {
+  name: "baremetal-worker",
   namespace: "default",
   image: settings.provisionerImage, // registry image pinned by digest
   clusterName: "workload",
@@ -84,17 +86,17 @@ new SshBaremetalSetup(chart, "baremetal-setup", {
   workloadKubeProviderConfigName: "workload", // existing provider-kubernetes config
 });
 
-const fleet = new SshBaremetalFleet(chart, "workers", {
-  compositionName: "ssh-baremetal",
+const fleet = new BaremetalFleet(chart, "workers", {
+  compositionName: "baremetal-worker",
 });
-for (const address of ["192.0.2.10", "198.51.100.20"]) fleet.addHost(address);
+for (const address of ["192.0.2.10", "198.51.100.20"]) fleet.addNode(address);
 ```
 
 Each address produces only a cluster-scoped XR:
 
 ```yaml
 apiVersion: nebula.io/v1alpha1
-kind: XSshBaremetalHost
+kind: XBaremetalWorker
 metadata:
   name: bm-192-0-2-10
   annotations:
@@ -103,12 +105,30 @@ spec:
   address: 192.0.2.10
   crossplane:
     compositionRef:
-      name: ssh-baremetal
+      name: baremetal-worker
     compositionUpdatePolicy: Manual
 ```
 
-The IP is immutable. Hostname and optional /64 allocation derive from it,
-independent of inventory ordering. Manual revision selection pins the profile
+An IP alone derives the hostname and optional /64 allocation independently of
+inventory ordering. Named workers use the same lifecycle and can override
+topology, SSH access, labels and taints:
+
+```ts
+baremetalWorker(chart, { compositionName: "baremetal-worker" }, {
+  address: "192.0.2.11",
+  name: "worker-1", // installed hostname, pool and CAPI deployment identity
+  sshUser: "admin", // source OS; installed SSH uses the worker key and root
+  sshPort: 2222,
+  geo: "eu", region: "dc2", zone: "dc2",
+  nodeLabels: { workload: "guest" },
+  taints: ["workload=guest:NoSchedule"],
+});
+```
+
+Import `baremetalWorker` from the same package root. Node labels merge with the
+shared defaults; taints replace the shared list, including an empty list to clear
+it. The IP, hostname and source SSH overrides are immutable. Manual revision
+selection pins the profile
 for an existing host; new declarations select the latest revision. Installation
 identity or cluster-target changes on an already bound host fail reconciliation
 without withdrawing its existing graph. Template/rollout changes remain subject
@@ -170,7 +190,7 @@ independence does not imply support for every boot, storage or network layout.
 
 ## Retention and recovery
 
-Watch `xsshbaremetalhosts` status (`phase`, `osReady`, `workerReady`, `lastError`)
+Watch `xbaremetalworkers` status (`phase`, `osReady`, `workerReady`, `lastError`)
 and Crossplane conditions. The `state` Object's `status.atProvider.manifest`
 contains the progress ConfigMap: public host keys, facts and installation state.
 Back up that record, the XR/CompositionRevision and referenced credentials.
@@ -194,15 +214,29 @@ operator action. Decommission explicitly: inspect/stop the Job, drain/remove the
 CAPI deployment, release the pool, decide how to retain local data, then clean up
 retained installation resources. Never delete/recreate the XR as a retry method.
 
+## Updating declarations
+
+`BaremetalFleet` and `baremetalWorker` now emit `XBaremetalWorker` declarations.
+Move the former fleet's cluster, version, SSH key and tag-domain settings into
+`BaremetalSetup`, together with the installation profile. Fleet and standalone
+worker options select only `compositionName`. Both accept an IP or a node object.
+The runtime scripts and typed enrollment definitions live inside `infra/k0s`.
+
+Changing an existing chart from direct CAPI resources to an XR needs an explicit
+migration: retain the live enrollment resources and review their ownership before
+changing declarations. The installer refuses hosts with existing Kubernetes
+installations. Use new worker declarations for fresh, unused servers.
+
 ## Validation
 
 Tests execute the actual Go/Sprig composition and Python installer/Job runtime.
 They cover deferred handoff, stale verification, observation loss, revision
 changes, current-generation readiness, scoped RBAC, restart recovery, lost
 bindings, disk ambiguity, corrupt downloads, bounded root storage and private
-archive permissions. The existing enrollment-only API remains unchanged.
+archive permissions. Named workers and IP-only workers exercise the same
+installation and enrollment lifecycle.
 
-`test/ssh-baremetal-vm.py` is an opt-in integration test restricted to its own
+`test/baremetal-vm.py` is an opt-in integration test restricted to its own
 new disposable QEMU disk. It creates a source OS and exercises SSH discovery,
 staging, kexec, reinstall and verification using pinned netboot artifacts. Failed
 disks/logs remain in a printed private temporary directory; successful runs

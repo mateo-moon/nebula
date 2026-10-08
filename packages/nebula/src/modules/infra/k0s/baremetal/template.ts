@@ -1,6 +1,6 @@
 /** Crossplane owns the resource graph. The Job only installs and verifies an OS.
  * Keep the template executable in function-go-templating and in the Go test harness. */
-export function sshBaremetalTemplate(profile: Record<string, unknown>): string {
+export function baremetalWorkerTemplate(profile: Record<string, unknown>): string {
   return `{{- $profile := ${JSON.stringify(JSON.stringify(profile))} | fromJson -}}\n` + TEMPLATE;
 }
 
@@ -54,11 +54,24 @@ const TEMPLATE = String.raw`
 {{- $xr := .observed.composite.resource -}}
 {{- $resources := .observed.resources | default dict -}}
 {{- $uid := $xr.metadata.uid -}}
-{{- $hostname := printf "bm-%s" (replace "." "-" $xr.spec.address) -}}
-{{- $prefix := printf "%s-%s" $hostname ($uid | sha256sum | trunc 12) -}}
+{{- $hostname := $xr.spec.hostname | default (printf "bm-%s" (replace "." "-" $xr.spec.address)) -}}
+{{- $prefix := printf "%s-%s" ($hostname | trunc 50 | trimSuffix "-") ($uid | sha256sum | trunc 12) -}}
 {{- $namespace := $profile.namespace -}}
 {{- $meta := dict "name" $prefix "namespace" $namespace -}}
-{{- $request := dict "uid" $uid "spec" (dict "address" $xr.spec.address "hostname" $hostname "ssh" $profile.ssh "installation" $profile.installation)
+{{- $ssh := deepCopy $profile.ssh -}}
+{{- if hasKey $xr.spec "sshUser" -}}{{- $_ := set $ssh "user" $xr.spec.sshUser -}}{{- end -}}
+{{- if hasKey $xr.spec "sshPort" -}}{{- $_ := set $ssh "port" $xr.spec.sshPort -}}{{- end -}}
+{{- $labels := mergeOverwrite (deepCopy ($profile.defaults.nodeLabels | default dict)) ($xr.spec.nodeLabels | default dict) -}}
+{{- $_ := set $labels (printf "%s/geo" $profile.tagDomain) ($xr.spec.geo | default $profile.defaults.geo) -}}
+{{- $_ := set $labels "topology.kubernetes.io/region" ($xr.spec.region | default $profile.defaults.region) -}}
+{{- $_ := set $labels "topology.kubernetes.io/zone" ($xr.spec.zone | default $profile.defaults.zone) -}}
+{{- $labelEntries := list -}}
+{{- range ($labels | keys | sortAlpha) -}}{{- $labelEntries = append $labelEntries (printf "%s=%s" . (get $labels .)) -}}{{- end -}}
+{{- $labelArg := join "," $labelEntries -}}
+{{- $taints := $profile.defaults.taints | default list -}}
+{{- if hasKey $xr.spec "taints" -}}{{- $taints = $xr.spec.taints -}}{{- end -}}
+{{- $taintArg := "" -}}{{- if $taints -}}{{- $taintArg = printf "--register-with-taints=%s" (join "," $taints) -}}{{- end -}}
+{{- $request := dict "uid" $uid "spec" (dict "address" $xr.spec.address "hostname" $hostname "ssh" $ssh "installation" $profile.installation)
   "context" (dict "namespace" $namespace "cluster" $profile.clusterName "provider" $profile.kubeProviderConfigName
     "workloadProvider" ($profile.workloadKubeProviderConfigName | default "") "podPrefix" ($profile.ipv6PodCidrPrefix | default "")) -}}
 {{- $requestJSON := $request | toJson -}}
@@ -183,6 +196,11 @@ const TEMPLATE = String.raw`
 {{- range $index, $resource := $profile.enrollment -}}
 {{- $manifest := $resource | toJson | replace "\"NEBULA_HOSTNAME\"" ($hostname | toJson) | replace "\"NEBULA_ADDRESS\"" ($xr.spec.address | toJson) | fromJson -}}
 {{- $key := index (list "pool" "remote-template" "bootstrap-template" "worker") $index -}}
+{{- if eq $key "pool" -}}{{- $_ := set $manifest.spec.machine "port" $ssh.port -}}{{- end -}}
+{{- if eq $key "bootstrap-template" -}}
+{{- $args := $manifest.spec.template.spec.args -}}
+{{- $_ := set $manifest.spec.template.spec "args" (list (index $args 0 | replace "NEBULA_LABELS" $labelArg) (index $args 1 | replace "NEBULA_TAINT_ARGS" $taintArg)) -}}
+{{- end -}}
 {{- $readiness := dict -}}
 {{- $gate := and $osReady $admissionReady -}}
 {{- if eq $key "worker" -}}

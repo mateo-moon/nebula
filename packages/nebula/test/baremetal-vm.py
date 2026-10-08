@@ -1,6 +1,6 @@
 """Opt-in destructive test restricted to a newly created disposable QEMU disk.
 
-python3 -B test/ssh-baremetal-vm.py --artifacts /path/to/verified-debian-netboot
+python3 -B test/baremetal-vm.py --artifacts /path/to/verified-debian-netboot
 The directory must contain `linux` and `initrd.gz` matching the pins below.
 Installs once from netboot, then tests the actual SSH -> kexec -> reinstall flow.
 """
@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 import time
 
-fixtures = runpy.run_path(str(Path(__file__).with_name("ssh-baremetal-runtime.py")))
+fixtures = runpy.run_path(str(Path(__file__).with_name("baremetal-runtime.py")))
 installer = fixtures["installer"]
 BASE = "https://deb.debian.org/debian/dists/trixie/main/installer-amd64/current/images/netboot/debian-installer/amd64/"
 PINS = {"linux": "2b2358b37674d2505350528875bb17afae2a36522a9e8a9417eaca65a7da0e08",
@@ -27,7 +27,7 @@ PINS = {"linux": "2b2358b37674d2505350528875bb17afae2a36522a9e8a9417eaca65a7da0e
 
 @contextmanager
 def evidence_directory():
-    root = Path(tempfile.mkdtemp(prefix="nebula-ssh-baremetal-vm-"))
+    root = Path(tempfile.mkdtemp(prefix="nebula-baremetal-vm-"))
     try:
         yield root
     except BaseException:
@@ -83,7 +83,7 @@ def run_test(artifacts):
         ssh = ["ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=yes",
                "-o", "HostKeyAlias=" + spec["hostname"], "-o", "UserKnownHostsFile=" + str(root / "known_hosts"),
                "-o", "GlobalKnownHostsFile=/dev/null", "-i", str(root / "worker-key"), "-p", str(port), "root@127.0.0.1"]
-        here = Path(__file__).resolve().parents[1] / "src/modules/infra/baremetal"
+        here = Path(__file__).resolve().parents[1] / "src/modules/infra/k0s/baremetal"
         agent = (here / "installer.py").read_text() + "\n" + (here / "host.py").read_text()
 
         def call(action, uid, **extra):

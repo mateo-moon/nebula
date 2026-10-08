@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluate } from "@marcbachmann/cel-js";
-import { SshBaremetalFleet, SshBaremetalSetup, type SshBaremetalSetupOptions } from "../src/modules/infra/baremetal";
+import { BaremetalFleet, BaremetalSetup, baremetalWorker, type BaremetalSetupOptions } from "../src/modules/infra/k0s/baremetal";
 
-const options: SshBaremetalSetupOptions = {
+const options: BaremetalSetupOptions = {
   clusterName: "test", k0sVersion: "v1.36.3+k0s.2", sshSecretName: "worker-ssh", tagDomain: "example.test",
   namespace: "clusters", image: "registry.example.test/provisioner@sha256:" + "3".repeat(64),
   trustOnFirstUse: true, defaults: { geo: "eu", region: "dc1", zone: "dc1" },
@@ -21,7 +21,7 @@ const options: SshBaremetalSetupOptions = {
     disk: { minSizeGiB: 32 }, rootSizeGiB: 16, volumeGroup: "worker-vg",
   },
 };
-const dir = mkdtempSync(join(tmpdir(), "ssh-baremetal-template-"));
+const dir = mkdtempSync(join(tmpdir(), "baremetal-worker-template-"));
 const binary = join(dir, "render");
 execFileSync("go", ["build", "-o", binary, "."], {
   cwd: fileURLToPath(new URL("./support/oidc-template", import.meta.url)),
@@ -30,10 +30,10 @@ execFileSync("go", ["build", "-o", binary, "."], {
 after(() => rmSync(dir, { recursive: true, force: true }));
 function setup(o = options) {
   const chart = Testing.chart();
-  new SshBaremetalSetup(chart, "setup", o);
-  new SshBaremetalFleet(chart, "fleet").addHost("192.0.2.10");
+  new BaremetalSetup(chart, "setup", o);
+  new BaremetalFleet(chart, "fleet").addNode("192.0.2.10");
   const resources = Testing.synth(chart);
-  const xr = resources.find(r => r.kind === "XSshBaremetalHost")!;
+  const xr = resources.find(r => r.kind === "XBaremetalWorker")!;
   xr.metadata.uid = "request-123";
   return { resources, xr, template: resources.find(r => r.kind === "Composition")!.spec.pipeline[0].input.inline.template };
 }
@@ -47,7 +47,7 @@ function render(observed: Record<string, any> = {}, xr = fixture.xr, template = 
 const key = (r: any) => r.metadata?.annotations?.["gotemplating.fn.crossplane.io/composition-resource-name"];
 const named = (rs: any[], name: string) => rs.find(r => key(r) === name);
 const native = (rs: any[], name: string) => named(rs, name)?.spec.forProvider.manifest;
-const status = (rs: any[]) => rs.find(r => r.kind === "XSshBaremetalHost")!.status;
+const status = (rs: any[]) => rs.find(r => r.kind === "XBaremetalWorker")!.status;
 function observe(rs: any[]): Record<string, any> {
   return Object.fromEntries(rs.filter(r => r.kind === "Object").map(r => [key(r), { resource: { ...structuredClone(r),
     status: { ...structuredClone(healthy), atProvider: { manifest: structuredClone(r.spec.forProvider.manifest) } },
@@ -63,19 +63,65 @@ function installed(template = fixture.template, xr = fixture.xr): Record<string,
   return observed;
 }
 
-test("IP-only XR follows Setup/Composition pattern with immutable identity and pinned revision", () => {
-  assert.deepEqual(fixture.xr.spec, { address: "192.0.2.10", crossplane: { compositionRef: { name: "ssh-baremetal" }, compositionUpdatePolicy: "Manual" } });
+test("the baremetal worker XR follows Setup/Composition with immutable identity and pinned revision", () => {
+  assert.deepEqual(fixture.xr.spec, { address: "192.0.2.10", crossplane: { compositionRef: { name: "baremetal-worker" }, compositionUpdatePolicy: "Manual" } });
   assert.equal(fixture.xr.metadata.namespace, undefined);
   assert.equal(fixture.resources.filter(r => r.kind === "CompositeResourceDefinition").length, 1);
-  assert.ok(!fixture.resources.some(r => ["Deployment", "CustomResourceDefinition", "SshBaremetalHost"].includes(r.kind)));
+  assert.ok(!fixture.resources.some(r => ["Deployment", "CustomResourceDefinition"].includes(r.kind)));
   const schema = fixture.resources.find(r => r.kind === "CompositeResourceDefinition")!.spec.versions[0].schema.openAPIV3Schema;
   assert.deepEqual(schema.properties.spec.required, ["address"]);
   const pattern = new RegExp(schema.properties.spec.properties.address.pattern);
   assert.ok(pattern.test("192.0.2.10"));
   for (const value of ["256.1.2.3", "01.2.3.4", "2001:db8::1", "1.2.3.4;reboot"]) assert.ok(!pattern.test(value));
   assert.match(schema.properties.spec["x-kubernetes-validations"][0].rule, /oldSelf.address/);
-  const fleet = new SshBaremetalFleet(Testing.chart(), "fleet");
-  fleet.addHost("192.0.2.10"); assert.throws(() => fleet.addHost("192.0.2.10"), /duplicate/);
+  const fleet = new BaremetalFleet(Testing.chart(), "fleet");
+  fleet.addNode("192.0.2.10"); assert.throws(() => fleet.addNode("192.0.2.10"), /duplicate/);
+  for (const field of ["hostname", "sshUser", "sshPort"])
+    assert.ok(schema.properties.spec["x-kubernetes-validations"].some((rule: any) => rule.message === `${field} is immutable`));
+});
+
+test("named workers carry their settings through OS installation and deferred CAPI enrollment", () => {
+  const shared = setup({ ...options, defaults: { ...options.defaults,
+    nodeLabels: { workload: "shared", inherited: "yes" }, taints: ["workload=shared:NoSchedule"] } });
+  const chart = Testing.chart();
+  baremetalWorker(chart, { compositionName: "baremetal-worker" }, {
+    name: "worker-1", address: "192.0.2.10", sshUser: "admin", sshPort: 2222,
+    geo: "us", region: "dc2", zone: "dc2-a", nodeLabels: { workload: "guest", empty: "", marker: "NEBULA_TAINT_ARGS" }, taints: ["workload=guest:NoSchedule"],
+  });
+  const xr = Testing.synth(chart)[0]; xr.metadata.uid = "named-worker-request";
+  const initial = render({}, xr, shared.template);
+  assert.equal(native(initial, "pool"), undefined);
+  const request = JSON.parse(native(initial, "request").data["request.json"]);
+  assert.equal(request.spec.hostname, "worker-1"); assert.equal(request.spec.ssh.user, "admin"); assert.equal(request.spec.ssh.port, 2222);
+  const final = render(installed(shared.template, xr), xr, shared.template);
+  const pool = native(final, "pool"); assert.equal(pool.metadata.name, "worker-1"); assert.equal(pool.spec.pool, "worker-1");
+  assert.equal(pool.spec.machine.user, "root"); assert.equal(pool.spec.machine.port, 2222); assert.equal(pool.spec.machine.sshKeyRef.name, "worker-ssh");
+  const config = native(final, "bootstrap-template").spec.template.spec;
+  assert.equal(config.useSystemHostname, true);
+  const labels = Object.fromEntries(config.args[0].slice("--labels=".length).split(",").map((entry: string) => entry.split("=")));
+  assert.deepEqual(labels, { "example.test/geo": "us", "topology.kubernetes.io/region": "dc2", "topology.kubernetes.io/zone": "dc2-a",
+    workload: "guest", inherited: "yes", empty: "", marker: "NEBULA_TAINT_ARGS" });
+  assert.match(config.args[1], /--register-with-taints=workload=guest:NoSchedule/);
+  const machine = native(final, "worker"); assert.equal(machine.metadata.name, "worker-1");
+  assert.deepEqual(machine.spec.rollout.strategy.rollingUpdate, { maxSurge: 0, maxUnavailable: 1 });
+  assert.equal(machine.spec.template.spec.deletion.nodeDrainTimeoutSeconds, 300);
+  const changedLabels = { ...xr, spec: { ...xr.spec, nodeLabels: { workload: "updated" }, taints: [] }, status: status(final) };
+  const updated = render(installed(shared.template, xr), changedLabels, shared.template);
+  assert.equal(native(updated, "state").data.requestHash, native(final, "state").data.requestHash);
+  assert.match(native(updated, "bootstrap-template").spec.template.spec.args[0], /workload=updated/);
+  assert.doesNotMatch(native(updated, "bootstrap-template").spec.template.spec.args[1], /--register-with-taints/);
+});
+
+test("a maximum-length worker hostname keeps its identity within native Job name limits", () => {
+  const chart = Testing.chart();
+  const name = "worker-" + "a".repeat(56);
+  baremetalWorker(chart, {}, { name, address: "192.0.2.11" });
+  const xr = Testing.synth(chart)[0]; xr.metadata.uid = "long-hostname-request";
+  const first = render({}, xr);
+  assert.ok(native(first, "install").metadata.name.length <= 63);
+  const final = render(installed(fixture.template, xr), xr);
+  assert.equal(native(final, "pool").metadata.name, name);
+  assert.equal(status(final).hostname, name);
 });
 
 test("initial graph has a bounded Job, private mounts, exact progress permissions and no enrollment", () => {
@@ -215,10 +261,10 @@ test("unsafe installation inputs fail before producing resources", () => {
     (o: any) => { o.ipv6PodCidrPrefix = "2001:db8::"; },
   ]) {
     const invalid = structuredClone(options); mutate(invalid);
-    assert.throws(() => new SshBaremetalSetup(Testing.chart(), "invalid", invalid), /SSH baremetal/);
+    assert.throws(() => new BaremetalSetup(Testing.chart(), "invalid", invalid), /Baremetal worker/);
   }
 });
 
 test("actual Python installer and finite Job restart qualification", () => {
-  execFileSync("python3", ["-B", fileURLToPath(new URL("./ssh-baremetal-runtime.py", import.meta.url))], { stdio: "pipe" });
+  execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-runtime.py", import.meta.url))], { stdio: "pipe" });
 });

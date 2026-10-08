@@ -136,14 +136,14 @@ test("the packed host reconciliation accessors can read all five lazy assets", (
   assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), [true, true, true, true, true]);
 });
 
-test("the packed SSH provisioner can load its Python runtime assets", () => {
+test("the packed baremetal setup can load its Python runtime assets", () => {
   const entry = join(consumer, "baremetal-scripts.mjs");
   writeFileSync(entry, `import { createRequire } from "node:module";
-    import { SshBaremetalSetup } from "nebula-cdk8s";
+    import { BaremetalSetup } from "nebula-cdk8s";
     const require = createRequire(import.meta.url);
     const { Testing } = createRequire(require.resolve("nebula-cdk8s"))("cdk8s");
     const chart = Testing.chart();
-    new SshBaremetalSetup(chart, "provisioner", {
+    new BaremetalSetup(chart, "provisioner", {
       namespace: "default", image: "registry.example.test/provisioner@sha256:" + "3".repeat(64), clusterName: "test", k0sVersion: "v1.36.3+k0s.2", sshSecretName: "worker-ssh", tagDomain: "example.test",
       trustOnFirstUse: true, defaults: { geo: "eu", region: "dc1", zone: "dc1" },
       installation: { suite: "trixie", mirror: { hostname: "deb.debian.org", directory: "/debian" },
