@@ -65,7 +65,7 @@ index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..22acdca9161058f755d0927ebe2baf4b
      let endorsement_key = tss::EndorsementKey::new(&tpm_manager)?;
      let (message_buffer, message_buffer_name) =
 diff --git a/nitro-tpm-attest/src/main.rs b/nitro-tpm-attest/src/main.rs
-index 9bcbfc41f57c181826d33f448f1508b71953a906..2d3eb343932e1beca3858fa114ada74d24f59527 100644
+index 9bcbfc41f57c181826d33f448f1508b71953a906..9cbb78d05d52a10baefec47ea5816de2ffb6e0cc 100644
 --- a/nitro-tpm-attest/src/main.rs
 +++ b/nitro-tpm-attest/src/main.rs
 @@ -1,5 +1,6 @@
@@ -85,7 +85,7 @@ index 9bcbfc41f57c181826d33f448f1508b71953a906..2d3eb343932e1beca3858fa114ada74d
  }
  
  fn main() -> anyhow::Result<()> {
-@@ -22,8 +26,18 @@ fn main() -> anyhow::Result<()> {
+@@ -22,8 +26,30 @@ fn main() -> anyhow::Result<()> {
      let nonce = arguments.nonce.map(std::fs::read).transpose()?;
      let public_key = arguments.public_key.map(std::fs::read).transpose()?;
  
@@ -100,9 +100,21 @@ index 9bcbfc41f57c181826d33f448f1508b71953a906..2d3eb343932e1beca3858fa114ada74d
 +    } else {
 +        tss_esapi::structures::Auth::default()
 +    };
-+    let attestation_document = nitro_tpm_attest::attestation_document_with_owner_auth(
++    let attestation_document = match nitro_tpm_attest::attestation_document_with_owner_auth(
 +        user_data, nonce, public_key, owner_auth,
-+    )?;
++    ) {
++        Ok(document) => document,
++        // Only fixed process exit categories cross the collector boundary.
++        // Never print an upstream error chain, authorization or request bytes.
++        Err(error) => std::process::exit(match error {
++            nitro_tpm_attest::Error::EndorsementKey(_) => 64,
++            nitro_tpm_attest::Error::MessageBuffer(_) => 65,
++            nitro_tpm_attest::Error::NsmRequest(_) => 66,
++            nitro_tpm_attest::Error::Tss(_) => 67,
++            nitro_tpm_attest::Error::NsmErrorResponse(_) => 68,
++            nitro_tpm_attest::Error::InvalidNsmResponse => 69,
++        }),
++    };
  
      std::io::Write::write_all(&mut std::io::stdout(), &attestation_document)?;
  

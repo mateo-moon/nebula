@@ -1,4 +1,5 @@
 use super::*;
+use crate::startup::{Stage, at};
 use std::{path::Path, sync::Arc};
 
 /// The channel key belongs to this process. The caller fixes claims from
@@ -56,22 +57,50 @@ impl Collector {
     /// Only public evidence is returned. Private channel keys, TPM owner auth
     /// and authority state are never accepted as arguments or written to files.
     pub async fn collect(&self, nonce: [u8; 32]) -> Result<Evidence> {
+        let result = self.collect_inner(nonce).await;
+        if let Err(error) = &result {
+            crate::startup::report_evidence(error);
+        }
+        result
+    }
+
+    async fn collect_inner(&self, nonce: [u8; 32]) -> Result<Evidence> {
         let path = Path::new("/run/nebula/evidence");
-        crate::require_memory_directory(path)?;
-        let public = self.identity.key.public_key_to_der()?;
-        let request = report_data(&nonce, &self.claims, &public)?;
-        let (report, vlek) = local_snp(request).await?;
-        let binding = serde_json::to_vec(&Binding {
-            claims: self.claims.clone(),
-            snp_sha256: hex(Sha256::digest(&report)),
-        })?;
-        ensure!(binding.len() <= 1024, "identity binding too large");
-        let request = NitroRequest::new(nonce, public, binding)?;
-        let output = if let Some(source) = &self.nitro {
-            source.document(request).await?
-        } else {
-            tokio::task::spawn_blocking(move || request.document(None)).await??
-        };
+        at(
+            Stage::EvidenceEnvironment,
+            crate::require_memory_directory(path),
+        )?;
+        let public = at(
+            Stage::EvidenceBinding,
+            self.identity.key.public_key_to_der(),
+        )?;
+        let request = at(
+            Stage::EvidenceBinding,
+            report_data(&nonce, &self.claims, &public),
+        )?;
+        let (report, vlek) = at(Stage::SnpReport, local_snp(request).await)?;
+        let binding = at(
+            Stage::EvidenceBinding,
+            serde_json::to_vec(&Binding {
+                claims: self.claims.clone(),
+                snp_sha256: hex(Sha256::digest(&report)),
+            }),
+        )?;
+        let request = at(
+            Stage::EvidenceBinding,
+            NitroRequest::new(nonce, public, binding),
+        )?;
+        let output = at(
+            Stage::NitroEvidence,
+            if let Some(source) = &self.nitro {
+                source.document(request).await
+            } else {
+                at(
+                    Stage::NitroEvidence,
+                    tokio::task::spawn_blocking(move || request.document(None)).await,
+                )?
+            },
+        )?;
         Ok(Evidence {
             nitro: STANDARD.encode(output),
             snp: STANDARD.encode(report),
@@ -86,22 +115,37 @@ impl Collector {
 async fn local_snp(request: [u8; 64]) -> Result<(Vec<u8>, Vec<u8>)> {
     tokio::task::spawn_blocking(move || {
         use sev::firmware::{guest::Firmware, host::CertType};
-        let (report, certificates) = Firmware::open()?
+        let (report, certificates) = at(Stage::SnpDevice, Firmware::open())?
             .get_ext_report(Some(1), Some(request), Some(0))
-            .map_err(|_| anyhow::anyhow!("local SNP evidence unavailable"))?;
+            .map_err(|error| {
+                use sev::error::{UserApiError, VmmError};
+                let stage = match &error {
+                    UserApiError::VmmError(VmmError::RateLimitRetryRequest) => {
+                        Stage::SnpRateLimited
+                    }
+                    UserApiError::VmmError(VmmError::InvalidCertificatePageLength)
+                    | UserApiError::ApiError(_) => Stage::SnpCertificateBuffer,
+                    UserApiError::FirmwareError(_) => Stage::SnpFirmware,
+                    _ => Stage::SnpReport,
+                };
+                anyhow::Error::from(error).context(stage)
+            })?;
         ensure!(report.len() == 1184, "invalid local SNP report");
-        let certificates = certificates.context("SNP endorsement missing")?;
-        ensure!(certificates.len() <= 8, "too many SNP certificates");
+        let certificates = certificates.context(Stage::SnpEndorsement)?;
+        ensure!(certificates.len() <= 8, Stage::SnpEndorsement);
         let vlek: Vec<_> = certificates
             .into_iter()
             .filter(|cert| cert.cert_type == CertType::VLEK)
             .collect();
         ensure!(
             vlek.len() == 1 && vlek[0].data.len() <= MAX_CERTIFICATE,
-            "unique VLEK required"
+            Stage::SnpEndorsement
         );
-        let cert = X509::from_der(&vlek[0].data).or_else(|_| X509::from_pem(&vlek[0].data))?;
-        Ok((report, cert.to_der()?))
+        let cert = at(
+            Stage::SnpEndorsement,
+            X509::from_der(&vlek[0].data).or_else(|_| X509::from_pem(&vlek[0].data)),
+        )?;
+        Ok((report, at(Stage::SnpEndorsement, cert.to_der())?))
     })
     .await?
 }

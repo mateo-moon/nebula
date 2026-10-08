@@ -168,15 +168,23 @@ lost-response recovery at each certificate-rotation checkpoint. Live deployment
 also verified creation of all module IAM resources, including the guest role's
 instance-profile attachment. Both released disks were imported automatically;
 an interrupted controller resumed the active import without duplicate snapshots.
-The latest immutable authority image boots, preserves NitroTPM's existing
-system keys and starts its protected service. All three services return fresh
-NitroTPM/SNP evidence. AWS currently returns SNP report version 5, which the
-initial verifier rejected. Explicit support for that documented layout now
-passes synthetic signature/rejection tests, verification of the three captured
-hardware reports, and fresh evidence-bound TLS connections from the corrected
-external verifier. Firmware minimums and build-derived PCR pins are unchanged.
-The running candidate's older verifier still prevents peer enrollment; a new
-appliance build and full quorum/runtime/recovery acceptance remain required.
+The immutable authority image boots, preserves NitroTPM's existing system keys
+and starts its protected service. Explicit support for the documented SNP
+report version 5 passes synthetic signature/rejection tests, verification of
+three earlier captured hardware reports, and fresh evidence-bound TLS checks.
+Firmware minimums and build-derived PCR pins are unchanged.
+The rebuilt candidate also passed anonymous artifact checks and another live
+controller-interruption/import test. All three SNP-enabled authorities and their
+state volumes were created automatically. Two peers produced valid fresh evidence;
+the first peer repeatedly closed the connection during evidence collection, before
+sending its proof. A diagnostic reboot did not restore enrollment. This is a failed
+automatic installation, not quorum or runtime qualification; no authority identity
+or default catalog was approved.
+The collector now classifies SNP request/endorsement and NitroTPM collection
+failures with fixed console codes, limited to one message per minute. The patched
+attester communicates only fixed failure exit categories; error chains and request
+or authentication bytes remain suppressed. A rebuilt candidate must diagnose and
+resolve the collection failure before full quorum/runtime/recovery acceptance.
 Normal deletion of earlier failed deployments removed all owned cloud and IAM
 resources, independently verified after the finalizer completed.
 

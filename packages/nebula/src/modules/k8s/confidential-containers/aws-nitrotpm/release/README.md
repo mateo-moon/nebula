@@ -26,6 +26,10 @@ ESAPI authorization whenever the raw Nitro vendor command recreates its context.
 The guest passes it over an anonymous pipe under the journal writer's lock;
 it never resets owner authorization or places the secret in arguments, environment
 variables, logs or persistent files. Runtime guests retain empty authorization.
+Failures use fixed process exit categories for endorsement, message-buffer,
+vendor-request, TPM and response processing. The collector emits only a fixed
+SNP/Nitro failure code, at most once per minute; upstream errors and request bytes
+never reach the console. These diagnostics do not relax evidence verification.
 Builds reject any upstream change beyond that exact patch, record its digest
 with the binary's provenance, and preserve upstream license notices in the image.
 CI exercises wrong credentials and authenticated object cleanup across context

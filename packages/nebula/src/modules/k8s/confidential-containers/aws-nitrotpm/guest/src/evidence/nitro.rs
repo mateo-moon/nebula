@@ -1,6 +1,7 @@
 //! Fixed local NitroTPM collector. Owner authorization crosses an anonymous
 //! pipe only; the caller serializes it with the protected journal writer.
 use super::*;
+use crate::startup::Stage;
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -129,10 +130,20 @@ impl NitroRequest {
             ensure!(
                 start.elapsed() <= Duration::from_secs(10)
                     && output.metadata()?.len() <= MAX_DOCUMENT as u64,
-                "NitroTPM collector exceeded limits"
+                Stage::NitroTimeout
             );
             if let Some(status) = child.0.try_wait()? {
-                ensure!(status.success(), "NitroTPM evidence unavailable");
+                if !status.success() {
+                    let stage = match status.code() {
+                        Some(64) => Stage::NitroEndorsement,
+                        Some(65) => Stage::NitroBuffer,
+                        Some(66) => Stage::NitroRequest,
+                        Some(67) => Stage::NitroTss,
+                        Some(68 | 69) => Stage::NitroResponse,
+                        _ => Stage::NitroEvidence,
+                    };
+                    return Err(anyhow::anyhow!("NitroTPM evidence unavailable").context(stage));
+                }
                 break;
             }
             thread::sleep(Duration::from_millis(10));
@@ -183,11 +194,44 @@ mod tests {
         let failure = request
             .execute(memory.path(), Some(&[b'B'; 32]), &program)
             .unwrap_err();
-        assert_eq!(failure.to_string(), "NitroTPM evidence unavailable");
+        assert!(failure.downcast_ref::<Stage>().is_some());
+        assert!(!format!("{failure:#}").contains("BBBBBBBB"));
         std::fs::write(&program, "#!/bin/sh\n/usr/bin/head -c 32769 /dev/zero\n").unwrap();
         assert!(request.execute(memory.path(), None, &program).is_err());
         assert_eq!(std::fs::read_dir(memory.path()).unwrap().count(), 1);
         assert!(NitroRequest::new([0; 32], vec![0; 1025], vec![0]).is_err());
         assert!(NitroRequest::new([0; 32], vec![0], vec![]).is_err());
+    }
+
+    #[test]
+    fn classified_collector_exits_remain_failures_and_discard_output() {
+        let memory = tempfile::tempdir().unwrap();
+        let program = memory.path().join("attester");
+        let request = NitroRequest::new([1; 32], vec![2; 32], vec![3; 32]).unwrap();
+        for (code, expected) in [
+            (64, "nitro-endorsement"),
+            (65, "nitro-buffer"),
+            (66, "nitro-request"),
+            (67, "nitro-tss"),
+            (68, "nitro-response"),
+            (69, "nitro-response"),
+            (70, "nitro-evidence"),
+        ] {
+            std::fs::write(
+                &program,
+                format!(
+                    "#!/bin/sh\nprintf private-output\nprintf private-error >&2\nexit {code}\n"
+                ),
+            )
+            .unwrap();
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let error = request.execute(memory.path(), None, &program).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                format!("NEBULA_STARTUP_FAILURE:{expected}")
+            );
+            assert!(!format!("{error:#}").contains("private-"));
+            assert_eq!(std::fs::read_dir(memory.path()).unwrap().count(), 1);
+        }
     }
 }
