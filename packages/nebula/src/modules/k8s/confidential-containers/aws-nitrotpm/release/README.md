@@ -73,6 +73,16 @@ qualification logs are not release assets.
 
 ## Firmware profile
 
+The verifier accepts the explicitly reviewed Milan SNP report versions 2, 3 and
+5 from [AMD ABI 56860 revision 1.58, section 7.3](https://www.amd.com/content/dam/amd/en/documents/developer/56860.pdf).
+Version 5 adds signed mitigation metadata without changing the report-data,
+TCB or signature offsets. Reserved fields and unsupported report versions fail
+closed; the firmware minimums, VLEK chain/signature, guest policy, VMPL, nonce,
+channel binding and exact release measurements remain mandatory. A masked chip
+identifier is allowed for VLEK, but a masked signing key is not. The mitigation
+metadata is not a substitute for the release's firmware policy or AWS platform
+maintenance.
+
 `firmware-policy.json` sets bootloader >= 3 and the conservative Milan B1
 microcode floor >= 0xA9 from AMD-SB-3002, together with SNP >= 0x1B from the 2026
 AMD-SB-3023 bulletin. This may reject Milan B2 configurations; it never silently

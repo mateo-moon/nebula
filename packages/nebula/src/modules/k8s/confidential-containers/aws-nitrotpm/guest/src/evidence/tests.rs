@@ -161,8 +161,9 @@ impl Fixture {
     fn report(&self, edit: impl FnOnce(&mut [u8])) -> Vec<u8> {
         let mut report = vec![0; 1184];
         report[..4].copy_from_slice(&2u32.to_le_bytes());
+        report[8..16].copy_from_slice(&(1u64 << 17).to_le_bytes()); // ABI-required bit
         report[52..56].copy_from_slice(&1u32.to_le_bytes());
-        report[72..76].copy_from_slice(&6u32.to_le_bytes()); // VLEK, masked chip key
+        report[72..76].copy_from_slice(&4u32.to_le_bytes()); // Signed with VLEK
         let data = report_data(
             &self.nonce,
             &self.claims,
@@ -399,6 +400,104 @@ fn genuine_signatures_cannot_excuse_unsafe_snp_state_or_firmware() {
     assert!(
         fixture
             .verify(&fixture.with_report(wrong_processor))
+            .is_err()
+    );
+}
+
+#[test]
+fn known_snp_versions_preserve_the_signed_report_layout() {
+    let fixture = Fixture::new();
+    for version in [2u32, 3, 5] {
+        let report = fixture.report(|raw| {
+            raw[..4].copy_from_slice(&version.to_le_bytes());
+            if version != 2 {
+                raw[392] = 0x19;
+                raw[393] = 1;
+                raw[394] = 2;
+                raw[64] = 0x20; // Alias-check status added in v3.
+            }
+            if version == 5 {
+                raw[11] |= 2; // PAGE_SWAP_DISABLE is defined in v5.
+                raw[64] |= 0x80; // SEV-TIO status is defined in v5.
+                raw[504..512].copy_from_slice(&1u64.to_le_bytes());
+                raw[512..520].copy_from_slice(&3u64.to_le_bytes());
+            }
+        });
+        fixture.verify(&fixture.with_report(report)).unwrap();
+    }
+}
+
+#[test]
+fn version_five_never_relaxes_identity_state_or_firmware_checks() {
+    let fixture = Fixture::new();
+    for (offset, value) in [
+        (0, 0),
+        (0, 4),
+        (0, 6),
+        (0, 255), // Unknown layouts remain unsupported.
+        (48, 1),
+        (52, 0),
+        (72, 0),
+        (72, 6),
+        (73, 1),
+        (10, 0),
+        (10, 6),
+        (10, 10),
+        (11, 4), // Policy, including its required bit.
+        (64, 0x40),
+        (65, 1), // Reserved platform flags in the v5 layout.
+        (76, 1),
+        (392, 0x1a),
+        (393, 0x10),
+        (395, 1),
+        (491, 1),
+        (495, 1),
+        (520, 1),
+        (671, 1),
+        (720, 1),
+        (792, 1),
+        (816, 1),
+        (1183, 1),
+        (56, 9),
+        (384, 9),
+        (480, 9),
+        (496, 9),
+        (62, 23),
+        (63, 159),
+        (390, 25),
+        (80, 1),
+    ] {
+        let report = fixture.report(|raw| {
+            raw[0] = 5;
+            raw[392] = 0x19;
+            raw[393] = 1;
+            raw[offset] = value;
+        });
+        assert!(
+            fixture.verify(&fixture.with_report(report)).is_err(),
+            "accepted dangerous v5 field {offset} = {value}"
+        );
+    }
+    for version in [2, 3] {
+        let report = fixture.report(|raw| {
+            raw[0] = version;
+            if version == 3 {
+                raw[392] = 0x19;
+                raw[393] = 1;
+            }
+            raw[504] = 1; // V5 fields cannot be smuggled into an older layout.
+        });
+        assert!(fixture.verify(&fixture.with_report(report)).is_err());
+    }
+    let empty_measurement = fixture.report(|raw| {
+        raw[0] = 5;
+        raw[392] = 0x19;
+        raw[393] = 1;
+        raw[144..192].fill(0);
+    });
+    assert!(
+        fixture
+            .verify(&fixture.with_report(empty_measurement))
             .is_err()
     );
 }
