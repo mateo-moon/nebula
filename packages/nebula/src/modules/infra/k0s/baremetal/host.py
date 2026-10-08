@@ -34,6 +34,8 @@ def probe(spec):
         raise ValueError("existing Kubernetes installation: refusing fresh OS installation")
     if platform.machine() != "x86_64" or not Path("/run/systemd/system").is_dir():
         raise ValueError("source host must be x86_64 Linux running systemd")
+    if spec["installation"].get("uefi"):
+        uefi_preflight(spec)
     disabled = Path("/proc/sys/kernel/kexec_load_disabled")
     if disabled.exists() and disabled.read_text().strip() != "0":
         raise ValueError("source kernel disables kexec")
@@ -168,7 +170,8 @@ def verify(payload):
     receipt = json.loads(Path("/var/lib/nebula-baremetal/installed.json").read_text())
     if receipt["uid"] != payload["uid"] or receipt["fingerprint"] != fingerprint(spec):
         raise ValueError("installed OS belongs to another request or profile")
-    if platform.node() != spec["hostname"] or receipt["sourceBootId"] == command(["cat", "/proc/sys/kernel/random/boot_id"]):
+    boot_id = command(["cat", "/proc/sys/kernel/random/boot_id"])
+    if platform.node() != spec["hostname"] or receipt["sourceBootId"] == boot_id:
         raise ValueError("installed host identity or reboot verification failed")
     os_release = dict(line.split("=", 1) for line in Path("/etc/os-release").read_text().splitlines() if "=" in line)
     if os_release.get("ID", "").strip('"') != "debian" or os_release.get("VERSION_CODENAME", "").strip('"') != spec["installation"]["suite"]:
@@ -184,7 +187,7 @@ def verify(payload):
     usable = [a for interface in addresses for a in interface.get("addr_info", []) if a.get("scope") == "global" and not a.get("tentative") and not a.get("deprecated")]
     if not any(a["family"] == "inet" for a in usable) or (spec["installation"].get("dualStack", True) and not any(a["family"] == "inet6" for a in usable)):
         raise ValueError("installed host lacks the requested node address families")
-    return {"verified": True, "addresses": [a["local"] for a in usable]}
+    return {"verified": True, "addresses": [a["local"] for a in usable], "bootId": boot_id}
 
 
 def agent_main():
@@ -196,7 +199,10 @@ def agent_main():
         raise ValueError("invalid request UID")
     validate_spec(payload["spec"])
     action = sys.argv[1]
-    result = probe(payload["spec"]) if action == "probe" else {"stage": stage, "commit": commit, "verify": verify}[action](payload)
+    result = probe(payload["spec"]) if action == "probe" else {
+        "stage": stage, "commit": commit, "verify": verify,
+        "uefi-apply": uefi_apply, "uefi-reboot": uefi_reboot, "uefi-verify": uefi_verify,
+    }[action](payload)
     print(canonical(result))
 
 
@@ -205,5 +211,6 @@ if __name__ == "__main__":
         agent_main()
     except (ValueError, KeyError, OSError, subprocess.SubprocessError, StopIteration) as error:
         # Do not print command stdout, SSH keys, payloads or a traceback.
-        print(canonical({"error": str(error) if isinstance(error, ValueError) else "host operation failed: " + type(error).__name__}))
+        print(canonical({"error": str(error) if isinstance(error, ValueError) else "host operation failed: " + type(error).__name__,
+                         "terminal": True}))
         sys.exit(1)

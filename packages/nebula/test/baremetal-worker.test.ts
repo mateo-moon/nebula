@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluate } from "@marcbachmann/cel-js";
 import { BaremetalFleet, BaremetalSetup, baremetalWorker, type BaremetalSetupOptions } from "../src/modules/infra/k0s/baremetal";
+import type { BaremetalUefiConfiguration } from "../src/modules/infra/k0s/baremetal/uefi";
 
 const options: BaremetalSetupOptions = {
   clusterName: "test", k0sVersion: "v1.36.3+k0s.2", sshSecretName: "worker-ssh", tagDomain: "example.test",
@@ -20,6 +21,12 @@ const options: BaremetalSetupOptions = {
     initrd: { url: "https://images.example.test/initrd", sha256: "2".repeat(64) },
     disk: { minSizeGiB: 32 }, rootSizeGiB: 16, volumeGroup: "worker-vg",
   },
+};
+const uefi: BaremetalUefiConfiguration = {
+  match: { boardVendor: "Fixture Vendor", boardName: "Fixture Board", biosVersion: "1.0" },
+  variables: [{ name: "Setup", guid: "00000000-0000-0000-0000-aaaaaaaaaaaa", payloadSize: 16, attributes: 7,
+    parameters: [{ name: "Enable feature", offset: 1, width: 1, value: 1, allowedValues: [0, 1, 255] }] }],
+  verification: { cpuFlags: ["sev_snp"], moduleParameters: [{ module: "kvm_amd", parameter: "sev_snp", value: "Y" }] },
 };
 const dir = mkdtempSync(join(tmpdir(), "baremetal-worker-template-"));
 const binary = join(dir, "render");
@@ -265,6 +272,44 @@ test("unsafe installation inputs fail before producing resources", () => {
   }
 });
 
+test("UEFI configuration is bound to the installation and gates CAPI publication", () => {
+  const firmware = setup({ ...options, installation: { ...options.installation, uefi } });
+  const first = render({}, firmware.xr, firmware.template);
+  assert.deepEqual(JSON.parse(native(first, "request").data["request.json"]).spec.installation.uefi, uefi);
+  assert.equal(native(first, "install").spec.activeDeadlineSeconds, native(render(), "install").spec.activeDeadlineSeconds + 900);
+  assert.ok(firmware.resources.find(r => r.kind === "ConfigMap").data["uefi.py"]);
+  const observed = installed(firmware.template, firmware.xr);
+  const osOnly = render(observed, firmware.xr, firmware.template);
+  assert.equal(status(osOnly).uefiReady, false); assert.equal(status(osOnly).osReady, false);
+  assert.equal(native(osOnly, "pool"), undefined);
+  observed.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ phase: "OSReady", uefiVerified: true });
+  const ready = render(observed, firmware.xr, firmware.template);
+  assert.equal(status(ready).uefiReady, true); assert.equal(status(ready).osReady, true); assert.ok(native(ready, "pool"));
+  const modified = structuredClone(uefi); modified.variables[0].parameters[0].value = 0;
+  const changed = setup({ ...options, installation: { ...options.installation, uefi: modified } });
+  assert.throws(() => render(observed, { ...firmware.xr, status: status(ready) }, changed.template), /installation profile changed/);
+});
+
+test("unqualified firmware layouts and unsafe parameter definitions are rejected", () => {
+  for (const mutate of [
+    (p: any) => { p.match.biosVersion = ""; }, (p: any) => { p.variables[0].guid = "../bad"; },
+    (p: any) => { p.variables[0].attributes = 39; }, (p: any) => { p.variables[0].payloadSize = 1; },
+    (p: any) => { p.variables[0].parameters[0].value = 256; },
+    (p: any) => { p.variables[0].parameters[0].allowedValues = [0]; },
+    (p: any) => { p.variables[0].parameters.push({ ...p.variables[0].parameters[0], name: "overlap" }); },
+    (p: any) => { p.variables.push(structuredClone(p.variables[0])); },
+    (p: any) => { p.verification.moduleParameters[0].module = "../module"; },
+    (p: any) => { p.rebootTimeoutSeconds = 0; },
+  ]) {
+    const invalid = structuredClone(uefi); mutate(invalid);
+    assert.throws(() => setup({ ...options, installation: { ...options.installation, uefi: invalid } }), /Baremetal UEFI/);
+  }
+});
+
 test("actual Python installer and finite Job restart qualification", () => {
   execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-runtime.py", import.meta.url))], { stdio: "pipe" });
+});
+
+test("UEFI variable transactions, firmware reboot and Job recovery qualification", () => {
+  execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-uefi.py", import.meta.url))], { stdio: "pipe" });
 });

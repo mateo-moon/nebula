@@ -84,7 +84,7 @@ def run_test(artifacts):
                "-o", "HostKeyAlias=" + spec["hostname"], "-o", "UserKnownHostsFile=" + str(root / "known_hosts"),
                "-o", "GlobalKnownHostsFile=/dev/null", "-i", str(root / "worker-key"), "-p", str(port), "root@127.0.0.1"]
         here = Path(__file__).resolve().parents[1] / "src/modules/infra/k0s/baremetal"
-        agent = (here / "installer.py").read_text() + "\n" + (here / "host.py").read_text()
+        agent = "\n".join((here / name).read_text() for name in ("installer.py", "uefi.py", "host.py"))
 
         def call(action, uid, **extra):
             result = subprocess.run(ssh + [shlex.join(["python3", "-c", agent, action])], text=True, capture_output=True, timeout=900,

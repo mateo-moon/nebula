@@ -96,7 +96,8 @@ const TEMPLATE = String.raw`
 {{- if and (eq .type "Failed") (eq .status "True") -}}{{- $jobFailed = true -}}{{- end -}}
 {{- end -}}
 {{- $bound := and (eq ($data.uid | default "") $uid) (eq ($data.requestHash | default "") $hash) -}}
-{{- $osReady := and $bound $complete (not $jobFailed) (eq ($data.verifiedRequestHash | default "") $hash)
+{{- $uefiReady := or (not $profile.installation.uefi) (and $bound (eq ($progress.uefiVerified | default false) true)) -}}
+{{- $osReady := and $bound $complete (not $jobFailed) $uefiReady (eq ($data.verifiedRequestHash | default "") $hash)
   (eq ($data.phase | default "") "OSReady") (eq (include "ready" $state) "true") (eq (include "ready" $job) "true")
   (eq (dig "spec" "providerConfigRef" "name" "" $state) $profile.kubeProviderConfigName)
   (eq (dig "spec" "providerConfigRef" "name" "" $job) $profile.kubeProviderConfigName)
@@ -132,9 +133,10 @@ const TEMPLATE = String.raw`
 {{- $mounts = append $mounts (dict "name" $key "mountPath" (printf "/etc/credentials/%s" $key) "readOnly" true) -}}
 {{- $volumes = append $volumes (dict "name" $key "secret" (dict "secretName" $secret.name "defaultMode" 288 "items" (list (dict "key" $secret.key "path" "value")))) -}}
 {{- end -}}
+{{- $uefiTimeout := 0 -}}{{- if $profile.installation.uefi -}}{{- $uefiTimeout = $profile.installation.uefi.rebootTimeoutSeconds | default 900 -}}{{- end -}}
 {{- $jobDesired := dict "apiVersion" "batch/v1" "kind" "Job"
   "metadata" (dict "name" $prefix "namespace" $namespace "annotations" (dict "baremetal.nebula.io/request-hash" $hash))
-  "spec" (dict "parallelism" 1 "completions" 1 "backoffLimit" 5 "activeDeadlineSeconds" (add $profile.installation.timeoutSeconds 2400)
+  "spec" (dict "parallelism" 1 "completions" 1 "backoffLimit" 5 "activeDeadlineSeconds" (add $profile.installation.timeoutSeconds 2400 $uefiTimeout)
     "template" (dict "spec" (dict "restartPolicy" "OnFailure" "serviceAccountName" $prefix
       "securityContext" (dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "fsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault"))
       "containers" (list (dict "name" "install" "image" $profile.image "command" (list "python3" "-B" "/opt/provisioner/runner.py")
@@ -230,6 +232,6 @@ const TEMPLATE = String.raw`
 {{- if $workerReady -}}{{- $phase = "Ready" -}}{{- end -}}
 {{- if $jobFailed -}}{{- $phase = "Failed" -}}{{- end -}}
 {{ template "emit" (dict "apiVersion" $xr.apiVersion "kind" $xr.kind "status"
-  (dict "phase" $phase "osReady" $osReady "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
+  (dict "phase" $phase "osReady" $osReady "uefiReady" $uefiReady "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
     "lastError" ($progress.lastError | default "") "requestHash" $hash "admissionPublished" $admissionPublished "enrollmentPublished" $enrollmentPublished)) }}
 `;

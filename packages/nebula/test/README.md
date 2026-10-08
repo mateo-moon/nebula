@@ -15,6 +15,9 @@ The packed-package test also needs package-registry access or a warm pnpm store.
   runtime: verified-OS gates, stale observations, retained enrollment, workload
   admission, current-generation readiness, exact progress permissions, reboot
   interruption, lost bindings, deadlines, disk selection and private payloads.
+  UEFI qualification covers hardware/layout matching, full variable backups,
+  single-write updates, immutable flags, partial-write recovery, firmware reboot
+  checkpoints and capability checks using temporary files and injected faults.
   The opt-in `python3 -B test/baremetal-vm.py --artifacts <directory>` creates
   a disposable QEMU disk and tests a real SSH/kexec reinstall. It requires QEMU,
   outbound Debian archive access, and the matching pinned `linux`/`initrd.gz`

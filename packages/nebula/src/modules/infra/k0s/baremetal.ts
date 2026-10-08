@@ -9,6 +9,7 @@ import {
 } from "#imports/apiextensions.crossplane.io";
 import { baremetalEnrollmentManifests } from "./baremetal/enrollment";
 import { baremetalWorkerTemplate } from "./baremetal/template";
+import { validateUefi, type BaremetalUefiConfiguration } from "./baremetal/uefi";
 
 /** One worker's address, with optional overrides of the shared defaults. */
 export interface BaremetalNode {
@@ -32,6 +33,8 @@ export interface BaremetalBootArtifact { url: string; sha256: string }
 
 /** Shared installation policy, independent of the server supplier. */
 export interface BaremetalInstallation {
+  /** Optional, hardware-bound UEFI settings applied and verified before k0s enrollment. */
+  uefi?: BaremetalUefiConfiguration;
   /** Debian amd64 netboot kernel and initrd, from the same installer release. */
   kernel: BaremetalBootArtifact;
   initrd: BaremetalBootArtifact;
@@ -151,6 +154,7 @@ export class BaremetalFleet extends Construct {
 }
 
 function validateInstallation(p: BaremetalInstallation): void {
+  if (p.uefi) validateUefi(p.uefi);
   for (const artifact of [p.kernel, p.initrd]) {
     const url = new URL(artifact.url);
     requireValue(url.protocol === "https:" && !url.username && !url.password && !url.hash,
@@ -192,7 +196,7 @@ export class BaremetalSetup extends Construct {
     requireValue(Boolean(o.defaults.geo && o.defaults.region && o.defaults.zone), "topology defaults are required");
     requireValue(dnsName.test(o.tagDomain), "invalid tag domain");
 
-    const scripts = Object.fromEntries(["runner.py", "installer.py", "host.py"].map(file => [file, readFileSync(new URL(`./baremetal/${file}`, import.meta.url), "utf8")]));
+    const scripts = Object.fromEntries(["runner.py", "installer.py", "uefi.py", "host.py"].map(file => [file, readFileSync(new URL(`./baremetal/${file}`, import.meta.url), "utf8")]));
     const scriptsName = `${name}-${createHash("sha256").update(JSON.stringify(scripts)).digest("hex").slice(0, 16)}`;
     new ApiObject(this, "scripts", { apiVersion: "v1", kind: "ConfigMap", metadata: {
       name: scriptsName, namespace, annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" },
@@ -240,7 +244,7 @@ export class BaremetalSetup extends Construct {
               })),
             ] },
             status: { type: "object", properties: {
-              phase: { type: "string" }, osReady: { type: "boolean" }, workerReady: { type: "boolean" },
+              phase: { type: "string" }, osReady: { type: "boolean" }, workerReady: { type: "boolean" }, uefiReady: { type: "boolean" },
               address: { type: "string" }, hostname: { type: "string" }, ipv6PodCidr: { type: "string" },
               lastError: { type: "string" }, requestHash: { type: "string" },
               admissionPublished: { type: "boolean" }, enrollmentPublished: { type: "boolean" },

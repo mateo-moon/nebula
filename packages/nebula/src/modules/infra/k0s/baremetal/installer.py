@@ -17,6 +17,63 @@ def fingerprint(spec):
     return hashlib.sha256(canonical({key: spec.get(key) for key in fields}).encode()).hexdigest()
 
 
+def validate_uefi(profile):
+    def require(ok, message):
+        if not ok:
+            raise ValueError("UEFI: " + message)
+
+    def uint(value, maximum):
+        return type(value) is int and 0 <= value <= maximum
+
+    match = profile["match"]
+    for key in ("boardVendor", "boardName", "biosVersion"):
+        require(isinstance(match.get(key), str) and re.fullmatch(r"[ -~]{1,128}", match[key]), "exact hardware/BIOS identity is required")
+    require(set(match) <= {"boardVendor", "boardName", "biosVersion", "biosVendor"}, "unknown hardware identity field")
+    require("biosVendor" not in match or re.fullmatch(r"[ -~]{1,128}", match["biosVendor"]), "invalid BIOS vendor")
+    deadline = profile.get("rebootTimeoutSeconds", 900)
+    require(uint(deadline, 7200) and deadline >= 60, "reboot deadline must be 60–7200 seconds")
+    variables = profile["variables"]
+    require(isinstance(variables, list) and 1 <= len(variables) <= 16, "declare 1–16 variables")
+    seen = set()
+    for variable in variables:
+        require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,127}", variable["name"]), "invalid variable name")
+        require(re.fullmatch(r"[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}", variable["guid"]), "invalid variable GUID")
+        key = (variable["name"], variable["guid"].lower())
+        require(key not in seen, "duplicate variable")
+        seen.add(key)
+        require(uint(variable["payloadSize"], 65536) and variable["payloadSize"] > 0 and variable["attributes"] == 7,
+                "require an exact payload size and NV/BS/RT attributes (7)")
+        require(isinstance(variable["parameters"], list) and 1 <= len(variable["parameters"]) <= 64, "declare 1–64 parameters")
+        occupied, names = set(), set()
+        for parameter in variable["parameters"]:
+            require(re.fullmatch(r"[ -~]{1,128}", parameter["name"]) and parameter["name"] not in names, "invalid or duplicate parameter name")
+            names.add(parameter["name"])
+            offset, width, desired = parameter["offset"], parameter["width"], parameter["value"]
+            require(type(width) is int and width in (1, 2, 4) and uint(offset, variable["payloadSize"])
+                    and offset + width <= variable["payloadSize"], "parameter exceeds variable payload")
+            positions = set(range(offset, offset + width))
+            require(not occupied & positions, "overlapping parameters")
+            occupied |= positions
+            maximum = 2 ** (8 * width) - 1
+            require(uint(desired, maximum), "parameter value exceeds width")
+            require(("allowedValues" in parameter) != ("range" in parameter), "declare legal values or a legal range")
+            if "allowedValues" in parameter:
+                values = parameter["allowedValues"]
+                require(isinstance(values, list) and 1 <= len(values) <= 64 and all(uint(v, maximum) for v in values)
+                        and desired in values, "invalid legal values")
+            else:
+                limits = parameter["range"]
+                require(uint(limits["min"], maximum) and uint(limits["max"], maximum)
+                        and limits["min"] <= desired <= limits["max"], "invalid legal range")
+    checks = profile.get("verification", {})
+    require(len(checks.get("cpuFlags", [])) <= 64 and len(checks.get("moduleParameters", [])) <= 64, "too many verification checks")
+    for flag in checks.get("cpuFlags", []):
+        require(re.fullmatch(r"[a-z0-9_]{1,64}", flag), "invalid CPU flag")
+    for check in checks.get("moduleParameters", []):
+        require(re.fullmatch(r"[a-zA-Z0-9_]{1,64}", check["module"]) and re.fullmatch(r"[a-zA-Z0-9_]{1,64}", check["parameter"])
+                and re.fullmatch(r"[A-Za-z0-9_,.+-]{1,128}", check["value"]), "invalid module parameter check")
+
+
 def validate_spec(spec):
     from urllib.parse import urlparse
     if ipaddress.ip_address(spec["address"]).version != 4:
@@ -29,6 +86,8 @@ def validate_spec(spec):
     if bool(ssh.get("knownHostsSecretName")) == bool(ssh.get("trustOnFirstUse")):
         raise ValueError("select pinned host keys or explicit first-use trust")
     p = spec["installation"]
+    if "uefi" in p:
+        validate_uefi(p["uefi"])
     for artifact in (p["kernel"], p["initrd"]):
         url = urlparse(artifact["url"])
         if url.scheme != "https" or not url.hostname or url.username or url.password or url.fragment:

@@ -89,7 +89,7 @@ class SSH:
         (self.directory / "known_hosts").write_text(known or "")
         self.strict = bool(known)
         here = Path(__file__).parent
-        self.agent = (here / "installer.py").read_text() + "\n" + (here / "host.py").read_text()
+        self.agent = "\n".join((here / name).read_text() for name in ("installer.py", "uefi.py", "host.py"))
 
     def public_key(self):
         return subprocess.check_output(["ssh-keygen", "-y", "-f", str(self.directory / "worker")], text=True).strip()
@@ -113,12 +113,16 @@ class SSH:
             # Host output is diagnostic, never code. Avoid exposing key paths,
             # private payloads or provider banners in status and logs.
             message = "check connectivity, privileges and host prerequisites"
+            terminal = False
             try:
                 diagnostic = json.loads(result.stdout)
                 if isinstance(diagnostic.get("error"), str):
                     message = diagnostic["error"][:512]
+                terminal = diagnostic.get("terminal") is True
             except (ValueError, AttributeError):
                 pass
+            if action.startswith("uefi-") and terminal:
+                raise ValueError("SSH " + action + " failed: " + message)
             raise RuntimeError("SSH " + action + " failed: " + message)
         self.strict = True
         return json.loads(result.stdout)
@@ -164,9 +168,18 @@ def advance(journal, ssh_factory=SSH, clock=time.time):
     if status.get("terminalError"):
         raise ValueError("installation is blocked; inspect the retained progress record")
     phase = status.get("phase", "Pending")
+    uefi = spec["installation"].get("uefi")
     if phase == "OSReady":
+        if uefi and status.get("uefiVerified") is not True:
+            raise ValueError("UEFI verification is missing; refusing enrollment")
         return True
-    if phase not in ("Pending", "Discovered", "Staged", "Installing"):
+    firmware_phases = ("ConfiguringUefi", "RebootingUefi", "VerifyingUefi")
+    if phase in firmware_phases:
+        if not uefi:
+            raise ValueError("UEFI phase has no firmware profile")
+        if clock() - status["uefiStartedAt"] > uefi.get("rebootTimeoutSeconds", 900):
+            raise ValueError("UEFI deadline exceeded; inspect firmware or power-cycle requirements")
+    elif phase not in ("Pending", "Discovered", "Staged", "Installing"):
         raise ValueError("unknown provisioning state; refusing to install")
     host = {"spec": spec, "metadata": {"uid": journal.request["uid"]}, "status": status}
     with tempfile.TemporaryDirectory(prefix="baremetal-") as directory:
@@ -200,7 +213,32 @@ def advance(journal, ssh_factory=SSH, clock=time.time):
                 return False
             if result.get("verified") is not True:
                 raise ValueError("installed OS verification did not succeed")
+            if uefi:
+                journal.save(phase="ConfiguringUefi", uefiStartedAt=clock(), installedBootId=result["bootId"], addresses=result["addresses"], lastError="")
+                return False
             journal.save(phase="OSReady", addresses=result["addresses"], lastError="")
+            return True
+        elif phase == "ConfiguringUefi":
+            result = ssh.call("uefi-apply", installed=True, expectedBootId=status["installedBootId"])
+            if result.get("configured") is not True:
+                raise ValueError("UEFI configuration did not succeed")
+            journal.save(phase="RebootingUefi" if result["changed"] else "VerifyingUefi", lastError="")
+            if result["changed"]:
+                # Both management and host journals record intent before scheduling reboot.
+                ssh.call("uefi-reboot", installed=True)
+        elif phase in ("RebootingUefi", "VerifyingUefi"):
+            try:
+                firmware = ssh.call("uefi-verify", installed=True)
+                if firmware.get("verified") is not True:
+                    if phase == "RebootingUefi":
+                        ssh.call("uefi-reboot", installed=True)
+                    return False
+                result = ssh.call("verify", installed=True)
+            except RuntimeError:
+                return False  # SSH may be unavailable during the bounded firmware reboot.
+            if result.get("verified") is not True or result["bootId"] != firmware["bootId"]:
+                raise ValueError("OS and UEFI verification are not from the same installed boot")
+            journal.save(phase="OSReady", uefiVerified=True, addresses=result["addresses"], lastError="")
             return True
     return False
 

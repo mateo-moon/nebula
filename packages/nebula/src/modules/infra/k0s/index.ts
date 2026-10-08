@@ -41,3 +41,4 @@ export type {
 
 export { BaremetalSetup, BaremetalFleet, baremetalWorker } from "./baremetal";
 export type { BaremetalSetupOptions, BaremetalInstallation, BaremetalBootArtifact, BaremetalFleetOptions, BaremetalNode } from "./baremetal";
+export type { BaremetalUefiConfiguration, BaremetalUefiVariable, BaremetalUefiParameter } from "./baremetal/uefi";

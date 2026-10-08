@@ -16,7 +16,7 @@ import installer
 
 host_agent = types.ModuleType("host_agent")
 source = Path(installer.__file__).parent
-exec(compile((source / "installer.py").read_text() + "\n" + (source / "host.py").read_text(), "host_agent", "exec"), host_agent.__dict__)
+exec(compile("\n".join((source / name).read_text() for name in ("installer.py", "uefi.py", "host.py")), "host_agent", "exec"), host_agent.__dict__)
 
 SPEC = {
     "address": "192.0.2.10", "hostname": "bm-192-0-2-10",
@@ -63,7 +63,7 @@ class FakeSSH:
         if action == "verify":
             if not self.installed:
                 raise RuntimeError("not yet installed")
-            return {"verified": True, "addresses": ["192.0.2.10", "2001:db8::10"]}
+            return {"verified": True, "addresses": ["192.0.2.10", "2001:db8::10"], "bootId": "installed-boot"}
         if action == "probe":
             return {**copy.deepcopy(FACTS), "bootId": self.original_boot}
         if action == "commit" and self.crash_commit:

@@ -3,7 +3,8 @@
 `BaremetalSetup` installs a shared `XBaremetalWorker` XRD and Composition,
 following the `WorkerSetup` / `EipDnsRecordSetup` split. `baremetalWorker` and
 `BaremetalFleet.addNode` declare one worker XR per IP. Its lifecycle discovers
-the source OS, installs the desired OS, verifies it and enrolls the worker in k0s.
+the source OS, installs the desired OS, applies optional UEFI settings, verifies
+the result and enrolls the worker in k0s.
 The shared composition contains SSH credential references, the installation
 profile and CAPI settings. This single baremetal API uses privileged SSH with
 any server supplier.
@@ -12,8 +13,10 @@ any server supplier.
 Git IP → XBaremetalWorker → Crossplane Composition
                               ├─ immutable request + durable progress ConfigMaps
                               ├─ scoped ServiceAccount / Role / RoleBinding
-                              └─ bounded SSH installation Job
-                                   ↓ verified OS + completed Job
+                              └─ bounded SSH provisioning Job
+                                   ├─ install and verify OS
+                                   └─ optional UEFI update → firmware reboot → checks
+                                   ↓ verified configuration + completed Job
                               optional workload Node admission
                                    ↓ observed policies and bindings ready
                               PooledRemoteMachine + CAPI templates/deployment
@@ -23,7 +26,7 @@ Git IP → XBaremetalWorker → Crossplane Composition
 
 The composition uses the existing `function-go-templating`, `function-auto-ready`
 and `provider-kubernetes`. There is no custom controller or cluster-wide host
-watcher. The Job only installs and verifies the OS; it has no permission to
+watcher. The Job installs the OS and verifies optional UEFI settings; it has no permission to
 create CAPI resources, update XRs, read Secrets through the API or list hosts.
 
 ## One-time setup
@@ -128,8 +131,7 @@ baremetalWorker(chart, { compositionName: "baremetal-worker" }, {
 Import `baremetalWorker` from the same package root. Node labels merge with the
 shared defaults; taints replace the shared list, including an empty list to clear
 it. The IP, hostname and source SSH overrides are immutable. Manual revision
-selection pins the profile
-for an existing host; new declarations select the latest revision. Installation
+selection pins the profile for an existing host; new declarations select the latest revision. Installation
 identity or cluster-target changes on an already bound host fail reconciliation
 without withdrawing its existing graph. Template/rollout changes remain subject
 to CAPI's rules and require an explicitly selected CompositionRevision.
@@ -155,7 +157,8 @@ That provisioner must preserve the OS root LV in the shared VG.
 
 The Job reconnects with the pinned host key and worker key, checks the request
 receipt, hostname, OS suite, node address families and free VG storage, records
-verification tied to the request hash, then exits successfully. Crossplane
+verification tied to the request hash, then exits successfully. If `installation.uefi`
+is configured, the UEFI phase below completes before that verification is published. Crossplane
 requires both that evidence and the completed Job before composing enrollment.
 Optional native Cilium admission policies and bindings must first be observed
 ready through the workload ProviderConfig. The Job never receives workload
@@ -168,6 +171,85 @@ Objects. CAPI owns the resulting Machine/RemoteMachine; it installs k0s and
 handles later remediation. No Node is precreated. XR readiness requires the
 current MachineDeployment generation, a current `MachinesReady` condition and
 the desired ready replica count. Provider polling determines observation latency.
+
+## UEFI parameters and variables
+
+Set `installation.uefi` in the shared `BaremetalSetup` profile. The variable layout
+belongs to an exact board and BIOS release. DMI matching, payload size, attributes,
+parameter bounds and legal current values are checked on the source OS before
+installation and again before the firmware update. Offsets exclude efivarfs's
+four-byte attribute header. Only existing nonvolatile variables with boot-service
+and runtime access (attributes `7`) are supported; unrelated bytes are preserved.
+
+This example describes the `AmdSetup` layout used for SEV-SNP on an ASUS
+K14PA-U12 with the qualified 2202-based firmware. Keep the exact DMI strings and
+measured payload size in the deployment's reviewed hardware profile; the offsets
+must not be reused for another BIOS layout. Values are unsigned little-endian.
+`SEV Control` is inverted: `0` enables it.
+
+```ts
+import type { BaremetalUefiConfiguration } from "nebula-cdk8s";
+
+const snpUefi: BaremetalUefiConfiguration = {
+  match: {
+    boardVendor: settings.boardVendor, // exact /sys/class/dmi/id/board_vendor
+    boardName: "K14PA-U12",
+    biosVersion: settings.qualifiedBiosVersion, // exact full release, no prefix matching
+  },
+  variables: [{
+    name: "AmdSetup",
+    guid: "3a997502-647a-4c82-998e-52ef9486a247",
+    payloadSize: settings.amdSetupPayloadSize, // measured file size minus four
+    attributes: 7,
+    parameters: [
+      { name: "SEV-ES ASID Space Limit", offset: 0x027, width: 4, value: 99, range: { min: 1, max: 1007 } },
+      { name: "SEV Control", offset: 0x02b, width: 1, value: 0, allowedValues: [0, 1] },
+      { name: "SNP Memory Coverage", offset: 0x037, width: 1, value: 1, allowedValues: [0, 1, 2, 255] },
+      { name: "SMEE", offset: 0x03d, width: 1, value: 1, allowedValues: [0, 1, 3] },
+      { name: "IOMMU", offset: 0x37d, width: 1, value: 1, allowedValues: [0, 1, 15] },
+      { name: "SEV-SNP Support", offset: 0x38f, width: 1, value: 1, allowedValues: [0, 1, 15] },
+    ],
+  }],
+  rebootTimeoutSeconds: 900,
+  verification: {
+    cpuFlags: ["sev", "sev_es", "sev_snp"],
+    moduleParameters: [{ module: "kvm_amd", parameter: "sev_snp", value: "Y" }],
+  },
+};
+// In BaremetalSetup: installation: { ...settings.installation, uefi: snpUefi }
+```
+
+After OS verification, the worker enters `ConfiguringUefi`, then `RebootingUefi`
+(or `VerifyingUefi` when every value was already set), and finally `OSReady`.
+The Job uses the installed worker credentials. It validates all variables before
+writing any, persists their full originals and desired values in the private
+`/var/lib/nebula-baremetal/uefi-operation.json`, and records an independent marker
+in the installed receipt before writing. Each changed variable receives one
+unbuffered write including the unchanged attribute header, with no truncation.
+Its original immutable flag is restored. Read-back must match immediately.
+
+A changed configuration gets a normal firmware reboot through `reboot.target`.
+A loaded kexec image is rejected. Management and local journals record intent
+before scheduling that reboot; retries may resume on the original boot but never
+schedule another reboot after a new boot is observed. Already-applied writes are
+not repeated. Verification checks the new boot, hardware identity, persistent
+parameter values, optional CPU flags on every processor, and module parameters
+on the installed kernel. Module checks load the named module with `modprobe`.
+The final OS and UEFI verification must refer to the same boot. The composition
+requires this evidence plus Job completion before exposing the pool.
+
+`status.uefiReady` reports that the configured UEFI requirements are satisfied
+(or that none were requested). Full variable backups stay on the server and
+never enter Kubernetes status or logs. Back them up with the installed receipt.
+Missing backups, unexpected bytes, partial updates across a reboot, failed
+capability checks and deadline expiry stop provisioning for inspection. There
+is no automatic rollback, variable deletion, firmware flashing or authenticated
+Secure Boot key update. A platform that requires an external power cycle must
+be recovered explicitly; the SSH workflow does not power the server off.
+
+The example maps the existing TEE enablement procedure into the generic API.
+The automated firmware flow still needs qualification on each physical BIOS
+profile; file-backed tests do not establish firmware activation on hardware.
 
 ## Scope and prerequisites
 
@@ -184,13 +266,14 @@ independence does not imply support for every boot, storage or network layout.
   and off-link IPv4 gateways need further installer profiles.
 - Existing CAPI/k0smotron, reachable control plane endpoints, CNI, peer firewall
   rules, storage operators and hardware-specific runtimes remain prerequisites.
-  The module does not alter cloud security groups, BIOS settings or SNP firmware.
+  UEFI settings use the optional hardware profile above. Cloud firewall rules
+  and firmware binary updates remain external prerequisites.
 - Optional native Node admission requires Kubernetes 1.36 in the workload
   cluster and an existing authenticated provider-kubernetes ProviderConfig.
 
 ## Retention and recovery
 
-Watch `xbaremetalworkers` status (`phase`, `osReady`, `workerReady`, `lastError`)
+Watch `xbaremetalworkers` status (`phase`, `osReady`, `uefiReady`, `workerReady`, `lastError`)
 and Crossplane conditions. The `state` Object's `status.atProvider.manifest`
 contains the progress ConfigMap: public host keys, facts and installation state.
 Back up that record, the XR/CompositionRevision and referenced credentials.
@@ -234,7 +317,11 @@ They cover deferred handoff, stale verification, observation loss, revision
 changes, current-generation readiness, scoped RBAC, restart recovery, lost
 bindings, disk ambiguity, corrupt downloads, bounded root storage and private
 archive permissions. Named workers and IP-only workers exercise the same
-installation and enrollment lifecycle.
+installation and enrollment lifecycle. `test/baremetal-uefi.py` additionally
+qualifies variable writes against temporary files with ioctl fault injection,
+including metadata preservation, immutable-flag recovery, partial updates,
+missing backups, reboot checkpoints and effective kernel checks. It never writes
+to the test runner's firmware.
 
 `test/baremetal-vm.py` is an opt-in integration test restricted to its own
 new disposable QEMU disk. It creates a source OS and exercises SSH discovery,
@@ -246,4 +333,5 @@ before using it on physical servers. No live fleet is changed by these tests.
 
 References: [provider-kubernetes v0.17.0](https://github.com/crossplane-contrib/provider-kubernetes/tree/v0.17.0),
 [Debian initrd preseeding](https://www.debian.org/releases/trixie/amd64/apbs02.en.html),
-[Debian automated installation](https://www.debian.org/releases/trixie/amd64/apbs04.en.html).
+[Debian automated installation](https://www.debian.org/releases/trixie/amd64/apbs04.en.html),
+[Linux efivarfs](https://docs.kernel.org/filesystems/efivarfs.html).
