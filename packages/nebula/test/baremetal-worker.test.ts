@@ -316,10 +316,11 @@ test("Crossplane CLI runs the pinned function pipeline with real readiness seman
   skip: !process.env.BAREMETAL_CROSSPLANE_CLI, timeout: 240_000,
 }, () => {
   const functions = [
-    ["function-go-templating", "v0.9.0"], ["function-auto-ready", "v0.4.2"],
-  ].map(([name, version]) => ({ apiVersion: "pkg.crossplane.io/v1", kind: "Function",
+    ["function-go-templating", "xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.9.0"],
+    ["function-auto-ready", "xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.4.2"],
+  ].map(([name, image]) => ({ apiVersion: "pkg.crossplane.io/v1", kind: "Function",
     metadata: { name, annotations: { "render.crossplane.io/runtime-docker-pull-policy": "IfNotPresent" } },
-    spec: { package: `xpkg.upbound.io/crossplane-contrib/${name}:${version}` },
+    spec: { package: image },
   }));
   const network = setup({ ...options, installation: { ...options.installation, uefi },
     ipv6PodCidrPrefix: "2001:db8::", workloadKubeProviderConfigName: "workload" });
