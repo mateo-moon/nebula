@@ -2,7 +2,24 @@
  * host inventory and prepares SSH access; remediation reuses that host and
  * hostname, preserving local-volume node affinity. */
 import { Construct } from "constructs";
-import { ApiObject, type ApiObjectProps } from "cdk8s";
+import {
+  MachineDeploymentV1Beta2,
+  type MachineDeploymentV1Beta2Props,
+  MachineDeploymentV1Beta2SpecRolloutStrategyType,
+  MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge,
+  MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable,
+} from "#imports/cluster.x-k8s.io";
+import {
+  PooledRemoteMachineV1Beta2,
+  type PooledRemoteMachineV1Beta2Props,
+  RemoteMachineTemplateV1Beta2,
+  type RemoteMachineTemplateV1Beta2Props,
+} from "#imports/infrastructure.cluster.x-k8s.io";
+import {
+  K0sWorkerConfigTemplateV1Beta2,
+  type K0sWorkerConfigTemplateV1Beta2Props,
+} from "#imports/bootstrap.cluster.x-k8s.io";
+import { NODE_IP_DISCOVERY_COMMANDS } from "./cluster";
 
 export interface BaremetalFleetOptions {
   /** CAPI cluster name (Machine.clusterName + cluster label). */
@@ -37,22 +54,21 @@ export interface BaremetalNode {
 }
 
 /**
- * One baremetal node: static SSH inventory + the CAPI adoption chain.
- * Mirrors AwsWorkerFleet.addCapiAdoption. Also used for deferred publication
- * after host preparation.
+ * Shared typed definitions for direct enrollment and deferred composition
+ * templates. Apply bootstrap options before the generated serializers run.
  */
-export function baremetalWorkerManifests(
+function baremetalWorkerProps(
   o: BaremetalFleetOptions,
   node: BaremetalNode,
-): ApiObjectProps[] {
-  const resources: ApiObjectProps[] = [];
+  bootstrap: { dualStack?: boolean } = {},
+) {
   const ns = o.namespace ?? "default";
   const user = node.sshUser ?? "root";
 
   // The pooled inventory entry, git-static. Pool of one, pool == node name:
   // the reservation is deterministic and CAPI's controller ownerReference
   // lands on the RemoteMachine, never on inventory.
-  resources.push({ apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2", kind: "PooledRemoteMachine",
+  const pooledMachine: PooledRemoteMachineV1Beta2Props = {
     metadata: { name: node.name, namespace: ns },
     spec: {
       pool: node.name,
@@ -64,12 +80,12 @@ export function baremetalWorkerManifests(
         sshKeyRef: { name: o.sshSecretName },
       },
     },
-  });
+  };
 
-  resources.push({ apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2", kind: "RemoteMachineTemplate",
+  const remoteMachineTemplate: RemoteMachineTemplateV1Beta2Props = {
     metadata: { name: node.name, namespace: ns },
     spec: { template: { spec: { pool: node.name } } },
-  });
+  };
 
   const labels = {
     ...node.nodeLabels,
@@ -85,12 +101,14 @@ export function baremetalWorkerManifests(
     // node NAME through DNS, which a bare host's hostname never satisfies.
     // Discovered from the default-route interface at provision time so the
     // address literal in this file stays in exactly one place (the pool).
-    "--node-ip=$(cat /run/node-ip)",
+    bootstrap.dualStack
+      ? "--node-ip=$(cat /run/node-ip),$(cat /run/node-ip6)"
+      : "--node-ip=$(cat /run/node-ip)",
     ...(node.taints?.length
       ? [`--register-with-taints=${node.taints.join(",")}`]
       : []),
   ].join(" ");
-  resources.push({ apiVersion: "bootstrap.cluster.x-k8s.io/v1beta2", kind: "K0sWorkerConfigTemplate",
+  const workerConfigTemplate: K0sWorkerConfigTemplateV1Beta2Props = {
     metadata: { name: node.name, namespace: ns },
     spec: {
       template: {
@@ -100,9 +118,11 @@ export function baremetalWorkerManifests(
           // bootstrap provider would rename the host to the randomly-suffixed
           // Machine name on every remediation.
           useSystemHostname: true,
-          preK0sCommands: [
+          preK0SCommands: [
             "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
-            `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1 > /run/node-ip'`,
+            ...(bootstrap.dualStack ? NODE_IP_DISCOVERY_COMMANDS : [
+              `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1 > /run/node-ip'`,
+            ]),
           ],
           // Labels through k0s's own --labels flag, never kubelet-extra-args'
           // --node-labels: k0s resolves that collision by dropping its
@@ -116,10 +136,10 @@ export function baremetalWorkerManifests(
         },
       },
     },
-  });
+  };
 
   const nodeLabelKey = `${o.tagDomain}/node`;
-  resources.push({ apiVersion: "cluster.x-k8s.io/v1beta2", kind: "MachineDeployment",
+  const machineDeployment: MachineDeploymentV1Beta2Props = {
     metadata: {
       name: node.name,
       namespace: ns,
@@ -131,12 +151,12 @@ export function baremetalWorkerManifests(
       selector: { matchLabels: { [nodeLabelKey]: node.name } },
       rollout: {
         strategy: {
-          type: "RollingUpdate",
+          type: MachineDeploymentV1Beta2SpecRolloutStrategyType.ROLLING_UPDATE,
           // maxSurge MUST stay 0: a surge Machine waits forever on the
           // single-entry pool.
           rollingUpdate: {
-            maxSurge: 0,
-            maxUnavailable: 1,
+            maxSurge: MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge.fromNumber(0),
+            maxUnavailable: MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable.fromNumber(1),
           },
         },
       },
@@ -168,15 +188,34 @@ export function baremetalWorkerManifests(
         },
       },
     },
-  });
-  return resources;
+  };
+  return { pooledMachine, remoteMachineTemplate, workerConfigTemplate, machineDeployment };
 }
 
+/** Serialize typed definitions for embedding in a Crossplane composition.
+ * Generated manifest() methods apply schema field names and union conversions
+ * without adding live enrollment objects to the setup chart. */
+export function baremetalWorkerManifests(
+  o: BaremetalFleetOptions,
+  node: BaremetalNode,
+  bootstrap: { dualStack?: boolean } = {},
+): readonly Record<string, unknown>[] {
+  const props = baremetalWorkerProps(o, node, bootstrap);
+  return [
+    PooledRemoteMachineV1Beta2.manifest(props.pooledMachine),
+    RemoteMachineTemplateV1Beta2.manifest(props.remoteMachineTemplate),
+    K0sWorkerConfigTemplateV1Beta2.manifest(props.workerConfigTemplate),
+    MachineDeploymentV1Beta2.manifest(props.machineDeployment),
+  ];
+}
+
+/** One prepared host: instantiate the existing typed CAPI enrollment graph. */
 export function baremetalWorker(scope: Construct, o: BaremetalFleetOptions, node: BaremetalNode): void {
-  const suffixes = ["pooled-machine", "remote-machine-template", "worker-config-template", "machine-deployment"];
-  baremetalWorkerManifests(o, node).forEach((manifest, i) => {
-    new ApiObject(scope, `${node.name}-${suffixes[i]}`, manifest);
-  });
+  const props = baremetalWorkerProps(o, node);
+  new PooledRemoteMachineV1Beta2(scope, `${node.name}-pooled-machine`, props.pooledMachine);
+  new RemoteMachineTemplateV1Beta2(scope, `${node.name}-remote-machine-template`, props.remoteMachineTemplate);
+  new K0sWorkerConfigTemplateV1Beta2(scope, `${node.name}-worker-config-template`, props.workerConfigTemplate);
+  new MachineDeploymentV1Beta2(scope, `${node.name}-machine-deployment`, props.machineDeployment);
 }
 
 /** A shared configuration for multiple externally owned worker hosts. */

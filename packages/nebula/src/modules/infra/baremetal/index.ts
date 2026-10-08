@@ -8,7 +8,6 @@ import {
   Composition, CompositionSpecMode,
 } from "#imports/apiextensions.crossplane.io";
 import { baremetalWorkerManifests, type BaremetalFleetOptions, type BaremetalNode } from "../k0s/baremetal";
-import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { sshBaremetalTemplate } from "./template";
 
 export interface BaremetalBootArtifact { url: string; sha256: string }
@@ -181,14 +180,9 @@ export class SshBaremetalSetup extends Construct {
         } } }],
       },
     });
-    const enrollment: any[] = baremetalWorkerManifests(o, {
+    const enrollment = baremetalWorkerManifests(o, {
       ...o.defaults, name: "NEBULA_HOSTNAME", address: "NEBULA_ADDRESS", sshUser: "root", sshPort: o.initialSshPort ?? 22,
-    });
-    if (o.installation.dualStack !== false) {
-      const config = enrollment.find(r => r.kind === "K0sWorkerConfigTemplate").spec.template.spec;
-      config.preK0sCommands = [config.preK0sCommands[0], ...NODE_IP_DISCOVERY_COMMANDS];
-      config.args = config.args.map((arg: string) => arg.replace("--node-ip=$(cat /run/node-ip)", "--node-ip=$(cat /run/node-ip),$(cat /run/node-ip6)"));
-    }
+    }, { dualStack: o.installation.dualStack !== false });
     this.composition = new Composition(this, "composition", {
       metadata: { name, annotations: { "argocd.argoproj.io/sync-wave": "-5" } },
       spec: { compositeTypeRef: { apiVersion: "nebula.io/v1alpha1", kind: "XSshBaremetalHost" }, mode: CompositionSpecMode.PIPELINE,
