@@ -428,3 +428,7 @@ test("actual Python installer and finite Job restart qualification", () => {
 test("UEFI variable transactions, firmware reboot and Job recovery qualification", () => {
   execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-uefi.py", import.meta.url))], { stdio: "pipe" });
 });
+
+test("isolated Python agent packaging and transport failure semantics", () => {
+  execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-transport.py", import.meta.url))], { stdio: "pipe" });
+});

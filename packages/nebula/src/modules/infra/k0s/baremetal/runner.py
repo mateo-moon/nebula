@@ -1,278 +1,302 @@
-"""A finite installation Job. Crossplane owns enrollment and all resource orchestration.
+"""Finite, journaled provisioning lifecycle. Crossplane owns enrollment.
 
-This process can read/patch only its precreated progress ConfigMap. Private keys
-are mounted Secrets; it cannot list hosts, read Secrets or create CAPI resources.
+Each handler advances at most one phase. Destructive actions are scheduled only
+following a successful journal checkpoint; a restarted Job resumes that checkpoint.
 """
+
+from __future__ import annotations
+
 import hashlib
 import json
 import os
-from pathlib import Path
-import shlex
 import ssl
 import subprocess
 import tempfile
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
+from collections.abc import Callable
+from enum import Enum
+from pathlib import Path
 
-from installer import canonical, fingerprint, validate_spec
-
-BOOTSTRAP = """set -eu
-if [ ! -d /run/systemd/system ] || [ "$(uname -m)" != x86_64 ]; then
-  printf '%s\\n' '{"error":"source host must be x86_64 Linux running systemd"}'
-  exit 1
-fi
-missing=false
-for utility in python3 ip lsblk findmnt pvs; do
-  command -v "$utility" >/dev/null 2>&1 || missing=true
-done
-if [ "$missing" = true ]; then
-  if [ -d /var/lib/k0s ] || [ -f /etc/kubernetes/kubelet.conf ]; then
-    printf '%s\\n' '{"error":"existing Kubernetes installation: refusing fresh OS installation"}'
-    exit 1
-  fi
-  if command -v apt-get >/dev/null 2>&1; then
-    DEBIAN_FRONTEND=noninteractive apt-get update >&2
-    DEBIAN_FRONTEND=noninteractive apt-get install -y python3 iproute2 util-linux lvm2 ca-certificates >&2
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y python3 iproute util-linux lvm2 ca-certificates >&2
-  else
-    printf '%s\\n' '{"error":"source needs Python 3, iproute, util-linux and LVM tools, or apt/dnf to install them"}'
-    exit 1
-  fi
-fi
-exec "$@"
-"""
+from models import JsonObject, WorkerSpec
+from runtime import ProvisioningError, RetryableError, canonical, fingerprint, json_object
+from transport import SSH, Kubernetes, KubernetesClient, SshClient
+from validation import validate_spec
 
 
-class Kubernetes:
-    def __init__(self, server, context, token=None):
-        self.server, self.context, self.token = server.rstrip("/"), context, token
-        parsed = urllib.parse.urlparse(server)
-        if parsed.scheme != "https" or parsed.username or parsed.password:
-            raise ValueError("Kubernetes endpoint must use verified HTTPS")
-
-    def request(self, method, path, value=None, content_type="application/merge-patch+json"):
-        headers = {"Accept": "application/json"}
-        if self.token:
-            headers["Authorization"] = "Bearer " + self.token()
-        if value is not None:
-            headers["Content-Type"] = content_type
-        request = urllib.request.Request(self.server + path, headers=headers, method=method,
-                                         data=None if value is None else canonical(value).encode())
-        try:
-            with urllib.request.urlopen(request, context=self.context, timeout=30) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as error:
-            if method == "GET" and error.code == 404:
-                return None
-            # Keep raw API failure bodies out of progress records and logs.
-            raise RuntimeError(f"Kubernetes {method} failed with HTTP {error.code}") from None
+class Phase(str, Enum):
+    PENDING = "Pending"
+    DISCOVERED = "Discovered"
+    STAGED = "Staged"
+    INSTALLING = "Installing"
+    CONFIGURING_UEFI = "ConfiguringUefi"
+    REBOOTING_UEFI = "RebootingUefi"
+    VERIFYING_UEFI = "VerifyingUefi"
+    OS_READY = "OSReady"
 
 
-class SSH:
-    def __init__(self, host, directory, credentials="/etc/credentials"):
-        self.host, self.directory = host, Path(directory)
-        spec = host["spec"]
-        for local in ("initial", "worker"):
-            path = self.directory / local
-            path.write_bytes((Path(credentials) / local / "value").read_bytes())
-            path.chmod(0o600)
-        known = host.get("status", {}).get("knownHosts")
-        if host.get("status", {}).get("phase", "Pending") != "Pending" and not known:
-            raise ValueError("recorded SSH host keys are missing; restore management state")
-        if known is None and spec["ssh"].get("knownHostsSecretName"):
-            known = (Path(credentials) / "known-hosts" / "value").read_text()
-        if not (known or "").strip() and not spec["ssh"].get("trustOnFirstUse"):
-            raise ValueError("pinned known_hosts Secret is empty")
-        (self.directory / "known_hosts").write_text(known or "")
-        self.strict = bool(known)
-        here = Path(__file__).parent
-        self.agent = "\n".join((here / name).read_text() for name in ("installer.py", "uefi.py", "host.py"))
-
-    def public_key(self):
-        return subprocess.check_output(["ssh-keygen", "-y", "-f", str(self.directory / "worker")], text=True).strip()
-
-    def call(self, action, installed=False, **extra):
-        spec = self.host["spec"]
-        user = "root" if installed else spec["ssh"]["user"]
-        port = spec["ssh"]["port"]
-        args = ["ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
-                "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2",
-                "-o", "GlobalKnownHostsFile=/dev/null", "-o", "UserKnownHostsFile=" + str(self.directory / "known_hosts"),
-                "-o", "HostKeyAlias=" + spec["hostname"], "-o", "StrictHostKeyChecking=" + ("yes" if self.strict else "accept-new"),
-                "-i", str(self.directory / ("worker" if installed else "initial")), "-p", str(port), user + "@" + spec["address"]]
-        remote = ["python3", "-c", self.agent, action]
-        if action == "probe" and not installed:
-            remote = ["sh", "-c", BOOTSTRAP, "nebula-bootstrap", *remote]
-        remote = (["sudo", "-n"] if user != "root" else []) + remote
-        result = subprocess.run(args + [shlex.join(remote)], input=canonical({"spec": spec, "uid": self.host["metadata"]["uid"], **extra}),
-                                text=True, capture_output=True, timeout=900 if action in ("probe", "stage") else 45)
-        if result.returncode:
-            # Host output is diagnostic, never code. Avoid exposing key paths,
-            # private payloads or provider banners in status and logs.
-            message = "check connectivity, privileges and host prerequisites"
-            terminal = False
-            try:
-                diagnostic = json.loads(result.stdout)
-                if isinstance(diagnostic.get("error"), str):
-                    message = diagnostic["error"][:512]
-                terminal = diagnostic.get("terminal") is True
-            except (ValueError, AttributeError):
-                pass
-            if action.startswith("uefi-") and terminal:
-                raise ValueError("SSH " + action + " failed: " + message)
-            raise RuntimeError("SSH " + action + " failed: " + message)
-        self.strict = True
-        return json.loads(result.stdout)
-
-    def known_hosts(self):
-        return (self.directory / "known_hosts").read_text()
+FIRMWARE_PHASES = {Phase.CONFIGURING_UEFI, Phase.REBOOTING_UEFI, Phase.VERIFYING_UEFI}
+POLL_INTERVAL_SECONDS = 15
+SshFactory = Callable[[JsonObject, str], SshClient]
 
 
 class Journal:
-    def __init__(self, api, namespace, name, request, request_hash):
+    """Compare-and-swap progress storage bound to one immutable request."""
+
+    def __init__(
+        self,
+        api: KubernetesClient,
+        namespace: str,
+        name: str,
+        request: JsonObject,
+        request_hash: str,
+    ) -> None:
         self.api = api
         self.path = f"/api/v1/namespaces/{namespace}/configmaps/{name}"
-        self.request, self.request_hash = request, request_hash
+        self.request = request
+        self.request_hash = request_hash
         self.refresh()
 
-    def refresh(self):
-        self.resource = self.api.request("GET", self.path)
-        if not self.resource:
-            raise RuntimeError("progress ConfigMap is not available")
-        data = self.resource.get("data", {})
+    def refresh(self) -> None:
+        resource = self.api.request("GET", self.path)
+        if not resource:
+            raise RetryableError("progress ConfigMap is not available")
+        data = resource.get("data", {})
         if data.get("uid") != self.request["uid"] or data.get("requestHash") != self.request_hash:
-            raise ValueError("progress belongs to another request or profile")
-        self.status = json.loads(data.get("progress", "{}"))
+            raise ProvisioningError("progress belongs to another request or profile")
+        self.resource = resource
+        self.status = json_object(json.loads(data.get("progress", "{}")), "Progress")
 
-    def save(self, **changes):
+    def save(self, **changes: object) -> None:
         status = {**self.status, **changes}
-        data = {"progress": canonical(status), "phase": status.get("phase", "Pending")}
-        if status.get("phase") == "OSReady":
+        data = {"progress": canonical(status), "phase": status.get("phase", Phase.PENDING)}
+        if status.get("phase") == Phase.OS_READY:
             data["verifiedRequestHash"] = self.request_hash
-        # Optimistic locking: never schedule kexec if recording intent lost a race.
-        self.resource = self.api.request("PATCH", self.path, {
-            "metadata": {"resourceVersion": self.resource["metadata"]["resourceVersion"]}, "data": data})
+        resource = self.api.request(
+            "PATCH",
+            self.path,
+            {
+                "metadata": {"resourceVersion": self.resource["metadata"]["resourceVersion"]},
+                "data": data,
+            },
+        )
+        if resource is None:
+            raise RetryableError("progress checkpoint was not acknowledged")
+        self.resource = resource
         self.status = status
 
 
-def advance(journal, ssh_factory=SSH, clock=time.time):
-    spec = journal.request["spec"]
-    validate_spec(spec)
-    status = journal.status
-    current_fingerprint = fingerprint(spec)
-    if status.get("fingerprint", current_fingerprint) != current_fingerprint:
-        raise ValueError("installation identity/profile changed; restore the original request")
-    if status.get("terminalError"):
-        raise ValueError("installation is blocked; inspect the retained progress record")
-    phase = status.get("phase", "Pending")
-    uefi = spec["installation"].get("uefi")
-    if phase == "OSReady":
-        if uefi and status.get("uefiVerified") is not True:
-            raise ValueError("UEFI verification is missing; refusing enrollment")
-        return True
-    firmware_phases = ("ConfiguringUefi", "RebootingUefi", "VerifyingUefi")
-    if phase in firmware_phases:
-        if not uefi:
-            raise ValueError("UEFI phase has no firmware profile")
-        if clock() - status["uefiStartedAt"] > uefi.get("rebootTimeoutSeconds", 900):
-            raise ValueError("UEFI deadline exceeded; inspect firmware or power-cycle requirements")
-    elif phase not in ("Pending", "Discovered", "Staged", "Installing"):
-        raise ValueError("unknown provisioning state; refusing to install")
-    host = {"spec": spec, "metadata": {"uid": journal.request["uid"]}, "status": status}
-    with tempfile.TemporaryDirectory(prefix="baremetal-") as directory:
-        ssh = ssh_factory(host, directory)
-        if phase == "Pending":
+class Provisioner:
+    """Execute one resumable transition using a snapshot of the persisted state."""
+
+    def __init__(self, journal: Journal, clock: Callable[[], float] = time.time) -> None:
+        self.journal = journal
+        self.clock = clock
+        self.spec: WorkerSpec = journal.request["spec"]
+        self.status = journal.status
+        self.uefi = self.spec["installation"].get("uefi")
+        try:
+            self.phase = Phase(self.status.get("phase", Phase.PENDING))
+        except ValueError:
+            raise ProvisioningError("unknown provisioning state; refusing to install") from None
+
+    def validate_checkpoint(self) -> None:
+        validate_spec(self.spec)
+        expected = fingerprint(self.spec)
+        if self.status.get("fingerprint", expected) != expected:
+            raise ProvisioningError(
+                "installation identity/profile changed; restore the original request"
+            )
+        if self.status.get("terminalError"):
+            raise ProvisioningError("installation is blocked; inspect the retained progress record")
+        if (
+            self.phase == Phase.OS_READY
+            and self.uefi
+            and self.status.get("uefiVerified") is not True
+        ):
+            raise ProvisioningError("UEFI verification is missing; refusing enrollment")
+        if self.phase in FIRMWARE_PHASES:
+            if not self.uefi:
+                raise ProvisioningError("UEFI phase has no firmware profile")
+            if self.clock() - self.status["uefiStartedAt"] > self.uefi.get(
+                "rebootTimeoutSeconds", 900
+            ):
+                raise ProvisioningError(
+                    "UEFI deadline exceeded; inspect firmware or power-cycle requirements"
+                )
+
+    def step(self, ssh: SshClient) -> bool:
+        handlers = {
+            Phase.PENDING: self.discover,
+            Phase.DISCOVERED: self.stage,
+            Phase.STAGED: self.start_installation,
+            Phase.INSTALLING: self.await_installation,
+            Phase.CONFIGURING_UEFI: self.configure_firmware,
+            Phase.REBOOTING_UEFI: self.await_firmware,
+            Phase.VERIFYING_UEFI: self.await_firmware,
+        }
+        return handlers[self.phase](ssh)
+
+    def discover(self, ssh: SshClient) -> bool:
+        facts = ssh.call("probe")
+        if facts.get("installed"):
+            raise ProvisioningError(
+                "existing installation receipt without management binding; restore management state"
+            )
+        self.journal.save(
+            phase=Phase.DISCOVERED,
+            fingerprint=fingerprint(self.spec),
+            facts=facts,
+            knownHosts=ssh.known_hosts(),
+        )
+        return False
+
+    def stage(self, ssh: SshClient) -> bool:
+        ssh.call("stage", facts=self.status["facts"], workerPublicKey=ssh.public_key())
+        self.journal.save(phase=Phase.STAGED)
+        return False
+
+    def start_installation(self, ssh: SshClient) -> bool:
+        # Never schedule kexec unless the management checkpoint succeeded.
+        self.journal.save(phase=Phase.INSTALLING, startedAt=self.clock())
+        ssh.call("commit")
+        return False
+
+    def resume_original_boot(self, ssh: SshClient) -> None:
+        if self.clock() - self.status["startedAt"] > self.spec["installation"].get(
+            "timeoutSeconds", 3600
+        ):
+            raise ProvisioningError(
+                "installation deadline exceeded; recovery needs inspection, never automatic reimaging"
+            )
+        try:
             facts = ssh.call("probe")
-            if facts.get("installed"):
-                raise ValueError("existing installation receipt without management binding; restore management state")
-            journal.save(phase="Discovered", fingerprint=current_fingerprint, facts=facts, knownHosts=ssh.known_hosts())
-        elif phase == "Discovered":
-            ssh.call("stage", facts=status["facts"], workerPublicKey=ssh.public_key())
-            journal.save(phase="Staged")
-        elif phase == "Staged":
-            # Persist destructive intent BEFORE scheduling kexec.
-            journal.save(phase="Installing", startedAt=clock())
+        except RetryableError:
+            return
+        # A crash between checkpoint and kexec may resume only the known source boot.
+        if facts.get("bootId") == self.status["facts"]["bootId"]:
             ssh.call("commit")
-        elif phase == "Installing":
-            try:
-                result = ssh.call("verify", installed=True)
-            except RuntimeError:
-                if clock() - status["startedAt"] > spec["installation"]["timeoutSeconds"]:
-                    raise ValueError("installation deadline exceeded; recovery needs inspection, never automatic reimaging")
-                # Recover a crash after saving intent only on the authenticated
-                # original source boot. An unknown boot is never reinstalled.
-                try:
-                    facts = ssh.call("probe")
-                except RuntimeError:
-                    return False
-                if facts.get("bootId") == status["facts"]["bootId"]:
-                    ssh.call("commit")
+
+    def await_installation(self, ssh: SshClient) -> bool:
+        try:
+            result = ssh.call("verify", installed=True)
+        except RetryableError:
+            self.resume_original_boot(ssh)
+            return False
+        if result.get("verified") is not True:
+            raise ProvisioningError("installed OS verification did not succeed")
+        if self.uefi:
+            self.journal.save(
+                phase=Phase.CONFIGURING_UEFI,
+                uefiStartedAt=self.clock(),
+                installedBootId=result["bootId"],
+                addresses=result["addresses"],
+                lastError="",
+            )
+            return False
+        self.journal.save(phase=Phase.OS_READY, addresses=result["addresses"], lastError="")
+        return True
+
+    def configure_firmware(self, ssh: SshClient) -> bool:
+        result = ssh.call(
+            "uefi-apply", installed=True, expectedBootId=self.status["installedBootId"]
+        )
+        if result.get("configured") is not True:
+            raise ProvisioningError("UEFI configuration did not succeed")
+        phase = Phase.REBOOTING_UEFI if result["changed"] else Phase.VERIFYING_UEFI
+        # Persist the next phase before a reboot can interrupt the SSH session.
+        self.journal.save(phase=phase, lastError="")
+        if result["changed"]:
+            ssh.call("uefi-reboot", installed=True)
+        return False
+
+    def await_firmware(self, ssh: SshClient) -> bool:
+        try:
+            firmware = ssh.call("uefi-verify", installed=True)
+            if firmware.get("verified") is not True:
+                if self.phase == Phase.REBOOTING_UEFI:
+                    ssh.call("uefi-reboot", installed=True)
                 return False
-            if result.get("verified") is not True:
-                raise ValueError("installed OS verification did not succeed")
-            if uefi:
-                journal.save(phase="ConfiguringUefi", uefiStartedAt=clock(), installedBootId=result["bootId"], addresses=result["addresses"], lastError="")
-                return False
-            journal.save(phase="OSReady", addresses=result["addresses"], lastError="")
-            return True
-        elif phase == "ConfiguringUefi":
-            result = ssh.call("uefi-apply", installed=True, expectedBootId=status["installedBootId"])
-            if result.get("configured") is not True:
-                raise ValueError("UEFI configuration did not succeed")
-            journal.save(phase="RebootingUefi" if result["changed"] else "VerifyingUefi", lastError="")
-            if result["changed"]:
-                # Both management and host journals record intent before scheduling reboot.
-                ssh.call("uefi-reboot", installed=True)
-        elif phase in ("RebootingUefi", "VerifyingUefi"):
-            try:
-                firmware = ssh.call("uefi-verify", installed=True)
-                if firmware.get("verified") is not True:
-                    if phase == "RebootingUefi":
-                        ssh.call("uefi-reboot", installed=True)
-                    return False
-                result = ssh.call("verify", installed=True)
-            except RuntimeError:
-                return False  # SSH may be unavailable during the bounded firmware reboot.
-            if result.get("verified") is not True or result["bootId"] != firmware["bootId"]:
-                raise ValueError("OS and UEFI verification are not from the same installed boot")
-            journal.save(phase="OSReady", uefiVerified=True, addresses=result["addresses"], lastError="")
-            return True
-    return False
+            result = ssh.call("verify", installed=True)
+        except RetryableError:
+            return False  # The persisted deadline bounds reboot connectivity loss.
+        if result.get("verified") is not True or result["bootId"] != firmware["bootId"]:
+            raise ProvisioningError("OS and UEFI verification are not from the same installed boot")
+        self.journal.save(
+            phase=Phase.OS_READY, uefiVerified=True, addresses=result["addresses"], lastError=""
+        )
+        return True
 
 
-def main():
+def advance(
+    journal: Journal, ssh_factory: SshFactory = SSH, clock: Callable[[], float] = time.time
+) -> bool:
+    provisioner = Provisioner(journal, clock)
+    provisioner.validate_checkpoint()
+    if provisioner.phase == Phase.OS_READY:
+        return True
+    host = {
+        "spec": provisioner.spec,
+        "metadata": {"uid": journal.request["uid"]},
+        "status": journal.status,
+    }
+    with tempfile.TemporaryDirectory(prefix="baremetal-") as directory:
+        return provisioner.step(ssh_factory(host, directory))
+
+
+def record_error(journal: Journal | None, error: Exception) -> bool:
+    """Record a sanitized diagnostic and return whether the operation must stop."""
+    terminal = isinstance(error, (ValueError, KeyError, TypeError))
+    message = (
+        str(error)
+        if isinstance(error, (ProvisioningError, RetryableError))
+        else type(error).__name__
+    )
+    print(canonical({"error": message}), flush=True)
+    if journal is not None:
+        try:
+            journal.save(lastError=message, terminalError=terminal)
+        except (ValueError, RuntimeError, OSError):
+            pass  # No further host work is done before a fresh checkpoint read.
+    return terminal
+
+
+def main() -> None:
     os.umask(0o077)
     raw = Path("/etc/provisioner/request.json").read_bytes()
-    request = json.loads(raw)
+    request = json_object(json.loads(raw), "Request")
     request_hash = hashlib.sha256(raw).hexdigest()
     account = Path("/var/run/secrets/kubernetes.io/serviceaccount")
     service_host = os.environ["KUBERNETES_SERVICE_HOST"]
     if ":" in service_host:
         service_host = "[" + service_host + "]"
-    server = "https://" + service_host + ":" + os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
-    api = Kubernetes(server, ssl.create_default_context(cafile=str(account / "ca.crt")), lambda: (account / "token").read_text().strip())
-    # The Job's activeDeadlineSeconds bounds the entire run, including discovery
-    # and staging; the persisted timestamp bounds the irreversible install step.
+    server = (
+        "https://" + service_host + ":" + os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
+    )
+    api = Kubernetes(
+        server,
+        ssl.create_default_context(cafile=str(account / "ca.crt")),
+        lambda: (account / "token").read_text().strip(),
+    )
+    # The Kubernetes Job deadline bounds discovery and staging as well.
     while True:
         journal = None
         try:
-            journal = Journal(api, os.environ["NAMESPACE"], os.environ["STATE_CONFIG_MAP"], request, request_hash)
+            journal = Journal(
+                api, os.environ["NAMESPACE"], os.environ["STATE_CONFIG_MAP"], request, request_hash
+            )
             if advance(journal):
                 return
-        except (ValueError, RuntimeError, KeyError, OSError, subprocess.SubprocessError) as error:
-            message = str(error) if isinstance(error, (ValueError, RuntimeError)) else type(error).__name__
-            print(canonical({"error": message}), flush=True)
-            if journal:
-                try:
-                    journal.save(lastError=message, terminalError=isinstance(error, (ValueError, KeyError)))
-                except (ValueError, RuntimeError, OSError):
-                    pass
-            if isinstance(error, (ValueError, KeyError)):
+        except (
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+            OSError,
+            subprocess.SubprocessError,
+        ) as error:
+            if record_error(journal, error):
                 raise SystemExit(1) from None
-        time.sleep(15)
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":

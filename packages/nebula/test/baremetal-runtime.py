@@ -1,81 +1,42 @@
+"""Installer and checkpoint recovery tests using isolated host fixtures."""
+
 import copy
 import gzip
-import ipaddress
 import json
-from pathlib import Path
 import subprocess
-import sys
 import tempfile
-import unittest
-from unittest.mock import patch
 import types
+import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/modules/infra/k0s/baremetal"))
-import runner
-import installer
-
-host_agent = types.ModuleType("host_agent")
-source = Path(installer.__file__).parent
-exec(compile("\n".join((source / name).read_text() for name in ("installer.py", "uefi.py", "host.py")), "host_agent", "exec"), host_agent.__dict__)
-
-SPEC = {
-    "address": "192.0.2.10", "hostname": "bm-192-0-2-10",
-    "ssh": {"user": "root", "port": 22, "secretName": "initial", "workerSecretName": "worker", "trustOnFirstUse": True},
-    "installation": {"suite": "trixie", "mirror": {"hostname": "deb.debian.org", "directory": "/debian"},
-        "kernel": {"url": "https://images.example.test/kernel", "sha256": "1" * 64},
-        "initrd": {"url": "https://images.example.test/initrd", "sha256": "2" * 64},
-        "disk": {"minSizeGiB": 32}, "rootSizeGiB": 16, "volumeGroup": "worker-vg", "timeoutSeconds": 3600, "dualStack": True},
-
-}
-FACTS = {"bootId": "source-boot", "uefi": True, "disk": {"byId": "/dev/disk/by-id/virtio-test"},
-         "network": {"mac": "02:00:00:00:00:10", "addresses": ["192.0.2.10/24", "2001:db8::10/64"],
-                     "routes": [{"destination": "0.0.0.0/0", "gateway": "192.0.2.1"}, {"destination": "::/0", "gateway": "fe80::1"}], "dns": ["192.0.2.53"]}}
-
-
-class FakeAPI:
-    def __init__(self, resource):
-        self.resource, self.actions = copy.deepcopy(resource), []
-
-    def request(self, method, path, value=None, content_type=None):
-        self.actions.append((method, path))
-        if method == "PATCH":
-            if value["metadata"]["resourceVersion"] != self.resource["metadata"]["resourceVersion"]:
-                raise RuntimeError("conflict")
-            self.resource["metadata"]["resourceVersion"] = str(int(self.resource["metadata"]["resourceVersion"]) + 1)
-            self.resource["data"].update(copy.deepcopy(value["data"]))
-        return copy.deepcopy(self.resource)
-
-
-class FakeSSH:
-    installed, crash_commit, calls, original_boot = False, False, [], "source-boot"
-
-    def __init__(self, *args):
-        pass
-
-    def public_key(self):
-        return "ssh-ed25519 AAAA"
-
-    def known_hosts(self):
-        return "bm-192-0-2-10 ssh-ed25519 AAAA\n"
-
-    def call(self, action, **kwargs):
-        self.calls.append(action)
-        if action == "verify":
-            if not self.installed:
-                raise RuntimeError("not yet installed")
-            return {"verified": True, "addresses": ["192.0.2.10", "2001:db8::10"], "bootId": "installed-boot"}
-        if action == "probe":
-            return {**copy.deepcopy(FACTS), "bootId": self.original_boot}
-        if action == "commit" and self.crash_commit:
-            raise RuntimeError("controller stopped before commit")
-        return {}
+from baremetal_fixtures import (
+    FACTS,
+    SPEC,
+    FakeAPI,
+    FakeSSH,
+    host_agent,
+    installer,
+    runner,
+    transport,
+)
 
 
 class Qualification(unittest.TestCase):
     def setUp(self):
-        FakeSSH.installed, FakeSSH.crash_commit, FakeSSH.calls, FakeSSH.original_boot = False, False, [], "source-boot"
+        FakeSSH.installed, FakeSSH.crash_commit, FakeSSH.calls, FakeSSH.original_boot = (
+            False,
+            False,
+            [],
+            "source-boot",
+        )
         self.request = {"uid": "request-123", "spec": copy.deepcopy(SPEC)}
-        self.api = FakeAPI({"metadata": {"resourceVersion": "1"}, "data": {"uid": "request-123", "requestHash": "hash-123"}})
+        self.api = FakeAPI(
+            {
+                "metadata": {"resourceVersion": "1"},
+                "data": {"uid": "request-123", "requestHash": "hash-123"},
+            }
+        )
         self.journal = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
 
     def step(self, clock=lambda: 100):
@@ -100,7 +61,12 @@ class Qualification(unittest.TestCase):
         self.assertTrue(self.step())
         self.assertEqual(FakeSSH.calls.count("stage"), 1)
         self.assertEqual(FakeSSH.calls.count("commit"), 2)
-        self.assertTrue(all(path == "/api/v1/namespaces/default/configmaps/host-state" for _, path in self.api.actions))
+        self.assertTrue(
+            all(
+                path == "/api/v1/namespaces/default/configmaps/host-state"
+                for _, path in self.api.actions
+            )
+        )
 
     def test_changed_profile_deadline_and_unknown_boot_never_reinstall(self):
         for _ in range(3):
@@ -119,6 +85,7 @@ class Qualification(unittest.TestCase):
         class InstalledSSH(FakeSSH):
             def call(self, *args, **kwargs):
                 return {"installed": {"uid": "old-request"}}
+
         with self.assertRaisesRegex(ValueError, "restore management state"):
             runner.advance(self.journal, InstalledSSH)
         for field in ("uid", "requestHash"):
@@ -130,15 +97,18 @@ class Qualification(unittest.TestCase):
         self.assertEqual(FakeSSH.calls, [])
 
     def test_concurrent_journal_update_cannot_commit(self):
-        for _ in range(2): self.step()
+        for _ in range(2):
+            self.step()
         self.api.resource["metadata"]["resourceVersion"] = "99"
-        with self.assertRaisesRegex(RuntimeError, "conflict"): self.step()
+        with self.assertRaisesRegex(RuntimeError, "conflict"):
+            self.step()
         self.assertNotIn("commit", FakeSSH.calls)
 
     def test_terminal_error_is_persisted_across_pods(self):
         self.journal.save(terminalError=True, lastError="inspection required")
         resumed = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
-        with self.assertRaisesRegex(ValueError, "blocked"): runner.advance(resumed, FakeSSH)
+        with self.assertRaisesRegex(ValueError, "blocked"):
+            runner.advance(resumed, FakeSSH)
         self.assertEqual(FakeSSH.calls, [])
 
     def test_mounted_keys_stay_private_and_pinned_trust_cannot_fall_back_to_tofu(self):
@@ -148,7 +118,9 @@ class Qualification(unittest.TestCase):
             scratch.mkdir()
             for name in ("initial", "worker", "known-hosts"):
                 (credentials / name).mkdir(parents=True)
-                (credentials / name / "value").write_text("fixture" if name != "known-hosts" else "")
+                (credentials / name / "value").write_text(
+                    "fixture" if name != "known-hosts" else ""
+                )
             host = {"spec": copy.deepcopy(SPEC), "metadata": {"uid": "request-123"}}
             host["spec"]["ssh"].pop("trustOnFirstUse")
             host["spec"]["ssh"]["knownHostsSecretName"] = "pinned"
@@ -171,12 +143,18 @@ class Qualification(unittest.TestCase):
             installer.select_disk([disk, other], {"/dev/vda", "/dev/vdb"}, policy)
         with self.assertRaises(ValueError):
             installer.select_disk([{**disk, "size": 1024}], {"/dev/vda"}, policy)
-        self.assertEqual(installer.select_disk([disk, other], set(), {**policy, "serial": "second"}), other)
+        self.assertEqual(
+            installer.select_disk([disk, other], set(), {**policy, "serial": "second"}), other
+        )
 
     def test_other_disks_cannot_be_erased_through_a_shared_volume_group(self):
-        installer.validate_volume_groups("/dev/vda", {"source": {"/dev/vda"}, "data": {"/dev/vdb"}}, "worker-vg")
+        installer.validate_volume_groups(
+            "/dev/vda", {"source": {"/dev/vda"}, "data": {"/dev/vdb"}}, "worker-vg"
+        )
         with self.assertRaisesRegex(ValueError, "shares"):
-            installer.validate_volume_groups("/dev/vda", {"source": {"/dev/vda", "/dev/vdb"}}, "worker-vg")
+            installer.validate_volume_groups(
+                "/dev/vda", {"source": {"/dev/vda", "/dev/vdb"}}, "worker-vg"
+            )
         with self.assertRaisesRegex(ValueError, "another disk"):
             installer.validate_volume_groups("/dev/vda", {"worker-vg": {"/dev/vdb"}}, "worker-vg")
 
@@ -187,8 +165,14 @@ class Qualification(unittest.TestCase):
         self.assertIn(b"Gateway=fe80::1", files["nebula/uplink.network"])
         self.assertNotIn(b"passwd -d", files["nebula/late.sh"])
         self.assertNotIn(b"partman-auto-lvm/guided_size string max", files["preseed.cfg"])
-        self.assertIn(b"chmod 0644 /target/etc/systemd/network/10-nebula.network", files["nebula/late.sh"])
-        password_lines = [line for line in files["preseed.cfg"].decode().splitlines() if line.startswith("d-i passwd/root-password")]
+        self.assertIn(
+            b"chmod 0644 /target/etc/systemd/network/10-nebula.network", files["nebula/late.sh"]
+        )
+        password_lines = [
+            line
+            for line in files["preseed.cfg"].decode().splitlines()
+            if line.startswith("d-i passwd/root-password")
+        ]
         self.assertEqual(len(password_lines), 2)
         self.assertEqual(password_lines[0].split()[-1], password_lines[1].split()[-1])
         self.assertGreater(len(password_lines[0].split()[-1]), 48)
@@ -199,15 +183,17 @@ class Qualification(unittest.TestCase):
                     target = Path(tmp) / Path(name).name
                     target.write_bytes(data)
                     subprocess.run(["sh", "-n", str(target)], check=True)
-        archive = installer.cpio({**files, "nebula/hostkeys/ssh_host_ed25519_key": b"private-test-payload"})
+        archive = installer.cpio(
+            {**files, "nebula/hostkeys/ssh_host_ed25519_key": b"private-test-payload"}
+        )
         pos, unpacked = 0, {}
         while True:
-            self.assertEqual(archive[pos:pos + 6], b"070701")
-            fields = [int(archive[pos + 6 + i * 8:pos + 14 + i * 8], 16) for i in range(13)]
+            self.assertEqual(archive[pos : pos + 6], b"070701")
+            fields = [int(archive[pos + 6 + i * 8 : pos + 14 + i * 8], 16) for i in range(13)]
             pos += 110
-            name = archive[pos:pos + fields[11] - 1].decode()
+            name = archive[pos : pos + fields[11] - 1].decode()
             pos = (pos + fields[11] + 3) // 4 * 4
-            content = archive[pos:pos + fields[6]]
+            content = archive[pos : pos + fields[6]]
             pos = (pos + fields[6] + 3) // 4 * 4
             if name == "TRAILER!!!":
                 break
@@ -218,23 +204,45 @@ class Qualification(unittest.TestCase):
         self.assertEqual(gzip.decompress(gzip.compress(archive)), archive)
 
     def test_bootstrap_shell_is_valid(self):
-        subprocess.run(["sh", "-n"], input=runner.BOOTSTRAP, text=True, check=True)
+        subprocess.run(["sh", "-n"], input=transport.BOOTSTRAP, text=True, check=True)
 
     def test_installed_storage_must_match_before_capi_handoff(self):
-        receipt = {"uid": "request-123", "fingerprint": installer.fingerprint(SPEC), "sourceBootId": "source-boot"}
-        responses = {"/var/lib/nebula-baremetal/installed.json": json.dumps(receipt),
-                     "/etc/os-release": 'ID=debian\nVERSION_CODENAME=trixie\n'}
+        receipt = {
+            "uid": "request-123",
+            "fingerprint": installer.fingerprint(SPEC),
+            "sourceBootId": "source-boot",
+        }
+        responses = {
+            "/var/lib/nebula-baremetal/installed.json": json.dumps(receipt),
+            "/etc/os-release": "ID=debian\nVERSION_CODENAME=trixie\n",
+        }
+
         def fake_path(name):
             return types.SimpleNamespace(read_text=lambda: responses[name])
+
         def command(args):
-            if args[0] == "cat": return "installed-boot"
-            if args[0] == "vgs": return str(free_bytes)
-            if args[0] == "lvs": return str(root_bytes)
+            if args[0] == "cat":
+                return "installed-boot"
+            if args[0] == "vgs":
+                return str(free_bytes)
+            if args[0] == "lvs":
+                return str(root_bytes)
             return "active"
-        addresses = [{"addr_info": [{"family": "inet", "scope": "global", "local": "192.0.2.10"},
-                                    {"family": "inet6", "scope": "global", "local": "2001:db8::10"}]}]
-        with patch.object(host_agent, "Path", fake_path), patch.object(host_agent, "command", command), \
-             patch.object(host_agent, "json_command", lambda args: addresses), patch.object(host_agent.platform, "node", lambda: SPEC["hostname"]):
+
+        addresses = [
+            {
+                "addr_info": [
+                    {"family": "inet", "scope": "global", "local": "192.0.2.10"},
+                    {"family": "inet6", "scope": "global", "local": "2001:db8::10"},
+                ]
+            }
+        ]
+        with (
+            patch.object(host_agent, "Path", fake_path),
+            patch.object(host_agent, "command", command),
+            patch.object(host_agent, "json_command", lambda args: addresses),
+            patch.object(host_agent.platform, "node", lambda: SPEC["hostname"]),
+        ):
             free_bytes, root_bytes = 16 * 1024**3, 16 * 1024**3
             self.assertTrue(host_agent.verify({"uid": "request-123", "spec": SPEC})["verified"])
             free_bytes, root_bytes = 0, 32 * 1024**3
@@ -244,15 +252,19 @@ class Qualification(unittest.TestCase):
     def test_corrupt_download_never_becomes_a_boot_artifact(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "kernel"
+
             def download(args):
                 self.assertIn("=https", args)
                 self.assertIn("--max-filesize", args)
                 Path(args[args.index("--output") + 1]).write_bytes(b"corrupt download")
-            with patch.object(host_agent, "command", download), self.assertRaisesRegex(ValueError, "checksum"):
+
+            with (
+                patch.object(host_agent, "command", download),
+                self.assertRaisesRegex(ValueError, "checksum"),
+            ):
                 host_agent.fetch_artifact(SPEC["installation"]["kernel"], destination)
             self.assertFalse(destination.exists())
             self.assertFalse(destination.with_suffix(".download").exists())
-
 
 
 if __name__ == "__main__":

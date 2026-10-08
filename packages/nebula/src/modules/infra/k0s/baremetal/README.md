@@ -342,6 +342,30 @@ migration: retain the live enrollment resources and review their ownership befor
 changing declarations. The installer refuses hosts with existing Kubernetes
 installations. Use new worker declarations for fresh, unused servers.
 
+## Python runtime
+
+The runtime uses Python 3.9+ and the standard library, with normal imports and
+explicit module boundaries:
+
+- `runner.py` implements the journal and one handler per provisioning phase.
+- `transport.py` owns authenticated SSH and Kubernetes requests and distinguishes
+  retryable transport failures from terminal host rejections.
+- `host.py` dispatches validated requests and separates disk/network discovery
+  from staging, installation commit and OS verification.
+- `installer.py` renders the Debian seed and private initramfs archive.
+- `uefi.py` owns variable updates, durable transactions and reboot verification.
+- `models.py`, `validation.py` and `runtime.py` define wire types, input validation,
+  shared errors and serialization helpers.
+- `agent.py` bundles the host modules into a temporary zipapp. The remote Python
+  process runs in isolated mode; request data stays on stdin. The private archive
+  is cleaned up when the process exits, including ordinary error exits.
+
+Persisted request, progress and receipt field names remain unchanged. CI runs
+Ruff formatting/lint checks and strict mypy checks with pinned development tools
+from `test/requirements-python.txt`; these are not runtime dependencies. Shared
+test fixtures use normal imports, and transport tests execute the packaged agent
+in an isolated subprocess without targeting a server.
+
 ## Validation
 
 Tests execute the actual Go/Sprig composition and Python installer/Job runtime.
@@ -354,6 +378,11 @@ qualifies variable writes against temporary files with ioctl fault injection,
 including metadata preservation, immutable-flag recovery, partial updates,
 missing backups, reboot checkpoints and effective kernel checks. It never writes
 to the test runner's firmware.
+
+`test/baremetal-transport.py` checks the zipapp/import boundary, cleanup, sanitized
+errors, token rotation and retryable versus terminal failures. Python checks are
+configured in `pyproject.toml` and can be run from the package directory with
+`ruff check`, `ruff format --check` and `mypy` after installing the pinned tools.
 
 The opt-in full-pipeline test uses Crossplane CLI 2.1.3 with the real
 `function-go-templating:v0.9.0` and `function-auto-ready:v0.4.2` containers:

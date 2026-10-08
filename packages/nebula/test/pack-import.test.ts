@@ -154,5 +154,6 @@ test("the packed baremetal setup can load its Python runtime assets", () => {
     const scripts = Testing.synth(chart).find(resource => resource.kind === "ConfigMap").data;
     console.log(JSON.stringify(Object.keys(scripts).sort()));
   `);
-  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), ["host.py", "installer.py", "runner.py", "uefi.py"]);
+  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)),
+    ["agent.py", "host.py", "installer.py", "models.py", "runner.py", "runtime.py", "transport.py", "uefi.py", "validation.py"]);
 });
