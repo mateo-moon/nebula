@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Testing } from "cdk8s";
 import { AWS_METADATA_NODE_IP_DISCOVERY_COMMANDS, AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 import { AwsWorkerLaunchTemplateSetup, WORKER_LAUNCH_TEMPLATE } from "../src/modules/infra/aws/worker-launch-template";
+import { assertProviderPolicies } from "./support/provider-management-policies";
 
 const dir = mkdtempSync(join(tmpdir(), "worker-template-"));
 const binary = join(dir, "render");
@@ -328,20 +329,49 @@ test("activation requires the same captured UID and external identity under this
   }
 });
 
-test("verified activation atomically detaches Argo metadata and restores ordered LT deletion", () => {
+test("verified activation detaches Argo metadata and updates retained LT metadata without recreation", () => {
   const { composite, observations } = ownedFixture();
   composite.spec.handoff = "activate";
   const result = render(observations, composite);
   const template = templateOf(result)!;
   assert.equal(statusOf(result).handoffActive, true);
   assert.equal(statusOf(result).ownershipReady, true);
-  assert.equal(template.spec.deletionPolicy, "Delete");
-  assert.deepEqual(template.spec.managementPolicies, ["Observe", "Update", "Delete", "LateInitialize"]);
+  assert.equal(template.spec.deletionPolicy, "Orphan");
+  assert.deepEqual(template.spec.managementPolicies, ["Observe", "Update", "LateInitialize"]);
+  assertProviderPolicies(result);
   for (const key of ["tracking-id", "sync-options", "compare-options", "sync-wave"])
     assert.equal(template.metadata.annotations[`argocd.argoproj.io/${key}`], "");
   assert.equal(template.metadata.annotations["crossplane.io/external-name"], undefined);
   assert.deepEqual(template.spec.forProvider.networkInterfaces[0].securityGroups, ["sg-0123456789abcdef0"]);
   assert.ok(Buffer.from(template.spec.forProvider.userData, "base64").toString().includes("--volume-ids vol-0123456789abcdef0"));
+});
+
+test("unsupported activation policies repair only the owned recorded LT identity without changing cloud fields", () => {
+  for (const mismatch of ["none", "uid", "external-name", "observed-id", "provider", "region", "name", "deleted", "foreign-owner", "different-policy"]) {
+    const { composite, owned, observations } = ownedFixture();
+    composite.spec.handoff = "activate";
+    owned.spec.deletionPolicy = "Delete";
+    owned.spec.managementPolicies = ["Observe", "Update", "Delete", "LateInitialize"];
+    owned.status.conditions[1] = { type: "Synced", status: "False", observedGeneration: 1 };
+    if (mismatch === "uid") owned.metadata.uid = "replacement";
+    if (mismatch === "external-name") owned.metadata.annotations["crossplane.io/external-name"] = "lt-aaaaaaaa";
+    if (mismatch === "observed-id") owned.status.atProvider.id = "lt-aaaaaaaa";
+    if (mismatch === "provider") owned.spec.providerConfigRef.name = "another-provider";
+    if (mismatch === "region") owned.status.atProvider.region = "us-east-1";
+    if (mismatch === "name") owned.spec.forProvider.name = "another-template";
+    if (mismatch === "deleted") owned.metadata.deletionTimestamp = "2026-10-08T00:00:00Z";
+    if (mismatch === "foreign-owner") owned.metadata.ownerReferences[0].uid = "other-xr";
+    if (mismatch === "different-policy") owned.spec.managementPolicies = ["Observe", "Update", "Delete"];
+    const before = structuredClone(owned.spec);
+    const result = render(observations, composite);
+    const repaired = templateOf(result);
+    if (mismatch === "none") {
+      assert.deepEqual(repaired.spec, { ...before, deletionPolicy: "Orphan", managementPolicies: ["Observe", "Update", "LateInitialize"] });
+      assertProviderPolicies(result);
+    } else if (repaired) assert.deepEqual(repaired.spec, before, mismatch);
+    assert.equal(statusOf(result).handoffActive, false, mismatch);
+    assert.ok(result.filter(r => r.kind !== xr.kind).every(r => r.metadata.annotations["gotemplating.fn.crossplane.io/ready"] === "False"), mismatch);
+  }
 });
 
 test("activation waits for the current LT generation even when the observer still reports an older healthy snapshot", () => {
@@ -372,7 +402,12 @@ test("missing LT reconciliation generation holds retention and activation until 
     assert.equal(statusOf(pending).ownershipReady, true);
     assert.equal(statusOf(pending).launchTemplateReady, false);
     assert.equal(statusOf(pending).handoffActive, false);
-    assert.deepEqual(templateOf(pending)!.spec, owned.spec);
+    const selected = templateOf(pending)!;
+    const record = JSON.parse(selected.metadata.annotations["nebula.io/observed-generation-repair"]);
+    assert.equal(record.phase, "pause");
+    assert.equal(selected.metadata.annotations["crossplane.io/paused"], "true");
+    assert.deepEqual(selected.spec, { ...owned.spec, deletionPolicy: "Orphan", managementPolicies: ["Observe", "LateInitialize"],
+      forProvider: { ...owned.spec.forProvider, description: record.probeDescription } });
     for (const object of pending.filter(r => r.kind === "Object" || r.kind === "LaunchTemplate"))
       assert.equal(object.metadata.annotations["gotemplating.fn.crossplane.io/ready"], "False");
     owned.status.conditions[1].observedGeneration = owned.metadata.generation;
@@ -411,4 +446,18 @@ test("node-level observed mode migrates only the selected node and preserves sna
   const disk = rendered.find(r => r.kind === "EBSVolume")!;
   assert.equal(disk.spec.forProvider.tags["example.test/backup"], undefined);
   assert.equal(disk.spec.deletionPolicy, "Orphan");
+});
+
+test("all adopted LT XRs retain their cloud binding when a workload is removed", () => {
+  for (const handoff of ["retain", "activate"] as const) {
+    const chart = Testing.chart();
+    const fleet = new AwsWorkerFleet(chart, "fleet", {
+      namePrefix: "test", clusterName: "test", k0sVersion: "v1.36.3+k0s.2", sshPublicKey: "fixture",
+      sshSecretName: "test-ssh", dataVgName: "test-vg", tagDomain: "example.test", eipPurpose: "test-worker",
+    });
+    fleet.addNode({ geo: "eu", region: "eu-central-1", az: "eu-central-1a", vpcCidr: "10.12.0.0/16", subnetCidr: "10.12.0.0/20" },
+      { name: "selected", ami: "ami-fixture", instanceType: "m6i.xlarge", nodeLabels: {}, observedIdentity: true, launchTemplateHandoff: handoff }, "test-profile");
+    const template = Testing.synth(chart).find(r => r.kind === xr.kind)!;
+    assert.equal(template.metadata.annotations["argocd.argoproj.io/sync-options"], "Prune=false,Delete=false", handoff);
+  }
 });

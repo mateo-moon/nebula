@@ -63,28 +63,58 @@ Never infer a replacement cloud binding from a missing status entry.
 
 Activate in a separate Git change by setting `handoff: "activate"`, after checking
 those statuses and retained identities. The first activation pass preserves all
-baseline cloud fields and only enables Delete (Create stays disabled on adopted
-rules), while setting the old Argo tracking, sync, compare and wave annotations
+baseline cloud fields and keeps Orphan with Observe/Update/LateInitialize,
+while setting the old Argo tracking, sync, compare and wave annotations
 to empty strings in the same Crossplane SSA operation. On Crossplane 2.1.3 and
 Argo 3.3 this transfers those fields to the composed-resource manager and ends
 raw-resource Argo tracking, while preserving the provider-owned external name.
 The function's string annotations survive go-templating 0.9.0 serialization.
 
 The next provider poll must confirm all baseline UIDs, bindings, current health,
-Delete policies and cleared annotations before `status.adoptionComplete` becomes
-true. Only then may the composition reconcile CAPA's current NAT set. This
-ordering also covers a source disappearing during adoption: its rule first gains
-Delete, and only a later reconcile omits it, so obsolete access is revoked rather
-than orphaned. The initial read-only adoption observers are then removed; a
+the supported update policies and cleared annotations before
+`status.adoptionComplete` becomes true. Only then may the composition reconcile
+CAPA's current NAT set. The initial read-only adoption observers are then removed; a
 subsequently revoked rule cannot keep readiness waiting on a missing old MR.
 
 Current addresses keep matching rule names regardless of CAPA list order.
-Rotation may reuse an existing rule whose old address disappeared; new addresses
-receive deterministic names. Once a rule has been removed, its original adoption
-name is not recreated. A newly observed NAT therefore adds a new /32 authorization
+Wanted adopted rules continue to use Observe/Update/LateInitialize and Orphan,
+so the provider can correct cloud drift without recreating the rule. When their
+source disappears, the composition first changes only the lifecycle to
+Observe/Delete and Delete, preserving every cloud field. It keeps that rule
+desired and all readiness signals false until the provider acknowledges the
+current generation. Only a subsequent reconciliation omits the rule and permits
+cloud revocation. This sequence also covers source removal during adoption.
+
+Once the delete-only policy is observed, retirement is irreversible. If CAPA
+reintroduces that address while its old rule is retiring, the old deletion must
+finish before a new rule is created. A retiring MR is never returned to the
+ordinary wanted/update lifecycle. A temporary read-only acknowledgement probe
+uses Orphan, but records and restores the delete-only retirement intent before
+omission; a deleting MR remains held until it disappears. New addresses receive deterministic hash-based names and the
+normal supported create/update/delete lifecycle. Existing names are not reused
+for different addresses; original adoption names remain permanently reserved.
+A hash collision with an adopted identity or another address holds all current
+rules and readiness false. A newly observed NAT therefore adds a new /32 authorization
 even if absent from the previous manual allowlist. Review this deliberate policy
 change before activation. Revoked source rules explicitly permit cloud Delete,
 which differs from retained data disks and worker public identities.
+
+The lifecycle phases match the installed crossplane-runtime v2.2.0 allowlist:
+Update and Delete cannot be combined without Create. Recovery of the formerly
+emitted unsupported four-action policy changes only the lifecycle to
+Observe/Update/LateInitialize and Orphan, and requires the exact saved owner,
+UID and cloud binding plus the ordinary provider/region/group/source checks.
+It cannot normalize an arbitrary policy or a different resource identity.
+
+An owned rule reporting successful reconciliation without a generation marker
+uses the bounded [acknowledgement recovery protocol](../owned-resource-acknowledgement.md).
+The composition pauses it, waits for the actual provider pause acknowledgement,
+performs a read-only description probe, and restores its exact description and
+supported lifecycle before requiring a fresh acknowledgement. All readiness and
+source reconciliation remain held throughout recovery. This covers retained
+rules and new hashed rules whose async Create callback omitted the marker.
+A validated saved retirement remains irreversible during a probe, even if the
+source returns. No paused probe can authorize a cloud update or deletion.
 
 For the rest of the fleet policy, `AwsWorkerFleetRegion.ingressRules` accepts
 native IPv4/IPv6 CIDRs and managed security-group references. Providing it,

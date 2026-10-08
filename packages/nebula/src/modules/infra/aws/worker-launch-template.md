@@ -42,8 +42,10 @@ for a ready worker. The XR exposes `status.bindingsReady` and
 its Ready/Synced conditions. An owned LT requires an explicit
 `Synced.observedGeneration` equal to its current `metadata.generation`, even
 when a provider-kubernetes observer still holds an older healthy snapshot.
-Missing legacy generation markers hold readiness and activation false while
-retention continues to preserve the complete LT spec. After a spec change,
+Missing legacy generation markers hold readiness and activation false. A
+verified owned LT can recover the provider acknowledgement through the bounded
+[pause/read-only/restore protocol](owned-resource-acknowledgement.md); retained
+cloud settings remain unchanged throughout that protocol. After a spec change,
 allow both provider poll cycles to
 propagate; verify the LT's current generation and Synced observation again
 before treating an activation as complete.
@@ -83,32 +85,50 @@ version before activating the migration.
    named resource with Orphan and no Create/Delete. Every existing cloud-spec
    field, including bootstrap bytes, remains unchanged in this stage. Missing
    resources, conflicting bindings and another controller owner fail closed.
-   The retained XR itself carries Prune/Delete=false until activation, so
-   removing its directory during the handoff cannot garbage-collect its LT MR
-   and lose the retained cloud binding.
+   The adopted XR itself carries Prune/Delete=false during and after activation,
+   so removing its directory cannot garbage-collect its LT MR and lose the
+   retained cloud binding.
 4. Verify the same LT UID and external ID have the intended XR controller
    owner, the XR reports bindings/ownership/template ready, and Argo no longer desires
    the raw LT. Then change only `launchTemplateHandoff` to `"activate"` in Git.
    Activation requires the recorded UID and binding to match the observed LT
    owned by this XR. One composed-resource apply sets all four obsolete Argo
-   tracking/sync/compare/wave annotations to empty strings and restores
-   deletionPolicy Delete plus the Delete management policy. Create stays off
-   for an adopted template. Empty tracking is unparseable by Argo's annotation
+   tracking/sync/compare/wave annotations to empty strings. The LT keeps Orphan
+   and Observe/Update/LateInitialize: neither Create nor Delete is enabled for
+   an adopted template. Empty tracking is unparseable by Argo's annotation
    tracker, so it stops treating the raw LT as application-owned; the
    composition never copies the old tracking identity or provider external ID.
    Null annotation values are invalid in go-templating v0.9.0; omission alone
    would leave the old manager's value. Do not remove or revert handoff mode
    after activation.
-5. The XR remains application-owned at wave -3. Keep foreground pruning and
-   the existing reverse-wave order: drain MachineDeployment, remove its
-   bootstrap/remote templates, then ASG, XWorker and XAwsWorkerLaunchTemplate.
-   Kubernetes foreground garbage collection waits on the LT's provider
-   finalizer, and its restored Delete policy cleans up the cloud template.
-   Leaving Orphan after activation would leak that template. Retained EIP/data
-   declarations must keep their own Prune/Delete=false protections and
+5. Keep foreground pruning and the existing reverse-wave order for disposable
+   compute: drain MachineDeployment, remove its bootstrap/remote templates,
+   then ASG and XWorker. The adopted LT XR, its managed resource and its cloud
+   template remain retained, so a later return of the same workload can use
+   the existing binding and UID ledger. Retaining launch-template metadata does
+   not retain running instances or request additional capacity. Retained EIP/data
+   declarations must also keep their own Prune/Delete=false protections and
    no-Delete cloud policies. `addEip(..., { retain: true })` emits both the cloud
    retention policy and these Argo guards so workload ownership cannot prune
    the Kubernetes binding while leaving the cloud address orphaned.
+
+The installed AWS provider v2.6.2 embeds crossplane-runtime v2.2.0, whose
+[supported policy sets](https://github.com/crossplane/crossplane-runtime/blob/v2.2.0/pkg/reconciler/managed/policies.go)
+do not permit Update and Delete together without Create. Adopted templates use
+the supported update-only lifecycle above. Fresh templates retain their normal
+declared lifecycle; this limitation does not change data-volume or address
+retention. Tests validate every generated lifecycle against the pinned upstream
+allowlist, including rejection of the formerly emitted unsupported set.
+
+For an existing XR that received that unsupported four-action policy, the
+composition can replace only its lifecycle with Orphan and
+Observe/Update/LateInitialize. This recovery requires the exact recorded MR
+UID, external binding, controller owner, name, provider and region. It preserves
+the complete previous cloud spec and holds readiness false until a real
+current-generation provider acknowledgement. An unknown policy or identity
+mismatch is not repaired automatically. If the provider then reports successful
+reconciliation without its generation marker, the same identity checks gate
+the [acknowledgement recovery protocol](owned-resource-acknowledgement.md).
 
 The handoff mechanics were checked against Crossplane v2.1.3, Argo v3.3.0,
 go-templating v0.9.0 and auto-ready v0.4.2. Local execution of the installed
