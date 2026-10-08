@@ -123,7 +123,14 @@ class Controller:
                   "observedGeneration": self.obj["metadata"]["generation"],
                   "conditions": [{"type": "Ready", "status": "True" if phase == "Ready" else "False", "reason": phase,
                                   "lastTransitionTime": transition or datetime.now(timezone.utc).isoformat()}]}
-        self.obj = self.kube.patch(self.path + "/status", {"metadata": {"resourceVersion": self.obj["metadata"]["resourceVersion"]}, "status": status})
+        # A merge patch retains omitted nested receipts, which can resurrect a
+        # retired instance/snapshot and repeatedly start a new replacement.
+        # Replace the complete status atomically; reject a stale controller's
+        # write before changing anything, including its public progress cursor.
+        self.obj = self.kube.request("PATCH", self.path + "/status", [
+            {"op": "test", "path": "/metadata/resourceVersion", "value": self.obj["metadata"]["resourceVersion"]},
+            {"op": "add", "path": "/status", "value": status},
+        ], "application/json-patch+json")
 
     def peer_config(self, cloud, values):
         path = f"/api/v1/namespaces/{self.kube.namespace}/configmaps/peer-pods-cm"

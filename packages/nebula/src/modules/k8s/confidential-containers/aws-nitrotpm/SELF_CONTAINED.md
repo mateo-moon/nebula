@@ -117,6 +117,13 @@ Git declares static CAA settings only. Discovered cloud IDs and rollout stamps
 belong to the controller, so normal GitOps reconciliation preserves them without
 requiring application-level ignore rules.
 
+Checkpoints atomically replace the status after testing its current Kubernetes
+resource version. An omitted retired instance or failed-import receipt is
+therefore actually removed; a JSON merge patch would retain those nested fields
+and restart the same replacement repeatedly. Stale writers are rejected before
+changing status, and a lost reply remains recoverable by reading the committed
+cursor on the next reconciliation.
+
 The CR finalizer first closes the runtime launch path and drains PeerPods whose
 instance tags identify this deployment, including records in workload namespaces.
 It checkpoints each exact Kubernetes UID before requesting deletion and waits
@@ -240,6 +247,16 @@ failures without exposing key bytes, boot intent or underlying error text.
 The observed hardware failure had only an unclassified code, so the corrected
 candidate still requires a fresh immutable-appliance run; no default catalog has
 been promoted.
+
+Stopping one authority instance also recovered automatically with its original
+identity and a fresh guest process key. The failed-member replacement test then
+exposed the nested merge-patch issue above: stale instance receipts survived and
+advanced the replacement generation repeatedly. The test controller was paused
+to bound allocations. Regressions reproduce the old behavior, verify removal of
+obsolete receipts across restart/lost replies, and reject stale writers. An
+isolated object in the real Kubernetes API confirms both the old merge behavior
+and the corrected atomic patch, without launching AWS resources. Replacement
+and the remaining lifecycle gates still require the corrected appliance run.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,

@@ -37,6 +37,7 @@ class KubeFixture:
         self.resources = {}
         self.deletes = []
         self.lose_delete_reply = False
+        self.lose_checkpoint_reply = False
     def get(self, path):
         if "/awsconfidentialruntimes/" in path: return copy.deepcopy(self.obj)
         if path not in self.resources: raise ApiError(404)
@@ -45,7 +46,17 @@ class KubeFixture:
         if path == "/apis/confidentialcontainers.org/v1alpha1/peerpods":
             return [copy.deepcopy(obj) for key, obj in self.resources.items() if "/peerpods/" in key]
         return [copy.deepcopy(obj) for key, obj in self.resources.items() if key.startswith(path + "/")]
-    def request(self, method, path, value):
+    def request(self, method, path, value, content_type="application/json"):
+        if method == "PATCH":
+            assert path.endswith("/status") and content_type == "application/json-patch+json"
+            assert value[0]["op"] == "test" and value[0]["path"] == "/metadata/resourceVersion"
+            if value[0]["value"] != self.obj["metadata"]["resourceVersion"]: raise ApiError(422)
+            assert len(value) == 2 and value[1]["op"] == "add" and value[1]["path"] == "/status"
+            self.patches.append((path, copy.deepcopy(value)))
+            self.obj["status"] = copy.deepcopy(value[1]["value"])
+            self.obj["metadata"]["resourceVersion"] = str(int(self.obj["metadata"]["resourceVersion"]) + 1)
+            if self.lose_checkpoint_reply: raise OSError("injected lost checkpoint reply")
+            return copy.deepcopy(self.obj)
         assert method == "DELETE"
         obj = self.resources[path]
         assert value["preconditions"] == {key: obj["metadata"][key] for key in ("uid", "resourceVersion")}
@@ -53,13 +64,60 @@ class KubeFixture:
         obj["metadata"]["deletionTimestamp"] = "2026-10-08T00:00:00Z"
         if self.lose_delete_reply: raise OSError("injected lost reply")
     def patch(self, path, value):
+        if value.get("metadata", {}).get("resourceVersion", self.obj["metadata"]["resourceVersion"]) != self.obj["metadata"]["resourceVersion"]:
+            raise ApiError(409)
         self.patches.append((path, copy.deepcopy(value)))
-        for key, update in value.items(): self.obj.setdefault(key, {}).update(copy.deepcopy(update))
+        def merge(old, update):
+            if not isinstance(update, dict): return copy.deepcopy(update)
+            result = copy.deepcopy(old) if isinstance(old, dict) else {}
+            for key, item in update.items():
+                if item is None: result.pop(key, None)
+                else: result[key] = merge(result.get(key), item)
+            return result
+        self.obj = merge(self.obj, value)
         self.obj["metadata"]["resourceVersion"] = str(int(self.obj["metadata"]["resourceVersion"]) + 1)
         return copy.deepcopy(self.obj)
 
 
 class ControllerTests(unittest.TestCase):
+    def test_checkpoint_removes_retired_instance_and_failed_import_receipts(self):
+        obj, release = fixture()
+        obj["status"] = {"cursors": {
+            "authorities": {"2": {"generation": 0, "instance": "old-instance", "volume": "old-volume", "retired": []}},
+            "imports": {"authority-image": {"attempt": 0, "snapshot": "failed-snapshot", "completion": {"ChangedBlocksCount": 9}, "completionAccepted": True}},
+        }}
+        kube = KubeFixture(obj)
+        controller = Controller(kube, "example", release, lambda: None)
+        controller.obj = kube.get(controller.path)
+        new = {"authorities": {"2": {"generation": 1, "retired": ["old-volume"], "previousPeer": "old-peer"}},
+               "imports": {"authority-image": {"attempt": 1}}}
+        controller.checkpoint("PreparingReplicaReplacement", new)
+        restarted = Controller(kube, "example", release, lambda: None)
+        restarted.obj = kube.get(restarted.path)
+        self.assertEqual(restarted.obj["status"]["cursors"], new)
+        # Later checkpoints cannot resurrect an omitted receipt after restart.
+        restarted.checkpoint("WaitingForStateVolume", restarted.obj["status"]["cursors"])
+        self.assertEqual(kube.obj["status"]["cursors"], new)
+        # Even if a successful write loses its reply, the next process reads
+        # the one committed replacement generation, not the retired instance.
+        kube.lose_checkpoint_reply = True
+        new["authorities"]["2"]["volume"] = "new-volume"
+        with self.assertRaises(OSError): restarted.checkpoint("BootstrappingAuthority", new)
+        following = Controller(kube, "example", release, lambda: None)
+        following.obj = kube.get(following.path)
+        self.assertEqual(following.obj["status"]["cursors"], new)
+
+    def test_checkpoint_refuses_a_stale_writer_without_overwriting_progress(self):
+        obj, release = fixture()
+        kube = KubeFixture(obj)
+        first = Controller(kube, "example", release, lambda: None)
+        stale = Controller(kube, "example", release, lambda: None)
+        first.obj = kube.get(first.path)
+        stale.obj = kube.get(stale.path)
+        first.checkpoint("Provisioning", {"marker": "newer"})
+        with self.assertRaises(ApiError): stale.checkpoint("Provisioning", {"marker": "older"})
+        self.assertEqual(kube.obj["status"]["cursors"], {"marker": "newer"})
+
     def test_diagnostics_never_include_error_messages_or_response_data(self):
         error = ClientError({"Error": {"Code": "AccessDenied", "Message": "private payload"}, "Credentials": "private material"}, "CreateBucket")
         self.assertEqual(reconciler.diagnostic(error), {"category": "AWS", "operation": "CreateBucket", "code": "AccessDenied"})
