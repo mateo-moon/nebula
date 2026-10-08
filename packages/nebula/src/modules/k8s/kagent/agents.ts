@@ -4,7 +4,7 @@
  *   devops-orchestrator (sonnet, memory) — front door; routes, enforces approval.
  *          ├── docs-agent     (haiku) — cluster docs; "how to" / access / runbooks.
  *          ├── k8s-inspector  (haiku) — read-only cluster inspection.
- *          └── change-author  (sonnet) — drafts changes; every mutation gated.
+ *          └── change-author  (sonnet) — drafts changes; no cluster mutation tools.
  *
  * All systemMessages are GENERIC (no cluster-specific paths/names/endpoints).
  * The per-cluster context (access method, API endpoint, deploy commands) is injected
@@ -16,7 +16,6 @@ import { ApiObject } from "cdk8s";
 import { agentTool, defineAgent, KAGENT_WAVE, mcpTool } from "./crd";
 import { ORCHESTRATOR_MODEL_CONFIG, SUBAGENT_MODEL_CONFIG } from "./models";
 import {
-  GATED_WRITE_TOOLS,
   GITHUB_GATED_TOOLS,
   GITHUB_PROPOSE_TOOLS,
   GITHUB_READ_TOOLS,
@@ -148,7 +147,7 @@ export function declareAgents(
     tools: [mcpTool(TOOL_SERVER, { toolNames: [...READ_ONLY_TOOLS] })],
   });
 
-  // ── change-author: drafts changes; mutations gated ───────────────────────────
+  // ── change-author: drafts changes; no direct cluster mutations ───────────────
   defineAgent(chart, "change-author", {
     name: "change-author",
     namespace,
@@ -157,19 +156,17 @@ export function declareAgents(
     deployment: KIND_FIX_DEPLOYMENT,
     description:
       "Drafts infrastructure and code changes. Proposes manifests/branches/PRs; " +
-      "applies only after approval. Never applies without explicit approval.",
+      "never applies changes directly to the cluster.",
     systemMessage: [
       "You are change-author, the change-drafting sub-agent.",
       "WORKFLOW: (1) understand the change; (2) inspect current state; (3) DRAFT the change",
-      "(manifest patch, branch+PR, helm values) and present it for approval; (4) only after",
-      "explicit human approval, apply/merge/upgrade.",
-      "Every mutation tool is gated (requireApproval) — that pause IS the gate; don't bypass it.",
-      "Drafting is free; applying/merging/deleting is gated. Prefer the smallest reversible change.",
+      "(manifest patch, branch+PR, helm values) and present it for review.",
+      "You have no direct Kubernetes or Helm mutation tools. Never claim to have applied a change.",
+      "Prefer the smallest reversible change.",
     ].join(" "),
     tools: [
       mcpTool(TOOL_SERVER, {
-        toolNames: [...READ_ONLY_TOOLS, ...GATED_WRITE_TOOLS],
-        requireApproval: [...GATED_WRITE_TOOLS],
+        toolNames: [...READ_ONLY_TOOLS],
       }),
       ...(opts.githubMcp
         ? [mcpTool(opts.githubMcp, {
@@ -180,7 +177,7 @@ export function declareAgents(
     ],
   });
 
-  // ── devops-orchestrator: front door — routes, enforces approval, remembers ────
+  // ── devops-orchestrator: front door — routes and remembers ────────────────────
   defineAgent(chart, "devops-orchestrator", {
     name: "devops-orchestrator",
     namespace,
@@ -192,7 +189,7 @@ export function declareAgents(
     deployment: KIND_FIX_DEPLOYMENT,
     description:
       "The DevOps engineer agent. Understands intent, routes to specialists, " +
-      "enforces propose-then-approve, reports clearly.",
+      "keeps cluster changes in reviewable drafts, and reports clearly.",
     systemMessage: [
       "You are devops-orchestrator, an autonomous DevOps engineer agent.",
       "",
@@ -212,7 +209,8 @@ export function declareAgents(
       "NEVER give generic advice. Always use the CLUSTER CONTEXT for specifics.",
       "If a cluster-wide query is too large, scope it per-namespace or fall back to kubectl commands.",
       "",
-      "PROPOSE-THEN-APPROVE: inspect freely; any change proposed first, applied only after approval.",
+      "CHANGE SAFETY: inspect freely; return cluster changes as reviewable drafts.",
+      "The delegated agents cannot apply Kubernetes or Helm mutations directly.",
       "Never fabricate state — rely on sub-agent results. Be concise.",
       "",
       "CLUSTER CONTEXT:",
