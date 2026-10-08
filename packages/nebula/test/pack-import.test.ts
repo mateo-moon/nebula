@@ -135,3 +135,19 @@ test("the packed host reconciliation accessors can read all five lazy assets", (
   `);
   assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), [true, true, true, true, true]);
 });
+
+test("the packed SSH provisioner can load its Python runtime assets", () => {
+  const entry = join(consumer, "baremetal-scripts.mjs");
+  writeFileSync(entry, `import { createRequire } from "node:module";
+    import { SshBaremetalProvisioner } from "nebula-cdk8s";
+    const require = createRequire(import.meta.url);
+    const { Testing } = createRequire(require.resolve("nebula-cdk8s"))("cdk8s");
+    const chart = Testing.chart();
+    new SshBaremetalProvisioner(chart, "provisioner", {
+      namespace: "default", image: "registry.example.test/provisioner@sha256:" + "3".repeat(64), secretNames: ["worker-ssh"],
+    });
+    const scripts = Testing.synth(chart).find(resource => resource.kind === "ConfigMap").data;
+    console.log(JSON.stringify(Object.keys(scripts).sort()));
+  `);
+  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), ["controller.py", "host.py", "installer.py"]);
+});

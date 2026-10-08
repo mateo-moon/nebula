@@ -2,17 +2,7 @@
  * host inventory and prepares SSH access; remediation reuses that host and
  * hostname, preserving local-volume node affinity. */
 import { Construct } from "constructs";
-import {
-  MachineDeploymentV1Beta2,
-  MachineDeploymentV1Beta2SpecRolloutStrategyType,
-  MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge,
-  MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable,
-} from "#imports/cluster.x-k8s.io";
-import {
-  PooledRemoteMachineV1Beta2,
-  RemoteMachineTemplateV1Beta2,
-} from "#imports/infrastructure.cluster.x-k8s.io";
-import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
+import { ApiObject, type ApiObjectProps } from "cdk8s";
 
 export interface BaremetalFleetOptions {
   /** CAPI cluster name (Machine.clusterName + cluster label). */
@@ -48,20 +38,21 @@ export interface BaremetalNode {
 
 /**
  * One baremetal node: static SSH inventory + the CAPI adoption chain.
- * Mirrors AwsWorkerFleet.addCapiAdoption.
+ * Mirrors AwsWorkerFleet.addCapiAdoption. Also used for deferred publication
+ * after host preparation.
  */
-export function baremetalWorker(
-  scope: Construct,
+export function baremetalWorkerManifests(
   o: BaremetalFleetOptions,
   node: BaremetalNode,
-): void {
+): ApiObjectProps[] {
+  const resources: ApiObjectProps[] = [];
   const ns = o.namespace ?? "default";
   const user = node.sshUser ?? "root";
 
   // The pooled inventory entry, git-static. Pool of one, pool == node name:
   // the reservation is deterministic and CAPI's controller ownerReference
   // lands on the RemoteMachine, never on inventory.
-  new PooledRemoteMachineV1Beta2(scope, `${node.name}-pooled-machine`, {
+  resources.push({ apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2", kind: "PooledRemoteMachine",
     metadata: { name: node.name, namespace: ns },
     spec: {
       pool: node.name,
@@ -75,7 +66,7 @@ export function baremetalWorker(
     },
   });
 
-  new RemoteMachineTemplateV1Beta2(scope, `${node.name}-remote-machine-template`, {
+  resources.push({ apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2", kind: "RemoteMachineTemplate",
     metadata: { name: node.name, namespace: ns },
     spec: { template: { spec: { pool: node.name } } },
   });
@@ -99,7 +90,7 @@ export function baremetalWorker(
       ? [`--register-with-taints=${node.taints.join(",")}`]
       : []),
   ].join(" ");
-  new K0sWorkerConfigTemplateV1Beta2(scope, `${node.name}-worker-config-template`, {
+  resources.push({ apiVersion: "bootstrap.cluster.x-k8s.io/v1beta2", kind: "K0sWorkerConfigTemplate",
     metadata: { name: node.name, namespace: ns },
     spec: {
       template: {
@@ -109,7 +100,7 @@ export function baremetalWorker(
           // bootstrap provider would rename the host to the randomly-suffixed
           // Machine name on every remediation.
           useSystemHostname: true,
-          preK0SCommands: [
+          preK0sCommands: [
             "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
             `sh -c 'IFACE=$(ip route show default | awk "{print \\$5}" | head -1); ip -4 addr show dev "$IFACE" scope global | awk "/inet /{print \\$2; exit}" | cut -d/ -f1 > /run/node-ip'`,
           ],
@@ -128,7 +119,7 @@ export function baremetalWorker(
   });
 
   const nodeLabelKey = `${o.tagDomain}/node`;
-  new MachineDeploymentV1Beta2(scope, `${node.name}-machine-deployment`, {
+  resources.push({ apiVersion: "cluster.x-k8s.io/v1beta2", kind: "MachineDeployment",
     metadata: {
       name: node.name,
       namespace: ns,
@@ -140,14 +131,12 @@ export function baremetalWorker(
       selector: { matchLabels: { [nodeLabelKey]: node.name } },
       rollout: {
         strategy: {
-          type: MachineDeploymentV1Beta2SpecRolloutStrategyType.ROLLING_UPDATE,
+          type: "RollingUpdate",
           // maxSurge MUST stay 0: a surge Machine waits forever on the
           // single-entry pool.
           rollingUpdate: {
-            maxSurge:
-              MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxSurge.fromNumber(0),
-            maxUnavailable:
-              MachineDeploymentV1Beta2SpecRolloutStrategyRollingUpdateMaxUnavailable.fromNumber(1),
+            maxSurge: 0,
+            maxUnavailable: 1,
           },
         },
       },
@@ -179,6 +168,14 @@ export function baremetalWorker(
         },
       },
     },
+  });
+  return resources;
+}
+
+export function baremetalWorker(scope: Construct, o: BaremetalFleetOptions, node: BaremetalNode): void {
+  const suffixes = ["pooled-machine", "remote-machine-template", "worker-config-template", "machine-deployment"];
+  baremetalWorkerManifests(o, node).forEach((manifest, i) => {
+    new ApiObject(scope, `${node.name}-${suffixes[i]}`, manifest);
   });
 }
 
