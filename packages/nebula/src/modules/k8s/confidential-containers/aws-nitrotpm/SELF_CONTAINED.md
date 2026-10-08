@@ -197,6 +197,13 @@ canary PodVM, but stable quorum health and successful encrypted Pod execution
 were not established. A diagnostic parser's reordered JSON caused a separate
 decoding error; normal production wire round trips pass without a codec change.
 
+The retained canary boot log also showed transport setup failing before policy
+activation. Its actual CAA envelope is rejected by the old positive-index check:
+the upstream allocator legitimately assigns index zero to the first pod.
+The validator now accepts zero-based indices within the VXLAN range. A synthetic
+regression reproduces the rejection before the fix; private replay of the captured
+envelope verifies the narrow correction without publishing transport credentials.
+
 A controlled test using real OpenRaft reproduces cancellation of a responding
 majority when connection latency exceeds the old five-second RPC budget. The
 revised bounded budget passes that test and still refuses an isolated leader.

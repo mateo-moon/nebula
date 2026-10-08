@@ -16,6 +16,10 @@ pub(crate) enum Stage {
     StateDisk,
     TrustRoot,
     AuthorityState,
+    TransportFilesystem,
+    TransportMetadata,
+    TransportConfiguration,
+    TransportPersist,
     TpmEnvironment,
     TpmInventory,
     BootMeasurements,
@@ -71,6 +75,10 @@ impl Stage {
             Self::StateDisk => "NEBULA_STARTUP_FAILURE:state-disk\n",
             Self::TrustRoot => "NEBULA_STARTUP_FAILURE:trust-root\n",
             Self::AuthorityState => "NEBULA_STARTUP_FAILURE:authority-state\n",
+            Self::TransportFilesystem => "NEBULA_STARTUP_FAILURE:transport-filesystem\n",
+            Self::TransportMetadata => "NEBULA_STARTUP_FAILURE:transport-metadata\n",
+            Self::TransportConfiguration => "NEBULA_STARTUP_FAILURE:transport-configuration\n",
+            Self::TransportPersist => "NEBULA_STARTUP_FAILURE:transport-persist\n",
             Self::TpmEnvironment => "NEBULA_STARTUP_FAILURE:tpm-environment\n",
             Self::TpmInventory => "NEBULA_STARTUP_FAILURE:tpm-inventory\n",
             Self::BootMeasurements => "NEBULA_STARTUP_FAILURE:boot-measurements\n",
@@ -225,5 +233,25 @@ mod tests {
             diagnostics.take(now + Duration::from_secs(60), &other),
             Some("NEBULA_STARTUP_FAILURE:snp-report\n")
         );
+    }
+
+    #[test]
+    fn transport_diagnostics_never_reveal_metadata_or_tls_material() {
+        for (stage, expected) in [
+            (Stage::TransportFilesystem, "transport-filesystem"),
+            (Stage::TransportMetadata, "transport-metadata"),
+            (Stage::TransportConfiguration, "transport-configuration"),
+            (Stage::TransportPersist, "transport-persist"),
+        ] {
+            let error = at::<(), _>(
+                stage,
+                Err(anyhow::anyhow!("private metadata and TLS key bytes")),
+            )
+            .unwrap_err();
+            assert_eq!(
+                message(&error),
+                format!("NEBULA_STARTUP_FAILURE:{expected}\n")
+            );
+        }
     }
 }

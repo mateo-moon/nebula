@@ -1,5 +1,6 @@
 //! The pinned CAA cloud-config is a transport envelope, never guest configuration.
 //! Its credentials authenticate an untrusted worker to APF, not a workload to KBS.
+use crate::startup::{Stage, at};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{io::Write, net::IpAddr, path::Path, time::Duration};
@@ -132,7 +133,7 @@ impl Forwarder {
             network.tunnel_type == "vxlan"
                 && !network.external_net_via_pod_vm
                 && (576..=9001).contains(&network.mtu)
-                && network.index > 0
+                && network.index <= 0xffffff
                 && network.vxlan_port != Some(0)
                 && network
                     .vxlan_id
@@ -257,16 +258,25 @@ fn write_configuration(directory: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 pub async fn provision() -> Result<()> {
-    crate::require_memory_directory(Path::new(DIRECTORY))?;
-    let http = reqwest::Client::builder()
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(5))
-        .build()?;
+    at(
+        Stage::TransportFilesystem,
+        crate::require_memory_directory(Path::new(DIRECTORY)),
+    )?;
+    let http = at(
+        Stage::TransportMetadata,
+        reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(5))
+            .build(),
+    )?;
     // No IMDSv1 fallback, configurable endpoint, proxy or response redirect.
-    let data = user_data(&http, METADATA).await?;
-    let config = configuration(&data)?;
-    write_configuration(Path::new(DIRECTORY), &config)
+    let data = at(Stage::TransportMetadata, user_data(&http, METADATA).await)?;
+    let config = at(Stage::TransportConfiguration, configuration(&data))?;
+    at(
+        Stage::TransportPersist,
+        write_configuration(Path::new(DIRECTORY), &config),
+    )
 }
 
 /// Fixed IMDSv2 origin, no proxies/redirects. Metadata selects public boot
@@ -377,6 +387,21 @@ mod tests {
     }
 
     #[test]
+    fn first_caa_pod_uses_zero_based_vxlan_index() {
+        // CAA's worker allocator starts at zero. Its index is an offset from
+        // the configured VXLAN minimum, not an OS network-interface index.
+        let data = changed(|v| {
+            v["pod-network"]["index"] = json!(0);
+            v["pod-network"]["vxlan-id"] = json!(555000);
+            v["pod-network"]["mtu"] = json!(9001);
+        });
+        let config: Value =
+            serde_json::from_slice(&configuration(data.as_bytes()).unwrap()).unwrap();
+        assert_eq!(config["pod-network"]["index"], 0);
+        assert_eq!(config["pod-network"]["vxlan-id"], 555000);
+    }
+
+    #[test]
     fn mutable_guest_configuration_and_extra_files_are_rejected() {
         for suffix in [
             "  - path: /run/peerpod/initdata\n    content: |\n      policy\n",
@@ -456,6 +481,8 @@ mod tests {
             ("pod-hw-addr", json!("invalid")),
             ("tunnel-type", json!("unsupported")),
             ("mtu", json!(0)),
+            ("index", json!(-1)),
+            ("index", json!(0x1000000)),
             ("vxlan-id", json!(0x1000000)),
             ("vxlan-port", json!(0)),
             ("external-net-via-pod-vm", json!(true)),

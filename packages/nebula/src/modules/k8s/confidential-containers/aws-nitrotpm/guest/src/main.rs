@@ -33,7 +33,8 @@ async fn main() {
             std::process::exit(1);
         }
     } else if args.as_slice() == ["--transport"] {
-        if aws_trustee_bootstrap::transport::provision().await.is_err() {
+        if let Err(error) = aws_trustee_bootstrap::transport::provision().await {
+            aws_trustee_bootstrap::startup::report(&error);
             eprintln!("CAA transport provisioning failed; guest services remain stopped");
             std::process::exit(1);
         }
