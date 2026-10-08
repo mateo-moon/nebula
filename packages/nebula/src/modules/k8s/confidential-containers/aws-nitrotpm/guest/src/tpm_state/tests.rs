@@ -303,6 +303,8 @@ fn emulator_recovers_encrypted_journal_after_restart_and_refuses_disk_rollback()
     let _serial = EMULATION.lock().unwrap();
     let mut emulator = Emulator::new();
     let mut journal = emulator.provision();
+    let owner_auth = journal.owner_auth.clone();
+    assert!(owner_auth.iter().any(|byte| *byte != 0));
     assert_eq!(journal.commit(b"first confidential state").unwrap(), 1);
     let first = emulator.value();
     let record = |value: &[u8]| emulator.disk().join(format!("{}.state", hex(value)));
@@ -319,6 +321,9 @@ fn emulator_recovers_encrypted_journal_after_restart_and_refuses_disk_rollback()
     emulator.stop();
     emulator.start();
     let (journal, snapshot) = emulator.recover().unwrap();
+    // Fresh attestation needs the same sealed owner secret after every boot.
+    // Compare without formatting either secret into a failed-test diagnostic.
+    assert!(*journal.owner_auth == *owner_auth);
     let snapshot = snapshot.unwrap();
     assert_eq!(snapshot.sequence, 2);
     assert_eq!(&*snapshot.bytes, b"second confidential state");

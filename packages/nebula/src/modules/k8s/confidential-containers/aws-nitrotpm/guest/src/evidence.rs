@@ -25,6 +25,8 @@ pub use channel::{ChannelIdentity, SecureChannel, accept, connect};
 pub use channel::{PublisherChannel, accept_publisher, connect_publisher};
 mod collect;
 pub use collect::Collector;
+mod nitro;
+pub(crate) use nitro::{NitroRequest, NitroSource};
 #[cfg(test)]
 mod tests;
 

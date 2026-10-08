@@ -16,6 +16,22 @@ stock offline filesystem KBC and anonymous public OCI pull; workload keys are
 delivered only by the measured bootstrap. No private registry credential is
 installed through user data.
 
+Both appliances also ship `nebula-nitro-tpm-attest`, built from the exact AWS
+NitroTPM-Tools revision in `nitro.py` and the reviewed `patches/nitro-owner-auth.patch`.
+The upstream tool assumes empty owner authorization when creating and deleting
+its temporary endorsement key and NV message buffer. The authority instead has
+a random owner secret sealed with its journal. This small patch accepts that
+32-byte secret over standard input, keeps it in zeroizing memory, and restores
+ESAPI authorization whenever the raw Nitro vendor command recreates its context.
+The guest passes it over an anonymous pipe under the journal writer's lock;
+it never resets owner authorization or places the secret in arguments, environment
+variables, logs or persistent files. Runtime guests retain empty authorization.
+Builds reject any upstream change beyond that exact patch, record its digest
+with the binary's provenance, and preserve upstream license notices in the image.
+CI exercises wrong credentials and authenticated object cleanup across context
+recreation against an isolated software TPM; real Nitro evidence still requires
+hardware qualification.
+
 `canary.py` builds a minimal public probe, encrypts its OCI layer through stock
 ocicrypt/keyprovider, verifies the encryption annotation/resource, and uses the
 matching upstream genpolicy. Its fixed public key is intentionally not a secret.

@@ -1,5 +1,5 @@
-//! Local TPM persistence for the future measured authority, not its enrollment
-//! or quorum protocol. No boot unit or operator CLI calls these entry points.
+//! Local TPM persistence for the measured authority. Managed boot authenticates
+//! its deployment before entering provisioning or recovery.
 //!
 //! The appliance must authenticate its deployment and immutable release before
 //! calling this module. It exclusively owns this TPM; all appliance TPM users
@@ -40,12 +40,17 @@ pub struct BootPolicy {
 }
 
 /// Keys and TPM authorization are deliberately not exposed by this facade.
-pub struct TpmJournal(Journal<HardwareAnchor>);
+pub struct TpmJournal {
+    journal: Journal<HardwareAnchor>,
+    // Required by NitroTPM's transient attestation objects as well as the
+    // protected journal. Never exported, persisted unsealed or passed in argv.
+    owner_auth: Zeroizing<[u8; 32]>,
+}
 
 impl TpmJournal {
     /// Only for an authenticated NEW authority member. This one-attempt local
     /// provisioner is not permission to replace an existing deployment's keys.
-    /// An interrupted provisioner cannot acknowledge state; the future enrollment
+    /// An interrupted provisioner cannot acknowledge state; the enrollment
     /// protocol must replace that uncommitted member, not reset a live journal.
     pub fn provision(directory: &Path, deployment: [u8; 32], boot: &BootPolicy) -> Result<Self> {
         provision(directory, deployment, boot, Driver::hardware()?)
@@ -62,7 +67,13 @@ impl TpmJournal {
     }
 
     pub fn commit(&mut self, bytes: &[u8]) -> Result<u64> {
-        self.0.commit(bytes)
+        self.journal.commit(bytes)
+    }
+
+    /// Called under the replica store's hardware-writer lock. A fresh quote
+    /// cannot race journal operations or reset owner authorization to obtain it.
+    pub(crate) fn attest(&mut self, request: crate::evidence::NitroRequest) -> Result<Vec<u8>> {
+        request.document(Some(&self.owner_auth))
     }
 }
 
@@ -493,7 +504,10 @@ fn provision(
     };
     let (journal, snapshot) = Journal::open(directory, key, deployment, anchor)?;
     ensure!(snapshot.is_none(), "new authority already contains state");
-    Ok(TpmJournal(journal))
+    Ok(TpmJournal {
+        journal,
+        owner_auth: Zeroizing::new(secrets[64..].try_into()?),
+    })
 }
 
 fn recover(
@@ -580,7 +594,13 @@ fn recover(
         policy: nv_policy,
     };
     let (journal, snapshot) = Journal::open(directory, key, deployment, anchor)?;
-    Ok((TpmJournal(journal), snapshot))
+    Ok((
+        TpmJournal {
+            journal,
+            owner_auth: Zeroizing::new(secrets[64..].try_into()?),
+        },
+        snapshot,
+    ))
 }
 
 fn hex(bytes: &[u8]) -> String {

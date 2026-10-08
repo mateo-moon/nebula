@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from image_sources import BASE_REVISION, CAA_REVISION, BASE_DESCRIPTION, MASKS
+from nitro import NITRO_REVISION, PATCH, LICENSES
 
 
 def require(ok, message):
@@ -34,7 +35,7 @@ def stage(base, caa, binaries, asvk, canary, releasever, role, output):
     require(releasever.startswith("2023.") and all(c.isdigit() or c == "." for c in releasever), "immutable AL2023 repository version required")
     clean_revision(base, BASE_REVISION)
     clean_revision(caa, CAA_REVISION)
-    names = {"aws-trustee-bootstrap"} | ({"kata-agent", "confidential-data-hub", "agent-protocol-forwarder"} if role == "runtime" else set())
+    names = {"aws-trustee-bootstrap", "nebula-nitro-tpm-attest"} | ({"kata-agent", "confidential-data-hub", "agent-protocol-forwarder"} if role == "runtime" else set())
     require(set(binaries) == names, "unexpected appliance binary set")
     shutil.copytree(base / BASE_DESCRIPTION, output)
     # KIWI already runs this build hook as root. The upstream example's sudo
@@ -66,6 +67,20 @@ def stage(base, caa, binaries, asvk, canary, releasever, role, output):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data); target.chmod(0o755)
         provenance[name] = {"sha256": item["sha256"], "revision": item["revision"]}
+        if name == "nebula-nitro-tpm-attest":
+            patch = Path(__file__).resolve().parent / "patches" / PATCH
+            require(item["revision"] == NITRO_REVISION and item["patchSha256"] == hashlib.sha256(patch.read_bytes()).hexdigest(),
+                    "unreviewed Nitro attester source")
+            require(set(item["licenses"]) == set(LICENSES), "complete Nitro licenses required")
+            provenance[name]["patchSha256"] = item["patchSha256"]
+            provenance[name]["licenses"] = {}
+            for relative, license in item["licenses"].items():
+                content = Path(license["path"]).read_bytes()
+                require(hashlib.sha256(content).hexdigest() == license["sha256"], "changed Nitro license")
+                destination = root / "usr/share/licenses/nebula-nitro-tpm-attest" / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(content)
+                provenance[name]["licenses"][relative] = license["sha256"]
     trust = Path(__file__).resolve().parents[1] / "trust/amd-milan-ark.pem"
     subprocess.run(["openssl", "verify", "-CAfile", str(trust), str(asvk)], check=True, stdout=subprocess.DEVNULL)
     (root / "usr/share/nebula").mkdir(parents=True, exist_ok=True)
@@ -97,7 +112,7 @@ def stage(base, caa, binaries, asvk, canary, releasever, role, output):
     for item in list(packages):
         if item.get("name") in {"zram-generator", "zram-generator-defaults", "dracut-kiwi-overlay", "awscli"}: packages.remove(item)
     present = {item.get("name") for item in packages}
-    for package in ["tpm2-tools", "e2fsprogs", "util-linux", "openssl-libs", "libseccomp", "ca-certificates", "iproute", "iptables-nft", "net-tools"]:
+    for package in ["tpm2-tools", "tpm2-tss", "e2fsprogs", "util-linux", "openssl-libs", "libseccomp", "ca-certificates", "iproute", "iptables-nft", "net-tools"]:
         if package not in present: ET.SubElement(packages, "package", {"name": package})
     tree.write(output / "appliance.kiwi", encoding="utf8", xml_declaration=True)
     wants = units / "multi-user.target.wants"

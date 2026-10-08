@@ -76,7 +76,7 @@ impl Host {
                 ))
             })
             .await?;
-        Collector::new(
+        Collector::authority(
             self.identity.clone(),
             Claims {
                 authority_identity: identity,
@@ -89,6 +89,7 @@ impl Host {
                 version: 1,
             },
             self.asvk.clone(),
+            Arc::new(self.store.clone()),
         )
     }
     fn candidate(&self, address: SocketAddr, identity: &AttestedIdentity) -> Result<Enrollment> {

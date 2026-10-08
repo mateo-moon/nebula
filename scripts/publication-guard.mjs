@@ -92,6 +92,9 @@ const UPSTREAM_DOMAINS = [
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
   "helm.sh", "aws.amazon.com", "docs.edgeless.systems", "openbao.org",
 ];
+// The AWS NitroTPM source copyright notice uses this public corporate name.
+// Do not thereby approve arbitrary tenant or internal subdomains.
+const UPSTREAM_EXACT_DOMAINS = new Set(["amazon.com"]);
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
 // in URLs and after host keys under any public TLD in URL_TLDS.
@@ -208,6 +211,7 @@ function domainAllowed(host) {
   const h = host.toLowerCase().replace(/\.$/, "");
   if (!h.includes(".") || /^[0-9.]+$/.test(h) || !URL_TLDS.has(h.slice(h.lastIndexOf(".") + 1))) return true;
   if (RESERVED_DOMAIN.some((r) => r.test(h))) return true;
+  if (UPSTREAM_EXACT_DOMAINS.has(h)) return true;
   return UPSTREAM_DOMAINS.some((d) => h === d || h.endsWith(`.${d}`));
 }
 

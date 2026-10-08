@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from image_sources import BASE_REVISION, CAA_REVISION
 from stage import stage, require
+from nitro import prepare as prepare_nitro, NITRO_REVISION, PATCH, LICENSES
 
 KATA = "c7351e797efff8bfc6bd73da0eb1909be12e2cfe"
 GUEST_COMPONENTS = "17ad60d88f9b7e4b3b54d01200985ae72723e8ab"
@@ -80,6 +81,19 @@ def binaries(source, work):
     revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     if subprocess.check_output(["git", "-C", str(source), "status", "--porcelain", "--untracked-files=all"], text=True).strip(): revision += "-dirty"
     copy("aws-trustee-bootstrap", target / "release/aws-trustee-bootstrap", revision)
+    nitro = prepare_nitro(source, work)
+    run("cargo", "build", "--locked", "--release", "--manifest-path", nitro / "Cargo.toml",
+        "-p", "nitro-tpm-attest", "--bin", "nitro-tpm-attest", env=env)
+    attester = "nebula-nitro-tpm-attest"
+    copy(attester, target / "release/nitro-tpm-attest", NITRO_REVISION)
+    revisions[attester]["patchSha256"] = sha(source / "release/patches" / PATCH)
+    licenses = out / (attester + "-licenses"); licenses.mkdir(exist_ok=True)
+    revisions[attester]["licenses"] = {}
+    for name in LICENSES:
+        destination = licenses / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(nitro / name, destination)
+        revisions[attester]["licenses"][name] = {"path": str(destination), "sha256": sha(destination)}
     # Generate upstream version files without changing any policy/security code.
     run("make", "src/version.rs", "LIBC=gnu", "AGENT_POLICY=yes", "INIT_DATA=no", cwd=kata / "src/agent", env=env)
     run("cargo", "build", "--locked", "--release", "--manifest-path", kata / "src/agent/Cargo.toml",
@@ -115,7 +129,7 @@ def images(source, work, canary, repository, tag, policy):
     for role in ("authority", "runtime"):
         description, build = work / (role + "-description"), work / (role + "-image")
         require(not description.exists() and not build.exists(), "fresh image build directories required")
-        stage(base, caa, inputs if role == "runtime" else {"aws-trustee-bootstrap": inputs["aws-trustee-bootstrap"]},
+        stage(base, caa, inputs if role == "runtime" else {name: inputs[name] for name in ("aws-trustee-bootstrap", "nebula-nitro-tpm-attest")},
             source / "trust/amd-milan-asvk.pem", canary, RELEASEVER, role, description)
         run("kiwi-ng", "system", "build", "--description", description, "--target-dir", build)
         disks = list(build.glob("*.raw")); require(len(disks) == 1, "one appliance disk required")

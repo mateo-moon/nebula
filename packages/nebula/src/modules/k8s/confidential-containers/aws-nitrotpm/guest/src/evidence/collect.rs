@@ -1,6 +1,5 @@
 use super::*;
-use std::{path::Path, sync::Arc, time::Duration};
-use tokio::io::AsyncReadExt;
+use std::{path::Path, sync::Arc};
 
 /// The channel key belongs to this process. The caller fixes claims from
 /// authenticated boot/committed state; the remote request supplies only a nonce.
@@ -9,9 +8,36 @@ pub struct Collector {
     pub(super) identity: Arc<ChannelIdentity>,
     pub(super) claims: Claims,
     asvk: Vec<u8>,
+    nitro: Option<Arc<dyn NitroSource>>,
 }
 impl Collector {
-    pub fn new(identity: Arc<ChannelIdentity>, mut claims: Claims, asvk: Vec<u8>) -> Result<Self> {
+    pub fn new(identity: Arc<ChannelIdentity>, claims: Claims, asvk: Vec<u8>) -> Result<Self> {
+        ensure!(
+            claims.role == Role::Runtime,
+            "authority requires its protected TPM writer"
+        );
+        Self::configured(identity, claims, asvk, None)
+    }
+
+    pub(crate) fn authority(
+        identity: Arc<ChannelIdentity>,
+        claims: Claims,
+        asvk: Vec<u8>,
+        nitro: Arc<dyn NitroSource>,
+    ) -> Result<Self> {
+        ensure!(
+            claims.role == Role::Authority,
+            "authority collector required"
+        );
+        Self::configured(identity, claims, asvk, Some(nitro))
+    }
+
+    fn configured(
+        identity: Arc<ChannelIdentity>,
+        mut claims: Claims,
+        asvk: Vec<u8>,
+        nitro: Option<Arc<dyn NitroSource>>,
+    ) -> Result<Self> {
         claims.tls_sha256 = hex(Sha256::digest(&identity.certificate));
         claims.validate()?;
         ensure!(asvk.len() <= MAX_CERTIFICATE, "invalid ASVK size");
@@ -20,6 +46,7 @@ impl Collector {
             identity,
             claims,
             asvk,
+            nitro,
         })
     }
     pub fn claims(&self) -> &Claims {
@@ -39,43 +66,12 @@ impl Collector {
             snp_sha256: hex(Sha256::digest(&report)),
         })?;
         ensure!(binding.len() <= 1024, "identity binding too large");
-        let directory = tempfile::tempdir_in(path)?;
-        std::fs::write(directory.path().join("nonce"), nonce)?;
-        std::fs::write(directory.path().join("public.der"), public)?;
-        std::fs::write(directory.path().join("binding.json"), binding)?;
-        let mut process = tokio::process::Command::new("/usr/bin/nitro-tpm-attest")
-            .arg("--nonce")
-            .arg(directory.path().join("nonce"))
-            .arg("--public-key")
-            .arg(directory.path().join("public.der"))
-            .arg("--user-data")
-            .arg(directory.path().join("binding.json"))
-            .env_clear()
-            .stdin(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()?;
-        let output = tokio::time::timeout(Duration::from_secs(10), async {
-            let mut output = Vec::new();
-            process
-                .stdout
-                .take()
-                .context("attester output missing")?
-                .take((MAX_DOCUMENT + 1) as u64)
-                .read_to_end(&mut output)
-                .await?;
-            ensure!(
-                !output.is_empty() && output.len() <= MAX_DOCUMENT,
-                "attester output invalid"
-            );
-            ensure!(
-                process.wait().await?.success(),
-                "NitroTPM evidence unavailable"
-            );
-            Ok::<_, anyhow::Error>(output)
-        })
-        .await??;
+        let request = NitroRequest::new(nonce, public, binding)?;
+        let output = if let Some(source) = &self.nitro {
+            source.document(request).await?
+        } else {
+            tokio::task::spawn_blocking(move || request.document(None)).await??
+        };
         Ok(Evidence {
             nitro: STANDARD.encode(output),
             snp: STANDARD.encode(report),

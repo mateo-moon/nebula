@@ -7,7 +7,7 @@ COPY --from=rust /usr/local/cargo /opt/cargo
 COPY --from=rust /usr/local/rustup /opt/rustup
 RUN dnf --releasever=2023.12.20260930 install -y \
     kiwi-cli python3-kiwi kiwi-systemdeps-core python3-poetry-core qemu-img veritysetup erofs-utils \
-    git aws-nitro-tpm-tools gcc gcc-c++ make cmake clang pkgconfig openssl-devel libseccomp-devel \
+    git aws-nitro-tpm-tools gcc gcc-c++ make cmake clang pkgconfig openssl-devel libseccomp-devel tpm2-tss-devel \
     protobuf-compiler protobuf-devel e2fsprogs util-linux sudo gzip tar xz findutils diffutils \
     python3.12 python3.12-pip curl-minimal && dnf clean all
 RUN rustc --version && cargo --version

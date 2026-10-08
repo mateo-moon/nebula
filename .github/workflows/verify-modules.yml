@@ -114,6 +114,45 @@ jobs:
       - name: Synthetic evidence through stock KBS, guest client and offline KBC
         run: NEBULA_KBS_BINARY="$RUNNER_TEMP/trustee/target/debug/kbs" python -m pytest -q tests
 
+  aws-nitro-owner:
+    name: AWS Nitro attestation with protected TPM owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare exact reviewed Nitro source and TPM development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libtss2-dev clang
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup override set 1.98.1
+          python3 release/nitro.py --work "$RUNNER_TEMP/nitro-source"
+      - name: Build the real patched attester and test binary
+        run: |
+          cargo build --locked --manifest-path "$RUNNER_TEMP/nitro-source/nitro-tpm-tools/Cargo.toml" -p nitro-tpm-attest --bin nitro-tpm-attest
+          cargo test --locked --manifest-path "$RUNNER_TEMP/nitro-source/nitro-tpm-tools/Cargo.toml" -p nitro-tpm-attest --lib --no-run --message-format=json > "$RUNNER_TEMP/nitro-tests.jsonl"
+          mkdir -p "$RUNNER_TEMP/nitro-test"
+          python3 - "$RUNNER_TEMP/nitro-tests.jsonl" "$RUNNER_TEMP/nitro-test/attester-tests" <<'PY'
+          import json, pathlib, shutil, sys
+          messages = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          binaries = [item["executable"] for item in messages if item.get("reason") == "compiler-artifact" and item.get("executable") and item["target"]["kind"] == ["lib"] and item["profile"]["test"]]
+          assert len(binaries) == 1, "exactly one attester library test binary required"
+          shutil.copy2(binaries[0], sys.argv[2])
+          PY
+      - name: Reject wrong owner auth and preserve authenticated cleanup after context recreation
+        run: |
+          docker build -f guest/tests/tpm.Dockerfile -t nebula-nitro-owner-test guest/tests
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
+            --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=64m \
+            -v "$RUNNER_TEMP/nitro-test:/tests:ro" -v "$PWD/release/test-nitro-owner.sh:/test.sh:ro" \
+            nebula-nitro-owner-test sh /test.sh /tests/attester-tests
+
   aws-tpm-state:
     name: AWS authority software TPM experiments
     runs-on: ubuntu-24.04

@@ -1,0 +1,288 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 47535003b0b732e7613a6664623f2ae8835df750..c9120604a6442ddc53df79560cbf223d3de5cad3 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1677,6 +1677,7 @@ dependencies = [
+  "tokio",
+  "tss-esapi",
+  "tss-esapi-sys",
++ "zeroize",
+ ]
+ 
+ [[package]]
+diff --git a/nitro-tpm-attest/Cargo.toml b/nitro-tpm-attest/Cargo.toml
+index 9462e82a7ff4ce1ae24d409ea304508132f7d56b..180e57119aa99e242f1471167d9a924a735c9f26 100644
+--- a/nitro-tpm-attest/Cargo.toml
++++ b/nitro-tpm-attest/Cargo.toml
+@@ -22,6 +22,7 @@ serde_bytes = "0.11"
+ thiserror = "2.0"
+ tss-esapi = "7.7"
+ tss-esapi-sys = "0.6"
++zeroize = "=1.8.2"
+ 
+ [build-dependencies]
+ semver = "1.0"
+diff --git a/nitro-tpm-attest/src/lib.rs b/nitro-tpm-attest/src/lib.rs
+index 8d05b3bf6d1e5c4590dc42035ad89a8c7470fd75..22acdca9161058f755d0927ebe2baf4bbbcc9c89 100644
+--- a/nitro-tpm-attest/src/lib.rs
++++ b/nitro-tpm-attest/src/lib.rs
+@@ -1,5 +1,6 @@
+ // Copyright 2025 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
++// Modified by Nebula to support protected TPM owner authorization and its isolated regression.
+ 
+ //! Abstraction for the TPM2 AWS NSM Vendor Command
+ //!
+@@ -34,6 +35,21 @@ pub fn attestation_document(
+     user_data: Option<Vec<u8>>,
+     nonce: Option<Vec<u8>>,
+     public_key: Option<Vec<u8>>,
++) -> Result<Vec<u8>, Error> {
++    attestation_document_with_owner_auth(
++        user_data,
++        nonce,
++        public_key,
++        tss_esapi::structures::Auth::default(),
++    )
++}
++
++/// Request evidence without resetting a provisioned TPM's owner authorization.
++pub fn attestation_document_with_owner_auth(
++    user_data: Option<Vec<u8>>,
++    nonce: Option<Vec<u8>>,
++    public_key: Option<Vec<u8>>,
++    owner_auth: tss_esapi::structures::Auth,
+ ) -> Result<Vec<u8>, Error> {
+     let nsm_request = nsm_api::Request::Attestation {
+         user_data: user_data.map(Into::into),
+@@ -43,7 +59,7 @@ pub fn attestation_document(
+ 
+     let tpm_device_path =
+         std::path::PathBuf::from(std::env::var_os("TPM_DEVICE").unwrap_or("/dev/tpm0".into()));
+-    let tpm_manager = std::cell::RefCell::new(TpmManager::new(tpm_device_path));
++    let tpm_manager = std::cell::RefCell::new(TpmManager::new(tpm_device_path, owner_auth));
+ 
+     let endorsement_key = tss::EndorsementKey::new(&tpm_manager)?;
+     let (message_buffer, message_buffer_name) =
+diff --git a/nitro-tpm-attest/src/main.rs b/nitro-tpm-attest/src/main.rs
+index 9bcbfc41f57c181826d33f448f1508b71953a906..2d3eb343932e1beca3858fa114ada74d24f59527 100644
+--- a/nitro-tpm-attest/src/main.rs
++++ b/nitro-tpm-attest/src/main.rs
+@@ -1,5 +1,6 @@
+ // Copyright 2025 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
++// Modified by Nebula to support protected TPM owner authorization and its isolated regression.
+ 
+ /// Request a TPM attestation document from NitroTPM
+ #[derive(clap::Parser)]
+@@ -13,6 +14,9 @@ struct Arguments {
+     /// Path of a public key to optional include
+     #[arg(short, long)]
+     public_key: Option<std::path::PathBuf>,
++    /// Read exactly 32 bytes of owner authorization from standard input.
++    #[arg(long)]
++    owner_auth_stdin: bool,
+ }
+ 
+ fn main() -> anyhow::Result<()> {
+@@ -22,8 +26,18 @@ fn main() -> anyhow::Result<()> {
+     let nonce = arguments.nonce.map(std::fs::read).transpose()?;
+     let public_key = arguments.public_key.map(std::fs::read).transpose()?;
+ 
+-    let attestation_document =
+-        nitro_tpm_attest::attestation_document(user_data, nonce, public_key)?;
++    let owner_auth = if arguments.owner_auth_stdin {
++        use std::io::Read;
++        let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(33));
++        std::io::stdin().take(33).read_to_end(&mut bytes)?;
++        anyhow::ensure!(bytes.len() == 32, "exact owner authorization required");
++        tss_esapi::structures::Auth::try_from(bytes.as_slice())?
++    } else {
++        tss_esapi::structures::Auth::default()
++    };
++    let attestation_document = nitro_tpm_attest::attestation_document_with_owner_auth(
++        user_data, nonce, public_key, owner_auth,
++    )?;
+ 
+     std::io::Write::write_all(&mut std::io::stdout(), &attestation_document)?;
+ 
+diff --git a/nitro-tpm-attest/src/tpm_manager.rs b/nitro-tpm-attest/src/tpm_manager.rs
+index 7f61a7a611fb37969aaffd7d3d1c515e71b14ef0..c59b6106d27e5cfce6b0126f3a4337495a2e48f7 100644
+--- a/nitro-tpm-attest/src/tpm_manager.rs
++++ b/nitro-tpm-attest/src/tpm_manager.rs
+@@ -1,5 +1,6 @@
+ // Copyright 2025 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
++// Modified by Nebula to support protected TPM owner authorization and its isolated regression.
+ 
+ //! While the TSS is used wherever possible, it is required to interact with the raw TPM device in
+ //! order to send the NSM vendor command. This means the TSS context (which keeps the TPM device
+@@ -18,6 +19,9 @@ pub enum Error {
+ pub(crate) struct TpmManager {
+     device_path: std::path::PathBuf,
+     mode: Mode,
++    owner_auth: tss_esapi::structures::Auth,
++    #[cfg(test)]
++    test_tcti: Option<tss_esapi::TctiNameConf>,
+ }
+ 
+ enum Mode {
+@@ -27,10 +31,16 @@ enum Mode {
+ }
+ 
+ impl TpmManager {
+-    pub(crate) fn new(device_path: std::path::PathBuf) -> Self {
++    pub(crate) fn new(
++        device_path: std::path::PathBuf,
++        owner_auth: tss_esapi::structures::Auth,
++    ) -> Self {
+         Self {
+             device_path,
+             mode: Mode::None,
++            owner_auth,
++            #[cfg(test)]
++            test_tcti: None,
+         }
+     }
+ 
+@@ -49,7 +59,16 @@ impl TpmManager {
+                 .ok_or(Error::InvalidTpmDevicePath)?,
+         )?);
+ 
+-        self.mode = Mode::Tss(tss_esapi::Context::new(tcti_name_conf)?);
++        #[cfg(test)]
++        let tcti_name_conf = self.test_tcti.clone().unwrap_or(tcti_name_conf);
++        let mut context = tss_esapi::Context::new(tcti_name_conf)?;
++        // The raw vendor command closes the TSS context. Reinstall the secret
++        // on EVERY new context, including the one used for authenticated cleanup.
++        context.tr_set_auth(
++            tss_esapi::handles::ObjectHandle::Owner,
++            self.owner_auth.clone(),
++        )?;
++        self.mode = Mode::Tss(context);
+ 
+         Ok(match self.mode {
+             Mode::Tss(ref mut context) => context,
+@@ -73,3 +92,97 @@ impl TpmManager {
+         })
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::tss::{EndorsementKey, MessageBuffer};
++    use std::cell::RefCell;
++    use tss_esapi::{
++        constants::{CapabilityType, Tss2ResponseCodeKind},
++        handles::AuthHandle,
++        structures::{Auth, CapabilityData},
++    };
++
++    #[test]
++    #[ignore = "isolated software TPM only; never a host TPM"]
++    fn protected_owner_survives_attestation_objects_and_context_recreation() {
++        assert_eq!(std::env::var("NEBULA_SWTPM_TEST").as_deref(), Ok("1"));
++        // The test-only constructor cannot select a physical TPM.
++        let endpoint = std::env::var("NEBULA_SWTPM_PORT")
++            .unwrap()
++            .parse::<u16>()
++            .unwrap();
++        let conf: tss_esapi::TctiNameConf = format!("swtpm:host=127.0.0.1,port={endpoint}")
++            .parse()
++            .unwrap();
++        let owner = Auth::try_from(vec![91; 32]).unwrap();
++        let make = |auth| {
++            RefCell::new(TpmManager {
++                device_path: "/dev/tpm0".into(),
++                mode: Mode::None,
++                owner_auth: auth,
++                test_tcti: Some(conf.clone()),
++            })
++        };
++        let initial = make(Auth::default());
++        initial
++            .borrow_mut()
++            .tss()
++            .unwrap()
++            .execute_with_nullauth_session(|context| {
++                context.hierarchy_change_auth(AuthHandle::Owner, owner.clone())
++            })
++            .unwrap();
++        drop(initial);
++        let empty = make(Auth::default());
++        let error = match EndorsementKey::new(&empty) {
++            Ok(_) => panic!("empty owner authorization accepted"),
++            Err(error) => error,
++        };
++        match error {
++            crate::tss::endorsement_key::Error::Tss(tss_esapi::Error::Tss2Error(code)) => {
++                assert!(matches!(
++                    code.kind(),
++                    Some(Tss2ResponseCodeKind::BadAuth | Tss2ResponseCodeKind::AuthFail)
++                ))
++            }
++            _ => panic!("wrong failure category for owner authorization"),
++        }
++        drop(empty);
++        let manager = make(owner.clone());
++        let endorsement = EndorsementKey::new(&manager).unwrap();
++        let request = crate::nsm_api::Request::Attestation {
++            user_data: None,
++            nonce: None,
++            public_key: None,
++        };
++        let (buffer, _) =
++            MessageBuffer::from_request(&manager, endorsement.tpm_handle(), &request).unwrap();
++        // The actual vendor request closes/reopens ESAPI. Test that transition
++        // independently of the AWS-only vendor command, then authenticated drop.
++        manager.borrow_mut().mode = Mode::None;
++        drop(buffer);
++        drop(endorsement);
++        for property in [
++            tss_esapi::constants::tss::TPM2_PERSISTENT_FIRST,
++            tss_esapi::constants::tss::TPM2_NV_INDEX_FIRST,
++        ] {
++            let (found, _) = manager
++                .borrow_mut()
++                .tss()
++                .unwrap()
++                .execute_without_session(|context| {
++                    context.get_capability(CapabilityType::Handles, property, 64)
++                })
++                .unwrap();
++            match found {
++                CapabilityData::Handles(handles) => assert!(handles.into_inner().is_empty()),
++                _ => panic!("invalid handles response"),
++            }
++        }
++        // It was never reset to empty to make attestation work.
++        let empty = make(Auth::default());
++        assert!(EndorsementKey::new(&empty).is_err());
++    }
++}
+diff --git a/nitro-tpm-attest/src/tss/message_buffer.rs b/nitro-tpm-attest/src/tss/message_buffer.rs
+index d2a89ff666dc20a270ab34cea8b05ab93a3d6ec3..613b579196803b70e285b6b0738448730c7d94c7 100644
+--- a/nitro-tpm-attest/src/tss/message_buffer.rs
++++ b/nitro-tpm-attest/src/tss/message_buffer.rs
+@@ -1,5 +1,6 @@
+ // Copyright 2025 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
++// Modified by Nebula to support protected TPM owner authorization and its isolated regression.
+ 
+ use super::ContextExtension as _;
+ use aws_nitro_enclaves_nsm_api::api as nsm_api;
+@@ -39,7 +40,13 @@ impl<'a> MessageBuffer<'a> {
+     ) -> Result<(Self, tss_esapi::structures::Name), Error> {
+         // The plain attestation document (without any optional parameters) will be almost 5 KiB and
+         // the optional parameters are each limited to 1 KiB
++        #[cfg(not(test))]
+         const SIZE: usize = 8192;
++        // Software TPMs cap each NV index at 2 KiB. The isolated owner-auth
++        // regression exercises the same authorization/write/drop path with a
++        // small request; it cannot produce or validate AWS attestation evidence.
++        #[cfg(test)]
++        const SIZE: usize = 2048;
+ 
+         let mut nv_index_auth = vec![0u8; tss_esapi::structures::Auth::MAX_SIZE];
+ 

@@ -347,6 +347,13 @@ test("the Helm and vals download sources are upstream; neighbouring names are no
   assert.deepEqual(classes(scan("ghcr.io/helmfiles/vals:1")), ["registry-namespace"]);
 });
 
+test("AWS upstream copyright passes without approving arbitrary Amazon subdomains", () => {
+  assert.deepEqual(scan("// Copyright 2025 Amazon.com, Inc. or its affiliates."), []);
+  for (const domain of ["tenant.amazon.com", "amazon.com.acme-corp.io", "amazon-copy.com"]) {
+    assert.deepEqual(classes(scan(domain)), ["domain"]);
+  }
+});
+
 test("reviewed confidential-runtime research sources pass without allowing lookalikes", () => {
   for (const url of [
     "https://aws.amazon.com/blogs/aws/amazon-ec2-now-supports-nitrotpm-and-uefi-secure-boot/",

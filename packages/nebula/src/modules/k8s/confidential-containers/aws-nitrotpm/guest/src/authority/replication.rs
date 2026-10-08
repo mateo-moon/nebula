@@ -649,6 +649,21 @@ impl ReplicaStore<TpmJournal> {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::evidence::NitroSource for ReplicaStore<TpmJournal> {
+    async fn document(&self, request: crate::evidence::NitroRequest) -> Result<Vec<u8>> {
+        let inner = self.0.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut locked = inner
+                .lock()
+                .map_err(|_| anyhow::anyhow!("protected TPM writer unavailable"))?;
+            ensure!(!locked.poisoned, "protected TPM writer unavailable");
+            locked.journal.attest(request)
+        })
+        .await?
+    }
+}
+
 impl<S: Store + Send + 'static> RaftLogReader<Types> for ReplicaStore<S> {
     async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + fmt::Debug + Send>(
         &mut self,
