@@ -37,7 +37,6 @@ import { deepmerge } from "deepmerge-ts";
 import {
   BaseConstruct,
   type Toleration,
-  ARGOCD_KEEP_ON_DELETE,
   syncWave,
 } from "../../../core";
 
@@ -109,12 +108,19 @@ export interface KagentIngressConfig {
 export interface KagentRbacConfig {
   /**
    * "cluster-admin" (default — the chart's built-in role; NOT recommended for production).
-   * "scoped" — the module creates a least-privilege ClusterRole (read-everything +
-   *   workload-write only; NO ClusterRoleBindings, node writes, secret writes, or PV writes).
-   *   The chart's cluster-admin binding is deleted and replaced.
+   * "scoped" — the module removes the tools chart's cluster-wide bindings and creates
+   *   namespace RoleBindings to explicit, least-privilege reader/writer ClusterRoles.
    */
   scope?: "cluster-admin" | "scoped";
-  /** When scope="scoped", restrict write to these namespaces (empty = all). */
+  /**
+   * Namespaces readable by kagent-tools when scope="scoped".
+   * Defaults to the Kagent release namespace. Secrets are never readable.
+   */
+  readNamespaces?: string[];
+  /**
+   * Namespaces writable by kagent-tools when scope="scoped".
+   * Defaults to none. Enabling this permits workload creation in the named namespaces.
+   */
   writeNamespaces?: string[];
 }
 
@@ -307,7 +313,63 @@ export class Kagent extends BaseConstruct<KagentConfig> {
       haValues,
       dbValues,
     );
-    const chartValues = deepmerge(baseValues, this.config.values ?? {});
+    const chartValues = deepmerge(
+      baseValues,
+      this.config.values ?? {},
+    ) as Record<string, unknown>;
+
+    // Kagent's controller chart also carries broad cluster-scoped RBAC by default.
+    // In scoped mode, make the controller watch only the namespaces that the tools
+    // may inspect. Assign these after the user values merge so scope="scoped" cannot
+    // accidentally be reopened through `values`.
+    const scopedReadNamespaces = this.config.rbac?.scope === "scoped"
+      ? this.scopedReadNamespaces(ns)
+      : undefined;
+    if (scopedReadNamespaces) {
+      chartValues.global = {
+        ...(chartValues.global as Record<string, unknown> | undefined),
+        watchNamespaces: scopedReadNamespaces,
+      };
+      chartValues.rbac = {
+        ...(chartValues.rbac as Record<string, unknown> | undefined),
+        namespaces: scopedReadNamespaces,
+      };
+      chartValues.controller = {
+        ...(chartValues.controller as Record<string, unknown> | undefined),
+        watchNamespaces: scopedReadNamespaces,
+      };
+
+      // The bundled tools subchart otherwise creates its own wildcard RBAC. We
+      // own that ServiceAccount's permissions below, and run the server itself
+      // in read-only mode unless writes were explicitly scoped to namespaces.
+      const toolsValues =
+        (chartValues["kagent-tools"] as Record<string, unknown> | undefined) ?? {};
+      const toolsConfig =
+        (toolsValues.tools as Record<string, unknown> | undefined) ?? {};
+      const toolsArgs = Array.isArray(toolsConfig.args)
+        ? toolsConfig.args.filter((arg): arg is string => typeof arg === "string")
+        : [];
+      const hasScopedWrites = Boolean(
+        this.config.rbac?.writeNamespaces?.filter(Boolean).length,
+      );
+      chartValues["kagent-tools"] = {
+        ...toolsValues,
+        // Keep the ServiceAccount name stable because the scoped RoleBindings
+        // below target it directly.
+        fullnameOverride: "kagent-tools",
+        useDefaultServiceAccount: false,
+        rbac: {
+          ...(toolsValues.rbac as Record<string, unknown> | undefined),
+          create: false,
+        },
+        tools: {
+          ...toolsConfig,
+          args: hasScopedWrites
+            ? toolsArgs
+            : [...new Set([...toolsArgs, "--read-only"])],
+        },
+      };
+    }
 
     // 2) Controller chart (UI, controller, bundled Postgres, kmcp, tools).
     this.helm = new Helm(this, "helm", {
@@ -325,7 +387,8 @@ export class Kagent extends BaseConstruct<KagentConfig> {
 
     // RBAC scoping (replace the chart's cluster-admin with a scoped role).
     if (this.config.rbac?.scope === "scoped") {
-      this.createScopedRbac(ns);
+      this.removeBundledToolsClusterRbac(ns);
+      this.createScopedRbac(ns, scopedReadNamespaces!);
     }
   }
 
@@ -450,21 +513,48 @@ export class Kagent extends BaseConstruct<KagentConfig> {
     }
   }
 
-  /**
-   * Create a scoped ClusterRole + binding for the kagent-tools ServiceAccount,
-   * replacing the chart's default cluster-admin binding.
-   *
-   * Scope: read-everything (get/list/watch) + workload-write (pods, deployments,
-   * services, configmaps, namespaces). Explicitly DENIED: ClusterRoleBindings
-   * (privilege escalation), node writes (cordon/drain), secret writes,
-   * persistentvolume writes.
-   */
-  private createScopedRbac(ns: string): void {
-    const writeNs = this.config.rbac?.writeNamespaces?.length
-      ? this.config.rbac.writeNamespaces
-      : undefined;
+  private scopedReadNamespaces(ns: string): string[] {
+    const configured = this.config.rbac?.readNamespaces?.filter(Boolean) ?? [];
+    return [...new Set(configured.length ? configured : [ns])];
+  }
 
-    // Scoped ClusterRole (read-everything + workload-write).
+  /** Remove the tools subchart's bindings to its wildcard ClusterRoles. */
+  private removeBundledToolsClusterRbac(ns: string): void {
+    const removedRoleNames = new Set<string>();
+    for (const resource of [...this.helm.apiObjects]) {
+      if (resource.kind !== "ClusterRoleBinding") continue;
+      const manifest = resource.toJson();
+      const bindsTools = (manifest.subjects ?? []).some(
+        (subject: { kind?: string; name?: string; namespace?: string }) =>
+          subject.kind === "ServiceAccount" &&
+          subject.name === "kagent-tools" &&
+          subject.namespace === ns,
+      );
+      if (!bindsTools) continue;
+      if (manifest.roleRef?.kind === "ClusterRole" && manifest.roleRef.name) {
+        removedRoleNames.add(manifest.roleRef.name);
+      }
+      this.helm.node.tryRemoveChild(resource.node.id);
+    }
+
+    // The wildcard roles are useless without their bindings. Removing them also
+    // makes an accidental future binding fail closed instead of restoring access.
+    for (const resource of [...this.helm.apiObjects]) {
+      if (resource.kind === "ClusterRole" && removedRoleNames.has(resource.name)) {
+        this.helm.node.tryRemoveChild(resource.node.id);
+      }
+    }
+  }
+
+  /** Create namespace-only, secret-free RBAC for kagent-tools. */
+  private createScopedRbac(ns: string, readNamespaces: string[]): void {
+    const writeNamespaces = [
+      ...new Set(this.config.rbac?.writeNamespaces?.filter(Boolean) ?? []),
+    ];
+
+    // This name belonged to the old broad role and may still have a retained
+    // ClusterRoleBinding in an existing Argo installation. Emptying it revokes
+    // that legacy binding without relying on prune to delete the retained object.
     new ApiObject(this, "scoped-role", {
       apiVersion: "rbac.authorization.k8s.io/v1",
       kind: "ClusterRole",
@@ -474,71 +564,77 @@ export class Kagent extends BaseConstruct<KagentConfig> {
           "app.kubernetes.io/name": "kagent-tools",
           "nebula.sh/managed-by": "nebula",
         },
-        annotations: ARGOCD_KEEP_ON_DELETE,
+      },
+      rules: [],
+    });
+
+    new ApiObject(this, "scoped-reader-role", {
+      apiVersion: "rbac.authorization.k8s.io/v1",
+      kind: "ClusterRole",
+      metadata: {
+        name: "kagent-tools-reader",
+        labels: {
+          "app.kubernetes.io/name": "kagent-tools",
+          "nebula.sh/managed-by": "nebula",
+        },
       },
       rules: [
-        // Broad read (the inspector needs get/list/watch on everything).
         {
-          apiGroups: ["*"],
-          resources: ["*"],
+          apiGroups: [""],
+          resources: [
+            "configmaps",
+            "endpoints",
+            "events",
+            "limitranges",
+            "persistentvolumeclaims",
+            "pods",
+            "pods/log",
+            "resourcequotas",
+            "serviceaccounts",
+            "services",
+          ],
           verbs: ["get", "list", "watch"],
         },
-        // Pod logs.
-        { apiGroups: [""], resources: ["pods/log"], verbs: ["get"] },
-        // Workload write — for gated apply/delete/scale.
         {
-          apiGroups: ["", "apps", "batch"],
-          resources: [
-            "pods",
-            "deployments",
-            "daemonsets",
-            "statefulsets",
-            "replicasets",
-            "services",
-            "configmaps",
-            "namespaces",
-            "jobs",
-            "cronjobs",
-          ],
-          verbs: ["create", "update", "patch", "delete"],
+          apiGroups: ["apps"],
+          resources: ["daemonsets", "deployments", "replicasets", "statefulsets"],
+          verbs: ["get", "list", "watch"],
         },
-        // Explicitly NOT granted: clusterrolebindings, clusterroles, nodes (write),
-        // persistentvolumes (write), secrets (write) — defense-in-depth.
+        {
+          apiGroups: ["batch"],
+          resources: ["cronjobs", "jobs"],
+          verbs: ["get", "list", "watch"],
+        },
+        {
+          apiGroups: ["autoscaling"],
+          resources: ["horizontalpodautoscalers"],
+          verbs: ["get", "list", "watch"],
+        },
+        {
+          apiGroups: ["networking.k8s.io"],
+          resources: ["ingresses", "networkpolicies"],
+          verbs: ["get", "list", "watch"],
+        },
+        {
+          apiGroups: ["policy"],
+          resources: ["poddisruptionbudgets"],
+          verbs: ["get", "list", "watch"],
+        },
+        {
+          apiGroups: ["kagent.dev"],
+          resources: ["agents", "mcpservers", "modelconfigs", "remotemcpservers"],
+          verbs: ["get", "list", "watch"],
+        },
       ],
     });
 
-    // Binding (cluster-wide or namespace-scoped).
-    if (writeNs) {
-      for (const wns of writeNs) {
-        new ApiObject(this, `scoped-binding-${wns}`, {
-          apiVersion: "rbac.authorization.k8s.io/v1",
-          kind: "RoleBinding",
-          metadata: {
-            name: `kagent-tools-scoped-${wns}`,
-            namespace: wns,
-            annotations: ARGOCD_KEEP_ON_DELETE,
-          },
-          subjects: [
-            {
-              kind: "ServiceAccount",
-              name: "kagent-tools",
-              namespace: ns,
-            },
-          ],
-          roleRef: {
-            kind: "ClusterRole",
-            name: "kagent-tools-scoped",
-            apiGroup: "rbac.authorization.k8s.io",
-          },
-        });
-      }
-    } else {
-      new ApiObject(this, "scoped-binding", {
+    for (const readNamespace of readNamespaces) {
+      new ApiObject(this, `scoped-reader-binding-${readNamespace}`, {
         apiVersion: "rbac.authorization.k8s.io/v1",
-        kind: "ClusterRoleBinding",
+        kind: "RoleBinding",
         metadata: {
-          name: "kagent-tools-scoped",
-          annotations: ARGOCD_KEEP_ON_DELETE,
+          name: "kagent-tools-reader",
+          namespace: readNamespace,
         },
         subjects: [
           {
@@ -549,7 +645,61 @@ export class Kagent extends BaseConstruct<KagentConfig> {
         ],
         roleRef: {
           kind: "ClusterRole",
-          name: "kagent-tools-scoped",
+          name: "kagent-tools-reader",
+          apiGroup: "rbac.authorization.k8s.io",
+        },
+      });
+    }
+
+    if (!writeNamespaces.length) return;
+
+    new ApiObject(this, "scoped-writer-role", {
+      apiVersion: "rbac.authorization.k8s.io/v1",
+      kind: "ClusterRole",
+      metadata: {
+        name: "kagent-tools-writer",
+        labels: {
+          "app.kubernetes.io/name": "kagent-tools",
+          "nebula.sh/managed-by": "nebula",
+        },
+      },
+      rules: [
+        {
+          apiGroups: ["", "apps", "batch"],
+          resources: [
+            "configmaps",
+            "cronjobs",
+            "daemonsets",
+            "deployments",
+            "jobs",
+            "pods",
+            "replicasets",
+            "services",
+            "statefulsets",
+          ],
+          verbs: ["create", "update", "patch", "delete"],
+        },
+      ],
+    });
+
+    for (const writeNamespace of writeNamespaces) {
+      new ApiObject(this, `scoped-writer-binding-${writeNamespace}`, {
+        apiVersion: "rbac.authorization.k8s.io/v1",
+        kind: "RoleBinding",
+        metadata: {
+          name: "kagent-tools-writer",
+          namespace: writeNamespace,
+        },
+        subjects: [
+          {
+            kind: "ServiceAccount",
+            name: "kagent-tools",
+            namespace: ns,
+          },
+        ],
+        roleRef: {
+          kind: "ClusterRole",
+          name: "kagent-tools-writer",
           apiGroup: "rbac.authorization.k8s.io",
         },
       });
