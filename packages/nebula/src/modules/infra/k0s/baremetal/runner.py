@@ -226,7 +226,10 @@ class Provisioner:
 
     def configure_firmware(self, ssh: SshClient) -> bool:
         result = ssh.call(
-            "uefi-apply", installed=True, expectedBootId=self.status["installedBootId"]
+            "uefi-apply",
+            installed=True,
+            expectedBootId=self.status["installedBootId"],
+            firmwareRetryGeneration=self.status.get("firmwareRetryGeneration", 0),
         )
         if result.get("configured") is not True:
             raise ProvisioningError("UEFI configuration did not succeed")

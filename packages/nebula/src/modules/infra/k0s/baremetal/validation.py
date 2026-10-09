@@ -138,8 +138,8 @@ def validate_uefi(profile: FirmwareProfile) -> None:
     seen = set()
     for variable in variables:
         validate_variable(variable)
-        identity = (variable["name"], variable["guid"].lower())
-        require_uefi(identity not in seen, "duplicate variable")
+        identity = variable["name"]
+        require_uefi(identity not in seen, "setup_var.efi requires unique variable names")
         seen.add(identity)
     validate_firmware_checks(profile.get("verification", {}))
 

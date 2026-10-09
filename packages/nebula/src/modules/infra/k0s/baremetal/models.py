@@ -124,7 +124,6 @@ class VariableBackup(TypedDict):
     name: str
     before: str
     after: str
-    flags: int
 
 
 class FirmwareCheckpoint(TypedDict):
@@ -136,5 +135,22 @@ class FirmwareCheckpoint(TypedDict):
     changed: bool
 
 
+class EfiBootIdentity(TypedDict):
+    directory: str
+    bootNumber: str
+    returnBoot: str
+    partUuid: str
+    bootOrder: str
+
+
+class EfiBootIntent(EfiBootIdentity, total=False):
+    entryHash: str
+
+
 class FirmwareTransaction(FirmwareCheckpoint, total=False):
     rebootRequested: bool
+    backend: str
+    generation: int
+    efiBoot: EfiBootIntent
+    failed: str
+    cleanupComplete: bool

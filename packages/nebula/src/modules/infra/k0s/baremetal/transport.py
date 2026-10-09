@@ -197,7 +197,7 @@ class SSH:
                     text=True,
                     capture_output=True,
                     pass_fds=descriptors,
-                    timeout=900 if action in ("probe", "stage") else 45,
+                    timeout=900 if action in ("probe", "stage", "uefi-apply") else 45,
                 )
         except (subprocess.TimeoutExpired, OSError) as error:
             raise RetryableError(f"SSH {action} transport failed: {type(error).__name__}") from None

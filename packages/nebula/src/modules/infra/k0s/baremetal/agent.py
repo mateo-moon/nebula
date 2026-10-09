@@ -16,6 +16,7 @@ HOST_MODULES = (
     "installer.py",
     "storage.py",
     "uefi.py",
+    "efi_boot.py",
     "host.py",
 )
 

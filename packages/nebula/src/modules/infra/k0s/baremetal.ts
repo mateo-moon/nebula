@@ -241,7 +241,7 @@ export class BaremetalSetup extends Construct {
     requireValue(Boolean(o.defaults.geo && o.defaults.region && o.defaults.zone), "topology defaults are required");
     requireValue(dnsName.test(o.tagDomain), "invalid tag domain");
 
-    const runtimeFiles = ["agent.py", "host.py", "installer.py", "models.py", "runner.py", "runtime.py", "storage.py", "transport.py", "uefi.py", "validation.py"];
+    const runtimeFiles = ["agent.py", "efi_boot.py", "host.py", "installer.py", "models.py", "runner.py", "runtime.py", "storage.py", "transport.py", "uefi.py", "validation.py"];
     const scripts = Object.fromEntries(runtimeFiles.map(file => [file, readFileSync(new URL(`./baremetal/${file}`, import.meta.url), "utf8")]));
     const scriptsName = `${name}-${createHash("sha256").update(JSON.stringify(scripts)).digest("hex").slice(0, 16)}`;
     new ApiObject(this, "scripts", { apiVersion: "v1", kind: "ConfigMap", metadata: {

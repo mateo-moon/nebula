@@ -369,6 +369,10 @@ def dispatch(action: str, payload: JsonObject) -> JsonObject:
     if not re.fullmatch(r"[a-zA-Z0-9-]{1,64}", payload["uid"]):
         raise ProvisioningError("invalid request UID")
     validate_spec(payload["spec"])
+    if action.startswith("uefi-"):
+        generation = payload.get("firmwareRetryGeneration", 0)
+        if type(generation) is not int or not 0 <= generation <= 100:
+            raise ProvisioningError("invalid firmware retry generation")
     if action == "probe":
         skip_uefi = payload.get("skipUefi", False)
         if type(skip_uefi) is not bool:
