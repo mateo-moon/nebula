@@ -6,6 +6,7 @@ installed receipt bind an operation to one request UID.
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import gzip
 import hashlib
@@ -402,11 +403,15 @@ def main() -> None:
         StopIteration,
     ) as error:
         # Never include command output, key payloads or a traceback in the protocol.
-        message = (
-            str(error)
-            if isinstance(error, ProvisioningError)
-            else "host operation failed: " + type(error).__name__
-        )
+        if isinstance(error, ProvisioningError):
+            message = str(error)
+        elif isinstance(error, OSError) and error.errno is not None:
+            # Error numbers identify firmware/OS failures without exposing the
+            # exception's filename, command output or private payload.
+            code = errno.errorcode.get(error.errno, "UNKNOWN")
+            message = f"host operation failed: {type(error).__name__} ({code}, errno {error.errno})"
+        else:
+            message = "host operation failed: " + type(error).__name__
         # Missing files or services while the new OS boots can be retried.
         # Firmware failures require inspection; do not guess after a write.
         terminal = action.startswith("uefi-") or isinstance(

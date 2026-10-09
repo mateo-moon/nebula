@@ -65,6 +65,7 @@ const TEMPLATE = String.raw`
 {{- $uid := $xr.metadata.uid -}}
 {{- $hostname := $xr.spec.hostname | default (printf "bm-%s" (replace "." "-" $xr.spec.address)) -}}
 {{- $prefix := printf "%s-%s" ($hostname | trunc 50 | trimSuffix "-") ($uid | sha256sum | trunc 12) -}}
+{{- $retryPrefix := printf "%s-%s" ($hostname | trunc 42 | trimSuffix "-") ($uid | sha256sum | trunc 12) -}}
 {{- $namespace := $profile.namespace -}}
 {{- $meta := dict "name" $prefix "namespace" $namespace -}}
 {{- $ssh := deepCopy $profile.ssh -}}
@@ -96,7 +97,14 @@ const TEMPLATE = String.raw`
 {{- $state := dig "resource" (dict) (get $resources "state" | default dict) -}}
 {{- $data := dig "status" "atProvider" "manifest" "data" (dict) $state -}}
 {{- $progress := get $data "progress" | default "{}" | fromJson | default dict -}}
-{{- $job := dig "resource" (dict) (get $resources "install" | default dict) -}}
+{{- $install := dig "resource" (dict) (get $resources "install" | default dict) -}}
+{{- $generation := $xr.spec.firmwareRetryGeneration | default 0 | int -}}
+{{- $job := $install -}}
+{{- $jobName := $prefix -}}
+{{- if gt $generation 0 -}}
+{{- $job = dig "resource" (dict) (get $resources (printf "firmware-%d" $generation) | default dict) -}}
+{{- $jobName = printf "%s-fw-%d" $retryPrefix $generation -}}
+{{- end -}}
 {{- $jobManifest := dig "status" "atProvider" "manifest" (dict) $job -}}
 {{- $complete := false -}}
 {{- $jobFailed := false -}}
@@ -112,7 +120,7 @@ const TEMPLATE = String.raw`
   (eq (dig "spec" "providerConfigRef" "name" "" $job) $profile.kubeProviderConfigName)
   (eq (dig "status" "atProvider" "manifest" "metadata" "name" "" $state) $stateName)
   (eq (dig "status" "atProvider" "manifest" "metadata" "namespace" "" $state) $namespace)
-  (eq (dig "metadata" "name" "" $jobManifest) $prefix) (eq (dig "metadata" "namespace" "" $jobManifest) $namespace)
+  (eq (dig "metadata" "name" "" $jobManifest) $jobName) (eq (dig "metadata" "namespace" "" $jobManifest) $namespace)
   (eq (dig "metadata" "annotations" "baremetal.nebula.io/request-uid" "" $jobManifest) $uid)
   (eq (dig "metadata" "annotations" "baremetal.nebula.io/request-hash" "" $jobManifest) $hash) -}}
 
@@ -152,15 +160,62 @@ const TEMPLATE = String.raw`
         "env" (list (dict "name" "NAMESPACE" "value" $namespace) (dict "name" "STATE_CONFIG_MAP" "value" $stateName))
         "securityContext" (dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")))
         "resources" (dict "requests" (dict "cpu" "50m" "memory" "128Mi")) "volumeMounts" $mounts)) "volumes" $volumes))) -}}
-{{- /* The Job is immutable after creation, including image/scripts across a revision change. */ -}}
-{{- $existingJob := dig "spec" "forProvider" "manifest" (dict) $job -}}
+{{- $runtimeJob := deepCopy $jobDesired -}}
+{{- /* The original installation Job is retained, never replaced or rerun. */ -}}
+{{- $existingJob := dig "spec" "forProvider" "manifest" (dict) $install -}}
 {{- if $existingJob -}}{{- $jobDesired = deepCopy $existingJob -}}{{- end -}}
+{{- $activeDesired := $jobDesired -}}
+{{- $terminalCel := "has(object.status) && has(object.status.conditions) && object.status.conditions.exists(c, (c.type == 'Complete' || c.type == 'Failed') && c.status == 'True')" -}}
+{{- $completeCel := "has(object.status) && has(object.status.conditions) && object.status.conditions.exists(c, c.type == 'Complete' && c.status == 'True')" -}}
+{{- $installFinished := false -}}
+{{- range (dig "status" "atProvider" "manifest" "status" "conditions" (list) $install) -}}
+{{- if and (or (eq .type "Complete") (eq .type "Failed")) (eq .status "True") -}}{{- $installFinished = true -}}{{- end -}}
+{{- end -}}
+{{- $publishedGeneration := $progress.firmwareRetryGeneration | default 0 | int -}}
+{{- $firmwarePhase := has ($data.phase | default "") (list "ConfiguringUefi" "RebootingUefi" "VerifyingUefi") -}}
+{{- if gt $generation 0 -}}
+{{- range $attempt := untilStep 1 (add1 $generation | int) 1 -}}
+{{- $key := printf "firmware-%d" $attempt -}}
+{{- $observed := dig "resource" (dict) (get $resources $key | default dict) -}}
+{{- $previous := $install -}}
+{{- if gt $attempt 1 -}}{{- $previous = dig "resource" (dict) (get $resources (printf "firmware-%d" (sub $attempt 1 | int)) | default dict) -}}{{- end -}}
+{{- $previousFailed := false -}}
+{{- range (dig "status" "atProvider" "manifest" "status" "conditions" (list) $previous) -}}
+{{- if and (eq .type "Failed") (eq .status "True") -}}{{- $previousFailed = true -}}{{- end -}}
+{{- end -}}
+{{- $canStart := and $bound $firmwarePhase ($progress.terminalError | default false) $previousFailed
+  (eq $attempt (add1 $publishedGeneration | int))
+  (not (dig "status" "enrollmentPublished" false $xr)) (not (dig "status" "admissionPublished" false $xr))
+  (not (hasKey $resources "pool")) (not (hasKey $resources "worker"))
+  (not (hasKey $resources "remote-template")) (not (hasKey $resources "bootstrap-template"))
+  (not (hasKey $resources "cidr-policy")) (not (hasKey $resources "identity-policy")) -}}
+{{- $publish := or $observed (le $attempt $publishedGeneration) $canStart -}}
+{{- $retryDesired := deepCopy $runtimeJob -}}
+{{- $_ := set $retryDesired.metadata "name" (printf "%s-fw-%d" $retryPrefix $attempt) -}}
+{{- $_ := set $retryDesired.spec "backoffLimit" 0 -}}
+{{- $_ := set $retryDesired.spec "activeDeadlineSeconds" (add $uefiTimeout 120) -}}
+{{- $_ := set $retryDesired.spec.template.spec "restartPolicy" "Never" -}}
+{{- $container := index $retryDesired.spec.template.spec.containers 0 -}}
+{{- $_ := set $container "env" (append $container.env (dict "name" "FIRMWARE_RETRY_GENERATION" "value" ($attempt | toString))) -}}
+{{- $existing := dig "spec" "forProvider" "manifest" (dict) $observed -}}
+{{- if $existing -}}{{- $retryDesired = deepCopy $existing -}}{{- end -}}
+{{- if eq $attempt $generation -}}{{- $activeDesired = $retryDesired -}}{{- end -}}
+{{- if $publish -}}
+{{- $cel := $terminalCel -}}{{- if eq $attempt $generation -}}{{- $cel = $completeCel -}}{{- end -}}
+{{ template "object" (merge (dict "key" $key "policies" $snapshot "manifest" $retryDesired
+  "readiness" (dict "policy" "DeriveFromCelQuery" "celQuery" $cel)) $context) }}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- $osReady = and $osReady
-  (eq (include "current" (dict "observed" $job "manifest" $jobDesired "provider" $profile.kubeProviderConfigName "uid" $uid)) "true")
+  (or (eq $generation 0) (eq $generation $publishedGeneration))
+  (eq (include "current" (dict "observed" $job "manifest" $activeDesired "provider" $profile.kubeProviderConfigName "uid" $uid)) "true")
   (eq (include "current" (dict "observed" $state "provider" $profile.kubeProviderConfigName "uid" $uid "manifest"
     (dict "apiVersion" "v1" "kind" "ConfigMap" "metadata" (dict "name" $stateName "namespace" $namespace) "data" (dict "uid" $uid "requestHash" $hash)))) "true") -}}
-{{ template "object" (merge (dict "key" "install" "policies" $snapshot "gate" $osReady "manifest" $jobDesired
-  "readiness" (dict "policy" "DeriveFromCelQuery" "celQuery" "has(object.status) && has(object.status.conditions) && object.status.conditions.exists(c, c.type == 'Complete' && c.status == 'True')")) $context) }}
+{{- $installCel := $completeCel -}}{{- $installGate := $osReady -}}
+{{- if gt $generation 0 -}}{{- $installCel = $terminalCel -}}{{- $installGate = $installFinished -}}{{- end -}}
+{{ template "object" (merge (dict "key" "install" "policies" $snapshot "gate" $installGate "manifest" $jobDesired
+  "readiness" (dict "policy" "DeriveFromCelQuery" "celQuery" $installCel)) $context) }}
 
 {{- $cidr := "" -}}
 {{- $admissionPublished := or (dig "status" "admissionPublished" false $xr)
@@ -244,7 +299,7 @@ const TEMPLATE = String.raw`
 {{- if $osReady -}}{{- $phase = "OSReady" -}}{{- end -}}
 {{- if and $osReady $enrollmentPublished -}}{{- $phase = "Enrolling" -}}{{- end -}}
 {{- if $workerReady -}}{{- $phase = "Ready" -}}{{- end -}}
-{{- if $jobFailed -}}{{- $phase = "Failed" -}}{{- end -}}
+{{- if or $jobFailed ($progress.terminalError | default false) -}}{{- $phase = "Failed" -}}{{- end -}}
 {{ template "emit" (dict "apiVersion" $xr.apiVersion "kind" $xr.kind "status"
   (dict "phase" $phase "osReady" $osReady "uefiReady" $uefiReady "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
     "lastError" ($progress.lastError | default "") "requestHash" $hash "admissionPublished" $admissionPublished "enrollmentPublished" $enrollmentPublished)) }}

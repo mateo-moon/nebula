@@ -24,10 +24,17 @@ export interface BaremetalNode {
   zone?: string;
   nodeLabels?: Record<string, string>;
   taints?: string[];
+  /** Explicit, one-shot firmware retry after a terminal failure (1–16).
+   * Never retries OS installation. Increase by one for another inspected attempt. */
+  firmwareRetryGeneration?: number;
 }
 
 /** Select the shared installation and enrollment Composition. */
-export interface BaremetalFleetOptions { compositionName?: string }
+export interface BaremetalFleetOptions {
+  compositionName?: string;
+  /** Explicitly select a reviewed revision for an existing, manually pinned host. */
+  compositionRevisionName?: string;
+}
 
 export interface BaremetalBootArtifact { url: string; sha256: string }
 
@@ -113,6 +120,8 @@ const labelPattern = "^[A-Za-z0-9](?:[-_.A-Za-z0-9]*[A-Za-z0-9])?$";
 const taintPattern = "^[A-Za-z0-9_./-]+(?:=[A-Za-z0-9_.-]+)?:(NoSchedule|NoExecute|PreferNoSchedule)$";
 
 function validateNode(node: Omit<BaremetalNode, "address">): void {
+  requireValue(node.firmwareRetryGeneration === undefined || (Number.isInteger(node.firmwareRetryGeneration)
+    && node.firmwareRetryGeneration >= 1 && node.firmwareRetryGeneration <= 16), "invalid firmware retry generation");
   requireValue(node.name === undefined || (node.name.length <= 63 && new RegExp(hostnamePattern).test(node.name)), "invalid hostname");
   requireValue(node.sshUser === undefined || (node.sshUser.length <= 32 && new RegExp(sshUserPattern).test(node.sshUser)), "invalid SSH user");
   requireValue(node.sshPort === undefined || (Number.isInteger(node.sshPort) && node.sshPort >= 1 && node.sshPort <= 65535), "invalid SSH port");
@@ -134,6 +143,8 @@ export function baremetalWorker(scope: Construct, o: BaremetalFleetOptions, inpu
   const name = node.name ?? `bm-${node.address.replaceAll(".", "-")}`;
   const compositionName = o.compositionName ?? "baremetal-worker";
   requireValue(/^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(compositionName), "composition name must be a DNS label of 2–40 characters");
+  requireValue(o.compositionRevisionName === undefined || (dnsName.test(o.compositionRevisionName)
+    && o.compositionRevisionName.length <= 253), "invalid composition revision name");
   return new ApiObject(scope, name, {
     apiVersion: "nebula.io/v1alpha1", kind: "XBaremetalWorker",
     metadata: { name, annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } },
@@ -147,7 +158,9 @@ export function baremetalWorker(scope: Construct, o: BaremetalFleetOptions, inpu
       ...(node.zone !== undefined ? { zone: node.zone } : {}),
       ...(node.nodeLabels !== undefined ? { nodeLabels: node.nodeLabels } : {}),
       ...(node.taints !== undefined ? { taints: node.taints } : {}),
-      crossplane: { compositionRef: { name: compositionName }, compositionUpdatePolicy: "Manual" },
+      ...(node.firmwareRetryGeneration !== undefined ? { firmwareRetryGeneration: node.firmwareRetryGeneration } : {}),
+      crossplane: { compositionRef: { name: compositionName }, compositionUpdatePolicy: "Manual",
+        ...(o.compositionRevisionName ? { compositionRevisionRef: { name: o.compositionRevisionName } } : {}) },
     },
   });
 }
@@ -259,6 +272,7 @@ export class BaremetalSetup extends Construct {
               hostname: { type: "string", minLength: 1, maxLength: 63, pattern: hostnamePattern },
               sshUser: { type: "string", minLength: 1, maxLength: 32, pattern: sshUserPattern },
               sshPort: { type: "integer", minimum: 1, maximum: 65535 },
+              firmwareRetryGeneration: { type: "integer", minimum: 1, maximum: 16 },
               geo: { type: "string", minLength: 1, maxLength: 63, pattern: labelPattern },
               region: { type: "string", minLength: 1, maxLength: 63, pattern: labelPattern },
               zone: { type: "string", minLength: 1, maxLength: 63, pattern: labelPattern },
@@ -267,6 +281,8 @@ export class BaremetalSetup extends Construct {
               taints: { type: "array", maxItems: 64, items: { type: "string", maxLength: 253, pattern: taintPattern } },
             }, "x-kubernetes-validations": [
               { rule: "self.address == oldSelf.address", message: "host address is immutable" },
+              { rule: "!has(oldSelf.firmwareRetryGeneration) ? (!has(self.firmwareRetryGeneration) || self.firmwareRetryGeneration == 1) : (has(self.firmwareRetryGeneration) && (self.firmwareRetryGeneration == oldSelf.firmwareRetryGeneration || self.firmwareRetryGeneration == oldSelf.firmwareRetryGeneration + 1))",
+                message: "firmware retry generation must start at one and increase by one; it cannot be removed" },
               ...["hostname", "sshUser", "sshPort"].map(field => ({
                 rule: `has(self.${field}) == has(oldSelf.${field}) && (!has(self.${field}) || self.${field} == oldSelf.${field})`,
                 message: `${field} is immutable`,

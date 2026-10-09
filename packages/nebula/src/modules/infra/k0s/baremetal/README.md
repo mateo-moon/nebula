@@ -451,3 +451,25 @@ References: [provider-kubernetes v0.17.0](https://github.com/crossplane-contrib/
 [Debian initrd preseeding](https://www.debian.org/releases/trixie/amd64/apbs02.en.html),
 [Debian automated installation](https://www.debian.org/releases/trixie/amd64/apbs04.en.html),
 [Linux efivarfs](https://docs.kernel.org/filesystems/efivarfs.html).
+
+## Firmware recovery
+
+OS installation and firmware changes retain their request-bound journals and
+host backups. A terminal error blocks further host operations and enrollment.
+Inspect the error and backup before requesting another firmware attempt.
+
+Select the reviewed `compositionRevisionName` in `BaremetalFleetOptions`, then
+set the host's `firmwareRetryGeneration: 1` through GitOps. Further inspected
+attempts increase the generation by one, up to 16. It cannot be removed or reset.
+The installation profile and request identity must remain unchanged.
+
+The Composition waits for the previous Job to finish with a failure, then
+creates a separate firmware-only Job. The runtime consumes the generation with
+a compare-and-swap checkpoint, preserves prior errors, and renews the bounded
+firmware deadline. Restarting the same attempt cannot unblock another error.
+Discovery, disk erasure and OS installation phases are refused. The original
+Job and previous attempts remain retained; only the active attempt's completion
+and bound OS/firmware verification can permit enrollment.
+
+Firmware errors report the operation and errno, without variable contents or
+credential paths. Original variable bytes remain in the private host backup.
