@@ -514,6 +514,48 @@ test("another firmware generation waits for the previous attempt to fail and ret
   assert.equal(native(next, "pool"), undefined);
 });
 
+test("per-host UEFI skip retains the request and needs completed OS verification", () => {
+  const fw = setup({ ...options, installation: { ...options.installation, uefi } });
+  const xr = structuredClone(fw.xr); xr.spec.firmwareRetryGeneration = 1; xr.spec.skipUefi = true;
+  const original = render({}, fw.xr, fw.template);
+  const observed = observe(original);
+  const data = observed.state.resource.status.atProvider.manifest.data;
+  data.phase = "ConfiguringUefi"; data.progress = JSON.stringify({ terminalError: true });
+  observed.install.resource.status.atProvider.manifest.status = { conditions: [{ type: "Failed", status: "True" }] };
+  const retry = render(observed, xr, fw.template);
+  const job = native(retry, "firmware-1");
+  assert.ok(job.spec.template.spec.containers[0].env.some((e: any) => e.name === "SKIP_UEFI" && e.value === "true"));
+  assert.deepEqual(native(retry, "request"), native(original, "request"));
+  assert.deepEqual(native(retry, "install"), native(original, "install"));
+  observed["firmware-1"] = observe(retry)["firmware-1"];
+  observed["firmware-1"].resource.status.atProvider.manifest.status = { conditions: [{ type: "Complete", status: "True" }] };
+  data.phase = "OSReady"; data.verifiedRequestHash = data.requestHash;
+  data.progress = JSON.stringify({ phase: "OSReady", firmwareRetryGeneration: 1, uefiVerified: false });
+  assert.equal(status(render(observed, xr, fw.template)).osReady, false);
+  data.progress = JSON.stringify({ phase: "OSReady", firmwareRetryGeneration: 1, uefiSkipped: true, uefiVerified: false });
+  const completed = render(observed, xr, fw.template);
+  assert.equal(status(completed).osReady, true); assert.equal(status(completed).uefiReady, false);
+  assert.equal(status(completed).uefiSkipped, true); assert.ok(native(completed, "pool"));
+  delete xr.spec.skipUefi;
+  assert.equal(status(render(observed, xr, fw.template)).osReady, false);
+});
+
+test("UEFI skip is explicit and an existing host needs the next operator attempt", () => {
+  const chart = Testing.chart();
+  baremetalWorker(chart, {}, { address: "192.0.2.10", skipUefi: true });
+  assert.equal(Testing.synth(chart)[0].spec.skipUefi, true);
+  assert.throws(() => baremetalWorker(Testing.chart(), {}, { address: "192.0.2.10", skipUefi: false as any }), /explicitly true/);
+  const rules = fixture.resources.find(r => r.kind === "CompositeResourceDefinition")!.spec.versions[0].schema.openAPIV3Schema.properties.spec["x-kubernetes-validations"];
+  const skipRules = rules.filter((r: any) => r.message.includes("skip") || r.message.includes("skipping"));
+  for (const [oldSelf, self, expected] of [
+    [{ firmwareRetryGeneration: 1n }, { firmwareRetryGeneration: 1n, skipUefi: true }, false],
+    [{ firmwareRetryGeneration: 1n }, { firmwareRetryGeneration: 2n, skipUefi: true }, true],
+    [{}, { firmwareRetryGeneration: 1n, skipUefi: true }, true],
+    [{ skipUefi: true, firmwareRetryGeneration: 1n }, { firmwareRetryGeneration: 2n }, false],
+    [{ skipUefi: true, firmwareRetryGeneration: 1n }, { skipUefi: true, firmwareRetryGeneration: 1n }, true],
+  ] as const) assert.equal(skipRules.every((r: any) => evaluate(r.rule, { oldSelf, self })), expected);
+});
+
 test("firmware attempt and revision selection are explicit and bounded in the public API", () => {
   const chart = Testing.chart();
   baremetalWorker(chart, { compositionRevisionName: "baremetal-worker-1234567" }, {

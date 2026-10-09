@@ -113,8 +113,11 @@ const TEMPLATE = String.raw`
 {{- if and (eq .type "Failed") (eq .status "True") -}}{{- $jobFailed = true -}}{{- end -}}
 {{- end -}}
 {{- $bound := and (eq ($data.uid | default "") $uid) (eq ($data.requestHash | default "") $hash) -}}
-{{- $uefiReady := or (not $profile.installation.uefi) (and $bound (eq ($progress.uefiVerified | default false) true)) -}}
-{{- $osReady := and $bound $complete (not $jobFailed) (not ($progress.terminalError | default false)) $uefiReady (eq ($data.verifiedRequestHash | default "") $hash)
+{{- $skipUefi := $xr.spec.skipUefi | default false -}}
+{{- $uefiSkipped := and $bound $skipUefi (eq ($progress.uefiSkipped | default false) true) -}}
+{{- $uefiReady := or (not $profile.installation.uefi) (and $bound (not $skipUefi) (eq ($progress.uefiVerified | default false) true)) -}}
+{{- $firmwareSatisfied := or $uefiReady $uefiSkipped -}}
+{{- $osReady := and $bound $complete (not $jobFailed) (not ($progress.terminalError | default false)) $firmwareSatisfied (eq ($data.verifiedRequestHash | default "") $hash)
   (eq ($data.phase | default "") "OSReady") (eq (include "ready" $state) "true") (eq (include "ready" $job) "true")
   (eq (dig "spec" "providerConfigRef" "name" "" $state) $profile.kubeProviderConfigName)
   (eq (dig "spec" "providerConfigRef" "name" "" $job) $profile.kubeProviderConfigName)
@@ -157,7 +160,8 @@ const TEMPLATE = String.raw`
     "template" (dict "spec" (dict "restartPolicy" "OnFailure" "serviceAccountName" $prefix
       "securityContext" (dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "fsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault"))
       "containers" (list (dict "name" "install" "image" $profile.image "command" (list "python3" "-B" "/opt/provisioner/runner.py")
-        "env" (list (dict "name" "NAMESPACE" "value" $namespace) (dict "name" "STATE_CONFIG_MAP" "value" $stateName))
+        "env" (list (dict "name" "NAMESPACE" "value" $namespace) (dict "name" "STATE_CONFIG_MAP" "value" $stateName)
+          (dict "name" "SKIP_UEFI" "value" ($skipUefi | toString)))
         "securityContext" (dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")))
         "resources" (dict "requests" (dict "cpu" "50m" "memory" "128Mi")) "volumeMounts" $mounts)) "volumes" $volumes))) -}}
 {{- $runtimeJob := deepCopy $jobDesired -}}
@@ -301,6 +305,6 @@ const TEMPLATE = String.raw`
 {{- if $workerReady -}}{{- $phase = "Ready" -}}{{- end -}}
 {{- if or $jobFailed ($progress.terminalError | default false) -}}{{- $phase = "Failed" -}}{{- end -}}
 {{ template "emit" (dict "apiVersion" $xr.apiVersion "kind" $xr.kind "status"
-  (dict "phase" $phase "osReady" $osReady "uefiReady" $uefiReady "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
+  (dict "phase" $phase "osReady" $osReady "uefiReady" $uefiReady "uefiSkipped" $uefiSkipped "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
     "lastError" ($progress.lastError | default "") "requestHash" $hash "admissionPublished" $admissionPublished "enrollmentPublished" $enrollmentPublished)) }}
 `;

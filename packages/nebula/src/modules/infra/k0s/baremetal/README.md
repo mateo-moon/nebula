@@ -9,6 +9,13 @@ The shared composition contains SSH credential references, the installation
 profile and CAPI settings. This single baremetal API uses privileged SSH with
 any server supplier.
 
+For a worker that must keep its existing firmware settings, declare
+`skipUefi: true`. The Job verifies the installed OS and records `uefiSkipped`
+instead of claiming `uefiVerified`. An already-installed worker requires the
+next `firmwareRetryGeneration` and a reviewed CompositionRevision. The immutable
+installation request, host receipt, firmware backups and previous failures stay
+bound to the original identity; skipping UEFI never schedules another install.
+
 ```text
 Git IP → XBaremetalWorker → Crossplane Composition
                               ├─ immutable request + durable progress ConfigMaps

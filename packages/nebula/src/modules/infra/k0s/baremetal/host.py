@@ -36,7 +36,7 @@ def walk_disks(items: list[JsonObject]) -> Iterator[JsonObject]:
         yield from walk_disks(item.get("children", []))
 
 
-def probe(spec: WorkerSpec) -> JsonObject:
+def probe(spec: WorkerSpec, skip_uefi: bool = False) -> JsonObject:
     marker = Path("/var/lib/nebula-baremetal/installed.json")
     if marker.exists():
         return {"installed": json.loads(marker.read_text())}
@@ -44,7 +44,7 @@ def probe(spec: WorkerSpec) -> JsonObject:
         raise ProvisioningError("existing Kubernetes installation: refusing fresh OS installation")
     if platform.machine() != "x86_64" or not Path("/run/systemd/system").is_dir():
         raise ProvisioningError("source host must be x86_64 Linux running systemd")
-    if spec["installation"].get("uefi"):
+    if spec["installation"].get("uefi") and not skip_uefi:
         uefi.preflight(spec)
     disabled = Path("/proc/sys/kernel/kexec_load_disabled")
     if disabled.exists() and disabled.read_text().strip() != "0":
@@ -370,7 +370,10 @@ def dispatch(action: str, payload: JsonObject) -> JsonObject:
         raise ProvisioningError("invalid request UID")
     validate_spec(payload["spec"])
     if action == "probe":
-        return probe(payload["spec"])
+        skip_uefi = payload.get("skipUefi", False)
+        if type(skip_uefi) is not bool:
+            raise ProvisioningError("invalid UEFI skip policy")
+        return probe(payload["spec"], skip_uefi)
     actions = {
         "stage": stage,
         "commit": commit,

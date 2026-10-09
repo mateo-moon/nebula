@@ -470,6 +470,36 @@ class FirmwareJob(unittest.TestCase):
             runner.begin_firmware_retry(stale, 1)
         self.assertEqual(self.journal.status["firmwareRetryGeneration"], 1)
 
+    def test_skip_rechecks_os_without_firmware_writes_or_reinstallation(self):
+        self.install()
+        self.journal.save(terminalError=True, lastError="firmware write protected")
+        runner.begin_firmware_retry(self.journal, 1, lambda: 5000)
+        before = list(FirmwareSSH.calls)
+        self.assertTrue(runner.advance(self.journal, FirmwareSSH, lambda: 5000, skip_uefi=True))
+        self.assertEqual(FirmwareSSH.calls[len(before) :], ["verify"])
+        self.assertTrue(self.journal.status["uefiSkipped"])
+        self.assertFalse(self.journal.status["uefiVerified"])
+        self.assertEqual(
+            self.journal.status["firmwareFailures"][0]["error"], "firmware write protected"
+        )
+        self.assertEqual(self.api.resource["data"]["verifiedRequestHash"], "hash-123")
+        self.assertTrue(runner.advance(self.journal, FirmwareSSH, skip_uefi=True))
+        with self.assertRaisesRegex(ValueError, "UEFI verification"):
+            self.step()
+
+    def test_skip_does_not_publish_os_ready_when_verification_fails(self):
+        self.install()
+        with patch.object(FirmwareSSH, "call", return_value={"verified": False}):
+            with self.assertRaisesRegex(ValueError, "OS verification"):
+                runner.advance(self.journal, FirmwareSSH, skip_uefi=True)
+        self.assertNotIn("verifiedRequestHash", self.api.resource["data"])
+
+    def test_skip_cannot_reopen_a_terminal_failure_without_a_retry(self):
+        self.install()
+        self.journal.save(terminalError=True, lastError="write protected")
+        with self.assertRaisesRegex(ValueError, "blocked"):
+            runner.advance(self.journal, FirmwareSSH, skip_uefi=True)
+
 
 if __name__ == "__main__":
     unittest.main()

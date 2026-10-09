@@ -88,12 +88,15 @@ class Journal:
 class Provisioner:
     """Execute one resumable transition using a snapshot of the persisted state."""
 
-    def __init__(self, journal: Journal, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self, journal: Journal, clock: Callable[[], float] = time.time, skip_uefi: bool = False
+    ) -> None:
         self.journal = journal
         self.clock = clock
         self.spec: WorkerSpec = journal.request["spec"]
         self.status = journal.status
         self.uefi = self.spec["installation"].get("uefi")
+        self.skip_uefi = skip_uefi
         try:
             self.phase = Phase(self.status.get("phase", Phase.PENDING))
         except ValueError:
@@ -111,13 +114,16 @@ class Provisioner:
         if (
             self.phase == Phase.OS_READY
             and self.uefi
-            and self.status.get("uefiVerified") is not True
+            and not (
+                self.status.get("uefiVerified") is True
+                or (self.skip_uefi and self.status.get("uefiSkipped") is True)
+            )
         ):
             raise ProvisioningError("UEFI verification is missing; refusing enrollment")
         if self.phase in FIRMWARE_PHASES:
             if not self.uefi:
                 raise ProvisioningError("UEFI phase has no firmware profile")
-            if self.clock() - self.status["uefiStartedAt"] > self.uefi.get(
+            if not self.skip_uefi and self.clock() - self.status["uefiStartedAt"] > self.uefi.get(
                 "rebootTimeoutSeconds", 900
             ):
                 raise ProvisioningError(
@@ -125,6 +131,8 @@ class Provisioner:
                 )
 
     def step(self, ssh: SshClient) -> bool:
+        if self.skip_uefi and self.phase in FIRMWARE_PHASES:
+            return self.skip_firmware(ssh)
         handlers = {
             Phase.PENDING: self.discover,
             Phase.DISCOVERED: self.stage,
@@ -137,7 +145,7 @@ class Provisioner:
         return handlers[self.phase](ssh)
 
     def discover(self, ssh: SshClient) -> bool:
-        facts = ssh.call("probe")
+        facts = ssh.call("probe", skipUefi=self.skip_uefi)
         if facts.get("installed"):
             raise ProvisioningError(
                 "existing installation receipt without management binding; restore management state"
@@ -169,7 +177,7 @@ class Provisioner:
                 "installation deadline exceeded; recovery needs inspection, never automatic reimaging"
             )
         try:
-            facts = ssh.call("probe")
+            facts = ssh.call("probe", skipUefi=self.skip_uefi)
         except RetryableError:
             return
         # A crash between checkpoint and kexec may resume only the known source boot.
@@ -184,7 +192,7 @@ class Provisioner:
             return False
         if result.get("verified") is not True:
             raise ProvisioningError("installed OS verification did not succeed")
-        if self.uefi:
+        if self.uefi and not self.skip_uefi:
             self.journal.save(
                 phase=Phase.CONFIGURING_UEFI,
                 uefiStartedAt=self.clock(),
@@ -193,7 +201,27 @@ class Provisioner:
                 lastError="",
             )
             return False
-        self.journal.save(phase=Phase.OS_READY, addresses=result["addresses"], lastError="")
+        self.mark_os_ready(result)
+        return True
+
+    def mark_os_ready(self, result: JsonObject) -> None:
+        skipped = bool(self.uefi and self.skip_uefi)
+        self.journal.save(
+            phase=Phase.OS_READY,
+            addresses=result["addresses"],
+            verifiedBootId=result["bootId"],
+            uefiSkipped=skipped,
+            uefiVerified=False,
+            lastError="",
+        )
+
+    def skip_firmware(self, ssh: SshClient) -> bool:
+        # Recheck the retained OS receipt, disk layout and networking. Never
+        # call firmware or installer actions, and retain every earlier failure.
+        result = ssh.call("verify", installed=True)
+        if result.get("verified") is not True:
+            raise ProvisioningError("installed OS verification did not succeed")
+        self.mark_os_ready(result)
         return True
 
     def configure_firmware(self, ssh: SshClient) -> bool:
@@ -228,9 +256,13 @@ class Provisioner:
 
 
 def advance(
-    journal: Journal, ssh_factory: SshFactory = SSH, clock: Callable[[], float] = time.time
+    journal: Journal,
+    ssh_factory: SshFactory = SSH,
+    clock: Callable[[], float] = time.time,
+    *,
+    skip_uefi: bool = False,
 ) -> bool:
-    provisioner = Provisioner(journal, clock)
+    provisioner = Provisioner(journal, clock, skip_uefi)
     provisioner.validate_checkpoint()
     if provisioner.phase == Phase.OS_READY:
         return True
@@ -312,6 +344,9 @@ def record_error(journal: Journal | None, error: Exception) -> bool:
 
 def main() -> None:
     os.umask(0o077)
+    policy = os.environ.get("SKIP_UEFI", "false")
+    if policy not in ("false", "true"):
+        raise ProvisioningError("invalid UEFI skip policy")
     raw = Path("/etc/provisioner/request.json").read_bytes()
     request = json_object(json.loads(raw), "Request")
     request_hash = hashlib.sha256(raw).hexdigest()
@@ -336,7 +371,7 @@ def main() -> None:
             )
             if os.environ.get("FIRMWARE_RETRY_GENERATION"):
                 begin_firmware_retry(journal, int(os.environ["FIRMWARE_RETRY_GENERATION"]))
-            if advance(journal):
+            if advance(journal, skip_uefi=policy == "true"):
                 return
         except (
             ValueError,
