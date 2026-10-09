@@ -2,7 +2,7 @@
 # all host access uses unprivileged OpenSSH and Kubernetes HTTPS.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
-RUN apt-get update && apt-get install -y --no-install-recommends python3 openssh-client ca-certificates passwd \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 openssh-client sshpass ca-certificates passwd \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 provisioner \
     && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin provisioner

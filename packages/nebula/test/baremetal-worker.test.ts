@@ -90,6 +90,32 @@ test("the baremetal worker XR follows Setup/Composition with immutable identity 
     assert.ok(schema.properties.spec["x-kubernetes-validations"].some((rule: any) => rule.message === `${field} is immutable`));
 });
 
+test("password bootstrap references a separate Secret and enrollment retains the worker key", () => {
+  assert.throws(() => setup({ ...options, initialSshAuthentication: "password" }), /separate initial SSH Secret/);
+  const password = setup({ ...options, initialSshAuthentication: "password", initialSshSecretName: "rescue-password" });
+  const first = render({}, password.xr, password.template);
+  const request = JSON.parse(native(first, "request").data["request.json"]);
+  assert.equal(request.spec.ssh.authentication, "password");
+  assert.equal(request.spec.ssh.secretName, "rescue-password");
+  assert.equal(request.spec.ssh.workerSecretName, "worker-ssh");
+  const final = render(installed(password.template, password.xr), password.xr, password.template);
+  assert.equal(native(final, "pool").spec.machine.sshKeyRef.name, "worker-ssh");
+});
+
+test("rescue storage declarations require explicit unique erasure identities", () => {
+  const disk = { serial: "os", minSizeGiB: 32, eraseSerials: ["os", "data"], workloadSerials: ["data"] };
+  const profile = setup({ ...options, installation: { ...options.installation, disk } });
+  const request = JSON.parse(native(render({}, profile.xr, profile.template), "request").data["request.json"]);
+  assert.deepEqual(request.spec.installation.disk, disk);
+  for (const invalid of [
+    { ...disk, eraseSerials: ["data"] },
+    { ...disk, eraseSerials: ["os", "os"] },
+    { ...disk, workloadSerials: ["os"] },
+    { ...disk, workloadSerials: ["unknown"] },
+    { ...disk, workloadSerials: ["data", "data"] },
+  ]) assert.throws(() => setup({ ...options, installation: { ...options.installation, disk: invalid } }), /Serials/);
+});
+
 test("named workers carry their settings through OS installation and deferred CAPI enrollment", () => {
   const shared = setup({ ...options, defaults: { ...options.defaults,
     nodeLabels: { workload: "shared", inherited: "yes" }, taints: ["workload=shared:NoSchedule"] } });

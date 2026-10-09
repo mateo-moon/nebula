@@ -4,7 +4,7 @@ Field names match the existing JSON receipts and Crossplane request. Runtime
 validation remains necessary because SSH and Kubernetes are serialization boundaries.
 """
 
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 # External command output and Kubernetes envelopes have independently versioned schemas.
 JsonObject = dict[str, Any]
@@ -21,6 +21,8 @@ class DiskRequirements(TypedDict):
 
 class DiskPolicy(DiskRequirements, total=False):
     serial: str
+    eraseSerials: list[str]
+    workloadSerials: list[str]
 
 
 class ValueRange(TypedDict):
@@ -99,6 +101,7 @@ class SshIdentity(TypedDict):
 
 
 class SshSettings(SshIdentity, total=False):
+    authentication: Literal["privateKey", "password"]
     knownHostsSecretName: str
     trustOnFirstUse: bool
 

@@ -18,6 +18,7 @@ from baremetal_fixtures import (
     host_agent,
     installer,
     runner,
+    storage,
     transport,
 )
 
@@ -147,6 +148,119 @@ class Qualification(unittest.TestCase):
             installer.select_disk([disk, other], set(), {**policy, "serial": "second"}), other
         )
 
+    def test_rescue_root_does_not_require_a_block_device(self):
+        for kind in ("overlay", "tmpfs", "ramfs"):
+            with patch.object(
+                storage,
+                "json_command",
+                return_value={"filesystems": [{"source": kind, "fstype": kind}]},
+            ) as query:
+                self.assertEqual(storage.root_devices(), [])
+                self.assertEqual(query.call_count, 1)
+
+    def test_rescue_cleanup_rejects_shared_mounted_and_ambiguous_storage(self):
+        array = {"path": "/dev/md0", "type": "raid0", "mountpoints": [None]}
+        first = {
+            "path": "/dev/vda",
+            "type": "disk",
+            "serial": "first",
+            "children": [{"path": "/dev/vda1", "type": "part", "children": [array]}],
+        }
+        second = {
+            "path": "/dev/vdb",
+            "type": "disk",
+            "serial": "second",
+            "children": [{"path": "/dev/vdb1", "type": "part", "children": [array]}],
+        }
+        devices = [first, second]
+        with self.assertRaisesRegex(ValueError, "outside"):
+            storage.cleanup_plan(devices, ["first"])
+        plan = storage.cleanup_plan(devices, ["first", "second"])
+        self.assertEqual(plan.arrays, ("/dev/md0",))
+        self.assertEqual(plan.partitions, ("/dev/vda1", "/dev/vdb1"))
+        for mounted in ("/data", "[SWAP]"):
+            array["mountpoints"] = [mounted]
+            with self.assertRaisesRegex(ValueError, "mounted"):
+                storage.cleanup_plan(devices, ["first", "second"])
+        array["mountpoints"] = [None]
+        for signature in ("LVM2_member", "crypto_LUKS"):
+            first["children"][0]["fstype"] = signature
+            with self.assertRaisesRegex(ValueError, "signatures"):
+                storage.cleanup_plan(devices, ["first", "second"])
+        first["children"][0].pop("fstype")
+        with self.assertRaisesRegex(ValueError, "resolve"):
+            storage.cleanup_plan(devices, ["missing"])
+        with self.assertRaisesRegex(ValueError, "resolve"):
+            storage.cleanup_plan([first, {**second, "serial": "first"}], ["first"])
+        with self.assertRaisesRegex(ValueError, "holders"):
+            storage.reject_unapproved_holders(devices, "/dev/vda")
+
+    def test_cleanup_requires_rescue_and_loaded_kernel_then_only_writes_selected_devices(self):
+        devices = [
+            {
+                "path": "/dev/vda",
+                "type": "disk",
+                "serial": "first",
+                "children": [
+                    {
+                        "path": "/dev/vda1",
+                        "type": "part",
+                        "children": [{"path": "/dev/md0", "type": "raid0"}],
+                    }
+                ],
+            },
+            {"path": "/dev/vdb", "type": "disk", "serial": "untouched"},
+        ]
+        with (
+            patch.object(storage, "root_devices", return_value=[]) as root,
+            patch.object(storage, "inventory", return_value=devices),
+            patch.object(storage.Path, "read_text", return_value="1") as loaded,
+            patch.object(storage, "command") as execute,
+        ):
+            root.return_value = [{"path": "/dev/vda"}]
+            with self.assertRaisesRegex(ValueError, "rescue"):
+                storage.erase_from_rescue(["first"])
+            root.return_value = []
+            loaded.return_value = "0"
+            with self.assertRaisesRegex(ValueError, "loaded replacement"):
+                storage.erase_from_rescue(["first"])
+            execute.assert_not_called()
+            loaded.return_value = "1"
+            storage.erase_from_rescue(["first"])
+        self.assertEqual(
+            [call.args[0] for call in execute.call_args_list],
+            [
+                ["mdadm", "--stop", "/dev/md0"],
+                ["wipefs", "--all", "/dev/vda1"],
+                ["wipefs", "--all", "/dev/vda"],
+                ["udevadm", "settle"],
+            ],
+        )
+
+    def test_inactive_raid_members_cannot_hide_shared_or_missing_disks(self):
+        def disk(path, serial):
+            return {
+                "path": path,
+                "type": "disk",
+                "serial": serial,
+                "children": [
+                    {
+                        "path": path + "1",
+                        "type": "part",
+                        "fstype": "linux_raid_member",
+                        "raidUuid": "array-id",
+                        "raidDevices": 2,
+                    }
+                ],
+            }
+
+        devices = [disk("/dev/vda", "first"), disk("/dev/vdb", "second")]
+        with self.assertRaisesRegex(ValueError, "outside"):
+            storage.cleanup_plan(devices, ["first"])
+        with self.assertRaisesRegex(ValueError, "missing"):
+            storage.cleanup_plan(devices[:1], ["first"])
+        self.assertEqual(storage.cleanup_plan(devices, ["first", "second"]).arrays, ())
+
     def test_other_disks_cannot_be_erased_through_a_shared_volume_group(self):
         installer.validate_volume_groups(
             "/dev/vda", {"source": {"/dev/vda"}, "data": {"/dev/vdb"}}, "worker-vg"
@@ -205,6 +319,61 @@ class Qualification(unittest.TestCase):
 
     def test_bootstrap_shell_is_valid(self):
         subprocess.run(["sh", "-n"], input=transport.BOOTSTRAP, text=True, check=True)
+
+    def test_additional_workload_disks_use_stable_identity_and_require_explicit_erasure(self):
+        spec, facts = copy.deepcopy(SPEC), copy.deepcopy(FACTS)
+        spec["installation"]["disk"].update(
+            {
+                "serial": "os-disk",
+                "eraseSerials": ["os-disk", "data-one", "data-two"],
+                "workloadSerials": ["data-one", "data-two"],
+            }
+        )
+        facts["workloadDisks"] = [
+            {"serial": serial, "byId": "/dev/disk/by-id/virtio-" + serial, "size": 64 * 1024**3}
+            for serial in ("data-one", "data-two")
+        ]
+        files = installer.render_files(spec, facts, "ssh-ed25519 AAAA", {"uid": "test"})
+        script = files["nebula/late.sh"].decode()
+        self.assertEqual(script.count('in-target vgextend worker-vg "$disk"'), 2)
+        self.assertEqual(script.count('in-target pvcreate --yes "$disk"'), 2)
+        self.assertNotIn("virtio-os-disk", script)
+        subprocess.run(["sh", "-n"], input=script, text=True, check=True)
+        for serials in (["not-authorized"], ["os-disk"], ["data-one", "data-one"]):
+            spec["installation"]["disk"]["workloadSerials"] = serials
+            with self.assertRaisesRegex(ValueError, "additional erased"):
+                installer.render_files(spec, facts, "ssh-ed25519 AAAA", {"uid": "test"})
+        spec["installation"]["disk"]["workloadSerials"] = ["data-one", "data-two"]
+        facts["workloadDisks"].pop()
+        with self.assertRaisesRegex(ValueError, "discovery differs"):
+            installer.render_files(spec, facts, "ssh-ed25519 AAAA", {"uid": "test"})
+
+    def test_worker_handoff_requires_every_declared_disk_in_the_workload_group(self):
+        def query(args):
+            if args[0] == "pvs":
+                return {
+                    "report": [
+                        {
+                            "pv": [
+                                {"pv_name": "/dev/vda3", "vg_name": "worker-vg"},
+                                {"pv_name": "/dev/vdb", "vg_name": "worker-vg"},
+                            ]
+                        }
+                    ]
+                }
+            return {
+                "blockdevices": [
+                    {
+                        "type": "disk",
+                        "serial": "os" if args[-1] == "/dev/vda3" else "data",
+                    }
+                ]
+            }
+
+        with patch.object(storage, "json_command", side_effect=query):
+            storage.verify_volume_group("worker-vg", {"os", "data"})
+            with self.assertRaisesRegex(ValueError, "exactly the declared"):
+                storage.verify_volume_group("worker-vg", {"os", "data", "missing"})
 
     def test_installed_storage_must_match_before_capi_handoff(self):
         receipt = {

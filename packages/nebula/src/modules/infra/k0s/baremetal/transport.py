@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -40,7 +41,7 @@ if [ ! -d /run/systemd/system ] || [ "$(uname -m)" != x86_64 ]; then
   exit 1
 fi
 missing=false
-for utility in python3 ip lsblk findmnt pvs; do
+for utility in python3 ip lsblk findmnt pvs wipefs mdadm udevadm; do
   command -v "$utility" >/dev/null 2>&1 || missing=true
 done
 if [ "$missing" = true ]; then
@@ -50,9 +51,9 @@ if [ "$missing" = true ]; then
   fi
   if command -v apt-get >/dev/null 2>&1; then
     DEBIAN_FRONTEND=noninteractive apt-get update >&2
-    DEBIAN_FRONTEND=noninteractive apt-get install -y python3 iproute2 util-linux lvm2 ca-certificates >&2
+    DEBIAN_FRONTEND=noninteractive apt-get install -y python3 iproute2 util-linux lvm2 mdadm udev ca-certificates >&2
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y python3 iproute util-linux lvm2 ca-certificates >&2
+    dnf install -y python3 iproute util-linux lvm2 mdadm systemd-udev ca-certificates >&2
   else
     printf '%s\\n' '{"error":"source needs Python 3, iproute, util-linux and LVM tools, or apt/dnf to install them"}'
     exit 1
@@ -111,8 +112,11 @@ class SSH:
     ) -> None:
         self.host = host
         self.directory = Path(directory)
+        self.initial_credential = Path(credentials) / "initial" / "value"
         spec = host["spec"]
         for local in ("initial", "worker"):
+            if local == "initial" and spec["ssh"].get("authentication") == "password":
+                continue
             path = self.directory / local
             path.write_bytes((Path(credentials) / local / "value").read_bytes())
             path.chmod(0o600)
@@ -136,12 +140,13 @@ class SSH:
         spec = self.host["spec"]
         user = "root" if installed else spec["ssh"]["user"]
         port = spec["ssh"]["port"]
+        password_auth = not installed and spec["ssh"].get("authentication") == "password"
         args = [
             "ssh",
             "-F",
             "/dev/null",
             "-o",
-            "BatchMode=yes",
+            "BatchMode=" + ("no" if password_auth else "yes"),
             "-o",
             "IdentitiesOnly=yes",
             "-o",
@@ -158,24 +163,42 @@ class SSH:
             "HostKeyAlias=" + spec["hostname"],
             "-o",
             "StrictHostKeyChecking=" + ("yes" if self.strict else "accept-new"),
-            "-i",
-            str(self.directory / ("worker" if installed else "initial")),
-            "-p",
-            str(port),
-            user + "@" + spec["address"],
         ]
+        if password_auth:
+            args.extend(
+                [
+                    "-o",
+                    "PreferredAuthentications=keyboard-interactive,password",
+                    "-o",
+                    "PubkeyAuthentication=no",
+                    "-o",
+                    "NumberOfPasswordPrompts=1",
+                ]
+            )
+        else:
+            args.extend(["-i", str(self.directory / ("worker" if installed else "initial"))])
+        args.extend(["-p", str(port), user + "@" + spec["address"]])
         remote = ["python3", "-I", "-B", "-c", self.agent, action]
         if action == "probe" and not installed:
             remote = ["sh", "-c", BOOTSTRAP, "nebula-bootstrap", *remote]
         remote = (["sudo", "-n"] if user != "root" else []) + remote
         try:
-            result = subprocess.run(
-                args + [shlex.join(remote)],
-                input=canonical({"spec": spec, "uid": self.host["metadata"]["uid"], **extra}),
-                text=True,
-                capture_output=True,
-                timeout=900 if action in ("probe", "stage") else 45,
-            )
+            with ExitStack() as stack:
+                descriptors: tuple[int, ...] = ()
+                if password_auth:
+                    # Read the mounted Secret through an inherited descriptor. Neither
+                    # argv, environment, request JSON nor scratch files contain it.
+                    credential = stack.enter_context(self.initial_credential.open("rb"))
+                    descriptors = (credential.fileno(),)
+                    args = ["sshpass", "-d", str(credential.fileno()), *args]
+                result = subprocess.run(
+                    args + [shlex.join(remote)],
+                    input=canonical({"spec": spec, "uid": self.host["metadata"]["uid"], **extra}),
+                    text=True,
+                    capture_output=True,
+                    pass_fds=descriptors,
+                    timeout=900 if action in ("probe", "stage") else 45,
+                )
         except (subprocess.TimeoutExpired, OSError) as error:
             raise RetryableError(f"SSH {action} transport failed: {type(error).__name__}") from None
         if result.returncode:

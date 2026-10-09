@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/modules/infra/
 import host as host_agent
 import installer
 import runner
+import storage
 import transport
 import uefi as uefi_agent
 from agent import build_agent
@@ -24,6 +25,7 @@ __all__ = [
     "host_agent",
     "installer",
     "runner",
+    "storage",
     "transport",
     "uefi_agent",
 ]
