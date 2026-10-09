@@ -4,7 +4,15 @@ import ipaddress
 import re
 from urllib.parse import urlparse
 
-from models import Artifact, FirmwareChecks, FirmwareProfile, Installation, UefiVariable, WorkerSpec
+from models import (
+    Artifact,
+    DiskPolicy,
+    FirmwareChecks,
+    FirmwareProfile,
+    Installation,
+    UefiVariable,
+    WorkerSpec,
+)
 from runtime import ProvisioningError
 
 
@@ -142,6 +150,10 @@ def validate_spec(spec: WorkerSpec) -> None:
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", spec["hostname"]):
         raise ProvisioningError("invalid hostname")
     ssh = spec["ssh"]
+    if ssh.get("authentication", "privateKey") not in ("privateKey", "password"):
+        raise ProvisioningError("invalid SSH authentication")
+    if ssh.get("authentication") == "password" and ssh["secretName"] == ssh["workerSecretName"]:
+        raise ProvisioningError("password bootstrap requires a separate initial SSH Secret")
     if not re.fullmatch(r"[a-z_][a-z0-9_-]*", ssh["user"]) or not 1 <= ssh["port"] <= 65535:
         raise ProvisioningError("invalid SSH settings")
     if bool(ssh.get("knownHostsSecretName")) == bool(ssh.get("trustOnFirstUse")):
@@ -149,7 +161,34 @@ def validate_spec(spec: WorkerSpec) -> None:
     validate_installation(spec["installation"])
 
 
+def validate_disk_policy(disk: DiskPolicy) -> None:
+    serial_pattern = r"[a-zA-Z0-9_.:-]{1,128}"
+    if "serial" in disk and not re.fullmatch(serial_pattern, disk["serial"]):
+        raise ProvisioningError("invalid disk serial")
+    if "eraseSerials" in disk:
+        serials = disk["eraseSerials"]
+        if (
+            not 1 <= len(serials) <= 16
+            or len(set(serials)) != len(serials)
+            or any(not re.fullmatch(serial_pattern, serial) for serial in serials)
+            or disk.get("serial") not in serials
+        ):
+            raise ProvisioningError(
+                "eraseSerials must include unique exact serials and the OS disk"
+            )
+    if "workloadSerials" in disk:
+        serials = disk["workloadSerials"]
+        if (
+            not 1 <= len(serials) <= 15
+            or len(set(serials)) != len(serials)
+            or disk.get("serial") in serials
+            or not set(serials) <= set(disk.get("eraseSerials", []))
+        ):
+            raise ProvisioningError("workloadSerials must be additional erased disks")
+
+
 def validate_installation(installation: Installation) -> None:
+    validate_disk_policy(installation["disk"])
     if "uefi" in installation:
         validate_uefi(installation["uefi"])
     validate_artifact(installation["kernel"])

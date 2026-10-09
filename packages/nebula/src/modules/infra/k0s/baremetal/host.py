@@ -6,6 +6,7 @@ installed receipt bind an operation to one request UID.
 
 from __future__ import annotations
 
+import fcntl
 import gzip
 import hashlib
 import ipaddress
@@ -20,6 +21,7 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+import storage
 import uefi
 from installer import cpio, render_files, select_disk, validate_volume_groups
 from models import Artifact, JsonObject, Receipt, WorkerSpec
@@ -59,6 +61,9 @@ def probe(spec: WorkerSpec) -> JsonObject:
     network = discover_network(spec)
     return {
         "disk": disk,
+        "workloadDisks": storage.workload_disks(
+            spec["installation"]["disk"].get("workloadSerials", [])
+        ),
         "network": network,
         "uefi": Path("/sys/firmware/efi").exists(),
         "bootId": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
@@ -68,18 +73,21 @@ def probe(spec: WorkerSpec) -> JsonObject:
 
 def discover_disk(spec: WorkerSpec) -> JsonObject:
     """Select one stable disk and reject layouts that could affect other disks."""
-    root = command(["findmnt", "-n", "-o", "SOURCE", "/"])
-    roots = list(
-        walk_disks(
-            json_command(["lsblk", "-s", "-p", "-J", "-o", "NAME,PATH,TYPE", root])["blockdevices"]
-        )
-    )
+    roots = storage.root_devices()
     disks = json_command(
         ["lsblk", "-b", "-d", "-p", "-J", "-o", "NAME,PATH,SIZE,TYPE,RO,RM,SERIAL"]
     )["blockdevices"]
     disk = select_disk(
         disks, {d["path"] for d in roots if d["type"] == "disk"}, spec["installation"]["disk"]
     )
+    serials = spec["installation"]["disk"].get("eraseSerials")
+    devices = storage.inventory()
+    if serials:
+        if roots:
+            raise ProvisioningError("explicit disk cleanup requires a RAM/rescue OS")
+        storage.cleanup_plan(devices, serials)
+    else:
+        storage.reject_unapproved_holders(devices, disk["path"])
     # Do not let partman dismantle an array spanning disks outside this request.
     if any(d["type"].startswith("raid") or d["type"] in ("crypt", "mpath") for d in roots):
         raise ProvisioningError(
@@ -102,15 +110,7 @@ def discover_disk(spec: WorkerSpec) -> JsonObject:
                 d["path"] for d in ancestors if d["type"] == "disk"
             )
     validate_volume_groups(disk["path"], groups, spec["installation"]["volumeGroup"])
-    ids = sorted(
-        p
-        for p in Path("/dev/disk/by-id").iterdir()
-        if str(p.resolve()) == disk["path"] and "-part" not in p.name
-    )
-    if not ids:
-        raise ProvisioningError("selected disk needs a stable /dev/disk/by-id identity")
-    disk["byId"] = str(ids[0])
-    return disk
+    return storage.stable_disk(disk)
 
 
 def discover_network(spec: WorkerSpec) -> JsonObject:
@@ -274,6 +274,15 @@ def stage(payload: JsonObject) -> Receipt:
 
 
 def commit(payload: JsonObject) -> JsonObject:
+    # The existing staged receipt is required before this lock is opened. It
+    # serializes retries so cleanup cannot race the delayed kexec activation.
+    directory = Path("/run/nebula-baremetal") / payload["uid"]
+    with (directory / "commit.lock").open("a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        return commit_locked(payload)
+
+
+def commit_locked(payload: JsonObject) -> JsonObject:
     spec = payload["spec"]
     directory = Path("/run/nebula-baremetal") / payload["uid"]
     receipt = json.loads((directory / "receipt.json").read_text())
@@ -286,6 +295,9 @@ def commit(payload: JsonObject) -> JsonObject:
         raise ProvisioningError("staged installer requires kexec")
     unit = "nebula-install-" + payload["uid"]
     if subprocess.run(["systemctl", "is-active", "--quiet", unit + ".timer"]).returncode != 0:
+        serials = spec["installation"]["disk"].get("eraseSerials")
+        if serials:
+            storage.erase_from_rescue(serials)
         # The same transient timer name makes a retry safe before SSH disappears.
         command(
             [
@@ -319,6 +331,9 @@ def verify(payload: JsonObject) -> JsonObject:
     ):
         raise ProvisioningError("installed OS does not match the requested suite")
     vg = spec["installation"]["volumeGroup"]
+    workload_serials = spec["installation"]["disk"].get("workloadSerials")
+    if workload_serials:
+        storage.verify_volume_group(vg, {spec["installation"]["disk"]["serial"], *workload_serials})
     free_bytes = float(
         command(["vgs", "--noheadings", "--units", "b", "--nosuffix", "-o", "vg_free", vg])
     )

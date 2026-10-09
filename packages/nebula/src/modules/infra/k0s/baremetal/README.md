@@ -68,7 +68,7 @@ documentation.
    local Kubernetes ProviderConfig, CAPI cluster and SSH Secrets first.
 2. Build this module's `Dockerfile` with a reviewed Debian base supplied as
    `BASE_IMAGE`, push it to your registry, and use its immutable image digest.
-   It contains Python, OpenSSH and CA certificates. The setup emits an immutable,
+   It contains Python, OpenSSH, sshpass and CA certificates. The setup emits an immutable,
    content-addressed scripts ConfigMap; Jobs run as a non-root container with a
    read-only root filesystem. Keep old script ConfigMaps while hosts reference
    their CompositionRevisions.
@@ -78,7 +78,13 @@ documentation.
    should use that InjectedIdentity. For a different identity, configure the
    corresponding SA and grant the equivalent permissions in the target namespace.
 4. Supply privileged SSH: root or an account with passwordless sudo. Private
-   keys use Secret key `value`. Supply `knownHostsSecretName`, key `known_hosts`,
+   keys use Secret key `value`. For password access to the initial/rescue OS,
+   set `initialSshAuthentication: "password"` and `initialSshSecretName` to a
+   separate Secret whose `value` holds the password. It is passed to sshpass
+   through an inherited file descriptor, never argv, environment, request JSON
+   or a copied scratch file. The installed OS always uses `sshSecretName`'s
+   private key, with password SSH disabled.
+   Supply `knownHostsSecretName`, key `known_hosts`,
    with aliases equal to the installed hostname (`bm-<IPv4-with-dashes>` by default). Alternatively,
    explicitly choose `trustOnFirstUse: true`. The first authenticated key is
    persisted before staging; later connections pin that key. Host private keys
@@ -126,6 +132,41 @@ const fleet = new BaremetalFleet(chart, "workers", {
 });
 for (const address of ["192.0.2.10", "198.51.100.20"]) fleet.addNode(address);
 ```
+
+### Fresh servers in a rescue OS
+
+An overlay/tmpfs/ramfs root has no physical root disk. Configure an exact
+`installation.disk.serial`; ordinary ambiguity checks still apply. Existing
+MD, encrypted or multipath holders are rejected unless the supported rescue
+cleanup policy is explicitly declared:
+
+```ts
+disk: {
+  serial: "os-disk-serial",
+  minSizeGiB: 96,
+  eraseSerials: ["os-disk-serial", "second-disposable-disk-serial"],
+  workloadSerials: ["second-disposable-disk-serial"],
+}
+```
+
+This authorizes destruction of the listed disks' existing partition and
+filesystem signatures. It is not secure data erasure. Each serial must resolve
+uniquely to a writable fixed disk. Mounted filesystems, active swap, LVM and
+encrypted signatures, nested storage, and MD arrays involving an unlisted disk
+are rejected. The OS is installed only on `serial`. Additional disks in
+`workloadSerials` become LVM physical volumes in `volumeGroup`; their full space
+joins the OS disk's free extents for workload PVCs. They must also be explicitly
+listed in `eraseSerials`. Other erased disks remain unpartitioned. This pools
+capacity without RAID redundancy. Enrollment verifies that the VG contains
+exactly the declared disk serials. Do not include disks whose data must be retained.
+
+Cleanup is restricted to a RAM/rescue OS, after the durable `Installing`
+checkpoint and a successful installer kernel load. At commit, the host checks
+serials, holders and mount state again, stops only contained MD arrays, removes
+signatures only on the declared disks, then activates the loaded installer.
+Commit retries are locked and cleanup is idempotent. A source reboot loses the
+staged kernel and is rejected; restore access and inspect retained management
+state before recovery.
 
 Each address produces only a cluster-scoped XR:
 

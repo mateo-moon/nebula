@@ -67,6 +67,28 @@ def network_config(facts: JsonObject) -> str:
     return "\n".join(lines) + "\n"
 
 
+def workload_volume_script(spec: WorkerSpec, facts: JsonObject) -> str:
+    """Add only the extra erased disks to the installed OS's existing VG."""
+    expected = spec["installation"]["disk"].get("workloadSerials", [])
+    disks = facts.get("workloadDisks", [])
+    if len(disks) != len(expected) or {disk["serial"] for disk in disks} != set(expected):
+        raise ProvisioningError("workload disk discovery differs from the declared serials")
+    lines = []
+    for disk in disks:
+        lines.extend(
+            [
+                "disk=$(readlink -f " + shlex.quote(disk["byId"]) + ")",
+                '[ -b "$disk" ]',
+                '[ "$(blockdev --getsize64 "$disk")" -eq ' + str(int(disk["size"])) + " ]",
+                'in-target pvcreate --yes "$disk"',
+                "in-target vgextend "
+                + shlex.quote(spec["installation"]["volumeGroup"])
+                + ' "$disk"',
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
 def render_files(
     spec: WorkerSpec, facts: JsonObject, worker_public_key: str, receipt: Receipt
 ) -> dict[str, bytes]:
@@ -174,7 +196,10 @@ disk=$(readlink -f {shlex.quote(facts["disk"]["byId"])})
 debconf-set partman-auto/disk "$disk"
 debconf-set grub-installer/bootdev "$disk"
 """
-    late = """set -eu
+    late = (
+        "set -eu\n"
+        + workload_volume_script(spec, facts)
+        + """
 install -d -m 0700 /target/root/.ssh /target/var/lib/nebula-baremetal
 cp /nebula/authorized_keys /target/root/.ssh/authorized_keys
 chmod 0600 /target/root/.ssh/authorized_keys
@@ -196,6 +221,7 @@ in-target /bin/sh -c 'printf "root:%s\\n" "$(head -c 48 /dev/urandom | base64)" 
 cp /nebula/receipt.json /target/var/lib/nebula-baremetal/installed.json
 chmod 0600 /target/var/lib/nebula-baremetal/installed.json
 """
+    )
     return {
         "preseed.cfg": preseed.encode(),
         "nebula/early.sh": early.encode(),

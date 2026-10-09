@@ -9,7 +9,15 @@ import io
 import zipfile
 from pathlib import Path
 
-HOST_MODULES = ("models.py", "runtime.py", "validation.py", "installer.py", "uefi.py", "host.py")
+HOST_MODULES = (
+    "models.py",
+    "runtime.py",
+    "validation.py",
+    "installer.py",
+    "storage.py",
+    "uefi.py",
+    "host.py",
+)
 
 
 def build_agent(directory: Path = Path(__file__).parent) -> str:

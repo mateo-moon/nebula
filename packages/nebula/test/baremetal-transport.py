@@ -122,6 +122,56 @@ class TransportTests(unittest.TestCase):
                 host_agent.dispatch("unknown", {"uid": "request", "spec": SPEC})
         probe.assert_not_called()
 
+    def test_password_bootstrap_passes_a_private_descriptor_and_then_uses_worker_key(self):
+        credentials = self.root / "credentials"
+        password = "fixture-password-do-not-log"
+        (credentials / "initial" / "value").write_text(password)
+        scratch = self.root / "password-scratch"
+        scratch.mkdir()
+        spec = copy.deepcopy(SPEC)
+        spec["ssh"]["authentication"] = "password"
+        ssh = transport.SSH({"spec": spec, "metadata": {"uid": "test"}}, scratch, credentials)
+        self.assertFalse((scratch / "initial").exists())
+        inherited = []
+
+        def execute(args, **kwargs):
+            self.assertNotIn(password, json.dumps([args, kwargs]))
+            if args[0] == "sshpass":
+                descriptor = int(args[2])
+                self.assertEqual(kwargs["pass_fds"], (descriptor,))
+                self.assertEqual(os.read(descriptor, 4096).decode(), password)
+                self.assertIn("BatchMode=no", args)
+                self.assertIn("NumberOfPasswordPrompts=1", args)
+                self.assertNotIn("-i", args)
+                inherited.append(descriptor)
+            else:
+                self.assertEqual(kwargs["pass_fds"], ())
+                self.assertIn("BatchMode=yes", args)
+                self.assertEqual(args[args.index("-i") + 1], str(scratch / "worker"))
+            return subprocess.CompletedProcess(args, 0, stdout="{}", stderr="")
+
+        with patch.object(transport.subprocess, "run", side_effect=execute):
+            ssh.call("probe")
+            ssh.call("stage")
+            ssh.call("verify", installed=True)
+        self.assertEqual(len(inherited), 2)
+        with self.assertRaises(OSError):
+            os.fstat(inherited[-1])
+
+    def test_password_descriptor_closes_after_transport_failure(self):
+        self.ssh.host["spec"]["ssh"]["authentication"] = "password"
+        descriptors = []
+
+        def fail(args, **kwargs):
+            descriptors.extend(kwargs["pass_fds"])
+            raise subprocess.TimeoutExpired(args, 45)
+
+        with patch.object(transport.subprocess, "run", side_effect=fail):
+            with self.assertRaises(RetryableError):
+                self.ssh.call("probe")
+        with self.assertRaises(OSError):
+            os.fstat(descriptors[0])
+
     def test_host_protocol_classifies_failures_without_leaking_details(self):
         for action, failure, terminal in (
             ("verify", FileNotFoundError("private path"), False),

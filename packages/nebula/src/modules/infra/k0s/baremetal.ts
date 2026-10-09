@@ -42,8 +42,18 @@ export interface BaremetalInstallation {
   /** Debian archive hostname and path. Signed archive verification stays enabled. */
   mirror: { hostname: string; directory: string };
   /** Existing root disk is selected only when it resolves to ONE physical disk.
-   * An exact serial can select a disk on multi-disk hosts. RAID is refused. */
-  disk: { serial?: string; minSizeGiB: number };
+   * A rescue OS requires an exact serial. Destructive cleanup is opt-in. */
+  disk: {
+    serial?: string;
+    minSizeGiB: number;
+    /** From a RAM/rescue OS only: erase these exact disks, including any MD
+     * arrays wholly contained in them. Must include serial. Mounted storage,
+     * shared arrays, LVM, encryption and multipath are refused. */
+    eraseSerials?: string[];
+    /** Additional erased disks dedicated in full to the workload volume group.
+     * Each must also appear in eraseSerials and differ from the OS disk. */
+    workloadSerials?: string[];
+  };
   rootSizeGiB: number;
   /** Installed root LV shares this VG; unallocated extents remain for local PVCs. */
   volumeGroup: string;
@@ -73,6 +83,9 @@ export interface BaremetalSetupOptions {
   image: string;
   installation: BaremetalInstallation;
   initialSshSecretName?: string;
+  /** Initial Secret's value is a private key by default, or a bootstrap password.
+   * Password access ends at OS installation; the worker always uses its SSH key. */
+  initialSshAuthentication?: "privateKey" | "password";
   initialSshUser?: string;
   initialSshPort?: number;
   /** Secret key known_hosts; HostKeyAlias is the worker's installed hostname. */
@@ -168,6 +181,18 @@ function validateInstallation(p: BaremetalInstallation): void {
     "disk must leave at least 4 GiB beyond root for boot and free extents");
   requireValue(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(p.volumeGroup), "invalid volume group");
   requireValue(!p.disk.serial || /^[a-zA-Z0-9_.:-]{1,128}$/.test(p.disk.serial), "invalid disk serial");
+  if (p.disk.eraseSerials !== undefined) {
+    requireValue(p.disk.eraseSerials.length > 0 && p.disk.eraseSerials.length <= 16
+      && new Set(p.disk.eraseSerials).size === p.disk.eraseSerials.length
+      && p.disk.eraseSerials.every(serial => /^[a-zA-Z0-9_.:-]{1,128}$/.test(serial))
+      && p.disk.eraseSerials.includes(p.disk.serial ?? ""), "eraseSerials must contain unique exact serials, including the OS disk serial");
+  }
+  if (p.disk.workloadSerials !== undefined) {
+    requireValue(p.disk.workloadSerials.length > 0 && p.disk.workloadSerials.length <= 15
+      && new Set(p.disk.workloadSerials).size === p.disk.workloadSerials.length
+      && p.disk.workloadSerials.every(serial => serial !== p.disk.serial && p.disk.eraseSerials?.includes(serial)),
+    "workloadSerials must be unique additional disks included in eraseSerials");
+  }
   requireValue(!p.dnsServers || (p.dnsServers.length > 0 && p.dnsServers.every(ip => isIP(ip))), "invalid resolvers");
   requireValue(p.timeoutSeconds === undefined || (Number.isInteger(p.timeoutSeconds) && p.timeoutSeconds >= 300), "installation timeout must be at least 300 seconds");
 }
@@ -185,6 +210,8 @@ export class BaremetalSetup extends Construct {
     requireValue(/^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(name), "composition name must be a DNS label of 2–40 characters");
     requireValue(/@sha256:[a-f0-9]{64}$/.test(o.image), "runtime image must be pinned by digest");
     requireValue(Boolean(o.knownHostsSecretName) !== Boolean(o.trustOnFirstUse), "choose a known_hosts Secret or explicitly enable trustOnFirstUse");
+    requireValue(o.initialSshAuthentication === undefined || ["privateKey", "password"].includes(o.initialSshAuthentication), "invalid initial SSH authentication");
+    requireValue(o.initialSshAuthentication !== "password" || Boolean(o.initialSshSecretName && o.initialSshSecretName !== o.sshSecretName), "password bootstrap requires a separate initial SSH Secret");
     requireValue(Boolean(o.ipv6PodCidrPrefix) === Boolean(o.workloadKubeProviderConfigName), "IPv6 pod allocation and workload ProviderConfig must be configured together");
     if (o.ipv6PodCidrPrefix) requireValue(/^[a-f0-9]{1,4}:[a-f0-9]{1,4}::$/.test(o.ipv6PodCidrPrefix), "pod prefix must be the base of a /32, e.g. 2001:db8::");
     for (const value of [namespace, o.clusterName, o.sshSecretName, o.initialSshSecretName, o.knownHostsSecretName,
@@ -196,7 +223,7 @@ export class BaremetalSetup extends Construct {
     requireValue(Boolean(o.defaults.geo && o.defaults.region && o.defaults.zone), "topology defaults are required");
     requireValue(dnsName.test(o.tagDomain), "invalid tag domain");
 
-    const runtimeFiles = ["agent.py", "host.py", "installer.py", "models.py", "runner.py", "runtime.py", "transport.py", "uefi.py", "validation.py"];
+    const runtimeFiles = ["agent.py", "host.py", "installer.py", "models.py", "runner.py", "runtime.py", "storage.py", "transport.py", "uefi.py", "validation.py"];
     const scripts = Object.fromEntries(runtimeFiles.map(file => [file, readFileSync(new URL(`./baremetal/${file}`, import.meta.url), "utf8")]));
     const scriptsName = `${name}-${createHash("sha256").update(JSON.stringify(scripts)).digest("hex").slice(0, 16)}`;
     new ApiObject(this, "scripts", { apiVersion: "v1", kind: "ConfigMap", metadata: {
@@ -268,6 +295,7 @@ export class BaremetalSetup extends Construct {
             workloadKubeProviderConfigName: o.workloadKubeProviderConfigName, ipv6PodCidrPrefix: o.ipv6PodCidrPrefix,
             installation: { ...o.installation, dualStack: o.installation.dualStack ?? true, timeoutSeconds: o.installation.timeoutSeconds ?? 3600 },
             ssh: { user: o.initialSshUser ?? "root", port: o.initialSshPort ?? 22,
+              authentication: o.initialSshAuthentication ?? "privateKey",
               secretName: o.initialSshSecretName ?? o.sshSecretName, workerSecretName: o.sshSecretName,
               ...(o.knownHostsSecretName ? { knownHostsSecretName: o.knownHostsSecretName } : { trustOnFirstUse: true }) },
           }) },
