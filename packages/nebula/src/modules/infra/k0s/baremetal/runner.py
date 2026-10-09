@@ -243,8 +243,58 @@ def advance(
         return provisioner.step(ssh_factory(host, directory))
 
 
+def begin_firmware_retry(
+    journal: Journal, generation: int, clock: Callable[[], float] = time.time
+) -> None:
+    """Consume an operator attempt once, without permitting installation phases."""
+    provisioner = Provisioner(journal, clock)
+    validate_spec(provisioner.spec)
+    status = journal.status
+    if status.get("fingerprint") != fingerprint(provisioner.spec):
+        raise ProvisioningError("firmware retry is not bound to the installed profile")
+    previous = status.get("firmwareRetryGeneration", 0)
+    if generation < 1 or generation > 16 or generation < previous:
+        raise ProvisioningError("invalid firmware retry generation")
+    if not provisioner.uefi or provisioner.phase not in FIRMWARE_PHASES | {Phase.OS_READY}:
+        raise ProvisioningError("firmware retry refuses OS installation phases")
+    if generation == previous:
+        return  # A restart cannot unblock a failed attempt a second time.
+    if generation != previous + 1 or not status.get("terminalError"):
+        raise ProvisioningError(
+            "firmware retry requires the next generation and a terminal failure"
+        )
+    if provisioner.phase not in FIRMWARE_PHASES or status.get("uefiVerified"):
+        raise ProvisioningError("firmware retry requires incomplete firmware verification")
+    if not status.get("installedBootId"):
+        raise ProvisioningError("firmware retry requires the retained installed boot identity")
+    failures = [
+        *status.get("firmwareFailures", []),
+        {
+            "generation": previous,
+            "phase": provisioner.phase,
+            "error": status.get("lastError", ""),
+            "at": clock(),
+        },
+    ]
+    journal.save(
+        firmwareRetryGeneration=generation,
+        firmwareFailures=failures,
+        uefiStartedAt=clock(),
+        terminalError=False,
+        lastError="",
+    )
+
+
 def record_error(journal: Journal | None, error: Exception) -> bool:
     """Record a sanitized diagnostic and return whether the operation must stop."""
+    if journal is not None and journal.status.get("terminalError"):
+        # Restarting a blocked Job must preserve the failure that requires
+        # inspection, rather than replacing it with the blocked-state message.
+        print(
+            canonical({"error": journal.status.get("lastError", "installation is blocked")}),
+            flush=True,
+        )
+        return True
     terminal = isinstance(error, (ValueError, KeyError, TypeError))
     message = (
         str(error)
@@ -284,6 +334,8 @@ def main() -> None:
             journal = Journal(
                 api, os.environ["NAMESPACE"], os.environ["STATE_CONFIG_MAP"], request, request_hash
             )
+            if os.environ.get("FIRMWARE_RETRY_GENERATION"):
+                begin_firmware_retry(journal, int(os.environ["FIRMWARE_RETRY_GENERATION"]))
             if advance(journal):
                 return
         except (

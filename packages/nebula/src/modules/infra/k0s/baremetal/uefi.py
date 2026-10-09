@@ -7,6 +7,7 @@ durable transaction on the installed OS; they never enter Kubernetes or logs.
 from __future__ import annotations
 
 import array
+import errno
 import fcntl
 import json
 import os
@@ -112,6 +113,16 @@ def variable_flags(path: Path) -> int:
         return flags[0]
 
 
+@contextmanager
+def firmware_io(stage: str) -> Iterator[None]:
+    """Expose the failing operation and errno, never paths or variable contents."""
+    try:
+        yield
+    except OSError as error:
+        code = errno.errorcode.get(error.errno or 0, "UNKNOWN")
+        raise ProvisioningError(f"UEFI {stage} failed: {code} (errno {error.errno})") from None
+
+
 def write_variable(
     variable: UefiVariable, before: bytes, desired: bytes, original_flags: int
 ) -> None:
@@ -120,27 +131,43 @@ def write_variable(
     if actual not in (before, desired):
         raise ProvisioningError("UEFI variable changed after its backup; refusing to overwrite it")
     with path.open("rb") as attributes:
+        failure = None
         try:
             if actual != desired:
-                fcntl.ioctl(
-                    attributes.fileno(),
-                    UEFI_SETFLAGS,
-                    array.array("L", [original_flags & ~UEFI_IMMUTABLE]),
-                )
+                with firmware_io("clear immutable flag"):
+                    fcntl.ioctl(
+                        attributes.fileno(),
+                        UEFI_SETFLAGS,
+                        array.array("L", [original_flags & ~UEFI_IMMUTABLE]),
+                    )
                 # No truncation, creation, deletion, buffered writes or partial-write retry.
-                descriptor = os.open(path, os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                with firmware_io("open variable for writing"):
+                    descriptor = os.open(path, os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
                 try:
-                    if os.write(descriptor, desired) != len(desired):
-                        raise ProvisioningError(
-                            "UEFI write was incomplete; inspect the retained backup"
-                        )
+                    with firmware_io("write variable"):
+                        if os.write(descriptor, desired) != len(desired):
+                            raise ProvisioningError(
+                                "UEFI write was incomplete; inspect the retained backup"
+                            )
                 finally:
                     os.close(descriptor)
-                if read_variable(variable) != desired:
-                    raise ProvisioningError("UEFI read-back differs from the requested update")
+                with firmware_io("read back variable"):
+                    if read_variable(variable) != desired:
+                        raise ProvisioningError("UEFI read-back differs from the requested update")
+        except ProvisioningError as error:
+            failure = error
+            raise
         finally:
             # Also repair an interrupted attempt that wrote data but lost its SSH session.
-            fcntl.ioctl(attributes.fileno(), UEFI_SETFLAGS, array.array("L", [original_flags]))
+            try:
+                with firmware_io("restore immutable flag"):
+                    fcntl.ioctl(
+                        attributes.fileno(), UEFI_SETFLAGS, array.array("L", [original_flags])
+                    )
+            except ProvisioningError as restoration:
+                if failure is not None:
+                    raise ProvisioningError(f"{failure}; {restoration}") from None
+                raise
 
 
 def atomic_write(destination: Path, state: object) -> None:

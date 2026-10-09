@@ -448,6 +448,91 @@ test("unqualified firmware layouts and unsafe parameter definitions are rejected
   }
 });
 
+test("firmware retry waits for a terminal Job and preserves the immutable installation request", () => {
+  const fw = setup({ ...options, installation: { ...options.installation, uefi } });
+  const xr = structuredClone(fw.xr); xr.spec.firmwareRetryGeneration = 1;
+  const original = render({}, fw.xr, fw.template);
+  const observed = observe(original);
+  const data = observed.state.resource.status.atProvider.manifest.data;
+  data.phase = "ConfiguringUefi";
+  data.progress = JSON.stringify({ phase: data.phase, terminalError: true });
+  assert.equal(native(render(observed, xr, fw.template), "firmware-1"), undefined);
+  observed.install.resource.status.atProvider.manifest.status = { conditions: [{ type: "Failed", status: "True" }] };
+  const retry = render(observed, xr, fw.template);
+  const job = native(retry, "firmware-1");
+  assert.ok(job); assert.equal(job.spec.backoffLimit, 0); assert.equal(job.spec.template.spec.restartPolicy, "Never");
+  assert.ok(job.spec.template.spec.containers[0].env.some((e: any) => e.name === "FIRMWARE_RETRY_GENERATION" && e.value === "1"));
+  assert.deepEqual(native(retry, "request"), native(original, "request"));
+  assert.deepEqual(native(retry, "install"), native(original, "install"));
+  assert.equal(native(retry, "pool"), undefined);
+  for (const key of ["pool", "worker", "cidr-policy", "identity-policy"]) {
+    const enrolled = { ...observed, [key]: { resource: {} } };
+    assert.equal(native(render(enrolled, xr, fw.template), "firmware-1"), undefined);
+  }
+  for (const phase of ["Pending", "Staged", "Installing", "OSReady"]) {
+    const invalid = structuredClone(observed); invalid.state.resource.status.atProvider.manifest.data.phase = phase;
+    assert.equal(native(render(invalid, xr, fw.template), "firmware-1"), undefined);
+  }
+  const wrongBinding = structuredClone(observed); wrongBinding.state.resource.status.atProvider.manifest.data.uid = "other";
+  assert.equal(native(render(wrongBinding, xr, fw.template), "firmware-1"), undefined);
+
+  const resumed = { ...observed, "firmware-1": observe(retry)["firmware-1"] };
+  const state = resumed.state.resource.status.atProvider.manifest.data;
+  state.phase = "OSReady"; state.verifiedRequestHash = state.requestHash;
+  state.progress = JSON.stringify({ phase: "OSReady", firmwareRetryGeneration: 1, uefiVerified: true });
+  assert.equal(native(render(resumed, xr, fw.template), "pool"), undefined);
+  resumed["firmware-1"].resource.status.atProvider.manifest.status = { conditions: [{ type: "Complete", status: "True" }] };
+  const complete = render(resumed, xr, fw.template);
+  assert.equal(status(complete).osReady, true); assert.ok(native(complete, "pool"));
+  assert.match(named(complete, "install").spec.readiness.celQuery, /Failed/);
+  for (const mutate of [
+    (o: any) => { o["firmware-1"].resource.status.atProvider.manifest.metadata.annotations["baremetal.nebula.io/request-hash"] = "other"; },
+    (o: any) => { o["firmware-1"].resource.status.atProvider.manifest.spec.template.spec.containers[0].image = "stale"; },
+    (o: any) => { o.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ uefiVerified: true, firmwareRetryGeneration: 2 }); },
+    (o: any) => { o.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ firmwareRetryGeneration: 1 }); },
+  ]) {
+    const invalid = structuredClone(resumed); mutate(invalid);
+    assert.equal(native(render(invalid, xr, fw.template), "pool"), undefined);
+  }
+});
+
+test("another firmware generation waits for the previous attempt to fail and retains its Job", () => {
+  const fw = setup({ ...options, installation: { ...options.installation, uefi } });
+  const xr = structuredClone(fw.xr); xr.spec.firmwareRetryGeneration = 1;
+  const observed = observe(render({}, fw.xr, fw.template));
+  const data = observed.state.resource.status.atProvider.manifest.data;
+  data.phase = "ConfiguringUefi"; data.progress = JSON.stringify({ terminalError: true });
+  observed.install.resource.status.atProvider.manifest.status = { conditions: [{ type: "Failed", status: "True" }] };
+  const first = render(observed, xr, fw.template);
+  observed["firmware-1"] = observe(first)["firmware-1"];
+  data.progress = JSON.stringify({ terminalError: true, firmwareRetryGeneration: 1 });
+  xr.spec.firmwareRetryGeneration = 2;
+  assert.equal(native(render(observed, xr, fw.template), "firmware-2"), undefined);
+  observed["firmware-1"].resource.status.atProvider.manifest.status = { conditions: [{ type: "Failed", status: "True" }] };
+  const next = render(observed, xr, fw.template);
+  assert.ok(native(next, "firmware-2")); assert.deepEqual(native(next, "firmware-1"), native(first, "firmware-1"));
+  assert.equal(native(next, "pool"), undefined);
+});
+
+test("firmware attempt and revision selection are explicit and bounded in the public API", () => {
+  const chart = Testing.chart();
+  baremetalWorker(chart, { compositionRevisionName: "baremetal-worker-1234567" }, {
+    address: "192.0.2.10", firmwareRetryGeneration: 1,
+  });
+  const xr = Testing.synth(chart)[0];
+  assert.equal(xr.spec.crossplane.compositionUpdatePolicy, "Manual");
+  assert.equal(xr.spec.crossplane.compositionRevisionRef.name, "baremetal-worker-1234567");
+  for (const generation of [0, 17, 1.5]) assert.throws(() => baremetalWorker(Testing.chart(), {}, {
+    address: "192.0.2.10", firmwareRetryGeneration: generation,
+  }), /retry generation/);
+  const schema = fixture.resources.find(r => r.kind === "CompositeResourceDefinition")!.spec.versions[0].schema.openAPIV3Schema;
+  const rule = schema.properties.spec["x-kubernetes-validations"].find((r: any) => r.message.startsWith("firmware retry"));
+  for (const [previous, next, expected] of [[0, 0, true], [0, 1, true], [0, 2, false], [1, 0, false], [1, 1, true], [1, 2, true], [1, 3, false]] as const) {
+    assert.equal(evaluate(rule.rule, { oldSelf: previous ? { firmwareRetryGeneration: BigInt(previous) } : {},
+      self: next ? { firmwareRetryGeneration: BigInt(next) } : {} }), expected);
+  }
+});
+
 test("actual Python installer and finite Job restart qualification", () => {
   execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-runtime.py", import.meta.url))], { stdio: "pipe" });
 });

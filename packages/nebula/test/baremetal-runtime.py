@@ -1,12 +1,15 @@
 """Installer and checkpoint recovery tests using isolated host fixtures."""
 
 import copy
+import errno
 import gzip
+import io
 import json
 import subprocess
 import tempfile
 import types
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -111,6 +114,40 @@ class Qualification(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "blocked"):
             runner.advance(resumed, FakeSSH)
         self.assertEqual(FakeSSH.calls, [])
+
+    def test_blocked_restart_preserves_the_original_terminal_diagnostic(self):
+        original = "SSH uefi-apply failed: host operation failed: OSError (EROFS, errno 30)"
+        self.journal.save(terminalError=True, lastError=original)
+        resumed = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
+        actions = len(self.api.actions)
+        with self.assertRaises(ValueError) as blocked:
+            runner.advance(resumed, FakeSSH)
+        with redirect_stdout(io.StringIO()) as output:
+            self.assertTrue(runner.record_error(resumed, blocked.exception))
+        self.assertEqual(json.loads(output.getvalue())["error"], original)
+        self.assertEqual(resumed.status["lastError"], original)
+        self.assertEqual(len(self.api.actions), actions)
+        self.assertEqual(FakeSSH.calls, [])
+
+    def test_host_error_retains_errno_without_private_exception_details(self):
+        for code in (errno.EINVAL, errno.EROFS, errno.ENOSPC, errno.EIO):
+            with self.subTest(errno=code):
+                error = OSError(code, "private payload", "/private/credential")
+                with (
+                    patch.object(host_agent.sys, "argv", ["agent", "uefi-apply"]),
+                    patch.object(host_agent.sys, "stdin", io.StringIO("{}")),
+                    patch.object(host_agent.os, "geteuid", return_value=0),
+                    patch.object(host_agent.os, "umask"),
+                    patch.object(host_agent, "dispatch", side_effect=error),
+                    redirect_stdout(io.StringIO()) as output,
+                    self.assertRaises(SystemExit),
+                ):
+                    host_agent.main()
+                response = json.loads(output.getvalue())
+                self.assertTrue(response["terminal"])
+                self.assertIn(errno.errorcode[code], response["error"])
+                self.assertIn(f"errno {code}", response["error"])
+                self.assertNotIn("private", response["error"])
 
     def test_mounted_keys_stay_private_and_pinned_trust_cannot_fall_back_to_tofu(self):
         with tempfile.TemporaryDirectory() as tmp:

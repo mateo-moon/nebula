@@ -1,6 +1,7 @@
 """Exercise UEFI byte updates and recovery on temporary files, never host firmware."""
 
 import copy
+import errno
 import json
 import os
 import tempfile
@@ -174,7 +175,10 @@ class UefiTransactions(unittest.TestCase):
                 raise OSError("interrupted before restoring flags")
             return self.ioctl(descriptor, operation, values, *args)
 
-        with patch.object(host.fcntl, "ioctl", interrupted), self.assertRaises(OSError):
+        with (
+            patch.object(host.fcntl, "ioctl", interrupted),
+            self.assertRaisesRegex(ValueError, "restore immutable flag"),
+        ):
             host.apply(self.payload)
         self.assertFalse(json.loads((self.state / "uefi-operation.json").read_text())["complete"])
         self.assertEqual(self.flags[self.path.stat().st_ino], 0)
@@ -182,6 +186,19 @@ class UefiTransactions(unittest.TestCase):
             host.apply(self.payload)
         self.assertEqual(writes.call_count, 0)
         self.assertEqual(self.flags[self.path.stat().st_ino], 16)
+
+    def test_write_errno_has_operation_context_and_restores_flags(self):
+        with (
+            patch.object(
+                host.os, "write", side_effect=OSError(errno.EINVAL, "private payload")
+            ) as writes,
+            self.assertRaisesRegex(ValueError, r"UEFI write variable failed: EINVAL \(errno 22\)"),
+        ):
+            host.apply(self.payload)
+        self.assertEqual(writes.call_count, 1)
+        self.assertEqual(self.path.read_bytes(), self.original)
+        self.assertEqual(self.flag_changes, [0, 16])
+        self.assertFalse(json.loads((self.state / "uefi-operation.json").read_text())["complete"])
 
     def test_changed_bytes_or_reboot_during_partial_write_are_not_overwritten(self):
         with (
@@ -396,6 +413,62 @@ class FirmwareJob(unittest.TestCase):
         self.journal.save(phase="OSReady")
         with self.assertRaisesRegex(ValueError, "UEFI verification"):
             self.step()
+
+    def test_explicit_retry_retains_failure_and_resumes_only_firmware(self):
+        self.install()
+        original = "UEFI write variable failed: EINVAL (errno 22)"
+        self.journal.save(terminalError=True, lastError=original)
+        before = list(FirmwareSSH.calls)
+        runner.begin_firmware_retry(self.journal, 1, lambda: 5000)
+        self.assertEqual(self.journal.status["firmwareFailures"][0]["error"], original)
+        self.assertEqual(self.journal.status["uefiStartedAt"], 5000)
+        self.assertEqual(self.journal.status["phase"], "ConfiguringUefi")
+        self.assertFalse(self.step(lambda: 5000))
+        FirmwareSSH.ready = True
+        self.assertTrue(self.step(lambda: 5001))
+        self.assertEqual(FirmwareSSH.calls[: len(before)], before)
+        self.assertFalse({"stage", "commit", "probe"} & set(FirmwareSSH.calls[len(before) :]))
+        self.assertTrue(self.journal.status["uefiVerified"])
+
+    def test_failed_retry_cannot_be_unblocked_by_its_restart(self):
+        self.install()
+        self.journal.save(terminalError=True, lastError="first failure")
+        runner.begin_firmware_retry(self.journal, 1, lambda: 100)
+        self.journal.save(terminalError=True, lastError="second failure")
+        version = self.api.resource["metadata"]["resourceVersion"]
+        runner.begin_firmware_retry(self.journal, 1, lambda: 101)
+        self.assertEqual(self.api.resource["metadata"]["resourceVersion"], version)
+        with self.assertRaisesRegex(ValueError, "blocked"):
+            self.step()
+        runner.begin_firmware_retry(self.journal, 2, lambda: 102)
+        self.assertEqual(len(self.journal.status["firmwareFailures"]), 2)
+
+    def test_retry_refuses_installation_changed_identity_and_skipped_attempts(self):
+        for phase in ("Pending", "Discovered", "Staged", "Installing", "OSReady"):
+            self.journal.save(
+                phase=phase,
+                terminalError=True,
+                fingerprint=runner.fingerprint(self.request["spec"]),
+            )
+            with self.assertRaises(ValueError):
+                runner.begin_firmware_retry(self.journal, 1)
+        self.journal.save(phase="ConfiguringUefi", installedBootId="installed-boot")
+        for generation in (0, 2, 17):
+            with self.assertRaises(ValueError):
+                runner.begin_firmware_retry(self.journal, generation)
+        self.journal.save(fingerprint="changed")
+        with self.assertRaisesRegex(ValueError, "bound"):
+            runner.begin_firmware_retry(self.journal, 1)
+        self.assertEqual(FirmwareSSH.calls, [])
+
+    def test_concurrent_retry_consumers_use_a_single_checkpoint(self):
+        self.install()
+        self.journal.save(terminalError=True, lastError="original")
+        stale = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
+        runner.begin_firmware_retry(self.journal, 1)
+        with self.assertRaisesRegex(RuntimeError, "conflict"):
+            runner.begin_firmware_retry(stale, 1)
+        self.assertEqual(self.journal.status["firmwareRetryGeneration"], 1)
 
 
 if __name__ == "__main__":
