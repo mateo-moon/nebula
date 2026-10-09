@@ -45,8 +45,8 @@ export function validateUefi(p: BaremetalUefiConfiguration): void {
   for (const variable of p.variables) {
     requireValue(/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(variable.name), "invalid variable name");
     requireValue(/^[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$/.test(variable.guid), "invalid variable GUID");
-    const key = `${variable.name}-${variable.guid.toLowerCase()}`;
-    requireValue(!variables.has(key), "duplicate variable"); variables.add(key);
+    const key = variable.name;
+    requireValue(!variables.has(key), "setup_var.efi requires unique variable names"); variables.add(key);
     requireValue(uint(variable.payloadSize, 65536) && variable.payloadSize > 0 && variable.attributes === 7, "require an exact payload size and NV/BS/RT attributes (7)");
     requireValue(Array.isArray(variable.parameters) && variable.parameters.length > 0 && variable.parameters.length <= 64, "declare 1–64 parameters per variable");
     const occupied = new Set<number>();

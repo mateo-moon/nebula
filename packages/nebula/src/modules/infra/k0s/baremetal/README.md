@@ -302,21 +302,38 @@ const snpUefi: BaremetalUefiConfiguration = {
 After OS verification, the worker enters `ConfiguringUefi`, then `RebootingUefi`
 (or `VerifyingUefi` when every value was already set), and finally `OSReady`.
 The Job uses the installed worker credentials. It validates all variables before
-writing any, persists their full originals and desired values in the private
-`/var/lib/nebula-baremetal/uefi-operation.json`, and records an independent marker
-in the installed receipt before writing. Each changed variable receives one
-unbuffered write including the unchanged attribute header, with no truncation.
-Its original immutable flag is restored. Read-back must match immediately.
+staging a firmware boot, persists their full originals and desired values in the
+private `/var/lib/nebula-baremetal/uefi-operation.json`, and records an independent
+marker in the installed receipt. Setup variables are never written through Linux
+`efivarfs`. Variable names must resolve uniquely to the profile's GUID because
+[setup_var.efi](https://github.com/datasone/setup_var.efi) selects by name.
 
-A changed configuration gets a normal firmware reboot through `reboot.target`.
-A loaded kexec image is rejected. Management and local journals record intent
-before scheduling that reboot; retries may resume on the original boot but never
-schedule another reboot after a new boot is observed. Already-applied writes are
-not repeated. Verification checks the new boot, hardware identity, persistent
-parameter values, optional CPU flags on every processor, and module parameters
-on the installed kernel. Module checks load the named module with `modprobe`.
-The final OS and UEFI verification must refer to the same boot. The composition
-requires this evidence plus Job completion before exposing the pool.
+The agent downloads SHA256-pinned `setup_var.efi` 0.3.1 and the x86-64
+[EDK2 shell](https://github.com/pbatard/UEFI-Shell) 26H2 to an owned directory on
+the existing GPT ESP at `/boot/efi`. It requires `efibootmgr` (included in fresh
+installations), a writable FAT ESP and Secure Boot disabled. It refuses a foreign
+pending BootNext and never changes Secure Boot trust policy or overwrites an
+existing startup script. It creates an owned Boot entry without changing BootOrder,
+then arms BootNext after the management checkpoint. The shell consumes a one-time
+guard, sets the original OS entry as its return BootNext, runs the helper with
+`--write_on_demand`, captures its exit status, and performs a normal firmware reset.
+
+A loaded kexec image is rejected. Durable reboot intent prevents re-arming or
+scheduling another reboot after a lost reply. Verification requires a new boot,
+the captured successful EFI result, hardware identity, exact complete variable
+bytes including unchanged padding, optional CPU flags on every processor, and
+module parameters on the installed kernel. Module checks use `modprobe`. The
+agent archives EFI logs privately, removes its owned boot entry and staging files,
+and records completion. The final OS and UEFI verification must refer to the
+same boot. The composition requires this evidence plus Job completion before
+exposing the pool. Already-configured values need no EFI download or reboot.
+
+A helper error such as `WRITE_PROTECTED` is terminal. Preboot execution does not
+bypass a board's variable protection. Failed attempts retain their private backups
+and result logs; another execution requires the next `firmwareRetryGeneration`.
+An incomplete legacy efivarfs transaction must be inspected before migrating to
+this backend. The original request can instead select `skipUefi: true` through
+the reviewed composition without reinstallation.
 
 `status.uefiReady` reports that the configured UEFI requirements are satisfied
 (or that none were requested). Full variable backups stay on the server and
@@ -329,7 +346,7 @@ be recovered explicitly; the SSH workflow does not power the server off.
 
 The example maps the existing TEE enablement procedure into the generic API.
 The automated firmware flow still needs qualification on each physical BIOS
-profile; file-backed tests do not establish firmware activation on hardware.
+profile; unit tests and an actual QEMU/OVMF EFI execution do not establish activation on a physical BIOS.
 
 ## Scope and prerequisites
 
@@ -480,3 +497,16 @@ and bound OS/firmware verification can permit enrollment.
 
 Firmware errors report the operation and errno, without variable contents or
 credential paths. Original variable bytes remain in the private host backup.
+
+For the opt-in EFI execution test, install `pyfatfs` and `setuptools<81` in a
+separate test environment and provide QEMU, `sgdisk`, fresh standard OVMF code
+and variable templates, and the two binaries matching `efi_boot.ARTIFACTS`:
+
+```sh
+python3 -B test/baremetal-efi-vm.py --artifacts /path/to/efi-artifacts \
+  --firmware-code /path/to/OVMF_CODE.fd --firmware-vars /path/to/OVMF_VARS.fd
+```
+
+It creates a disposable GPT/FAT disk and private NVRAM copy, runs the production
+script through a real BootNext shell boot, checks exact variable bytes and the
+return boot, and verifies that selecting the shell again cannot repeat writes.

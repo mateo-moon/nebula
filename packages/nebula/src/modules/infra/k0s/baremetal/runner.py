@@ -226,7 +226,10 @@ class Provisioner:
 
     def configure_firmware(self, ssh: SshClient) -> bool:
         result = ssh.call(
-            "uefi-apply", installed=True, expectedBootId=self.status["installedBootId"]
+            "uefi-apply",
+            installed=True,
+            expectedBootId=self.status["installedBootId"],
+            firmwareRetryGeneration=self.status.get("firmwareRetryGeneration", 0),
         )
         if result.get("configured") is not True:
             raise ProvisioningError("UEFI configuration did not succeed")
@@ -234,15 +237,27 @@ class Provisioner:
         # Persist the next phase before a reboot can interrupt the SSH session.
         self.journal.save(phase=phase, lastError="")
         if result["changed"]:
-            ssh.call("uefi-reboot", installed=True)
+            ssh.call(
+                "uefi-reboot",
+                installed=True,
+                firmwareRetryGeneration=self.status.get("firmwareRetryGeneration", 0),
+            )
         return False
 
     def await_firmware(self, ssh: SshClient) -> bool:
         try:
-            firmware = ssh.call("uefi-verify", installed=True)
+            firmware = ssh.call(
+                "uefi-verify",
+                installed=True,
+                firmwareRetryGeneration=self.status.get("firmwareRetryGeneration", 0),
+            )
             if firmware.get("verified") is not True:
                 if self.phase == Phase.REBOOTING_UEFI:
-                    ssh.call("uefi-reboot", installed=True)
+                    ssh.call(
+                        "uefi-reboot",
+                        installed=True,
+                        firmwareRetryGeneration=self.status.get("firmwareRetryGeneration", 0),
+                    )
                 return False
             result = ssh.call("verify", installed=True)
         except RetryableError:

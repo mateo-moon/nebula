@@ -169,7 +169,7 @@ def render_files(
         "partman/confirm_nooverwrite boolean": "true",
         "partman-basicfilesystems/no_swap boolean": "false",
         "base-installer/install-recommends boolean": "false",
-        "pkgsel/include string": "openssh-server ca-certificates curl lvm2 python3 systemd-resolved",
+        "pkgsel/include string": "openssh-server ca-certificates curl lvm2 python3 systemd-resolved efibootmgr",
         "pkgsel/upgrade select": "none",
         "grub-installer/only_debian boolean": "true",
         "grub-installer/with_other_os boolean": "true",

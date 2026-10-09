@@ -689,3 +689,10 @@ test("decoding limits refuse an opaque remainder instead of passing it", (t) => 
   assert.ok(JSON.parse(result.stdout).findings.some((x) => x.class === "private-scan-limit"));
   assert.ok(!result.stdout.includes(word));
 });
+
+test("EFI artifact upstreams are exact public owners and neighbouring names remain blocked", () => {
+  for (const owner of ["datasone", "pbatard"]) {
+    assert.deepEqual(classes(scan(`https://github.com/${owner}/upstream/releases`)), []);
+    assert.deepEqual(classes(scan(`https://github.com/${owner}-private/private`)), ["repository-owner"]);
+  }
+});

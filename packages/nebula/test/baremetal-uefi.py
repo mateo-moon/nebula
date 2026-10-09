@@ -1,7 +1,6 @@
 """Exercise UEFI byte updates and recovery on temporary files, never host firmware."""
 
 import copy
-import errno
 import json
 import os
 import tempfile
@@ -75,7 +74,6 @@ class UefiTransactions(unittest.TestCase):
         self.variable = self.spec["installation"]["uefi"]["variables"][0]
         self.path = self.efi / host.variable_name(self.variable)
         self.path.write_bytes(self.original)
-        self.flags, self.flag_changes = {self.path.stat().st_ino: 16}, []
         for name, value in (
             ("UEFI_ROOT", self.efi),
             ("UEFI_DMI", self.dmi),
@@ -83,13 +81,19 @@ class UefiTransactions(unittest.TestCase):
             ("UEFI_BOOT_ID", self.boot),
         ):
             self.stack.enter_context(patch.object(host, name, value))
-        self.stack.enter_context(patch.object(host.fcntl, "ioctl", self.ioctl))
         self.stack.enter_context(
             patch.object(
                 host.subprocess,
                 "run",
                 return_value=types.SimpleNamespace(returncode=0, stdout="efivarfs\n"),
             )
+        )
+        self.prepare = self.stack.enter_context(patch.object(host.efi_boot, "prepare", self.stage))
+        self.arm = self.stack.enter_context(patch.object(host.efi_boot, "arm"))
+        self.result = self.stack.enter_context(patch.object(host.efi_boot, "execution_result"))
+        self.cleanup = self.stack.enter_context(patch.object(host.efi_boot, "cleanup"))
+        self.commands = self.stack.enter_context(
+            patch.object(host, "command", return_value="loaded")
         )
 
     def bind(self):
@@ -99,35 +103,44 @@ class UefiTransactions(unittest.TestCase):
             )
         )
 
-    def ioctl(self, descriptor, operation, values, *args):
-        inode = os.fstat(descriptor).st_ino
-        if operation == host.UEFI_GETFLAGS:
-            values[0] = self.flags[inode]
-        else:
-            self.flags[inode] = values[0]
-            self.flag_changes.append(values[0])
+    def stage(self, profile, state, save):
+        saved = json.loads((self.state / "uefi-operation.json").read_text())
+        self.assertEqual(bytes.fromhex(saved["variables"][0]["before"]), self.original)
+        state["efiBoot"] = {
+            "directory": "nebula-fixture",
+            "bootNumber": "0003",
+            "returnBoot": "0000",
+            "partUuid": "fixture",
+            "bootOrder": "0000",
+            "entryHash": "1" * 64,
+        }
+        save(state)
 
-    def test_one_write_preserves_attributes_padding_and_private_backup(self):
+    def execute(self):
+        host.reboot(self.payload)
+        self.path.write_bytes(host.desired_blob(self.variable, self.original))
+        self.boot.write_text("firmware-boot")
+
+    def test_apply_stages_after_private_backup_without_linux_variable_writes(self):
         with patch.object(host.os, "write", wraps=os.write) as writes:
             result = host.apply(self.payload)
         self.assertTrue(result["changed"])
-        self.assertEqual(writes.call_count, 1)
-        desired = host.desired_blob(self.variable, self.original)
-        self.assertEqual(self.path.read_bytes(), desired)
-        changed = {index for index, (a, b) in enumerate(zip(self.original, desired)) if a != b}
-        self.assertEqual(changed, {5, 8})
-        self.assertEqual(self.flag_changes, [0, 16])
+        self.assertEqual(writes.call_count, 0)
+        self.assertEqual(self.path.read_bytes(), self.original)
         saved = self.state / "uefi-operation.json"
         self.assertEqual(saved.stat().st_mode & 0o777, 0o600)
-        self.assertEqual(
-            bytes.fromhex(json.loads(saved.read_text())["variables"][0]["before"]), self.original
-        )
-        self.assertEqual(set(result), {"configured", "changed", "sourceBootId"})
-        with patch.object(host.os, "write", wraps=os.write) as writes:
-            host.apply(self.payload)
-            self.assertEqual(writes.call_count, 0)
+        self.assertFalse(json.loads(saved.read_text())["complete"])
+        self.assertFalse(host.verify(self.payload)["verified"])
+        self.execute()
+        self.assertTrue(host.verify(self.payload)["verified"])
+        self.cleanup.assert_called_once()
+        self.assertTrue(json.loads(saved.read_text())["complete"])
+        changed = {
+            i for i, (a, b) in enumerate(zip(self.original, self.path.read_bytes())) if a != b
+        }
+        self.assertEqual(changed, {5, 8})
 
-    def test_wrong_hardware_size_attributes_or_values_never_write(self):
+    def test_wrong_hardware_size_attributes_or_values_never_prepare(self):
         for mutate in (
             lambda: (self.dmi / "bios_version").write_text("different"),
             lambda: self.path.write_bytes(self.original[:-1]),
@@ -137,163 +150,180 @@ class UefiTransactions(unittest.TestCase):
             (self.dmi / "bios_version").write_text("1.0")
             self.path.write_bytes(self.original)
             mutate()
-            with (
-                patch.object(host.os, "write", wraps=os.write) as writes,
-                self.assertRaises(ValueError),
-            ):
+            with patch.object(host.efi_boot, "prepare") as prepare, self.assertRaises(ValueError):
                 host.apply(self.payload)
-            self.assertEqual(writes.call_count, 0)
+            prepare.assert_not_called()
             self.assertFalse((self.state / "uefi-operation.json").exists())
+
+    def test_ambiguous_name_is_rejected_before_preboot_write(self):
+        (self.efi / "Setup-00000000-0000-0000-0000-bbbbbbbbbbbb").write_bytes(self.original)
+        with (
+            patch.object(host.efi_boot, "prepare") as prepare,
+            self.assertRaisesRegex(ValueError, "unambiguous"),
+        ):
+            host.apply(self.payload)
+        prepare.assert_not_called()
 
     def test_late_invalid_variable_blocks_the_whole_operation(self):
         other = copy.deepcopy(self.variable)
         other["name"] = "Second"
         self.spec["installation"]["uefi"]["variables"].append(other)
-        path = self.efi / host.variable_name(other)
-        path.write_bytes(b"invalid")
+        (self.efi / host.variable_name(other)).write_bytes(b"invalid")
         self.bind()
-        with (
-            patch.object(host.os, "write", wraps=os.write) as writes,
-            self.assertRaises(ValueError),
-        ):
+        with patch.object(host.efi_boot, "prepare") as prepare, self.assertRaises(ValueError):
             host.apply(self.payload)
-        self.assertEqual(writes.call_count, 0)
+        prepare.assert_not_called()
         self.assertEqual(self.path.read_bytes(), self.original)
 
-    def test_backup_failure_prevents_any_firmware_write(self):
+    def test_backup_failure_prevents_boot_mutation(self):
         with (
             patch.object(host, "save_transaction", side_effect=OSError("disk full")),
-            patch.object(host.os, "write", wraps=os.write) as writes,
+            patch.object(host.efi_boot, "prepare") as prepare,
         ):
             with self.assertRaises(OSError):
                 host.apply(self.payload)
-        self.assertEqual(writes.call_count, 0)
+        prepare.assert_not_called()
 
-    def test_resume_repairs_immutable_flag_without_writing_twice(self):
-        def interrupted(descriptor, operation, values, *args):
-            if operation == host.UEFI_SETFLAGS and values[0] == 16:
-                raise OSError("interrupted before restoring flags")
-            return self.ioctl(descriptor, operation, values, *args)
-
-        with (
-            patch.object(host.fcntl, "ioctl", interrupted),
-            self.assertRaisesRegex(ValueError, "restore immutable flag"),
-        ):
-            host.apply(self.payload)
-        self.assertFalse(json.loads((self.state / "uefi-operation.json").read_text())["complete"])
-        self.assertEqual(self.flags[self.path.stat().st_ino], 0)
-        with patch.object(host.os, "write", wraps=os.write) as writes:
-            host.apply(self.payload)
-        self.assertEqual(writes.call_count, 0)
-        self.assertEqual(self.flags[self.path.stat().st_ino], 16)
-
-    def test_write_errno_has_operation_context_and_restores_flags(self):
-        with (
-            patch.object(
-                host.os, "write", side_effect=OSError(errno.EINVAL, "private payload")
-            ) as writes,
-            self.assertRaisesRegex(ValueError, r"UEFI write variable failed: EINVAL \(errno 22\)"),
-        ):
-            host.apply(self.payload)
-        self.assertEqual(writes.call_count, 1)
-        self.assertEqual(self.path.read_bytes(), self.original)
-        self.assertEqual(self.flag_changes, [0, 16])
-        self.assertFalse(json.loads((self.state / "uefi-operation.json").read_text())["complete"])
-
-    def test_changed_bytes_or_reboot_during_partial_write_are_not_overwritten(self):
-        with (
-            patch.object(host, "write_variable", side_effect=OSError("interrupted")),
-            self.assertRaises(OSError),
-        ):
-            host.apply(self.payload)
-        self.path.write_bytes(self.original[:-1] + b"\x00")
-        with (
-            patch.object(host.os, "write", wraps=os.write) as writes,
-            self.assertRaisesRegex(ValueError, "changed after"),
-        ):
-            host.apply(self.payload)
-        self.assertEqual(writes.call_count, 0)
-        self.path.write_bytes(self.original)
-        self.boot.write_text("unexpected-boot")
-        with self.assertRaisesRegex(ValueError, "incomplete UEFI"):
-            host.apply(self.payload)
-
-    def test_host_receipt_and_transaction_must_match_the_request(self):
-        bad = {**self.payload, "uid": "other-request"}
-        with self.assertRaisesRegex(ValueError, "not bound"):
-            host.apply(bad)
+    def test_failure_result_is_terminal_retains_backup_and_cleans_boot_intent(self):
         host.apply(self.payload)
-        self.spec["installation"]["uefi"]["variables"][0]["parameters"][0]["value"] = 0
-        self.bind()
-        with self.assertRaisesRegex(ValueError, "another operation"):
+        host.reboot(self.payload)
+        self.boot.write_text("firmware-boot")
+        self.result.side_effect = fixtures.ProvisioningError(
+            "setup_var.efi failed: WRITE_PROTECTED"
+        )
+        for _ in range(2):
+            with self.assertRaisesRegex(ValueError, "WRITE_PROTECTED"):
+                host.verify(self.payload)
+        self.cleanup.assert_called_once()
+        self.result.assert_called_once()
+        state = json.loads((self.state / "uefi-operation.json").read_text())
+        self.assertFalse(state["complete"])
+        self.assertEqual(bytes.fromhex(state["variables"][0]["before"]), self.original)
+        self.assertEqual(self.path.read_bytes(), self.original)
+        with self.assertRaisesRegex(ValueError, "WRITE_PROTECTED"):
             host.apply(self.payload)
 
-    def test_missing_backup_cannot_turn_a_pending_reboot_into_a_noop(self):
+    def test_success_status_does_not_accept_changed_padding(self):
+        host.apply(self.payload)
+        self.execute()
+        self.path.write_bytes(self.path.read_bytes()[:-1] + b"\x00")
+        with self.assertRaisesRegex(ValueError, "complete backed-up layout"):
+            host.verify(self.payload)
+        self.cleanup.assert_called_once()
+
+    def test_retry_requires_explicit_next_generation_and_preserves_original(self):
+        host.apply(self.payload)
+        host.reboot(self.payload)
+        self.boot.write_text("firmware-boot")
+        self.result.side_effect = fixtures.ProvisioningError(
+            "setup_var.efi failed: WRITE_PROTECTED"
+        )
+        with self.assertRaises(ValueError):
+            host.verify(self.payload)
+        self.payload["firmwareRetryGeneration"] = 2
+        with self.assertRaisesRegex(ValueError, "next explicit"):
+            host.apply(self.payload)
+        self.payload["firmwareRetryGeneration"] = 1
+        host.apply(self.payload)
+        state = json.loads((self.state / "uefi-operation.json").read_text())
+        self.assertEqual(state["bootId"], "firmware-boot")
+        self.assertEqual(bytes.fromhex(state["variables"][0]["before"]), self.original)
+        self.assertNotIn("rebootRequested", state)
+
+    def test_stale_generation_cannot_arm_or_verify_another_attempt(self):
+        self.payload["firmwareRetryGeneration"] = 1
+        host.apply(self.payload)
+        stale = {**self.payload, "firmwareRetryGeneration": 0}
+        for action in (host.reboot, host.verify):
+            with self.assertRaisesRegex(ValueError, "another retry generation"):
+                action(stale)
+        self.arm.assert_not_called()
+        self.result.assert_not_called()
+
+    def test_preparation_failure_can_retry_only_with_the_next_generation(self):
+        with patch.object(
+            host.efi_boot,
+            "prepare",
+            side_effect=fixtures.ProvisioningError("EFI artifact checksum mismatch"),
+        ):
+            with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+                host.apply(self.payload)
+        state = json.loads((self.state / "uefi-operation.json").read_text())
+        self.assertTrue(state["cleanupComplete"])
+        self.assertEqual(state["variables"][0]["before"], self.original.hex())
+        with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+            host.apply(self.payload)
+        self.payload["firmwareRetryGeneration"] = 1
+        host.apply(self.payload)
+        self.assertEqual(self.path.read_bytes(), self.original)
+        self.assertNotIn("failed", json.loads((self.state / "uefi-operation.json").read_text()))
+
+    def test_completed_execution_can_recheck_capabilities_without_another_reboot(self):
+        host.apply(self.payload)
+        self.execute()
+        host.verify(self.payload)
+        self.payload["firmwareRetryGeneration"] = 1
+        with patch.object(host.efi_boot, "prepare") as prepare:
+            self.assertFalse(host.apply(self.payload)["changed"])
+        prepare.assert_not_called()
+        self.assertTrue(host.verify(self.payload)["verified"])
+
+    def test_missing_backup_cannot_turn_pending_execution_into_noop(self):
         host.apply(self.payload)
         (self.state / "uefi-operation.json").unlink()
-        with (
-            patch.object(host.os, "write", wraps=os.write) as writes,
-            self.assertRaisesRegex(ValueError, "backup is missing"),
-        ):
+        with self.assertRaisesRegex(ValueError, "backup is missing"):
             host.apply(self.payload)
-        self.assertEqual(writes.call_count, 0)
 
-    def test_activation_needs_another_boot_and_persistent_parameter_values(self):
+    def test_installed_receipt_must_match_request(self):
+        with self.assertRaisesRegex(ValueError, "not bound"):
+            host.apply({**self.payload, "uid": "other"})
+
+    def test_legacy_runtime_transaction_is_not_replayed_as_preboot(self):
         host.apply(self.payload)
-        self.assertFalse(host.verify(self.payload)["verified"])
-        self.boot.write_text("firmware-boot")
-        self.assertTrue(host.verify(self.payload)["verified"])
-        self.path.write_bytes(self.original)
-        with self.assertRaisesRegex(ValueError, "did not persist"):
-            host.verify(self.payload)
-        with (
-            patch.object(host.os, "write", wraps=os.write) as writes,
-            self.assertRaises(ValueError),
-        ):
+        state = json.loads((self.state / "uefi-operation.json").read_text())
+        state.pop("backend")
+        host.save_transaction(state)
+        with self.assertRaisesRegex(ValueError, "Legacy"):
             host.apply(self.payload)
-        self.assertEqual(writes.call_count, 0)
 
-    def test_already_configured_variables_need_no_write_or_reboot(self):
+    def test_already_configured_variables_need_no_efi_download_or_reboot(self):
         self.path.write_bytes(host.desired_blob(self.variable, self.original))
-        with patch.object(host.os, "write", wraps=os.write) as writes:
+        with patch.object(host.efi_boot, "prepare") as prepare:
             self.assertFalse(host.apply(self.payload)["changed"])
-        self.assertEqual(writes.call_count, 0)
+        prepare.assert_not_called()
         self.assertFalse(host.reboot(self.payload)["scheduled"])
         self.assertTrue(host.verify(self.payload)["verified"])
 
-    def test_reboot_resumes_only_before_the_original_boot_ends(self):
+    def test_reboot_checkpoint_prevents_duplicate_arming_and_scheduling(self):
         host.apply(self.payload)
-        calls = []
+        self.assertTrue(host.reboot(self.payload)["scheduled"])
+        self.assertTrue(host.reboot(self.payload)["scheduled"])
+        self.arm.assert_called_once()
+        self.assertEqual(
+            sum(a.args[0][0] == "systemd-run" for a in self.commands.call_args_list), 1
+        )
+        self.commands.return_value = "not-found"
+        with self.assertRaisesRegex(ValueError, "checkpoint"):
+            host.reboot(self.payload)
+        self.arm.assert_called_once()
 
-        def command(args):
-            calls.append(args)
-            return "not-found"
-
+    def test_failed_checkpoint_never_schedules_reboot(self):
+        host.apply(self.payload)
         with (
-            patch.object(host, "command", command),
-            patch.object(
-                host.subprocess, "run", return_value=types.SimpleNamespace(returncode=1, stdout="")
-            ),
+            patch.object(host, "save_transaction", side_effect=OSError("disk full")),
+            self.assertRaises(OSError),
         ):
-            # Keep mount detection separate from timer status in this fixture.
-            with patch.object(host, "verify_environment"):
-                self.assertTrue(host.reboot(self.payload)["scheduled"])
-                self.assertIn("reboot.target", calls[-1])
-                self.assertNotIn("kexec", calls[-1])
-                self.boot.write_text("firmware-boot")
-                count = len(calls)
-                self.assertFalse(host.reboot(self.payload)["scheduled"])
-                self.assertEqual(len(calls), count)
+            host.reboot(self.payload)
+        self.assertFalse(self.commands.called)
 
     def test_effective_kernel_capabilities_gate_verification(self):
-        profile = self.spec["installation"]["uefi"]
-        profile["verification"] = {
+        self.spec["installation"]["uefi"]["verification"] = {
             "cpuFlags": ["sev_snp"],
             "moduleParameters": [{"module": "kvm_amd", "parameter": "sev_snp", "value": "Y"}],
         }
         self.bind()
         host.apply(self.payload)
-        self.boot.write_text("firmware-boot")
+        self.execute()
         module = self.root / "modules/kvm_amd/parameters"
         module.mkdir(parents=True)
         (module / "sev_snp").write_text("N")
@@ -305,24 +335,173 @@ class UefiTransactions(unittest.TestCase):
                 return self.root / "modules"
             return Path(value)
 
-        with patch.object(host, "Path", path), patch.object(host, "command", return_value=""):
+        with patch.object(host, "Path", path):
             with self.assertRaisesRegex(ValueError, "kernel module verification"):
                 host.verify(self.payload)
             (module / "sev_snp").write_text("Y")
             self.assertTrue(host.verify(self.payload)["verified"])
 
-    def test_in_progress_shutdown_waits_without_scheduling_another_reboot(self):
-        host.apply(self.payload)
-        state = json.loads((self.state / "uefi-operation.json").read_text())
-        host.save_transaction({**state, "rebootRequested": True})
+
+class EfiBootTests(unittest.TestCase):
+    def setUp(self):
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
+        self.esp, self.vars = self.root / "esp", self.root / "vars"
+        (self.esp / "EFI").mkdir(parents=True)
+        self.vars.mkdir()
+        self.boot = host.efi_boot
+        self.stack.enter_context(patch.object(self.boot, "ESP", self.esp))
+        self.stack.enter_context(patch.object(self.boot, "VARIABLES", self.vars))
+        self.stack.enter_context(
+            patch.object(
+                self.boot,
+                "esp_identity",
+                return_value=("/dev/vda", "1", "00000000-0000-0000-0000-aaaaaaaaaaaa"),
+            )
+        )
+        self.stack.enter_context(
+            patch.object(self.boot.shutil, "which", return_value="/usr/bin/efibootmgr")
+        )
+        self.write_variable("SecureBoot", b"\x00")
+        self.write_variable("BootCurrent", b"\x00\x00")
+        self.write_variable("BootOrder", b"\x02\x00\x00\x00")
+        self.state = {
+            "uid": "fixture",
+            "fingerprint": "fingerprint",
+            "bootId": "source",
+            "variables": [],
+            "complete": False,
+            "changed": True,
+        }
+        self.snapshots = []
+        self.calls = []
+
+    def write_variable(self, name, value):
+        (self.vars / (name + "-" + self.boot.GLOBAL_GUID)).write_bytes(b"\x07\x00\x00\x00" + value)
+
+    def save(self, state):
+        self.snapshots.append(copy.deepcopy(state))
+
+    def command(self, args):
+        self.calls.append(args)
+        if args[0] == "efibootmgr" and "--create-only" in args:
+            self.assertIn("efiBoot", self.snapshots[-1])
+            self.write_variable("Boot" + self.state["efiBoot"]["bootNumber"], b"fixture-entry")
+        if args == ["efibootmgr", "--verbose"]:
+            i = self.state["efiBoot"]
+            return f"Boot{i['bootNumber']}* {i['directory']} HD(1,GPT,{i['partUuid']},0,1)/File(\\EFI\\{i['directory']}\\Shell.efi)"
+        if "--bootnext" in args:
+            self.write_variable("BootNext", int(args[-1], 16).to_bytes(2, "little"))
+        if "--delete-bootnum" in args:
+            (self.vars / ("Boot" + args[2] + "-" + self.boot.GLOBAL_GUID)).unlink()
+        return ""
+
+    def prepare(self):
+        def download(path):
+            path.write_bytes(b"fixture artifact")
+
         with (
-            patch.object(host, "verify_environment"),
-            patch.object(host, "command", return_value="loaded") as commands,
-            patch.object(host.subprocess, "run", return_value=types.SimpleNamespace(returncode=1)),
+            patch.object(self.boot, "fetch_artifact", download),
+            patch.object(self.boot, "command", self.command),
         ):
-            self.assertTrue(host.reboot(self.payload)["scheduled"])
-        self.assertEqual(commands.call_count, 1)
-        self.assertEqual(commands.call_args.args[0][0:2], ["systemctl", "show"])
+            self.boot.prepare(UEFI, self.state, self.save)
+
+    def test_staging_binds_partition_and_preserves_boot_order(self):
+        self.prepare()
+        intent = self.state["efiBoot"]
+        self.assertIn("entryHash", intent)
+        self.assertEqual(self.boot.global_value("BootOrder"), b"\x02\x00\x00\x00")
+        self.assertIsNone(self.boot.global_value("BootNext"))
+        path = self.esp / "EFI" / intent["directory"]
+        script = (path / "startup.nsh").read_text()
+        self.assertIn("--write_on_demand Setup:0x1(1)=0x1 Setup:0x4(4)=0x63", script)
+        self.assertIn("setvar BootNext -guid " + self.boot.GLOBAL_GUID, script)
+        self.assertIn("=H0000", script)
+        self.assertIn("rm %f:", script)
+        self.assertIn("once.flag", script)
+        self.assertNotIn("rm %f:" + "\\EFI\\" + intent["directory"] + "\\startup.nsh", script)
+        with patch.object(self.boot, "command", self.command):
+            self.boot.arm(intent)
+        self.assertEqual(
+            self.boot.global_value("BootNext"), int(intent["bootNumber"], 16).to_bytes(2, "little")
+        )
+
+    def test_secure_boot_or_foreign_bootnext_refuses_staging(self):
+        for name, value in [("SecureBoot", b"\x01"), ("BootNext", b"\xff\x00")]:
+            self.write_variable("SecureBoot", b"\x00")
+            self.write_variable(name, value)
+            with patch.object(self.boot, "command") as commands, self.assertRaises(ValueError):
+                self.boot.prepare(UEFI, self.state, self.save)
+            commands.assert_not_called()
+            self.assertEqual(self.state.get("efiBoot"), None)
+
+    def test_ownership_change_does_not_arm_or_delete_entry(self):
+        self.prepare()
+        intent = self.state["efiBoot"]
+        self.write_variable("Boot" + intent["bootNumber"], b"foreign-entry")
+        with patch.object(self.boot, "command", self.command):
+            for action in (
+                lambda: self.boot.arm(intent),
+                lambda: self.boot.cleanup(intent, self.root / "archive"),
+            ):
+                with self.assertRaisesRegex(ValueError, "changed after staging"):
+                    action()
+        self.assertFalse(any("--bootnext" in a or "--delete-bootnum" in a for a in self.calls))
+
+    def test_efi_failure_is_sanitized_and_logs_are_archived_privately(self):
+        self.prepare()
+        intent = self.state["efiBoot"]
+        path = self.esp / "EFI" / intent["directory"]
+        (path / "status.log").write_text(
+            "marker=" + intent["directory"] + "\r\nreturnStatus=0x0\r\napplyStatus=0x15\r\n",
+            encoding="utf-16",
+        )
+        (path / "apply.log").write_text(
+            "private variable contents WRITE_PROTECTED", encoding="utf-16"
+        )
+        with self.assertRaisesRegex(ValueError, "setup_var.efi failed: WRITE_PROTECTED") as raised:
+            self.boot.execution_result(intent)
+        self.assertNotIn("private", str(raised.exception))
+        with patch.object(self.boot, "command", self.command):
+            self.boot.cleanup(intent, self.root / "archive")
+        self.assertFalse(path.exists())
+        self.assertEqual((self.root / "archive/apply.log").stat().st_mode & 0o777, 0o600)
+        self.assertIsNone(self.boot.global_value("Boot" + intent["bootNumber"]))
+
+    def test_success_requires_both_helper_and_return_boot_success(self):
+        self.prepare()
+        intent = self.state["efiBoot"]
+        path = self.esp / "EFI" / intent["directory"]
+        for marker, result, returned in [
+            (intent["directory"], "0x0", "0x0"),
+            ("foreign", "0x0", "0x0"),
+            (intent["directory"], "0x0", "0x15"),
+        ]:
+            (path / "status.log").write_text(
+                f"marker={marker}\r\nreturnStatus={returned}\r\napplyStatus={result}\r\n",
+                encoding="utf-16",
+            )
+            if marker == intent["directory"] and returned == "0x0":
+                self.boot.execution_result(intent)
+            else:
+                with self.assertRaises(ValueError):
+                    self.boot.execution_result(intent)
+
+    def test_checksum_failure_never_promotes_download(self):
+        target = self.esp / "setup_var.efi"
+
+        def download(args):
+            Path(args[args.index("--output") + 1]).write_bytes(b"tampered executable")
+            return ""
+
+        with (
+            patch.object(self.boot, "command", download),
+            self.assertRaisesRegex(ValueError, "checksum mismatch"),
+        ):
+            self.boot.fetch_artifact(target)
+        self.assertFalse(target.exists())
+        self.assertFalse(target.with_suffix(".download").exists())
 
 
 class FirmwareSSH(fixtures.FakeSSH):

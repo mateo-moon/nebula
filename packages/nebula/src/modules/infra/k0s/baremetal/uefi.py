@@ -1,4 +1,4 @@
-"""Hardware-bound efivarfs updates with durable backups and reboot checkpoints.
+"""Hardware-bound preboot setup_var.efi updates with durable backups and reboot checkpoints.
 
 Only existing NV/BS/RT variables are modified. Full originals stay in a private,
 durable transaction on the installed OS; they never enter Kubernetes or logs.
@@ -6,8 +6,6 @@ durable transaction on the installed OS; they never enter Kubernetes or logs.
 
 from __future__ import annotations
 
-import array
-import errno
 import fcntl
 import json
 import os
@@ -18,6 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
 
+import efi_boot
 from models import (
     FirmwareProfile,
     FirmwareTransaction,
@@ -32,8 +31,6 @@ UEFI_ROOT = Path("/sys/firmware/efi/efivars")
 UEFI_DMI = Path("/sys/class/dmi/id")
 UEFI_STATE = Path("/var/lib/nebula-baremetal")
 UEFI_BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
-# Linux x86-64 ioctl numbers; the installer already restricts host architecture.
-UEFI_GETFLAGS, UEFI_SETFLAGS, UEFI_IMMUTABLE = 0x80086601, 0x40086602, 0x10
 
 
 def verify_environment(profile: FirmwareProfile) -> None:
@@ -65,6 +62,8 @@ def variable_name(variable: UefiVariable) -> str:
 
 def read_variable(variable: UefiVariable) -> bytes:
     path = UEFI_ROOT / variable_name(variable)
+    if list(UEFI_ROOT.glob(variable["name"] + "-*")) != [path]:
+        raise ProvisioningError("setup_var.efi requires an unambiguous variable name and GUID")
     if path.is_symlink():
         raise ProvisioningError("UEFI variable must not be a symlink")
     with path.open("rb") as source:
@@ -104,70 +103,6 @@ def preflight(spec: WorkerSpec) -> None:
     # Validate every variable before OS installation or any firmware write.
     for variable in profile["variables"]:
         desired_blob(variable, read_variable(variable))
-
-
-def variable_flags(path: Path) -> int:
-    with path.open("rb") as source:
-        flags = array.array("L", [0])
-        fcntl.ioctl(source.fileno(), UEFI_GETFLAGS, flags, True)
-        return flags[0]
-
-
-@contextmanager
-def firmware_io(stage: str) -> Iterator[None]:
-    """Expose the failing operation and errno, never paths or variable contents."""
-    try:
-        yield
-    except OSError as error:
-        code = errno.errorcode.get(error.errno or 0, "UNKNOWN")
-        raise ProvisioningError(f"UEFI {stage} failed: {code} (errno {error.errno})") from None
-
-
-def write_variable(
-    variable: UefiVariable, before: bytes, desired: bytes, original_flags: int
-) -> None:
-    path = UEFI_ROOT / variable_name(variable)
-    actual = read_variable(variable)
-    if actual not in (before, desired):
-        raise ProvisioningError("UEFI variable changed after its backup; refusing to overwrite it")
-    with path.open("rb") as attributes:
-        failure = None
-        try:
-            if actual != desired:
-                with firmware_io("clear immutable flag"):
-                    fcntl.ioctl(
-                        attributes.fileno(),
-                        UEFI_SETFLAGS,
-                        array.array("L", [original_flags & ~UEFI_IMMUTABLE]),
-                    )
-                # No truncation, creation, deletion, buffered writes or partial-write retry.
-                with firmware_io("open variable for writing"):
-                    descriptor = os.open(path, os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
-                try:
-                    with firmware_io("write variable"):
-                        if os.write(descriptor, desired) != len(desired):
-                            raise ProvisioningError(
-                                "UEFI write was incomplete; inspect the retained backup"
-                            )
-                finally:
-                    os.close(descriptor)
-                with firmware_io("read back variable"):
-                    if read_variable(variable) != desired:
-                        raise ProvisioningError("UEFI read-back differs from the requested update")
-        except ProvisioningError as error:
-            failure = error
-            raise
-        finally:
-            # Also repair an interrupted attempt that wrote data but lost its SSH session.
-            try:
-                with firmware_io("restore immutable flag"):
-                    fcntl.ioctl(
-                        attributes.fileno(), UEFI_SETFLAGS, array.array("L", [original_flags])
-                    )
-            except ProvisioningError as restoration:
-                if failure is not None:
-                    raise ProvisioningError(f"{failure}; {restoration}") from None
-                raise
 
 
 def atomic_write(destination: Path, state: object) -> None:
@@ -239,83 +174,139 @@ def verify_values(profile: FirmwareProfile) -> None:
             )
 
 
+def new_transaction(
+    payload: JsonObject, profile: FirmwareProfile, boot: str
+) -> FirmwareTransaction:
+    if boot != payload["expectedBootId"]:
+        raise ProvisioningError(
+            "installed host rebooted before UEFI preparation; inspect before proceeding"
+        )
+    variables: list[VariableBackup] = []
+    for variable in profile["variables"]:
+        before = read_variable(variable)
+        variables.append(
+            {
+                "name": variable_name(variable),
+                "before": before.hex(),
+                "after": desired_blob(variable, before).hex(),
+            }
+        )
+    changed = any(v["before"] != v["after"] for v in variables)
+    return {
+        "uid": payload["uid"],
+        "fingerprint": fingerprint(payload["spec"]),
+        "bootId": boot,
+        "variables": variables,
+        "complete": not changed,
+        "changed": changed,
+        "backend": "setup_var.efi",
+        "generation": payload.get("firmwareRetryGeneration", 0),
+    }
+
+
+def verify_backups(profile: FirmwareProfile, state: FirmwareTransaction, *, desired: bool) -> None:
+    for variable, saved in zip(profile["variables"], state["variables"]):
+        actual = read_variable(variable).hex()
+        if actual != saved["after"] and (desired or actual != saved["before"]):
+            raise ProvisioningError("UEFI variable differs from its complete backed-up layout")
+
+
+def retry_transaction(payload: JsonObject, state: FirmwareTransaction) -> None:
+    generation = payload.get("firmwareRetryGeneration", 0)
+    if state.get("backend") != "setup_var.efi":
+        raise ProvisioningError(
+            "Legacy UEFI operation needs inspection before switching to preboot execution"
+        )
+    if generation == state.get("generation", 0):
+        if state.get("failed"):
+            raise ProvisioningError(state["failed"])
+        return
+    if generation != state.get("generation", 0) + 1 or not (
+        state.get("failed") or state["complete"]
+    ):
+        raise ProvisioningError(
+            "A new EFI attempt requires the next explicit retry generation after failure"
+        )
+    if state.get("efiBoot") and not state.get("cleanupComplete"):
+        cleanup_attempt(state)
+    state["bootId"] = UEFI_BOOT_ID.read_text().strip()
+    state["generation"] = generation
+    state.pop("efiBoot", None)
+    state.pop("failed", None)
+    state.pop("rebootRequested", None)
+    state.pop("cleanupComplete", None)
+    save_transaction(state)
+
+
 def apply(payload: JsonObject) -> JsonObject:
     with operation(payload) as (profile, state):
         boot = UEFI_BOOT_ID.read_text().strip()
         if state is None:
-            if boot != payload["expectedBootId"]:
-                raise ProvisioningError(
-                    "installed host rebooted before UEFI configuration; inspect before writing"
-                )
-            variables: list[VariableBackup] = []
-            for variable in profile["variables"]:
-                before = read_variable(variable)
-                variables.append(
-                    {
-                        "name": variable_name(variable),
-                        "before": before.hex(),
-                        "after": desired_blob(variable, before).hex(),
-                        "flags": variable_flags(UEFI_ROOT / variable_name(variable)),
-                    }
-                )
-            state = {
-                "uid": payload["uid"],
-                "fingerprint": fingerprint(payload["spec"]),
-                "bootId": boot,
-                "variables": variables,
-                "complete": False,
-                "changed": any(v["before"] != v["after"] for v in variables),
-            }
-            save_transaction(state)  # fsync every original before touching any variable.
+            state = new_transaction(payload, profile, boot)
+            save_transaction(state)  # fsync every original before touching EFI boot intent.
+        retry_transaction(payload, state)
+        verify_backups(profile, state, desired=state["complete"])
         if not state["complete"]:
-            if boot != state["bootId"]:
-                raise ProvisioningError(
-                    "reboot during incomplete UEFI update; inspect the retained backup"
-                )
-            # A lost transaction must not make a just-written value look like
-            # preexisting configuration that needs no firmware reboot.
+            if boot != state["bootId"] or state.get("rebootRequested"):
+                raise ProvisioningError("EFI execution already started; verify its retained result")
             receipt = json.loads((UEFI_STATE / "installed.json").read_text())
             if not receipt.get("uefiStarted"):
                 atomic_write(UEFI_STATE / "installed.json", {**receipt, "uefiStarted": True})
-            for variable, saved in zip(profile["variables"], state["variables"]):
-                write_variable(
-                    variable,
-                    bytes.fromhex(saved["before"]),
-                    bytes.fromhex(saved["after"]),
-                    saved["flags"],
+            try:
+                efi_boot.prepare(profile, state, save_transaction)
+            except (OSError, ProvisioningError, subprocess.SubprocessError) as error:
+                failure = (
+                    str(error) if isinstance(error, ProvisioningError) else "EFI preparation failed"
                 )
-            state["complete"] = True
-            save_transaction(state)
-        verify_values(profile)
-        return {"configured": True, "changed": state["changed"], "sourceBootId": state["bootId"]}
+                state["failed"] = failure
+                save_transaction(state)
+                try:
+                    cleanup_attempt(state)
+                except (OSError, ProvisioningError, subprocess.SubprocessError):
+                    failure += "; EFI boot cleanup failed; inspect retained intent"
+                    state["failed"] = failure
+                    save_transaction(state)
+                raise ProvisioningError(failure) from None
+        return {
+            "configured": True,
+            "changed": state["changed"] and not state["complete"],
+            "sourceBootId": state["bootId"],
+        }
+
+
+def verify_generation(payload: JsonObject, state: FirmwareTransaction) -> None:
+    if payload.get("firmwareRetryGeneration", 0) != state.get("generation", 0):
+        raise ProvisioningError("EFI action belongs to another retry generation")
 
 
 def reboot(payload: JsonObject) -> JsonObject:
     with operation(payload) as (profile, state):
-        if not state or not state["complete"]:
-            raise ProvisioningError("UEFI configuration is incomplete; refusing to reboot")
-        verify_values(profile)
+        if not state or state.get("backend") != "setup_var.efi" or state.get("failed"):
+            raise ProvisioningError("UEFI execution has no valid prepared operation")
+        verify_generation(payload, state)
         if not state["changed"] or UEFI_BOOT_ID.read_text().strip() != state["bootId"]:
             return {"scheduled": False}
+        if "efiBoot" not in state or "entryHash" not in state["efiBoot"]:
+            raise ProvisioningError("EFI boot intent is incomplete")
+        verify_backups(profile, state, desired=False)
         loaded = Path("/sys/kernel/kexec_loaded")
         if loaded.exists() and loaded.read_text().strip() != "0":
             raise ProvisioningError(
-                "a kexec image is loaded; UEFI activation requires a firmware reboot"
+                "a kexec image is loaded; UEFI execution requires a firmware reboot"
             )
         unit = "nebula-uefi-" + payload["uid"]
-        if subprocess.run(["systemctl", "is-active", "--quiet", unit + ".timer"]).returncode == 0:
-            return {"scheduled": True}
-        if (
-            state.get("rebootRequested")
-            and command(["systemctl", "show", "--property=LoadState", "--value", unit + ".timer"])
-            != "not-found"
-        ):
-            # Shutdown can leave SSH reachable while another service drains.
-            # Wait for this request until the management deadline; never enqueue another.
-            return {"scheduled": True}
+        if state.get("rebootRequested"):
+            if (
+                command(["systemctl", "show", "--property=LoadState", "--value", unit + ".timer"])
+                != "not-found"
+            ):
+                return {"scheduled": True}
+            raise ProvisioningError(
+                "EFI reboot checkpoint exists without its timer; inspect before retrying"
+            )
+        efi_boot.arm(state["efiBoot"])
         state["rebootRequested"] = True
         save_transaction(state)
-        # Explicit reboot.target performs normal shutdown and firmware boot; no kexec/soft-reboot selection.
         command(
             [
                 "systemd-run",
@@ -331,13 +322,55 @@ def reboot(payload: JsonObject) -> JsonObject:
         return {"scheduled": True}
 
 
+def cleanup_attempt(state: FirmwareTransaction) -> None:
+    if "efiBoot" in state:
+        archive = UEFI_STATE / ("efi-attempt-" + str(state.get("generation", 0)))
+        efi_boot.cleanup(state["efiBoot"], archive)
+    state["cleanupComplete"] = True
+    save_transaction(state)
+
+
+def finish_execution(profile: FirmwareProfile, state: FirmwareTransaction) -> None:
+    if state.get("failed"):
+        raise ProvisioningError(state["failed"])
+    intent = state.get("efiBoot")
+    if not intent or not state.get("rebootRequested"):
+        raise ProvisioningError("UEFI verification has no armed EFI execution")
+    failure = ""
+    try:
+        efi_boot.execution_result(intent)
+        verify_backups(profile, state, desired=True)
+    except (OSError, ProvisioningError) as error:
+        failure = (
+            str(error)
+            if isinstance(error, ProvisioningError)
+            else "EFI execution result is missing"
+        )
+    try:
+        cleanup_attempt(state)
+    except (OSError, ProvisioningError, subprocess.SubprocessError):
+        failure = (
+            failure + "; " if failure else ""
+        ) + "EFI boot cleanup failed; inspect retained intent"
+    if failure:
+        state["failed"] = failure
+        save_transaction(state)
+        raise ProvisioningError(failure)
+    state["complete"] = True
+    save_transaction(state)
+
+
 def verify(payload: JsonObject) -> JsonObject:
     with operation(payload) as (profile, state):
-        if not state or not state["complete"]:
-            raise ProvisioningError("UEFI verification has no completed operation")
+        if not state or state.get("backend") != "setup_var.efi":
+            raise ProvisioningError("UEFI verification has no prepared setup_var.efi operation")
+        verify_generation(payload, state)
         boot = UEFI_BOOT_ID.read_text().strip()
-        if state["changed"] and boot == state["bootId"]:
+        if not state["complete"] and state["changed"] and boot == state["bootId"]:
             return {"verified": False}
+        if not state["complete"]:
+            finish_execution(profile, state)
+        verify_backups(profile, state, desired=True)
         verify_values(profile)
         checks = profile.get("verification", {})
         if checks.get("cpuFlags"):
