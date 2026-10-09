@@ -1,0 +1,21 @@
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+include = ["src/modules/infra/k0s/baremetal/*.py", "test/baremetal*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "C90"]
+ignore = ["E501"] # Generated shell/preseed lines must retain their exact contents.
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.per-file-ignores]
+"test/baremetal*.py" = ["E402", "C901"]
+
+[tool.mypy]
+python_version = "3.9"
+files = ["src/modules/infra/k0s/baremetal"]
+strict = true
+warn_unreachable = true
+

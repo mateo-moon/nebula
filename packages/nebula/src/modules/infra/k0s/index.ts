@@ -39,5 +39,6 @@ export type {
   K0smotronClusterControlPlane,
 } from "./k0smotron-cluster";
 
-export { BaremetalFleet, baremetalWorker } from "./baremetal";
-export type { BaremetalFleetOptions, BaremetalNode } from "./baremetal";
+export { BaremetalSetup, BaremetalFleet, baremetalWorker } from "./baremetal";
+export type { BaremetalSetupOptions, BaremetalInstallation, BaremetalBootArtifact, BaremetalFleetOptions, BaremetalNode } from "./baremetal";
+export type { BaremetalUefiConfiguration, BaremetalUefiVariable, BaremetalUefiParameter } from "./baremetal/uefi";

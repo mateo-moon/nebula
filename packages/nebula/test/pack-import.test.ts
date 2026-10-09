@@ -135,3 +135,25 @@ test("the packed host reconciliation accessors can read all five lazy assets", (
   `);
   assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)), [true, true, true, true, true]);
 });
+
+test("the packed baremetal setup can load its Python runtime assets", () => {
+  const entry = join(consumer, "baremetal-scripts.mjs");
+  writeFileSync(entry, `import { createRequire } from "node:module";
+    import { BaremetalSetup } from "nebula-cdk8s";
+    const require = createRequire(import.meta.url);
+    const { Testing } = createRequire(require.resolve("nebula-cdk8s"))("cdk8s");
+    const chart = Testing.chart();
+    new BaremetalSetup(chart, "provisioner", {
+      namespace: "default", image: "registry.example.test/provisioner@sha256:" + "3".repeat(64), clusterName: "test", k0sVersion: "v1.36.3+k0s.2", sshSecretName: "worker-ssh", tagDomain: "example.test",
+      trustOnFirstUse: true, defaults: { geo: "eu", region: "dc1", zone: "dc1" },
+      installation: { suite: "trixie", mirror: { hostname: "deb.debian.org", directory: "/debian" },
+        kernel: { url: "https://images.example.test/kernel", sha256: "1".repeat(64) },
+        initrd: { url: "https://images.example.test/initrd", sha256: "2".repeat(64) },
+        disk: { minSizeGiB: 32 }, rootSizeGiB: 16, volumeGroup: "worker-vg" },
+    });
+    const scripts = Testing.synth(chart).find(resource => resource.kind === "ConfigMap").data;
+    console.log(JSON.stringify(Object.keys(scripts).sort()));
+  `);
+  assert.deepEqual(JSON.parse(run(process.execPath, ["--import", "tsx", entry], consumer)),
+    ["agent.py", "host.py", "installer.py", "models.py", "runner.py", "runtime.py", "transport.py", "uefi.py", "validation.py"]);
+});

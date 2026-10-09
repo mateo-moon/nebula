@@ -11,6 +11,26 @@ The packed-package test also needs package-registry access or a warm pnpm store.
 - `argocd-discovery`, `worker-policy`, and `baremetal-and-registration` cover
   additional discovery roots without ownership changes, duplicate-name refusal,
   application/worker retention and exact baremetal/native admission graphs.
+- `baremetal-worker` executes the actual Go/Sprig XRD composition and Python Job
+  runtime: verified-OS gates, stale observations, retained enrollment, workload
+  admission, current-generation readiness, exact progress permissions, reboot
+  interruption, lost bindings, deadlines, disk selection and private payloads.
+  UEFI qualification covers hardware/layout matching, full variable backups,
+  single-write updates, immutable flags, partial-write recovery, firmware reboot
+  checkpoints and capability checks using temporary files and injected faults.
+  Transport qualification runs the real zipapp in an isolated Python subprocess
+  and covers malformed responses, private-output suppression, token rotation,
+  cleanup and explicit retryable/terminal errors. Runtime modules pass strict
+  mypy and Ruff checks; CI installs the pinned `requirements-python.txt` tools.
+  With `BAREMETAL_CROSSPLANE_CLI=/path/to/crossplane`, the same test file also runs
+  the full pipeline in Docker using Crossplane CLI 2.1.3 and the installed function
+  versions. CI enables this tier with a checksum-verified CLI. It checks actual
+  XR Ready conditions through installation, UEFI/admission gates, enrollment,
+  intent changes and observation loss, without contacting a cluster or host.
+  The opt-in `python3 -B test/baremetal-vm.py --artifacts <directory>` creates
+  a disposable QEMU disk and tests a real SSH/kexec reinstall. It requires QEMU,
+  outbound Debian archive access, and the matching pinned `linux`/`initrd.gz`
+  files documented inside the test. It never targets an existing server or disk.
 - `worker-observed-identity`, `worker-observed-network` and
   `worker-fleet-attachment` execute the emitted worker template and bootstrap:
   exact retained bindings, wrong/missing region or AZ, lost external names,
