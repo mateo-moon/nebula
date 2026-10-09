@@ -230,6 +230,16 @@ class UefiTransactions(unittest.TestCase):
         self.assertEqual(bytes.fromhex(state["variables"][0]["before"]), self.original)
         self.assertNotIn("rebootRequested", state)
 
+    def test_stale_generation_cannot_arm_or_verify_another_attempt(self):
+        self.payload["firmwareRetryGeneration"] = 1
+        host.apply(self.payload)
+        stale = {**self.payload, "firmwareRetryGeneration": 0}
+        for action in (host.reboot, host.verify):
+            with self.assertRaisesRegex(ValueError, "another retry generation"):
+                action(stale)
+        self.arm.assert_not_called()
+        self.result.assert_not_called()
+
     def test_preparation_failure_can_retry_only_with_the_next_generation(self):
         with patch.object(
             host.efi_boot,

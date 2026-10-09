@@ -274,10 +274,16 @@ def apply(payload: JsonObject) -> JsonObject:
         }
 
 
+def verify_generation(payload: JsonObject, state: FirmwareTransaction) -> None:
+    if payload.get("firmwareRetryGeneration", 0) != state.get("generation", 0):
+        raise ProvisioningError("EFI action belongs to another retry generation")
+
+
 def reboot(payload: JsonObject) -> JsonObject:
     with operation(payload) as (profile, state):
         if not state or state.get("backend") != "setup_var.efi" or state.get("failed"):
             raise ProvisioningError("UEFI execution has no valid prepared operation")
+        verify_generation(payload, state)
         if not state["changed"] or UEFI_BOOT_ID.read_text().strip() != state["bootId"]:
             return {"scheduled": False}
         if "efiBoot" not in state or "entryHash" not in state["efiBoot"]:
@@ -358,6 +364,7 @@ def verify(payload: JsonObject) -> JsonObject:
     with operation(payload) as (profile, state):
         if not state or state.get("backend") != "setup_var.efi":
             raise ProvisioningError("UEFI verification has no prepared setup_var.efi operation")
+        verify_generation(payload, state)
         boot = UEFI_BOOT_ID.read_text().strip()
         if not state["complete"] and state["changed"] and boot == state["bootId"]:
             return {"verified": False}

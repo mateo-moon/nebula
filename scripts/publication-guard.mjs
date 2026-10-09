@@ -70,6 +70,7 @@ const UPSTREAM_OWNERS = new Set([
   "github", "nodejs", "microsoft", "pnpm", "privatenumber", "eemeli", "rust-lang", "rustls", "rustcrypto",
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
   "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
+  "datasone", "pbatard", // Public setup_var.efi and EDK2 UEFI-Shell release sources.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
