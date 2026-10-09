@@ -41,6 +41,7 @@ export const DEFAULT_SCOPE = [
   ":(glob)packages/nebula/example/confidential-guests*",
   "docker/devops-bridge",
   "docker/nebula-cmp",
+  "packages/nebula/src/modules/infra/k0s/baremetal",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);

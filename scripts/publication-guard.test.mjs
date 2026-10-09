@@ -307,6 +307,7 @@ test("the checked-in allowlist is well formed", async () => {
 const IMAGES = [
   { context: "docker/devops-bridge", workflow: "publish-devops-bridge.yml", retired: "build-devops-bridge.yml", file: "synthetic.py" },
   { context: "docker/nebula-cmp", workflow: "publish-nebula-cmp.yml", retired: "build-nebula-cmp.yml", file: "Dockerfile" },
+  { context: "packages/nebula/src/modules/infra/k0s/baremetal", workflow: "publish-baremetal-provisioner.yml", retired: "build-baremetal-provisioner.yml", file: "Dockerfile" },
 ];
 
 for (const { context, file } of IMAGES) {

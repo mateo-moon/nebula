@@ -12,8 +12,19 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  guard:
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan the image build context
+        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs packages/nebula/src/modules/infra/k0s/baremetal
+
+  publish:
+    needs: guard
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -23,8 +34,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Scan the image build context
-        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs packages/nebula/src/modules/infra/k0s/baremetal
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -45,8 +54,3 @@ jobs:
           build-args: |
             BASE_IMAGE=docker.io/library/debian@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
           provenance: false
-      - name: Record immutable deployment reference
-        env:
-          IMAGE: ghcr.io/${{ github.repository_owner }}/nebula-baremetal-provisioner
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: printf '%s@%s\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
