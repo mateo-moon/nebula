@@ -231,7 +231,9 @@ an unattended seed, network configuration, worker public key, existing host
 keys and request receipt. The agent loads the installer with kexec before
 committing a reboot. The Job persists `Installing` with a resource-version check
 before scheduling that transition. Debian Installer runs from RAM, overwrites
-the selected root disk, installs key-only root SSH and reboots. Bounded `/boot`
+the selected root disk, installs key-only root SSH and reboots. The minimal OS
+explicitly installs and enables `systemd-timesyncd` for NTP synchronisation on
+first boot and later reboots, using Debian's default time servers. Bounded `/boot`
 and root LV sizes leave free VG extents for a separate local-volume provisioner.
 That provisioner must preserve the OS root LV in the shared VG.
 

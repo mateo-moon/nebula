@@ -199,7 +199,9 @@ def render_files(
         "partman/confirm_nooverwrite boolean": "true",
         "partman-basicfilesystems/no_swap boolean": "false",
         "base-installer/install-recommends boolean": "false",
-        "pkgsel/include string": "openssh-server ca-certificates curl lvm2 python3 systemd-resolved efibootmgr fuse",
+        # Minimal installs omit the recommended NTP client; workers still need
+        # a synchronised clock after the installer exits and on later reboots.
+        "pkgsel/include string": "openssh-server ca-certificates curl lvm2 python3 systemd-resolved systemd-timesyncd efibootmgr fuse",
         "pkgsel/upgrade select": "none",
         "grub-installer/only_debian boolean": "true",
         "grub-installer/with_other_os boolean": "true",
@@ -250,7 +252,7 @@ chmod 0644 /target/etc/systemd/network/10-nebula.network
 printf 'auto lo\niface lo inet loopback\n' > /target/etc/network/interfaces
 rm -f /target/etc/resolv.conf
 ln -s /run/systemd/resolve/stub-resolv.conf /target/etc/resolv.conf
-in-target systemctl enable systemd-networkd systemd-resolved ssh
+in-target systemctl enable systemd-networkd systemd-resolved systemd-timesyncd ssh
 in-target systemctl disable networking || true
 # Keep an unlocked account for public-key SSH without an empty password.
 # The random console password is never printed, returned or persisted outside shadow.
