@@ -219,7 +219,10 @@ for p in /sys/class/net/*; do
   if [ "$(cat "$p/address")" = {shlex.quote(network["mac"])} ]; then iface=${{p##*/}}; fi
 done
 [ -n "$iface" ]
-debconf-set netcfg/choose_interface "$iface"
+export DEBIAN_FRONTEND=noninteractive
+. /usr/share/debconf/confmodule
+db_set netcfg/choose_interface "$iface"
+db_fset netcfg/choose_interface seen true
 """
     disk = f"""set -eu
 . /nebula/logging.sh
