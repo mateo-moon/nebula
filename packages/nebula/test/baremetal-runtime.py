@@ -108,6 +108,52 @@ class Qualification(unittest.TestCase):
             self.step()
         self.assertNotIn("commit", FakeSSH.calls)
 
+    def test_diagnostics_survive_pod_restart_without_private_payloads(self):
+        self.request["spec"]["installation"]["mirror"]["hostname"] = "private-mirror-fixture"
+        with redirect_stdout(io.StringIO()) as output:
+            self.step()
+            self.step()
+            self.step()
+            self.step(lambda: 130)
+        resumed = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
+        events = resumed.status["events"]
+        self.assertEqual(
+            [event["event"] for event in events[:4]], ["phase-changed"] * 3 + ["kexec-scheduled"]
+        )
+        self.assertEqual(events[0]["sourceBootId"], "source-boot")
+        self.assertEqual(events[-2]["event"], "waiting-for-installed-ssh")
+        self.assertEqual(events[-2]["at"], 130)
+        self.assertNotIn("private-mirror-fixture", output.getvalue())
+        self.assertNotIn("knownHosts", json.dumps(events))
+        self.assertNotIn("ssh-ed25519", json.dumps(events))
+        self.assertEqual([json.loads(line) for line in output.getvalue().splitlines()], events)
+
+    def test_connectivity_diagnostics_are_throttled_and_bounded_after_restart(self):
+        with redirect_stdout(io.StringIO()):
+            self.journal.diagnostic("waiting-for-installed-ssh", 100, error="SSH unavailable")
+            actions = len(self.api.actions)
+            resumed = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")
+            resumed.diagnostic("waiting-for-installed-ssh", 115, error="SSH unavailable")
+            self.assertEqual(len(self.api.actions), actions + 1)  # refresh only
+            for at in range(160, 160 + 60 * 140, 60):
+                resumed.diagnostic(
+                    "waiting-for-installed-ssh",
+                    at,
+                    error="SSH unavailable",
+                    password="private-password-fixture",
+                    privateKey="private-key-fixture",
+                )
+        events = resumed.status["events"]
+        self.assertEqual(len(events), runner.MAX_DIAGNOSTIC_EVENTS)
+        self.assertNotIn("private-", json.dumps(events))
+
+    def test_unacknowledged_diagnostic_is_not_reported_as_persisted(self):
+        self.api.resource["metadata"]["resourceVersion"] = "99"
+        with redirect_stdout(io.StringIO()) as output, self.assertRaises(RuntimeError):
+            self.journal.diagnostic("waiting-for-installed-ssh", 100)
+        self.assertEqual(output.getvalue(), "")
+        self.assertNotIn("events", self.journal.status)
+
     def test_terminal_error_is_persisted_across_pods(self):
         self.journal.save(terminalError=True, lastError="inspection required")
         resumed = runner.Journal(self.api, "default", "host-state", self.request, "hash-123")

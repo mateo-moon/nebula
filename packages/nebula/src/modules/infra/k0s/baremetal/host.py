@@ -68,6 +68,8 @@ def probe(spec: WorkerSpec, skip_uefi: bool = False) -> JsonObject:
         "network": network,
         "uefi": Path("/sys/firmware/efi").exists(),
         "bootId": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+        "kernel": platform.release(),
+        "rootFs": command(["findmnt", "-n", "-o", "FSTYPE", "/"]),
         "machineId": Path("/etc/machine-id").read_text().strip(),
     }
 
@@ -361,7 +363,13 @@ def verify(payload: JsonObject) -> JsonObject:
         and not any(a["family"] == "inet6" for a in usable)
     ):
         raise ProvisioningError("installed host lacks the requested node address families")
-    return {"verified": True, "addresses": [a["local"] for a in usable], "bootId": boot_id}
+    return {
+        "verified": True,
+        "addresses": [a["local"] for a in usable],
+        "bootId": boot_id,
+        "kernel": platform.release(),
+        "rootFs": command(["findmnt", "-n", "-o", "FSTYPE", "/"]),
+    }
 
 
 def dispatch(action: str, payload: JsonObject) -> JsonObject:

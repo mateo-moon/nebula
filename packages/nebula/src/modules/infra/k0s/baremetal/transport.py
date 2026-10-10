@@ -214,8 +214,12 @@ class SSH:
             except (ValueError, AttributeError):
                 pass
             if terminal:
-                raise ProvisioningError("SSH " + action + " failed: " + message)
-            raise RetryableError("SSH " + action + " failed: " + message)
+                raise ProvisioningError(
+                    "SSH " + action + " failed: " + message + f" (exit {result.returncode})"
+                )
+            raise RetryableError(
+                "SSH " + action + " failed: " + message + f" (exit {result.returncode})"
+            )
         self.strict = True
         try:
             return json_object(json.loads(result.stdout), "Host response")
