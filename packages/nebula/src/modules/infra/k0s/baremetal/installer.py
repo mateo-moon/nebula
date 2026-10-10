@@ -29,9 +29,12 @@ nebula_finish() {
   exit "$nebula_exit"
 }
 nebula_logging() {
-  umask 077
   nebula_phase=$1
   mkdir -p /var/log
+  # Scope the private creation mask to logging; target network configuration
+  # must keep the installer's normal directory permissions.
+  (umask 077; : >> /var/log/nebula-installer.jsonl)
+  chmod 0600 /var/log/nebula-installer.jsonl
   trap nebula_finish 0
   nebula_log started 0
 }
