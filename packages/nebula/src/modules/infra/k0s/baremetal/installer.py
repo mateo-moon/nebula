@@ -10,6 +10,33 @@ from runtime import ProvisioningError, canonical
 from runtime import fingerprint as fingerprint
 from validation import validate_spec
 
+INSTALLER_LOGGING = r"""# Only fixed phase names, exit status and public boot identity are logged.
+# Do not enable shell tracing: preseed and late setup handle private keys/passwords.
+nebula_log() {
+  printf '{"at":"%s","phase":"%s","event":"%s","exitCode":%s,"bootId":"%s","kernel":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$nebula_phase" "$1" "$2" \
+    "$(cat /proc/sys/kernel/random/boot_id)" "$(uname -r)" >> /var/log/nebula-installer.jsonl
+}
+nebula_finish() {
+  nebula_exit=$?
+  trap - 0
+  nebula_log finished "$nebula_exit" || true
+  if [ -d /target/var/log ]; then
+    mkdir -p /target/var/log/nebula-baremetal &&
+      cp /var/log/nebula-installer.jsonl /target/var/log/nebula-baremetal/installer.jsonl &&
+      chmod 0600 /target/var/log/nebula-baremetal/installer.jsonl || true
+  fi
+  exit "$nebula_exit"
+}
+nebula_logging() {
+  umask 077
+  nebula_phase=$1
+  mkdir -p /var/log
+  trap nebula_finish 0
+  nebula_log started 0
+}
+"""
+
 
 def select_disk(disks: list[JsonObject], root_disks: set[str], policy: DiskPolicy) -> JsonObject:
     eligible = [d for d in disks if d.get("type") == "disk" and not d.get("ro") and not d.get("rm")]
@@ -182,6 +209,8 @@ def render_files(
     preseed = "\n".join(f"d-i {key} {value}" for key, value in entries.items())
     preseed += "\ntasksel tasksel/first multiselect\npopularity-contest popularity-contest/participate boolean false\n"
     early = f"""set -eu
+. /nebula/logging.sh
+nebula_logging preseed-early
 iface=''
 for p in /sys/class/net/*; do
   if [ "$(cat "$p/address")" = {shlex.quote(network["mac"])} ]; then iface=${{p##*/}}; fi
@@ -190,6 +219,8 @@ done
 debconf-set netcfg/choose_interface "$iface"
 """
     disk = f"""set -eu
+. /nebula/logging.sh
+nebula_logging disk-selection
 disk=$(readlink -f {shlex.quote(facts["disk"]["byId"])})
 [ -b "$disk" ]
 [ "$(blockdev --getsize64 "$disk")" -ge {installation["disk"]["minSizeGiB"] * 1024**3} ]
@@ -197,7 +228,7 @@ debconf-set partman-auto/disk "$disk"
 debconf-set grub-installer/bootdev "$disk"
 """
     late = (
-        "set -eu\n"
+        "set -eu\n. /nebula/logging.sh\nnebula_logging target-configuration\n"
         + workload_volume_script(spec, facts)
         + """
 install -d -m 0700 /target/root/.ssh /target/var/lib/nebula-baremetal
@@ -224,6 +255,7 @@ chmod 0600 /target/var/lib/nebula-baremetal/installed.json
     )
     return {
         "preseed.cfg": preseed.encode(),
+        "nebula/logging.sh": INSTALLER_LOGGING.encode(),
         "nebula/early.sh": early.encode(),
         "nebula/disk.sh": disk.encode(),
         "nebula/late.sh": late.encode(),

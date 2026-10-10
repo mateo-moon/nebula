@@ -36,6 +36,8 @@ class Phase(str, Enum):
 
 FIRMWARE_PHASES = {Phase.CONFIGURING_UEFI, Phase.REBOOTING_UEFI, Phase.VERIFYING_UEFI}
 POLL_INTERVAL_SECONDS = 15
+MAX_DIAGNOSTIC_EVENTS = 128
+DIAGNOSTIC_INTERVAL_SECONDS = 60
 SshFactory = Callable[[JsonObject, str], SshClient]
 
 
@@ -66,8 +68,40 @@ class Journal:
         self.resource = resource
         self.status = json_object(json.loads(data.get("progress", "{}")), "Progress")
 
-    def save(self, **changes: object) -> None:
+    def save(
+        self,
+        *,
+        diagnostic: str | None = None,
+        diagnostic_fields: JsonObject | None = None,
+        at: float | None = None,
+        **changes: object,
+    ) -> None:
         status = {**self.status, **changes}
+        phase = status.get("phase", Phase.PENDING)
+        if phase != self.status.get("phase", Phase.PENDING):
+            diagnostic = "phase-changed"
+        event = None
+        if diagnostic:
+            # Deliberately select public facts. Never serialize the request,
+            # preseed, SSH command, credential files or raw host output.
+            event = {
+                "at": time.time() if at is None else at,
+                "uid": self.request["uid"],
+                "phase": phase,
+                "event": diagnostic,
+            }
+            fields = diagnostic_fields or {}
+            for key in ("error", "bootId", "kernel", "rootFs", "exitCode"):
+                if key in fields:
+                    event[key] = str(fields[key])[:512]
+            if diagnostic == "phase-changed":
+                facts = status.get("facts", {})
+                for key in ("bootId", "kernel", "rootFs"):
+                    if facts.get(key):
+                        event["source" + key[0].upper() + key[1:]] = str(facts[key])[:128]
+                if status.get("verifiedBootId") or status.get("installedBootId"):
+                    event["bootId"] = status.get("verifiedBootId") or status["installedBootId"]
+            status["events"] = [*status.get("events", []), event][-MAX_DIAGNOSTIC_EVENTS:]
         data = {"progress": canonical(status), "phase": status.get("phase", Phase.PENDING)}
         if status.get("phase") == Phase.OS_READY:
             data["verifiedRequestHash"] = self.request_hash
@@ -83,6 +117,17 @@ class Journal:
             raise RetryableError("progress checkpoint was not acknowledged")
         self.resource = resource
         self.status = status
+        if event is not None:
+            print(canonical(event), flush=True)
+
+    def diagnostic(self, event: str, at: float, **fields: object) -> None:
+        previous = next(
+            (item for item in reversed(self.status.get("events", [])) if item["event"] == event),
+            None,
+        )
+        if previous and at - previous["at"] < DIAGNOSTIC_INTERVAL_SECONDS:
+            return
+        self.save(diagnostic=event, diagnostic_fields=fields, at=at)
 
 
 class Provisioner:
@@ -152,6 +197,7 @@ class Provisioner:
             )
         self.journal.save(
             phase=Phase.DISCOVERED,
+            at=self.clock(),
             fingerprint=fingerprint(self.spec),
             facts=facts,
             knownHosts=ssh.known_hosts(),
@@ -160,13 +206,14 @@ class Provisioner:
 
     def stage(self, ssh: SshClient) -> bool:
         ssh.call("stage", facts=self.status["facts"], workerPublicKey=ssh.public_key())
-        self.journal.save(phase=Phase.STAGED)
+        self.journal.save(phase=Phase.STAGED, at=self.clock())
         return False
 
     def start_installation(self, ssh: SshClient) -> bool:
         # Never schedule kexec unless the management checkpoint succeeded.
-        self.journal.save(phase=Phase.INSTALLING, startedAt=self.clock())
+        self.journal.save(phase=Phase.INSTALLING, startedAt=self.clock(), at=self.clock())
         ssh.call("commit")
+        self.journal.diagnostic("kexec-scheduled", self.clock())
         return False
 
     def resume_original_boot(self, ssh: SshClient) -> None:
@@ -182,12 +229,26 @@ class Provisioner:
             return
         # A crash between checkpoint and kexec may resume only the known source boot.
         if facts.get("bootId") == self.status["facts"]["bootId"]:
+            self.journal.diagnostic(
+                "source-boot-still-running",
+                self.clock(),
+                bootId=facts["bootId"],
+                kernel=facts.get("kernel", "unknown"),
+            )
             ssh.call("commit")
+        else:
+            self.journal.diagnostic(
+                "unexpected-source-boot",
+                self.clock(),
+                bootId=facts.get("bootId", "unknown"),
+                kernel=facts.get("kernel", "unknown"),
+            )
 
     def await_installation(self, ssh: SshClient) -> bool:
         try:
             result = ssh.call("verify", installed=True)
-        except RetryableError:
+        except RetryableError as error:
+            self.journal.diagnostic("waiting-for-installed-ssh", self.clock(), error=str(error))
             self.resume_original_boot(ssh)
             return False
         if result.get("verified") is not True:
@@ -195,8 +256,10 @@ class Provisioner:
         if self.uefi and not self.skip_uefi:
             self.journal.save(
                 phase=Phase.CONFIGURING_UEFI,
+                at=self.clock(),
                 uefiStartedAt=self.clock(),
                 installedBootId=result["bootId"],
+                diagnostic_fields=result,
                 addresses=result["addresses"],
                 lastError="",
             )
@@ -208,8 +271,10 @@ class Provisioner:
         skipped = bool(self.uefi and self.skip_uefi)
         self.journal.save(
             phase=Phase.OS_READY,
+            at=self.clock(),
             addresses=result["addresses"],
             verifiedBootId=result["bootId"],
+            diagnostic_fields=result,
             uefiSkipped=skipped,
             uefiVerified=False,
             lastError="",
@@ -235,7 +300,7 @@ class Provisioner:
             raise ProvisioningError("UEFI configuration did not succeed")
         phase = Phase.REBOOTING_UEFI if result["changed"] else Phase.VERIFYING_UEFI
         # Persist the next phase before a reboot can interrupt the SSH session.
-        self.journal.save(phase=phase, lastError="")
+        self.journal.save(phase=phase, lastError="", at=self.clock())
         if result["changed"]:
             ssh.call(
                 "uefi-reboot",
@@ -265,7 +330,11 @@ class Provisioner:
         if result.get("verified") is not True or result["bootId"] != firmware["bootId"]:
             raise ProvisioningError("OS and UEFI verification are not from the same installed boot")
         self.journal.save(
-            phase=Phase.OS_READY, uefiVerified=True, addresses=result["addresses"], lastError=""
+            phase=Phase.OS_READY,
+            uefiVerified=True,
+            addresses=result["addresses"],
+            lastError="",
+            at=self.clock(),
         )
         return True
 
@@ -351,7 +420,12 @@ def record_error(journal: Journal | None, error: Exception) -> bool:
     print(canonical({"error": message}), flush=True)
     if journal is not None:
         try:
-            journal.save(lastError=message, terminalError=terminal)
+            journal.save(
+                lastError=message,
+                terminalError=terminal,
+                diagnostic="provisioning-error",
+                diagnostic_fields={"error": message},
+            )
         except (ValueError, RuntimeError, OSError):
             pass  # No further host work is done before a fresh checkpoint read.
     return terminal
