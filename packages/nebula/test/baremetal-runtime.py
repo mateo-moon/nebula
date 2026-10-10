@@ -5,6 +5,7 @@ import errno
 import gzip
 import io
 import json
+import shlex
 import subprocess
 import tempfile
 import types
@@ -153,6 +154,33 @@ class Qualification(unittest.TestCase):
             self.journal.diagnostic("waiting-for-installed-ssh", 100)
         self.assertEqual(output.getvalue(), "")
         self.assertNotIn("events", self.journal.status)
+
+    def test_logging_preserves_caller_permissions_and_records_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "log"
+            target = root / "target"
+            log.mkdir()
+            target.mkdir()
+            boot = root / "boot-id"
+            boot.write_text("public-boot-fixture\n")
+            script = installer.INSTALLER_LOGGING.replace("/var/log", str(log))
+            script = script.replace("/target" + str(log), str(target))
+            script = script.replace("/proc/sys/kernel/random/boot_id", str(boot))
+            script += "\numask 022\nbefore=$(umask)\nnebula_logging fixture\n"
+            script += '[ "$(umask)" = "$before" ] || exit 99\n'
+            script += "mkdir " + shlex.quote(str(root / "network-directory")) + "\nexit 7\n"
+            result = subprocess.run(["/bin/sh", "-c", script], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertEqual((root / "network-directory").stat().st_mode & 0o777, 0o755)
+            for path in (
+                log / "nebula-installer.jsonl",
+                target / "nebula-baremetal/installer.jsonl",
+            ):
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                events = [json.loads(line) for line in path.read_text().splitlines()]
+                self.assertEqual(events[-1]["exitCode"], 7)
+                self.assertEqual(events[-1]["bootId"], "public-boot-fixture")
 
     def test_terminal_error_is_persisted_across_pods(self):
         self.journal.save(terminalError=True, lastError="inspection required")
