@@ -210,8 +210,21 @@ pub fn configuration(user_data: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
     Ok(Zeroizing::new(serde_json::to_vec(&config)?))
 }
 
+#[derive(Debug)]
+struct MetadataStatus(reqwest::StatusCode);
+
+impl std::fmt::Display for MetadataStatus {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "metadata HTTP status {}", self.0.as_u16())
+    }
+}
+
+impl std::error::Error for MetadataStatus {}
+
 async fn bounded_body(mut response: reqwest::Response, limit: usize) -> Result<Zeroizing<Vec<u8>>> {
-    ensure!(response.status().is_success(), "metadata request rejected");
+    if !response.status().is_success() {
+        return Err(MetadataStatus(response.status()).into());
+    }
     let mut bytes = Zeroizing::new(Vec::new());
     while let Some(chunk) = response.chunk().await? {
         ensure!(
@@ -305,8 +318,17 @@ pub(crate) async fn metadata(path: &str, limit: usize) -> Result<Zeroizing<Vec<u
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(5))
         .build()?;
+    metadata_at(&http, METADATA, path, limit).await
+}
+
+async fn metadata_at(
+    http: &reqwest::Client,
+    origin: &str,
+    path: &str,
+    limit: usize,
+) -> Result<Zeroizing<Vec<u8>>> {
     let token = bounded_body(
-        http.put(format!("{METADATA}/api/token"))
+        http.put(format!("{origin}/api/token"))
             .header("X-aws-ec2-metadata-token-ttl-seconds", "60")
             .send()
             .await?,
@@ -318,7 +340,7 @@ pub(crate) async fn metadata(path: &str, limit: usize) -> Result<Zeroizing<Vec<u
         "invalid IMDSv2 token"
     );
     bounded_body(
-        http.get(format!("{METADATA}/{path}"))
+        http.get(format!("{origin}/{path}"))
             .header("X-aws-ec2-metadata-token", std::str::from_utf8(&token)?)
             .send()
             .await?,
@@ -327,8 +349,63 @@ pub(crate) async fn metadata(path: &str, limit: usize) -> Result<Zeroizing<Vec<u
     .await
 }
 
+/// Instance-tag metadata can lag the first successful user-data read. Wait only
+/// before policy activation, using a fresh IMDSv2 token for every bounded retry.
+/// The executable has no metadata-origin or retry-budget override.
+pub(crate) async fn runtime_deployment_metadata() -> Result<Zeroizing<Vec<u8>>> {
+    let http = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
+        .build()?;
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        deployment_metadata_at(&http, METADATA, 30, Duration::from_secs(2)),
+    )
+    .await?
+}
+
+async fn deployment_metadata_at(
+    http: &reqwest::Client,
+    origin: &str,
+    attempts: usize,
+    retry_delay: Duration,
+) -> Result<Zeroizing<Vec<u8>>> {
+    ensure!(
+        (1..=30).contains(&attempts),
+        "invalid metadata retry budget"
+    );
+    let mut remaining = attempts;
+    loop {
+        match metadata_at(
+            http,
+            origin,
+            "meta-data/tags/instance/nebula-coco-deployment",
+            64,
+        )
+        .await
+        {
+            Ok(value) => return Ok(value),
+            Err(error) if remaining > 1 && temporary_metadata_failure(&error) => {
+                remaining -= 1;
+                tokio::time::sleep(retry_delay).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn temporary_metadata_failure(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<MetadataStatus>()
+        .is_some_and(|status| matches!(status.0.as_u16(), 404 | 429) || status.0.is_server_error())
+        || error
+            .downcast_ref::<reqwest::Error>()
+            .is_some_and(|error| error.is_timeout() || error.is_connect())
+}
+
 pub(crate) fn pod_identity() -> Result<(String, String)> {
-    let data = std::fs::read(CONFIG)?;
+    let data = at(Stage::RuntimePodTransportRead, std::fs::read(CONFIG))?;
     ensure!(data.len() <= LIMIT, "oversize CAA transport");
     let config: Forwarder = serde_json::from_slice(&data)?;
     config.validate()?;
@@ -584,6 +661,115 @@ mod tests {
         assert!(requests[0].contains("x-aws-ec2-metadata-token-ttl-seconds: 60\r\n"));
         assert!(requests[1].starts_with("GET /latest/user-data HTTP/1.1"));
         assert!(requests[1].contains("x-aws-ec2-metadata-token: test-token\r\n"));
+    }
+
+    #[tokio::test]
+    async fn deployment_metadata_waits_for_visible_tags_with_fresh_tokens() {
+        let deployment = "ab".repeat(32); // Synthetic public deployment selector.
+        let (url, server) = server(vec![
+            (200, "first-token".into()),
+            (404, String::new()),
+            (200, "second-token".into()),
+            (503, String::new()),
+            (200, "third-token".into()),
+            (200, deployment.clone()),
+        ]);
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        let result = deployment_metadata_at(&client, &url, 3, Duration::ZERO)
+            .await
+            .unwrap();
+        assert_eq!(result.as_slice(), deployment.as_bytes());
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 6);
+        for (pair, token) in
+            requests
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .zip(["first-token", "second-token", "third-token"])
+        {
+            assert!(pair[0].starts_with("PUT /latest/api/token HTTP/1.1"));
+            assert!(pair[1].starts_with(
+                "GET /latest/meta-data/tags/instance/nebula-coco-deployment HTTP/1.1"
+            ));
+            assert!(pair[1].contains(&format!("x-aws-ec2-metadata-token: {token}\r\n")));
+        }
+    }
+
+    #[tokio::test]
+    async fn deployment_metadata_retries_are_bounded_and_preserve_refusals() {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        for status in [404, 429, 503] {
+            let (url, server) = server(
+                (0..3)
+                    .flat_map(|_| [(200, "token".into()), (status, String::new())])
+                    .collect(),
+            );
+            let error = deployment_metadata_at(&client, &url, 3, Duration::ZERO)
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<MetadataStatus>().unwrap().0.as_u16(),
+                status
+            );
+            assert_eq!(server.join().unwrap().len(), 6);
+        }
+        for status in [301, 302, 307, 400, 401, 403] {
+            let (url, server) = server(vec![(200, "token".into()), (status, String::new())]);
+            let error = deployment_metadata_at(&client, &url, 3, Duration::ZERO)
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<MetadataStatus>().unwrap().0.as_u16(),
+                status
+            );
+            assert_eq!(server.join().unwrap().len(), 2);
+        }
+    }
+
+    #[tokio::test]
+    async fn deployment_metadata_never_retries_malformed_or_oversize_successes() {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        for (responses, message) in [
+            (
+                vec![(200, "token\ninjection".into())],
+                "invalid IMDSv2 token",
+            ),
+            (vec![(200, String::new())], "invalid IMDSv2 token"),
+            (vec![(200, "t".repeat(4097))], "oversize metadata response"),
+            (
+                vec![(200, "token".into()), (200, "x".repeat(65))],
+                "oversize metadata response",
+            ),
+        ] {
+            let count = responses.len();
+            let (url, server) = server(responses);
+            let error = deployment_metadata_at(&client, &url, 3, Duration::ZERO)
+                .await
+                .unwrap_err();
+            assert_eq!(error.to_string(), message);
+            assert_eq!(server.join().unwrap().len(), count);
+        }
+    }
+
+    #[test]
+    fn persisted_transport_remains_valid_for_runtime_identity() {
+        let bytes = configuration(input().as_bytes()).unwrap();
+        let reread: Forwarder = serde_json::from_slice(&bytes).unwrap();
+        reread.validate().unwrap();
+        assert!(!reread.pod_namespace.is_empty() && !reread.pod_name.is_empty());
     }
 
     #[tokio::test]

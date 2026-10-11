@@ -67,6 +67,12 @@ Appliance startup failures emit a fixed `NEBULA_STARTUP_FAILURE` stage code to
 the EC2 console. These codes are operational hints, not attestation or readiness
 proofs. General service output remains suppressed: keys, credentials, PCR values,
 cloud responses and raw error chains are never included in these diagnostics.
+Runtime identity diagnostics distinguish the private transport-file read from
+Pod identity decoding and deployment metadata retrieval/validation. Before
+activation, deployment-tag retrieval tolerates transient IMDSv2 unavailability
+for at most sixty seconds. It retains the fixed metadata origin, fresh tokens,
+strict response bounds and refusal of redirects or authorization failures.
+There is no service restart that could repeat policy activation.
 
 `build.py images` derives SHA384 PCR4/PCR12 from the built UKIs using the upstream
 Nitro tools. Release IDs commit role, expected PCRs and minimum firmware policy.

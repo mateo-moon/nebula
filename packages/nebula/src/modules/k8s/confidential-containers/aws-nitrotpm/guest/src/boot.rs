@@ -293,13 +293,19 @@ async fn provision_runtime() -> Result<()> {
         Stage::RuntimeEnvironment,
         crate::require_memory_directory(Path::new(crate::SECRETS)),
     )?;
-    let (namespace, pod) = at(Stage::RuntimeIdentity, transport::pod_identity())?;
+    let (namespace, pod) = at(Stage::RuntimePodIdentity, transport::pod_identity())?;
     let deployment = at(
-        Stage::RuntimeIdentity,
-        transport::metadata("meta-data/tags/instance/nebula-coco-deployment", 64).await,
+        Stage::RuntimeDeploymentMetadata,
+        transport::runtime_deployment_metadata().await,
     )?;
-    let deployment = at(Stage::RuntimeIdentity, std::str::from_utf8(&deployment))?;
-    ensure!(workload::digest(deployment), "invalid runtime deployment");
+    let deployment = at(
+        Stage::RuntimeDeploymentIdentity,
+        std::str::from_utf8(&deployment),
+    )?;
+    ensure!(
+        workload::digest(deployment),
+        Stage::RuntimeDeploymentIdentity
+    );
     // The controller and peer-pod creation reconcile independently. Wait for
     // public intent before extending PCR 15; a retry after activation must never
     // reset or replace the already measured workload policy.

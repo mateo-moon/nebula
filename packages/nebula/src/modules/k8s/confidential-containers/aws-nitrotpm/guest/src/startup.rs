@@ -21,7 +21,10 @@ pub(crate) enum Stage {
     TransportConfiguration,
     TransportPersist,
     RuntimeEnvironment,
-    RuntimeIdentity,
+    RuntimePodTransportRead,
+    RuntimePodIdentity,
+    RuntimeDeploymentMetadata,
+    RuntimeDeploymentIdentity,
     RuntimeIntent,
     RuntimeConfiguration,
     RuntimeApproval,
@@ -89,7 +92,14 @@ impl Stage {
             Self::TransportConfiguration => "NEBULA_STARTUP_FAILURE:transport-configuration\n",
             Self::TransportPersist => "NEBULA_STARTUP_FAILURE:transport-persist\n",
             Self::RuntimeEnvironment => "NEBULA_STARTUP_FAILURE:runtime-environment\n",
-            Self::RuntimeIdentity => "NEBULA_STARTUP_FAILURE:runtime-identity\n",
+            Self::RuntimePodTransportRead => "NEBULA_STARTUP_FAILURE:runtime-pod-transport-read\n",
+            Self::RuntimePodIdentity => "NEBULA_STARTUP_FAILURE:runtime-pod-identity\n",
+            Self::RuntimeDeploymentMetadata => {
+                "NEBULA_STARTUP_FAILURE:runtime-deployment-metadata\n"
+            }
+            Self::RuntimeDeploymentIdentity => {
+                "NEBULA_STARTUP_FAILURE:runtime-deployment-identity\n"
+            }
             Self::RuntimeIntent => "NEBULA_STARTUP_FAILURE:runtime-intent\n",
             Self::RuntimeConfiguration => "NEBULA_STARTUP_FAILURE:runtime-configuration\n",
             Self::RuntimeApproval => "NEBULA_STARTUP_FAILURE:runtime-approval\n",
@@ -219,7 +229,16 @@ mod tests {
     fn runtime_diagnostics_classify_steps_without_disclosing_keys_or_intent() {
         for (stage, label) in [
             (Stage::RuntimeEnvironment, "runtime-environment"),
-            (Stage::RuntimeIdentity, "runtime-identity"),
+            (Stage::RuntimePodTransportRead, "runtime-pod-transport-read"),
+            (Stage::RuntimePodIdentity, "runtime-pod-identity"),
+            (
+                Stage::RuntimeDeploymentMetadata,
+                "runtime-deployment-metadata",
+            ),
+            (
+                Stage::RuntimeDeploymentIdentity,
+                "runtime-deployment-identity",
+            ),
             (Stage::RuntimeIntent, "runtime-intent"),
             (Stage::RuntimeConfiguration, "runtime-configuration"),
             (Stage::RuntimeApproval, "runtime-approval"),

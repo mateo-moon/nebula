@@ -255,8 +255,33 @@ advanced the replacement generation repeatedly. The test controller was paused
 to bound allocations. Regressions reproduce the old behavior, verify removal of
 obsolete receipts across restart/lost replies, and reject stale writers. An
 isolated object in the real Kubernetes API confirms both the old merge behavior
-and the corrected atomic patch, without launching AWS resources. Replacement
-and the remaining lifecycle gates still require the corrected appliance run.
+and the corrected atomic patch, without launching AWS resources. The next
+immutable-appliance run confirms automatic replacement with exactly one new
+generation, one changed voter and the original protected authority identity.
+All-replica reboot and automatic stop/start recovery also pass on that release.
+Losing the quorum and partitioning replica traffic both refuse authorization
+despite fresh attestation. Restoring the original instances or network rule
+recovers the same protected identity and a fresh quorum. Owner publication
+passes again after all five recovery tests. Normal reverse pruning completes
+without stripping finalizers or repairing module resources.
+
+That run still fails the encrypted canary, now with a fixed `runtime-identity`
+diagnostic before policy activation or key release. The deployment tag and
+metadata settings are present. The normalized transport passes its decoding
+round trip, and a synthetic Linux probe confirms the private file remains
+readable across the matching service filesystem sandboxes. These checks do not
+prove which identity operation failed inside that immutable guest.
+
+The runtime previously read its deployment metadata only once. A real local
+HTTP regression reproduces failure when the tag initially returns 404 and later
+becomes available. Startup now retries transient 404/429/5xx, connection and
+timeout failures before activation, with a fresh IMDSv2 token per attempt and
+a fixed sixty-second total budget. Redirects, authorization refusals, malformed
+tokens and oversized responses still fail without retry or fallback. Separate
+fixed codes distinguish reading transport data, decoding Pod identity, fetching
+deployment metadata and validating that identity. The regression passes after
+the change; its exact hardware effect and encrypted execution still require a
+new immutable-appliance run. No default catalog has been promoted.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,
