@@ -25,12 +25,14 @@ struct Disk {
     sequence: u64,
     bytes: Zeroizing<Vec<u8>>,
     fault: Fault,
+    writer: u64,
 }
 #[derive(Clone, Default)]
-struct Memory(Arc<Mutex<Disk>>);
+struct Memory(Arc<Mutex<Disk>>, u64);
 impl Store for Memory {
     fn commit(&mut self, bytes: &[u8]) -> Result<u64> {
         let mut disk = self.0.lock().unwrap();
+        ensure!(self.1 == disk.writer, "simulated process has stopped");
         ensure!(
             !matches!(disk.fault, Fault::Before),
             "injected write failure"
@@ -50,7 +52,19 @@ impl Memory {
         }
     }
     fn restore(&self) -> ReplicaStore<Self> {
-        ReplicaStore::restore(self.clone(), self.snapshot(), &genesis()).unwrap()
+        // A real process exit releases the exclusive journal/TPM locks and
+        // stops every old writer. OpenRaft's in-process shutdown only joins
+        // its core; detached snapshot work may still retain an old handle.
+        // Fence those handles atomically with reading the durable snapshot.
+        let mut disk = self.0.lock().unwrap();
+        disk.writer += 1;
+        let journal = Self(self.0.clone(), disk.writer);
+        let snapshot = crate::protected_state::Snapshot {
+            sequence: disk.sequence,
+            bytes: disk.bytes.clone(),
+        };
+        drop(disk);
+        ReplicaStore::restore(journal, snapshot, &genesis()).unwrap()
     }
 }
 
@@ -837,6 +851,24 @@ async fn replacement_catches_up_from_snapshot_and_does_not_copy_replica_identity
         status
     );
     cluster.shutdown().await;
+}
+
+#[tokio::test]
+async fn simulated_restart_fences_prior_process_snapshot_writers() {
+    let disk = Memory::default();
+    let mut original = ReplicaStore::create(disk.clone(), genesis()).unwrap();
+    let identity = original.replica_public_key().await.unwrap();
+    let mut pending_snapshot = original.get_snapshot_builder().await;
+    let mut recovered = disk.restore();
+    let before = disk.snapshot();
+    // OpenRaft shutdown joins its core, but a detached snapshot builder can
+    // still hold the old store. A restarted process cannot share that writer.
+    assert!(pending_snapshot.build_snapshot().await.is_err());
+    assert_eq!(disk.snapshot().sequence, before.sequence);
+    assert_eq!(*disk.snapshot().bytes, *before.bytes);
+    recovered.save_vote(&Vote::new(1, 11)).await.unwrap();
+    assert_eq!(recovered.replica_public_key().await.unwrap(), identity);
+    assert_eq!(recovered.read_vote().await.unwrap(), Some(Vote::new(1, 11)));
 }
 
 #[tokio::test]
