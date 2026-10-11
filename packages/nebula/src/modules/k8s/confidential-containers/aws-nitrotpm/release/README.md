@@ -49,6 +49,16 @@ hardware qualification.
 `canary.py` builds a minimal public probe, encrypts its OCI layer through stock
 ocicrypt/keyprovider, verifies the encryption annotation/resource, and uses the
 matching upstream genpolicy. Its fixed public key is intentionally not a secret.
+The probe includes exact OCI 1.1.0, 1.2.0 and 1.3.0 policy alternatives and the
+two fixed CPU/memory annotations added by Kata. All alternatives retain upstream
+authorization rules and the same commands, images, mounts and process limits.
+Unknown OCI versions, other hypervisor annotations and changed resource values are refused.
+This build-time adaptation applies only to the public probe; owner-signed
+workload policies are unchanged. Before building appliances, the release runs
+the generated policy through the exact Regorus revision/configuration used by
+the pinned Kata agent. Synthetic sandbox requests and negative controls cover
+version matching, resources, commands, privileges, mounts, exec, key/policy
+overwrite and diagnostics. The test interpreter is not shipped in either image.
 The pinned sandbox image is embedded in the guest. The local read-only registry
 used during policy generation is a build process, not deployed infrastructure.
 

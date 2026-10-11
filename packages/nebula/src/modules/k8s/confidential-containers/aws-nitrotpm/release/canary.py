@@ -19,6 +19,8 @@ import threading
 import time
 
 from build import run, require, json_file
+from canary_policy import compatible_policy
+from check_canary_policy import check_policy
 
 PAUSE = "registry.k8s.io/pause@sha256:278fb9dbcca9518083ad1e11276933a2e96f23de604a3a08cc3c80002767d24c"
 RESOURCE = "nebula-canary/image_key/v1"
@@ -158,7 +160,9 @@ def probe(work, repository):
     policy = result.stdout.decode()
     require(local + "/canary@" + digest in policy and "package agent_policy" in policy, "generated canary policy missing image commitment")
     policy = policy.replace(local + "/canary@" + digest, published)
+    policy = compatible_policy(policy)
     require(local not in policy and len(policy.encode()) < 240 * 1024, "unexpected generated canary policy")
+    check_policy(policy, work / "binaries/nebula-canary-policy-test")
     json_file(work / "canary.json", {"image": published, "policy": policy})
     sandbox(work)
 

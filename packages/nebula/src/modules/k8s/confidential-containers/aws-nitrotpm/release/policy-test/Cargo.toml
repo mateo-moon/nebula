@@ -1,0 +1,12 @@
+[package]
+name = "nebula-canary-policy-test"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# Match Kata c7351e797efff8bfc6bd73da0eb1909be12e2cfe exactly.
+# This binary is used only by release tests and never shipped in an appliance.
+regorus = { git = "https://github.com/microsoft/regorus", rev = "898643129e3652efd43e596f978d99f85e770235", default-features = false, features = ["arc", "base64", "base64url", "regex", "std"] }
+serde_json = "=1.0.150"

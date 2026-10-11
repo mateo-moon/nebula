@@ -108,6 +108,10 @@ def binaries(source, work):
     run("make", "src/version.rs", cwd=kata / "src/tools/genpolicy", env=env)
     run("cargo", "build", "--locked", "--release", "--manifest-path", kata / "src/tools/genpolicy/Cargo.toml", env=env)
     shutil.copy2(target / "release/genpolicy", out / "genpolicy")
+    # Test-only interpreter: match the pinned Kata agent's policy engine and
+    # evaluate the actual generated canary before any appliance is published.
+    run("cargo", "build", "--locked", "--release", "--manifest-path", source / "release/policy-test/Cargo.toml", env=env)
+    shutil.copy2(target / "release/nebula-canary-policy-test", out / "nebula-canary-policy-test")
     run("cargo", "build", "--locked", "--release", "--manifest-path", components / "attestation-agent/coco_keyprovider/Cargo.toml", env=env)
     shutil.copy2(target / "release/coco_keyprovider", out / "coco_keyprovider")
     json_file(work / "binaries.json", revisions)
