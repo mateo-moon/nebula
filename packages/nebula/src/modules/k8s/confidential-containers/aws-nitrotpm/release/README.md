@@ -93,7 +93,20 @@ computed by NitroTPM-Tools for a UKI without external parameters; the verifier
 still compares it exactly. Image staging/build directories must be fresh so
 retries cannot silently reuse a previous policy, binary or staging script.
 
-`complete.py` assembles `catalog.candidate.json` from real disk/client receipts
+The controller image also ships the pinned upstream peer-pods webhook with the
+reviewed runtime-handler admission patch and a static Nydus mount dispatcher.
+Builds run the upstream webhook tests, including real AdmissionRequest/JSONPatch
+regressions, and reject any source changes beyond that exact patch. Public build
+receipts bind its source revision, patch, executable and upstream license, plus
+the module-owned mount helper's source and executable. The node lifecycle
+sidecar supplies this helper only when absent and removes only its owned bytes.
+
+The guest's systemd-owned CDH must accept a Unix connection before Kata starts.
+The immutable agent configuration selects `guest_components_procs = "none"`:
+Kata initializes its CDH client without trying to launch unshipped AA/REST
+services. Missing or stale listeners time out with a fixed startup diagnostic.
+
+`complete.py` verifies the worker receipts and assembles `catalog.candidate.json` from real disk/client receipts
 and the published controller digest. Hardware qualification promotes those exact
 bytes into `catalog.json` in the Nebula package. Never insert a placeholder digest
 or approve a build based solely on a CI check or mutable Kubernetes status.

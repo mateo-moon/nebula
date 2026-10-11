@@ -72,7 +72,7 @@ const UPSTREAM_OWNERS = new Set([
   "github", "nodejs", "microsoft", "pnpm", "privatenumber", "eemeli", "rust-lang", "rustls", "rustcrypto",
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
   "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
-  "brave", "tpm2-software",
+  "brave", "tpm2-software", "evanphx", // Upstream webhook JSON Patch dependency.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
@@ -94,7 +94,7 @@ const UPSTREAM_DOMAINS = [
 ];
 // The AWS NitroTPM source copyright notice uses this public corporate name.
 // Do not thereby approve arbitrary tenant or internal subdomains.
-const UPSTREAM_EXACT_DOMAINS = new Set(["amazon.com"]);
+const UPSTREAM_EXACT_DOMAINS = new Set(["amazon.com", "kata.peerpods.io"]);
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
 // in URLs and after host keys under any public TLD in URL_TLDS.

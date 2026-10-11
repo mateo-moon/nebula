@@ -120,6 +120,32 @@ jobs:
       - name: Synthetic evidence through stock KBS, guest client and offline KBC
         run: NEBULA_KBS_BINARY="$RUNNER_TEMP/trustee/target/debug/kbs" python -m pytest -q tests
 
+  aws-worker-prerequisites:
+    name: AWS CoCo admission and worker mount helper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/nebula/src/modules/k8s/confidential-containers/aws-nitrotpm
+    env:
+      GOTOOLCHAIN: go1.26.7
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare the exact reviewed upstream admission patch
+        run: python3 release/webhook.py --work "$RUNNER_TEMP/webhook-source"
+      - name: Exercise actual admission requests and apply their returned JSON patches
+        run: |
+          cd "$RUNNER_TEMP/webhook-source/caa-webhook/src/webhook"
+          go test -mod=readonly ./...
+      - name: Validate Nydus mount arguments and the static helper build
+        run: |
+          cd release/mount-helper
+          go test -mod=readonly ./...
+          go build -mod=readonly -trimpath -buildvcs=false -o "$RUNNER_TEMP/nebula-mount-helper" .
+
   aws-nitro-owner:
     name: AWS Nitro attestation with protected TPM owner
     runs-on: ubuntu-24.04

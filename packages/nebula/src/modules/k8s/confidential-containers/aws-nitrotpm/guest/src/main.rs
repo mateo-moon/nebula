@@ -32,6 +32,12 @@ async fn main() {
             eprintln!("authority verification failed");
             std::process::exit(1);
         }
+    } else if args.as_slice() == ["--wait-cdh"] {
+        if let Err(error) = aws_trustee_bootstrap::guest_services::wait_for_cdh().await {
+            aws_trustee_bootstrap::startup::report(&error);
+            eprintln!("guest key service unavailable; agent remains stopped");
+            std::process::exit(1);
+        }
     } else if args.as_slice() == ["--transport"] {
         if let Err(error) = aws_trustee_bootstrap::transport::provision().await {
             aws_trustee_bootstrap::startup::report(&error);

@@ -23,6 +23,7 @@ pub mod activation;
 pub mod authority;
 pub mod boot;
 pub mod evidence;
+pub mod guest_services;
 pub mod owner_client;
 pub mod protected_state;
 pub mod startup;

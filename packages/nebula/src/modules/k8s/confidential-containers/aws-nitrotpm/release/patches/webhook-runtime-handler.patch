@@ -1,0 +1,130 @@
+diff --git a/src/webhook/pkg/mutating/mutating-webhook_test.go b/src/webhook/pkg/mutating/mutating-webhook_test.go
+index 7626f4707c413df4a1c6ebd316ec5cbd17c4ab99..e692569099a201170134e0d39ebd900c6f5cf94e 100644
+--- a/src/webhook/pkg/mutating/mutating-webhook_test.go
++++ b/src/webhook/pkg/mutating/mutating-webhook_test.go
+@@ -1,13 +1,108 @@
+ package mutating
+ 
+ import (
++	"context"
++	"encoding/json"
+ 	"os"
++	"reflect"
+ 	"testing"
+ 
++	jsonpatch "github.com/evanphx/json-patch/v5"
++	admissionv1 "k8s.io/api/admission/v1"
+ 	corev1 "k8s.io/api/core/v1"
+ 	"k8s.io/apimachinery/pkg/api/resource"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/apimachinery/pkg/runtime"
++	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+ )
+ 
++// Exercise the real admission response and apply its JSON Patch to the original
++// Pod. Image pulling must use the RuntimeClass handler, which can differ from
++// the public RuntimeClass name; no kubelet feature gate is required.
++func TestImagePullRuntimeHandlerAdmission(t *testing.T) {
++	const annotation = "io.containerd.cri.runtime-handler"
++	const target = "kata-remote-aws-nitrotpm"
++	for _, tc := range []struct {
++		name, class, handler, want string
++		annotations                map[string]string
++	}{
++		{"absent annotations", target, "kata-remote", "kata-remote", nil},
++		{"empty annotations", target, "kata-remote", "kata-remote", map[string]string{}},
++		{"preserve annotations", target, "kata-remote", "kata-remote", map[string]string{"example.com/keep": "yes"}},
++		{"replace wrong handler", target, "kata-remote", "kata-remote", map[string]string{annotation: "runc"}},
++		{"existing handler", target, "kata-remote", "kata-remote", map[string]string{annotation: "kata-remote"}},
++		{"other class", "other-runtime", "kata-remote", "original", map[string]string{annotation: "original"}},
++		{"no class", "", "kata-remote", "", nil},
++		{"unconfigured handler", target, "", "", nil},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			t.Setenv("TARGET_RUNTIMECLASS", target)
++			t.Setenv("TARGET_RUNTIMEHANDLER", tc.handler)
++			t.Setenv("POD_VM_EXTENDED_RESOURCE", "kata.peerpods.io/vm")
++			pod := &corev1.Pod{
++				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
++				ObjectMeta: metav1.ObjectMeta{Name: "fixture", Annotations: tc.annotations},
++				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "container", Image: "example.invalid/image",
++					Resources: corev1.ResourceRequirements{
++						Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
++						Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
++					}}}},
++			}
++			if tc.class != "" {
++				pod.Spec.RuntimeClassName = &tc.class
++			}
++			original, err := json.Marshal(pod)
++			if err != nil {
++				t.Fatal(err)
++			}
++			scheme := runtime.NewScheme()
++			if err := corev1.AddToScheme(scheme); err != nil {
++				t.Fatal(err)
++			}
++			mutator := &PodMutator{Decoder: admission.NewDecoder(scheme)}
++			response := mutator.Handle(context.Background(), admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
++				UID: "fixture", Operation: admissionv1.Create, Object: runtime.RawExtension{Raw: original},
++			}})
++			if !response.Allowed {
++				t.Fatal("admission refused the fixture")
++			}
++			data, err := json.Marshal(response.Patches)
++			if err != nil {
++				t.Fatal(err)
++			}
++			patch, err := jsonpatch.DecodePatch(data)
++			if err != nil {
++				t.Fatal(err)
++			}
++			changed, err := patch.Apply(original)
++			if err != nil {
++				t.Fatal(err)
++			}
++			var result corev1.Pod
++			if err := json.Unmarshal(changed, &result); err != nil {
++				t.Fatal(err)
++			}
++			if got := result.Annotations[annotation]; got != tc.want {
++				t.Fatalf("image pull handler = %q, want %q", got, tc.want)
++			}
++			if tc.class != target {
++				if !reflect.DeepEqual(*pod, result) {
++					t.Fatal("unrelated Pod was changed")
++				}
++				return
++			}
++			if result.Annotations["example.com/keep"] != pod.Annotations["example.com/keep"] ||
++				result.Annotations[PeerPodsCPUAnnotation] != "1" || result.Annotations[PeerPodsMemoryAnnotation] != "64" {
++				t.Fatal("existing annotations or upstream resource conversion changed")
++			}
++			quantity := result.Spec.Containers[0].Resources.Requests["kata.peerpods.io/vm"]
++			if quantity.Value() != 1 {
++				t.Fatal("upstream peer-pod allocation changed")
++			}
++		})
++	}
++}
++
+ func TestMutatePod_CpuMemReqLimit(t *testing.T) {
+ 	// Mock environment variable
+ 	os.Setenv("TARGET_RUNTIMECLASS", "kata-remote")
+diff --git a/src/webhook/pkg/mutating/remove-resourcespec.go b/src/webhook/pkg/mutating/remove-resourcespec.go
+index 268bf52808f70b2014a56d23d95887b001178732..b265b0f3b19f7832d48b6c861613a6173d1671f3 100644
+--- a/src/webhook/pkg/mutating/remove-resourcespec.go
++++ b/src/webhook/pkg/mutating/remove-resourcespec.go
+@@ -37,6 +37,12 @@ func (a *PodMutator) mutatePod(pod *corev1.Pod) (*corev1.Pod, error) {
+ 	}
+ 
+ 	mpod = adjustResourceSpec(mpod)
++	// The public RuntimeClass may be an alias for a different CRI handler.
++	// Route image pulls before scheduling, without requiring a kubelet feature
++	// gate or letting encrypted images fall back to the host snapshotter.
++	if handler := os.Getenv("TARGET_RUNTIMEHANDLER"); handler != "" {
++		mpod.Annotations["io.containerd.cri.runtime-handler"] = handler
++	}
+ 
+ 	return mpod, nil
+ }

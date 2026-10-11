@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from image_sources import BASE_REVISION, CAA_REVISION
 from stage import stage, require
 from nitro import prepare as prepare_nitro, NITRO_REVISION, PATCH, LICENSES
+from webhook import prepare as prepare_webhook, PATCH as WEBHOOK_PATCH
 
 KATA = "c7351e797efff8bfc6bd73da0eb1909be12e2cfe"
 GUEST_COMPONENTS = "17ad60d88f9b7e4b3b54d01200985ae72723e8ab"
@@ -72,6 +73,20 @@ def binaries(source, work):
     kata = checkout(work, "kata", "https://github.com/kata-containers/kata-containers.git", KATA)
     components = checkout(work, "guest-components", "https://github.com/confidential-containers/guest-components.git", GUEST_COMPONENTS)
     caa = checkout(work, "caa", "https://github.com/confidential-containers/cloud-api-adaptor.git", CAA_REVISION)
+    webhook = prepare_webhook(source, work)
+    go_env = {"GOOS": "linux", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOTOOLCHAIN": "local"}
+    helper = source / "release/mount-helper"
+    run("go", "test", "-mod=readonly", "./...", cwd=helper, env=go_env)
+    run("go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-o", out / "nebula-mount-helper", ".", cwd=helper, env=go_env)
+    json_file(work / "mount-helper-build.json", {"version": 1, "sourceSha256": sha(helper / "main.go"),
+        "binarySha256": sha(out / "nebula-mount-helper")})
+    run("go", "test", "-mod=readonly", "./...", cwd=webhook / "src/webhook", env=go_env)
+    run("go", "build", "-mod=readonly", "-trimpath", "-buildvcs=true", "-o", out / "peerpods-webhook", ".",
+        cwd=webhook / "src/webhook", env=go_env)
+    shutil.copy2(webhook / "LICENSE", out / "peerpods-webhook.LICENSE")
+    json_file(work / "webhook-build.json", {"version": 1, "sourceRevision": CAA_REVISION,
+        "patchSha256": sha(source / "release/patches" / WEBHOOK_PATCH),
+        "binarySha256": sha(out / "peerpods-webhook"), "licenseSha256": sha(out / "peerpods-webhook.LICENSE")})
     revisions = {}
     def copy(name, path, revision):
         shutil.copy2(path, out / name)
@@ -129,6 +144,8 @@ def images(source, work, canary, repository, tag, policy):
     inputs = json.loads((work / "binaries.json").read_text())
     require(not inputs["aws-trustee-bootstrap"]["revision"].endswith("-dirty"), "release builds require committed source")
     out = work / "release"; out.mkdir(exist_ok=True)
+    shutil.copy2(work / "webhook-build.json", out / "webhook-build.json")
+    shutil.copy2(work / "mount-helper-build.json", out / "mount-helper-build.json")
     result = {"version": 1}
     for role in ("authority", "runtime"):
         description, build = work / (role + "-description"), work / (role + "-image")

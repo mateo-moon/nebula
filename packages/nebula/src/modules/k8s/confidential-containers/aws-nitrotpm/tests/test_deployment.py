@@ -60,6 +60,9 @@ def test_service_gates_and_fixed_configuration():
     agent = tomllib.loads((root / "usr/share/nebula/agent.toml").read_text())
     assert agent["policy_file"] == "/usr/share/nebula/policy.rego"
     assert agent["debug_console"] is False and agent["dev_mode"] is False
+    assert agent["guest_components_procs"] == "none"
+    gate = (root / "usr/lib/systemd/system/kata-agent.service.d/90-attested-keys.conf").read_text()
+    assert "ExecStartPre=/usr/local/bin/aws-trustee-bootstrap --wait-cdh" in gate
 
 
 def test_kbs_cannot_start_with_missing_or_permissive_policy(flow, tmp_path):

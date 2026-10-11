@@ -56,6 +56,13 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.ok(!objects.some(value => value.metadata.annotations?.["helm.sh/resource-policy"] === "keep"), "normal pruning must own all installer resources");
   const installer = objects.find(value => value.kind === "DaemonSet" && value.metadata.name === "kata-as-coco-runtime")!;
   assert.equal(installer.metadata.annotations["argocd.argoproj.io/sync-options"], "PrunePropagationPolicy=foreground");
+  const mountHelper = installer.spec.template.spec.initContainers.find((value: any) => value.name === "nebula-mount-helper");
+  assert.equal(mountHelper.image, release.controllerImage);
+  assert.equal(mountHelper.restartPolicy, "Always", "the native sidecar must outlive normal Kata cleanup");
+  assert.deepEqual(mountHelper.command, ["python3", "/app/host_helper.py"]);
+  assert.ok(mountHelper.startupProbe, "the installer must wait for its mount helper");
+  assert.deepEqual(mountHelper.securityContext.capabilities, { drop: ["ALL"], add: ["SYS_CHROOT"] });
+  assert.equal(mountHelper.volumeMounts.find((value: any) => value.name === "nebula-helper-root").readOnly, true);
   for (const [kind, suffix] of [["ServiceAccount", "sa"], ["ClusterRole", "role"], ["ClusterRoleBinding", "rb"]]) {
     const resource = objects.find(value => value.kind === kind && value.metadata.name === `kata-as-coco-runtime-${suffix}`)!;
     assert.equal(resource.metadata.annotations["argocd.argoproj.io/sync-wave"], "-4", "installer permissions must outlive its Pods and precede namespace deletion");
@@ -105,6 +112,10 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   assert.equal(admission.metadata.namespace, "coco-system");
   assert.equal(admission.spec.template.spec.volumes.find((value: any) => value.name === "cert").secret.secretName, runtime.metadata.name + "-admission");
   assert.ok(admission.spec.template.spec.containers[0].env.some((value: any) => value.name === "TARGET_RUNTIMECLASS" && value.value === RuntimeClasses.AWS_NITRO_TPM));
+  assert.equal(admission.spec.template.spec.containers[0].image, release.controllerImage, "admission must use the released patched webhook");
+  assert.deepEqual(admission.spec.template.spec.containers[0].command, ["/manager"]);
+  assert.ok(admission.spec.template.spec.containers[0].env.some((value: any) => value.name === "TARGET_RUNTIMEHANDLER" && value.value === "kata-remote"),
+    "image pulls must select the actual handler without a caller-supplied annotation or kubelet feature gate");
   assert.deepEqual(service.spec.selector, admission.spec.selector.matchLabels);
   assert.notDeepEqual(admission.spec.selector.matchLabels, cleanup.spec.selector.matchLabels, "same-namespace controllers need distinct selectors");
   assert.equal(webhook.webhooks[0].failurePolicy, "Fail");

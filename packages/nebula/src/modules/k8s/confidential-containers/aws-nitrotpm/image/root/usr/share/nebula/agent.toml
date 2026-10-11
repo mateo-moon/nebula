@@ -1,5 +1,7 @@
 server_addr = "unix:///run/kata-containers/agent.sock"
 policy_file = "/usr/share/nebula/policy.rego"
+# systemd owns CDH; initialize Kata's client without launching another AA/CDH.
+guest_components_procs = "none"
 debug_console = false
 dev_mode = false
 tracing = false

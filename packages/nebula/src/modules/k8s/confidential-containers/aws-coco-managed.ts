@@ -173,6 +173,28 @@ export class ManagedAwsCoco extends Construct {
     requireValue(installer, "upstream Kata installer contract changed");
     installer.addJsonPatch(JsonPatch.add("/metadata/annotations", { ...installer.toJson().metadata?.annotations,
       "argocd.argoproj.io/sync-options": "PrunePropagationPolicy=foreground" }));
+    const installerSpec = installer.toJson().spec.template.spec;
+    const helperVolumes = [
+      { name: "nebula-helper-root", hostPath: { path: "/", type: "Directory" } },
+      { name: "nebula-helper-bin", hostPath: { path: "/usr/local/bin", type: "DirectoryOrCreate" } },
+      { name: "nebula-helper-status", emptyDir: { medium: "Memory" } },
+    ];
+    requireValue(!installerSpec.volumes.some((volume: any) => helperVolumes.some(value => value.name === volume.name)),
+      "upstream installer volume contract changed");
+    // A native sidecar starts before installation and stops after the main
+    // installer has cleaned Kata. Missing mount.fuse support is module-owned;
+    // existing worker helpers and their packages remain untouched.
+    installer.addJsonPatch(JsonPatch.add("/spec/template/spec/volumes", [...installerSpec.volumes, ...helperVolumes]),
+      JsonPatch.add("/spec/template/spec/initContainers", [{
+        name: "nebula-mount-helper", image: this.release.controllerImage, restartPolicy: "Always",
+        command: ["python3", "/app/host_helper.py"], env: [{ name: "NEBULA_HELPER_OWNER", value: this.name }],
+        securityContext: { runAsUser: 0, runAsNonRoot: false, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+          capabilities: { drop: ["ALL"], add: ["SYS_CHROOT"] } },
+        resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { memory: "96Mi" } },
+        volumeMounts: [{ name: "nebula-helper-root", mountPath: "/host", readOnly: true },
+          { name: "nebula-helper-bin", mountPath: "/host-bin" }, { name: "nebula-helper-status", mountPath: "/run/nebula-helper" }],
+        startupProbe: { exec: { command: ["sh", "-c", "test -f /run/nebula-helper/ready"] }, periodSeconds: 1, failureThreshold: 120 },
+      }, ...(installerSpec.initContainers ?? [])]));
     for (const [kind, suffix] of [["ServiceAccount", "sa"], ["ClusterRole", "role"], ["ClusterRoleBinding", "rb"]]) {
       const resource = resources.find(value => value.kind === kind && value.name === `kata-as-coco-runtime-${suffix}`);
       requireValue(resource?.toJson().metadata?.annotations?.["helm.sh/resource-policy"] === "keep", "upstream Kata RBAC contract changed");
@@ -209,6 +231,15 @@ export class ManagedAwsCoco extends Construct {
     const admission = resources.find(resource => resource.kind === "Deployment" && resource.toJson().metadata?.labels?.["app.kubernetes.io/created-by"] === "peerpods-webhook");
     const service = resources.find(resource => resource.kind === "Service" && resource.name === "peer-pods-webhook-webhook-service");
     requireValue(webhook && admission && service && admission.toJson().metadata.namespace === this.namespace, "upstream admission contract changed");
+    const admissionContainers = admission.toJson().spec.template.spec.containers;
+    requireValue(admissionContainers.length === 1 && JSON.stringify(admissionContainers[0].command) === '["/manager"]' &&
+      Array.isArray(admissionContainers[0].env) && !admissionContainers[0].env.some((value: any) => value.name === "TARGET_RUNTIMEHANDLER"),
+      "upstream admission executable contract changed");
+    // The released controller image also contains the narrowly patched upstream
+    // webhook. Admission selects the CRI handler before the first image pull;
+    // the public RuntimeClass name is an alias, not the containerd handler.
+    admission.addJsonPatch(JsonPatch.replace("/spec/template/spec/containers/0/image", this.release.controllerImage),
+      JsonPatch.add("/spec/template/spec/containers/0/env/-", { name: "TARGET_RUNTIMEHANDLER", value: "kata-remote" }));
     const label = "peer-pods-webhook-controller-manager";
     admission.addJsonPatch(JsonPatch.replace("/spec/selector/matchLabels/control-plane", label),
       JsonPatch.replace("/spec/template/metadata/labels/control-plane", label),

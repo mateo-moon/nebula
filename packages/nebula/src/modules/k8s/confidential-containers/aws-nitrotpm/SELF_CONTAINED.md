@@ -33,6 +33,14 @@ Admission intercepts only this module's RuntimeClass and keeps fail-closed
 behavior; unrelated Pods and the controller can start while TLS is being set up.
 These Kubernetes-visible TLS keys protect admission transport, not workload data.
 
+Admission also selects the actual containerd runtime handler before kubelet's
+first image pull, so encrypted layers use the Kata Nydus snapshotter. The Kata
+installer owns a small mount helper when the worker has none; it preserves an
+existing system helper and removes its own helper during ordinary deletion.
+No worker package installation is required. Inside each measured PodVM, systemd
+starts CDH and waits for its Unix listener before Kata connects to it. Kata does
+not launch another attestation agent or key service.
+
 ## Where the automatic steps happen
 
 | Step | Execution location | Management-visible result |
