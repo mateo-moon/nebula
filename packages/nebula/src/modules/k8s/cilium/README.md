@@ -166,6 +166,11 @@ and -3, ahead of the preserved CiliumNodeConfigs at -2 and chart resources at
 the default wave. CREATE/UPDATE in the Cilium namespace must match the exact
 declared name, sole `ipv6-node` default and exact hostname selector; broader
 selectors or extra defaults fail closed. Other namespaces remain unaffected.
+An UPDATE that removes existing finalizers from an already-deleting config is
+also admitted when its spec, deletion timestamp, labels, annotations and owner
+references are unchanged. This lets Kubernetes finish foreground pruning after
+a node leaves the inventory, without admitting a new retired config or changing
+its network settings. Kubernetes retains responsibility for finalizer cleanup.
 
 This API requires the CiliumNodeConfig CRD to exist already and Kubernetes
 ValidatingAdmissionPolicy v1 support. The Cilium operator installs its CRDs;
