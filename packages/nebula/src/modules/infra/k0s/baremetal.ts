@@ -301,6 +301,8 @@ export class BaremetalSetup extends Construct {
               phase: { type: "string" }, osReady: { type: "boolean" }, workerReady: { type: "boolean" }, uefiReady: { type: "boolean" }, uefiSkipped: { type: "boolean" },
               address: { type: "string" }, hostname: { type: "string" }, ipv6PodCidr: { type: "string" },
               lastError: { type: "string" }, requestHash: { type: "string" },
+              verifiedFirmwareGeneration: { type: "integer", minimum: 0, maximum: 16,
+                description: "Verified successful attempt; zero is the original installation. Earlier attempts are retired and cannot be recreated." },
               admissionPublished: { type: "boolean" }, enrollmentPublished: { type: "boolean" },
             } },
           },

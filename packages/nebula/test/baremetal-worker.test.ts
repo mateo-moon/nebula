@@ -391,6 +391,20 @@ test("Crossplane CLI runs the pinned function pipeline with real readiness seman
   assert.equal(ready(fullRender(all, updated)), "False", "old ready worker cannot acknowledge new bootstrap intent");
   const lost = fullRender({}, { ...network.xr, status: status(graph) });
   assert.equal(count(lost), 14); assert.equal(ready(lost), "False");
+
+  const retry = completedFirmwareRetry(2, network);
+  const checkpoint = fullRender(retry.observed, retry.xr);
+  retry.xr.status = status(checkpoint);
+  assert.equal(retry.xr.status.verifiedFirmwareGeneration, 2);
+  const retired = fullRender(retry.observed, retry.xr);
+  const jobs = retired.filter(r => r.kind === "Object" && r.spec.forProvider.manifest.kind === "Job");
+  assert.equal(jobs.length, 1);
+  assert.match(jobs[0].spec.forProvider.manifest.metadata.name, /-fw-2$/);
+  assert.deepEqual(jobs[0].spec.managementPolicies, ["Observe"]);
+  const missing = fullRender({}, retry.xr);
+  assert.equal(status(missing).verifiedFirmwareGeneration, 2);
+  assert.equal(ready(missing), "False");
+  assert.equal(missing.filter(r => r.kind === "Object" && r.spec.forProvider.manifest.kind === "Job").length, 1);
 });
 
 test("custom SSH port and pinned known hosts survive installation and handoff", () => {
@@ -538,6 +552,116 @@ test("per-host UEFI skip retains the request and needs completed OS verification
   assert.equal(status(completed).uefiSkipped, true); assert.ok(native(completed, "pool"));
   delete xr.spec.skipUefi;
   assert.equal(status(render(observed, xr, fw.template)).osReady, false);
+});
+
+function completedFirmwareRetry(generation: number, fw = setup({ ...options, installation: { ...options.installation, uefi } })) {
+  const xr = structuredClone(fw.xr);
+  const observed = observe(render({}, xr, fw.template));
+  const data = observed.state.resource.status.atProvider.manifest.data;
+  data.phase = "ConfiguringUefi";
+  for (let attempt = 1; attempt <= generation; attempt++) {
+    const previous = attempt === 1 ? "install" : `firmware-${attempt - 1}`;
+    observed[previous].resource.status.atProvider.manifest.status = { conditions: [{ type: "Failed", status: "True" }] };
+    data.progress = JSON.stringify({ terminalError: true, firmwareRetryGeneration: attempt - 1 });
+    xr.spec.firmwareRetryGeneration = attempt;
+    observed[`firmware-${attempt}`] = observe(render(observed, xr, fw.template))[`firmware-${attempt}`];
+  }
+  data.phase = "OSReady"; data.verifiedRequestHash = data.requestHash;
+  data.progress = JSON.stringify({ phase: "OSReady", firmwareRetryGeneration: generation, uefiVerified: true });
+  observed[`firmware-${generation}`].resource.status.atProvider.manifest.status = { conditions: [{ type: "Complete", status: "True" }] };
+  return { xr, observed, template: fw.template };
+}
+
+test("a verified retry retires predecessors only after recording success and preserves the remaining graph", () => {
+  for (const generation of [1, 2, 4]) {
+    const { xr, observed, template } = completedFirmwareRetry(generation);
+    const first = render(observed, xr, template);
+    assert.equal(status(first).verifiedFirmwareGeneration, generation);
+    assert.ok(native(first, "install"), "persist success before retiring anything");
+    xr.status = status(first);
+    const retired = render(observed, xr, template);
+    const superseded = ["install", ...Array.from({ length: generation - 1 }, (_, i) => `firmware-${i + 1}`)];
+    for (const name of superseded) {
+      assert.equal(named(retired, name), undefined);
+      delete observed[name];
+    }
+    const successful = `firmware-${generation}`;
+    assert.deepEqual(named(retired, successful).spec.managementPolicies, ["Observe"]);
+    assert.equal(named(retired, successful).spec.deletionPolicy, "Orphan");
+    for (const resource of retired.filter(r => r.kind === "Object")) {
+      assert.deepEqual(resource.spec.forProvider.manifest, native(first, key(resource)));
+      assert.equal(resource.metadata.annotations["gotemplating.fn.crossplane.io/ready"], readiness(first, key(resource)));
+      if (key(resource) !== successful) assert.deepEqual(resource, named(first, key(resource)));
+    }
+    assert.deepEqual(status(retired), status(first));
+    assert.deepEqual(render(observed, xr, template), retired, "removing retired observations cannot recreate attempts");
+  }
+});
+
+test("missing success evidence never retires an attempt or hides its current failure", () => {
+  const { xr, observed, template } = completedFirmwareRetry(2);
+  for (const mutate of [
+    (o: any) => { o["firmware-2"].resource.status.atProvider.manifest.status = { conditions: [{ type: "Failed", status: "True" }] }; },
+    (o: any) => { delete o["firmware-2"].resource.status.atProvider.manifest.status; },
+    (o: any) => { o.state.resource.status.atProvider.manifest.data.verifiedRequestHash = "other"; },
+    (o: any) => { o.state.resource.status.atProvider.manifest.data.uid = "other"; },
+    (o: any) => { o.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ uefiVerified: true, firmwareRetryGeneration: 1 }); },
+    (o: any) => { o["firmware-2"].resource.status.atProvider.manifest.spec.template.spec.containers[0].image = "other"; },
+    (o: any) => { delete o.state; },
+  ]) {
+    const invalid = structuredClone(observed); mutate(invalid);
+    const result = render(invalid, xr, template);
+    assert.equal(status(result).verifiedFirmwareGeneration, undefined);
+    assert.equal(status(result).osReady, false);
+    for (const name of ["install", "firmware-1", "firmware-2"]) {
+      assert.ok(named(result, name));
+      assert.equal(named(result, name).spec.deletionPolicy, "Orphan");
+    }
+  }
+});
+
+test("a persisted successful attempt prevents recreation through missing observations and further retries", () => {
+  const { xr, observed, template } = completedFirmwareRetry(2);
+  xr.status = status(render(observed, xr, template));
+  const retired = render(observed, xr, template);
+  delete observed.install; delete observed["firmware-1"];
+  Object.assign(observed, observe(retired.filter(r => ["pool", "remote-template", "bootstrap-template", "worker"].includes(key(r)))));
+  for (const missing of [["state"], ["firmware-2"], ["state", "firmware-2"]]) {
+    const incomplete = structuredClone(observed);
+    for (const name of missing) delete incomplete[name];
+    const result = render(incomplete, xr, template);
+    assert.equal(status(result).osReady, false);
+    assert.equal(status(result).verifiedFirmwareGeneration, 2);
+    assert.equal(named(result, "install"), undefined);
+    assert.equal(named(result, "firmware-1"), undefined);
+    assert.deepEqual(named(result, "firmware-2").spec.managementPolicies, ["Observe"]);
+    assert.ok(named(result, "worker"), "temporary missing evidence must preserve enrollment");
+  }
+  xr.spec.firmwareRetryGeneration = 3;
+  const next = render(observed, xr, template);
+  assert.equal(named(next, "install"), undefined);
+  assert.equal(named(next, "firmware-1"), undefined);
+  assert.equal(named(next, "firmware-3"), undefined, "an enrolled worker cannot start another firmware attempt");
+  assert.deepEqual(named(next, "firmware-2").spec.managementPolicies, ["Observe"]);
+  assert.equal(status(next).verifiedFirmwareGeneration, 2);
+});
+
+test("successful initial installations become observe-only and a mismatched completion checkpoint fails closed", () => {
+  const xr = structuredClone(fixture.xr);
+  const observed = installed();
+  xr.status = status(render(observed, xr));
+  assert.equal(xr.status.verifiedFirmwareGeneration, 0);
+  assert.deepEqual(named(render(observed, xr), "install").spec.managementPolicies, ["Observe"]);
+  delete observed.install;
+  const missing = render(observed, xr);
+  assert.deepEqual(named(missing, "install").spec.managementPolicies, ["Observe"]);
+  assert.equal(status(missing).osReady, false);
+  assert.equal(status(missing).verifiedFirmwareGeneration, 0);
+  for (const invalid of [
+    { ...xr.status, requestHash: "other" },
+    { ...xr.status, requestHash: "" },
+    { ...xr.status, verifiedFirmwareGeneration: 1 },
+  ]) assert.throws(() => render(observed, { ...xr, status: invalid }), /bound|profile changed/);
 });
 
 test("UEFI skip is explicit and an existing host needs the next operator attempt", () => {
