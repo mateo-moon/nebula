@@ -56,6 +56,22 @@ export class CiliumNodeIpv6Overrides extends Construct {
     // Use the namespace form so the resolver evaluates each hostname selector.
     this.configSources = `config-map:cilium-config,cilium-node-config:${namespace}`;
     const metadata = (name: string, wave: number) => ({ name, annotations: { "argocd.argoproj.io/sync-wave": String(wave) } });
+    // Foreground pruning removes finalizers with UPDATE after a node has left
+    // inventory. Admit only that cleanup, with the network spec and other
+    // mutable metadata unchanged; otherwise the inventory fence blocks GC.
+    const finalizerRemoval = [
+      'request.operation == "UPDATE"', 'oldObject != null',
+      'has(oldObject.metadata.deletionTimestamp)', 'oldObject.metadata.deletionTimestamp != null',
+      'has(object.metadata.deletionTimestamp)',
+      'object.metadata.deletionTimestamp == oldObject.metadata.deletionTimestamp',
+      'object.spec == oldObject.spec',
+      ...["labels", "annotations", "ownerReferences"].map(field =>
+        `(has(object.metadata.${field}) == has(oldObject.metadata.${field}) && `
+        + `(!has(oldObject.metadata.${field}) || object.metadata.${field} == oldObject.metadata.${field}))`),
+      'has(oldObject.metadata.finalizers)', 'size(oldObject.metadata.finalizers) > 0',
+      '(!has(object.metadata.finalizers) || (size(object.metadata.finalizers) < size(oldObject.metadata.finalizers) '
+        + '&& object.metadata.finalizers.all(f, f in oldObject.metadata.finalizers)))',
+    ].join(" && ");
     new ApiObject(this, "policy", {
       apiVersion: "admissionregistration.k8s.io/v1", kind: "ValidatingAdmissionPolicy",
       metadata: metadata(policyName, -4),
@@ -65,11 +81,11 @@ export class CiliumNodeIpv6Overrides extends Construct {
             operations: ["CREATE", "UPDATE"], scope: "Namespaced" }] },
         matchConditions: [{ name: "cilium-namespace", expression: `object.metadata.namespace == ${JSON.stringify(namespace)}` }],
         variables: [{ name: "inventory", expression: JSON.stringify(inventory) }],
-        validations: [{ expression: 'object.metadata.name in variables.inventory && '
+        validations: [{ expression: `(${finalizerRemoval}) || (object.metadata.name in variables.inventory && `
           + 'object.spec.defaults == {"ipv6-node": variables.inventory[object.metadata.name].ipv6} && '
           + 'has(object.spec.nodeSelector) && has(object.spec.nodeSelector.matchLabels) && '
           + 'object.spec.nodeSelector.matchLabels == {"kubernetes.io/hostname": variables.inventory[object.metadata.name].nodeName} && '
-          + '(!has(object.spec.nodeSelector.matchExpressions) || size(object.spec.nodeSelector.matchExpressions) == 0)',
+          + '(!has(object.spec.nodeSelector.matchExpressions) || size(object.spec.nodeSelector.matchExpressions) == 0))',
           message: "CiliumNodeConfig must exactly match the declared node IPv6 inventory and may override only ipv6-node." }],
       },
     });
