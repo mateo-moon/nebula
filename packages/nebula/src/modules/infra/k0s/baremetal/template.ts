@@ -99,6 +99,14 @@ const TEMPLATE = String.raw`
 {{- $progress := get $data "progress" | default "{}" | fromJson | default dict -}}
 {{- $install := dig "resource" (dict) (get $resources "install" | default dict) -}}
 {{- $generation := $xr.spec.firmwareRetryGeneration | default 0 | int -}}
+{{- /* Persist successful execution before retiring its predecessors. Missing
+       observations must never put a superseded attempt back in the graph. */ -}}
+{{- $verifiedGeneration := dig "status" "verifiedFirmwareGeneration" -1 $xr | int -}}
+{{- if or (lt $verifiedGeneration -1) (gt $verifiedGeneration $generation)
+  (and (ge $verifiedGeneration 0) (ne $previousHash $hash)) -}}
+{{- fail "verified firmware generation must remain bound to this installation request" -}}
+{{- end -}}
+{{- $observe := list "Observe" -}}
 {{- $job := $install -}}
 {{- $jobName := $prefix -}}
 {{- if gt $generation 0 -}}
@@ -193,7 +201,7 @@ const TEMPLATE = String.raw`
   (not (hasKey $resources "pool")) (not (hasKey $resources "worker"))
   (not (hasKey $resources "remote-template")) (not (hasKey $resources "bootstrap-template"))
   (not (hasKey $resources "cidr-policy")) (not (hasKey $resources "identity-policy")) -}}
-{{- $publish := or $observed (le $attempt $publishedGeneration) $canStart -}}
+{{- $publish := or $observed (le $attempt $publishedGeneration) $canStart (eq $attempt $verifiedGeneration) -}}
 {{- $retryDesired := deepCopy $runtimeJob -}}
 {{- $_ := set $retryDesired.metadata "name" (printf "%s-fw-%d" $retryPrefix $attempt) -}}
 {{- $_ := set $retryDesired.spec "backoffLimit" 0 -}}
@@ -204,9 +212,10 @@ const TEMPLATE = String.raw`
 {{- $existing := dig "spec" "forProvider" "manifest" (dict) $observed -}}
 {{- if $existing -}}{{- $retryDesired = deepCopy $existing -}}{{- end -}}
 {{- if eq $attempt $generation -}}{{- $activeDesired = $retryDesired -}}{{- end -}}
-{{- if $publish -}}
+{{- if and $publish (ge $attempt $verifiedGeneration) -}}
 {{- $cel := $terminalCel -}}{{- if eq $attempt $generation -}}{{- $cel = $completeCel -}}{{- end -}}
-{{ template "object" (merge (dict "key" $key "policies" $snapshot "manifest" $retryDesired
+{{- $policies := $snapshot -}}{{- if eq $attempt $verifiedGeneration -}}{{- $policies = $observe -}}{{- end -}}
+{{ template "object" (merge (dict "key" $key "policies" $policies "manifest" $retryDesired
   "readiness" (dict "policy" "DeriveFromCelQuery" "celQuery" $cel)) $context) }}
 {{- end -}}
 {{- end -}}
@@ -218,8 +227,11 @@ const TEMPLATE = String.raw`
     (dict "apiVersion" "v1" "kind" "ConfigMap" "metadata" (dict "name" $stateName "namespace" $namespace) "data" (dict "uid" $uid "requestHash" $hash)))) "true") -}}
 {{- $installCel := $completeCel -}}{{- $installGate := $osReady -}}
 {{- if gt $generation 0 -}}{{- $installCel = $terminalCel -}}{{- $installGate = $installFinished -}}{{- end -}}
-{{ template "object" (merge (dict "key" "install" "policies" $snapshot "gate" $installGate "manifest" $jobDesired
+{{- if le $verifiedGeneration 0 -}}
+{{- $policies := $snapshot -}}{{- if eq $verifiedGeneration 0 -}}{{- $policies = $observe -}}{{- end -}}
+{{ template "object" (merge (dict "key" "install" "policies" $policies "gate" $installGate "manifest" $jobDesired
   "readiness" (dict "policy" "DeriveFromCelQuery" "celQuery" $installCel)) $context) }}
+{{- end -}}
 
 {{- $cidr := "" -}}
 {{- $admissionPublished := or (dig "status" "admissionPublished" false $xr)
@@ -304,7 +316,9 @@ const TEMPLATE = String.raw`
 {{- if and $osReady $enrollmentPublished -}}{{- $phase = "Enrolling" -}}{{- end -}}
 {{- if $workerReady -}}{{- $phase = "Ready" -}}{{- end -}}
 {{- if or $jobFailed ($progress.terminalError | default false) -}}{{- $phase = "Failed" -}}{{- end -}}
-{{ template "emit" (dict "apiVersion" $xr.apiVersion "kind" $xr.kind "status"
-  (dict "phase" $phase "osReady" $osReady "uefiReady" $uefiReady "uefiSkipped" $uefiSkipped "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
-    "lastError" ($progress.lastError | default "") "requestHash" $hash "admissionPublished" $admissionPublished "enrollmentPublished" $enrollmentPublished)) }}
+{{- $status := dict "phase" $phase "osReady" $osReady "uefiReady" $uefiReady "uefiSkipped" $uefiSkipped "workerReady" $workerReady "address" $xr.spec.address "hostname" $hostname "ipv6PodCidr" $cidr
+    "lastError" ($progress.lastError | default "") "requestHash" $hash "admissionPublished" $admissionPublished "enrollmentPublished" $enrollmentPublished -}}
+{{- if $osReady -}}{{- $verifiedGeneration = $generation -}}{{- end -}}
+{{- if ge $verifiedGeneration 0 -}}{{- $_ := set $status "verifiedFirmwareGeneration" $verifiedGeneration -}}{{- end -}}
+{{ template "emit" (dict "apiVersion" $xr.apiVersion "kind" $xr.kind "status" $status) }}
 `;

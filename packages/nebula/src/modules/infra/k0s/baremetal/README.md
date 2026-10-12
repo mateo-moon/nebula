@@ -378,13 +378,29 @@ contains the progress ConfigMap: public host keys, facts and installation state.
 Back up that record, the XR/CompositionRevision and referenced credentials.
 Private keys never enter the XR, its status or composition observations.
 
-Request/state/Job Objects have Observe/Create permissions without Update/Delete.
+Request/state and unverified Job Objects have Observe/Create permissions without Update/Delete.
 The runner owns progress updates; Crossplane cannot reset them. Jobs have one
 completion, bounded retries and an overall deadline, with no automatic TTL.
 A restarted pod resumes its journal. A crash near kexec can reschedule only the
 same operation on the authenticated original boot. An unknown boot, lost binding,
 changed profile or expired installation deadline never authorizes another wipe.
 An on-host exclusive claim also fences another XR or IP alias.
+
+Once the selected Job completes and its bound OS/firmware receipt passes all
+readiness checks, the composition records `status.verifiedFirmwareGeneration`
+(zero for the original installation). On a subsequent reconciliation, it retires
+the Objects for earlier attempts and changes the successful Job to Observe-only.
+This checkpoint survives missing observations: an old attempt is never recreated,
+and deleting the successful Job cannot launch provisioning again. Missing success
+evidence still reports not ready; it does not authorize another execution.
+
+Superseded Jobs are orphaned, preserving their diagnostics for inspection. After
+archiving any required logs, they can be deleted once their Objects have gone.
+Keep the successful Job, installation request/state, and enrollment resources.
+The latest failed or running attempt is retained until a later attempt actually
+succeeds. Do not add a TTL to active attempts: Job completion is part of the
+verification gate. Existing workers receive this behavior through a reviewed
+normal CompositionRevision update with their installation profile unchanged.
 
 All composed Objects use `deletionPolicy: Orphan` without Delete permissions.
 Underlying CAPI resources have request-UID annotations and no Crossplane GC
