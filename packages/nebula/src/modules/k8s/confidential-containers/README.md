@@ -49,11 +49,12 @@ copied role ARN, PCR capture, key-seeding script or post-install action is an
 installation input. Platform placement refers to the existing Nebula VPC and
 worker groups, not separately prepared CoCo infrastructure.
 
-A released package must contain its real, qualified `release/catalog.json`.
-The software build pipeline produces immutable candidates and derives expected
-measurements from their UKIs. It does not turn a successful compile into hardware
-qualification. This draft is still completing that release qualification; no
-placeholder catalog or permissive fallback is provided.
+The package includes the exact hardware-qualified `release/catalog.json`.
+The software build pipeline derives expected measurements from the built UKIs;
+qualification then checks those immutable bytes through deployment, encrypted
+execution, recovery and ordinary deletion. The default catalog passed this
+acceptance on 2026-10-13 in eu-west-1 using c6a.large guests. See the
+[release qualification record](aws-nitrotpm/release/QUALIFICATION.md).
 
 ## Workload publication
 

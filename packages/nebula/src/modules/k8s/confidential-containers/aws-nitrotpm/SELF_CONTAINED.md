@@ -3,9 +3,11 @@
 The managed implementation lives in `../aws-coco-managed.ts`, `control/`,
 `guest/src/boot.rs`, `guest/src/evidence/`, `guest/src/authority/replication/`
 and `release/`. It replaces the prototype's manual installation procedure.
-Software integration tests pass and a public candidate release is available;
-complete immutable-appliance hardware qualification and promotion into the
-default catalog remain pending.
+The package includes a hardware-qualified default catalog. Its exact released
+appliances passed automatic deployment, encrypted execution, protected recovery
+and ordinary deletion on 2026-10-13. The
+[qualification record](release/QUALIFICATION.md) identifies the source, catalog
+and acceptance scope.
 
 ## Installation contract
 
@@ -174,152 +176,46 @@ cross-release migration. The old prototype AMI API remains a research interface.
 
 ## Evidence and acceptance
 
-Local validation includes real synthetic COSE/SNP signatures and certificate
-chains, real TLS with channel-key substitution rejection, actual OpenRaft
-elections/snapshots/partitions/replacement, TPM journal fault injection, Node/Rust
-signed-contract interoperability, AWS SDK request-shape tests, controller failure
-paths and real Helm synthesis. The Linux fixture exercises the actual
-software-TPM adapter and protected replica store. These tests do not qualify AWS firmware,
-EC2 persistence guarantees, the full boot services or end-to-end isolation.
+The default catalog binds the exact public artifacts from signed source
+`4095d068b6aa08082abe860c2cc58ff436d1cce2`. A fresh disposable eu-west-1
+cluster with c6a.large guests passed all acceptance gates without startup
+intervention, cleanup repairs or finalizer removal. Earlier candidates and
+diagnostic interventions are not qualification evidence for this release.
 
-The assembled Linux appliances also pass offline systemd dependency checks and
-start their bootstrap executables using the libraries included in each image.
-The CI-built Apple Silicon owner client passes the Node/Rust signed-contract
-checks. The published candidate passes anonymous download checks for both disks,
-all three owner clients and
-all four container manifests, including compressed and expanded disk digests.
-Live Kubernetes validation accepts the managed resource schemas and
-rejects a changed immutable enrollment. The real AWS provider creates the scoped
-test users, policies and credential Secrets, and ordinary Crossplane deletion
-removes the fixture's users, role, instance profile and policies. The actual
-EBS sparse uploader passes encrypted snapshot completion and byte/checksum
-readback. These checks remain separate from complete attested guest boot and
-recovery acceptance.
+The module imported both appliances, resumed an interrupted controller during
+import without duplicate snapshots, enrolled three distinct attested authority
+replicas and completed its ordinary encrypted canary. The worker initially had
+no Nydus mount helper; automatic installation and removal both passed. No
+initial stop/start recovery was needed on this run. That bounded recovery path
+has controller regressions and live IAM DryRun coverage, but its retry branch
+was not triggered by this successful hardware boot.
 
-Argo CD 3.3.0's diff engine preserves controller-discovered cloud IDs and restart
-annotations in the rendered resources with both client-side and server-side
-apply. Negative checks reproduce drift from the old empty placeholders and
-still detect changes to declared security settings.
+The released owner client verified fresh authority evidence outside Kubernetes,
+published a synthetic workload key, and refused unsigned policy alteration,
+a signed descriptor outside its grant and a wrong key commitment. Different
+release and deployment profiles were refused with healthy positive controls.
+All-replica reboot, automatic recovery of a stopped instance and replacement of
+one terminated member preserved the original authority identity. Replacement
+advanced exactly one generation and changed exactly one voter. Quorum loss and
+a replica-network partition refused authorization despite fresh attestation;
+restoring the original instances or network rule recovered the same identity.
+Owner publication passed again after all five faults.
 
-The controller suite includes real admission TLS hostname verification and
-lost-response recovery at each certificate-rotation checkpoint. Live deployment
-also verified creation of all module IAM resources, including the guest role's
-instance-profile attachment. Both released disks were imported automatically;
-an interrupted controller resumed the active import without duplicate snapshots.
-The immutable authority image boots, preserves NitroTPM's existing system keys
-and starts its protected service. Explicit support for the documented SNP
-report version 5 passes synthetic signature/rejection tests, verification of
-three earlier captured hardware reports, and fresh evidence-bound TLS checks.
-Firmware minimums and build-derived PCR pins are unchanged.
-`tpm2-tools` parses credential files as password text,
-while the Nitro collector consumes the original binary owner secret. Embedded
-NUL bytes, trailing CR/LF and password prefixes could therefore change the actual
-TPM credential. Provisioning and recovery now use explicit hex encoding in a
-private tmpfs file, with a zeroizing encoding buffer. A software-TPM regression
-fails before this fix and passes for all four affected input cases afterward,
-independently checking the stored credential and rejection of empty authorization.
-The fixed appliance produced fresh valid evidence from all three distinct Nitro
-modules with the same protected authority identity. Both image imports and
-controller-interruption recovery passed. The module automatically launched its
-canary PodVM, but stable quorum health and successful encrypted Pod execution
-were not established. A diagnostic parser's reordered JSON caused a separate
-decoding error; normal production wire round trips pass without a codec change.
+Ordinary reverse pruning removed the worker helper, module cloud resources and
+IAM resources. Independent inventories confirmed complete module cleanup and
+removal of the disposable test platform. No consumer cleanup script was needed;
+the publisher fixture's scripts only operated and inspected the temporary lab.
 
-The retained canary boot log also showed transport setup failing before policy
-activation. Its actual CAA envelope is rejected by the old positive-index check:
-the upstream allocator legitimately assigns index zero to the first pod.
-The validator now accepts zero-based indices within the VXLAN range. A synthetic
-regression reproduces the rejection before the fix; private replay of the captured
-envelope verifies the narrow correction without publishing transport credentials.
+Software verification covers real COSE/SNP signatures and TLS channel binding,
+OpenRaft elections and replacement, actual software-TPM persistence and fault
+injection, protected tmpfs key installation, Node/Rust owner contracts, controller
+reconciliation, admission TLS rotation and module rendering. Release checks use
+the actual pinned CDH loader/client and Kata policy engine. Anonymous downloads
+verified the published disk/client/container digests and reviewed worker build
+receipts. See the qualification record for exact runs and results.
 
-A controlled test using real OpenRaft reproduces cancellation of a responding
-majority when connection latency exceeds the old five-second RPC budget. The
-revised bounded budget passes that test and still refuses an isolated leader.
-Idle maintenance skips redundant quorum rounds when no protected initialization
-or replacement work exists; authorization continues to require fresh quorum.
-The subsequent candidate includes these quorum and transport corrections.
-
-The same hardware run exposed a cleanup-controller ordering failure: a PeerPod
-finalizer survived removal of its controller. Restoring only cleanup resources
-allowed normal finalization without stripping any finalizer. Independent AWS
-inventories verified removal of all module and disposable test resources.
-The corrected ordering and UID-bound drain pass controller and synthesis tests;
-ordinary deletion without repair remains a required hardware acceptance gate.
-No authority identity, workload keys or default catalog were approved in this run.
-
-A subsequent immutable candidate completes the normal module synchronization
-waves, both imports and interrupted-import recovery. Its three distinct Nitro
-replicas form a stable, freshly attested authority. The released owner client
-publishes a synthetic workload key and rejects unsigned policy changes, signed
-descriptors outside the grant, wrong key commitments, different releases and
-different deployments, each with successful positive controls. A simultaneous
-reboot of all three original instances preserves the protected authority identity
-and recovers a fresh quorum with new guest process keys.
-
-The runtime transport now completes, but the next bootstrap service fails and
-the encrypted canary has not succeeded. Inspection found a definite managed-path
-bug: the key writer expects the protected directory, but received the resource
-filename. A regression executing that actual path on an isolated Linux tmpfs
-fails before the correction and passes afterward. It also checks exact key
-commitments, private file permissions and refusal to overwrite the file with
-unauthorized keys. CI now exercises this path and the existing atomic-write and
-symlink rejection checks. Fixed runtime stage codes identify subsequent startup
-failures without exposing key bytes, boot intent or underlying error text.
-The observed hardware failure had only an unclassified code, so the corrected
-candidate still requires a fresh immutable-appliance run; no default catalog has
-been promoted.
-
-Stopping one authority instance also recovered automatically with its original
-identity and a fresh guest process key. The failed-member replacement test then
-exposed the nested merge-patch issue above: stale instance receipts survived and
-advanced the replacement generation repeatedly. The test controller was paused
-to bound allocations. Regressions reproduce the old behavior, verify removal of
-obsolete receipts across restart/lost replies, and reject stale writers. An
-isolated object in the real Kubernetes API confirms both the old merge behavior
-and the corrected atomic patch, without launching AWS resources. The next
-immutable-appliance run confirms automatic replacement with exactly one new
-generation, one changed voter and the original protected authority identity.
-All-replica reboot and automatic stop/start recovery also pass on that release.
-Losing the quorum and partitioning replica traffic both refuse authorization
-despite fresh attestation. Restoring the original instances or network rule
-recovers the same protected identity and a fresh quorum. Owner publication
-passes again after all five recovery tests. Normal reverse pruning completes
-without stripping finalizers or repairing module resources.
-
-That run still fails the encrypted canary, now with a fixed `runtime-identity`
-diagnostic before policy activation or key release. The deployment tag and
-metadata settings are present. The normalized transport passes its decoding
-round trip, and a synthetic Linux probe confirms the private file remains
-readable across the matching service filesystem sandboxes. These checks do not
-prove which identity operation failed inside that immutable guest.
-
-The runtime previously read its deployment metadata only once. A real local
-HTTP regression reproduces failure when the tag initially returns 404 and later
-becomes available. Startup now retries transient 404/429/5xx, connection and
-timeout failures before activation, with a fresh IMDSv2 token per attempt and
-a fixed sixty-second total budget. Redirects, authorization refusals, malformed
-tokens and oversized responses still fail without retry or fallback. Separate
-fixed codes distinguish reading transport data, decoding Pod identity, fetching
-deployment metadata and validating that identity. The regression passes after
-the change; its exact hardware effect and encrypted execution still require a
-new immutable-appliance run. No default catalog has been promoted.
-
-The next hardware run confirmed automatic runtime-handler admission and mount
-helper installation on a minimal worker. Both image imports and interrupted
-import recovery passed. One initial authority repeatedly failed to generate its
-SNP report; a recorded diagnostic stop/start let it attest and the cohort enroll.
-That intervention invalidates unattended qualification. The ordinary canary
-then reached CDH but failed on an empty registry-credential URI. Bounded initial
-boot recovery and removal of that override address these two failures. The
-release build exercises the pinned CDH config loader and image client against
-empty, missing, valid and unset credential overrides. These corrections still
-require a fresh immutable-appliance run. Normal reverse pruning removed the
-worker helper and all cloud/IAM resources without repairs or finalizer removal;
-independent inventories confirmed cleanup. No catalog was promoted.
-
-Release acceptance requires actual generic authority/runtime boot, three-replica
-attested enrollment, encrypted canary, controller restart during import,
-service restart, preserved-instance reboot/stop-start, failed-member replacement,
-quorum loss refusal, tampered policy/profile refusal and complete owned-resource
-removal. The earlier [hardware experiment](HARDWARE_QUALIFICATION.md) establishes
-local TPM mechanics only; it is not evidence that these new appliances passed.
+This acceptance covers the current release, region and instance profile. It
+does not qualify other firmware profiles or cross-release migration. The
+[earlier hardware experiment](HARDWARE_QUALIFICATION.md) concerns local TPM
+mechanics and is separate from this managed-appliance acceptance. The AWS Nitro
+trust boundary and permanent-quorum-loss behavior described above still apply.
