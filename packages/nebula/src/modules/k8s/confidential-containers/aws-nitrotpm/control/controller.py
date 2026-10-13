@@ -21,6 +21,7 @@ import admission
 from botocore.exceptions import BotoCoreError, ClientError
 from cloud import Cloud, Pending, require
 from kube import Kube, ApiError, credential_environment
+import startup_recovery
 
 FINALIZER = "coco.nebula.io/aws-resources"
 RUNTIME_CLASS = "kata-remote-aws-nitrotpm"
@@ -90,6 +91,25 @@ def inspect_authority(addresses, profile, deployment, identity=None, binary="/us
     return None
 
 
+def probe_authorities(addresses, profile, deployment, binary="/usr/local/bin/aws-trustee-bootstrap"):
+    """Fresh evidence only: successful probes cannot enroll or release keys."""
+    def probe(slot, address):
+        config = {"address": address + ":9444", "profile": profile, "deployment": deployment, "expectedIdentity": None}
+        result = subprocess.run([binary, "--probe-authority"], input=(json.dumps(config) + "\n").encode(),
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=70, check=False)
+        require(result.returncode == 0 and len(result.stdout) <= 128, "startup evidence unavailable")
+        answer = json.loads(result.stdout)
+        require(isinstance(answer, dict) and set(answer) == {"attested"} and
+                answer["attested"] is True, "startup evidence unavailable")
+        return slot
+    attested = set()
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for future in as_completed([pool.submit(probe, slot, address) for slot, address in enumerate(addresses)]):
+            try: attested.add(future.result())
+            except (OSError, ValueError, subprocess.TimeoutExpired): pass
+    return attested
+
+
 def validate_spec(spec, release):
     require(set(spec) == {"deployment", "region", "placement", "genesis", "release"}, "unexpected module settings")
     require(spec["release"] == release["id"] and release["version"] == 1, "controller/release mismatch")
@@ -110,9 +130,10 @@ def validate_spec(spec, release):
 
 
 class Controller:
-    def __init__(self, kube, name, release, session_factory, verifier=inspect_authority):
+    def __init__(self, kube, name, release, session_factory, verifier=inspect_authority, startup_probe=probe_authorities):
         self.kube, self.name, self.release = kube, name, release
         self.session_factory, self.verifier = session_factory, verifier
+        self.startup_probe = startup_probe
         self.path = f"/apis/coco.nebula.io/v1alpha1/namespaces/{kube.namespace}/awsconfidentialruntimes/{name}"
         self.obj = None
 
@@ -340,13 +361,17 @@ class Controller:
             # One replacement per pass, and only while a fresh quorum confirms
             # its protected uniform membership. Initial creation needs no key.
             replaced = False
+            instances = []
             for slot, interface in enumerate(interfaces):
                 member = next((peer for peer in health["voters"].values() if peer.get("address") == interface["PrivateIpAddress"] + ":9443"), None) if health else None
                 instance = cloud.authority(slot, interface, images["authority"], common, cursors,
                     allow_replace=stable and not replaced, previous_peer=member.get("publicKey") if member else None)
                 cloud.attach_state(instance)
+                instances.append(instance)
                 if instance.get("NebulaReplacement"): replaced = True
             template = cloud.runtime_template(images["runtime"], subnets[0]["SubnetId"], runtime_group, common["runtimeProfiles"][0]["release"])
+            startup_recovery.recover(cloud, instances, cursors,
+                lambda: self.startup_probe(addresses, common["authorityProfile"], spec["deployment"]))
             if not stable: raise Pending("WaitingForAuthorityQuorum")
             cloud.collect_retired(interfaces, health, cursors)
             values = {"AWS_REGION": spec["region"], "AWS_SUBNET_ID": subnets[0]["SubnetId"], "AWS_SG_IDS": runtime_group,

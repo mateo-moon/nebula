@@ -88,6 +88,9 @@ export class ManagedAwsCoco extends Construct {
       "ec2:CreateLaunchTemplate", "ec2:DeleteLaunchTemplate"];
     const privileges = {
       controller: [read, terminate, pass, allowed(controllerActions, "*", regional),
+        allowed(["ec2:StopInstances"], `arn:aws:ec2:${region}:*:instance/*`, {
+          ...tagged, StringLike: { "ec2:ResourceTag/NebulaCocoComponent": "authority-*" },
+        }),
         allowed(["iam:GetInstanceProfile"], `arn:aws:iam::*:instance-profile/${guestName}`),
         allowed(["ebs:StartSnapshot", "ebs:PutSnapshotBlock", "ebs:CompleteSnapshot"], `arn:aws:ec2:${region}::snapshot/*`, regional),
         allowed(["s3:CreateBucket", "s3:PutBucketOwnershipControls", "s3:GetBucketTagging", "s3:PutBucketTagging", "s3:PutBucketPublicAccessBlock", "s3:PutEncryptionConfiguration", "s3:ListBucket", "s3:DeleteBucket"], `arn:aws:s3:::${this.name}-*`),

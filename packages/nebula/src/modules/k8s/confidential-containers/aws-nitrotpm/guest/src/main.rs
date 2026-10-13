@@ -2,7 +2,13 @@
 async fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() == 1
-        && ["--owner-channel", "--inspect-authority", "--canary-intent"].contains(&args[0].as_str())
+        && [
+            "--owner-channel",
+            "--inspect-authority",
+            "--probe-authority",
+            "--canary-intent",
+        ]
+        .contains(&args[0].as_str())
     {
         if aws_trustee_bootstrap::owner_client::run(&args[0])
             .await

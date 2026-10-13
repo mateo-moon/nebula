@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from check_cdh_config import check_config as check_cdh_config
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -117,6 +118,11 @@ def binaries(source, work):
     run("cargo", "build", "--locked", "--release", "--manifest-path", components / "confidential-data-hub/hub/Cargo.toml",
         "--no-default-features", "--features", "bin,ttrpc", "--bin", "ttrpc-cdh", env=env)
     copy("confidential-data-hub", target / "release/ttrpc-cdh", GUEST_COMPONENTS)
+    # Test the actual pinned config loader and lazy image client, including
+    # the inherited empty-URI regression, before publishing either appliance.
+    run("cargo", "build", "--locked", "--release", "--manifest-path", components / "confidential-data-hub/hub/Cargo.toml",
+        "--no-default-features", "--features", "bin,ttrpc", "--bin", "cdh-oneshot", env=env)
+    check_cdh_config(target / "release/cdh-oneshot", source)
     run("go", "build", "-trimpath", "-buildvcs=true", "-o", out / "agent-protocol-forwarder", "./cmd/agent-protocol-forwarder",
         cwd=caa / "src/cloud-api-adaptor", env={"GOOS": "linux", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOTOOLCHAIN": "local"})
     revisions["agent-protocol-forwarder"] = {"path": str(out / "agent-protocol-forwarder"), "sha256": sha(out / "agent-protocol-forwarder"), "revision": CAA_REVISION}

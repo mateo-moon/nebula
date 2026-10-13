@@ -40,6 +40,10 @@ existing system helper and removes its own helper during ordinary deletion.
 No worker package installation is required. Inside each measured PodVM, systemd
 starts CDH and waits for its Unix listener before Kata connects to it. Kata does
 not launch another attestation agent or key service.
+The CDH service removes the upstream registry-credential override entirely:
+an empty override is still a file URI to the pinned CDH config loader. Anonymous
+public pulls use the released configuration, while image decryption keys retain
+their separate protected filesystem path.
 
 ## Where the automatic steps happen
 
@@ -124,6 +128,15 @@ CAA/cleanup, while the controller reads its projected credential files afresh.
 Git declares static CAA settings only. Discovered cloud IDs and rollout stamps
 belong to the controller, so normal GitOps reconciliation preserves them without
 requiring application-level ignore rules.
+
+Before initial authority enrollment, a replica that still cannot produce fresh
+valid evidence after five minutes can be stopped and started automatically.
+Recovery preserves its instance, NitroTPM, state disk, interface and generation.
+The controller checkpoints the exact target and attempt budget before stopping
+one replica at a time, with at most two attempts per replica. Lost replies resume
+the same intent. After enrollment, this startup recovery path is disabled.
+An attested probe grants no membership or key access; enrollment still requires
+the normal fresh quorum, and exhausted recovery leaves the module unready.
 
 Checkpoints atomically replace the status after testing its current Kubernetes
 resource version. An omitted retired instance or failed-import receipt is
@@ -290,6 +303,19 @@ fixed codes distinguish reading transport data, decoding Pod identity, fetching
 deployment metadata and validating that identity. The regression passes after
 the change; its exact hardware effect and encrypted execution still require a
 new immutable-appliance run. No default catalog has been promoted.
+
+The next hardware run confirmed automatic runtime-handler admission and mount
+helper installation on a minimal worker. Both image imports and interrupted
+import recovery passed. One initial authority repeatedly failed to generate its
+SNP report; a recorded diagnostic stop/start let it attest and the cohort enroll.
+That intervention invalidates unattended qualification. The ordinary canary
+then reached CDH but failed on an empty registry-credential URI. Bounded initial
+boot recovery and removal of that override address these two failures. The
+release build exercises the pinned CDH config loader and image client against
+empty, missing, valid and unset credential overrides. These corrections still
+require a fresh immutable-appliance run. Normal reverse pruning removed the
+worker helper and all cloud/IAM resources without repairs or finalizer removal;
+independent inventories confirmed cleanup. No catalog was promoted.
 
 Release acceptance requires actual generic authority/runtime boot, three-replica
 attested enrollment, encrypted canary, controller restart during import,

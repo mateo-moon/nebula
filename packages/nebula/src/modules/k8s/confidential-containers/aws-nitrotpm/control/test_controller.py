@@ -161,6 +161,43 @@ class ControllerTests(unittest.TestCase):
         controller.peer_config.assert_not_called()
         controller.canary.assert_not_called()
 
+    def test_startup_recovery_cannot_substitute_for_quorum_enrollment(self):
+        kube, controller, cloud, _ = self.setup_controller()
+        controller.startup_probe = MagicMock(return_value={0, 2})
+        cloud.checkpoint.side_effect = controller.checkpoint
+        def authority(slot, _interface, _image, _common, cursors, **_kwargs):
+            instance = {"InstanceId": f"instance-{slot}", "State": {"Name": "running"},
+                "LaunchTime": datetime.now(timezone.utc) - timedelta(seconds=600)}
+            cursors.setdefault("authorities", {})[str(slot)] = {"instance": instance["InstanceId"], "volume": f"state-{slot}", "generation": 0}
+            return instance
+        cloud.authority.side_effect = authority
+        with patch.object(reconciler, "Cloud", return_value=cloud): controller.reconcile()
+        self.assertEqual(kube.obj["status"]["phase"], "RecoveringAuthorityStartup")
+        self.assertNotIn("authorityIdentity", kube.obj["status"]["cursors"])
+        cloud.ec2.stop_instances.assert_called_once_with(InstanceIds=["instance-1"])
+        self.assertEqual(kube.obj["status"]["cursors"]["startupRecovery"]["attempts"], {"1": 1})
+        controller.startup_probe.assert_called_once()
+        controller.peer_config.assert_not_called()
+        controller.canary.assert_not_called()
+        self.assertTrue(all(not call.kwargs["allow_replace"] for call in cloud.authority.call_args_list))
+
+    def test_startup_probe_requires_exact_success_from_the_real_verifier_process(self):
+        from subprocess import CompletedProcess
+        answers = {"192.0.2.1:9444": (0, b'{"attested":true}'),
+                   "192.0.2.2:9444": (1, b'{"attested":true}'),
+                   "192.0.2.3:9444": (0, b'{"attested":1}')}
+        def process(args, **kwargs):
+            self.assertEqual(args, ["verifier", "--probe-authority"])
+            config = json.loads(kwargs["input"])
+            self.assertEqual(config["profile"], {"release": "a" * 64})
+            self.assertEqual(config["deployment"], "b" * 64)
+            self.assertIsNone(config["expectedIdentity"])
+            code, output = answers[config["address"]]
+            return CompletedProcess(args, code, stdout=output)
+        with patch.object(reconciler.subprocess, "run", side_effect=process):
+            self.assertEqual(reconciler.probe_authorities([f"192.0.2.{i}" for i in [1, 2, 3]],
+                {"release": "a" * 64}, "b" * 64, "verifier"), {0})
+
     def test_quorum_then_config_then_canary_controls_readiness(self):
         health = {"voters": {str(i): {} for i in range(3)}, "joint": False, "replacing": False,
                   "status": {"authorityIdentity": "d" * 64}}

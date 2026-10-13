@@ -105,6 +105,14 @@ The guest's systemd-owned CDH must accept a Unix connection before Kata starts.
 The immutable agent configuration selects `guest_components_procs = "none"`:
 Kata initializes its CDH client without trying to launch unshipped AA/REST
 services. Missing or stale listeners time out with a fixed startup diagnostic.
+The service uses `UnsetEnvironment` to remove the upstream registry-credential
+override; setting it to an empty string still requests a local file in the
+pinned CDH. `check_cdh_config.py` runs that actual config loader and image client
+through `cdh-oneshot` during every appliance build. Empty and missing-file
+overrides must fail initialization; a valid file and the released unset setting
+must reach image-reference validation. The deliberately invalid image reference
+prevents registry access, and this test needs no workload keys. The test-only
+executable is not included in the appliance.
 
 `complete.py` verifies the worker receipts and assembles `catalog.candidate.json` from real disk/client receipts
 and the published controller digest. Hardware qualification promotes those exact

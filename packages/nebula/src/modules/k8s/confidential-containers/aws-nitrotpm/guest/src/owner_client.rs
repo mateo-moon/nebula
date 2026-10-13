@@ -50,6 +50,21 @@ pub async fn run(mode: &str) -> Result<()> {
     );
     let (peer, mut channel) =
         evidence::connect_publisher(config.address, &config.profile, &config.deployment).await?;
+    ensure!(
+        config
+            .expected_identity
+            .as_ref()
+            .is_none_or(|id| *id == peer.claims().authority_identity),
+        "authority identity changed"
+    );
+    if mode == "--probe-authority" {
+        // A fresh, fully verified handshake can diagnose a booting replica
+        // before a quorum exists. It grants no membership or key access.
+        let mut output = std::io::stdout().lock();
+        output.write_all(b"{\"attested\":true}\n")?;
+        output.flush()?;
+        return Ok(());
+    }
     let request = match mode {
         "--inspect-authority" => OwnerRequest::Health,
         "--canary-intent" => OwnerRequest::Canary,

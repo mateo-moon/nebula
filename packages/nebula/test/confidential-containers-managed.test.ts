@@ -76,6 +76,13 @@ test("managed mode owns provisioning and credential bridges without synthesizing
   const guestPolicy = objects.find(value => value.kind === "Policy" && value.metadata.name.endsWith("guest-boot"))!;
   assert.deepEqual(JSON.parse(guestPolicy.spec.forProvider.policy).Statement[0].Action, ["s3:GetObject"]);
   const controllerPolicy = objects.find(value => value.kind === "Policy" && value.metadata.name.endsWith("controller-policy"))!;
+  const restartPolicy = JSON.parse(controllerPolicy.spec.forProvider.policy).Statement.filter((statement: any) => statement.Action.includes("ec2:StopInstances"));
+  assert.equal(restartPolicy.length, 1);
+  assert.equal(restartPolicy[0].Resource, "arn:aws:ec2:eu-west-1:*:instance/*");
+  assert.deepEqual(restartPolicy[0].Condition, {
+    StringEquals: { "aws:RequestedRegion": "eu-west-1", "ec2:ResourceTag/NebulaCocoDeployment": runtime.spec.deployment },
+    StringLike: { "ec2:ResourceTag/NebulaCocoComponent": "authority-*" },
+  });
   const bucketPolicy = JSON.parse(controllerPolicy.spec.forProvider.policy).Statement.find((statement: any) => statement.Action.includes("s3:CreateBucket"));
   assert.ok(bucketPolicy.Action.includes("s3:PutBucketOwnershipControls"), "AWS requires ownership permission with BucketOwnerEnforced creation");
   const cm = objects.find(value => value.kind === "ConfigMap" && value.metadata.name === "peer-pods-cm")!;
