@@ -54,10 +54,19 @@ jobs:
               sleep "$((attempt * 15))"
             done
           done
+      - name: Install verified Kyverno chart and CLI for offline policy qualification
+        run: |
+          curl --fail --location --retry 3 https://kyverno.github.io/kyverno/kyverno-3.9.1.tgz --output "$RUNNER_TEMP/kyverno-3.9.1.tgz"
+          printf '7b7fe51a431b5b133b0ce7eb9dcb222b6a37fb967c163223cf480054ad14d752  %s\n' "$RUNNER_TEMP/kyverno-3.9.1.tgz" | sha256sum --check
+          curl --fail --location --retry 3 https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz --output "$RUNNER_TEMP/kyverno-cli.tar.gz"
+          printf 'b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  %s\n' "$RUNNER_TEMP/kyverno-cli.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/kyverno-cli.tar.gz" -C "$RUNNER_TEMP" kyverno
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
+          KYVERNO_CHART_ARCHIVE: ${{ runner.temp }}/kyverno-3.9.1.tgz
+          KYVERNO_CLI: ${{ runner.temp }}/kyverno
         run: pnpm test
       - run: pnpm exec tsc --noEmit
       - name: Real Envoy mutual TLS qualification
