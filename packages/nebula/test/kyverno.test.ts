@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,18 +8,14 @@ import { createHash } from "node:crypto";
 import { Testing, Yaml } from "cdk8s";
 import { parseAllDocuments } from "yaml";
 import {
-  Kyverno, KyvernoClusterPolicy, kyvernoValues, namespaceRoleBindingPolicy,
+  Kyverno, KyvernoPolicy, kyvernoValues,
   KYVERNO_CHART_REPOSITORY, KYVERNO_CHART_VERSION,
-  type KyvernoConfig,
+  type KyvernoConfig, type KyvernoPolicyConfig,
 } from "../src";
 
-const example = () => namespaceRoleBindingPolicy({
-  name: "workload-developers", matchLabels: { "example.com/class": "workload" },
-  bindingName: "kyverno-developers", clusterRoleName: "edit",
-  subjects: [{ kind: "Group", name: "example-developers" }],
-});
+import { defaultPodLabels, namespaceAccessPermissions, namespaceAccessPolicy, requirePodTeamLabel } from "../example/kyverno-policies";
 
-function captureHelm(config: KyvernoConfig = {}) {
+function captureHelm(config: KyvernoConfig = {}, compose?: (module: Kyverno) => void) {
   const directory = mkdtempSync(join(tmpdir(), "kyverno-helm-"));
   const previousPath = process.env.PATH;
   const valuesFile = join(directory, "values.yaml");
@@ -35,6 +31,7 @@ fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(args));
   try {
     const chart = Testing.chart();
     const module = new Kyverno(chart, "kyverno", config);
+    compose?.(module);
     return { module, resources: Testing.synth(chart), values: Yaml.load(valuesFile)[0], args: JSON.parse(readFileSync(argsFile, "utf8")) as string[] };
   } finally {
     process.env.PATH = previousPath;
@@ -63,7 +60,8 @@ test("installation is pinned, creates its namespace, and has no implicit policy 
 });
 
 test("custom installation, policy specs and deep Helm overrides reach synthesis", () => {
-  const policy = { name: "custom-policy", labels: { team: "example" }, annotations: { "argocd.argoproj.io/sync-wave": "3" },
+  const policy = { apiVersion: "kyverno.io/v1", kind: "ClusterPolicy",
+    metadata: { name: "custom-policy", labels: { team: "example" }, annotations: { "argocd.argoproj.io/sync-wave": "3" } },
     spec: { background: false, rules: [{ name: "example-rule", match: { any: [{ resources: { kinds: ["Pod"] } }] }, validate: { message: "Label required", pattern: { metadata: { labels: { team: "?*" } } } } }] } };
   const { resources, args, values, module } = captureHelm({
     namespace: "policy-system", releaseName: "policy-engine", version: "3.9.0", repository: "https://charts.example.com/",
@@ -84,51 +82,72 @@ test("custom installation, policy specs and deep Helm overrides reach synthesis"
   assert.equal(module.policies.length, 1);
 });
 
-test("generation permissions grant RoleBinding lifecycle and bind only the selected ClusterRoles", () => {
-  const additional = { apiGroups: [""], resources: ["configmaps"], verbs: ["create", "update", "delete"] };
-  const { values } = captureHelm({ roleBindingClusterRoles: ["edit", "view", "edit"], backgroundControllerExtraRules: [additional] });
-  assert.deepEqual(values.backgroundController.rbac.clusterRole.extraResources, [additional, {
-    apiGroups: ["rbac.authorization.k8s.io"], resources: ["rolebindings"],
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"],
-  }, {
-    apiGroups: ["rbac.authorization.k8s.io"], resources: ["clusterroles"], verbs: ["bind"], resourceNames: ["edit", "view"],
-  }]);
-  for (const role of ["", "  ", "*", "team-*"]) {
-    assert.throws(() => kyvernoValues({ roleBindingClusterRoles: [role] }), /explicit ClusterRole/);
+test("generic RBAC reaches each controller without deriving permissions from policies", () => {
+  const rules = {
+    admission: [{ apiGroups: [""], resources: ["configmaps"], verbs: ["get"] }],
+    background: namespaceAccessPermissions,
+    cleanup: [{ apiGroups: ["apps"], resources: ["deployments"], verbs: ["get", "list", "delete"] }],
+    reports: [{ apiGroups: ["example.com"], resources: ["widgets"], verbs: ["get", "list", "watch"] }],
+  };
+  const { values } = captureHelm({ controllerExtraRules: rules });
+  for (const controller of ["admission", "background", "cleanup", "reports"] as const) {
+    assert.deepEqual(values[`${controller}Controller`].rbac.clusterRole.extraResources, rules[controller]);
+  }
+  assert.equal(values.cleanupController.enabled, false, "permissions do not implicitly enable services");
+});
+
+test("native policy kinds, scopes and arbitrary specs pass through without a rules requirement", () => {
+  const manifests: KyvernoPolicyConfig[] = [
+    { apiVersion: "kyverno.io/v1", kind: "Policy", metadata: { name: "namespaced", namespace: "team-a", labels: { team: "example" } }, spec: defaultPodLabels.spec },
+    { apiVersion: "policies.kyverno.io/v1", kind: "ValidatingPolicy", metadata: { name: "cel-validation" }, spec: { validations: [{ expression: "true", message: "example" }] } },
+    { apiVersion: "policies.kyverno.io/v1", kind: "GeneratingPolicy", metadata: { name: "cel-generation" }, spec: { generate: [{ expression: "generator.Apply('example', [])" }] } },
+    { apiVersion: "policies.kyverno.io/v1", kind: "MutatingPolicy", metadata: { name: "cel-mutation" }, spec: { mutations: [{ patchType: "JSONPatch", jsonPatch: { expression: "[]" } }] } },
+    { apiVersion: "kyverno.io/v2", kind: "CleanupPolicy", metadata: { name: "cleanup", namespace: "team-a" }, spec: { schedule: "0 * * * *", match: { any: [{ resources: { kinds: ["Pod"] } }] } } },
+    { apiVersion: "kyverno.io/v2", kind: "PolicyException", metadata: { name: "exception", namespace: "team-a" }, spec: { exceptions: [{ policyName: "example", ruleNames: ["rule"] }] } },
+    { apiVersion: "policies.kyverno.io/v99alpha1", kind: "FuturePolicy", metadata: { name: "future", annotations: { "argocd.argoproj.io/sync-wave": "5" }, finalizers: ["example.com/retain"] }, spec: { futureField: { nested: ["unchanged"] } } },
+  ];
+  // This is passthrough qualification, not schema validation of these fixtures.
+  const { resources, module } = captureHelm({ policies: manifests });
+  assert.equal(module.policies.length, manifests.length);
+  for (const manifest of manifests) {
+    const rendered = resources.find(resource => resource.metadata.name === manifest.metadata.name);
+    assert.deepEqual(rendered, {
+      ...manifest,
+      metadata: { ...manifest.metadata, annotations: { "argocd.argoproj.io/sync-wave": "1", ...manifest.metadata.annotations } },
+    });
   }
 });
 
-test("namespace classification drives synchronized grants, backfill and retention on policy removal", () => {
+test("policies can be added on demand from TypeScript and multi-document YAML before synthesis", () => {
+  const directory = mkdtempSync(join(tmpdir(), "kyverno-yaml-"));
+  try {
+    const file = join(directory, "policies.yaml");
+    writeFileSync(file, [defaultPodLabels, namespaceAccessPolicy].map(manifest => Yaml.stringify(manifest)).join("---\n"));
+    let added: KyvernoPolicy | undefined;
+    const { resources, module } = captureHelm({ policies: [requirePodTeamLabel] }, engine => {
+      Yaml.load(file).forEach((manifest, index) => { added = engine.addPolicy(`loaded-${index}`, manifest); });
+    });
+    assert.ok(added instanceof KyvernoPolicy);
+    assert.equal(module.policies.length, 3);
+    assert.deepEqual(resources.filter(resource => resource.kind === "ClusterPolicy").map(resource => resource.spec), [requirePodTeamLabel.spec, defaultPodLabels.spec, namespaceAccessPolicy.spec]);
+    assert.equal(resources.some(resource => resource.kind === "RoleBinding"), false);
+    assert.deepEqual((kyvernoValues() as any).backgroundController.rbac.clusterRole.extraResources, []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("standalone policy composition requires no installation or Helm invocation", () => {
   const chart = Testing.chart();
-  new KyvernoClusterPolicy(chart, "access", example());
+  new KyvernoPolicy(chart, "access", namespaceAccessPolicy);
   const [policy] = Testing.synth(chart);
+  assert.deepEqual(policy.spec, namespaceAccessPolicy.spec);
   const [rule] = policy.spec.rules;
-  assert.deepEqual(rule.match, { any: [{ resources: { kinds: ["Namespace"], selector: { matchLabels: { "example.com/class": "workload" } } } }] });
-  assert.equal(rule.preconditions, undefined);
-  assert.equal(rule.match.any[0].resources.operations, undefined, "do not restrict updates required for revocation");
   assert.equal(rule.generate.generateExisting, true);
   assert.equal(rule.generate.synchronize, true);
   assert.equal(rule.generate.orphanDownstreamOnPolicyDelete, true);
-  assert.equal(rule.generate.namespace, "{{ request.object.metadata.name }}");
-  assert.equal(rule.generate.name, "kyverno-developers");
-  assert.deepEqual(rule.generate.data.roleRef, { apiGroup: "rbac.authorization.k8s.io", kind: "ClusterRole", name: "edit" });
-  assert.deepEqual(rule.generate.data.subjects, [{ kind: "Group", name: "example-developers", apiGroup: "rbac.authorization.k8s.io" }]);
-  assert.equal(policy.metadata.annotations["argocd.argoproj.io/sync-wave"], "1");
-  assert.equal(policy.spec.background, true);
-  assert.deepEqual(Testing.synth(chart).map(resource => resource.kind), ["ClusterPolicy"], "never synthesize grants or change existing bindings directly");
-});
-
-test("subjects support users and service accounts; empty classification or subjects are refused", () => {
-  const input = { name: "access", bindingName: "access", clusterRoleName: "view", matchLabels: { class: "workload" },
-    subjects: [{ kind: "ServiceAccount" as const, name: "reader", namespace: "automation" }, { kind: "User" as const, name: "example-user" }] };
-  const chart = Testing.chart();
-  new KyvernoClusterPolicy(chart, "access", namespaceRoleBindingPolicy(input));
-  assert.deepEqual(Testing.synth(chart)[0].spec.rules[0].generate.data.subjects, [
-    { kind: "ServiceAccount", name: "reader", namespace: "automation", apiGroup: "" },
-    { kind: "User", name: "example-user", apiGroup: "rbac.authorization.k8s.io" },
-  ]);
-  assert.throws(() => namespaceRoleBindingPolicy({ ...input, matchLabels: {} }), /classification/);
-  assert.throws(() => namespaceRoleBindingPolicy({ ...input, subjects: [] }), /subjects/);
+  assert.equal(rule.preconditions, undefined);
+  assert.deepEqual(rule.match.any[0].resources.selector.matchLabels, { "example.com/namespace-class": "workload" });
 });
 
 test("pinned upstream chart renders CRDs, controllers and correctly aggregated background RBAC", {
@@ -139,7 +158,7 @@ test("pinned upstream chart renders CRDs, controllers and correctly aggregated b
   const directory = mkdtempSync(join(tmpdir(), "kyverno-render-"));
   try {
     const valuesFile = join(directory, "values.yaml");
-    writeFileSync(valuesFile, Yaml.stringify(kyvernoValues({ roleBindingClusterRoles: ["edit"] })));
+    writeFileSync(valuesFile, Yaml.stringify(kyvernoValues({ controllerExtraRules: { background: namespaceAccessPermissions } })));
     const output = execFileSync("helm", ["template", "policy-engine", archive, "--namespace", "policy-system", "-f", valuesFile], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
     const resources = parseAllDocuments(output).map(document => document.toJSON());
     const deployments = resources.filter(resource => resource.kind === "Deployment");
@@ -152,7 +171,7 @@ test("pinned upstream chart renders CRDs, controllers and correctly aggregated b
     const roles = resources.filter(resource => resource.kind === "ClusterRole");
     const extra = roles.find(resource => resource.metadata.name === "policy-engine-kyverno:background-controller:additional");
     assert.ok(extra, "chart must consume additional RBAC values");
-    assert.deepEqual(extra.rules, (kyvernoValues({ roleBindingClusterRoles: ["edit"] }) as any).backgroundController.rbac.clusterRole.extraResources);
+    assert.deepEqual(extra.rules, (kyvernoValues({ controllerExtraRules: { background: namespaceAccessPermissions } }) as any).backgroundController.rbac.clusterRole.extraResources);
     const aggregate = roles.find(resource => resource.metadata.name === "policy-engine-kyverno:background-controller");
     assert.ok(aggregate.aggregationRule.clusterRoleSelectors.some((selector: any) => Object.entries(selector.matchLabels).every(([key, value]) => extra.metadata.labels[key] === value)));
     const binding = resources.find(resource => resource.kind === "ClusterRoleBinding" && resource.metadata.name === aggregate.metadata.name);
@@ -173,15 +192,15 @@ test("pinned Kyverno engine generates grants only for matching namespace classif
   const directory = mkdtempSync(join(tmpdir(), "kyverno-policy-"));
   try {
     const chart = Testing.chart();
-    new KyvernoClusterPolicy(chart, "access", example());
+    new KyvernoPolicy(chart, "access", namespaceAccessPolicy);
     const policyFile = join(directory, "policy.yaml");
     const resourceFile = join(directory, "namespaces.yaml");
     const outputFile = join(directory, "generated.yaml");
     writeFileSync(policyFile, Yaml.stringify(Testing.synth(chart)[0]));
     writeFileSync(resourceFile, [
-      { name: "new-workload", labels: { "example.com/class": "workload" } },
-      { name: "existing-workload", labels: { "example.com/class": "workload" }, creationTimestamp: "2020-01-01T00:00:00Z" },
-      { name: "system", labels: { "example.com/class": "system" } },
+      { name: "new-workload", labels: { "example.com/namespace-class": "workload" } },
+      { name: "existing-workload", labels: { "example.com/namespace-class": "workload" }, creationTimestamp: "2020-01-01T00:00:00Z" },
+      { name: "system", labels: { "example.com/namespace-class": "system" } },
       { name: "unclassified" },
     ].map(metadata => Yaml.stringify({ apiVersion: "v1", kind: "Namespace", metadata })).join("---\n"));
     const result = execFileSync(cli, ["apply", policyFile, "--resource", resourceFile, "--output", outputFile], { encoding: "utf8" });
@@ -189,10 +208,40 @@ test("pinned Kyverno engine generates grants only for matching namespace classif
     const generated = Yaml.load(outputFile).filter(resource => resource.kind === "RoleBinding");
     assert.deepEqual(generated.map(resource => resource.metadata.namespace).sort(), ["existing-workload", "new-workload"]);
     for (const resource of generated) {
-      assert.equal(resource.metadata.name, "kyverno-developers");
+      assert.equal(resource.metadata.name, "kyverno-workload-developers");
       assert.deepEqual(resource.roleRef, { apiGroup: "rbac.authorization.k8s.io", kind: "ClusterRole", name: "edit" });
       assert.deepEqual(resource.subjects, [{ kind: "Group", name: "example-developers", apiGroup: "rbac.authorization.k8s.io" }]);
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("pinned engine evaluates caller-owned validation and mutation policies", {
+  skip: !process.env.KYVERNO_CLI,
+}, () => {
+  const cli = process.env.KYVERNO_CLI!;
+  const directory = mkdtempSync(join(tmpdir(), "kyverno-general-policies-"));
+  try {
+    const policyFile = join(directory, "policy.yaml");
+    const resourceFile = join(directory, "pods.yaml");
+    const outputFile = join(directory, "mutated.yaml");
+    const pod = (name: string, labels: Record<string, string>) => ({
+      apiVersion: "v1", kind: "Pod", metadata: { name, namespace: "example-team", labels },
+      spec: { containers: [{ name: "app", image: "nginx:1.27" }] },
+    });
+    writeFileSync(policyFile, Yaml.stringify(requirePodTeamLabel));
+    writeFileSync(resourceFile, [pod("valid", { team: "example" }), pod("invalid", {})].map(resource => Yaml.stringify(resource)).join("---\n"));
+    const validation = spawnSync(cli, ["apply", policyFile, "--resource", resourceFile], { encoding: "utf8" });
+    assert.equal(validation.status, 1);
+    assert.match(validation.stdout, /pass: 1/);
+    assert.match(validation.stdout, /fail: 1/);
+    writeFileSync(policyFile, Yaml.stringify(defaultPodLabels));
+    writeFileSync(resourceFile, Yaml.stringify(pod("valid", { team: "example" })));
+    execFileSync(cli, ["apply", policyFile, "--resource", resourceFile, "--output", outputFile], { encoding: "utf8" });
+    const [mutated] = Yaml.load(outputFile);
+    assert.deepEqual(mutated.metadata.labels, { team: "example", "example.com/managed": "true" });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

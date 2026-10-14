@@ -1,20 +1,14 @@
 import { App, Chart } from "cdk8s";
-import { Kyverno, namespaceRoleBindingPolicy } from "../src/modules/k8s/kyverno";
+import { Kyverno } from "../src/modules/k8s/kyverno";
+import { defaultPodLabels, namespaceAccessPermissions, namespaceAccessPolicy, requirePodTeamLabel } from "./kyverno-policies";
 
-// Synthesis only. Deployment repositories own identities and classification.
-export function kyvernoExample(chart: Chart): Kyverno {
-  return new Kyverno(chart, "kyverno", {
-    roleBindingClusterRoles: ["edit"],
-    policies: [namespaceRoleBindingPolicy({
-      name: "developer-workload-access",
-      matchLabels: { "example.com/namespace-class": "workload" },
-      bindingName: "kyverno-workload-developers",
-      clusterRoleName: "edit",
-      subjects: [{ kind: "Group", name: "example-developers" }],
-    })],
-  });
-}
-
+// Synthesis only. Deployment repositories own their policies and permissions.
 const app = new App();
-kyvernoExample(new Chart(app, "kyverno-example"));
+const chart = new Chart(app, "kyverno-example");
+const kyverno = new Kyverno(chart, "kyverno", {
+  controllerExtraRules: { background: namespaceAccessPermissions },
+  policies: [requirePodTeamLabel],
+});
+kyverno.addPolicy("default-labels", defaultPodLabels);
+kyverno.addPolicy("namespace-access", namespaceAccessPolicy);
 app.synth();

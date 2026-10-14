@@ -1,153 +1,168 @@
 # Kyverno
 
-`Kyverno` renders the upstream Helm chart **3.9.1**, running Kyverno **v1.19.1**.
-It follows Nebula's `HelmModule` conventions: a namespace, a pinned chart, and
-deep-merged caller values. Import from `nebula-cdk8s`.
+`Kyverno` installs the pinned upstream Helm chart **3.9.1** (Kyverno **v1.19.1**).
+Policies belong to the deployment repository and use native Kyverno manifests.
+Add policies whenever needed without changing Nebula or adding policy-specific
+options to the installation module.
 
 ```typescript
-import { Kyverno, namespaceRoleBindingPolicy } from "nebula-cdk8s";
+import { Kyverno } from "nebula-cdk8s";
+import { requirePodTeamLabel, defaultPodLabels } from "./policies";
 
-new Kyverno(chart, "policy-engine", {
-  namespace: "policy-system",
-  roleBindingClusterRoles: ["edit"],
-  policies: [namespaceRoleBindingPolicy({
-    name: "developer-workload-access",
-    matchLabels: { "example.com/namespace-class": "workload" },
-    bindingName: "kyverno-workload-developers",
-    clusterRoleName: "edit",
-    subjects: [{ kind: "Group", name: "example-developers" }],
-  })],
+const kyverno = new Kyverno(chart, "policy-engine", {
+  policies: [requirePodTeamLabel],
+});
+kyverno.addPolicy("default-pod-labels", defaultPodLabels);
+```
+
+Both `policies` and `addPolicy(id, manifest)` accept `KyvernoPolicyConfig`:
+
+```typescript
+{
+  apiVersion: "kyverno.io/v1",
+  kind: "ClusterPolicy",
+  metadata: { name: "require-team" },
+  spec: {
+    validationFailureAction: "Enforce",
+    rules: [{
+      name: "require-team",
+      match: { any: [{ resources: { kinds: ["Pod"] } }] },
+      validate: {
+        message: "Pods must declare a team label",
+        pattern: { metadata: { labels: { team: "?*" } } },
+      },
+    }],
+  },
+}
+```
+
+The module passes through `apiVersion`, `kind`, metadata and the complete spec.
+There is no kind allowlist or mandatory `spec.rules`: cluster and namespaced
+policies, CEL policies, cleanup policies and exceptions use the same API. The
+installed Kyverno version must support each supplied CRD and spec. Nebula does
+not infer policy scope, rewrite rules or enable a service based on a policy.
+Set `metadata.namespace` explicitly for namespaced resources.
+
+## Load policies from files or declare them independently
+
+Keep policies in TypeScript modules, import JSON, or load standard multi-document
+YAML with cdk8s. Compose them before `app.synth()`:
+
+```typescript
+import { Yaml, type Chart } from "cdk8s";
+import { KyvernoPolicy, type KyvernoPolicyConfig } from "nebula-cdk8s";
+
+Yaml.load("policies/security.yaml").forEach((manifest, index) => {
+  kyverno.addPolicy(`security-${index}`, manifest as KyvernoPolicyConfig);
+});
+
+// A separate policy application can use an existing Kyverno installation.
+new KyvernoPolicy(policyChart, "team-policy", {
+  apiVersion: "kyverno.io/v1",
+  kind: "Policy",
+  metadata: { name: "team-policy", namespace: "example-team" },
+  spec: teamPolicySpec,
 });
 ```
 
-The labels, identities, role and binding name above are illustrative. The caller
-owns them. The role must already exist. Use a dedicated ClusterRole when the
-built-in `edit` role is broader than the intended developer access.
+`addPolicy()` returns the created `KyvernoPolicy` resource. `kyverno.policies`
+includes both constructor-supplied and subsequently added resources. This API
+composes manifests; GitOps applies additions and updates after synthesis.
 
-## Installation and configuration
+## Installation and permissions
 
 | Option | Default / purpose |
 | --- | --- |
-| `namespace` | `kyverno`; created by the construct. |
-| `releaseName` | `kyverno`; upstream chart naming conventions apply. |
-| `version` | Exact chart version `3.9.1`; override for a qualified upgrade. |
+| `namespace` | `kyverno`; created in Argo CD wave `-1`. |
+| `releaseName` | `kyverno`; upstream naming conventions apply. |
+| `version` | Exact chart version `3.9.1`; configurable for qualified upgrades. |
 | `repository` | `https://kyverno.github.io/kyverno/`. |
-| `roleBindingClusterRoles` | Empty; explicitly authorize RoleBinding generation for named ClusterRoles. |
-| `backgroundControllerExtraRules` | Empty; additional Kubernetes RBAC rules for other generation targets. |
-| `policies` | Empty; native ClusterPolicy configurations. |
-| `values` | Extra upstream Helm values, deep-merged last. Arrays follow `deepmerge-ts` semantics. |
+| `policies` | Empty; any native policy manifests. |
+| `controllerExtraRules` | Empty; native RBAC rule arrays keyed by `admission`, `background`, `cleanup`, or `reports`. |
+| `values` | Upstream Helm values, deep-merged last using `deepmerge-ts` array semantics. |
 
-Admission and background controllers run with one replica each. Upstream chart
-resource requests/limits and security settings apply. Use `values` to qualify
-placement, resources and high availability for the target cluster. Reporting,
-reports-server, cleanup-controller, Grafana, and automatic Kubernetes
-ValidatingAdmissionPolicy generation are disabled by default. The background
-controller handles synchronization and grant removal without cleanup-controller.
-Enable reporting flags together with the reporting controller, or cleanup
-services, explicitly if other policies need them.
+Controller permissions are independent of policy content. Supply only the
+permissions your policies need, including context reads, generation targets or
+cleanup targets. For example:
 
-The module replaces the upstream background controller's default generation
-write permissions with explicit opt-ins. Its standard discovery/read and
-controller-internal permissions remain. For example, a ConfigMap generation
-policy can request its lifecycle verbs via `backgroundControllerExtraRules`.
-Context API calls or custom admission policies may also need additional admission
-controller RBAC via `values.admissionController.rbac.clusterRole.extraResources`.
-Advanced Helm overrides can change these defaults and require their own review.
+```typescript
+new Kyverno(chart, "policy-engine", {
+  controllerExtraRules: {
+    background: [{
+      apiGroups: [""],
+      resources: ["configmaps"],
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"],
+    }],
+    admission: [{ apiGroups: [""], resources: ["configmaps"], verbs: ["get"] }],
+  },
+});
+```
 
-CRDs carry Helm `keep` and Argo CD `Prune=false,Delete=false` annotations. No
-existing application retention settings, namespace labels, role definitions or
-bindings are modified by this module. It is not added to `Platform` or any
-deployment preset. Synthesizing the example creates files only:
+Rules reach the selected controller's chart-managed aggregated ClusterRole and
+ServiceAccount binding. The upstream background controller's broad generation
+writes are replaced by explicit rules; its standard discovery/read and internal
+permissions remain. Native Helm RBAC overrides remain available through `values`.
+Rules alone do not enable an optional controller.
+
+Admission and background controllers default to one replica each, with upstream
+resource requests/limits and security settings. Reporting flags, reports-server,
+cleanup-controller, Grafana and automatic Kubernetes ValidatingAdmissionPolicy
+generation are disabled by default. Enable the needed controllers/features via
+`values` for policies that require them, such as cleanup policies. Qualify native
+specs against the pinned Kyverno schema/engine. No policies are enabled implicitly.
+
+CRDs, including the separately configured API dependency, retain Helm `keep` and
+Argo CD `Prune=false,Delete=false` annotations. Policy resources default to Argo
+wave `1`, overridable through their annotations; controller resources use wave
+`0`. Separate applications must wait for Kyverno's CRDs, controllers and
+aggregated RBAC to be ready before syncing policies. Waves across applications
+do not establish readiness.
+
+## Examples
+
+[kyverno.ts](../../../../example/kyverno.ts) composes three ordinary policies from
+[kyverno-policies.ts](../../../../example/kyverno-policies.ts): pod-label validation,
+label mutation, and namespace access generation. These are deployment examples;
+none is embedded in the module API. Render them without deploying:
 
 ```sh
 cd packages/nebula
 pnpm exec cdk8s synth --app 'tsx example/kyverno.ts'
 ```
 
-No cloud resources, load balancers, autoscaling or paid services are requested.
-Controller pods still consume cluster capacity. Before adopting or increasing
-replicas, obtain an approved resource/cost estimate and budget in the deployment
-repository; do not enable extra capacity automatically.
+The namespace example selects `example.com/namespace-class=workload`, generates a
+new developer RoleBinding, backfills existing matches with `generateExisting`,
+and reconciles the grant with `synchronize`. Classification is in `match`, so
+removing/changing that label removes the generated grant. The example preserves
+grants if the policy is removed (`orphanDownstreamOnPolicyDelete: true`). This
+retention choice belongs to that example; the generic module imposes no policy
+lifecycle defaults. Revocation requires the policy/controller to remain active.
 
-## Namespace access lifecycle
+Its caller-supplied RBAC allows RoleBinding lifecycle verbs and `bind` on only the
+named `edit` ClusterRole. Explicit `bind` satisfies Kubernetes escalation checks
+without giving the controller all of `edit`'s workload permissions. Protect
+policy and classification-label editing; controller credentials operate across
+namespaces. See [Kubernetes binding restrictions](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#restrictions-on-role-binding-creation-or-update)
+and [Kyverno generation behavior](https://kyverno.io/docs/policy-types/cluster-policy/generate/).
 
-`namespaceRoleBindingPolicy` returns a normal `KyvernoClusterPolicyConfig`:
+Use a new binding name and check for existing targets before enabling generation:
+Kyverno can reconcile an existing object with the same name. Keep existing/manual
+grants and their retention settings under their existing owner. Changing a
+RoleBinding's immutable `roleRef` needs an explicit migration. Access from other
+bindings remains additive. Qualify backfill, repair, reclassification revocation,
+policy-removal retention and preservation of unrelated bindings in a disposable
+cluster before production adoption.
 
-* A new Namespace with **all** classification labels receives the named
-  RoleBinding in that Namespace, granting only the configured subjects the
-  configured ClusterRole's namespaced permissions.
-* `generateExisting: true` backfills matching Namespaces when the policy is
-  created or updated. This is generation for existing triggers, not a periodic
-  scan of every resource by the reporting controller.
-* `synchronize: true` reconciles edits/deletion of generated grants and removes
-  a generated grant after its Namespace's classification labels stop matching.
-  Classification is deliberately in `match.resources.selector`, not in
-  preconditions, and the match does not restrict admission operations to CREATE.
-* `orphanDownstreamOnPolicyDelete: true` preserves generated grants if the policy
-  or rule is removed. Revocation on namespace reclassification requires the
-  policy and Kyverno to remain installed. Plan explicit access retirement before
-  uninstalling them. Namespace deletion naturally removes its bindings.
-
-Only grant-management resources owned by this policy participate in that
-lifecycle. Choose a **new binding name** and verify there are no existing
-bindings with that name in matching Namespaces before enabling the policy.
-Kyverno can reconcile an existing resource at its target name; this helper does
-not implement adoption or collision detection. Keep existing/manual grants and
-their retention settings under their existing owner, and migrate them separately.
-Overlapping policies must use distinct binding names. Kubernetes `roleRef` is
-immutable: changing `clusterRoleName` on an existing binding requires an explicit
-replacement/migration plan. Orphaned grants also need explicit ownership planning
-before reintroducing the same policy or binding names.
-
-Kubernetes RBAC grants add together: deleting a generated binding does not revoke
-access supplied by some other binding. Protect classification-label writes and
-policy writes from the developers whose access they govern. A selector is a
-policy boundary, not an RBAC limitation on the controller's credentials.
-
-### Required controller permissions
-
-For `roleBindingClusterRoles: ["edit"]`, the module adds background-controller
-permissions to get/list/watch/create/update/patch/delete RoleBindings and to
-**bind only the named `edit` ClusterRole** (`resourceNames: ["edit"]`). The chart
-aggregates these rules and binds its background ServiceAccount, including under
-a custom release/namespace. There is no `cluster-admin` grant, wildcard `bind`,
-`escalate`, or ClusterRoleBinding creation permission added by this option.
-Kubernetes permits binding a role when the caller has the explicit `bind` verb;
-granting the controller all of that role's workload permissions is unnecessary.
-See [Kubernetes RBAC binding restrictions](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#restrictions-on-role-binding-creation-or-update).
-
-These controller credentials operate across namespaces. Constrain policy and
-classification editing accordingly. The identity applying the installation must
-itself be permitted to grant these RBAC permissions.
-
-## Other declarative policies and GitOps ordering
-
-Pass any native `kyverno.io/v1` ClusterPolicy spec through `policies`, or use
-`new KyvernoClusterPolicy(chart, id, { name, spec, labels, annotations })` in a
-separate policy application. Generate, validate, mutate, exclusions, context and
-other upstream fields pass through without a Nebula-specific DSL. No policy is
-enabled implicitly. Native spec typing is intentionally open; qualify specs
-against the pinned Kyverno schema/engine.
-
-Policies default to Argo CD sync wave `1` and allow annotation overrides. Install
-the namespace, CRDs, controller RBAC and controllers before policies. In one Argo
-application the namespace is in wave `-1` and controller deployments/CRDs are in
-wave `0`. For separate applications,
-wait for Kyverno's CRDs and admission/background deployments to be ready before
-syncing policies; waves in different applications do not establish readiness.
-Backfill also requires aggregated RBAC to have converged. Review Kyverno
-UpdateRequests/controller logs when a generated grant fails.
-
-Upstream details: [generate synchronization, backfill and binding permissions](https://kyverno.io/docs/policy-types/cluster-policy/generate/)
-and [chart configuration](https://github.com/kyverno/kyverno/tree/v1.19.1/charts/kyverno).
+The module is opt-in and is not added to deployment presets. It requests no cloud
+resources, load balancers or autoscaling. Pods still consume cluster capacity;
+obtain an approved estimate/budget before deployment or increasing capacity.
 
 ## Validation
 
-`pnpm test` covers installation arguments and merging, exports, raw policy
-preservation, opt-in RBAC, subjects, classification matching fields, existing
-namespace generation and retention settings. CI also downloads checksum-verified
-chart/CLI fixtures and runs the real Helm renderer and Kyverno v1.19.1 engine.
-Run those tiers locally with:
+`test/kyverno.test.ts` checks native kind/spec/metadata passthrough, namespaced
+policies, future schema passthrough, TypeScript/YAML additions after construction,
+standalone policies, generic controller RBAC and installation overrides. CI also
+runs checksum-verified real chart rendering and Kyverno engine evaluation:
 
 ```sh
 KYVERNO_CHART_ARCHIVE=/path/to/kyverno-3.9.1.tgz \
@@ -155,13 +170,5 @@ KYVERNO_CLI=/path/to/kyverno \
 pnpm exec tsx --test test/kyverno.test.ts
 ```
 
-The chart test checks CRD retention, controller selection, aggregated RBAC and
-ServiceAccount wiring. The CLI evaluates matching new/existing and nonmatching
-Namespaces and asserts the generated grants. These are offline tests; they do
-not exercise asynchronous controller deletion, webhook readiness or Kubernetes
-RBAC enforcement on a running cluster. Before production adoption, qualify in a
-disposable cluster: create an unrelated retained binding and a matching existing
-Namespace; install Kyverno and the policy; confirm backfill; create another
-matching Namespace; confirm generation; edit/delete its generated binding and
-confirm repair; remove/change its classification and confirm only the generated
-binding disappears; delete the policy and confirm remaining grants are retained.
+These tests do not deploy to a cluster or exercise asynchronous deletion,
+webhook readiness or Kubernetes RBAC enforcement.

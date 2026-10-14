@@ -2,8 +2,8 @@
 
 `pnpm test` runs every `test/**/*.test.ts` file with the Node test runner.
 
-`kyverno.test.ts` covers Helm configuration, declarative policy synthesis and
-scoped generation permissions. Set `KYVERNO_CHART_ARCHIVE` to the pinned 3.9.1
+`kyverno.test.ts` covers Helm configuration, arbitrary native policy manifests,
+on-demand TypeScript/YAML composition and generic controller permissions. Set `KYVERNO_CHART_ARCHIVE` to the pinned 3.9.1
 chart archive and `KYVERNO_CLI` to a v1.19.1 executable for real offline chart and
 policy-engine checks. CI enables both with checksum-verified downloads. These
 checks do not deploy to a cluster; see the Kyverno module README for lifecycle
