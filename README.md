@@ -36,6 +36,7 @@ discovery, resource ownership, and staged adoption of existing infrastructure.
 | Monitoring | Prometheus Operator, member-cluster monitoring, mesh metrics, and Crossplane observability. |
 | Confidential workloads | Measured guest definitions, signed releases, attested image pulls, admission policies, and sealed disks. |
 | Automation | KEDA, GitHub and Gitea runners, kagent, event bridges, and Ollama. |
+| Policy | [Kyverno](packages/nebula/src/modules/k8s/kyverno/README.md), native policies added on demand, with generic controller permissions. |
 
 Browse the [infrastructure modules](packages/nebula/src/modules/infra),
 [Kubernetes modules](packages/nebula/src/modules/k8s), and
@@ -70,6 +71,7 @@ Run these commands from `packages/nebula`:
 | [GCP](packages/nebula/example/main.ts) | `pnpm example:synth` | GKE infrastructure, DNS, and Kubernetes services. |
 | [AWS](packages/nebula/example/aws.ts) | `pnpm example:aws:synth` | EC2/k0s clusters, AWS resources, GitOps applications, and workload services. |
 | [Confidential guests](packages/nebula/example/confidential-guests.ts) | `pnpm example:confidential-guests:synth` | A composed guest stack with lifecycle, storage, admission, and release configuration. |
+| [Kyverno](packages/nebula/example/kyverno.ts) | `pnpm exec cdk8s synth --app 'tsx example/kyverno.ts'` | Pinned policy engine with deployment-owned validation, mutation and generation policies. |
 
 The examples contain illustrative settings. Deployment repositories own their
 environment values and secret references.

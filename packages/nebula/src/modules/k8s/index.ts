@@ -520,3 +520,10 @@ export { OAuth2Proxy } from "./oauth2-proxy";
 export type { OAuth2ProxyConfig } from "./oauth2-proxy";
 export { Ollama } from "./ollama";
 export type { OllamaConfig } from "./ollama";
+export {
+  Kyverno, KyvernoPolicy, kyvernoValues,
+  KYVERNO_CHART_VERSION, KYVERNO_CHART_REPOSITORY,
+} from "./kyverno";
+export type {
+  KyvernoConfig, KyvernoPolicyConfig, KyvernoRbacRule, KyvernoController,
+} from "./kyverno";

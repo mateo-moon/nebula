@@ -69,7 +69,7 @@ const UPSTREAM_OWNERS = new Set([
   "prometheus-operator", "prometheus-community", "grafana", "open-telemetry", "sigstore", "gitleaks", "actions",
   "github", "nodejs", "microsoft", "pnpm", "privatenumber", "eemeli", "rust-lang", "rustls", "rustcrypto",
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
-  "kedacore", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
+  "kedacore", "kyverno", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
   "datasone", "pbatard", // Public setup_var.efi and EDK2 UEFI-Shell release sources.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
@@ -87,7 +87,7 @@ const UPSTREAM_DOMAINS = [
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
-  "helm.sh",
+  "helm.sh", "kyverno.io",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
