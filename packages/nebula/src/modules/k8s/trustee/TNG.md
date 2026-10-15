@@ -141,7 +141,8 @@ guest engine before approving a new InitData hash.
 
 The owner client is the sibling Node package
 [`@nebula/trustee-client`](../../../../../trustee-client/README.md), with an
-importable API and a `nebula-trustee` command. It manages the local unmodified
+importable TypeScript API and a `nebula-trustee` command. It follows `nebula/cli`'s
+source packaging and uses `tsx`. It manages the local unmodified
 AS and patched TNG, checks an authenticated round trip, and shuts both down
 when the operation finishes. No external bootstrap service is required.
 

@@ -1,2 +1,13 @@
-#!/usr/bin/env node
-import "../dist/trustee-client/src/cli.js";
+#!/usr/bin/env bash
+set -e
+# Resolve npm's bin symlink as well as pnpm's forwarding script.
+launcher="$0"
+while [ -L "$launcher" ]; do
+  launcher_dir="$(cd -- "$(dirname -- "$launcher")" && pwd)"
+  launcher="$(readlink -- "$launcher")"
+  [[ "$launcher" = /* ]] || launcher="$launcher_dir/$launcher"
+done
+package_dir="$(cd -- "$(dirname -- "$launcher")/.." && pwd)"
+# Use this package's declared runtime, including outside a project directory.
+tsx_cli="$(node -p 'require.resolve("tsx/cli", { paths: [process.argv[1]] })' "$package_dir")"
+exec node "$tsx_cli" "$package_dir/src/cli.ts" "$@"

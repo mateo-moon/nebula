@@ -6,18 +6,20 @@ import { createServer } from "node:https";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
-import { TrusteeClient, trusteePolicies } from "../dist/trustee-client/src/index.js";
-import { fixture, identity, port } from "./support.mjs";
+import { TrusteeClient, trusteePolicies } from "../src/index";
+import { fixture, identity, port } from "./support";
 
 test("native TNG and mainline AS reject a TLS server without attestation before sending an owner request", {
   skip: !process.env.TNG_TEST_BINARY, timeout: 120_000,
 }, async t => {
+  const tngBinary = process.env.TNG_TEST_BINARY;
+  assert.ok(tngBinary);
   const remotePort = await port(), f = await fixture(t, { targetPort: remotePort });
   let requests = 0;
   const server = createServer({ key: readFileSync(join(f.stateDirectory, "signer.key")), cert: readFileSync(join(f.stateDirectory, "signer.pem")) },
     (_req, res) => { requests++; res.end('["resource-policy"]'); });
-  await new Promise(accept => server.listen(remotePort, "127.0.0.1", accept)); t.after(() => server.close());
-  await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary: process.env.TNG_TEST_BINARY,
+  await new Promise<void>(accept => server.listen(remotePort, "127.0.0.1", accept)); t.after(() => server.close());
+  await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary,
     dockerBinary: "docker", requestTimeoutMs: 10_000 }), /Trustee connection failed/);
   assert.equal(requests, 0, "credentials must not reach an unattested endpoint");
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
@@ -28,10 +30,12 @@ test("native TNG and mainline AS reject a TLS server without attestation before 
 test("native upstream KBS accepts Node owner JWTs, policy updates and binary resource lifecycle", {
   skip: !process.env.TRUSTEE_TEST_IMAGE, timeout: 120_000,
 }, async t => {
-  assert.match(process.env.TRUSTEE_TEST_IMAGE, /@sha256:[a-f0-9]{64}$/);
+  const trusteeImage = process.env.TRUSTEE_TEST_IMAGE;
+  assert.ok(trusteeImage);
+  assert.match(trusteeImage, /@sha256:[a-f0-9]{64}$/);
   const remotePort = await port(), f = await fixture(t, { forwardPort: remotePort });
   const name = `nebula-node-trustee-test-${randomUUID()}`;
-  const docker = (...args) => execFileSync("docker", args, { timeout: 60_000, stdio: ["ignore", "pipe", "pipe"] });
+  const docker = (...args: string[]) => execFileSync("docker", args, { timeout: 60_000, stdio: ["ignore", "pipe", "pipe"] });
   const server = join(f.directory, "kbs"); mkdirSync(server);
   writeFileSync(join(server, "owner.pub"), f.pair.publicKey.export({ format: "pem", type: "spki" }));
   writeFileSync(join(server, "kbs.toml"), `
@@ -62,12 +66,12 @@ dir_path = "/run/trustee/storage"
 name = "resource"
 storage_backend_type = "kvstorage"
 `);
-  let client;
+  let client: TrusteeClient | undefined;
   try {
     docker("run", "--detach", "--rm", "--name", name, "--platform", "linux/amd64", "--read-only", "--cap-drop=ALL",
       "--security-opt=no-new-privileges", "--publish", `127.0.0.1:${remotePort}:8080`, "--env", "RUST_LOG=off",
       "--tmpfs", "/run/trustee:rw,nosuid,nodev", "--tmpfs", "/tmp:rw,nosuid,nodev",
-      "--mount", `type=bind,source=${server},target=/fixture,readonly`, "--entrypoint", "/bin/sh", process.env.TRUSTEE_TEST_IMAGE,
+      "--mount", `type=bind,source=${server},target=/fixture,readonly`, "--entrypoint", "/bin/sh", trusteeImage,
       "-ec", "umask 077; openssl ecparam -name prime256v1 -genkey -noout -out /run/trustee/signer.key; openssl req -new -x509 -key /run/trustee/signer.key -sha256 -days 1 -subj /CN=test -out /run/trustee/signer.pem; exec kbs --config-file /fixture/kbs.toml");
     let ready = false;
     for (let attempt = 0; attempt < 100; attempt++) {

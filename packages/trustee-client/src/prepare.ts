@@ -3,8 +3,8 @@ import { createPrivateKey, createPublicKey, X509Certificate } from "node:crypto"
 import { lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { tngTrusteeClientPlan } from "../../nebula/src/modules/k8s/trustee/client-plan.js";
-import { snpIdentity, type TrusteeSnpIdentity } from "../../nebula/src/modules/k8s/trustee/policies.js";
+import { tngTrusteeClientPlan } from "nebula-cdk8s/trustee/client-plan";
+import { snpIdentity, type TrusteeSnpIdentity } from "nebula-cdk8s/trustee/policies";
 
 export const VERIFIER_IMAGE = "ghcr.io/confidential-containers/staged-images/coco-as-restful@sha256:997d6ba65bbfd6464ebbecaa99ca04ec8050304c9c976cd44e65971c7427eb7d";
 

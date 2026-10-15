@@ -10,7 +10,7 @@ import { measuredFragments } from "../envoy";
 import { validateTrusteeAgentPolicy } from "./agent-policy";
 import type { TrusteeAgentPolicy } from "./index";
 
-export { tngTrusteeClientPlan } from "./client-plan.js";
+export { tngTrusteeClientPlan } from "./client-plan";
 
 /** Self-sufficient, ephemeral Trustee. Only the owner's PUBLIC administration
  * key enters the manifest. Both server images must be public and digest pinned. */

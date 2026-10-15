@@ -4,7 +4,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { readPreparedClient, VERIFIER_IMAGE } from "./prepare.js";
+import { readPreparedClient, VERIFIER_IMAGE } from "./prepare";
 
 export interface RuntimeOptions {
   readonly stateDirectory: string;
@@ -83,11 +83,16 @@ export async function startRuntime(options: RuntimeOptions) {
     await freePort(profile.localPort); await freePort(profile.verifierPort);
     endpoint = process.env.DOCKER_HOST ?? await docker(["context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], 10_000);
     if (!endpoint.startsWith("unix://")) throw new Error("Verifier requires a trusted local Docker Unix socket; remote Docker is not supported");
+    const uid = process.getuid?.(), gid = process.getgid?.();
+    if (uid === undefined || gid === undefined) throw new Error("Verifier requires a local Unix user identity");
     assertAlive();
     const mount = (source: string, target: string, readonly = true) => ["--mount",
       `type=bind,source=${join(directory, source)},target=/state/${target}${readonly ? ",readonly" : ""}`];
     containerAttempted = true;
     await docker(["run", "--detach", "--rm", "--name", name, "--platform", "linux/amd64",
+      // Match the owner of the private bind mounts. Capless container root cannot
+      // read another Linux user's 0600 signing key or traverse 0700 directories.
+      "--user", `${uid}:${gid}`,
       "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--tmpfs", "/tmp:rw,nosuid,nodev",
       "--env", "RUST_LOG=off", "--publish", `127.0.0.1:${profile.verifierPort}:8080`,
       ...mount("as.json", "as.json"), ...mount("signer.key", "signer.key"), ...mount("signer.pem", "signer.pem"),

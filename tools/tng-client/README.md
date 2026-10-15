@@ -20,8 +20,8 @@ sha256sum --check SHA256SUMS
 install -m 0755 tng /your/approved/bin/tng
 ```
 
-Use the installed absolute path with the Node client. No compiler or source
-checkout is required on the client machine.
+Use the installed absolute path with the Node client. No native compiler or TNG
+source checkout is required on the client machine.
 
 ## Maintainer build
 

@@ -5,6 +5,7 @@ on:
     paths:
       - tools/tng-client/**
       - packages/trustee-client/**
+      - packages/nebula/package.json
       - packages/nebula/src/modules/k8s/trustee/client-plan.ts
       - packages/nebula/src/modules/k8s/trustee/policies.ts
       - .github/workflows/build-tng-client.yml
@@ -46,6 +47,7 @@ jobs:
         run: |
           npm install -g pnpm@11.9.0
           pnpm install --frozen-lockfile
+          pnpm typecheck
           pnpm test
       - name: Archive the qualified binary and checksums
         run: tar -czf "$RUNNER_TEMP/tng-client-linux-amd64.tar.gz" -C "$RUNNER_TEMP/native-artifact" tng LICENSE BUILD.txt SHA256SUMS

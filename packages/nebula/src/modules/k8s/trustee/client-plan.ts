@@ -1,4 +1,4 @@
-import { trusteePolicies, snpIdentity, type TrusteeSnpIdentity } from "./policies.js";
+import { trusteePolicies, snpIdentity, type TrusteeSnpIdentity } from "./policies";
 
 const fail = (message: string): never => { throw new TypeError(`TngTrustee: ${message}`); };
 

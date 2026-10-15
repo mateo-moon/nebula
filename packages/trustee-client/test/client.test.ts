@@ -5,9 +5,10 @@ import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "no
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { test } from "node:test";
-import { TrusteeClient, TrusteeHttpError, prepareClient, createOwnerToken, tngTrusteeClientPlan, trusteePolicies } from "../dist/trustee-client/src/index.js";
-import { readPreparedClient } from "../dist/trustee-client/src/prepare.js";
-import { fixture, identity } from "./support.mjs";
+import { TrusteeClient, TrusteeHttpError, prepareClient, createOwnerToken, tngTrusteeClientPlan, trusteePolicies } from "../src/index";
+import { readPreparedClient } from "../src/prepare";
+import { fixture, identity } from "./support";
+import type { RecordedRequest } from "./fixtures";
 
 test("offline preparation preserves exact workload approval and private signing custody", async t => {
   const f = await fixture(t), before = process.umask();
@@ -46,14 +47,14 @@ test("owner JWT is native ES256 with bounded lifetime; CLI never prints or overw
   const f = await fixture(t), token = createOwnerToken(f.pair.privateKey, "trustee");
   const [header, payload, signature] = token.split(".");
   assert.equal(verify("sha256", Buffer.from(`${header}.${payload}`), { key: f.pair.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url")), true);
-  assert.deepEqual(JSON.parse(Buffer.from(header, "base64url")), { alg: "ES256", typ: "JWT" });
-  const claims = JSON.parse(Buffer.from(payload, "base64url"));
+  assert.deepEqual(JSON.parse(Buffer.from(header, "base64url").toString()), { alg: "ES256", typ: "JWT" });
+  const claims = JSON.parse(Buffer.from(payload, "base64url").toString());
   assert.deepEqual([claims.iss, claims.aud, claims.role, claims.exp - claims.iat, claims.nbf], ["nebula-owner", "trustee", "owner", 300, claims.iat]);
   const output = join(f.directory, "owner.header");
-  const args = ["bin/nebula-trustee", "owner-header", output, "--owner-key", join(f.directory, "owner.key"), "--audience", "trustee"];
-  assert.equal(execFileSync(process.execPath, args, { encoding: "utf8" }), "");
+  const args = ["owner-header", output, "--owner-key", join(f.directory, "owner.key"), "--audience", "trustee"];
+  assert.equal(execFileSync("bin/nebula-trustee", args, { encoding: "utf8" }), "");
   assert.equal(statSync(output).mode & 0o777, 0o600);
-  assert.throws(() => execFileSync(process.execPath, args, { stdio: "pipe" }));
+  assert.throws(() => execFileSync("bin/nebula-trustee", args, { stdio: "pipe" }));
   assert.throws(() => createOwnerToken(generateKeyPairSync("ed25519").privateKey, "trustee"), /P-256/);
   assert.throws(() => createOwnerToken(f.pair.publicKey, "trustee"), /private/);
 });
@@ -68,15 +69,15 @@ test("managed client uses native admin encoding, validates paths, isolates keys 
   const secret = Buffer.from([0, 255, 5, 0, 8]);
   await client.putResource(["owner", "key", "release-1"], secret);
   await client.deleteResource(["owner", "key", "release-1"]);
-  const requests = readFileSync(join(f.directory, "requests.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  const requests: RecordedRequest[] = readFileSync(join(f.directory, "requests.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
   assert.ok(requests.every(req => req.valid && req.claims.aud === "trustee" && req.claims.role === "owner"));
   const posted = requests.filter(req => req.method === "POST");
-  const decode = req => JSON.parse(Buffer.from(req.body, "base64"));
+  const decode = (req: RecordedRequest) => JSON.parse(Buffer.from(req.body, "base64").toString());
   assert.deepEqual(decode(posted[0]), { type: "rego", policy_id: "default_cpu", policy: Buffer.from(policies.attestationPolicy).toString("base64url") });
   assert.deepEqual(decode(posted[1]), { policy: Buffer.from(policies.resourcePolicy).toString("base64url") });
   assert.deepEqual(Buffer.from(posted[2].body, "base64"), secret);
   assert.equal(posted[2].contentType, "application/octet-stream");
-  assert.equal(requests.at(-1).method, "DELETE");
+  assert.equal(requests.at(-1)?.method, "DELETE");
   await assert.rejects(client.putResource(["..", "key", "x"], secret), /three plain/);
   await assert.rejects(client.putResource(["owner", "key", "x"], Buffer.alloc(2 * 1024 * 1024 + 1)), /2 MiB/);
   assert.equal(readFileSync(join(f.directory, "requests.jsonl"), "utf8").trim().split("\n").length, requests.length);
@@ -92,9 +93,11 @@ test("managed client uses native admin encoding, validates paths, isolates keys 
 test("redirects and HTTP failures never leak credentials or response content, and clean up", async t => {
   let redirected = 0;
   const trap = createServer((_req, res) => { redirected++; res.end(); });
-  await new Promise(accept => trap.listen(0, "127.0.0.1", accept)); t.after(() => trap.close());
+  await new Promise<void>(accept => trap.listen(0, "127.0.0.1", accept)); t.after(() => trap.close());
+  const address = trap.address();
+  assert.ok(address && typeof address !== "string");
   for (const status of [302, 401, 500]) {
-    const f = await fixture(t, { status, redirectPort: trap.address().port });
+    const f = await fixture(t, { status, redirectPort: address.port });
     await assert.rejects(TrusteeClient.connect(f.options), error => error instanceof TrusteeHttpError && error.status === status && !error.message.includes("sensitive"));
     assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
     assert.equal(existsSync(join(f.directory, "verifier.pid")), false);
@@ -107,7 +110,7 @@ test("failed TNG startup and occupied ports cannot reuse another local proxy", a
   await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary: join(f.directory, "missing") }), /TNG/);
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
   assert.equal(existsSync(join(f.directory, "verifier.pid")), false);
-  const blocker = createServer(); await new Promise(accept => blocker.listen(f.localPort, "127.0.0.1", accept)); t.after(() => blocker.close());
+  const blocker = createServer(); await new Promise<void>(accept => blocker.listen(f.localPort, "127.0.0.1", accept)); t.after(() => blocker.close());
   await assert.rejects(TrusteeClient.connect(f.options), /already in use/);
 });
 

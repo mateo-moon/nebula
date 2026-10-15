@@ -1,9 +1,11 @@
 # @nebula/trustee-client
 
 Node owner client for Nebula's [self-sufficient Trustee deployment](../nebula/src/modules/k8s/trustee/TNG.md).
-Like `@nebula/cli`, this is a separate package with a command-line entry point.
-It also exports a typed JavaScript API. The installed archive runs in plain Node;
-it needs neither a repository checkout nor a TypeScript loader.
+Like `@nebula/cli`, this package ships TypeScript under `src/`, with a thin
+launcher in `bin/` and typed command handlers under `src/commands/`. The launcher
+runs the source through the declared `tsx` dependency. The public API also exports
+TypeScript source, following `nebula-cdk8s`; use `tsx` or your application's
+TypeScript tooling. There is no JavaScript build or prepack step.
 
 The client starts a local, digest-pinned mainline Trustee Attestation Service
 (AS) and the qualified native TNG client. AS verifies the SNP report and the
@@ -19,22 +21,42 @@ image runs as `linux/amd64`. The owner's computer and its Docker VM are trusted.
 Remote Docker endpoints are rejected. Do not run this client on an excluded
 infrastructure administrator's machine.
 
-From the repository root, build with Node 24 and pnpm 11.9.0 and install its
-archive (Node 20 development uses pnpm 10.34.6):
+From the repository root, install with Node 24 and pnpm 11.9.0
+(Node 20 development uses pnpm 10.34.6), as with `packages/cli`:
 
 ```sh
 cd packages/trustee-client
 pnpm install --frozen-lockfile
-pnpm pack --pack-destination /tmp
-npm install -g /tmp/nebula-trustee-client-0.1.0.tgz
-nebula-trustee --help
+pnpm exec tsx src/cli.ts --help
+./bin/nebula-trustee --help
 ```
 
-For an application, install that same archive as a normal dependency instead of
-globally. Packing builds only JavaScript and TypeScript declarations. The two
-pure policy/configuration sources are compiled from `packages/nebula`, so
-deployment and client approval rules share one implementation. There is no
-runtime dependency on cdk8s.
+The package declares `nebula-cdk8s: file:../nebula`, like `@nebula/cli`. It imports
+the shared policy and verifier plan through `nebula-cdk8s/trustee/policies` and
+`nebula-cdk8s/trustee/client-plan`. Those TypeScript exports load only the pure
+Trustee helpers; the client does not copy or compile a sibling package's source.
+
+For installation outside a checkout, pack both packages from the same reviewed
+revision with `pnpm pack --pack-destination /your/artifacts`. In the consuming
+project, select the matching Nebula archive in `pnpm-workspace.yaml`:
+
+```yaml
+allowBuilds:
+  esbuild: true
+overrides:
+  nebula-cdk8s: file:/your/artifacts/nebula-cdk8s-1.1.0.tgz
+```
+
+Then install and run the client:
+
+```sh
+pnpm add /your/artifacts/nebula-trustee-client-0.1.0.tgz tsx
+pnpm exec nebula-trustee --help
+```
+
+Run a TypeScript application with `pnpm exec tsx app.ts`. The examples below use
+the installed `nebula-trustee` command; from the checkout, use
+`./bin/nebula-trustee` instead.
 
 TNG is a separately built native runtime dependency. Supply its absolute path
 through `tngBinary` or `--tng`. The Node package does not contain a Rust build
@@ -46,7 +68,7 @@ a qualified Linux amd64 artifact with checksums and source/toolchain metadata.
 Choose a successful run for a reviewed Nebula commit and verify the checksums
 before installing the binary. Native source, patching and build instructions for
 maintainers live under [`tools/tng-client`](../../tools/tng-client/README.md).
-Native builds and releases can be maintained independently of the Node API.
+Native builds and releases can be maintained independently of the TypeScript API.
 
 Keep the P-256 owner key on this trusted computer; only its public key belongs
 in the measured deployment. Independently approve `expected-snp.json` with
@@ -70,9 +92,9 @@ refuses expired certificates or edited policies/configuration. Optional
 validates the certificate chain and report signature. Otherwise AS uses its
 native endorsement lookup.
 
-## Node API
+## TypeScript API
 
-```js
+```ts
 import { readFileSync } from "node:fs";
 import { prepareClient, TrusteeClient, trusteePolicies } from "@nebula/trustee-client";
 
@@ -152,13 +174,16 @@ See the deployment's full threat model and recorded SNP qualification.
 
 ```sh
 pnpm test
+pnpm typecheck
 TRUSTEE_TEST_IMAGE=ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68 \
 TNG_TEST_BINARY=/absolute/path/to/qualified/tng pnpm test
 ```
 
 Tests cover private preparation, exact approval, native JWT/HTTP encoding,
 redirects, timeout/cancellation, failed startup, cleanup and installation into
-a clean consumer. The native KBS test checks administration with a test-only
+a clean TypeScript consumer, including public API type checks and CLI invocation
+outside a project directory. Tests and fixtures are TypeScript and run through
+`tsx`, without generated JavaScript. The native KBS test checks administration with a test-only
 loopback forwarding proxy; it makes no TEE claim. The native TNG/AS test verifies
 that an ordinary TLS endpoint receives no owner request. Hardware evidence for
 the shared TNG/AS approval path remains in the deployment's SNP test record.

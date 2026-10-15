@@ -1,8 +1,8 @@
 import { type KeyObject } from "node:crypto";
 import { request } from "node:http";
-import { resourcePath, type TrusteeResourcePath } from "../../nebula/src/modules/k8s/trustee/policies.js";
-import { createOwnerToken, ownerKey } from "./owner-token.js";
-import { startRuntime, type RuntimeOptions } from "./runtime.js";
+import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
+import { createOwnerToken, ownerKey } from "./owner-token";
+import { startRuntime, type RuntimeOptions } from "./runtime";
 
 export interface TrusteeClientOptions extends RuntimeOptions {
   readonly ownerPrivateKey: string | Buffer | KeyObject;

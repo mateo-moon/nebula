@@ -1,8 +1,6 @@
-export { prepareClient, type PrepareClientOptions } from "./prepare.js";
-export { TrusteeClient, type TrusteeClientOptions, TrusteeHttpError } from "./client.js";
-export { createOwnerToken } from "./owner-token.js";
-// Compile the same pure policy and configuration sources into this package.
-// Installed clients need neither cdk8s nor a checkout nor a TypeScript loader.
-export { tngTrusteeClientPlan } from "../../nebula/src/modules/k8s/trustee/client-plan.js";
+export { prepareClient, type PrepareClientOptions } from "./prepare";
+export { TrusteeClient, type TrusteeClientOptions, TrusteeHttpError } from "./client";
+export { createOwnerToken } from "./owner-token";
+export { tngTrusteeClientPlan } from "nebula-cdk8s/trustee/client-plan";
 export { trusteePolicies, type TrusteeSnpIdentity, type TrusteeResourcePath,
-  type TrusteeResourceAdmission, type TrusteePolicies } from "../../nebula/src/modules/k8s/trustee/policies.js";
+  type TrusteeResourceAdmission, type TrusteePolicies } from "nebula-cdk8s/trustee/policies";

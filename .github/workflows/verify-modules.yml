@@ -107,11 +107,12 @@ jobs:
       - run: npm install -g pnpm@${{ matrix.pnpm }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+      - run: pnpm typecheck
       - name: Native Trustee owner protocol qualification
         if: matrix.node == 24
         env:
           TRUSTEE_TEST_IMAGE: ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68
-        run: node --test test/native.test.mjs
+        run: pnpm exec tsx --test test/native.test.ts
 
   bridge:
     name: Bridge tests
