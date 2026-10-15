@@ -1,0 +1,76 @@
+diff --git a/rats-cert/src/tee/coco/verifier/remote.rs b/rats-cert/src/tee/coco/verifier/remote.rs
+index 4f6ee3f..40d0cda 100644
+--- a/rats-cert/src/tee/coco/verifier/remote.rs
++++ b/rats-cert/src/tee/coco/verifier/remote.rs
+@@ -37,12 +37,18 @@ impl CocoRemoteVerifier {
+             }
+         }
+ 
++        // An explicitly pinned CA is authoritative. Mainline Trustee does not
++        // implement the OpenAnolis-only /certificate discovery endpoint.
++        #[cfg(not(wasm))]
++        let pinned_certificates = !trusted_certs_paths.is_empty();
++        #[cfg(wasm)]
++        let pinned_certificates = false;
+         let config = AttestationTokenVerifierConfig {
+             #[cfg(not(wasm))]
+             trusted_certs_paths,
+             trusted_certs: Default::default(),
+             trusted_jwk_sets: Default::default(),
+-            as_addr: if skip_as_token_cert_verify {
++            as_addr: if skip_as_token_cert_verify || pinned_certificates {
+                 // Don't pass as_addr to token verifier when skipping cert verify
+                 None
+             } else {
+diff --git a/rats-cert/src/tee/coco/verifier/token/jwk.rs b/rats-cert/src/tee/coco/verifier/token/jwk.rs
+index 97417a2..7377bbd 100644
+--- a/rats-cert/src/tee/coco/verifier/token/jwk.rs
++++ b/rats-cert/src/tee/coco/verifier/token/jwk.rs
+@@ -7,7 +7,7 @@ use crate::tee::coco::converter::restful::RESTFUL_AS_CONNECT_TIMEOUT_DEFAULT;
+ 
+ use super::AttestationTokenVerifierConfig;
+ use anyhow::{anyhow, bail, Context};
+-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
++use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+ use base64::Engine;
+ use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, Jwk};
+ use jsonwebtoken::{decode, decode_header, jwk, Algorithm, DecodingKey, Header, Validation};
+@@ -38,6 +38,20 @@ use x509_cert::Certificate;
+ 
+ const OPENID_CONFIG_URL_SUFFIX: &str = ".well-known/openid-configuration";
+ 
++fn decode_x5c(encoded: &str) -> anyhow::Result<Vec<u8>> {
++    // RFC 7517 section 4.7 requires standard Base64 for x5c (unlike the
++    // surrounding JWT). Retain compatibility with legacy URL-safe tokens.
++    STANDARD.decode(encoded).or_else(|_| URL_SAFE_NO_PAD.decode(encoded)).context("Illegal x5c cert")
++}
++
++#[test]
++fn x5c_accepts_standard_and_legacy_encoding_but_rejects_invalid_data() {
++    let bytes = [0xfb, 0xff, 0xee, 0x01];
++    assert_eq!(decode_x5c(&STANDARD.encode(bytes)).unwrap(), bytes);
++    assert_eq!(decode_x5c(&URL_SAFE_NO_PAD.encode(bytes)).unwrap(), bytes);
++    assert!(decode_x5c("invalid!certificate").is_err());
++}
++
+ #[derive(Error, Debug)]
+ pub enum JwksGetError {
+     #[error("Invalid source path: {0}")]
+@@ -255,7 +269,7 @@ impl JwkAttestationTokenVerifier {
+ 
+         // Parse leaf certificate
+         let pem = x5c[0].split('\n').collect::<String>();
+-        let leaf_der = URL_SAFE_NO_PAD.decode(pem).context("Illegal x5c cert")?;
++        let leaf_der = decode_x5c(&pem)?;
+ 
+         // Verify JWK public key matches certificate public key
+         {
+@@ -281,7 +295,7 @@ impl JwkAttestationTokenVerifier {
+         let mut intermediates = Vec::new();
+         for cert_pem in &x5c[1..] {
+             let pem = cert_pem.split('\n').collect::<String>();
+-            let der = URL_SAFE_NO_PAD.decode(&pem).context("Illegal x5c cert")?;
++            let der = decode_x5c(&pem)?;
+             intermediates.push(CertificateDer::from(der));
+         }
+ 

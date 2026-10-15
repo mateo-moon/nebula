@@ -5,6 +5,13 @@
 export { EnvoyTcpProxy, measuredFragments, measuredProxy } from "./envoy";
 export type { EnvoyTcpProxyConfig, EnvoyTcpRoute, EnvoyTlsFiles } from "./envoy";
 
+export { Trustee, trusteePlan, trusteeInitData, trusteePolicies, trusteeBootstrapPolicies,
+  TRUSTEE_STARTUP_METADATA_POLICY, TRUSTEE_DENIED_AGENT_REQUESTS } from "./trustee";
+export type { TrusteeConfig, TrusteeResource, TrusteeSnpIdentity, TrusteeResourceAdmission,
+  TrusteePolicies, TrusteePlan, TrusteeAgentPolicy } from "./trustee";
+export { TngTrustee, tngTrusteePlan, tngTrusteeInitData, tngTrusteeClientPlan } from "./trustee";
+export type { TngTrusteeConfig } from "./trustee";
+
 export { Crossplane } from "./crossplane";
 export type {
   CrossplaneConfig,

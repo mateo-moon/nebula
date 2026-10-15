@@ -73,6 +73,10 @@ jobs:
         env:
           ENVOY_TEST_IMAGE: docker.io/envoyproxy/envoy@sha256:43b69cf424922cd5d1086cc019dc89197e58d58deac89d36b3c8b67f1a9e8523 # v1.39.2 amd64
         run: pnpm exec tsx --test test/envoy.integration.test.ts
+      - name: Native Trustee software qualification with synthetic credentials
+        env:
+          TRUSTEE_TEST_IMAGE: ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68 # built-in AS, amd64
+        run: pnpm exec tsx --test test/trustee-runtime.integration.test.ts
       - run: pnpm verify:policies
       - name: Install pinned Rust for broker policy qualification
         run: rustup toolchain install 1.98.1 --profile minimal && rustup override set 1.98.1

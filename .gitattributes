@@ -1,0 +1,2 @@
+# Unified diffs contain single-space context lines and must retain them.
+packages/nebula/src/modules/k8s/trustee/patches/*.patch -whitespace
