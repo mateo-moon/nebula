@@ -11,6 +11,15 @@ by default, Namespace. It uses Nebula's measured-artifact checks and native
 CoCo Init-Data, AA, CDH and KBS protocols. There is no Trustee fork, custom
 attestation protocol, controller, secret-injection service or cloud KMS.
 
+Both deployment variants follow Nebula's `BaseConstruct<Config>` pattern and
+expose typed `deployment`, `service`, `networkPolicy` and optional `namespace`
+resources. They use the generated Kubernetes classes, as the confidential-guest
+modules do, to preserve the exact Pod template approved by genpolicy. Public
+types, pure plan builders, guest startup scripts and InitData binding live in
+separate files; `index.ts` exports the module API. Planning remains offline.
+Configuration must contain literal public values: `ref+` references are rejected
+before `BaseConstruct` can resolve anything from the synthesis host.
+
 This is a Nebula integration of upstream primitives, **not an upstream turnkey
 confidential Trustee product or a production-qualified deployment**. Official
 CoCo documentation still describes support for deploying Trustee inside CoCo

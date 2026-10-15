@@ -2,6 +2,21 @@
   "version": 1,
   "entries": [
     {
+      "class": "public-key",
+      "sha256": "0e25d04f30a7c9bd24678a9f5f6eedadfe53d8eeb47d9954f14275a78aecf52c",
+      "reason": "Synthetic bootstrap.example.test certificate generated for trustee-module-compatibility.json; its private key was discarded. Used only to freeze measured output in offline regression tests."
+    },
+    {
+      "class": "public-key",
+      "sha256": "9e5dbacc4d46b60c776cf435a224635a76a7c60a5b90deda2bea2e5b8af2b6f3",
+      "reason": "Synthetic P-256 owner public key generated for trustee-module-compatibility.json; no private key is stored. This regression fixture denies all workload creation and is not a deployment identity."
+    },
+    {
+      "class": "hex-64-bytes",
+      "sha256": "c2aee2770f457d45e9a0daeacba6bd3b5d04cf91e4da228a7802a71f6f1c369c",
+      "reason": "Synthetic Trustee identity fixture: 128 repetitions of the digit 3, not a hardware chip ID."
+    },
+    {
       "class": "hex-64-bytes",
       "sha256": "37945a3519275d66b3206a6939c9bf641969320e0357db8eacecb6da3545fa40",
       "reason": "HOST_DATA test vectors: base64 of gzip of 1 MiB and 1 MiB + 1 zero bytes (decompressed-at-limit, decompressed-over-limit)"

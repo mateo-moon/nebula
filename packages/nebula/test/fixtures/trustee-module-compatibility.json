@@ -1,0 +1,192 @@
+{
+  "description": "Synthetic public configuration captured before the module refactor at f7e72705fcde639d044d2bf47e115840dce4d77a. The policy denies all container creation; these hashes are regression fixtures, not deployment approvals or hardware evidence.",
+  "policyRego": "package agent_policy\ndefault CreateContainerRequest := false\ndefault CopyFileRequest := false\ndefault ExecProcessRequest := false\ndefault ReadStreamRequest := false\ndefault WriteStreamRequest := false\ndefault SetPolicyRequest := false\ndefault GetDiagnosticDataRequest := false\ndefault AddSwapRequest := false\ndefault UpdateEphemeralMountsRequest := false\ndefault AddSwapPathRequest := false\ndefault StartTracingRequest := false\ndefault AllowRequestsFailingPolicy := false\n",
+  "fixtures": [
+    {
+      "mode": "bootstrap",
+      "config": {
+        "name": "trustee",
+        "namespace": "confidential-keys",
+        "image": "registry.example.test/trustee@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bootstrap": {
+          "url": "https://bootstrap.example.test:8443",
+          "certificatePem": "-----BEGIN CERTIFICATE-----\nMIICvjCCAaYCCQDxTPB5M1BUHDANBgkqhkiG9w0BAQsFADAhMR8wHQYDVQQDDBZi\nb290c3RyYXAuZXhhbXBsZS50ZXN0MB4XDTI2MTAxNTE0NDY0OVoXDTI2MTAxNjE0\nNDY0OVowITEfMB0GA1UEAwwWYm9vdHN0cmFwLmV4YW1wbGUudGVzdDCCASIwDQYJ\nKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOaCxnJVPn1Xe65NNkNHa1waKqj0B0Kr\naxaPnPhKH1vIndhBkurJc4HeTL4RTj+JSc9a5fYVeDDFd7ifPAGDPXIZvDQUAR2K\n8PLPwqvJL1FVA74rZnQSEtERWfCcQI1sVMRuFmloFM7QDjooI38obpUmjUGaBj+r\nZCnweX+YHRncTPu91Zof8WUqP0/o7899JKqeAXKLmLRUzCrjFhI/zRassGYB8WNF\n5alHrLPXsmLlghgk4ZOO1KEXXLhmsU1PPt9ac5AMaA92LTrqhyZiotrimrfFRptk\nEfVjGhFJh5x5bAGi68jW6VkskDO+DMniNfrZLbZrdGQIYja3xqWrhSUCAwEAATAN\nBgkqhkiG9w0BAQsFAAOCAQEA31I5xFVVwHIGfV3eq92qcCnpC/uzQ4OoaeEhqa/r\nBtngeglCGfVXl6Q1VIPmg1hOwyBvSptIOWf/+K8c4zp4PjhGxybBvtEkn7/JyrDS\nFRWE2xmCrB1PH4lBMgUsGIGTPckVmPwoBqhlyyeueorXJKtkM17cKk2mV93MGAS7\nBdro4qrmrv1bd5mfzp00NwX/8wZyc16Z5uSgUDC98akURlnmdH9+JH4UolgiscSq\nPuVtcGh4mjyg1CUTY3f0ClwmSmxigYuRxvjMhf6hfrQdVkLfjauwYqkxg+GC6IR9\nXQ2psPmRgcYdnBb70i6EZ0afoejhqnLCY3NvqFkzbeXMeg==\n-----END CERTIFICATE-----\n",
+          "tlsPrivateKey": [
+            "owner",
+            "trustee-tls",
+            "key-v1"
+          ],
+          "tlsCertificate": [
+            "owner",
+            "trustee-tls",
+            "cert-v1"
+          ]
+        },
+        "resources": [
+          {
+            "path": [
+              "default",
+              "image-key",
+              "release-1"
+            ],
+            "bootstrapPath": [
+              "owner",
+              "image-key",
+              "release-1"
+            ],
+            "recipients": [
+              {
+                "measurement": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+                "initDataSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "chipId": "33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+                "minimumReportedTcb": {
+                  "bootloader": 3,
+                  "tee": 1,
+                  "snp": 12,
+                  "microcode": 72
+                }
+              }
+            ]
+          }
+        ],
+        "nodeSelector": {
+          "confidential-computing": "snp"
+        },
+        "clients": [
+          {
+            "namespace": "workloads",
+            "podLabels": {
+              "app": "confidential-worker"
+            }
+          }
+        ]
+      },
+      "planSha256": "3436fba1a210f149da41d61520da96112a41f576b98af97250a5ab53bcc4f8fb",
+      "initDataSha256": "cdde92ca3d0675f3eddcaecdb10e93b419c8ff583b44f29c83bbff335aa758d5",
+      "manifestsSha256": "78d262f633b5a7e3145fde8237fc6f2f462f9b6fa30175b1b953b291ebfd3aa4"
+    },
+    {
+      "mode": "bootstrap",
+      "config": {
+        "name": "trustee",
+        "namespace": "confidential-keys",
+        "image": "registry.example.test/trustee@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bootstrap": {
+          "url": "https://bootstrap.example.test:8443",
+          "certificatePem": "-----BEGIN CERTIFICATE-----\nMIICvjCCAaYCCQDxTPB5M1BUHDANBgkqhkiG9w0BAQsFADAhMR8wHQYDVQQDDBZi\nb290c3RyYXAuZXhhbXBsZS50ZXN0MB4XDTI2MTAxNTE0NDY0OVoXDTI2MTAxNjE0\nNDY0OVowITEfMB0GA1UEAwwWYm9vdHN0cmFwLmV4YW1wbGUudGVzdDCCASIwDQYJ\nKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOaCxnJVPn1Xe65NNkNHa1waKqj0B0Kr\naxaPnPhKH1vIndhBkurJc4HeTL4RTj+JSc9a5fYVeDDFd7ifPAGDPXIZvDQUAR2K\n8PLPwqvJL1FVA74rZnQSEtERWfCcQI1sVMRuFmloFM7QDjooI38obpUmjUGaBj+r\nZCnweX+YHRncTPu91Zof8WUqP0/o7899JKqeAXKLmLRUzCrjFhI/zRassGYB8WNF\n5alHrLPXsmLlghgk4ZOO1KEXXLhmsU1PPt9ac5AMaA92LTrqhyZiotrimrfFRptk\nEfVjGhFJh5x5bAGi68jW6VkskDO+DMniNfrZLbZrdGQIYja3xqWrhSUCAwEAATAN\nBgkqhkiG9w0BAQsFAAOCAQEA31I5xFVVwHIGfV3eq92qcCnpC/uzQ4OoaeEhqa/r\nBtngeglCGfVXl6Q1VIPmg1hOwyBvSptIOWf/+K8c4zp4PjhGxybBvtEkn7/JyrDS\nFRWE2xmCrB1PH4lBMgUsGIGTPckVmPwoBqhlyyeueorXJKtkM17cKk2mV93MGAS7\nBdro4qrmrv1bd5mfzp00NwX/8wZyc16Z5uSgUDC98akURlnmdH9+JH4UolgiscSq\nPuVtcGh4mjyg1CUTY3f0ClwmSmxigYuRxvjMhf6hfrQdVkLfjauwYqkxg+GC6IR9\nXQ2psPmRgcYdnBb70i6EZ0afoejhqnLCY3NvqFkzbeXMeg==\n-----END CERTIFICATE-----\n",
+          "tlsPrivateKey": [
+            "owner",
+            "trustee-tls",
+            "key-v1"
+          ],
+          "tlsCertificate": [
+            "owner",
+            "trustee-tls",
+            "cert-v1"
+          ]
+        },
+        "resources": [
+          {
+            "path": [
+              "default",
+              "image-key",
+              "release-1"
+            ],
+            "bootstrapPath": [
+              "owner",
+              "image-key",
+              "release-1"
+            ],
+            "recipients": [
+              {
+                "measurement": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+                "initDataSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "chipId": "33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+                "minimumReportedTcb": {
+                  "bootloader": 3,
+                  "tee": 1,
+                  "snp": 12,
+                  "microcode": 72
+                }
+              }
+            ]
+          }
+        ],
+        "nodeSelector": {
+          "confidential-computing": "snp"
+        },
+        "clients": [
+          {
+            "namespace": "workloads",
+            "podLabels": {
+              "app": "confidential-worker"
+            }
+          }
+        ],
+        "createNamespace": false,
+        "port": 9443,
+        "guestMemoryMiB": 4096,
+        "guestVcpus": 4,
+        "endpointHost": "keys.example.test"
+      },
+      "planSha256": "ef30adab391e174741584c1e8df33b1df9e7c30632ad0c2d4bac6700ad384235",
+      "initDataSha256": "77c06fcf991d7359cb2222ae69e97157242a91fd90ebbdc4c844d95e0d1a3c0b",
+      "manifestsSha256": "28bb6a8e40a7d3280a4e68f5b593b5645336a7dbfda85950a362950a91fbd9fa"
+    },
+    {
+      "mode": "tng",
+      "config": {
+        "name": "trustee",
+        "namespace": "trustee-test",
+        "kbsImage": "example.test/kbs@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tngImage": "example.test/tng@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ownerPublicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKEGw8Dgo6d6ZBvP8mgGwOwylAKgu\nnH4mZhS0t6ZtTKp/mCEw2czNHpSlcCjPll5u7Rxk9p3GQP9KgPUAT/Gm4g==\n-----END PUBLIC KEY-----\n",
+        "nodeSelector": {
+          "example.test/tee": "sev-snp"
+        },
+        "clients": [
+          {
+            "namespace": "owner",
+            "podLabels": {
+              "app": "client"
+            }
+          }
+        ]
+      },
+      "planSha256": "aec98fd3785321568fffa0fc57a8375ab5981670c0029468208be68599e515ba",
+      "initDataSha256": "d3edfd8f67e0c53736231dd5aa751201212f403d6e530ccecfb4bb4858dc4e78",
+      "manifestsSha256": "7b6d5b205dce9b25a0f608c37f0ab1a8ee978a72d3f8fe5bd4acac9f3c8f734e"
+    },
+    {
+      "mode": "tng",
+      "config": {
+        "name": "owner-trustee",
+        "namespace": "keys",
+        "kbsImage": "example.test/kbs@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tngImage": "example.test/tng@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ownerPublicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKEGw8Dgo6d6ZBvP8mgGwOwylAKgu\nnH4mZhS0t6ZtTKp/mCEw2czNHpSlcCjPll5u7Rxk9p3GQP9KgPUAT/Gm4g==\n-----END PUBLIC KEY-----\n",
+        "nodeSelector": {
+          "example.test/tee": "sev-snp"
+        },
+        "clients": [
+          {
+            "namespace": "owner",
+            "podLabels": {
+              "app": "client"
+            }
+          },
+          {
+            "namespace": "workloads",
+            "podLabels": {
+              "app": "worker"
+            }
+          }
+        ],
+        "createNamespace": false
+      },
+      "planSha256": "e48d1fe797091ea6c9b76d3cdc05db7a03fc0540fce0982ce2dc4703568f07e5",
+      "initDataSha256": "8c2651faa9729a8d3fcb4b052ee3f00c49e62ea1aa5188af73790caaa6ff84a2",
+      "manifestsSha256": "b5740fc209e5e4144e0015fdb60dac1db748c3eeac7f607c603cf2f2bf239e60"
+    }
+  ]
+}

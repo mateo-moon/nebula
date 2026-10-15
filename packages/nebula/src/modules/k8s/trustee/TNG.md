@@ -8,6 +8,15 @@ native JWT administration API. **No bootstrap Trustee or Kubernetes Secret is
 required.** This is an ephemeral development prototype, tested on the existing
 dev baremetal SNP worker on 15 October 2026.
 
+Compose it like other Nebula modules with `new TngTrustee(scope, id, config)`.
+`TngTrusteeDeploymentConfig` combines the public `TngTrusteeConfig` with its
+reviewed `policy` artifact. The construct extends `BaseConstruct`, uses typed
+Kubernetes resources, and exposes `deployment`, `service`, `networkPolicy`,
+`initDataSha256` and the optional created `namespace`. Set
+`createNamespace: false` to compose it in an existing namespace. Supply literal public inputs;
+host-side `ref+` secret resolution is rejected before construction. The pure
+`tngTrusteePlan` and `tngTrusteeInitData` preparation APIs remain unchanged.
+
 ```mermaid
 flowchart LR
   subgraph Owner[Owner's trusted computer]
