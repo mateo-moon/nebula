@@ -3,11 +3,3 @@ Copyright The nebula authors.
 
 This product is licensed under the Apache License, Version 2.0.
 See the LICENSE file for the full license text.
-
-Third-party material
-====================
-
-dist/assets/tng-2.11-mainline-trustee.patch
-  Includes context from Inclavare Containers TNG v2.11.0, licensed under Apache-2.0.
-  Source: https://github.com/inclavare-containers/TNG/tree/9259341240503dc645d7ad40b3a595240134cceb
-  Changes: mainline Trustee verifier CA pinning and standard Base64 x5c support.

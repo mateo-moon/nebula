@@ -31,22 +31,22 @@ nebula-trustee --help
 ```
 
 For an application, install that same archive as a normal dependency instead of
-globally. Packing builds the JavaScript and declarations and includes the native
-TNG compatibility patch. The two pure policy/configuration sources are compiled
-from `packages/nebula`, so deployment and client approval rules cannot drift into
-separate implementations. There is no runtime dependency on cdk8s.
+globally. Packing builds only JavaScript and TypeScript declarations. The two
+pure policy/configuration sources are compiled from `packages/nebula`, so
+deployment and client approval rules share one implementation. There is no
+runtime dependency on cdk8s.
 
-Build TNG explicitly; package installation never downloads or builds native code:
+TNG is a separately built native runtime dependency. Supply its absolute path
+through `tngBinary` or `--tng`. The Node package does not contain a Rust build
+API, compiler command, source checkout, compatibility patch, or native binary;
+installing and using it requires no Rust toolchain or Git.
 
-```sh
-rustup toolchain install 1.98.1 --profile minimal
-nebula-trustee build-tng /path/to/new/tng-source
-```
-
-This checks TNG v2.11.0's exact commit, applies the included mainline Trustee
-compatibility patch, builds the client, and runs its certificate-encoding
-regression test. `--toolchain stable` is supported when that installed toolchain
-is Rust 1.98.1. See [upstream compatibility work](https://github.com/inclavare-containers/TNG/pull/263).
+The [native build workflow](../../.github/workflows/build-tng-client.yml) produces
+a qualified Linux amd64 artifact with checksums and source/toolchain metadata.
+Choose a successful run for a reviewed Nebula commit and verify the checksums
+before installing the binary. Native source, patching and build instructions for
+maintainers live under [`tools/tng-client`](../../tools/tng-client/README.md).
+Native builds and releases can be maintained independently of the Node API.
 
 Keep the P-256 owner key on this trusted computer; only its public key belongs
 in the measured deployment. Independently approve `expected-snp.json` with
@@ -58,7 +58,7 @@ and `minimumReportedTcb` containing explicit `bootloader`, `tee`, `snp`, and
 nebula-trustee prepare --identity expected-snp.json --host trustee.example.test \
   --port 8443 --state /path/to/new/client-state
 nebula-trustee verify --state /path/to/new/client-state \
-  --tng /path/to/new/tng-source/target/release/tng \
+  --tng /opt/tng/bin/tng \
   --owner-key /private/owner.key --audience trustee
 ```
 
@@ -130,7 +130,6 @@ private regular files (mode 0600).
 | Command | Operation |
 | --- | --- |
 | `prepare` | Create private verifier state from approved identity; no server contact. |
-| `build-tng <new-directory>` | Explicitly build the pinned native client. |
 | `verify` | Verify attested TLS and native owner authorization. |
 | `list-resource-policies` | List installed resource policy IDs. |
 | `put-resource <repository/type/tag> <file>` | Provision exact binary bytes. |
@@ -140,7 +139,7 @@ private regular files (mode 0600).
 | `owner-header <new-file>` | For manual integrations: write a private short-lived header without printing or overwriting it. |
 
 The package also exports `tngTrusteeClientPlan`, `trusteePolicies`,
-`createOwnerToken`, `buildTngClient`, `TrusteeHttpError`, and their public types.
+`createOwnerToken`, `TrusteeHttpError`, and their public types.
 The native API formats follow [the qualified Trustee source](https://github.com/confidential-containers/trustee/blob/71251310045d8be2e95041cf0028691623c73957/tools/kbs-client/src/lib.rs).
 
 Resource retrieval by a confidential workload uses CoCo's native KBS/CDH

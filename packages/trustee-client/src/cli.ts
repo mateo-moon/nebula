@@ -3,7 +3,6 @@ import { Command } from "commander";
 import { TrusteeClient, type TrusteeClientOptions } from "./client.js";
 import { prepareClient } from "./prepare.js";
 import { createOwnerToken } from "./owner-token.js";
-import { buildTngClient } from "./build-tng.js";
 import { resourcePath, type TrusteeResourcePath } from "../../nebula/src/modules/k8s/trustee/policies.js";
 
 const program = new Command().name("nebula-trustee").version("0.1.0")
@@ -32,10 +31,6 @@ program.command("prepare").description("Create fresh private local verifier stat
       verifierPort: options.verifierPort, vcekFile: options.vcek });
     console.log("Prepared local verifier state.");
   });
-
-program.command("build-tng <new-source-directory>").description("Build the pinned native TNG client with the included compatibility patch")
-  .option("--toolchain <name>", "Installed Rust 1.98.1 toolchain", "1.98.1")
-  .action(async (directory, options) => { console.log(`Built client: ${await buildTngClient(directory, options.toolchain)}`); });
 
 program.command("owner-header <new-file>").description("Write a private five-minute native admin header for manual use")
   .requiredOption("--owner-key <file>", "Private P-256 owner key")

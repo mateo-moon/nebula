@@ -35,6 +35,7 @@ import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
   "packages/trustee-client",
+  "tools/tng-client",
   "packages/nebula/src/modules/k8s/confidential-guests",
   "confidential-guests",
   ":(glob)packages/nebula/test/confidential-guests*",

@@ -53,7 +53,7 @@ reviewed launch inputs; do not learn the expected identity from the connection
 being authenticated. The live test independently calculated the launch
 measurement and matched it against the cryptographically verified report.
 
-The included [client patch](patches/tng-2.11-mainline-trustee.patch) applies to
+The repository [client patch](../../../../../../tools/tng-client/tng-2.11-mainline-trustee.patch) applies to
 [TNG v2.11.0 / `9259341`](https://github.com/inclavare-containers/TNG/tree/9259341240503dc645d7ad40b3a595240134cceb):
 
 1. An explicitly pinned verifier CA avoids the OpenAnolis-only `/certificate`
@@ -68,7 +68,8 @@ a hardware-only appraisal to make an incompatible client connect.
 
 Run these commands from `packages/nebula` in a checkout. Preparation helpers and
 examples live in the repository; the published package exports the construct
-and planning functions, with the patch under `src/`.
+and planning functions. Native TNG builds are maintained separately under
+[`tools/tng-client`](../../../../../../tools/tng-client/README.md).
 
 Create an owner P-256 key in the owner's trusted environment:
 
@@ -144,7 +145,8 @@ importable API and a `nebula-trustee` command. It manages the local unmodified
 AS and patched TNG, checks an authenticated round trip, and shuts both down
 when the operation finishes. No external bootstrap service is required.
 
-Build/install the package and native TNG as described in its README. Then:
+Install the Node package and provide an already-built, qualified TNG binary as
+described in its README. Then:
 
 ```sh
 nebula-trustee prepare --identity expected-snp.json --host trustee.example.test \

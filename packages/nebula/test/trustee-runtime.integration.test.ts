@@ -3,7 +3,7 @@
 // It cannot test CoCo attestation, VM isolation, or the deployed agent policy.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID, X509Certificate, generateKeyPairSync, privateDecrypt, createDecipheriv, sign } from "node:crypto";
@@ -75,6 +75,9 @@ test("native Trustee startup and fail-closed provisioning (isolated software qua
       "--connect-timeout", "1", "--max-time", "2", ...args], { encoding: "utf8", timeout: 5_000 });
     const count = () => JSON.parse(query("http://127.0.0.1:8006/requests").stdout).length;
     try {
+      // Only public fixture source is mounted here. Linux bind mounts preserve
+      // the host's 0700 mkdtemp mode, which otherwise excludes container UID 10001.
+      chmodSync(dir, 0o755);
       writeFileSync(join(dir, "cdh.py"), fixture);
       mkdirSync(join(dir, "host-state"));
       docker("run", "--detach", "--name", server, "--network", "none", "--read-only", "--cap-drop", "ALL",
