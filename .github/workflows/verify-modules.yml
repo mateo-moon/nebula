@@ -83,6 +83,36 @@ jobs:
       - name: Evaluate SNP admission with the broker's pinned policy and EAR engines
         run: pnpm verify:broker-admission
 
+  trustee-client:
+    name: Trustee Node client (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        include:
+          - node: 20
+            pnpm: 10.34.6
+          - node: 24
+            pnpm: 11.9.0
+    defaults:
+      run:
+        working-directory: packages/trustee-client
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install -g pnpm@${{ matrix.pnpm }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: Native Trustee owner protocol qualification
+        if: matrix.node == 24
+        env:
+          TRUSTEE_TEST_IMAGE: ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68
+        run: node --test test/native.test.mjs
+
   bridge:
     name: Bridge tests
     runs-on: ubuntu-24.04

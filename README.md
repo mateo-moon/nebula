@@ -90,6 +90,11 @@ pnpm exec tsx src/cli.ts --help
 
 Use `pnpm exec tsx src/cli.ts <command> --help` to inspect a command's options.
 
+The separate [`@nebula/trustee-client`](packages/trustee-client/README.md) package
+provides the `nebula-trustee` command and a typed Node API for attesting and
+provisioning a self-sufficient Trustee deployment. It manages local TNG and
+Trustee verification, with native owner JWT administration.
+
 | Command | Purpose |
 | --- | --- |
 | `init --provider gcp` or `init --provider aws` | Scaffold a deployment project with configuration and cdk8s modules. |

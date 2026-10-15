@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { generateKeyPairSync, X509Certificate, verify } from "node:crypto";
-import { mkdtempSync, readFileSync, existsSync, statSync, writeFileSync, rmSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { generateKeyPairSync } from "node:crypto";
 import { App, Chart } from "cdk8s";
 import { parse } from "smol-toml";
 import { TngTrustee, tngTrusteePlan, tngTrusteeInitData, tngTrusteeClientPlan, type TngTrusteeConfig } from "../src";
@@ -72,42 +68,6 @@ test("client uses local mainline verification with exact VM/workload approval an
   assert.deepEqual(plan.tngConfig.add_ingress[0].verify.trusted_certs_paths, ["/state/ca.pem"]);
   assert.doesNotMatch(JSON.stringify(plan), /skip_as_token_cert_verify|trust_all|hardware_only/);
   assert.throws(() => tngTrusteeClientPlan({ ...identity(), initDataSha256: "" }, { host: "localhost", port: 8443 }));
-});
-
-test("client preparation creates a constrained signing chain and refuses silent rotation", () => {
-  const dir = mkdtempSync(join(tmpdir(), "tng-client-test-"));
-  try {
-    const expected = join(dir, "expected.json"), out = join(dir, "client");
-    writeFileSync(expected, JSON.stringify(identity()));
-    const args = ["--import", "tsx", "scripts/prepare-tng-trustee.ts", "client", expected, "localhost", "18443", out];
-    execFileSync(process.execPath, args);
-    const ca = new X509Certificate(readFileSync(join(out, "ca.pem")));
-    const signer = new X509Certificate(readFileSync(join(out, "signer.pem")));
-    assert.equal(ca.ca, true);
-    assert.equal(signer.ca, false);
-    assert.equal(signer.verify(ca.publicKey), true);
-    assert.deepEqual(signer.keyUsage, ["1.3.6.1.5.5.7.3.2"]); // TNG expects clientAuth for the AS signer.
-    assert.equal(existsSync(join(out, "ca.key")), false);
-    assert.equal(statSync(join(out, "signer.key")).mode & 0o777, 0o600);
-    assert.throws(() => execFileSync(process.execPath, args, { stdio: "pipe" }));
-    assert.equal(new X509Certificate(readFileSync(join(out, "signer.pem"))).fingerprint256, signer.fingerprint256);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("owner utility signs a short-lived native JWT without printing or overwriting it", () => {
-  const dir = mkdtempSync(join(tmpdir(), "tng-owner-test-"));
-  try {
-    const keyPath = join(dir, "owner.key"), output = join(dir, "owner.header");
-    writeFileSync(keyPath, pair.privateKey.export({ format: "pem", type: "pkcs8" }), { mode: 0o600 });
-    const args = ["scripts/trustee-owner-token.mjs", keyPath, "trustee", output];
-    assert.equal(execFileSync(process.execPath, args, { encoding: "utf8" }), "");
-    const token = readFileSync(output, "utf8").trim().replace("Authorization: Bearer ", "");
-    const [header, payload, signature] = token.split(".");
-    assert.equal(verify("sha256", Buffer.from(`${header}.${payload}`),
-      { key: pair.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url")), true);
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString());
-    assert.deepEqual([claims.iss, claims.aud, claims.role, claims.exp - claims.iat], ["nebula-owner", "trustee", "owner", 300]);
-    assert.equal(statSync(output).mode & 0o777, 0o600);
-    assert.throws(() => execFileSync(process.execPath, args, { stdio: "pipe" }));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  assert.equal(tngTrusteeClientPlan(identity(), { host: "trustee.example.test", port: 443 }).tngConfig.add_ingress[0].mapping.out.port, 443);
+  assert.throws(() => tngTrusteeClientPlan(identity(), { host: "localhost", port: 8443 }, 443));
 });

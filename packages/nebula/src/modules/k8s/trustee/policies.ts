@@ -1,4 +1,5 @@
-import type { KbsResourcePath } from "../confidential-guests/pull-broker";
+/** Same repository/type/tag tuple used by the native KBS resource protocol. */
+export type TrusteeResourcePath = readonly [string, string, string];
 
 /** An exact approved SNP launch/configuration pair, never two independent lists. */
 export interface TrusteeSnpIdentity {
@@ -15,7 +16,7 @@ export interface TrusteeSnpIdentity {
 }
 
 export interface TrusteeResourceAdmission {
-  readonly path: KbsResourcePath;
+  readonly path: TrusteeResourcePath;
   readonly recipients: readonly TrusteeSnpIdentity[];
 }
 

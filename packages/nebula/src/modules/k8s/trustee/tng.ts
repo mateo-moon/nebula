@@ -8,8 +8,9 @@ import { initDataDocument, measuredGuest, type MeasuredArtifact } from "../confi
 import { isDigestImage } from "../confidential-guests/types";
 import { measuredFragments } from "../envoy";
 import { validateTrusteeAgentPolicy } from "./agent-policy";
-import { trusteePolicies, snpIdentity, type TrusteeSnpIdentity } from "./policies";
 import type { TrusteeAgentPolicy } from "./index";
+
+export { tngTrusteeClientPlan } from "./client-plan.js";
 
 /** Self-sufficient, ephemeral Trustee. Only the owner's PUBLIC administration
  * key enters the manifest. Both server images must be public and digest pinned. */
@@ -149,26 +150,6 @@ export function tngTrusteeInitData(config: TngTrusteeConfig, reviewed: TrusteeAg
     "policy.rego": reviewed.policyRego, "aa.toml": plan.aaToml, "trustee.template.sha256": plan.canonicalPodSha256 } });
   const compressed = gzipSync(Buffer.from(document), { level: 9 }); compressed[9] = 255;
   return { canonicalPodSha256: plan.canonicalPodSha256, ccInitData: compressed.toString("base64"), initDataSha256: sha256Hex(document) };
-}
-
-/** Mainline AS runs in the CLIENT's trust boundary, not beside the untrusted
- * network or as a bootstrap KBS. Its verified SNP claims include HOST_DATA. */
-export function tngTrusteeClientPlan(identity: TrusteeSnpIdentity, target: { host: string; port: number },
-  localPort = 18080, verifierPort = 18082, verifierCaPath = "/state/ca.pem") {
-  const approved = snpIdentity(identity);
-  if (typeof target.host !== "string" || !/^[A-Za-z0-9.-]+$/.test(target.host)) fail("invalid target host");
-  for (const port of [target.port, localPort, verifierPort]) {
-    if (!Number.isInteger(port) || port < 1024 || port > 65535) fail("invalid port");
-  }
-  if (localPort === verifierPort) fail("client and verifier ports must differ");
-  if (!verifierCaPath.startsWith("/") || verifierCaPath.includes("\0")) fail("use an absolute local verifier CA path");
-  const policy = trusteePolicies([{ path: ["verification", "only", "server"], recipients: [approved] }]).attestationPolicy;
-  return { policy, asConfig: { storage_backend: { storage_type: "LocalFs", backends: { local_fs: { dir_path: "/state/storage" } } },
-    rvps_config: { type: "BuiltIn" }, attestation_token_broker: { duration_min: 1,
-      signer: { key_path: "/state/signer.key", cert_path: "/state/signer.pem" } } },
-    tngConfig: { add_ingress: [{ mapping: { in: { host: "127.0.0.1", port: localPort }, out: target },
-      rats_tls: { multiplex: false }, verify: { as_type: "restful", as_addr: `http://127.0.0.1:${verifierPort}`,
-        trusted_certs_paths: [verifierCaPath], policy_ids: ["approved"] } }] } };
 }
 
 export class TngTrustee extends Construct {

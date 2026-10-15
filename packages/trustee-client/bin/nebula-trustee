@@ -1,0 +1,2 @@
+#!/usr/bin/env node
+import "../dist/trustee-client/src/cli.js";

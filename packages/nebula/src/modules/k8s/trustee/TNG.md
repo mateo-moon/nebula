@@ -138,62 +138,53 @@ guest engine before approving a new InitData hash.
 
 ## Verify and provision
 
-Build the client with the checked patch and qualified Rust toolchain:
+The owner client is the sibling Node package
+[`@nebula/trustee-client`](../../../../../trustee-client/README.md), with an
+importable API and a `nebula-trustee` command. It manages the local unmodified
+AS and patched TNG, checks an authenticated round trip, and shuts both down
+when the operation finishes. No external bootstrap service is required.
+
+Build/install the package and native TNG as described in its README. Then:
 
 ```sh
-sh scripts/build-tng-trustee-client.sh /path/to/new/tng-source
-node --import tsx scripts/prepare-tng-trustee.ts client expected-snp.json trustee.example.test 8443 /path/to/new/client-state
+nebula-trustee prepare --identity expected-snp.json --host trustee.example.test \
+  --port 8443 --state /path/to/new/client-state
+nebula-trustee verify --state /path/to/new/client-state \
+  --tng /path/to/tng-source/target/release/tng --owner-key owner.key --audience trustee
+nebula-trustee put-resource owner/image-key/release-1 resource.bin \
+  --state /path/to/new/client-state --tng /path/to/tng-source/target/release/tng \
+  --owner-key owner.key --audience trustee
 ```
 
 `expected-snp.json` uses `TrusteeSnpIdentity`: `measurement` (96 hex digits),
 `initDataSha256` (64), `chipId` (128), and `minimumReportedTcb` with all four
 numeric components. Preparation creates a private local signer, a pinned CA,
-`approved_cpu.rego`, `as.json` and `tng.json`. It removes the CA private key and
-refuses to overwrite an existing directory. TNG expects `clientAuth` usage on
-the AS token-signing certificate; the helper supplies it.
-
-Launch unmodified AS locally using the digest in the qualification record:
-
-```sh
-docker run --rm --name tng-client-as --platform linux/amd64 \
-  --read-only --cap-drop=ALL --security-opt=no-new-privileges \
-  --tmpfs /tmp:rw,nosuid,nodev -p 127.0.0.1:18082:8080 \
-  -v /path/to/new/client-state:/state \
-  ghcr.io/confidential-containers/staged-images/coco-as-restful@sha256:997d6ba65bbfd6464ebbecaa99ca04ec8050304c9c976cd44e65971c7427eb7d \
-  restful-as --socket 0.0.0.0:8080 --config-file /state/as.json
-```
-
-In another terminal:
-
-```sh
-/path/to/new/tng-source/target/release/tng launch --config-file /path/to/new/client-state/tng.json
-node scripts/trustee-owner-token.mjs owner.key trustee owner.header
-curl --noproxy '*' --fail --header @owner.header http://127.0.0.1:18080/kbs/v0/resource-policy
-```
+`approved_cpu.rego`, `as.json`, `tng.json`, and a versioned `client.json` profile.
+It removes the CA private key and refuses to overwrite an existing directory.
+TNG expects `clientAuth` usage on the AS token-signing certificate. On connection,
+the package checks that policy and configuration still match the approved profile.
 
 The owner token has issuer `nebula-owner`, audience equal to `config.name`, role
-`owner` and a five-minute lifetime. The helper writes a private header file and
-prints no token. Through this same verified local proxy, use native KBS POSTs
-to `resource/<repository>/<type>/<tag>`, `resource-policy`, and
-`attestation-policy`. Use `trusteePolicies` to produce strict recipient rules;
-the API expects the native policy request format documented in
-[Trustee's configuration and administration documentation](https://github.com/confidential-containers/trustee/tree/71251310045d8be2e95041cf0028691623c73957/kbs/docs).
-Both attestation appraisal and resource policy must approve the recipient.
-The owner is intentionally authorized to change these policies; an excluded
-infrastructure administrator must not possess the owner key.
+`owner` and a five-minute lifetime. Normal client calls generate tokens in memory;
+they never place the token or resource bytes in subprocess arguments or logs.
+The owner key is never mounted into the local AS container. Both local listeners
+bind to loopback, and remote Docker daemons are rejected. The owner's machine,
+local Docker runtime, native TNG executable and approved identity inputs are
+trusted parts of the client boundary.
 
-For an offline verifier, cache the qualified host's public VCEK under
-`client-state/kds-store/vcek/<chipId>/vcek.der` and add this standard AS setting
-to `as.json`:
+Use `set-resource-policy` and `set-attestation-policy` to install reviewed Rego,
+or use the same methods on `TrusteeClient` from Node. `trusteePolicies` is exported
+by both packages from the same source. Both attestation appraisal and resource
+policy must approve the recipient. The owner is intentionally authorized to
+change these policies; an excluded infrastructure administrator must not possess
+the owner key. Resource retrieval by a confidential workload continues to use
+CoCo's native KBS/CDH protocol; an owner JWT does not replace recipient attestation.
 
-```json
-{"verifier_config":{"snp_verifier":{"vcek_sources":[{"type":"OfflineStore","path":"/state/kds-store"}]}}}
-```
-
-AS still validates the AMD certificate chain and signed report. This cache
-contains public endorsement material, not a bootstrap secret. The live tests
-used it after transient certificate-service failures to ensure policy failures
-were tested rather than mistaken for network failures.
+For offline verification, pass `--vcek public-vcek.der` to `prepare`. This uses
+mainline AS's native `OfflineStore`; AS still validates the AMD certificate chain
+and signed report. The cache is public endorsement material, not a bootstrap
+secret. Reprepare a new state directory when the approved identity or certificate
+chain changes; do not edit the generated policy or disable certificate checks.
 
 Route the TLS connection through L4 pass-through to the CoCo Pod. Do not
 terminate it in an infrastructure-controlled ingress. On this dev runtime,

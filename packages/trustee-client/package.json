@@ -1,0 +1,26 @@
+{
+  "name": "@nebula/trustee-client",
+  "version": "0.1.0",
+  "description": "Owner client for Nebula's attested, self-sufficient Trustee deployment",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": { "node": ">=20.19" },
+  "bin": { "nebula-trustee": "./bin/nebula-trustee" },
+  "main": "./dist/trustee-client/src/index.js",
+  "types": "./dist/trustee-client/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/trustee-client/src/index.d.ts",
+      "import": "./dist/trustee-client/src/index.js"
+    }
+  },
+  "files": ["dist/", "bin/", "LICENSE", "NOTICE"],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepack": "npm run build",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "commander": "^13.0.0" },
+  "devDependencies": { "@types/node": "^22.13.9", "typescript": "^5.7.2" }
+}
