@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Official Trustee chart documentation: public Bitnami Valkey image repository, not a credential"
+condition = "AND"
+paths = ['''^packages/nebula/src/modules/k8s/trustee/assets/helm/trustee/(README\.md(\.gotmpl)?|scenarios/valkey-sessions\.yaml)$''']
+regexTarget = "secret"
+regexes = ['''^bitnami/valkey$''']

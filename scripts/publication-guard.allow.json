@@ -2,16 +2,6 @@
   "version": 1,
   "entries": [
     {
-      "class": "public-key",
-      "sha256": "0e25d04f30a7c9bd24678a9f5f6eedadfe53d8eeb47d9954f14275a78aecf52c",
-      "reason": "Synthetic bootstrap.example.test certificate generated for trustee-module-compatibility.json; its private key was discarded. Used only to freeze measured output in offline regression tests."
-    },
-    {
-      "class": "public-key",
-      "sha256": "9e5dbacc4d46b60c776cf435a224635a76a7c60a5b90deda2bea2e5b8af2b6f3",
-      "reason": "Synthetic P-256 owner public key generated for trustee-module-compatibility.json; no private key is stored. This regression fixture denies all workload creation and is not a deployment identity."
-    },
-    {
       "class": "hex-64-bytes",
       "sha256": "c2aee2770f457d45e9a0daeacba6bd3b5d04cf91e4da228a7802a71f6f1c369c",
       "reason": "Synthetic Trustee identity fixture: 128 repetitions of the digit 3, not a hardware chip ID."
@@ -50,6 +40,16 @@
       "class": "opaque-blob",
       "sha256": "421be3037544def5f33750966d92bdca6e9e821cd0649e421e95289beff474db",
       "reason": "HOST_DATA test vector trailing-text: the example init-data gzip followed by 'xyz'"
+    },
+    {
+      "class": "binary-file",
+      "sha256": "3d1ab83b00ce9da2fcd55d66ab5b09aac1baef1fe099f52edc73860372cdcc63",
+      "reason": "Public Bitnami postgresql-18.2.0 Helm dependency archive resolved by the official Trustee Chart.lock; disabled in the confidential module. No deployment inputs or credentials."
+    },
+    {
+      "class": "binary-file",
+      "sha256": "72da4e974317fc5f98de3f9085fba56ab5d200d1a2c585423ca0612ad9c2378e",
+      "reason": "Public Bitnami valkey-6.2.0 Helm dependency archive resolved by the official Trustee Chart.lock; disabled in the confidential module. No deployment inputs or credentials."
     }
   ]
 }

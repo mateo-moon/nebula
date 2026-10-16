@@ -1,0 +1,239 @@
+--- a/deployment/helm-chart/.helmignore
++++ b/deployment/helm-chart/.helmignore
+@@ -24 +23,0 @@
+-
+--- a/deployment/helm-chart/README.md
++++ b/deployment/helm-chart/README.md
+@@ -308,0 +309 @@
++| as.enabled | bool | `true` | Deploy the separate AS workload and its configuration/Services. Disable for a self-contained KBS using built-in AS/RVPS. |
+@@ -348,0 +350,2 @@
++| kbs.args | list | `[]` | Arguments for the overridden command. |
++| kbs.command | list | `[]` | Override the KBS command. Required when managedConfig=false. |
+@@ -353,0 +357,4 @@
++| kbs.containerPort | string | `nil` | Container port; null follows kbs.service.port. |
++| kbs.containerSecurityContext | object | `{}` | Container security context overrides, merged over the chart's defaults. |
++| kbs.enableServiceLinks | string | `nil` | Enable Kubernetes Service environment injection. Null preserves the Kubernetes default. |
++| kbs.extraContainers | list | `[]` | Sidecar containers in the KBS Pod, e.g. an attested TLS proxy. |
+@@ -356,0 +364 @@
++| kbs.image.digest | string | `""` | Optional image digest (sha256:...), taking precedence over the tag. |
+@@ -360,0 +369 @@
++| kbs.managedConfig | bool | `true` | Generate and mount the chart's KBS config, user keys and data volumes. Disable when the image/command supplies its own config and mounts. |
+@@ -363,0 +373,3 @@
++| kbs.probes.enabled | bool | `true` | Enable KBS readiness and liveness probes. A proxy sidecar can provide its own probe instead. |
++| kbs.probes.liveness | object | `{}` | Override the entire liveness probe; empty uses /healthz. |
++| kbs.probes.readiness | object | `{}` | Override the entire readiness probe; empty uses /healthz. |
+@@ -366,0 +379 @@
++| kbs.runtimeClassName | string | `""` | RuntimeClass for the KBS Pod (for example a confidential-container runtime). |
+@@ -369,0 +383 @@
++| kbs.service.targetPort | string | `"http"` | Target container port name or number; may select a sidecar listener. |
+@@ -373,0 +388 @@
++| kbs.strategy | object | `{}` | Optional Deployment strategy, e.g. `{type: Recreate}` for ephemeral state. |
+@@ -395,0 +411 @@
++| rvps.enabled | bool | `true` | Deploy the separate RVPS workload and its configuration/Services. Disable for a self-contained KBS using built-in AS/RVPS. |
+@@ -411,0 +428 @@
++| secrets.enabled | bool | `true` | Manage user keys through Kubernetes Secrets and bootstrap hooks. Disable only with kbs.managedConfig=false and as.enabled=false. |
+--- a/deployment/helm-chart/templates/_helpers.tpl
++++ b/deployment/helm-chart/templates/_helpers.tpl
+@@ -496 +496 @@
+-{{- if .Values.secrets.useEphemeralGeneratedKeys }}1{{- end -}}
++{{- if and .Values.secrets.enabled .Values.secrets.useEphemeralGeneratedKeys }}1{{- end -}}
+--- a/deployment/helm-chart/templates/as-configmap.yaml
++++ b/deployment/helm-chart/templates/as-configmap.yaml
+@@ -0,0 +1 @@
++{{- if .Values.as.enabled }}
+@@ -10,0 +12,2 @@
++
++{{- end }}
+--- a/deployment/helm-chart/templates/as-deployment.yaml
++++ b/deployment/helm-chart/templates/as-deployment.yaml
+@@ -0,0 +1 @@
++{{- if .Values.as.enabled }}
+@@ -59 +60 @@
+-              value: {{ .Values.log_level }}
++              value: {{ .Values.log_level | quote }}
+@@ -167,0 +169,2 @@
++
++{{- end }}
+--- a/deployment/helm-chart/templates/as-service.yaml
++++ b/deployment/helm-chart/templates/as-service.yaml
+@@ -0,0 +1 @@
++{{- if .Values.as.enabled }}
+@@ -42,0 +44,2 @@
++
++{{- end }}
+--- a/deployment/helm-chart/templates/kbs-configmap.yaml
++++ b/deployment/helm-chart/templates/kbs-configmap.yaml
+@@ -0,0 +1 @@
++{{- if .Values.kbs.managedConfig }}
+@@ -10,0 +12,2 @@
++
++{{- end }}
+--- a/deployment/helm-chart/templates/kbs-deployment.yaml
++++ b/deployment/helm-chart/templates/kbs-deployment.yaml
+@@ -1 +1 @@
+-{{- if not .Values.secrets.useEphemeralGeneratedKeys }}
++{{- if and .Values.secrets.enabled (not .Values.secrets.useEphemeralGeneratedKeys) }}
+@@ -15,0 +16,4 @@
++  {{- with .Values.kbs.strategy }}
++  strategy:
++    {{- toYaml . | nindent 4 }}
++  {{- end }}
+@@ -35,0 +40,6 @@
++      {{- with .Values.kbs.runtimeClassName }}
++      runtimeClassName: {{ . | quote }}
++      {{- end }}
++      {{- if ne .Values.kbs.enableServiceLinks nil }}
++      enableServiceLinks: {{ .Values.kbs.enableServiceLinks }}
++      {{- end }}
+@@ -39,0 +50 @@
++      {{- if .Values.as.enabled }}
+@@ -51,0 +63 @@
++      {{- end }}
+@@ -60 +72,4 @@
+-            {{- include "coco-trustee.containerSecurityContext" . | nindent 12 }}
++            {{- toYaml (mergeOverwrite (include "coco-trustee.containerSecurityContext" . | fromYaml) .Values.kbs.containerSecurityContext) | nindent 12 }}
++          {{- if .Values.kbs.image.digest }}
++          image: "{{ .Values.kbs.image.repository }}@{{ .Values.kbs.image.digest }}"
++          {{- else }}
+@@ -61,0 +77 @@
++          {{- end }}
+@@ -62,0 +79,3 @@
++          {{- if .Values.kbs.command }}
++          command: {{ .Values.kbs.command | toJson }}
++          {{- else }}
+@@ -66,0 +86,4 @@
++          {{- end }}
++          {{- with .Values.kbs.args }}
++          args: {{ . | toJson }}
++          {{- end }}
+@@ -69 +92 @@
+-              value: {{ .Values.log_level }}
++              value: {{ .Values.log_level | quote }}
+@@ -92 +115 @@
+-              containerPort: {{ include "coco-trustee.port.kbs" . }}
++              containerPort: {{ default (include "coco-trustee.port.kbs" .) .Values.kbs.containerPort }}
+@@ -93,0 +117 @@
++          {{- if .Values.kbs.probes.enabled }}
+@@ -94,0 +119,3 @@
++            {{- if .Values.kbs.probes.readiness }}
++            {{- toYaml .Values.kbs.probes.readiness | nindent 12 }}
++            {{- else }}
+@@ -100,0 +128 @@
++            {{- end }}
+@@ -101,0 +130,3 @@
++            {{- if .Values.kbs.probes.liveness }}
++            {{- toYaml .Values.kbs.probes.liveness | nindent 12 }}
++            {{- else }}
+@@ -107,0 +139,2 @@
++            {{- end }}
++          {{- end }}
+@@ -112,0 +146 @@
++            {{- if .Values.kbs.managedConfig }}
+@@ -131,0 +166 @@
++            {{- end }}
+@@ -138,0 +174,3 @@
++      {{- with .Values.kbs.extraContainers }}
++        {{- toYaml . | nindent 8 }}
++      {{- end }}
+@@ -139,0 +178 @@
++        {{- if .Values.kbs.managedConfig }}
+@@ -163,0 +203 @@
++        {{- end }}
+--- a/deployment/helm-chart/templates/kbs-nodeport-service.yaml
++++ b/deployment/helm-chart/templates/kbs-nodeport-service.yaml
+@@ -12 +12 @@
+-      targetPort: http
++      targetPort: {{ .Values.kbs.service.targetPort }}
+--- a/deployment/helm-chart/templates/kbs-service.yaml
++++ b/deployment/helm-chart/templates/kbs-service.yaml
+@@ -13 +13 @@
+-      targetPort: http
++      targetPort: {{ .Values.kbs.service.targetPort }}
+@@ -40 +40 @@
+-      targetPort: http
++      targetPort: {{ .Values.kbs.service.targetPort }}
+--- a/deployment/helm-chart/templates/rvps-configmap.yaml
++++ b/deployment/helm-chart/templates/rvps-configmap.yaml
+@@ -0,0 +1 @@
++{{- if .Values.rvps.enabled }}
+@@ -10,0 +12,2 @@
++
++{{- end }}
+--- a/deployment/helm-chart/templates/rvps-deployment.yaml
++++ b/deployment/helm-chart/templates/rvps-deployment.yaml
+@@ -0,0 +1 @@
++{{- if .Values.rvps.enabled }}
+@@ -61 +62 @@
+-              value: {{ .Values.log_level }}
++              value: {{ .Values.log_level | quote }}
+@@ -128,0 +130,2 @@
++
++{{- end }}
+--- a/deployment/helm-chart/templates/rvps-service.yaml
++++ b/deployment/helm-chart/templates/rvps-service.yaml
+@@ -0,0 +1 @@
++{{- if .Values.rvps.enabled }}
+@@ -67,0 +69,2 @@
++
++{{- end }}
+--- /dev/null
++++ b/deployment/helm-chart/templates/validate.yaml
+@@ -0,0 +1,15 @@
++{{- if and .Values.kbs.managedConfig (not .Values.as.enabled) }}
++{{- fail "kbs.managedConfig requires as.enabled; supply your own config/command for built-in AS" }}
++{{- end }}
++{{- if and .Values.as.enabled (not .Values.rvps.enabled) }}
++{{- fail "the separate AS requires rvps.enabled" }}
++{{- end }}
++{{- if and (not .Values.secrets.enabled) (or .Values.kbs.managedConfig .Values.as.enabled) }}
++{{- fail "secrets.enabled=false requires kbs.managedConfig=false and as.enabled=false" }}
++{{- end }}
++{{- if and (not .Values.kbs.managedConfig) (not .Values.kbs.command) }}
++{{- fail "kbs.command is required when kbs.managedConfig=false" }}
++{{- end }}
++{{- if and (not .Values.kbs.managedConfig) .Values.kbs.tls.enabled }}
++{{- fail "kbs.tls config is chart-managed; configure TLS in your own command when kbs.managedConfig=false" }}
++{{- end }}
+--- a/deployment/helm-chart/values.yaml
++++ b/deployment/helm-chart/values.yaml
+@@ -138,0 +139,25 @@
++  # -- Generate and mount the chart's KBS config, user keys and data volumes. Disable when the image/command supplies its own config and mounts.
++  managedConfig: true
++  # -- RuntimeClass for the KBS Pod (for example a confidential-container runtime).
++  runtimeClassName: ""
++  # -- Optional Deployment strategy, e.g. `{type: Recreate}` for ephemeral state.
++  strategy: {}
++  # -- Enable Kubernetes Service environment injection. Null preserves the Kubernetes default.
++  enableServiceLinks: null
++  # -- Override the KBS command. Required when managedConfig=false.
++  command: []
++  # -- Arguments for the overridden command.
++  args: []
++  # -- Sidecar containers in the KBS Pod, e.g. an attested TLS proxy.
++  extraContainers: []
++  # -- Container security context overrides, merged over the chart's defaults.
++  containerSecurityContext: {}
++  # -- Container port; null follows kbs.service.port.
++  containerPort: null
++  probes:
++    # -- Enable KBS readiness and liveness probes. A proxy sidecar can provide its own probe instead.
++    enabled: true
++    # -- Override the entire readiness probe; empty uses /healthz.
++    readiness: {}
++    # -- Override the entire liveness probe; empty uses /healthz.
++    liveness: {}
+@@ -175,0 +201,2 @@
++    # -- Optional image digest (sha256:...), taking precedence over the tag.
++    digest: ""
+@@ -186,0 +214,2 @@
++    # -- Target container port name or number; may select a sidecar listener.
++    targetPort: http
+@@ -216,0 +246,2 @@
++  # -- Deploy the separate AS workload and its configuration/Services. Disable for a self-contained KBS using built-in AS/RVPS.
++  enabled: true
+@@ -301,0 +333,2 @@
++  # -- Deploy the separate RVPS workload and its configuration/Services. Disable for a self-contained KBS using built-in AS/RVPS.
++  enabled: true
+@@ -370,0 +404,2 @@
++  # -- Manage user keys through Kubernetes Secrets and bootstrap hooks. Disable only with kbs.managedConfig=false and as.enabled=false.
++  enabled: true

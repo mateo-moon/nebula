@@ -1,0 +1,18 @@
+{
+    "storage": {
+        "storage_type": "{{ include "coco-trustee.storage.type" . }}",
+        "backends": {
+            "local_fs": {
+                "dir_path": "{{ include "coco-trustee.storage.rvpsLocalDir" . }}"
+            },
+            "local_json": {
+                "file_dir_path": "{{ include "coco-trustee.storage.localJsonDir" . }}"
+            },
+            "postgres": {},
+            "redis": {}
+        }
+    },
+    "extractors": {
+        "swid_extractor": {}
+    }
+}

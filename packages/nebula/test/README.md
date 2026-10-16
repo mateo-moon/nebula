@@ -9,13 +9,12 @@ policy-engine checks. CI enables both with checksum-verified downloads. These
 checks do not deploy to a cluster; see the Kyverno module README for lifecycle
 qualification before production adoption.
 
-`tng-trustee.test.ts` covers the self-sufficient Trustee plan, strict local
-verification policy, owner-key/artifact binding, certificate preparation and
-native owner JWT utility. The disposable dev SNP qualification is recorded in
-`evidence/tng-trustee-snp-dev-2026-10-15.json`; its reviewed genpolicy hardener
-is `support/tng-trustee-dev-policy.mts`. See the module's `TNG.md` for pins,
-preparation and the two client compatibility fixes. Ordinary tests do not
-contact the cluster.
+`trustee-module.test.ts` renders the bundled official chart and checks its
+confidential topology. Set `TRUSTEE_GENPOLICY` to the pinned native binary and
+optionally `TRUSTEE_GENPOLICY_CACHE` for the real Helm → genpolicy → identity
+integration test. `trustee-guest-policy.integration.ts` executes the restrictive
+profile with native Regorus. See the module README for installation and dev SNP
+qualification. Ordinary tests do not contact the cluster.
 
 Use Node 24, pnpm and Go (the template fixture declares its version in
 `support/oidc-template/go.mod`). A first run downloads checksum-pinned Go
@@ -110,21 +109,14 @@ The packed-package test also needs package-registry access or a warm pnpm store.
   part) with the committed render in `confidential-guests-golden/`
   (regenerate with `UPDATE_GOLDEN=1` after reviewing the change) and runs
   the publication guard over that render.
-- `trustee.test.ts` checks confidential Trustee composition, absence of host
-  secret/storage paths, native KBS configuration, measured bootstrap identity,
-  stale-policy refusal and dangerous agent-API source gates. The
-  `verify:broker-admission` tier also runs `trustee-policy.integration.ts` with
-  the pinned Regorus/EAR engines, including resource isolation, exact launch
-  pairs, malformed evidence, TCB downgrades and bounded startup metadata copies.
-  `trustee-runtime.integration.test.ts` runs the actual upstream KBS when
-  `TRUSTEE_TEST_IMAGE` supplies its digest. It uses synthetic credentials and
-  a local CDH stand-in in network-isolated containers; it checks native TLS,
-  token endorsement, encrypted retrieval, admin denial and bootstrap failures.
-  These are software checks; a deployment still needs a qualified genpolicy
-  artifact, independent bootstrap KBS and SNP hardware acceptance tests.
-  The manual [development SNP record](evidence/trustee-snp-dev-2026-10-14.json)
-  captures native bootstrap/client success and rejection cases with synthetic
-  material, including the current platform's production-security limitations.
+- `trustee.test.ts` checks unsafe input refusal before host resolution or
+  manifest generation. `tng-trustee.test.ts` checks strict local attestation
+  policy. The `verify:broker-admission` tier executes Trustee SNP appraisal,
+  per-resource authorization and hostile guest-agent requests with native
+  Regorus/EAR. The sibling Node client's `native.test.ts` runs unmodified KBS
+  with synthetic credentials, exercising owner JWTs and resource lifecycle.
+  The previous dev records describe historical bootstrap/manual-policy paths;
+  they are not acceptance evidence for the current Helm integration.
 - `confidential-guests-guest-env.test.ts` holds the guest env renderers to
   the guest's own readers: `confidential-guests-guest-env/` vendors the
   contract's neutral fixtures byte for byte under a pinned manifest, the

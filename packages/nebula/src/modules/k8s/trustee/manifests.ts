@@ -1,5 +1,5 @@
 import {
-  IntOrString, Quantity, type Container, type KubeDeploymentProps, type KubeNetworkPolicyProps,
+  IntOrString, type Container, type KubeNetworkPolicyProps,
   type PodSpec,
 } from "cdk8s-plus-33/lib/imports/k8s";
 import type { TrusteeConfig } from "./types";
@@ -52,32 +52,6 @@ export type TrusteeDeploymentManifest = {
     };
   };
 };
-
-export function deploymentFor(pod: TrusteePodManifest): TrusteeDeploymentManifest {
-  const { name, namespace, labels, annotations } = pod.metadata;
-  return { apiVersion: "apps/v1", kind: "Deployment", metadata: { name, namespace, labels },
-    spec: { replicas: 1, strategy: { type: "Recreate" }, selector: { matchLabels: labels },
-      template: { metadata: { labels, annotations }, spec: pod.spec } } };
-}
-
-export function deploymentProps(pod: TrusteePodManifest): KubeDeploymentProps {
-  const { metadata, spec } = deploymentFor(pod);
-  const quantities = (values: Readonly<Record<string, string>>) =>
-    Object.fromEntries(Object.entries(values).map(([name, value]) => [name, Quantity.fromString(value)]));
-  return { metadata, spec: { ...spec, template: { ...spec.template, spec: {
-    ...pod.spec,
-    containers: pod.spec.containers.map(({ resources, readinessProbe, ...container }) => ({
-      ...container,
-      resources: { requests: quantities(resources.requests), limits: quantities(resources.limits) },
-      readinessProbe: readinessProbe && {
-        ...readinessProbe, tcpSocket: { port: IntOrString.fromNumber(readinessProbe.tcpSocket.port) },
-      },
-    })),
-    volumes: pod.spec.volumes.map(({ name, emptyDir }) => ({ name,
-      emptyDir: { ...emptyDir, sizeLimit: Quantity.fromString(emptyDir.sizeLimit) },
-    })),
-  } } } };
-}
 
 export function ingressPolicyProps(pod: TrusteePodManifest, clients: TrusteeConfig["clients"], port: number): KubeNetworkPolicyProps {
   const { name, namespace, labels } = pod.metadata;

@@ -110,8 +110,11 @@ test("failed TNG startup and occupied ports cannot reuse another local proxy", a
   await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary: join(f.directory, "missing") }), /TNG/);
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
   assert.equal(existsSync(join(f.directory, "verifier.pid")), false);
-  const blocker = createServer(); await new Promise<void>(accept => blocker.listen(f.localPort, "127.0.0.1", accept)); t.after(() => blocker.close());
+  let requests = 0;
+  const blocker = createServer((_req, res) => { requests++; res.end(); });
+  await new Promise<void>(accept => blocker.listen(f.localPort, "0.0.0.0", accept)); t.after(() => blocker.close());
   await assert.rejects(TrusteeClient.connect(f.options), /already in use/);
+  assert.equal(requests, 0, "an existing wildcard listener must never receive owner credentials");
 });
 
 test("requests time out and caller cancellation closes in-flight operations", async t => {

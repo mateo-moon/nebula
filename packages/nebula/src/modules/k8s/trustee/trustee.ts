@@ -1,42 +1,49 @@
 import { Construct } from "constructs";
-import { IntOrString, KubeDeployment, KubeNamespace, KubeNetworkPolicy, KubeService } from "cdk8s-plus-33/lib/imports/k8s";
+import { Helm, type ApiObject } from "cdk8s";
+import { KubeNamespace, KubeNetworkPolicy } from "cdk8s-plus-33/lib/imports/k8s";
 import { BaseConstruct } from "../../../core";
-import { deploymentProps, ingressPolicyProps } from "./manifests";
-import { bindTrusteePolicy } from "./measurement";
-import { trusteePlan } from "./plan";
-import type { TrusteeDeploymentConfig } from "./types";
+import { generateTrusteePolicy } from "./genpolicy";
+import { annotateTrustee, readTrusteeHelmPlan, trusteeHelmProps } from "./helm";
+import { ingressPolicyProps } from "./manifests";
+import { snpIdentity, type TrusteeSnpIdentity } from "./policies";
+import { trusteeSettings } from "./settings";
+import type { TrusteeConfig } from "./types";
 import { publicConfig } from "./validation";
 
-/** Upstream Trustee with native AA/CDH bootstrap in one measured SNP guest. */
-export class Trustee extends BaseConstruct<TrusteeDeploymentConfig> {
+/** Official Trustee Helm chart and native CoCo policy in one SNP PodVM.
+ * A replacement VM needs owner reprovisioning. */
+export class Trustee extends BaseConstruct<TrusteeConfig> {
   public readonly namespace?: KubeNamespace;
-  public readonly deployment: KubeDeployment;
-  public readonly service: KubeService;
+  public readonly helm: Helm;
+  public readonly deployment: ApiObject;
+  public readonly service: ApiObject;
   public readonly networkPolicy: KubeNetworkPolicy;
+  public readonly identity: TrusteeSnpIdentity;
   public readonly serviceUrl: string;
-  public readonly initDataSha256: string;
 
-  constructor(scope: Construct, id: string, config: TrusteeDeploymentConfig) {
+  constructor(scope: Construct, id: string, config: TrusteeConfig) {
     super(scope, id, publicConfig("Trustee", config));
-    const plan = trusteePlan(this.config);
-    const pod = bindTrusteePolicy(plan, this.config.policy);
-    this.serviceUrl = plan.serviceUrl;
-    this.initDataSha256 = this.config.policy.initDataSha256;
-    const { name, namespace, clients } = this.config;
-    const { labels } = pod.metadata;
-    const port = this.config.port ?? 8443;
-
-    if (this.config.createNamespace !== false) {
-      this.namespace = new KubeNamespace(this, "namespace", { metadata: { name: namespace } });
+    const { values, aaToml } = trusteeSettings(this.config);
+    this.helm = new Helm(this, "helm", trusteeHelmProps(this.config, values));
+    try {
+      const plan = readTrusteeHelmPlan(this.helm, this.config, values);
+      const generated = generateTrusteePolicy(plan.workload, aaToml, this.config);
+      this.deployment = this.helm.apiObjects.find(object => object.kind === "Deployment")!;
+      this.service = this.helm.apiObjects.find(object => object.kind === "Service")!;
+      annotateTrustee(this.deployment, generated.ccInitData);
+      this.identity = snpIdentity({ ...this.config.guest, initDataSha256: generated.initDataSha256 });
+      this.serviceUrl = `https://${this.service.name}.${this.config.namespace}.svc.cluster.local:8443`;
+      this.networkPolicy = new KubeNetworkPolicy(this, "network-policy",
+        ingressPolicyProps(plan.pod, this.config.clients, 8443));
+    } catch (error) {
+      this.node.tryRemoveChild("helm");
+      throw error;
     }
-    this.deployment = new KubeDeployment(this, "deployment", deploymentProps(pod));
-    this.service = new KubeService(this, "service", {
-      metadata: { name, namespace, labels },
-      spec: { type: "ClusterIP", selector: labels,
-        ports: [{ name: "https", port, targetPort: IntOrString.fromNumber(port), protocol: "TCP" }] },
-    });
-    this.networkPolicy = new KubeNetworkPolicy(this, "network-policy", ingressPolicyProps(pod, clients, port));
+    if (this.config.createNamespace !== false) {
+      this.namespace = new KubeNamespace(this, "namespace", { metadata: { name: this.config.namespace } });
+    }
   }
-}
 
+  get initDataSha256(): string { return this.identity.initDataSha256; }
+}
 export default Trustee;

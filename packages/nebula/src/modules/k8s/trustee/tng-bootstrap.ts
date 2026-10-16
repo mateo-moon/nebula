@@ -1,5 +1,6 @@
-import { TRUSTEE_STATE as STATE } from "./bootstrap";
-import type { TngTrusteePlan } from "./types";
+export const TRUSTEE_STATE = "/run/trustee";
+const STATE = TRUSTEE_STATE;
+import type { TrusteeTngConfig } from "./types";
 
 const quote = (text: string) => "'" + text.replaceAll("'", "'\"'\"'") + "'";
 const write = (path: string, text: string) =>
@@ -27,7 +28,7 @@ exec /usr/local/bin/kbs --config-file ${root}/kbs.toml >/dev/null 2>&1
 `;
 }
 
-export function tngBootstrapScript(tngConfig: TngTrusteePlan["tngConfig"]): string {
+export function tngBootstrapScript(tngConfig: TrusteeTngConfig): string {
   return `set -eu
 umask 077
 ulimit -c 0

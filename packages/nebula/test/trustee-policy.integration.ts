@@ -3,8 +3,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { trusteePolicies, TRUSTEE_DENIED_AGENT_REQUESTS, TRUSTEE_STARTUP_METADATA_POLICY } from "../src/modules/k8s/trustee";
-import { denyPolicy, evidence, identity } from "./support/trustee";
+import { trusteePolicies } from "../src/modules/k8s/trustee";
+import { evidence, identity } from "./support/trustee";
 
 const runner = fileURLToPath(new URL("./support/broker-policy-runner/target/debug/broker-policy-test-runner", import.meta.url));
 const evaluate = (cases: object[]): any[] => execFileSync(runner, { input: JSON.stringify(cases), encoding: "utf8", maxBuffer: 8 * 1024 * 1024 })
@@ -72,23 +72,4 @@ invalid.push({ input: { submods: { ...token(evidence()).submods, gpu0: {} } }, d
 evaluate(invalid.map(value => ({ ...value, policy: policies.resourcePolicy, query: "data.policy.allow" })))
   .forEach(value => assert.equal(value, false));
 
-// Exercise the fixed dangerous-RPC denies and metadata-copy exception with the
-// same Rego interpreter. Full generated creation-policy qualification is external.
-const agentPolicy = denyPolicy + TRUSTEE_STARTUP_METADATA_POLICY;
-const file = { file_type: "Regular", offset: 0, file_size: 1024,
-  path: `/run/kata-containers/shared/containers/${"a".repeat(64)}-${"b".repeat(16)}-resolv.conf` };
-const copies = [
-  { input: file, state: {}, allow: true },
-  { input: file, state: { trustee: true }, allow: false },
-  { input: file, state: { ["a".repeat(64)]: true }, allow: false },
-  ...[{ path: "/run/trustee/current/tls/key.pem" }, { path: file.path + "/../../key" }, { file_size: 65537 },
-    { file_size: -1 }, { offset: 1 }, { file_type: "Symlink" }, { path: file.path + "\n" }]
-    .map(change => ({ input: { ...file, ...change }, state: {}, allow: false })),
-];
-const decisions = evaluate(copies.map(item => ({ policy: agentPolicy, query: "data.agent_policy.CopyFileRequest",
-  input: item.input, data: { pstate: item.state } })));
-copies.forEach((item, index) => assert.equal(decisions[index], item.allow, JSON.stringify(item)));
-const denied = evaluate(TRUSTEE_DENIED_AGENT_REQUESTS.map(request => ({ policy: agentPolicy,
-  query: `data.agent_policy.${request}`, input: { process: { Args: ["cat", "/run/trustee/current/tls/key.pem"] } } })));
-denied.forEach(value => assert.equal(value, false));
-console.log(`Trustee: ${examples.length * 3 + invalid.length + copies.length + denied.length} native Rego/EAR decisions passed.`);
+console.log(`Trustee: ${examples.length * 3 + invalid.length} native Rego/EAR decisions passed.`);

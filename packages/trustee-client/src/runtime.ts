@@ -15,6 +15,9 @@ export interface RuntimeOptions {
 }
 
 async function freePort(port: number) {
+  // On macOS a specific-address bind can coexist with an existing wildcard
+  // listener. Check reachability too, before TNG can send an owner request.
+  if (await listening(port)) throw new Error(`Local port ${port} is already in use`);
   await new Promise<void>((accept, reject) => {
     const server = createServer();
     server.once("error", () => reject(new Error(`Local port ${port} is already in use`)));

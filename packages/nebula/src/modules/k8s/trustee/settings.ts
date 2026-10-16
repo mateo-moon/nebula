@@ -1,15 +1,16 @@
 import { createPublicKey } from "node:crypto";
 import { stringify } from "smol-toml";
-import { canonicalJson, sha256Hex } from "../confidential-guests/canonical";
 import { isDigestImage } from "../confidential-guests/types";
 import { measuredFragments } from "../envoy";
-import { TRUSTEE_STATE as STATE } from "./bootstrap";
-import { deploymentFor, type TrusteePodManifest } from "./manifests";
+import { TRUSTEE_STATE as STATE } from "./tng-bootstrap";
+import { confidentialTrusteeValues } from "./helm";
 import { tngBootstrapScript, tngTrusteeBootstrapScript } from "./tng-bootstrap";
-import type { TngTrusteeConfig, TngTrusteePlan } from "./types";
+import type { TrusteeConfig, TrusteeTngConfig } from "./types";
 import { publicConfig } from "./validation";
+import { snpIdentity } from "./policies";
+import { validateNetwork } from "./genpolicy";
 
-const fail = (message: string): never => { throw new TypeError(`TngTrustee: ${message}`); };
+const fail = (message: string): never => { throw new TypeError(`Trustee: ${message}`); };
 function label(value: string): void {
   if (typeof value !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value)) fail("invalid DNS label");
 }
@@ -31,8 +32,12 @@ function publicKey(pem: string): string {
   if (pem.replace(/\s/g, "") !== normalized.replace(/\s/g, "")) fail("unexpected public-key content");
   return normalized;
 }
-export function tngTrusteePlan(config: TngTrusteeConfig): TngTrusteePlan {
-  publicConfig("TngTrustee", config);
+export function trusteeSettings(config: TrusteeConfig) {
+  publicConfig("Trustee", config);
+  // Validate the owner-supplied guest fields before invoking external tools.
+  // The real Init-Data hash is produced by native genpolicy below.
+  snpIdentity({ ...config.guest, initDataSha256: "1".repeat(64) });
+  validateNetwork(config.network);
   label(config.name); label(config.namespace);
   if (config.namespace === "default" || config.namespace.startsWith("kube-")) fail("use a dedicated namespace");
   if (!isDigestImage(config.kbsImage) || !isDigestImage(config.tngImage)) fail("both images must be pinned by digest");
@@ -59,36 +64,29 @@ export function tngTrusteePlan(config: TngTrusteeConfig): TngTrusteePlan {
     storage_backend: { storage_type: "LocalFs", backends: { local_fs: { dir_path: `${root}/storage` } } },
     plugins: [{ name: "resource", storage_backend_type: "kvstorage" }],
   });
-  const tngConfig: TngTrusteePlan["tngConfig"] = { add_egress: [{ mapping: {
+  const tngConfig: TrusteeTngConfig = { add_egress: [{ mapping: {
     in: { host: "0.0.0.0", port: 8443 }, out: { host: "127.0.0.1", port: 8080 } },
     attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8006", refresh_interval: 0 },
     rats_tls: { multiplex: false } }] };
   const kbsScript = tngTrusteeBootstrapScript(owner, kbsConfig);
   const tngScript = tngBootstrapScript(tngConfig);
-  const labels = { "app.kubernetes.io/name": "tng-trustee", "app.kubernetes.io/instance": config.name };
-  const securityContext = { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
-  const container = (name: string, image: string, script: string, tmp: string) => ({ name, image, imagePullPolicy: "Always",
-    command: ["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', name],
-    args: measuredFragments(Buffer.from(script).toString("base64")),
-    env: [{ name: "RUST_LOG", value: "off" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
-    securityContext, resources: { requests: { cpu: "100m", memory: "128Mi" }, limits: { cpu: "1", memory: "1Gi" } },
-    volumeMounts: [{ name: tmp, mountPath: "/tmp" }] });
-  const kbs = container("trustee", config.kbsImage, kbsScript, "kbs-tmp");
-  kbs.volumeMounts.push({ name: "state", mountPath: STATE });
-  const tng = container("tng", config.tngImage, tngScript, "tng-tmp");
-  tng.env[0].value = "error";
-  const pod: TrusteePodManifest = { apiVersion: "v1", kind: "Pod", metadata: { name: config.name, namespace: config.namespace, labels,
-    annotations: { "io.containerd.cri.runtime-handler": "kata-qemu-snp",
-      "io.katacontainers.config.hypervisor.default_memory": "2048", "io.katacontainers.config.hypervisor.default_vcpus": "2",
-      "io.katacontainers.config.hypervisor.kernel_params": "agent.guest_components_procs=api-server-rest agent.guest_components_rest_api=attestation" } },
-    spec: { runtimeClassName: "kata-qemu-snp", automountServiceAccountToken: false, enableServiceLinks: false,
-      nodeSelector: { ...config.nodeSelector }, restartPolicy: "Always",
-      securityContext: { runAsUser: 10001, runAsGroup: 10001, runAsNonRoot: true, fsGroup: 10001,
-        seccompProfile: { type: "RuntimeDefault" } },
-      containers: [kbs, { ...tng, ports: [{ name: "rats-tls", containerPort: 8443 }],
-        readinessProbe: { tcpSocket: { port: 8443 }, periodSeconds: 5 } }],
-      volumes: ["state", "kbs-tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit: "128Mi" } })),
-    } };
+  const values = confidentialTrusteeValues(config, { image: config.kbsImage, script: kbsScript,
+    restApi: "attestation", port: 8443, memory: 2048, vcpus: 2 });
+  values.kbs.extraVolumeMounts = [{ name: "kbs-tmp", mountPath: "/tmp" }, { name: "state", mountPath: STATE }];
+  values.kbs.extraVolumes = ["state", "kbs-tmp", "tng-tmp"].map(name => ({ name,
+    emptyDir: { medium: "Memory", sizeLimit: "128Mi" } }));
+  values.kbs.probes.enabled = false; // KBS only listens on guest loopback; TNG owns readiness.
+  values.kbs.containerPort = 8080;
+  values.kbs.service.targetPort = "rats-tls";
+  values.kbs.extraContainers = [{ name: "tng", image: config.tngImage, imagePullPolicy: "Always",
+    command: ["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"],
+    args: measuredFragments(Buffer.from(tngScript).toString("base64")),
+    env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
+    securityContext: values.kbs.containerSecurityContext, resources: values.kbs.resources,
+    volumeMounts: [{ name: "tng-tmp", mountPath: "/tmp" }],
+    ports: [{ name: "rats-tls", containerPort: 8443 }],
+    readinessProbe: { tcpSocket: { port: 8443 }, periodSeconds: 5 },
+  }];
   const aaToml = stringify({ log: { level: "off" } });
-  return { pod, workload: deploymentFor(pod), canonicalPodSha256: sha256Hex(canonicalJson(pod)), kbsConfig, tngConfig, aaToml };
+  return { values, kbsConfig, tngConfig, aaToml };
 }

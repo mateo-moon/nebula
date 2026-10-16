@@ -71,7 +71,10 @@ maintainers live under [`tools/tng-client`](../../tools/tng-client/README.md).
 Native builds and releases can be maintained independently of the TypeScript API.
 
 Keep the P-256 owner key on this trusted computer; only its public key belongs
-in the measured deployment. Independently approve `expected-snp.json` with
+in the measured deployment. Use `trustee.identity` from the Nebula construct directly when preparing the
+client in the same TypeScript application. The module generates `initDataSha256`
+from native genpolicy output. For separate CLI usage, export that identity from
+the trusted synthesis environment to `expected-snp.json`, with
 `measurement` (96 lowercase hex digits), `initDataSha256` (64), `chipId` (128),
 and `minimumReportedTcb` containing explicit `bootloader`, `tee`, `snp`, and
 `microcode` byte values. Do not learn these values from the endpoint being verified.
