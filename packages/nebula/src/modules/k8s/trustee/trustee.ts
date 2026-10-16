@@ -4,7 +4,6 @@ import { KubeNamespace, KubeNetworkPolicy } from "cdk8s-plus-33/lib/imports/k8s"
 import { BaseConstruct } from "../../../core";
 import { generateTrusteePolicy } from "./genpolicy";
 import { annotateTrustee, extendTrusteeHelm, readTrusteeHelmPlan, trusteeHelmProps } from "./helm";
-import { withTrusteeChart } from "./chart";
 import { ingressPolicyProps } from "./manifests";
 import { snpIdentity, type TrusteeSnpIdentity } from "./policies";
 import { trusteeSettings } from "./settings";
@@ -26,7 +25,7 @@ export class Trustee extends BaseConstruct<TrusteeConfig> {
     super(scope, id, publicConfig("Trustee", config));
     const settings = trusteeSettings(this.config);
     try {
-      this.helm = withTrusteeChart(chart => new Helm(this, "helm", trusteeHelmProps(this.config, settings, chart)));
+      this.helm = new Helm(this, "helm", trusteeHelmProps(this.config, settings));
       extendTrusteeHelm(this.helm, settings);
       const plan = readTrusteeHelmPlan(this.helm, this.config, settings);
       const generated = generateTrusteePolicy(plan.workload, settings.aaToml, this.config);

@@ -11,6 +11,14 @@ export interface TrusteeNetworkConfig {
 export interface TrusteeConfig {
   readonly name: string;
   readonly namespace: string;
+  /** Official Trustee chart reference, OCI URL, packaged chart or prepared local
+   * directory, passed directly to Helm. Upstream currently publishes Git source
+   * only, so there is no implicit chart repository or download step. */
+  readonly chart: string;
+  /** Helm repository URL for a named chart. Omit for OCI URLs and local charts. */
+  readonly repository?: string;
+  /** Helm chart version. Defaults to the qualified chart version, 0.21.0. */
+  readonly version?: string;
   /** Unmodified upstream KBS with built-in AS/RVPS, pinned by digest. */
   readonly kbsImage: string;
   /** Unmodified upstream TNG with coco_asr, pinned by digest. */

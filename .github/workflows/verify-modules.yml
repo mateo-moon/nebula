@@ -100,9 +100,22 @@ jobs:
           helm version --short
       - name: Build the unmodified pinned native generator
         run: tools/genpolicy/build.sh "$RUNNER_TEMP/genpolicy"
+      - name: Check out the official Trustee chart for qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: confidential-containers/trustee
+          ref: 3e160008ef3e5d8ce82e59c729d56e2d0175dba0
+          path: .dependencies/trustee
+          sparse-checkout: deployment/helm-chart
+          persist-credentials: false
+      - name: Package the unmodified chart with its locked dependencies
+        run: |
+          helm dependency build .dependencies/trustee/deployment/helm-chart --skip-refresh
+          helm package .dependencies/trustee/deployment/helm-chart --destination "$RUNNER_TEMP/trustee-chart"
       - name: Generate native Init-Data from actual Helm output
         working-directory: packages/nebula
         env:
+          TRUSTEE_HELM_CHART: ${{ runner.temp }}/trustee-chart/trustee-0.21.0.tgz
           TRUSTEE_GENPOLICY: ${{ runner.temp }}/genpolicy/genpolicy
           TRUSTEE_GENPOLICY_CACHE: ${{ runner.temp }}/genpolicy-cache
         run: pnpm exec tsx --test test/trustee-module.test.ts

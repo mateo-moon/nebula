@@ -54,9 +54,14 @@ export function confidentialTrusteeHelmSettings(config: ReleaseConfig, guest: {
 
 export type TrusteeHelmSettings = ReturnType<typeof confidentialTrusteeHelmSettings>;
 
-export function trusteeHelmProps(config: ReleaseConfig, settings: TrusteeHelmSettings, chart: string): HelmProps {
+export function trusteeHelmProps(config: ReleaseConfig & Pick<TrusteeConfig, "chart" | "repository" | "version">,
+  settings: TrusteeHelmSettings): HelmProps {
   if (config.name.length > 53) throw new TypeError("Trustee: Helm release name must not exceed 53 characters");
-  return { chart, releaseName: config.name, namespace: config.namespace, values: settings.values,
+  if (typeof config.chart !== "string" || !config.chart.trim()) {
+    throw new TypeError("Trustee: supply the official Helm chart reference or prepared local chart path");
+  }
+  return { chart: config.chart, repo: config.repository, version: config.version ?? "0.21.0",
+    releaseName: config.name, namespace: config.namespace, values: settings.values,
     // Built-in AS/RVPS run inside KBS. Select only the upstream KBS resources;
     // never synthesize separate services, ConfigMaps, keys, RBAC or bootstrap Jobs.
     helmFlags: ["--show-only", "templates/kbs-deployment.yaml", "--show-only", "templates/kbs-service.yaml"] };

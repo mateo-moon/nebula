@@ -10,6 +10,8 @@ paths = ['''^packages/nebula/src/modules/k8s/trustee/assets/helm/trustee/(README
 regexTarget = "secret"
 regexes = ['''^bitnami/valkey$''']
 
+# Historical allowlist: chart.ts was removed with the custom downloader, but
+# this exact public checksum remains in the PR's earlier commits.
 [[allowlists]]
 description = "Public Valkey Helm archive SHA-256 checked against the upstream download, not a credential"
 condition = "AND"

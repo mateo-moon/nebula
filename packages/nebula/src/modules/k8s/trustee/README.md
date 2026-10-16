@@ -7,13 +7,19 @@ directly to `@nebula/trustee-client`. There is no separate workload artifact,
 manual policy binding, bootstrap KBS, or Trustee fork. `TngTrustee` is an alias.
 
 The [official Trustee chart](https://github.com/confidential-containers/trustee/tree/3e160008ef3e5d8ce82e59c729d56e2d0175dba0/deployment/helm-chart)
-is an external dependency, pinned to commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0`
-(chart 0.21.0). Upstream distributes it in Git rather than a Helm repository.
-The module automatically downloads and verifies its source archive, resolves
-its locked subcharts with Helm, renders it with cdk8s `Helm`, then removes the
-temporary source. Source and subchart checksums are pinned in [chart.ts](chart.ts).
-No upstream chart files, templates, scenarios or subchart archives ship in Nebula.
-Both optional database subcharts are disabled.
+is an external Helm dependency. Like other Nebula modules, `Trustee` passes the
+chart reference, repository and version directly to cdk8s `Helm`. Helm resolves
+the dependency. Nebula has no custom downloader, Git checkout, dependency build,
+or copied chart files, templates, scenarios or subchart archives.
+
+`chart` is required: supply a Helm chart reference, OCI URL, packaged chart or
+prepared local directory. `repository` supplies the Helm repository URL for a
+named chart; omit it for OCI and local charts. `version` defaults to the qualified
+chart version, `0.21.0`. Upstream currently distributes Git source and is still
+[discussing chart publication](https://github.com/confidential-containers/trustee/issues/1597),
+so the module does not invent a default repository. CI qualifies the unmodified
+chart at commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0` using a separate pinned
+checkout and standard Helm packaging. Both optional database subcharts are disabled.
 
 Only KBS Deployment and Service templates are selected with Helm's `--show-only`.
 The [TypeScript extensions](helm.ts) patch those resources to run one SNP PodVM
@@ -43,12 +49,28 @@ flowchart LR
 
 ## Use
 
-Install Helm, curl, tar and the pinned native [genpolicy tool](../../../../../../tools/genpolicy/README.md)
-on the trusted synthesis machine. Rust is needed only to build that tool, not
-inside the module. Synthesis needs GitHub access for the pinned chart and registry access for
-its locked dependencies and the two pinned images. The optional genpolicy cache
-avoids repeated image downloads. Importing Nebula
-remains free of file reads or subprocesses.
+Install Helm and the pinned native [genpolicy tool](../../../../../../tools/genpolicy/README.md)
+on the trusted synthesis machine. Rust is needed only to build that tool.
+Use an owner-approved copy of the official chart. For an upstream Git checkout,
+prepare it once using the normal upstream Helm dependency workflow:
+
+```sh
+git clone https://github.com/confidential-containers/trustee.git trustee-upstream
+git -C trustee-upstream checkout 3e160008ef3e5d8ce82e59c729d56e2d0175dba0
+helm dependency build ./trustee-upstream/deployment/helm-chart --skip-refresh
+```
+
+Set `chart` to `./trustee-upstream/deployment/helm-chart`, or use a package made
+with `helm package`. A published copy of the unmodified chart can instead be
+selected with `chart: "trustee"`, `repository: approvedChartRepository` and
+`version: "0.21.0"`, or with `chart: approvedOciChartUrl` and the same version.
+Chart preparation belongs to the dependency publisher or consuming application's
+build, and never runs inside the construct. It does not introduce a workload
+artifact or manual policy step: native genpolicy still runs during synthesis.
+
+Synthesis needs registry access for the two pinned images and, for a remote
+chart, access to its Helm repository. The optional genpolicy cache avoids repeated
+image downloads. Importing Nebula remains free of file reads or subprocesses.
 
 ```ts
 import { App, Chart } from "cdk8s";
@@ -60,6 +82,7 @@ const chart = new Chart(app, "keys");
 const trustee = new Trustee(chart, "trustee", {
   name: "trustee",
   namespace: "confidential-keys",
+  chart: "./trustee-upstream/deployment/helm-chart",
   kbsImage: approvedKbsDigest,
   tngImage: approvedTngDigest,
   ownerPublicKeyPem,

@@ -134,5 +134,40 @@
       "deniedByGuestPolicy": true,
       "initDataPreserved": true
     }
+  },
+  "standardHelmDependencyRefactor": {
+    "date": "2026-10-16",
+    "chart": "Owner-supplied official Helm dependency resolved directly by cdk8s Helm; no custom downloader or dependency build in the construct.",
+    "qualifiedSource": "3e160008ef3e5d8ce82e59c729d56e2d0175dba0",
+    "qualifiedVersion": "0.21.0",
+    "chartSourcesShippedInNebula": false,
+    "standardPackagedChartVerified": true,
+    "standardHelmRepositoryVerified": true,
+    "missingRepositoryVersionRejected": true,
+    "allResourcesIdentical": true,
+    "identityIdentical": true,
+    "trusteeTestsIncludingNativeHelmGenpolicy": 9,
+    "packedPackageTests": 7,
+    "strictTypeScriptPassed": true,
+    "retestedOnSameDevSnpHost": true,
+    "attestedOwnerOperations": {
+      "attestedConnection": true,
+      "authenticatedPolicyRead": true,
+      "attestationPolicyWrite": true,
+      "resourcePolicyWrite": true,
+      "binaryResourceWrite": true,
+      "resourceDelete": true
+    },
+    "negativeClientChecks": {
+      "wrong_measurement_rejected": true,
+      "wrong_initDataSha256_rejected": true,
+      "wrong_chipId_rejected": true,
+      "wrong_owner_rejected": true
+    },
+    "adminExecKbsDenied": true,
+    "adminExecTngDenied": true,
+    "secrets": 0,
+    "configMapsOtherThanNamespaceCA": 0,
+    "isolatedTestNamespaceRemoved": true
   }
 }

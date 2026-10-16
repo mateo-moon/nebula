@@ -11,6 +11,7 @@ export function trusteeConfig(): TrusteeConfig {
   const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const { initDataSha256: _hash, ...guest } = identity();
   return { name: "trustee", namespace: "confidential-keys",
+    chart: process.env.TRUSTEE_HELM_CHART ?? "./test/fixtures/unconfigured-trustee-chart",
     kbsImage: `registry.example.test/kbs@sha256:${"a".repeat(64)}`,
     tngImage: `registry.example.test/tng@sha256:${"b".repeat(64)}`,
     ownerPublicKeyPem: pair.publicKey.export({ format: "pem", type: "spki" }).toString(),

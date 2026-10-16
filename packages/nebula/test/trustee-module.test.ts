@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { App, Chart, Helm, JsonPatch } from "cdk8s";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { withTrusteeChart } from "../src/modules/k8s/trustee/chart";
 import { parse } from "smol-toml";
 import { Trustee } from "../src/modules/k8s/trustee";
 import { trusteeSettings } from "../src/modules/k8s/trustee/settings";
@@ -15,11 +11,14 @@ import { trusteeConfig } from "./support/trustee";
 
 const native = process.env.TRUSTEE_GENPOLICY;
 const realHelm = !!native || process.env.NEBULA_HELM_TESTS === "1";
+if (realHelm && !process.env.TRUSTEE_HELM_CHART) {
+  throw new Error("Set TRUSTEE_HELM_CHART to the prepared official chart when running Trustee Helm integration tests");
+}
 
 function rendered(extend = true) {
   const config = trusteeConfig(), chart = new Chart(new App(), "test");
   const settings = trusteeSettings(config);
-  const helm = withTrusteeChart(source => new Helm(chart, "helm", trusteeHelmProps(config, settings, source)));
+  const helm = new Helm(chart, "helm", trusteeHelmProps(config, settings));
   if (extend) extendTrusteeHelm(helm, settings);
   return { config, chart, settings, helm };
 }
@@ -75,23 +74,11 @@ test("missing native generator fails without leaving deployable resources", { sk
   assert.deepEqual(chart.toJson(), []);
 });
 
-test("a substituted source archive is rejected and removed before Helm can render it", () => {
-  const directory = mkdtempSync(join(tmpdir(), "trustee-dependency-test-"));
-  const oldPath = process.env.PATH, oldTmp = process.env.TMPDIR;
-  writeFileSync(join(directory, "curl"), `#!${process.execPath}
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.writeFileSync(args[args.indexOf("--output") + 1], "substituted archive");
-`, { mode: 0o755 });
-  process.env.PATH = `${directory}:${oldPath}`;
-  process.env.TMPDIR = directory;
-  try {
-    assert.throws(() => withTrusteeChart(() => assert.fail("must not render unverified source")), /checksum mismatch/);
-    assert.deepEqual(readdirSync(directory), ["curl"]);
-  } finally {
-    process.env.PATH = oldPath;
-    if (oldTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = oldTmp;
-    rmSync(directory, { recursive: true, force: true });
+test("a missing chart dependency fails without leaving deployable resources", () => {
+  for (const source of [undefined, "", " "]) {
+    const chart = new Chart(new App(), "missing-chart");
+    assert.throws(() => new Trustee(chart, "trustee", { ...trusteeConfig(), chart: source as string }), /supply the official Helm chart/);
+    assert.deepEqual(chart.toJson(), []);
   }
 });
 
