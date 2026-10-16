@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
-      artifact: ${{ steps.pins.outputs.key }}
+      artifact: ${{ steps.pins.outputs.key }}-${{ github.run_attempt }}
       version: ${{ steps.pins.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,7 +109,9 @@ jobs:
       - name: Pass the existing package to this run's validation
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.pins.outputs.key }}
+          # Artifacts are immutable within a run; retries get a fresh handoff.
+          # The persistent cache key still contains only the Helm pins.
+          name: ${{ steps.pins.outputs.key }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/trustee-chart
           if-no-files-found: error
           retention-days: 14
