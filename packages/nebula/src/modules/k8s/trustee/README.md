@@ -18,17 +18,30 @@ prepared local directory. `repository` supplies the Helm repository URL for a
 named chart; omit it for OCI and local charts. `version` defaults to the qualified
 chart version, `0.21.0`. Upstream currently distributes Git source and is still
 [discussing chart publication](https://github.com/confidential-containers/trustee/issues/1597),
-so the module does not invent a default repository. The dedicated
+so the module does not invent a default repository.
+
+CI records the upstream commit, chart version and upstream `Chart.lock` checksum
+in [the Helm pins](../../../../../../.github/trustee-chart.json). The reusable
 [chart build workflow](../../../../../../.github/workflows/build-trustee-chart.yml)
-checks out commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0`, packages and lints
-the unmodified chart using standard Helm commands, then passes that exact package
-to a separate native genpolicy qualification job. Only the Helm package is shared
-between jobs; workload policy is generated during the test. The workflow runs on
-changes to Trustee source and policy assets, its shared code dependencies, package
-dependency/configuration files, the native test and helper, generator build script,
-or the workflow itself. Documentation-only PRs and unrelated modules do not trigger
-it; manual dispatch remains available. General module verification stays in
-`verify-modules.yml`. Both optional database subcharts are disabled.
+keys its saved package only by those pins, independently of Nebula code or commit
+IDs. It restores an exact existing package first. Only changed Helm pins allow a
+new build: check out upstream, verify `Chart.lock`, resolve the locked dependencies,
+then package and lint with standard Helm commands. Formatting the pins file does
+not change the package key.
+
+The separate [Trustee validation workflow](../../../../../../.github/workflows/verify-trustee.yml)
+runs on module, shared code, test and build-input changes. It reuses the existing
+chart package and runs native genpolicy against the current module. Workload
+policy is generated during each validation; it is never cached with the chart.
+Both jobs verify the package checksum. Documentation-only PRs and unrelated
+modules do not trigger validation. General checks stay in `verify-modules.yml`.
+
+The chart package uses GitHub Actions' exact-key, branch-scoped cache without
+fallback keys. PR caches cannot replace the main-branch package. If GitHub evicts
+the package, validation with unchanged pins fails instead of rebuilding. A
+maintainer can explicitly run **Build Trustee Helm chart** with `repair-cache`
+on the relevant ref (or `main` for shared pins), then rerun validation. Both
+optional database subcharts remain disabled.
 
 Only KBS Deployment and Service templates are selected with Helm's `--show-only`.
 The [TypeScript extensions](helm.ts) patch those resources to run one SNP PodVM
