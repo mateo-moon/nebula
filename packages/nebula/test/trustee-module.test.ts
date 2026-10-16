@@ -1,23 +1,32 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { App, Chart, Helm } from "cdk8s";
+import { App, Chart, Helm, JsonPatch } from "cdk8s";
 import { generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { withTrusteeChart } from "../src/modules/k8s/trustee/chart";
 import { parse } from "smol-toml";
 import { Trustee } from "../src/modules/k8s/trustee";
 import { trusteeSettings } from "../src/modules/k8s/trustee/settings";
-import { readTrusteeHelmPlan, trusteeHelmProps } from "../src/modules/k8s/trustee/helm";
+import { extendTrusteeHelm, readTrusteeHelmPlan, trusteeHelmProps } from "../src/modules/k8s/trustee/helm";
 import { initDataDocument, initDataSha256, INIT_DATA_ANNOTATION } from "../src/modules/k8s/confidential-guests/measured";
 import { trusteeConfig } from "./support/trustee";
 
-function rendered() {
+const native = process.env.TRUSTEE_GENPOLICY;
+const realHelm = !!native || process.env.NEBULA_HELM_TESTS === "1";
+
+function rendered(extend = true) {
   const config = trusteeConfig(), chart = new Chart(new App(), "test");
   const settings = trusteeSettings(config);
-  const helm = new Helm(chart, "helm", trusteeHelmProps(config, settings.values));
-  return { config, chart, settings, helm, ...readTrusteeHelmPlan(helm, config, settings.values) };
+  const helm = withTrusteeChart(source => new Helm(chart, "helm", trusteeHelmProps(config, settings, source)));
+  if (extend) extendTrusteeHelm(helm, settings);
+  return { config, chart, settings, helm };
 }
 
-test("official Helm extensions produce one confidential Pod with guest-only configuration and keys", () => {
-  const { config, helm, pod, workload, settings } = rendered();
+test("official chart dependency plus extensions produce one confidential Pod with guest-only configuration and keys", { skip: !realHelm }, () => {
+  const { config, helm, settings } = rendered();
+  const { pod, workload } = readTrusteeHelmPlan(helm, config, settings);
   assert.deepEqual(helm.apiObjects.map(o => o.kind).sort(), ["Deployment", "Service"]);
   assert.equal(workload.metadata.name, "trustee-kbs");
   assert.equal(pod.spec.runtimeClassName, "kata-qemu-snp");
@@ -45,22 +54,47 @@ test("official Helm extensions produce one confidential Pod with guest-only conf
   }
 });
 
-test("upstream chart defaults still deploy separate services and the original key hook", () => {
-  const config = trusteeConfig(), { values } = trusteeSettings(config);
-  const props = trusteeHelmProps(config, values);
-  const helm = new Helm(new Chart(new App(), "defaults"), "helm", { ...props, values: {} });
-  assert.equal(helm.apiObjects.filter(o => o.kind === "Deployment").length, 3);
-  assert.ok(helm.apiObjects.some(o => o.kind === "Job"));
-  assert.ok(helm.apiObjects.some(o => o.kind === "ConfigMap"));
+test("stock upstream output is rejected before native measurement", { skip: !realHelm }, () => {
+  const { config, helm, settings } = rendered(false);
+  assert.throws(() => readTrusteeHelmPlan(helm, config, settings), /without host configuration/);
 });
 
-test("missing native generator fails without leaving deployable resources", () => {
+test("extensions do not allow host storage or extra workloads into the measured plan", { skip: !realHelm }, () => {
+  const { config, helm, settings } = rendered();
+  const deployment = helm.apiObjects.find(o => o.kind === "Deployment")!;
+  const path = "/spec/template/spec";
+  deployment.addJsonPatch(JsonPatch.add(`${path}/volumes/-`, { name: "host", hostPath: { path: "/tmp" } }));
+  assert.throws(() => readTrusteeHelmPlan(helm, config, settings), /without host configuration/);
+  deployment.addJsonPatch(JsonPatch.remove(`${path}/volumes/3`), JsonPatch.add(`${path}/initContainers`, [{ name: "host-init" }]));
+  assert.throws(() => readTrusteeHelmPlan(helm, config, settings), /without host configuration/);
+});
+
+test("missing native generator fails without leaving deployable resources", { skip: !realHelm }, () => {
   const config = trusteeConfig(), chart = new Chart(new App(), "missing");
   assert.throws(() => new Trustee(chart, "trustee", { ...config, genpolicy: { executable: "/does-not-exist/genpolicy" } }), /native genpolicy failed/);
   assert.deepEqual(chart.toJson(), []);
 });
 
-const native = process.env.TRUSTEE_GENPOLICY;
+test("a substituted source archive is rejected and removed before Helm can render it", () => {
+  const directory = mkdtempSync(join(tmpdir(), "trustee-dependency-test-"));
+  const oldPath = process.env.PATH, oldTmp = process.env.TMPDIR;
+  writeFileSync(join(directory, "curl"), `#!${process.execPath}
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.writeFileSync(args[args.indexOf("--output") + 1], "substituted archive");
+`, { mode: 0o755 });
+  process.env.PATH = `${directory}:${oldPath}`;
+  process.env.TMPDIR = directory;
+  try {
+    assert.throws(() => withTrusteeChart(() => assert.fail("must not render unverified source")), /checksum mismatch/);
+    assert.deepEqual(readdirSync(directory), ["curl"]);
+  } finally {
+    process.env.PATH = oldPath;
+    if (oldTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = oldTmp;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("native generation binds Helm images/config and supplies the client identity without a policy input", { skip: !native, timeout: 600_000 }, () => {
   const config = { ...trusteeConfig(),
     kbsImage: "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",

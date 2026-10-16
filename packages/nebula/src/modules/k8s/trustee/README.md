@@ -6,11 +6,24 @@ the generated CoCo Init-Data annotation. It exposes the generated `identity`
 directly to `@nebula/trustee-client`. There is no separate workload artifact,
 manual policy binding, bootstrap KBS, or Trustee fork. `TngTrustee` is an alias.
 
-The bundled [official chart and extensions](assets/helm/README.md) support a
-single SNP PodVM with KBS, its built-in AS/RVPS, and a TNG sidecar. Separate
-AS/RVPS deployments, bootstrap Jobs, Kubernetes Secrets and chart ConfigMaps
-are disabled. This mode requires the included extensions; the stock chart's
-default topology and key custody do not provide administrator isolation.
+The [official Trustee chart](https://github.com/confidential-containers/trustee/tree/3e160008ef3e5d8ce82e59c729d56e2d0175dba0/deployment/helm-chart)
+is an external dependency, pinned to commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0`
+(chart 0.21.0). Upstream distributes it in Git rather than a Helm repository.
+The module automatically downloads and verifies its source archive, resolves
+its locked subcharts with Helm, renders it with cdk8s `Helm`, then removes the
+temporary source. Source and subchart checksums are pinned in [chart.ts](chart.ts).
+No upstream chart files, templates, scenarios or subchart archives ship in Nebula.
+Both optional database subcharts are disabled.
+
+Only KBS Deployment and Service templates are selected with Helm's `--show-only`.
+The [TypeScript extensions](helm.ts) patch those resources to run one SNP PodVM
+with built-in AS/RVPS and a TNG sidecar: remove the external-AS init container,
+replace Kubernetes config/key mounts with guest tmpfs, pin the KBS image and
+measured startup, enforce read-only storage, and route the Service to attested TLS.
+Separate AS/RVPS workloads, bootstrap Jobs, Secrets, ConfigMaps and key-management
+RBAC never enter the synthesized manifests. The unmodified chart's default
+topology and key custody do not provide this isolation; native genpolicy measures
+the final extended Deployment before it can be synthesized.
 
 ```mermaid
 flowchart LR
@@ -30,10 +43,11 @@ flowchart LR
 
 ## Use
 
-Install Helm and the pinned native [genpolicy tool](../../../../../../tools/genpolicy/README.md)
+Install Helm, curl, tar and the pinned native [genpolicy tool](../../../../../../tools/genpolicy/README.md)
 on the trusted synthesis machine. Rust is needed only to build that tool, not
-inside the module. Synthesis needs registry access to inspect the two pinned
-images; an optional owner-local cache avoids repeat downloads. Importing Nebula
+inside the module. Synthesis needs GitHub access for the pinned chart and registry access for
+its locked dependencies and the two pinned images. The optional genpolicy cache
+avoids repeated image downloads. Importing Nebula
 remains free of file reads or subprocesses.
 
 ```ts

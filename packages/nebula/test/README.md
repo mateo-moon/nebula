@@ -9,7 +9,8 @@ policy-engine checks. CI enables both with checksum-verified downloads. These
 checks do not deploy to a cluster; see the Kyverno module README for lifecycle
 qualification before production adoption.
 
-`trustee-module.test.ts` renders the bundled official chart and checks its
+Set `NEBULA_HELM_TESTS=1` or `TRUSTEE_GENPOLICY` to enable the networked chart tests.
+`trustee-module.test.ts` resolves the external official chart dependency and checks its
 confidential topology. Set `TRUSTEE_GENPOLICY` to the pinned native binary and
 optionally `TRUSTEE_GENPOLICY_CACHE` for the real Helm → genpolicy → identity
 integration test. `trustee-guest-policy.integration.ts` executes the restrictive

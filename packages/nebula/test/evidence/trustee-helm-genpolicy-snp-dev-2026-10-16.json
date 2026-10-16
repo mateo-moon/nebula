@@ -97,5 +97,42 @@
     "No singleton identity, rollback protection, certificate renewal or continuous evidence freshness.",
     "Hostile-input tests are bounded cases, not proof against every administrator attack.",
     "TNG client compatibility changes from upstream PR 263 are still required."
-  ]
+  ],
+  "dependencyRefactor": {
+    "date": "2026-10-16",
+    "chart": "Unmodified official chart fetched as a pinned source dependency; only TypeScript extensions remain in Nebula.",
+    "sourceArchiveSha256": "5118ffa64c2376db52b4524719ffe8d0fafa1d91b8bd5a47340e4deb7b34dd06",
+    "copiesShippedInNebula": false,
+    "allResourcesIdentical": true,
+    "identityIdentical": true,
+    "nativeHelmGenpolicyTests": 6,
+    "packedPackageTests": 7,
+    "retestedOnSameDevSnpHost": true,
+    "attestedOwnerOperations": {
+      "attestedConnection": true,
+      "authenticatedPolicyRead": true,
+      "attestationPolicyWrite": true,
+      "resourcePolicyWrite": true,
+      "binaryResourceWrite": true,
+      "resourceDelete": true
+    },
+    "negativeClientChecks": {
+      "wrong_measurement_rejected": true,
+      "wrong_initDataSha256_rejected": true,
+      "wrong_chipId_rejected": true,
+      "wrong_owner_rejected": true
+    },
+    "adminExecKbsDenied": true,
+    "adminExecTngDenied": true,
+    "secrets": 0,
+    "configMapsOtherThanNamespaceCA": 0,
+    "changedImage": {
+      "deniedByGuestPolicy": true,
+      "initDataPreserved": true
+    },
+    "changedStartupArguments": {
+      "deniedByGuestPolicy": true,
+      "initDataPreserved": true
+    }
+  }
 }

@@ -59,10 +59,10 @@ const GCR_UPSTREAM = new Set([
 ]);
 const DOCKER_UPSTREAM = new Set([
   "_", "library", "docker", "moby", "alpine", "curlimages", "bitnami", "grafana", "prom", "hashicorp",
-  "rancher", "nginxinc", "envoyproxy", "openpolicyagent", "istio", "amazon", "bitnamicharts",
+  "rancher", "nginxinc", "envoyproxy", "openpolicyagent", "istio", "amazon",
 ]);
 const EMAIL_ALLOWED_ADDRESSES = new Set(["noreply@anthropic.com", "noreply@github.com", "git@github.com", "git@gitlab.com"]);
-const EMAIL_ALLOWED_DOMAINS = [/^(?:[a-z0-9-]+\.)*example\.(com|org|net)$/i, /\.(example|test|invalid|localhost)$/i, /^users\.noreply\.github\.com$/i, /^openssh\.com$/i];
+const EMAIL_ALLOWED_DOMAINS = [/^example\.(com|org|net)$/i, /\.(example|test|invalid|localhost)$/i, /^users\.noreply\.github\.com$/i, /^openssh\.com$/i];
 // Owners and namespaces of upstream projects on code hosts and registries
 // (github.com, gitlab.com, ghcr.io, quay.io, public.ecr.aws, ...).
 const UPSTREAM_OWNERS = new Set([
@@ -92,7 +92,7 @@ const UPSTREAM_DOMAINS = [
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
-  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com", "semver.org", "artifacthub.io", "spiffe.io",
+  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts

@@ -3,7 +3,7 @@ import { stringify } from "smol-toml";
 import { isDigestImage } from "../confidential-guests/types";
 import { measuredFragments } from "../envoy";
 import { TRUSTEE_STATE as STATE } from "./tng-bootstrap";
-import { confidentialTrusteeValues } from "./helm";
+import { confidentialTrusteeHelmSettings } from "./helm";
 import { tngBootstrapScript, tngTrusteeBootstrapScript } from "./tng-bootstrap";
 import type { TrusteeConfig, TrusteeTngConfig } from "./types";
 import { publicConfig } from "./validation";
@@ -70,23 +70,20 @@ export function trusteeSettings(config: TrusteeConfig) {
     rats_tls: { multiplex: false } }] };
   const kbsScript = tngTrusteeBootstrapScript(owner, kbsConfig);
   const tngScript = tngBootstrapScript(tngConfig);
-  const values = confidentialTrusteeValues(config, { image: config.kbsImage, script: kbsScript,
+  const { values, extensions } = confidentialTrusteeHelmSettings(config, { image: config.kbsImage, script: kbsScript,
     restApi: "attestation", port: 8443, memory: 2048, vcpus: 2 });
-  values.kbs.extraVolumeMounts = [{ name: "kbs-tmp", mountPath: "/tmp" }, { name: "state", mountPath: STATE }];
-  values.kbs.extraVolumes = ["state", "kbs-tmp", "tng-tmp"].map(name => ({ name,
+  extensions.volumeMounts = [{ name: "kbs-tmp", mountPath: "/tmp" }, { name: "state", mountPath: STATE }];
+  extensions.volumes = ["state", "kbs-tmp", "tng-tmp"].map(name => ({ name,
     emptyDir: { medium: "Memory", sizeLimit: "128Mi" } }));
-  values.kbs.probes.enabled = false; // KBS only listens on guest loopback; TNG owns readiness.
-  values.kbs.containerPort = 8080;
-  values.kbs.service.targetPort = "rats-tls";
-  values.kbs.extraContainers = [{ name: "tng", image: config.tngImage, imagePullPolicy: "Always",
+  extensions.extraContainers = [{ name: "tng", image: config.tngImage, imagePullPolicy: "Always",
     command: ["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"],
     args: measuredFragments(Buffer.from(tngScript).toString("base64")),
     env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
-    securityContext: values.kbs.containerSecurityContext, resources: values.kbs.resources,
+    securityContext: extensions.containerSecurityContext, resources: values.kbs.resources,
     volumeMounts: [{ name: "tng-tmp", mountPath: "/tmp" }],
     ports: [{ name: "rats-tls", containerPort: 8443 }],
     readinessProbe: { tcpSocket: { port: 8443 }, periodSeconds: 5 },
   }];
   const aaToml = stringify({ log: { level: "off" } });
-  return { values, kbsConfig, tngConfig, aaToml };
+  return { values, extensions, kbsConfig, tngConfig, aaToml };
 }

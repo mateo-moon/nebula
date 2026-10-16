@@ -3,7 +3,8 @@ import { Helm, type ApiObject } from "cdk8s";
 import { KubeNamespace, KubeNetworkPolicy } from "cdk8s-plus-33/lib/imports/k8s";
 import { BaseConstruct } from "../../../core";
 import { generateTrusteePolicy } from "./genpolicy";
-import { annotateTrustee, readTrusteeHelmPlan, trusteeHelmProps } from "./helm";
+import { annotateTrustee, extendTrusteeHelm, readTrusteeHelmPlan, trusteeHelmProps } from "./helm";
+import { withTrusteeChart } from "./chart";
 import { ingressPolicyProps } from "./manifests";
 import { snpIdentity, type TrusteeSnpIdentity } from "./policies";
 import { trusteeSettings } from "./settings";
@@ -23,11 +24,12 @@ export class Trustee extends BaseConstruct<TrusteeConfig> {
 
   constructor(scope: Construct, id: string, config: TrusteeConfig) {
     super(scope, id, publicConfig("Trustee", config));
-    const { values, aaToml } = trusteeSettings(this.config);
-    this.helm = new Helm(this, "helm", trusteeHelmProps(this.config, values));
+    const settings = trusteeSettings(this.config);
     try {
-      const plan = readTrusteeHelmPlan(this.helm, this.config, values);
-      const generated = generateTrusteePolicy(plan.workload, aaToml, this.config);
+      this.helm = withTrusteeChart(chart => new Helm(this, "helm", trusteeHelmProps(this.config, settings, chart)));
+      extendTrusteeHelm(this.helm, settings);
+      const plan = readTrusteeHelmPlan(this.helm, this.config, settings);
+      const generated = generateTrusteePolicy(plan.workload, settings.aaToml, this.config);
       this.deployment = this.helm.apiObjects.find(object => object.kind === "Deployment")!;
       this.service = this.helm.apiObjects.find(object => object.kind === "Service")!;
       annotateTrustee(this.deployment, generated.ccInitData);

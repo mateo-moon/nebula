@@ -40,16 +40,6 @@
       "class": "opaque-blob",
       "sha256": "421be3037544def5f33750966d92bdca6e9e821cd0649e421e95289beff474db",
       "reason": "HOST_DATA test vector trailing-text: the example init-data gzip followed by 'xyz'"
-    },
-    {
-      "class": "binary-file",
-      "sha256": "3d1ab83b00ce9da2fcd55d66ab5b09aac1baef1fe099f52edc73860372cdcc63",
-      "reason": "Public Bitnami postgresql-18.2.0 Helm dependency archive resolved by the official Trustee Chart.lock; disabled in the confidential module. No deployment inputs or credentials."
-    },
-    {
-      "class": "binary-file",
-      "sha256": "72da4e974317fc5f98de3f9085fba56ab5d200d1a2c585423ca0612ad9c2378e",
-      "reason": "Public Bitnami valkey-6.2.0 Helm dependency archive resolved by the official Trustee Chart.lock; disabled in the confidential module. No deployment inputs or credentials."
     }
   ]
 }

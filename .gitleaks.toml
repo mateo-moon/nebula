@@ -1,3 +1,5 @@
+# Historical allowlist: these vendored files have been removed. Keep this exact
+# path exception while the PR history still contains the upstream documentation.
 [extend]
 useDefault = true
 

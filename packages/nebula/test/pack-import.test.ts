@@ -72,6 +72,9 @@ test("the tarball ships every tracked file under src/ and imports/", () => {
   const missing = tracked.filter(f => !shipped.has(f));
   assert.deepEqual(missing, [], "tracked files missing from the packed tarball");
   assert.ok(shipped.has("package.json"));
+  assert.ok(shipped.has("src/modules/k8s/trustee/chart.ts"));
+  assert.ok(![...shipped].some(path => path.startsWith("src/modules/k8s/trustee/assets/helm/")),
+    "Trustee must consume the official chart as a dependency, not ship its sources or subcharts");
 });
 
 test("every package.json `files` entry that exists ships", () => {
