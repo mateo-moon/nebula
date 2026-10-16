@@ -9,17 +9,24 @@ manual policy binding, bootstrap KBS, or Trustee fork. `TngTrustee` is an alias.
 The [official Trustee chart](https://github.com/confidential-containers/trustee/tree/3e160008ef3e5d8ce82e59c729d56e2d0175dba0/deployment/helm-chart)
 is an external Helm dependency. Like other Nebula modules, `Trustee` passes the
 chart reference, repository and version directly to cdk8s `Helm`. Helm resolves
-the dependency. Nebula has no custom downloader, Git checkout, dependency build,
-or copied chart files, templates, scenarios or subchart archives.
+the dependency. The construct has no custom downloader and does not check out Git
+or build chart dependencies. No upstream chart files, templates, scenarios or
+subchart archives ship in Nebula.
 
 `chart` is required: supply a Helm chart reference, OCI URL, packaged chart or
 prepared local directory. `repository` supplies the Helm repository URL for a
 named chart; omit it for OCI and local charts. `version` defaults to the qualified
 chart version, `0.21.0`. Upstream currently distributes Git source and is still
 [discussing chart publication](https://github.com/confidential-containers/trustee/issues/1597),
-so the module does not invent a default repository. CI qualifies the unmodified
-chart at commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0` using a separate pinned
-checkout and standard Helm packaging. Both optional database subcharts are disabled.
+so the module does not invent a default repository. The dedicated
+[chart build workflow](../../../../../../.github/workflows/build-trustee-chart.yml)
+checks out commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0`, packages and lints
+the unmodified chart using standard Helm commands, then passes that exact package
+to a separate native genpolicy qualification job. Only the Helm package is shared
+between jobs; workload policy is generated during the test. The workflow runs on
+changes to the Nebula package, generator tooling or the workflow itself, and can
+also be dispatched manually. General module verification stays in
+`verify-modules.yml`. Both optional database subcharts are disabled.
 
 Only KBS Deployment and Service templates are selected with Helm's `--show-only`.
 The [TypeScript extensions](helm.ts) patch those resources to run one SNP PodVM
