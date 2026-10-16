@@ -3,14 +3,49 @@ name: Build Trustee Helm chart
 on:
   pull_request:
     paths:
-      - packages/nebula/**
-      - tools/genpolicy/**
+      # Trustee and the transitive inputs used by trustee-module.test.ts.
+      - packages/nebula/src/modules/k8s/trustee/**/*.ts
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/*.rego
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/genpolicy-settings.json
+      - packages/nebula/src/core/index.ts
+      - packages/nebula/src/core/base-construct.ts
+      - packages/nebula/src/core/helm-module.ts
+      - packages/nebula/src/core/argocd.ts
+      - packages/nebula/src/utils/secrets.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/canonical.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/measured.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/types.ts
+      - packages/nebula/src/modules/k8s/envoy/index.ts
+      - packages/nebula/test/trustee-module.test.ts
+      - packages/nebula/test/support/trustee.ts
+      - packages/nebula/package.json
+      - packages/nebula/pnpm-lock.yaml
+      - packages/nebula/pnpm-workspace.yaml
+      - packages/nebula/tsconfig.json
+      - tools/genpolicy/build.sh
       - .github/workflows/build-trustee-chart.yml
   push:
     branches: [main]
     paths:
-      - packages/nebula/**
-      - tools/genpolicy/**
+      - packages/nebula/src/modules/k8s/trustee/**/*.ts
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/*.rego
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/genpolicy-settings.json
+      - packages/nebula/src/core/index.ts
+      - packages/nebula/src/core/base-construct.ts
+      - packages/nebula/src/core/helm-module.ts
+      - packages/nebula/src/core/argocd.ts
+      - packages/nebula/src/utils/secrets.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/canonical.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/measured.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/types.ts
+      - packages/nebula/src/modules/k8s/envoy/index.ts
+      - packages/nebula/test/trustee-module.test.ts
+      - packages/nebula/test/support/trustee.ts
+      - packages/nebula/package.json
+      - packages/nebula/pnpm-lock.yaml
+      - packages/nebula/pnpm-workspace.yaml
+      - packages/nebula/tsconfig.json
+      - tools/genpolicy/build.sh
       - .github/workflows/build-trustee-chart.yml
   workflow_dispatch: {}
 

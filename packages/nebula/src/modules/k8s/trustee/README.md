@@ -24,8 +24,10 @@ checks out commit `3e160008ef3e5d8ce82e59c729d56e2d0175dba0`, packages and lints
 the unmodified chart using standard Helm commands, then passes that exact package
 to a separate native genpolicy qualification job. Only the Helm package is shared
 between jobs; workload policy is generated during the test. The workflow runs on
-changes to the Nebula package, generator tooling or the workflow itself, and can
-also be dispatched manually. General module verification stays in
+changes to Trustee source and policy assets, its shared code dependencies, package
+dependency/configuration files, the native test and helper, generator build script,
+or the workflow itself. Documentation-only PRs and unrelated modules do not trigger
+it; manual dispatch remains available. General module verification stays in
 `verify-modules.yml`. Both optional database subcharts are disabled.
 
 Only KBS Deployment and Service templates are selected with Helm's `--show-only`.
