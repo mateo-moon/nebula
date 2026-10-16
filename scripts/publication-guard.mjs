@@ -34,6 +34,11 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
+  "packages/trustee-client",
+  "tools/tng-client",
+  "packages/nebula/src/modules/k8s/trustee",
+  ":(glob)packages/nebula/test/*trustee*.ts",
+  "tools/genpolicy",
   "packages/nebula/src/modules/k8s/confidential-guests",
   "confidential-guests",
   ":(glob)packages/nebula/test/confidential-guests*",
@@ -62,7 +67,7 @@ const EMAIL_ALLOWED_DOMAINS = [/^example\.(com|org|net)$/i, /\.(example|test|inv
 // (github.com, gitlab.com, ghcr.io, quay.io, public.ecr.aws, ...).
 const UPSTREAM_OWNERS = new Set([
   "example", "kubernetes", "kubernetes-sigs", "kubernetes-csi", "containerd", "opencontainers", "moby", "docker",
-  "confidential-containers", "kata-containers", "virtee", "intel", "amd", "amdese", "google", "googlecontainertools",
+  "confidential-containers", "kata-containers", "inclavare-containers", "openanolis", "virtee", "intel", "amd", "amdese", "google", "googlecontainertools",
   "aws", "awslabs", "eks", "eks-distro", "karpenter", "aws-observability", "amazonlinux", "ubuntu", "debian", "fedora",
   "crossplane", "crossplane-contrib", "upbound", "cdk8s-team", "cert-manager", "jetstack", "argoproj", "argoproj-labs",
   "cilium", "projectcalico", "calico", "tigera", "k0sproject", "siderolabs", "fluxcd", "prometheus",
@@ -82,12 +87,12 @@ const UPSTREAM_DOMAINS = [
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
-  "katacontainers.io", "amd.com", "intel.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",
+  "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",
   "cert-manager.io", "cncf.io", "argoproj.io", "coreos.com", "cilium.io", "projectcalico.org", "k0sproject.io",
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
-  "helm.sh", "kyverno.io",
+  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts

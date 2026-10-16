@@ -1,0 +1,223 @@
+{
+  "date": "2026-10-15",
+  "scope": "Disposable synthetic-resource functional and negative qualification on the existing development SEV-SNP baremetal worker; not a production security certification.",
+  "architecture": {
+    "runtimeClassName": "kata-qemu-snp",
+    "serverContainers": [
+      "unmodified upstream TNG",
+      "unmodified upstream Trustee KBS with built-in AS and RVPS"
+    ],
+    "externalBootstrapTrustee": false,
+    "kubernetesSecrets": 0,
+    "serverKeyCustody": "generated inside the guest; tmpfs only",
+    "ownerKeyCustody": "owner computer; only public key measured in guest configuration",
+    "verifierLocation": "owner computer; unmodified mainline AS and patched TNG client",
+    "statePersistence": "ephemeral; owner reprovisions after VM replacement"
+  },
+  "pins": {
+    "kbsImage": "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",
+    "tngImage": "ghcr.io/inclavare-containers/tng@sha256:233528659b406ffc67e6b2bd542f58825a3e85c7a25559a5adc74a16e582d416",
+    "localAsImage": "ghcr.io/confidential-containers/staged-images/coco-as-restful@sha256:997d6ba65bbfd6464ebbecaa99ca04ec8050304c9c976cd44e65971c7427eb7d",
+    "reviewedTrusteeSource": "71251310045d8be2e95041cf0028691623c73957",
+    "tngSource": "9259341240503dc645d7ad40b3a595240134cceb",
+    "tngVersion": "2.11.0",
+    "clientPatchSha256": "3ba427a7f8993fba280bddd812f1bc993ea5918dcfb76ef0702e741161c9a831",
+    "clientBinarySha256": "fb4dc01c2905836783d58c6fdff99314fec00be8fc77874dea13939b4a0737d3",
+    "clientToolchain": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "genpolicyBinarySha256": "4fa1cabd8d6e757c271caa991b889e1c2ccdbbdce58872b8b581720b3867be36",
+    "genpolicyRulesSha256": "97e5f7344f3c44eb3a845a4b7dbb51b138c3a4117ae78bed112d0fe4a0272f80",
+    "genpolicySettingsSha256": "850e168c58e681e1531670fb999ced1582cdfe5037209db3655f676278f8b9bd",
+    "hardenedGuestPolicySha256": "5c1450da0b26e881cb70eef97296a5d79e16a0b82fab09d7fd6dde6fb473563f",
+    "sourceToImageProvenanceIndependentlyVerified": false
+  },
+  "verifiedServer": {
+    "status": "affirming",
+    "measurement": "0f7c3157234454f4cd70c5888155a8c97a299944f9632054a202cebc25d819e57cdafbced6ff2a942d937d03eb94ea77",
+    "initDataSha256": "a4630e33af03056081ffee1b21ce87b64463d8da2d37e4af741830a107640a41",
+    "canonicalPodSha256": "3ff134a498f61198e624aba890a54fefac644c70703878780b408ede70d532f4",
+    "independentlyCalculatedLaunchMeasurementMatched": true,
+    "vcpus": 4,
+    "signedChipIdMatchedApprovedHost": true,
+    "runtimeDataKeys": [
+      "pubkey-hash"
+    ],
+    "rawChipIdentityAndOwnerPublicKeyOmitted": true
+  },
+  "attestationChecks": {
+    "approved": {
+      "exitCode": 0,
+      "accepted": true
+    },
+    "wrong-initDataSha256": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "Non-affirming EAR appraisal: contraindicated"
+    },
+    "wrong-measurement": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "Non-affirming EAR appraisal: contraindicated"
+    },
+    "wrong-chipId": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "Non-affirming EAR appraisal: contraindicated"
+    },
+    "wrong-tls-key": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "RuntimeDataMismatch"
+    },
+    "missing-evidence": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "CertExtractExtensionFailed"
+    },
+    "tampered-report-signature": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "VEK does not sign the attestation report"
+    },
+    "wrong-verifier-ca": {
+      "exitCode": 1,
+      "accepted": false,
+      "reason": "UnknownIssuer"
+    }
+  },
+  "nativeAdministration": {
+    "owner-read-policy": {
+      "curlExit": 0,
+      "httpStatus": "200"
+    },
+    "owner-provision-resource": {
+      "curlExit": 0,
+      "httpStatus": "200"
+    },
+    "unauth-resource-read": {
+      "curlExit": 0,
+      "httpStatus": "401"
+    },
+    "unauth-resource-write": {
+      "curlExit": 0,
+      "httpStatus": "401"
+    },
+    "unauth-policy-write": {
+      "curlExit": 0,
+      "httpStatus": "401"
+    },
+    "owner-disallowed-api": {
+      "curlExit": 0,
+      "httpStatus": "401"
+    }
+  },
+  "ownerJwtChecks": {
+    "approved": {
+      "httpStatus": 200,
+      "expected": 200,
+      "passed": true
+    },
+    "wrong-signature": {
+      "httpStatus": 401,
+      "expected": 401,
+      "passed": true
+    },
+    "wrong-issuer": {
+      "httpStatus": 401,
+      "expected": 401,
+      "passed": true
+    },
+    "wrong-audience": {
+      "httpStatus": 401,
+      "expected": 401,
+      "passed": true
+    },
+    "expired": {
+      "httpStatus": 401,
+      "expected": 401,
+      "passed": true
+    },
+    "wrong-role": {
+      "httpStatus": 401,
+      "expected": 401,
+      "passed": true
+    }
+  },
+  "nativeResourceRoundTrip": {
+    "resourcePolicyStatus": 200,
+    "attestationPolicyStatus": 200,
+    "nativeAttestationStatus": 200,
+    "appraisal": "affirming",
+    "resourceStatus": 200,
+    "sha256Matches": true,
+    "unapprovedResourceStatus": 403,
+    "recipientKeyCustody": "owner-local; the measured SNP probe emits only evidence for this fixed key and challenge"
+  },
+  "guestExecChecks": {
+    "trustee": {
+      "exit": 1,
+      "guestPolicyDenied": true
+    },
+    "tng": {
+      "exit": 1,
+      "guestPolicyDenied": true
+    }
+  },
+  "changedCommandWithApprovedInitData": {
+    "denied": true,
+    "preservedInitData": true
+  },
+  "hostBoundaryChecks": {
+    "volumeRootExists": true,
+    "hostVolumeFiles": 0,
+    "guestPortsFromHost": {
+      "8006": "unreachable",
+      "8080": "unreachable",
+      "8443": "reachable"
+    }
+  },
+  "packagedClientChecks": {
+    "prepared-client": {
+      "exitCode": 0,
+      "passed": true
+    },
+    "wrong-verifier-ca": {
+      "exitCode": 1,
+      "passed": true
+    },
+    "live-proxy-request": {
+      "httpStatus": 401,
+      "passed": true
+    }
+  },
+  "additionalChecks": {
+    "typescriptUnitTestsPassed": 14,
+    "rustX5cRegressionTestsPassed": 1,
+    "existingTrusteeRegorusEarDecisionsPassed": 253,
+    "typecheckPassed": true,
+    "developmentHardenerReproducedLiveArtifact": true,
+    "publicationGuardPassed": true,
+    "publicationGuardSelfTestsPassed": 32
+  },
+  "observations": {
+    "serverContainersReady": 2,
+    "serverContainerRestarts": 0,
+    "publicVcekCachedLocally": true,
+    "certificateServiceNetworkFailuresExcludedFromPolicyResults": true,
+    "tlsTransport": "SSH TCP forwarding to the CoCo Pod address; attestation and TLS verified independently of SSH",
+    "kubectlPortForwardWasNotGuestTransport": true,
+    "nativeRecipientPrivateKeyInsideClientTee": false
+  },
+  "limits": [
+    "No durable key/resource storage, anti-rollback or singleton instance identity.",
+    "Owner is trusted to approve launch inputs, images, guest policy, recipient policy and owner key.",
+    "TNG certificate evidence refresh is disabled in this prototype; no claim of per-request challenge freshness or continuous re-attestation.",
+    "Image digest pinning and functional tests do not establish independent source-to-image provenance.",
+    "Existing qualified dev policy generator inputs and owner-reviewed network profile are required; helper is not a general production policy generator.",
+    "Infrastructure can deny availability."
+  ],
+  "cleanup": {
+    "testNamespaceRemoved": true,
+    "localTestProcessesRemoved": true,
+    "testPrivateKeysAndCredentialsRemoved": true
+  }
+}

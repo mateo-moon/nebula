@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-16",
+  "scope": "Functional and negative qualification of the native Helm/genpolicy module on the existing development SEV-SNP baremetal host. Not a production security certification.",
+  "architecture": {
+    "helm": "official Trustee chart 0.21.0 plus bundled generic extensions",
+    "nativeGenpolicy": true,
+    "manualWorkloadArtifact": false,
+    "externalBootstrapTrustee": false,
+    "runtimeClassName": "kata-qemu-snp",
+    "serverContainers": [
+      "unmodified KBS with built-in AS/RVPS",
+      "unmodified TNG"
+    ],
+    "keyCustody": "guest-generated keys in guest tmpfs; independent owner private key stays on owner computer",
+    "persistentState": false
+  },
+  "pins": {
+    "helmSource": "3e160008ef3e5d8ce82e59c729d56e2d0175dba0",
+    "genpolicySource": "5b57d5c41ffb9d9515e76ef51cfa851068cfc439",
+    "nativeGenpolicyBinarySha256": "e477b1110a138c91f19de80304013fe27280df824fb70a72a2f48f451fbdc31f",
+    "genpolicyProfileSha256": {
+      "rules.rego": "777955f798e6f168093f12a506c3787040b66cda9f4be81bcc03f84795b1925f",
+      "trustee.rego": "cdc740f8ddfcb4fd0b2f09b1884e205fe040fd51827a10b18e44471588fdf92b",
+      "genpolicy-settings.json": "7cd340ef8978a519a71a1c8af0c968867460cff1b8143fb0b629a38bd73480a5"
+    },
+    "kbsImage": "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",
+    "tngImage": "ghcr.io/inclavare-containers/tng@sha256:233528659b406ffc67e6b2bd542f58825a3e85c7a25559a5adc74a16e582d416",
+    "localAsImage": "ghcr.io/confidential-containers/staged-images/coco-as-restful@sha256:997d6ba65bbfd6464ebbecaa99ca04ec8050304c9c976cd44e65971c7427eb7d",
+    "tngClientBinarySha256": "36fc1411f66ab0e210f0b4f01569e5c8333fb0e7613fc4b8cb1e0c31ad07c30e",
+    "initDataSha256": "9b508db10764c29eebff6b4fc6620daef0993cfacc960b8a1f24d964669a5a30",
+    "sourceToImageProvenanceIndependentlyVerified": false
+  },
+  "nativeRuntime": {
+    "distribution": "k0s",
+    "containerd": "2.3.3",
+    "ociVersion": "1.3.0",
+    "guestMemoryMiB": 2048,
+    "guestVcpus": 2,
+    "readyContainers": 2,
+    "imageAndCommandTamperPreservedAllNativeAnnotations": true
+  },
+  "attestedOwnerOperations": {
+    "attestedConnection": true,
+    "authenticatedPolicyRead": true,
+    "attestationPolicyWrite": true,
+    "resourcePolicyWrite": true,
+    "binaryResourceWrite": true,
+    "resourceDelete": true
+  },
+  "negativeClientChecks": {
+    "wrong_measurement_rejected": true,
+    "wrong_initDataSha256_rejected": true,
+    "wrong_chipId_rejected": true,
+    "wrong_owner_rejected": true
+  },
+  "guestEnforcement": {
+    "adminExecKbsDenied": true,
+    "adminExecTngDenied": true,
+    "changedImage": {
+      "deniedByGuestPolicy": true,
+      "initDataPreserved": true
+    },
+    "changedStartupArguments": {
+      "deniedByGuestPolicy": true,
+      "initDataPreserved": true
+    }
+  },
+  "hostBoundary": {
+    "podVolumeDirectoryFound": true,
+    "hostVolumeFileCount": 0,
+    "ports": {
+      "8443": true,
+      "8080": false,
+      "8006": false
+    },
+    "secrets": 0,
+    "configMapsOtherThanNamespaceCA": 0
+  },
+  "replacementRecovery": {
+    "approvedDeploymentRestored": true,
+    "sameGeneratedIdentityVerified": true,
+    "ownerReprovisioningSucceeded": true
+  },
+  "softwareQualification": {
+    "node": "24.22.0",
+    "nativeHelmGenpolicyTests": 7,
+    "nativeGuestPolicyDecisions": 72,
+    "nativeAppraisalAndResourcePolicyDecisions": 233,
+    "nativeTngAndKbsClientTests": 2,
+    "nebulaPackedPackageTests": 7,
+    "clientPackedPackageTests": 1
+  },
+  "privacy": "Raw chip identity, addresses, node IDs, kubeconfig, owner public/private keys, evidence and credentials omitted.",
+  "limits": [
+    "No native resource retrieval inside a second TEE was rerun in this qualification.",
+    "State and server keys are lost on PodVM replacement.",
+    "No singleton identity, rollback protection, certificate renewal or continuous evidence freshness.",
+    "Hostile-input tests are bounded cases, not proof against every administrator attack.",
+    "TNG client compatibility changes from upstream PR 263 are still required."
+  ],
+  "dependencyRefactor": {
+    "date": "2026-10-16",
+    "chart": "Unmodified official chart fetched as a pinned source dependency; only TypeScript extensions remain in Nebula.",
+    "sourceArchiveSha256": "5118ffa64c2376db52b4524719ffe8d0fafa1d91b8bd5a47340e4deb7b34dd06",
+    "copiesShippedInNebula": false,
+    "allResourcesIdentical": true,
+    "identityIdentical": true,
+    "nativeHelmGenpolicyTests": 6,
+    "packedPackageTests": 7,
+    "retestedOnSameDevSnpHost": true,
+    "attestedOwnerOperations": {
+      "attestedConnection": true,
+      "authenticatedPolicyRead": true,
+      "attestationPolicyWrite": true,
+      "resourcePolicyWrite": true,
+      "binaryResourceWrite": true,
+      "resourceDelete": true
+    },
+    "negativeClientChecks": {
+      "wrong_measurement_rejected": true,
+      "wrong_initDataSha256_rejected": true,
+      "wrong_chipId_rejected": true,
+      "wrong_owner_rejected": true
+    },
+    "adminExecKbsDenied": true,
+    "adminExecTngDenied": true,
+    "secrets": 0,
+    "configMapsOtherThanNamespaceCA": 0,
+    "changedImage": {
+      "deniedByGuestPolicy": true,
+      "initDataPreserved": true
+    },
+    "changedStartupArguments": {
+      "deniedByGuestPolicy": true,
+      "initDataPreserved": true
+    }
+  },
+  "standardHelmDependencyRefactor": {
+    "date": "2026-10-16",
+    "chart": "Owner-supplied official Helm dependency resolved directly by cdk8s Helm; no custom downloader or dependency build in the construct.",
+    "qualifiedSource": "3e160008ef3e5d8ce82e59c729d56e2d0175dba0",
+    "qualifiedVersion": "0.21.0",
+    "chartSourcesShippedInNebula": false,
+    "standardPackagedChartVerified": true,
+    "standardHelmRepositoryVerified": true,
+    "missingRepositoryVersionRejected": true,
+    "allResourcesIdentical": true,
+    "identityIdentical": true,
+    "trusteeTestsIncludingNativeHelmGenpolicy": 9,
+    "packedPackageTests": 7,
+    "strictTypeScriptPassed": true,
+    "retestedOnSameDevSnpHost": true,
+    "attestedOwnerOperations": {
+      "attestedConnection": true,
+      "authenticatedPolicyRead": true,
+      "attestationPolicyWrite": true,
+      "resourcePolicyWrite": true,
+      "binaryResourceWrite": true,
+      "resourceDelete": true
+    },
+    "negativeClientChecks": {
+      "wrong_measurement_rejected": true,
+      "wrong_initDataSha256_rejected": true,
+      "wrong_chipId_rejected": true,
+      "wrong_owner_rejected": true
+    },
+    "adminExecKbsDenied": true,
+    "adminExecTngDenied": true,
+    "secrets": 0,
+    "configMapsOtherThanNamespaceCA": 0,
+    "isolatedTestNamespaceRemoved": true
+  }
+}

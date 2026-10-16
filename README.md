@@ -34,7 +34,7 @@ discovery, resource ownership, and staged adoption of existing infrastructure.
 | Networking | Cilium, Calico, WireGuard, Envoy, ingress-nginx, cert-manager, and external-dns. |
 | Storage | Longhorn, Piraeus, OpenEBS LVM, EBS CSI, snapshots, and PVC resizing. |
 | Monitoring | Prometheus Operator, member-cluster monitoring, mesh metrics, and Crossplane observability. |
-| Confidential workloads | Measured guest definitions, signed releases, attested image pulls, admission policies, and sealed disks. |
+| Confidential workloads | Measured guest definitions, signed releases, attested image pulls, admission policies, sealed disks, and Trustee in a CoCo SNP guest. |
 | Automation | KEDA, GitHub and Gitea runners, kagent, event bridges, and Ollama. |
 | Policy | [Kyverno](packages/nebula/src/modules/k8s/kyverno/README.md), native policies added on demand, with generic controller permissions. |
 
@@ -89,6 +89,12 @@ pnpm exec tsx src/cli.ts --help
 ```
 
 Use `pnpm exec tsx src/cli.ts <command> --help` to inspect a command's options.
+
+The separate [`@nebula/trustee-client`](packages/trustee-client/README.md) package
+provides the `nebula-trustee` command and a TypeScript API for attesting and
+provisioning a self-sufficient Trustee deployment. It manages local TNG and
+Trustee verification, with native owner JWT administration. It follows the CLI's
+source TypeScript packaging and runs through `tsx`.
 
 | Command | Purpose |
 | --- | --- |
@@ -159,6 +165,8 @@ repository root to inspect the build, USB image, VM, and GCP image commands.
 - [AWS worker adoption](packages/nebula/src/modules/infra/aws/worker-launch-template.md)
 - [Cilium networking](packages/nebula/src/modules/k8s/cilium/README.md)
 - [Confidential guests](packages/nebula/src/modules/k8s/confidential-guests/README.md)
+- [Confidential Trustee deployment and trust requirements](packages/nebula/src/modules/k8s/trustee/README.md)
+- [Self-sufficient Trustee with TNG attested TLS](packages/nebula/src/modules/k8s/trustee/TNG.md)
 - [Host reconciliation](packages/nebula/src/modules/k8s/host-reconciliation/README.md)
 
 ## License

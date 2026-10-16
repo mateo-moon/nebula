@@ -1,0 +1,117 @@
+name: Build Trustee Helm chart
+
+on:
+  workflow_call:
+    inputs:
+      repair-cache:
+        description: Explicitly recreate a missing package without changing its Helm pins
+        type: boolean
+        default: false
+    outputs:
+      artifact:
+        description: This run's package for the exact Helm pins
+        value: ${{ jobs.chart.outputs.artifact }}
+      version:
+        description: Pinned upstream chart version
+        value: ${{ jobs.chart.outputs.version }}
+  workflow_dispatch:
+    inputs:
+      repair-cache:
+        description: Recreate a missing package after cache eviction
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  chart:
+    name: Official Trustee chart package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      artifact: ${{ steps.pins.outputs.key }}-${{ github.run_attempt }}
+      version: ${{ steps.pins.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read the Helm pins
+        id: pins
+        run: |
+          pins=$(jq -ceS '
+            select(keys == ["dependencyLockSha256", "source", "version"])
+            | select(.source | test("^[a-f0-9]{40}$"))
+            | select(.version | test("^[0-9]+[.][0-9]+[.][0-9]+$"))
+            | select(.dependencyLockSha256 | test("^[a-f0-9]{64}$"))
+          ' .github/trustee-chart.json)
+          printf '%s' "$pins" > "$RUNNER_TEMP/trustee-chart-pins.json"
+          digest=$(printf '%s' "$pins" | sha256sum | cut -d ' ' -f 1)
+          {
+            echo "key=trustee-chart-$digest"
+            echo "source=$(jq -r .source <<< "$pins")"
+            echo "version=$(jq -r .version <<< "$pins")"
+            echo "lock=$(jq -r .dependencyLockSha256 <<< "$pins")"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore the existing package for these Helm pins
+        id: package
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/trustee-chart
+          key: ${{ steps.pins.outputs.key }}
+      - name: Allow a new build only for changed Helm pins or explicit cache repair
+        if: steps.package.outputs.cache-hit != 'true'
+        env:
+          BASE_SHA: ${{ github.event.before || github.event.pull_request.base.sha }}
+          REPAIR_CACHE: ${{ inputs.repair-cache }}
+        run: |
+          if [ "$REPAIR_CACHE" = "true" ]; then exit 0; fi
+          if [ -n "$BASE_SHA" ]; then
+            git cat-file -e "$BASE_SHA^{commit}"
+            if ! git cat-file -e "$BASE_SHA:.github/trustee-chart.json" 2>/dev/null; then exit 0; fi
+            previous=$(git show "$BASE_SHA:.github/trustee-chart.json" | jq -ceS .)
+            if [ "$previous" != "$(cat "$RUNNER_TEMP/trustee-chart-pins.json")" ]; then exit 0; fi
+          fi
+          echo "::error::The package for unchanged Helm pins is missing. Run Build Trustee Helm chart with repair-cache on this ref (or main for shared pins), then rerun validation. Module changes never rebuild the chart."
+          exit 1
+      - name: Check out the pinned official chart
+        if: steps.package.outputs.cache-hit != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: confidential-containers/trustee
+          ref: ${{ steps.pins.outputs.source }}
+          path: trustee-upstream
+          sparse-checkout: deployment/helm-chart
+          persist-credentials: false
+      - name: Package the unmodified chart with its locked dependencies
+        if: steps.package.outputs.cache-hit != 'true'
+        env:
+          LOCK_SHA256: ${{ steps.pins.outputs.lock }}
+          CHART_VERSION: ${{ steps.pins.outputs.version }}
+        run: |
+          printf '%s  %s\n' "$LOCK_SHA256" trustee-upstream/deployment/helm-chart/Chart.lock | sha256sum --check
+          helm version --short
+          helm dependency build trustee-upstream/deployment/helm-chart --skip-refresh
+          helm package trustee-upstream/deployment/helm-chart --destination "$RUNNER_TEMP/trustee-chart"
+          helm lint "$RUNNER_TEMP/trustee-chart/trustee-$CHART_VERSION.tgz"
+          cd "$RUNNER_TEMP/trustee-chart"
+          sha256sum "trustee-$CHART_VERSION.tgz" > SHA256SUMS
+      - name: Verify the package checksum
+        working-directory: ${{ runner.temp }}/trustee-chart
+        run: sha256sum --check SHA256SUMS
+      - name: Save the package for subsequent module validation
+        if: steps.package.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/trustee-chart
+          key: ${{ steps.pins.outputs.key }}
+      - name: Pass the existing package to this run's validation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          # Artifacts are immutable within a run; retries get a fresh handoff.
+          # The persistent cache key still contains only the Helm pins.
+          name: ${{ steps.pins.outputs.key }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trustee-chart
+          if-no-files-found: error
+          retention-days: 14

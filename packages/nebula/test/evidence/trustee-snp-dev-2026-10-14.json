@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-14",
+  "scope": "Disposable synthetic-resource functional qualification on an existing development SEV-SNP baremetal node. Not production security certification.",
+  "runtimeClass": "kata-qemu-snp",
+  "kbsImage": "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",
+  "sourceContract": "71251310045d8be2e95041cf0028691623c73957",
+  "imageSourceProvenanceVerified": false,
+  "generatorSha256": "4fa1cabd8d6e757c271caa991b889e1c2ccdbbdce58872b8b581720b3867be36",
+  "launch": {
+    "measurement": "c8f785a3faa8fe0ce4963cee7b2e0f92078201d4bbb8101fc525119bbb53f176b3b4ae9c0cdb5cb24a7e7d45617dd4b9",
+    "vcpus": 4,
+    "kernel_sha256": "f10415216b52b2f05d173f8ea20934c386b5911c1d22b99ff02c30b64977ea34",
+    "ovmf_sha256": "d9bbf4c9279c89e4dfc7b90d8a1d42440bc9b8022a9cdb86ab4d5449b51892a7",
+    "live_launch_reproduced": true
+  },
+  "trusteeInitDataSha256": "a6720bf207813e9c92730315fc04958b4fc1b5f8558d424338271d93b8f5f82e",
+  "clientInitDataSha256": "72aeca3196d098d1a36d1949eacf651437bdc1d247aa755734e6b9ae6bcfac9f",
+  "reportedTcb": {
+    "bootloader": 10,
+    "tee": 0,
+    "snp": 24,
+    "microcode": 88
+  },
+  "mitigationVectors": {
+    "launch": 0,
+    "current": 0
+  },
+  "platform": {
+    "board_vendor": "ASUSTeK COMPUTER INC.",
+    "board_name": "K14PA-U12 Series",
+    "bios_version": "2202-HET0009-25082201",
+    "bios_date": "08/22/2025"
+  },
+  "checks": {
+    "nativeBootstrap": "passed: real SNP attestation and three encrypted resource GETs",
+    "nativeClient": "passed: exact synthetic-resource digest",
+    "wrongLaunch": "denied: initial independently calculated two-vCPU launch did not match actual four-vCPU runtime",
+    "wrongInitData": {
+      "sameApprovedLaunch": true,
+      "nativeAttestationCompleted": true,
+      "resourceStatus": 403
+    },
+    "hostCommandTampering": {
+      "unchangedApprovedInitData": true,
+      "deniedBy": "CreateContainerRequest"
+    },
+    "clusterAdminExec": {
+      "denied": true,
+      "request": "ExecProcessRequest"
+    },
+    "httpDenials": {
+      "resource": 401,
+      "resource-write": 401,
+      "policy-write": 401
+    },
+    "hostVolumes": {
+      "scopedToTestTrusteePod": true,
+      "files": 0,
+      "plaintextHashMatches": 0
+    },
+    "containerLogsBytes": 0,
+    "stricterTcb": {
+      "minimumSnp": 27,
+      "reportedSnp": 24,
+      "nativeAttestationCompleted": true,
+      "bootstrapResourceStatus": 403,
+      "trusteeReady": false
+    },
+    "generatedGuestPolicyCases": 12,
+    "regoEarCases": 253,
+    "packageImportTests": 6
+  },
+  "limitations": [
+    "Bootstrap authority was a disposable ordinary Pod containing only synthetic material; independent production custody was not established.",
+    "The current platform fails the reviewed SNP firmware threshold and needs provider-approved firmware/OS mitigation review.",
+    "Upstream SNP appraisal does not expose mitigation vectors; chip ID and TCB floors do not prove all BIOS mitigations.",
+    "Exclusive owner-only AA/CDH TLS trust, source/build provenance and the complete adversarial guest-policy matrix remain production prerequisites.",
+    "Host inspection covered only this Trustee pod volume tree; it was not a physical-memory or side-channel test."
+  ],
+  "cleanup": {
+    "namespaceDeleted": true
+  },
+  "reviewedGeneratorInputs": {
+    "rulesSha256": "97e5f7344f3c44eb3a845a4b7dbb51b138c3a4117ae78bed112d0fe4a0272f80",
+    "settingsSha256": "850e168c58e681e1531670fb999ced1582cdfe5037209db3655f676278f8b9bd"
+  },
+  "trusteeAgentPolicySha256": "89be4c46314dc44037b6055c516d1ab873bf31f4b08e2bff81be83e9267d84d6",
+  "clientAgentPolicySha256": "0e73de4b62813553fc4d053feaaa01534e5fb247451f0a50e15cda5f4d97e34c"
+}

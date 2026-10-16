@@ -9,6 +9,14 @@ policy-engine checks. CI enables both with checksum-verified downloads. These
 checks do not deploy to a cluster; see the Kyverno module README for lifecycle
 qualification before production adoption.
 
+Set `NEBULA_HELM_TESTS=1` or `TRUSTEE_GENPOLICY` to enable the networked chart tests.
+`trustee-module.test.ts` resolves the external official chart dependency and checks its
+confidential topology. Set `TRUSTEE_GENPOLICY` to the pinned native binary and
+optionally `TRUSTEE_GENPOLICY_CACHE` for the real Helm → genpolicy → identity
+integration test. `trustee-guest-policy.integration.ts` executes the restrictive
+profile with native Regorus. See the module README for installation and dev SNP
+qualification. Ordinary tests do not contact the cluster.
+
 Use Node 24, pnpm and Go (the template fixture declares its version in
 `support/oidc-template/go.mod`). A first run downloads checksum-pinned Go
 dependencies for the actual Go/Sprig template evaluator; an offline run needs
@@ -102,6 +110,14 @@ The packed-package test also needs package-registry access or a warm pnpm store.
   part) with the committed render in `confidential-guests-golden/`
   (regenerate with `UPDATE_GOLDEN=1` after reviewing the change) and runs
   the publication guard over that render.
+- `trustee.test.ts` checks unsafe input refusal before host resolution or
+  manifest generation. `tng-trustee.test.ts` checks strict local attestation
+  policy. The `verify:broker-admission` tier executes Trustee SNP appraisal,
+  per-resource authorization and hostile guest-agent requests with native
+  Regorus/EAR. The sibling Node client's `native.test.ts` runs unmodified KBS
+  with synthetic credentials, exercising owner JWTs and resource lifecycle.
+  The previous dev records describe historical bootstrap/manual-policy paths;
+  they are not acceptance evidence for the current Helm integration.
 - `confidential-guests-guest-env.test.ts` holds the guest env renderers to
   the guest's own readers: `confidential-guests-guest-env/` vendors the
   contract's neutral fixtures byte for byte under a pinned manifest, the

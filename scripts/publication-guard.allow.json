@@ -3,6 +3,11 @@
   "entries": [
     {
       "class": "hex-64-bytes",
+      "sha256": "c2aee2770f457d45e9a0daeacba6bd3b5d04cf91e4da228a7802a71f6f1c369c",
+      "reason": "Synthetic Trustee identity fixture: 128 repetitions of the digit 3, not a hardware chip ID."
+    },
+    {
+      "class": "hex-64-bytes",
       "sha256": "37945a3519275d66b3206a6939c9bf641969320e0357db8eacecb6da3545fa40",
       "reason": "HOST_DATA test vectors: base64 of gzip of 1 MiB and 1 MiB + 1 zero bytes (decompressed-at-limit, decompressed-over-limit)"
     },
