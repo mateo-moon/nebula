@@ -10,7 +10,7 @@
  * `K0sCluster` is also repurposed by the k0rdent refactor as the emit engine that
  * generates the cluster-shape Helm chart a k0rdent `ClusterTemplate` wraps.
  */
-export { autoscalerAnnotations } from "./cluster";
+export { autoscalerAnnotations, NODE_IP_DISCOVERY_COMMANDS, DEFAULT_PRESTART_COMMANDS, withNodeIpArgs } from "./cluster";
 export { resolveK0sCalico, renderK0sCalicoSpec } from "./calico";
 export type { K0sCalicoConfig, ResolvedK0sCalico } from "./calico";
 export { WorkerSetup, Worker } from "./worker";
