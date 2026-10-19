@@ -171,7 +171,8 @@ rules/settings inputs. Nebula does not rewrite generated Rego or invent a
 parallel workload measurement format. The pinned upstream InitData uses a Rust
 HashMap, so its TOML field order is random. After validating native output,
 Nebula serializes only the standard Init-Data envelope in fixed order and gzip
-header format. The decoded `policy.rego` and `aa.toml` strings are preserved
+header format using a pinned JavaScript compressor, independent of the host's
+Node/zlib version. The decoded `policy.rego` and `aa.toml` strings are preserved
 byte-for-byte; the identity hashes the exact resulting TOML sent to the guest.
 This makes independent owner and Argo syntheses agree without saving or accepting
 an externally generated policy. Tests compare repeated native processes.

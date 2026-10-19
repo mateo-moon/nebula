@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { App, Chart, Helm, JsonPatch } from "cdk8s";
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { parse, stringify } from "smol-toml";
 import { deterministicInitData } from "../src/modules/k8s/trustee/genpolicy";
@@ -25,6 +25,9 @@ test("native Init-Data map order does not change the measured bytes or policy co
   const stable = deterministicInitData(encode(first));
   assert.equal(stable, deterministicInitData(encode(second)));
   assert.equal(stable, deterministicInitData(stable));
+  // Same wire bytes on Node 20/24/26 and Linux/macOS, independent of zlib.
+  assert.equal(createHash("sha256").update(stable).digest("hex"),
+    "9a0033ea4b29a94a78c63f9b09eb9a9ee3e701cc1f7e21f431115c6ec27153d3");
   assert.deepEqual(parse(initDataDocument(stable).toString()), parse(stringify(first)));
   assert.throws(() => deterministicInitData(encode({ ...first, extra: "ignored" })), /unexpected native/);
 });

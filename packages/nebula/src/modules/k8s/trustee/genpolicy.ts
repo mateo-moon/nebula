@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { gzipSync } from "node:zlib";
+import { gzipSync } from "fflate";
 import { parse, stringify } from "smol-toml";
 import { parseAllDocuments, stringify as yaml } from "yaml";
 import { initDataDocument, INIT_DATA_ANNOTATION, initDataSha256 } from "../confidential-guests/measured";
@@ -50,10 +50,11 @@ export function deterministicInitData(encoded: string): string {
   const document = stringify({ version: original.version, algorithm: original.algorithm,
     data: { "aa.toml": original.data["aa.toml"], "policy.rego": original.data["policy.rego"] } });
   if (!isDeepStrictEqual(parse(document), original)) throw new Error("Trustee: Init-Data serialization changed its contents");
-  const compressed = gzipSync(Buffer.from(document), { level: 9 });
+  // Pinned pure-JS compression is independent of Node's platform zlib version.
+  const compressed = gzipSync(Buffer.from(document), { level: 9, mtime: 0 });
   // A fixed OS byte avoids a platform-specific gzip header in the Pod template.
   compressed[9] = 255;
-  return compressed.toString("base64");
+  return Buffer.from(compressed).toString("base64");
 }
 
 /** Generate and validate native policy, then stabilize the transport envelope.
