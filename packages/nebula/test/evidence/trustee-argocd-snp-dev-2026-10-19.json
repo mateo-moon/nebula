@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-19",
+  "scope": "ArgoCD-managed Trustee on the existing dev SEV-SNP baremetal host, using native genpolicy and the actual Nebula Trustee CLI.",
+  "nebulaRevision": "d7b0b572090b707a697567ed3bee7d0c935a45fb",
+  "devopsDeploymentRevision": "100858a5b3497790fa8a7f0aee36b7aa91ae7ffe",
+  "upstreamTngRevision": "839da075e8dbe667fd79833181df079cd019102e",
+  "runtimeClass": "kata-qemu-snp",
+  "serverContainerCount": 2,
+  "helm": {
+    "source": "3e160008ef3e5d8ce82e59c729d56e2d0175dba0",
+    "version": "0.21.0",
+    "ociManifestDigest": "sha256:371376d5c4b135890f6b9b0071ad5a8f7c9975af797994b4aaf5efbea2e21cb5",
+    "reusedExistingPackage": true,
+    "customDownloader": false,
+    "dependenciesBuiltDuringSynthesis": false
+  },
+  "renderer": {
+    "image": "ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446",
+    "nativeGenpolicyRevision": "5b57d5c41ffb9d9515e76ef51cfa851068cfc439",
+    "nativeSourceUnmodified": true,
+    "nativeRegoAndAaConfigPreserved": true,
+    "standardInitDataEnvelopeCanonicalized": true,
+    "ownerPrivateKeyAvailableToArgo": false
+  },
+  "synthesis": {
+    "freshNativeProcessesIdentical": true,
+    "ownerLinuxAmd64Identical": true,
+    "ownerLinuxArm64Identical": true
+  },
+  "argocd": {
+    "application": "dev-trustee",
+    "revision": "100858a5b3497790fa8a7f0aee36b7aa91ae7ffe",
+    "syncedHealthy": true,
+    "argoOwnsDeployment": true,
+    "livePolicyMatchesIndependentOwner": true,
+    "hardRefreshCount": 2,
+    "deploymentGenerationUnchanged": true,
+    "podUidUnchanged": true,
+    "containerRestarts": 0
+  },
+  "cli": {
+    "offlineCliPreparation": true,
+    "attestedConnectionAndOwnerAuthorization": true,
+    "resourcePolicyListing": true,
+    "attestationPolicyUpdate": true,
+    "resourcePolicyUpdate": true,
+    "binaryResourceProvisioning": true,
+    "binaryResourceReplacement": true,
+    "resourceDeletion": true,
+    "denyAllReleasePolicyRestored": true,
+    "wrongOwnerRejected": true,
+    "wrongAudienceRejected": true,
+    "measurementMismatchRejected": true,
+    "initDataSha256MismatchRejected": true,
+    "chipIdMismatchRejected": true,
+    "cliRuntimeCleanup": true
+  },
+  "isolation": {
+    "snpHostPlacement": true,
+    "adminExeckbsDenied": true,
+    "adminExectngDenied": true,
+    "noKubernetesKeysOrConfiguration": true,
+    "changedcommandRejectedByGuest": true,
+    "changedimageRejectedByGuest": true
+  },
+  "bootstrap": {
+    "freshArgoVmAttestedAndOwnerProvisioned": true,
+    "externalBootstrapTrustee": false,
+    "serverStateInGuestMemory": true
+  },
+  "network": {
+    "attestedTlsReachable": true,
+    "kbsLoopbackInaccessibleFromHost": true,
+    "aaLoopbackInaccessibleFromHost": true
+  },
+  "limits": [
+    "Owner administration was tested through the CLI; resource retrieval by a second confidential workload was not tested.",
+    "Server state is ephemeral; VM replacement requires owner verification and provisioning again.",
+    "Argo follows the draft DevOps branch for qualification; returning the root application to main requires the deployment changes to be merged first.",
+    "The prototype does not provide singleton identity, rollback protection, certificate renewal orchestration or continuous attestation freshness. Infrastructure can deny availability."
+  ],
+  "finalState": {
+    "deploymentLeftRunning": true,
+    "argoManaged": true,
+    "readyContainers": 2,
+    "containerRestarts": 0,
+    "testResourcesDeleted": true,
+    "tamperedPodsRemoved": true,
+    "resourcePolicyDenyAll": true,
+    "localVerificationProcessesStopped": true,
+    "sshTestTunnelStopped": true
+  },
+  "privacy": "Raw chip identity, node names, addresses, kubeconfig, owner keys, attestation reports and credentials omitted."
+}

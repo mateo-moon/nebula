@@ -211,6 +211,17 @@ The [upstream-client requalification](../../../../test/evidence/trustee-tng-upst
 repeats attested owner operations, wrong-identity/owner rejection and administrator
 exec denial with unmodified upstream TNG, using that same approved server manifest.
 
+The [ArgoCD qualification](../../../../test/evidence/trustee-argocd-snp-dev-2026-10-19.json)
+deploys through the existing DevOps app-of-apps and Nebula renderer. Independent
+macOS and Linux amd64/arm64 synthesis produced byte-identical manifests and
+expected identities. The live SNP workload matched the owner copy; two Argo hard
+refreshes preserved its policy, Deployment generation and Pod UID without
+container restarts. The actual Nebula CLI passed owner policy/resource operations
+and wrong-owner/audience/VM/workload/chip rejection. Guest policy denied exec and
+changed command/image canaries. The Argo-managed deployment remains running with
+deny-all resource release; temporary test resources, canaries and tunnel were
+removed. Resource retrieval by a second confidential workload was not tested.
+
 This remains a prototype. State is deliberately ephemeral: PodVM replacement
 loses resources and keys and requires owner verification and provisioning
 again. Persistent creation latches prevent in-place container recreation.
