@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { App, Chart } from "cdk8s";
-import { generateKeyPairSync } from "node:crypto";
+import { createPublicKey, generateKeyPairSync } from "node:crypto";
 import { Trustee } from "../src/modules/k8s/trustee";
 import { trusteeSettings } from "../src/modules/k8s/trustee/settings";
 import { trusteeConfig } from "./support/trustee";
+
+test("explicit and named P-256 parameters produce the same measured owner key", () => {
+  const { publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1", paramEncoding: "explicit" });
+  const named = createPublicKey({ key: publicKey.export({ format: "jwk" }), format: "jwk" });
+  const explicitPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+  const namedPem = named.export({ format: "pem", type: "spki" }).toString();
+  assert.notEqual(explicitPem, namedPem, "fixture must exercise explicit curve parameters");
+  const config = trusteeConfig();
+  assert.deepEqual(trusteeSettings({ ...config, ownerPublicKeyPem: explicitPem }),
+    trusteeSettings({ ...config, ownerPublicKeyPem: namedPem }));
+});
 
 test("private keys, mutable images, unsafe namespaces and missing identities fail before Helm", () => {
   const config = trusteeConfig();

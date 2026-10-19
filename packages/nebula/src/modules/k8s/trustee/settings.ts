@@ -30,7 +30,11 @@ function publicKey(pem: string): string {
   }
   const normalized = key.export({ format: "pem", type: "spki" }).toString();
   if (pem.replace(/\s/g, "") !== normalized.replace(/\s/g, "")) fail("unexpected public-key content");
-  return normalized;
+  // OpenSSL can encode P-256 with explicit parameters. Trustee's native JWT
+  // decoder expects a named curve; a JWK round trip preserves the public point
+  // while selecting that interoperable SPKI encoding before measurement.
+  return createPublicKey({ key: key.export({ format: "jwk" }), format: "jwk" })
+    .export({ format: "pem", type: "spki" }).toString();
 }
 export function trusteeSettings(config: TrusteeConfig) {
   publicConfig("Trustee", config);
