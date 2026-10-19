@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { App, Chart, Helm, JsonPatch } from "cdk8s";
 import { generateKeyPairSync } from "node:crypto";
-import { parse } from "smol-toml";
+import { gzipSync } from "node:zlib";
+import { parse, stringify } from "smol-toml";
+import { deterministicInitData } from "../src/modules/k8s/trustee/genpolicy";
 import { Trustee } from "../src/modules/k8s/trustee";
 import { trusteeSettings } from "../src/modules/k8s/trustee/settings";
 import { extendTrusteeHelm, readTrusteeHelmPlan, trusteeHelmProps } from "../src/modules/k8s/trustee/helm";
@@ -14,6 +16,18 @@ const realHelm = !!native || process.env.NEBULA_HELM_TESTS === "1";
 if (realHelm && !process.env.TRUSTEE_HELM_CHART) {
   throw new Error("Set TRUSTEE_HELM_CHART to the prepared official chart when running Trustee Helm integration tests");
 }
+
+test("native Init-Data map order does not change the measured bytes or policy contents", () => {
+  const data = { "aa.toml": 'value = "quoted"\n', "policy.rego": 'package agent\nvalue := "\\\\\""\n' };
+  const encode = (value: object) => gzipSync(stringify(value)).toString("base64");
+  const first = { version: "0.1.0", algorithm: "sha256", data };
+  const second = { algorithm: "sha256", version: "0.1.0", data: Object.fromEntries(Object.entries(data).reverse()) };
+  const stable = deterministicInitData(encode(first));
+  assert.equal(stable, deterministicInitData(encode(second)));
+  assert.equal(stable, deterministicInitData(stable));
+  assert.deepEqual(parse(initDataDocument(stable).toString()), parse(stringify(first)));
+  assert.throws(() => deterministicInitData(encode({ ...first, extra: "ignored" })), /unexpected native/);
+});
 
 function rendered(extend = true) {
   const config = trusteeConfig(), chart = new Chart(new App(), "test");
@@ -98,6 +112,12 @@ test("native generation binds Helm images/config and supplies the client identit
   assert.deepEqual(Object.keys(data).sort(), ["aa.toml", "policy.rego"]);
   assert.match(data["policy.rego"], /trustee_creation/);
   assert.ok(!("policy" in config));
+  // Every constructor launches a separate native process with a new HashMap seed.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const repeated = new Trustee(new Chart(new App(), "native"), "trustee", config);
+    assert.deepEqual(repeated.deployment.toJson(), deployment);
+    assert.deepEqual(repeated.identity, module.identity);
+  }
   const nextOwner = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).publicKey.export({ format: "pem", type: "spki" }).toString();
   const changed = new Trustee(new Chart(new App(), "changed"), "trustee", { ...config, ownerPublicKeyPem: nextOwner, createNamespace: false });
   assert.notEqual(changed.identity.initDataSha256, module.identity.initDataSha256);

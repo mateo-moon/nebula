@@ -33,6 +33,10 @@ The separate [Trustee validation workflow](../../../../../../.github/workflows/v
 runs on module, shared code, test and build-input changes. It reuses the existing
 chart package and runs native genpolicy against the current module. Workload
 policy is generated during each validation; it is never cached with the chart.
+The [publication workflow](../../../../../../.github/workflows/publish-trustee-chart.yml)
+publishes that same package with `helm push` to OCI when Helm pins change or on
+explicit dispatch. Consumers pin the OCI manifest digest. Publication does not
+rebuild the archive, and module changes only rerun validation.
 Both jobs verify the package checksum. Documentation-only PRs and unrelated
 modules do not trigger validation. General checks stay in `verify-modules.yml`.
 
@@ -164,7 +168,18 @@ policy, diagnostics, extra mounts, post-start network changes and container
 recreation. Initial metadata copies and CNI configuration are narrowly bounded.
 Native genpolicy produces the entire policy and Init-Data directly using its
 rules/settings inputs. Nebula does not rewrite generated Rego or invent a
-parallel workload measurement format.
+parallel workload measurement format. The pinned upstream InitData uses a Rust
+HashMap, so its TOML field order is random. After validating native output,
+Nebula serializes only the standard Init-Data envelope in fixed order and gzip
+header format. The decoded `policy.rego` and `aa.toml` strings are preserved
+byte-for-byte; the identity hashes the exact resulting TOML sent to the guest.
+This makes independent owner and Argo syntheses agree without saving or accepting
+an externally generated policy. Tests compare repeated native processes.
+
+The multi-architecture `nebula-cmp` image includes this pinned, unmodified native
+genpolicy alongside Helm. Argo needs registry access for the pinned images and
+chart, but no owner private key or external Trustee. A changed approved input
+changes the expected identity and requires owner verification again.
 
 Only TNG listens on the Pod network. KBS and AA listen on guest loopback.
 Signing keys are generated inside the guest; resources and policies start

@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { gzipSync } from "node:zlib";
 import { parse, stringify } from "smol-toml";
 import { parseAllDocuments, stringify as yaml } from "yaml";
 import { initDataDocument, INIT_DATA_ANNOTATION, initDataSha256 } from "../confidential-guests/measured";
@@ -35,8 +36,28 @@ export function genpolicyInput(workload: TrusteeDeploymentManifest): object {
   return copy;
 }
 
-/** Native genpolicy writes Init-Data itself. Nebula never edits, repackages or
- * accepts a caller-supplied policy. Expected identity comes from these bytes. */
+/** Upstream InitData uses a HashMap, whose TOML field order changes across
+ * processes. Serialize only its envelope in fixed order; native policy and AA
+ * strings remain byte-for-byte identical. No policy can be supplied by callers. */
+export function deterministicInitData(encoded: string): string {
+  const original = parse(initDataDocument(encoded).toString("utf8")) as any;
+  if (Object.keys(original).sort().join() !== "algorithm,data,version" ||
+      original.version !== "0.1.0" || original.algorithm !== "sha256" ||
+      Object.keys(original.data ?? {}).sort().join() !== "aa.toml,policy.rego" ||
+      Object.values(original.data).some(value => typeof value !== "string")) {
+    throw new Error("Trustee: unexpected native Init-Data envelope");
+  }
+  const document = stringify({ version: original.version, algorithm: original.algorithm,
+    data: { "aa.toml": original.data["aa.toml"], "policy.rego": original.data["policy.rego"] } });
+  if (!isDeepStrictEqual(parse(document), original)) throw new Error("Trustee: Init-Data serialization changed its contents");
+  const compressed = gzipSync(Buffer.from(document), { level: 9 });
+  // A fixed OS byte avoids a platform-specific gzip header in the Pod template.
+  compressed[9] = 255;
+  return compressed.toString("base64");
+}
+
+/** Generate and validate native policy, then stabilize the transport envelope.
+ * Expected identity always hashes the exact bytes sent to the guest. */
 export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaToml: string, config: TrusteeConfig) {
   validateNetwork(config.network);
   const directory = mkdtempSync(join(tmpdir(), "nebula-trustee-genpolicy-"));
@@ -106,7 +127,8 @@ export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaTom
         throw new Error(`Trustee: genpolicy did not bind the required image, process or guest storage for ${container.name}`);
       }
     }
-    return { ccInitData: encoded, initDataSha256: initDataSha256(encoded) };
+    const ccInitData = deterministicInitData(encoded);
+    return { ccInitData, initDataSha256: initDataSha256(ccInitData) };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
