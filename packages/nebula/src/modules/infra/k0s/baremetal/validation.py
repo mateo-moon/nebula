@@ -144,9 +144,33 @@ def validate_uefi(profile: FirmwareProfile) -> None:
     validate_firmware_checks(profile.get("verification", {}))
 
 
+def validate_additional_ipv4_addresses(value: object, primary: str) -> None:
+    if not isinstance(value, list) or len(value) > 64:
+        raise ProvisioningError("additionalIpv4Addresses must be a list of at most 64 addresses")
+    seen = {primary}
+    for address in value:
+        if not isinstance(address, str):
+            raise ProvisioningError("additionalIpv4Addresses requires unicast IPv4 literals")
+        try:
+            ip = ipaddress.IPv4Address(address)
+        except ValueError as error:
+            raise ProvisioningError(
+                "additionalIpv4Addresses requires unicast IPv4 literals without CIDRs"
+            ) from error
+        first = ip.packed[0]
+        if first == 0 or first >= 224 or ip.is_loopback or ip.is_link_local:
+            raise ProvisioningError("additionalIpv4Addresses requires unicast IPv4 literals")
+        if address in seen:
+            raise ProvisioningError(
+                "additionalIpv4Addresses must be unique and exclude the primary address"
+            )
+        seen.add(address)
+
+
 def validate_spec(spec: WorkerSpec) -> None:
     if ipaddress.ip_address(spec["address"]).version != 4:
         raise ProvisioningError("installer requires IPv4 SSH access")
+    validate_additional_ipv4_addresses(spec.get("additionalIpv4Addresses", []), spec["address"])
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", spec["hostname"]):
         raise ProvisioningError("invalid hostname")
     ssh = spec["ssh"]

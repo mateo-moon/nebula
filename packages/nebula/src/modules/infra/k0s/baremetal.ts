@@ -14,6 +14,10 @@ import { validateUefi, type BaremetalUefiConfiguration } from "./baremetal/uefi"
 /** One worker's address, with optional overrides of the shared defaults. */
 export interface BaremetalNode {
   address: string;
+  /** Additional unicast IPv4 literals, installed as /32 aliases on the existing
+   * uplink. No CIDRs, duplicates or primary address; at most 64. Installation
+   * intent is immutable. Omitted or empty preserves the discovered network. */
+  additionalIpv4Addresses?: string[];
   /** Stable installed hostname; defaults to bm-<IPv4-with-dashes>. */
   name?: string;
   /** Privileged account on the source OS. The installed worker uses root. */
@@ -121,6 +125,8 @@ const hostnamePattern = "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$";
 const sshUserPattern = "^[a-z_][a-z0-9_-]*$";
 const labelPattern = "^[A-Za-z0-9](?:[-_.A-Za-z0-9]*[A-Za-z0-9])?$";
 const taintPattern = "^[A-Za-z0-9_./-]+(?:=[A-Za-z0-9_.-]+)?:(NoSchedule|NoExecute|PreferNoSchedule)$";
+const ipv4Pattern = "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$";
+const nonUnicastIpv4Pattern = "^(0[.]|127[.]|169[.]254[.]|22[4-9][.]|2[3-5][0-9][.])";
 
 function validateNode(node: Omit<BaremetalNode, "address">): void {
   requireValue(node.firmwareRetryGeneration === undefined || (Number.isInteger(node.firmwareRetryGeneration)
@@ -143,6 +149,14 @@ function validateNode(node: Omit<BaremetalNode, "address">): void {
 export function baremetalWorker(scope: Construct, o: BaremetalFleetOptions, input: string | BaremetalNode): ApiObject {
   const node = typeof input === "string" ? { address: input } : input;
   requireValue(isIP(node.address) === 4, "this installer requires an IPv4 SSH address");
+  if (node.additionalIpv4Addresses !== undefined) {
+    const addresses = node.additionalIpv4Addresses;
+    requireValue(Array.isArray(addresses) && addresses.length <= 64
+      && addresses.every(address => typeof address === "string" && isIP(address) === 4
+        && !new RegExp(nonUnicastIpv4Pattern).test(address) && address !== node.address)
+      && new Set(addresses).size === addresses.length,
+    "additionalIpv4Addresses must contain at most 64 unique unicast IPv4 literals, excluding the primary address");
+  }
   validateNode(node);
   const name = node.name ?? `bm-${node.address.replaceAll(".", "-")}`;
   const compositionName = o.compositionName ?? "baremetal-worker";
@@ -154,6 +168,7 @@ export function baremetalWorker(scope: Construct, o: BaremetalFleetOptions, inpu
     metadata: { name, annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } },
     spec: {
       address: node.address,
+      ...(node.additionalIpv4Addresses !== undefined ? { additionalIpv4Addresses: node.additionalIpv4Addresses } : {}),
       ...(node.name !== undefined ? { hostname: node.name } : {}),
       ...(node.sshUser !== undefined ? { sshUser: node.sshUser } : {}),
       ...(node.sshPort !== undefined ? { sshPort: node.sshPort } : {}),
@@ -272,8 +287,11 @@ export class BaremetalSetup extends Construct {
         versions: [{ name: "v1alpha1", served: true, referenceable: true, schema: { openApiv3Schema: {
           type: "object", properties: {
             spec: { type: "object", required: ["address"], properties: {
-              address: { type: "string", minLength: 7, maxLength: 15,
-                pattern: "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$" },
+              address: { type: "string", minLength: 7, maxLength: 15, pattern: ipv4Pattern },
+              additionalIpv4Addresses: { type: "array", maxItems: 64, "x-kubernetes-list-type": "atomic",
+                items: { type: "string", minLength: 7, maxLength: 15, pattern: ipv4Pattern,
+                  "x-kubernetes-validations": [{ rule: `!self.matches('${nonUnicastIpv4Pattern}')`, message: "additional addresses must be unicast IPv4" }] },
+                "x-kubernetes-validations": [{ rule: "self.all(a, self.filter(b, a == b).size() == 1)", message: "additional IPv4 addresses must be unique" }] },
               hostname: { type: "string", minLength: 1, maxLength: 63, pattern: hostnamePattern },
               sshUser: { type: "string", minLength: 1, maxLength: 32, pattern: sshUserPattern },
               sshPort: { type: "integer", minimum: 1, maximum: 65535 },
@@ -287,6 +305,10 @@ export class BaremetalSetup extends Construct {
               taints: { type: "array", maxItems: 64, items: { type: "string", maxLength: 253, pattern: taintPattern } },
             }, "x-kubernetes-validations": [
               { rule: "self.address == oldSelf.address", message: "host address is immutable" },
+              { rule: "!has(self.additionalIpv4Addresses) || self.additionalIpv4Addresses.all(a, a != self.address)",
+                message: "additional IPv4 addresses must exclude the primary address" },
+              { rule: "(has(self.additionalIpv4Addresses) ? self.additionalIpv4Addresses : []) == (has(oldSelf.additionalIpv4Addresses) ? oldSelf.additionalIpv4Addresses : [])",
+                message: "additionalIpv4Addresses is immutable" },
               { rule: "!has(oldSelf.firmwareRetryGeneration) ? (!has(self.firmwareRetryGeneration) || self.firmwareRetryGeneration == 1) : (has(self.firmwareRetryGeneration) && (self.firmwareRetryGeneration == oldSelf.firmwareRetryGeneration || self.firmwareRetryGeneration == oldSelf.firmwareRetryGeneration + 1))",
                 message: "firmware retry generation must start at one and increase by one; it cannot be removed" },
               { rule: "!has(oldSelf.skipUefi) || (has(self.skipUefi) && self.skipUefi)", message: "skipUefi cannot be removed once set" },

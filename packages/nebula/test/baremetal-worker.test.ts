@@ -102,6 +102,86 @@ test("password bootstrap references a separate Secret and enrollment retains the
   assert.equal(native(final, "pool").spec.machine.sshKeyRef.name, "worker-ssh");
 });
 
+test("additional IPv4 aliases reach the installer on the existing uplink and bind the request", () => {
+  const additionalIpv4Addresses = ["192.0.2.11", "192.0.2.12", "198.51.100.20"];
+  const chart = Testing.chart();
+  new BaremetalFleet(chart, "fleet").addNode({ address: "192.0.2.10", additionalIpv4Addresses });
+  const xr = Testing.synth(chart)[0]; xr.metadata.uid = fixture.xr.metadata.uid;
+  assert.deepEqual(xr.spec.additionalIpv4Addresses, additionalIpv4Addresses);
+  const first = render({}, xr);
+  const requestJSON = native(first, "request").data["request.json"];
+  const request = JSON.parse(requestJSON);
+  assert.equal(request.spec.address, "192.0.2.10");
+  assert.deepEqual(request.spec.additionalIpv4Addresses, additionalIpv4Addresses);
+  assert.notEqual(status(first).requestHash, status(render()).requestHash);
+  const network = execFileSync("python3", ["-B", "-c", `
+import json, sys
+from baremetal_fixtures import FACTS, installer
+request = json.load(sys.stdin)
+files = installer.render_files(request["spec"], FACTS, "ssh-ed25519 AAAA", {"uid": request["uid"]})
+sys.stdout.buffer.write(files["nebula/uplink.network"])
+`], { cwd: fileURLToPath(new URL(".", import.meta.url)), input: requestJSON, encoding: "utf8" });
+  assert.deepEqual(network.split("\n").filter(line => line.startsWith("Address=")), [
+    "Address=192.0.2.10/24", "Address=2001:db8::10/64", ...additionalIpv4Addresses.map(address => `Address=${address}/32`),
+  ]);
+  assert.equal(network.match(/^MACAddress=/gm)?.length, 1);
+  assert.equal(network.match(/^Gateway=/gm)?.length, 2);
+  assert.equal(native(render(installed(fixture.template, xr), xr), "pool").spec.machine.address, "192.0.2.10");
+  for (const addresses of [undefined, [], ["192.0.2.13"], [...additionalIpv4Addresses].reverse()]) {
+    assert.throws(() => render({}, { ...xr, status: status(first), spec: { ...xr.spec, additionalIpv4Addresses: addresses } }), /installation profile changed/);
+  }
+  assert.throws(() => render({}, { ...xr, status: status(render()) }), /installation profile changed/);
+});
+
+test("omitted and empty additional IPv4 inputs retain the original request and identity", () => {
+  const chart = Testing.chart();
+  baremetalWorker(chart, {}, { address: "192.0.2.10", additionalIpv4Addresses: [] });
+  const xr = Testing.synth(chart)[0]; xr.metadata.uid = fixture.xr.metadata.uid;
+  const original = render();
+  const empty = render({}, { ...xr, status: status(original) });
+  assert.equal(native(empty, "request").data["request.json"], native(original, "request").data["request.json"]);
+  assert.equal(status(empty).requestHash, status(original).requestHash);
+  assert.equal(JSON.parse(native(empty, "request").data["request.json"]).spec.additionalIpv4Addresses, undefined);
+});
+
+test("the API and XRD reject malformed, duplicate and non-unicast IPv4 aliases", () => {
+  const spec = fixture.resources.find(r => r.kind === "CompositeResourceDefinition")!.spec.versions[0].schema.openAPIV3Schema.properties.spec;
+  const field = spec.properties.additionalIpv4Addresses;
+  assert.equal(field.type, "array"); assert.equal(field.maxItems, 64);
+  assert.equal(field.default, undefined); assert.equal(field["x-kubernetes-list-type"], "atomic");
+  const pattern = new RegExp(field.items.pattern);
+  const rules = spec["x-kubernetes-validations"].filter((r: any) => r.message.includes("additional"));
+  const primaryRule = rules.find((r: any) => r.message.includes("exclude"));
+  const immutableRule = rules.find((r: any) => r.message.includes("immutable"));
+  const valid = (value: any): boolean => Array.isArray(value) && value.length <= field.maxItems
+    && value.every(a => typeof a === "string" && pattern.test(a)
+      && field.items["x-kubernetes-validations"].every((r: any) => evaluate(r.rule, { self: a })))
+    && field["x-kubernetes-validations"].every((r: any) => evaluate(r.rule, { self: value }))
+    && evaluate(primaryRule.rule, { self: { address: "192.0.2.10", additionalIpv4Addresses: value } }) === true;
+  for (const addresses of [[], ["192.0.2.11", "10.0.0.1", "198.51.100.255"], Array.from({ length: 64 }, (_, i) => `198.51.100.${i}`)]) {
+    assert.equal(valid(addresses), true);
+    baremetalWorker(Testing.chart(), {}, { address: "192.0.2.10", additionalIpv4Addresses: addresses });
+  }
+  for (const addresses of [
+    null, "192.0.2.11", {}, [1], [null], [""], ["192.0.2.11/32"], ["192.0.2.11/24"], ["2001:db8::1"],
+    ["256.1.2.3"], ["01.2.3.4"], [" 192.0.2.11"], ["192.0.2.11\nGateway=192.0.2.1"],
+    ["0.0.0.0"], ["0.1.2.3"], ["127.0.0.1"], ["169.254.1.1"], ["224.0.0.1"], ["240.0.0.1"], ["255.255.255.255"],
+    ["192.0.2.10"], ["192.0.2.11", "192.0.2.11"], Array.from({ length: 65 }, (_, i) => `198.51.100.${i}`),
+  ]) {
+    assert.equal(valid(addresses), false, JSON.stringify(addresses));
+    assert.throws(() => baremetalWorker(Testing.chart(), {}, { address: "192.0.2.10", additionalIpv4Addresses: addresses as any }), /additionalIpv4Addresses/);
+  }
+  for (const [oldAddresses, newAddresses, expected] of [
+    [undefined, undefined, true], [undefined, [], true], [[], undefined, true],
+    [undefined, ["192.0.2.11"], false], [["192.0.2.11"], undefined, false],
+    [["192.0.2.11"], ["192.0.2.11"], true], [["192.0.2.11"], ["192.0.2.12"], false],
+  ] as const) {
+    const self = newAddresses === undefined ? {} : { additionalIpv4Addresses: newAddresses };
+    const oldSelf = oldAddresses === undefined ? {} : { additionalIpv4Addresses: oldAddresses };
+    assert.equal(evaluate(immutableRule.rule, { self, oldSelf }), expected);
+  }
+});
+
 test("rescue storage declarations require explicit unique erasure identities", () => {
   const disk = { serial: "os", minSizeGiB: 32, eraseSerials: ["os", "data"], workloadSerials: ["data"] };
   const profile = setup({ ...options, installation: { ...options.installation, disk } });
@@ -368,7 +448,15 @@ test("Crossplane CLI runs the pinned function pipeline with real readiness seman
   };
   const ready = (rs: any[]) => rs.find(r => r.kind === "XBaremetalWorker").status.conditions.find((c: any) => c.type === "Ready").status;
   const count = (rs: any[]) => rs.filter(r => r.kind === "Object").length;
-  assert.equal(ready(fullRender({})), "False");
+  const initial = fullRender({});
+  assert.equal(ready(initial), "False");
+  const aliases = ["192.0.2.11", "192.0.2.12", "198.51.100.20"];
+  const withAliases = fullRender({}, { ...network.xr, spec: { ...network.xr.spec, additionalIpv4Addresses: aliases } });
+  const aliasRequest = withAliases.find(r => r.kind === "Object"
+    && r.spec.forProvider.manifest.data?.["request.json"])!.spec.forProvider.manifest;
+  assert.deepEqual(JSON.parse(aliasRequest.data["request.json"]).spec.additionalIpv4Addresses, aliases);
+  assert.notEqual(status(withAliases).requestHash, status(initial).requestHash);
+  assert.equal(ready(withAliases), "False");
   const observed = installed(network.template);
   assert.equal(ready(fullRender(observed)), "False", "OS verification cannot bypass UEFI");
   observed.state.resource.status.atProvider.manifest.data.progress = JSON.stringify({ phase: "OSReady", uefiVerified: true });

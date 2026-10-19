@@ -21,7 +21,10 @@ def canonical(value: object) -> str:
 
 
 def fingerprint(spec: WorkerSpec) -> str:
-    fields = ("address", "hostname", "ssh", "installation")
+    fields: tuple[str, ...] = ("address", "hostname", "ssh", "installation")
+    # Preserve existing receipts for callers that do not request aliases.
+    if spec.get("additionalIpv4Addresses"):
+        fields += ("additionalIpv4Addresses",)
     return hashlib.sha256(canonical({key: spec.get(key) for key in fields}).encode()).hexdigest()
 
 
