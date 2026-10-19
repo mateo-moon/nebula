@@ -52,7 +52,11 @@ export function trusteeClientSidecars(options: {
     env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
     securityContext: { runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false,
       readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
-    volumeMounts: [{ name: "trustee-verifier-state", mountPath: "/state", readOnly }, { name: `${name}-tmp`, mountPath: "/tmp" }],
+    volumeMounts: [{ name: "trustee-verifier-state", mountPath: "/state", ...(readOnly ? { readOnly: true } : {}) },
+      { name: `${name}-tmp`, mountPath: "/tmp" },
+      // Override the upstream image's VOLUME declaration. Otherwise containerd
+      // creates a host directory and Kata correctly refuses to copy it in.
+      ...(name === "trustee-verifier" ? [{ name: "trustee-verifier-cache", mountPath: "/opt/confidential-containers/attestation-service" }] : [])],
     resources: { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "256Mi" } },
   });
   return {
@@ -61,7 +65,7 @@ export function trusteeClientSidecars(options: {
         ports: [{ name: "kbs-client", containerPort: 18080 }],
         startupProbe: { tcpSocket: { port: 18080 }, periodSeconds: 2, failureThreshold: 60 },
       }],
-    volumes: ["trustee-verifier-state", "trustee-verifier-tmp", "trustee-client-tmp"].map(name => ({
+    volumes: ["trustee-verifier-state", "trustee-verifier-tmp", "trustee-verifier-cache", "trustee-client-tmp"].map(name => ({
       name, emptyDir: { medium: "Memory", sizeLimit: "64Mi" },
     })),
     kbsUrl: "http://127.0.0.1:18080",
