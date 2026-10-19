@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-19",
+  "scope": "Unmodified upstream TNG owner-client qualification against the previously approved Trustee deployment on the existing dev SEV-SNP baremetal host.",
+  "upstream": {
+    "repository": "https://github.com/inclavare-containers/TNG",
+    "revision": "839da075e8dbe667fd79833181df079cd019102e",
+    "mergedPullRequest": "https://github.com/inclavare-containers/TNG/pull/263",
+    "localPatchApplied": false,
+    "trackedSourceUnmodified": true,
+    "lockedCargoDependencies": true
+  },
+  "clientBuild": {
+    "target": "aarch64-apple-darwin",
+    "rust": "1.98.1",
+    "binarySha256": "e71869d4586298ec73bb87c0f31e8f13267db8ed7719bd6a9ea95f8cc995d3c2",
+    "artifactChecksumsVerified": true
+  },
+  "server": {
+    "previousQualification": "trustee-helm-genpolicy-snp-dev-2026-10-16.json",
+    "sameApprovedManifest": true,
+    "sameApprovedIdentity": true,
+    "guestPolicyAndAaConfigIdentical": true,
+    "runtimeClassName": "kata-qemu-snp",
+    "readyContainers": 2,
+    "externalBootstrapTrustee": false
+  },
+  "softwareChecks": {
+    "upstreamCoCoVerifierTestsPassed": 39,
+    "nodeClientTestsPassed": 10,
+    "nodeClientTestsSkipped": 0,
+    "nodeClientTypeCheckPassed": true,
+    "unattestedTlsEndpointRejectedBeforeOwnerRequest": true,
+    "nativeKbsOwnerApiPassed": true
+  },
+  "attestedOwnerOperations": {
+    "attestedConnection": true,
+    "authenticatedPolicyRead": true,
+    "attestationPolicyWrite": true,
+    "resourcePolicyWrite": true,
+    "binaryResourceWrite": true,
+    "resourceDelete": true
+  },
+  "negativeClientChecks": {
+    "measurementMismatchRejected": true,
+    "initDataSha256MismatchRejected": true,
+    "chipIdMismatchRejected": true,
+    "wrongOwnerRejected": true
+  },
+  "administratorIsolation": {
+    "adminExecKbsDenied": true,
+    "adminExecTngDenied": true,
+    "kubernetesSecrets": 0,
+    "kubernetesConfigMapsOtherThanNamespaceCA": 0
+  },
+  "cleanup": {
+    "isolatedTestNamespaceRemoved": true,
+    "sshTransportTunnelStopped": true
+  },
+  "limits": [
+    "This requalifies the native owner client; server images and workload policy were not changed.",
+    "Changed-image/startup-command tampering and native resource retrieval inside a second TEE were not rerun.",
+    "The prototype limitations in the module documentation still apply."
+  ],
+  "privacy": "Raw chip identity, node names, addresses, kubeconfig, owner keys, evidence and credentials omitted."
+}

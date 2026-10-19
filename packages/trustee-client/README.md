@@ -16,7 +16,7 @@ its native owner JWT API. No external bootstrap Trustee is involved.
 ## Install and prepare
 
 Requires Node >=20.19, OpenSSL, a trusted local Docker runtime with a Unix socket,
-and the patched native TNG executable. Linux and macOS are supported; the verifier
+and the qualified upstream TNG executable. Linux and macOS are supported; the verifier
 image runs as `linux/amd64`. The owner's computer and its Docker VM are trusted.
 Remote Docker endpoints are rejected. Do not run this client on an excluded
 infrastructure administrator's machine.
@@ -66,7 +66,8 @@ installing and using it requires no Rust toolchain or Git.
 The [native build workflow](../../.github/workflows/build-tng-client.yml) produces
 a qualified Linux amd64 artifact with checksums and source/toolchain metadata.
 Choose a successful run for a reviewed Nebula commit and verify the checksums
-before installing the binary. Native source, patching and build instructions for
+before installing the binary. The build pins an unmodified upstream commit that
+includes the merged mainline Trustee compatibility fixes. Build instructions for
 maintainers live under [`tools/tng-client`](../../tools/tng-client/README.md).
 Native builds and releases can be maintained independently of the TypeScript API.
 

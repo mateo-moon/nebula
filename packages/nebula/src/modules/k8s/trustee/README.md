@@ -191,12 +191,16 @@ records attested owner provisioning, wrong-identity/owner rejection, guest denia
 of exec and changed images/commands, inaccessible guest-only ports, empty host
 volumes and successful reprovisioning after replacement.
 
+The [upstream-client requalification](../../../../test/evidence/trustee-tng-upstream-snp-dev-2026-10-19.json)
+repeats attested owner operations, wrong-identity/owner rejection and administrator
+exec denial with unmodified upstream TNG, using that same approved server manifest.
+
 This remains a prototype. State is deliberately ephemeral: PodVM replacement
 loses resources and keys and requires owner verification and provisioning
 again. Persistent creation latches prevent in-place container recreation.
-Short-lived certificates have no renewal orchestration. The client currently
-requires the [TNG compatibility fixes](../../../../../../tools/tng-client/README.md)
-from upstream PR 263; the deployed TNG and Trustee images are unchanged.
+Short-lived certificates have no renewal orchestration. The native client uses a
+[pinned, unmodified upstream TNG revision](../../../../../../tools/tng-client/README.md)
+containing merged PR #263; the deployed TNG and Trustee images are unchanged.
 
 Attested TLS proves possession of the guest's TLS key; JWT authenticates the
 owner. Identical approved instances are still allowed. This does not implement
