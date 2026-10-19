@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "fflate";
 import { parse, stringify } from "smol-toml";
 import { parseAllDocuments, stringify as yaml } from "yaml";
-import { initDataDocument, INIT_DATA_ANNOTATION, initDataSha256 } from "../confidential-guests/measured";
+import { initDataDocument, INIT_DATA_ANNOTATION, initDataSha256, type GuestPodManifest } from "../confidential-guests/measured";
 import type { TrusteeDeploymentManifest } from "./manifests";
 import type { TrusteeConfig, TrusteeNetworkConfig } from "./types";
 
@@ -39,16 +39,16 @@ export function genpolicyInput(workload: TrusteeDeploymentManifest): object {
 /** Upstream InitData uses a HashMap, whose TOML field order changes across
  * processes. Serialize only its envelope in fixed order; native policy and AA
  * strings remain byte-for-byte identical. No policy can be supplied by callers. */
-export function deterministicInitData(encoded: string): string {
+export function deterministicInitData(encoded: string, configKeys = ["aa.toml"]): string {
   const original = parse(initDataDocument(encoded).toString("utf8")) as any;
   if (Object.keys(original).sort().join() !== "algorithm,data,version" ||
       original.version !== "0.1.0" || original.algorithm !== "sha256" ||
-      Object.keys(original.data ?? {}).sort().join() !== "aa.toml,policy.rego" ||
+      Object.keys(original.data ?? {}).sort().join() !== [...configKeys, "policy.rego"].sort().join() ||
       Object.values(original.data).some(value => typeof value !== "string")) {
     throw new Error("Trustee: unexpected native Init-Data envelope");
   }
   const document = stringify({ version: original.version, algorithm: original.algorithm,
-    data: { "aa.toml": original.data["aa.toml"], "policy.rego": original.data["policy.rego"] } });
+    data: Object.fromEntries([...configKeys, "policy.rego"].sort().map(key => [key, original.data[key]])) });
   if (!isDeepStrictEqual(parse(document), original)) throw new Error("Trustee: Init-Data serialization changed its contents");
   // Pinned pure-JS compression is independent of Node's platform zlib version.
   const compressed = gzipSync(Buffer.from(document), { level: 9, mtime: 0 });
@@ -60,10 +60,66 @@ export function deterministicInitData(encoded: string): string {
 /** Generate and validate native policy, then stabilize the transport envelope.
  * Expected identity always hashes the exact bytes sent to the guest. */
 export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaToml: string, config: TrusteeConfig) {
+  return generatePolicy(genpolicyInput(workload), workload.spec.template.spec.containers,
+    { "aa.toml": aaToml }, config, asset("trustee.rego"), true);
+}
+
+type NativePolicyConfig = Pick<TrusteeConfig, "network" | "genpolicy" | "k8sDistribution" | "ociVersion">;
+
+/** Native guest policy for workloads consuming an attested Trustee. Public
+ * bootstrap sidecars start before encrypted containers; all run in one TEE.
+ * Callers supply Kubernetes declarations and measured CoCo configuration, never
+ * a pre-generated policy or an observed identity. */
+export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
+  guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig) {
+  if (workload.kind !== "Pod" || !workload.spec) throw new TypeError("Attested workload requires a Pod");
+  const copy = structuredClone(workload) as any;
+  const spec = copy.spec;
+  if (!["kata-qemu-snp", "kata-qemu-tdx"].includes(spec.runtimeClassName) ||
+      spec.automountServiceAccountToken !== false || spec.enableServiceLinks !== false ||
+      spec.hostNetwork || spec.hostPID || spec.hostIPC || spec.shareProcessNamespace || spec.ephemeralContainers?.length ||
+      spec.volumes?.some((volume: any) => Object.keys(volume).sort().join() !== "emptyDir,name" || volume.emptyDir.medium !== "Memory")) {
+    throw new TypeError("Attested workload requires private namespaces, no API credentials and only guest tmpfs");
+  }
+  const containers = [...(spec.initContainers ?? []), ...spec.containers];
+  if (containers.length < 1 || new Set(containers.map(c => c.name)).size !== containers.length) throw new TypeError("Invalid workload containers");
+  for (const container of containers) {
+    const security = container.securityContext;
+    if (!container.image?.match(/@sha256:[a-f0-9]{64}$/) || !container.command?.length || !Array.isArray(container.args) ||
+        container.envFrom?.length || container.env?.some((e: any) => typeof e.value !== "string" || e.valueFrom) ||
+        container.volumeMounts?.some((m: any) => m.subPath || m.subPathExpr || m.mountPropagation) ||
+        !security || security.privileged || security.allowPrivilegeEscalation !== false || security.readOnlyRootFilesystem !== true ||
+        !Number.isSafeInteger(security.runAsUser) || security.runAsUser < 0 ||
+        !Number.isSafeInteger(security.runAsGroup) || security.runAsGroup < 0 ||
+        security.capabilities?.drop?.join() !== "ALL" ||
+        security.capabilities?.add?.some((cap: string) => !["SETUID", "SETGID", "SYS_CHROOT"].includes(cap))) {
+      throw new TypeError(`Invalid attested workload container ${container.name}`);
+    }
+    delete security.runAsNonRoot;
+    delete security.seccompProfile;
+  }
+  if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always")) throw new TypeError("Only persistent bootstrap sidecars are supported");
+  delete spec.automountServiceAccountToken;
+  delete spec.enableServiceLinks;
+  // RuntimeClass overhead affects host scheduling only. VM sizing remains in
+  // the independently measured launch identity.
+  delete spec.overhead;
+  if (spec.securityContext) {
+    delete spec.securityContext.runAsNonRoot;
+    delete spec.securityContext.seccompProfile;
+  }
+  if (Object.keys(guestConfig).sort().join() !== "aa.toml,cdh.toml" || Object.values(guestConfig).some(v => typeof v !== "string")) {
+    throw new TypeError("Expected measured AA and CDH configuration");
+  }
+  return generatePolicy(copy, containers, guestConfig, config, asset("client.rego"), false);
+}
+
+function generatePolicy(workload: any, containers: readonly any[], guestConfig: Record<string, string>,
+  config: NativePolicyConfig, profile: string, trustee: boolean) {
   validateNetwork(config.network);
   const directory = mkdtempSync(join(tmpdir(), "nebula-trustee-genpolicy-"));
   try {
-    const rules = `${asset("rules.rego")}\n${asset("trustee.rego")}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
+    const rules = `${asset("rules.rego")}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
     const rulesPath = join(directory, "rules.rego");
     const settingsPath = join(directory, "genpolicy-settings.json");
     const initdataPath = join(directory, "initdata.toml");
@@ -81,7 +137,7 @@ export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaTom
       ...["pause_container", "other_container"].map(key => ({ op: "replace",
         path: `/${key}/Annotations/io.katacontainers.pkg.oci.bundle_path`, value: bundle })),
     ]));
-    writeFileSync(initdataPath, stringify({ version: "0.1.0", algorithm: "sha256", data: { "aa.toml": aaToml } }));
+    writeFileSync(initdataPath, stringify({ version: "0.1.0", algorithm: "sha256", data: guestConfig }));
     const cache = config.genpolicy?.cacheDirectory ? resolve(config.genpolicy.cacheDirectory) : directory;
     mkdirSync(cache, { recursive: true, mode: 0o700 });
     let output: string;
@@ -91,7 +147,7 @@ export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaTom
         { cwd: directory, encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "pipe"] });
       if (!version.includes(GENPOLICY_REVISION) || version.includes("-dirty")) throw new Error("Unexpected genpolicy revision");
       output = execFileSync(executable, ["-p", rulesPath, "-j", directory,
-        `--initdata-path=${initdataPath}`, "--use-cached-files"], { cwd: cache, input: yaml(genpolicyInput(workload)),
+        `--initdata-path=${initdataPath}`, "--use-cached-files"], { cwd: cache, input: yaml(workload),
         encoding: "utf8", timeout: 600_000, maxBuffer: 4 * 1024 * 1024, stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, RUST_LOG: "error" } });
     } catch (error) {
@@ -101,34 +157,37 @@ export function generateTrusteePolicy(workload: TrusteeDeploymentManifest, aaTom
     const documents = parseAllDocuments(output);
     if (documents.length !== 1 || documents.some(document => document.errors.length)) throw new Error("Trustee: invalid genpolicy output");
     const generated = documents[0].toJSON();
-    const encoded = generated?.spec?.template?.metadata?.annotations?.[INIT_DATA_ANNOTATION];
+    const encoded = (generated.kind === "Pod" ? generated.metadata : generated?.spec?.template?.metadata)?.annotations?.[INIT_DATA_ANNOTATION];
     if (typeof encoded !== "string") throw new Error("Trustee: genpolicy did not produce native Init-Data");
     const document = parse(initDataDocument(encoded).toString("utf8")) as any;
     if (document.version !== "0.1.0" || document.algorithm !== "sha256" ||
-        Object.keys(document.data ?? {}).sort().join() !== "aa.toml,policy.rego" || document.data["aa.toml"] !== aaToml) {
+        Object.keys(document.data ?? {}).sort().join() !== [...Object.keys(guestConfig), "policy.rego"].sort().join() ||
+        Object.entries(guestConfig).some(([key, value]) => document.data[key] !== value)) {
       throw new Error("Trustee: genpolicy changed the guest configuration");
     }
     const parts = document.data["policy.rego"].split("\npolicy_data := ");
     if (parts.length !== 2 || parts[0] !== rules) throw new Error("Trustee: genpolicy changed the rules profile");
     const data = JSON.parse(parts[1]);
-    if (data.containers?.length !== workload.spec.template.spec.containers.length + 1 || data.cluster_config.guest_pull !== true) {
+    if (data.containers?.length !== containers.length + 1 || data.cluster_config.guest_pull !== true) {
       throw new Error("Trustee: incompatible genpolicy guest-pull output");
     }
-    for (const container of workload.spec.template.spec.containers) {
+    for (const container of containers) {
       const policy = data.containers.find((item: any) => item.OCI.Annotations["io.kubernetes.cri.container-name"] === container.name);
       if (!policy || policy.image !== container.image ||
           !isDeepStrictEqual(policy.OCI.Process.Args, [...container.command!, ...container.args!]) ||
           policy.OCI.Root.Readonly !== true || policy.OCI.Process.NoNewPrivileges !== true ||
-          policy.OCI.Process.User.UID !== 10001 || policy.OCI.Process.User.GID !== 10001 ||
-          policy.OCI.Process.Capabilities.Bounding.length !== 0 || policy.exec_commands.length !== 0 ||
+          policy.OCI.Process.User.UID !== (trustee ? 10001 : container.securityContext.runAsUser) ||
+          policy.OCI.Process.User.GID !== (trustee ? 10001 : container.securityContext.runAsGroup) ||
+          !isDeepStrictEqual([...policy.OCI.Process.Capabilities.Bounding].map((c: string) => c.replace(/^CAP_/, "")).sort(),
+            trustee ? [] : [...(container.securityContext.capabilities.add ?? [])].sort()) || policy.exec_commands.length !== 0 ||
           policy.OCI.Mounts.some((mount: any) => mount.destination.startsWith("/var/run/secrets/")) ||
-          policy.storages.length !== container.volumeMounts!.length ||
+          policy.storages.length !== (container.volumeMounts ?? []).length ||
           policy.storages.some((storage: any) => storage.driver !== "ephemeral" || storage.fstype !== "tmpfs" || storage.source !== "tmpfs") ||
-          container.env!.some(variable => !policy.OCI.Process.Env.includes(`${variable.name}=${variable.value}`))) {
+          (container.env ?? []).some((variable: any) => !policy.OCI.Process.Env.includes(`${variable.name}=${variable.value}`))) {
         throw new Error(`Trustee: genpolicy did not bind the required image, process or guest storage for ${container.name}`);
       }
     }
-    const ccInitData = deterministicInitData(encoded);
+    const ccInitData = deterministicInitData(encoded, Object.keys(guestConfig));
     return { ccInitData, initDataSha256: initDataSha256(ccInitData) };
   } finally {
     rmSync(directory, { recursive: true, force: true });

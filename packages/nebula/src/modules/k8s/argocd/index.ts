@@ -126,6 +126,10 @@ export interface NebulaPluginConfig {
     /** Key within the Secret that holds the key file (default "keys.txt"). */
     secretKey?: string;
   };
+  /** Rotating Kubernetes Docker config used by native genpolicy when it reads
+   * private image metadata. This is mounted only in the renderer, never in a
+   * confidential guest. The whole directory is projected so refreshes work. */
+  registryCredentials?: { secretName: string };
   /**
    * Whether to create the Workload Identity IAM binding via Crossplane (default: true).
    *
@@ -846,7 +850,7 @@ done
       name: string;
       configMap?: { name: string };
       emptyDir?: Record<string, never>;
-      secret?: { secretName: string };
+      secret?: { secretName: string; items?: Array<{ key: string; path: string }> };
     }> = [
       { name: "cmp-plugin", configMap: { name: "argocd-cmp-nebula" } },
       { name: "cmp-tmp", emptyDir: {} },
@@ -879,6 +883,15 @@ done
         name: "sops-age",
         secret: { secretName: pluginConfig.sopsAge.secretName },
       });
+    }
+
+    if (pluginConfig.registryCredentials) {
+      sidecarEnv.push({ name: "DOCKER_CONFIG", value: "/secrets/registry" });
+      volumeMounts.push({ name: "registry-credentials", mountPath: "/secrets/registry", readOnly: true });
+      volumes.push({ name: "registry-credentials", secret: {
+        secretName: pluginConfig.registryCredentials.secretName,
+        items: [{ key: ".dockerconfigjson", path: "config.json" }],
+      } });
     }
 
     // Build sidecar container configuration
