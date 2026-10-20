@@ -1,7 +1,28 @@
 import { request } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
 
 const resourceName = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/;
+
+function configured(signal: AbortSignal): Promise<boolean> {
+  return new Promise(resolve => {
+    // Public readiness only, on fixed loopback inside the measured PodVM.
+    // Host owner connections independently use TNG and pinned instance TLS.
+    const req = httpsRequest({ host: "127.0.0.1", port: 8444, path: "/nebula/v1/configured",
+      method: "GET", agent: false, signal, rejectUnauthorized: false }, response => {
+      let value = "";
+      response.on("data", chunk => { value += chunk; if (value.length > 256) req.destroy(); });
+      response.on("error", () => resolve(false));
+      response.on("end", () => {
+        try { resolve(response.statusCode === 200 && JSON.parse(value).configured === true); }
+        catch { resolve(false); }
+      });
+    });
+    req.setTimeout(5000, () => req.destroy());
+    req.on("error", () => resolve(false));
+    req.end();
+  });
+}
 
 /** Consume and immediately erase the guest-local response. No redirects,
  * configurable remote endpoint, response logging or persistent key copies. */
@@ -18,7 +39,7 @@ function available(resource: string, signal: AbortSignal): Promise<boolean> {
       response.on("error", () => resolve(false));
       response.on("end", () => resolve(response.statusCode === 200 && size > 0 && size <= 2 * 1024 * 1024));
     });
-    req.setTimeout(5_000, () => req.destroy());
+    req.setTimeout(60_000, () => req.destroy());
     req.on("error", () => resolve(false));
     req.end();
   });
@@ -28,14 +49,14 @@ function available(resource: string, signal: AbortSignal): Promise<boolean> {
  * owner enrollment and provisioning. All approval still belongs to native KBS.
  * Waiting has no deadline: an unprovisioned guest remains available to its owner. */
 export async function awaitOwner(resources: unknown, signal: AbortSignal,
-  check: typeof available = available): Promise<void> {
+  check: typeof available = available, configurationReady: typeof configured = configured): Promise<void> {
   if (!Array.isArray(resources) || resources.length > 64 ||
       resources.some(value => typeof value !== "string" || !resourceName.test(value))) {
     throw new Error("Invalid measured owner resources");
   }
   while (!signal.aborted) {
-    let ready = true;
-    for (const resource of resources) {
+    let ready = await configurationReady(signal);
+    if (ready) for (const resource of resources) {
       if (!await check(resource, signal)) { ready = false; break; }
     }
     if (ready) return;

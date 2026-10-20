@@ -60,6 +60,11 @@ export class TrusteeClient {
 
   close(): Promise<void> { return this.#runtime.close(); }
 
+  async bootstrapStatus(): Promise<unknown> {
+    if (!this.#enrollment) throw new Error("Bootstrap status requires instance enrollment");
+    return JSON.parse((await this.#request("GET", "/nebula/v1/bootstrap", Buffer.alloc(0), "application/json", 70_000)).toString("utf8"));
+  }
+
   async storageStatus(): Promise<{ version: 1; storage: Record<string, { phase: string }> }> {
     if (!this.#enrollment) throw new Error("Storage status requires instance enrollment");
     const status = JSON.parse((await this.#request("GET", "/nebula/v1/storage")).toString("utf8"));
@@ -102,7 +107,8 @@ export class TrusteeClient {
       policy: Buffer.from(rego).toString("base64url") }));
   }
 
-  async #request(method: string, path: string, body: Buffer = Buffer.alloc(0), contentType = "application/octet-stream"): Promise<Buffer> {
+  async #request(method: string, path: string, body: Buffer = Buffer.alloc(0), contentType = "application/octet-stream",
+    timeoutMs = this.#timeout): Promise<Buffer> {
     this.#runtime.assertAlive();
     if (body.length > MAX_BODY) throw new RangeError("Request exceeds the deployed Trustee's 2 MiB limit");
     return new Promise((accept, reject) => {
@@ -123,7 +129,7 @@ export class TrusteeClient {
         response.on("error", () => reject(new Error("Trustee response was interrupted")));
         response.on("end", () => response.statusCode === 200 ? accept(Buffer.concat(chunks)) : reject(new TrusteeHttpError(response.statusCode ?? 0)));
       });
-      const timeout = setTimeout(() => req.destroy(new Error("Trustee request timed out")), this.#timeout);
+      const timeout = setTimeout(() => req.destroy(new Error("Trustee request timed out")), timeoutMs);
       timeout.unref();
       req.once("close", () => clearTimeout(timeout));
       req.on("error", () => reject(new Error("Trustee connection failed, timed out or was closed; no unverified fallback was attempted")));

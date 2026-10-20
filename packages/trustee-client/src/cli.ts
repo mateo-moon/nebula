@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { enroll } from "./commands/enroll";
 import { renewClient } from "./prepare";
-import { prepareWorkloadCommand, configureWorkload, storageStatus } from "./commands/workload";
+import { prepareWorkloadCommand, configureWorkload, storageStatus, bootstrapStatus } from "./commands/workload";
 import {
   prepare, ownerHeader, verify, listResourcePolicies, putResource, deleteResource,
   setResourcePolicy, setAttestationPolicy,
@@ -68,6 +68,8 @@ connected(program.command("configure-workload").description("Install the indepen
   .action(configureWorkload);
 connected(program.command("storage-status").description("Read non-secret storage phase through the enrolled attested connection"))
   .action(storageStatus);
+connected(program.command("bootstrap-status").description("Read owner-authorized guest-local retrieval diagnostics; never returns resource bytes"))
+  .action(bootstrapStatus);
 connected(program.command("list-resource-policies").description("List installed resource policy IDs"))
   .action(listResourcePolicies);
 connected(program.command("put-resource <path> <file>").description("Provision bytes at repository/type/tag"))

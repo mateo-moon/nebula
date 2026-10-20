@@ -66,12 +66,15 @@ nebula-trustee put-resource default/image/application ./image.key \
 ```
 
 Provision each declared volume key the same way, using a separate random
-32-byte key. The measured bootstrap waits until every declared resource can be
+32-byte key. The measured bootstrap first waits for authenticated installation
+of both Trustee policies, then waits until every declared resource can be
 retrieved through guest-local CDH before starting the application. This keeps
 the enrollment endpoint available while its encrypted image is still locked.
 Store owner credentials, keys and the private enrollment directory
 outside Git and Kubernetes. `storage-status` reads the helper's non-secret phase
 through the enrolled, attested connection.
+`bootstrap-status` requires native owner authorization and reports guest-local
+retrieval errors without returning successful resource contents.
 
 Every owner request uses pinned inner TLS inside TNG's attested TLS connection.
 A routing change after enrollment fails before the owner token or resource

@@ -64,9 +64,15 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const bindings = (spec.storage ?? []).map(binding => ({ ...binding,
     spec: storages.find(storage => storage.metadata.namespace === metadata.namespace && storage.metadata.name === binding.resource)!.spec }));
   const encrypted = bindings.filter(binding => binding.spec.type === "EncryptedBlock");
-  gateway.args.push(JSON.stringify(encrypted.map(binding => binding.name)));
+  gateway.args.push(JSON.stringify({ storageNames: encrypted.map(binding => binding.name),
+    resources: spec.resources.map(path => path.join("/")) }));
   gateway.volumeMounts.push(...encrypted.map(binding =>
     mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`, true)));
+  // Do not create a CDH attestation session under the initial deny policy.
+  // Native clients may cache that non-affirming token until it expires.
+  initContainers.push({ name: "nebula-await-owner", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
+    command: ["node", "/app/dist/main.js"], args: ["await-owner", JSON.stringify(spec.resources.map(path => path.join("/")))],
+    securityContext: security(10001), resources: limits });
   if (encrypted.length) {
     volumes.push(memory("storage-runtime", "32Mi"));
     initContainers.push({ name: "nebula-install-storage", image: spec.storageImage, imagePullPolicy: "Always",
@@ -93,9 +99,6 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       resources: limits, volumeDevices: [{ name: volumeName, devicePath: "/dev/coco-data" }],
       volumeMounts: [mount(`state-${binding.name}`, "/run/volume")] });
   }
-  initContainers.push({ name: "nebula-await-owner", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
-    command: ["node", "/app/dist/main.js"], args: ["await-owner", JSON.stringify(spec.resources.map(path => path.join("/")))],
-    securityContext: security(10001), resources: limits });
   const containers = spec.containers.map(container => {
     const blockMounts = (container.mounts ?? []).filter(m => encrypted.some(binding => binding.name === m.storage));
     const directMounts = (container.mounts ?? []).filter(m => !blockMounts.includes(m));

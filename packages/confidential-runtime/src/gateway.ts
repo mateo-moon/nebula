@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, statfsSync } from "node:fs";
 import { createServer } from "node:https";
 import { request } from "node:http";
 import { join } from "node:path";
+import { bootstrapStatus, validResource } from "./bootstrap.js";
 
 const MAX_BODY = 2 * 1024 * 1024;
 
@@ -22,18 +23,38 @@ export interface GatewayOptions {
   readonly cert: string | Buffer;
   readonly upstreamPort?: number;
   readonly storageNames?: readonly string[];
+  readonly resources?: readonly string[];
 }
 
 export function gateway(options: GatewayOptions) {
   const storageNames = options.storageNames ?? [];
+  const resources = options.resources ?? [];
+  if (resources.length > 64 || resources.some(resource => !validResource(resource))) throw new Error("Invalid measured resource names");
   if (storageNames.length > 8 || storageNames.some(name => !/^[a-z][a-z0-9-]{0,39}$/.test(name))) {
     throw new Error("Invalid measured storage names");
   }
   const cert = new X509Certificate(options.cert);
   const instance = createHash("sha256").update(cert.publicKey.export({ type: "spki", format: "der" })).digest("hex");
+  let attestationConfigured = false, resourcesConfigured = false;
   const server = createServer({ key: options.key, cert: options.cert, minVersion: "TLSv1.3" }, (incoming, outgoing) => {
     const path = incoming.url ?? "", method = incoming.method ?? "";
     outgoing.setHeader("Cache-Control", "no-store");
+    if (method === "GET" && path === "/nebula/v1/bootstrap") {
+      incoming.resume();
+      const authorization = incoming.headers.authorization ?? "";
+      if (!/^Bearer [A-Za-z0-9_.-]+$/.test(authorization)) { outgoing.writeHead(403).end(); return; }
+      bootstrapStatus(resources, authorization, options.upstreamPort ?? 8080, attestationConfigured && resourcesConfigured).then(result => {
+        outgoing.writeHead(result.status, { "Content-Type": "application/json" });
+        outgoing.end(result.body ? JSON.stringify(result.body) : "");
+      }).catch(() => { if (!outgoing.headersSent) outgoing.writeHead(502); outgoing.end(); });
+      return;
+    }
+    if (method === "GET" && path === "/nebula/v1/configured") {
+      incoming.resume();
+      outgoing.setHeader("Content-Type", "application/json");
+      outgoing.end(JSON.stringify({ configured: attestationConfigured && resourcesConfigured }));
+      return;
+    }
     if (method === "GET" && path === "/nebula/v1/storage") {
       const storage = Object.fromEntries(storageNames.map(name => {
         let phase = "starting";
@@ -83,6 +104,10 @@ export function gateway(options: GatewayOptions) {
           "Content-Length": body.length,
         },
       }, response => {
+        if (method === "POST" && response.statusCode === 200) {
+          if (path === "/kbs/v0/attestation-policy") attestationConfigured = true;
+          if (path === "/kbs/v0/resource-policy") resourcesConfigured = true;
+        }
         const contentType = response.headers["content-type"];
         if (contentType) outgoing.setHeader("Content-Type", contentType);
         // No redirects, cookies, debug details or upstream connection headers.
@@ -103,7 +128,7 @@ export function gateway(options: GatewayOptions) {
   return server;
 }
 
-export function startGateway(directory = "/run/instance", storageNames: readonly string[] = []): void {
+export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = []): void {
   if (Number(statfsSync(directory).type) !== 0x01021994) throw new Error("Instance custody requires guest tmpfs");
   // Refuse reuse, including state mounted from a disk or another startup.
   const state = join(directory, "identity");
@@ -115,5 +140,5 @@ export function startGateway(directory = "/run/instance", storageNames: readonly
     "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
     "-addext", "keyUsage=critical,digitalSignature,keyCertSign",
     "-keyout", key, "-out", cert], { stdio: "ignore", timeout: 15_000 });
-  gateway({ key: readFileSync(key), cert: readFileSync(cert), storageNames }).listen(8444, "127.0.0.1");
+  gateway({ key: readFileSync(key), cert: readFileSync(cert), storageNames, resources }).listen(8444, "127.0.0.1");
 }

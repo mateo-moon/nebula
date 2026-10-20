@@ -32,3 +32,7 @@ export async function configureWorkload(options: ConnectionOptions): Promise<voi
 export async function storageStatus(options: ConnectionOptions): Promise<void> {
   await withClient(options, async client => { console.log(JSON.stringify(await client.storageStatus())); });
 }
+
+export async function bootstrapStatus(options: ConnectionOptions): Promise<void> {
+  await withClient(options, async client => { console.log(JSON.stringify(await client.bootstrapStatus())); });
+}

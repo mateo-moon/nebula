@@ -5,8 +5,8 @@ process.umask(0o077);
 if (process.argv.length !== 4) throw new Error("Expected a measured runtime role and configuration");
 const config = JSON.parse(process.argv[3]);
 if (process.argv[2] === "gateway") {
-  if (!Array.isArray(config)) throw new Error("Expected measured storage names");
-  startGateway("/run/instance", config);
+  if (!Array.isArray(config.storageNames) || !Array.isArray(config.resources)) throw new Error("Expected measured storage and resource names");
+  startGateway("/run/instance", config.storageNames, config.resources);
 } else if (process.argv[2] === "await-owner") {
   const stop = new AbortController();
   process.on("SIGTERM", () => stop.abort());
