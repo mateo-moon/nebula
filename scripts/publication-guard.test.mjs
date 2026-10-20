@@ -387,6 +387,24 @@ const publishingJobs = (jobs) => [...jobs].filter(([, text]) => PUBLISHES.test(t
 
 const RELEASE_VERSION = String.raw`^[0-9]+\.[0-9]+\.[0-9]+$`;
 const MAIN_ONLY = "\n    if: github.ref == 'refs/heads/main'\n";
+const MAIN_OR_MANUAL = "\n    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'\n";
+const DIGEST_RUN = `        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/\${DIGEST#sha256:}"
+`;
+const MANIFEST_RUN = `        run: |
+          args=(-t "$IMAGE:\${REVISION:0:7}")
+          if [ "$REF" = refs/heads/main ]; then args+=(-t "$IMAGE:latest"); fi
+          sources=()
+          for digest in *; do
+            [[ "$digest" =~ ^[a-f0-9]{64}$ ]] || exit 1
+            sources+=("$IMAGE@sha256:$digest")
+          done
+          test "\${#sources[@]}" = 2
+          docker buildx imagetools create "\${args[@]}" "\${sources[@]}"
+          docker buildx imagetools inspect "$IMAGE:\${REVISION:0:7}" >> "$GITHUB_STEP_SUMMARY"
+`;
+
 // The on: block of a workflow, as the text between its header and the next top-level key.
 const triggersOf = (workflow) => workflow.match(/\n["']?on["']?:[^\n]*\n((?:[ \t#][^\n]*\n|\n)*)/)?.[1] ?? "";
 const imageWorkflowViolations = (workflow, { context, path }) => {
@@ -402,8 +420,9 @@ const imageWorkflowViolations = (workflow, { context, path }) => {
   const jobs = jobsOf(workflow);
   const guard = jobs.get("guard");
   if (!guard) return [...v, "a guard job exists"];
-  check(guard.includes(MAIN_ONLY), "the guard, and so every job that needs it, runs only on main");
-  check(!/continue-on-error|\n\s+if:/.test(guard.replace(MAIN_ONLY, "\n")), "the guard cannot be skipped off main or soft-fail");
+  const gate = context === "docker/nebula-cmp" ? MAIN_OR_MANUAL : MAIN_ONLY;
+  check(guard.includes(gate), "publication requires main or an explicit maintainer dispatch for the CMP");
+  check(!/continue-on-error|\n\s+if:/.test(guard.replace(gate, "\n")), "the guard cannot be skipped off main or soft-fail");
   check(guard.includes(`\n        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs ${context}\n`),
     "the guard scans the build context without the repository owner exemption");
   const publishing = publishingJobs(jobs);
@@ -418,11 +437,25 @@ const imageWorkflowViolations = (workflow, { context, path }) => {
     const job = jobs.get(name);
     check(/\n\s+needs:\s*(?:guard|\[(?:[^\]]*[\s,])?guard(?:[\s,][^\]]*)?\])\s*\n/.test(job), `${name} needs the guard`);
     check(!/\n\s+if:|continue-on-error/.test(job), `${name} does not run around the guard`);
+    if (context === "docker/nebula-cmp" && name === "manifest") {
+      check(job.includes("needs: [guard, build]"), "manifest requires both guarded builds");
+      check(job.includes(MANIFEST_RUN), "manifest publishes exactly two validated digests from this run");
+      check(!/\n\s+(?:-\s+)?run:/.test(job.replace(MANIFEST_RUN, "")), "manifest runs no additional commands");
+      check(!/actions\/checkout|docker\/build-push-action|\n\s+(?:repository|ref|run-id|github-token):/.test(job), "manifest cannot import another tree or run");
+      check(job.includes("pattern: cmp-digest-*") && job.includes("merge-multiple: true") && job.includes("path: /tmp/digests"), "manifest consumes only its platform digest handoffs");
+      check(job.includes("REVISION: ${{ github.sha }}") && job.includes("REF: ${{ github.ref }}"), "manifest tags are tied to this source revision");
+      check(job.includes("IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"), "manifest destination is fixed");
+      continue;
+    }
     const contexts = [...job.matchAll(/\n\s+context:\s*(\S+)\s*\n/g)].map((m) => m[1]);
     const builds = job.match(/\n\s+(?:-\s+)?uses:\s*["']?docker\/build-push-action@/g) ?? [];
     check(builds.length > 0 && contexts.length === builds.length && contexts.every((c) => c === context),
       `${name} builds only ${context}, and every build step names it`);
-    check(!/\n\s+(?:-\s+)?run:/.test(job), `${name} runs no commands that could change the scanned tree`);
+    const withoutDigest = context === "docker/nebula-cmp" ? job.replace(DIGEST_RUN, "") : job;
+    check(!/\n\s+(?:-\s+)?run:/.test(withoutDigest), `${name} runs no commands that could change the scanned tree`);
+    if (context === "docker/nebula-cmp") {
+      check(job.includes(DIGEST_RUN) && job.includes("DIGEST: ${{ steps.image.outputs.digest }}"), "only the build output digest is handed off");
+    }
     check(!/\n\s+(?:sbom|attests):/.test(job), `${name} publishes no attestation the guard did not scan`);
     for (const [, file] of job.matchAll(/\n\s+file:\s*(\S+)\s*\n/g)) {
       check(file.startsWith(`${context}/`) && !file.split("/").includes(".."), `${name} uses a Dockerfile inside ${context}`);
@@ -458,7 +491,7 @@ test("seeded workflow mutations that would publish unscanned content are caught"
     assert.ok(real.includes(from), `mutation anchor: ${from}`);
     return real.replace(from, to);
   };
-  const guardCheckout = "  guard:\n    name: Publication guard (build context)\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    permissions:\n      contents: read\n";
+  const guardCheckout = "  guard:\n    name: Publication guard (build context)\n    # Manual dispatch qualifies a reviewed PR image before GitOps adoption.\n    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    permissions:\n      contents: read\n";
   const buildCheckout = "      packages: write\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n";
   const buildPush = "      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2\n";
   const mutations = {
@@ -481,9 +514,9 @@ test("seeded workflow mutations that would publish unscanned content are caught"
     "second build without context": edit("          provenance: false\n", "          provenance: false\n      - uses: docker/build-push-action@v6\n        with:\n          push: true\n"),
     "context rewritten before build": edit(buildPush, `      - run: echo x > docker/nebula-cmp/extra\n${buildPush}`),
     "sbom published": edit("          provenance: false\n", "          provenance: false\n          sbom: true\n"),
-    "guard runs off main": edit(MAIN_ONLY, "\n"),
-    "guard gate widened": edit(MAIN_ONLY, "\n    if: startsWith(github.ref, 'refs/heads/')\n"),
-    "guard gate made step-level": edit(MAIN_ONLY, "\n").replace("      - name: Scan the image build context\n", `      - name: Scan the image build context\n${MAIN_ONLY.slice(1).replace("    if", "        if")}`),
+    "guard runs without an authorized event": edit(MAIN_OR_MANUAL, "\n"),
+    "guard gate widened": edit(MAIN_OR_MANUAL, "\n    if: startsWith(github.ref, 'refs/heads/')\n"),
+    "guard gate made step-level": edit(MAIN_OR_MANUAL, "\n").replace("      - name: Scan the image build context\n", `      - name: Scan the image build context\n${MAIN_ONLY.slice(1).replace("    if", "        if")}`),
     "build gated on its own": edit("    needs: guard\n", `    needs: guard${MAIN_ONLY}`),
     "feature branches publish": edit("    branches: [main]\n", '    branches: [main, "feat/**"]\n'),
     "tags publish": edit("    branches: [main]\n", "    branches: [main]\n    tags: [\"v*\"]\n"),
@@ -515,12 +548,37 @@ test("the publisher detector sees jobs at any indent and every publishing form",
   assert.deepEqual([...jobsOf(wf(`${quiet}  other:\n    steps:\n      - run: true\n`)).keys()], ["test", "other"]);
 });
 
-test("every workflow that publishes (by the detector above) is one of the guarded image workflows", () => {
-  const guarded = new Set(IMAGES.map((i) => i.workflow));
+test("every workflow that publishes is a guarded image or pinned upstream Helm workflow", () => {
+  const guarded = new Set([...IMAGES.map((i) => i.workflow), "publish-trustee-chart.yml"]);
   for (const file of readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))) {
     const publishing = publishingJobs(jobsOf(readFileSync(join(WORKFLOWS, file), "utf8")));
     if (publishing.length > 0) assert.ok(guarded.has(file), `${file} publishes (${publishing.join(", ")}) without a guarded image entry`);
   }
+});
+
+test("Helm publication only uploads the verified upstream package from the same run", () => {
+  const workflow = readFileSync(join(WORKFLOWS, "publish-trustee-chart.yml"), "utf8");
+  const jobs = jobsOf(workflow);
+  assert.deepEqual([...jobs.keys()], ["chart", "publish"]);
+  assert.equal(jobs.get("chart").trim(), "uses: ./.github/workflows/build-trustee-chart.yml");
+  const publish = jobs.get("publish");
+  assert.match(publish, /needs: chart/);
+  assert.match(publish, /name: \$\{\{ needs.chart.outputs.artifact \}\}/);
+  assert.match(publish, /VERSION: \$\{\{ needs.chart.outputs.version \}\}/);
+  assert.doesNotMatch(publish, /actions\/checkout|\b(?:repository|ref|run-id|github-token|if|continue-on-error):/);
+  const script = `        run: |
+          sha256sum --check SHA256SUMS
+          printf '%s' "$REGISTRY_TOKEN" | helm registry login ghcr.io --username "$REGISTRY_USER" --password-stdin
+          helm push "trustee-$VERSION.tgz" "oci://ghcr.io/$REPOSITORY_OWNER/helm" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+`;
+  assert.ok(publish.includes(script));
+  assert.doesNotMatch(publish.replace(script, ""), /\brun:/);
+  assert.equal(triggersOf(workflow).trim(), "push:\n    branches: [main]\n    paths: [.github/trustee-chart.json]\n  workflow_dispatch: {}");
+  const build = readFileSync(join(WORKFLOWS, "build-trustee-chart.yml"), "utf8");
+  assert.match(build, /repository: confidential-containers\/trustee/);
+  assert.match(build, /ref: \$\{\{ steps.pins.outputs.source \}\}/);
+  assert.match(build, /helm dependency build trustee-upstream\/deployment\/helm-chart --skip-refresh/);
+  assert.match(build, /helm package trustee-upstream\/deployment\/helm-chart --destination/);
 });
 
 test("the image build contexts pass without the repository owner exemption", () => {

@@ -1,0 +1,103 @@
+name: Validate Trustee Helm module
+
+on:
+  pull_request:
+    paths:
+      # Trustee and the transitive inputs used by trustee-module.test.ts.
+      - packages/nebula/src/modules/k8s/trustee/**/*.ts
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/*.rego
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/genpolicy-settings.json
+      - packages/nebula/src/core/index.ts
+      - packages/nebula/src/core/base-construct.ts
+      - packages/nebula/src/core/helm-module.ts
+      - packages/nebula/src/core/argocd.ts
+      - packages/nebula/src/utils/secrets.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/canonical.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/measured.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/types.ts
+      - packages/nebula/src/modules/k8s/envoy/index.ts
+      - packages/nebula/test/trustee-module.test.ts
+      - packages/nebula/test/support/trustee.ts
+      - packages/nebula/package.json
+      - packages/nebula/pnpm-lock.yaml
+      - packages/nebula/pnpm-workspace.yaml
+      - packages/nebula/tsconfig.json
+      - tools/genpolicy/build.sh
+      - .github/trustee-chart.json
+      - .github/workflows/build-trustee-chart.yml
+      - .github/workflows/verify-trustee.yml
+  push:
+    branches: [main]
+    paths:
+      - packages/nebula/src/modules/k8s/trustee/**/*.ts
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/*.rego
+      - packages/nebula/src/modules/k8s/trustee/assets/genpolicy/genpolicy-settings.json
+      - packages/nebula/src/core/index.ts
+      - packages/nebula/src/core/base-construct.ts
+      - packages/nebula/src/core/helm-module.ts
+      - packages/nebula/src/core/argocd.ts
+      - packages/nebula/src/utils/secrets.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/canonical.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/measured.ts
+      - packages/nebula/src/modules/k8s/confidential-guests/types.ts
+      - packages/nebula/src/modules/k8s/envoy/index.ts
+      - packages/nebula/test/trustee-module.test.ts
+      - packages/nebula/test/support/trustee.ts
+      - packages/nebula/package.json
+      - packages/nebula/pnpm-lock.yaml
+      - packages/nebula/pnpm-workspace.yaml
+      - packages/nebula/tsconfig.json
+      - tools/genpolicy/build.sh
+      - .github/trustee-chart.json
+      - .github/workflows/build-trustee-chart.yml
+      - .github/workflows/verify-trustee.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trustee-validation-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  chart:
+    uses: ./.github/workflows/build-trustee-chart.yml
+
+  trustee-genpolicy:
+    name: Native Trustee Helm and genpolicy
+    needs: chart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download this run's chart package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.chart.outputs.artifact }}
+          path: ${{ runner.temp }}/trustee-chart
+      - name: Verify the reused chart package
+        working-directory: ${{ runner.temp }}/trustee-chart
+        run: sha256sum --check SHA256SUMS
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm --dir packages/nebula install --frozen-lockfile
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          rustup toolchain install 1.98.1 --profile minimal
+          helm version --short
+      - name: Build the unmodified pinned native generator
+        run: tools/genpolicy/build.sh "$RUNNER_TEMP/genpolicy"
+      - name: Generate native Init-Data from the packaged chart
+        working-directory: packages/nebula
+        env:
+          TRUSTEE_HELM_CHART: ${{ runner.temp }}/trustee-chart/trustee-${{ needs.chart.outputs.version }}.tgz
+          TRUSTEE_GENPOLICY: ${{ runner.temp }}/genpolicy/genpolicy
+          TRUSTEE_GENPOLICY_CACHE: ${{ runner.temp }}/genpolicy-cache
+        run: pnpm exec tsx --test test/trustee-module.test.ts

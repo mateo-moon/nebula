@@ -1,0 +1,20 @@
+[extend]
+useDefault = true
+
+# Historical allowlist: these vendored files have been removed. Keep this exact
+# path exception while the PR history still contains the upstream documentation.
+[[allowlists]]
+description = "Official Trustee chart documentation: public Bitnami Valkey image repository, not a credential"
+condition = "AND"
+paths = ['''^packages/nebula/src/modules/k8s/trustee/assets/helm/trustee/(README\.md(\.gotmpl)?|scenarios/valkey-sessions\.yaml)$''']
+regexTarget = "secret"
+regexes = ['''^bitnami/valkey$''']
+
+# Historical allowlist: chart.ts was removed with the custom downloader, but
+# this exact public checksum remains in the PR's earlier commits.
+[[allowlists]]
+description = "Public Valkey Helm archive SHA-256 checked against the upstream download, not a credential"
+condition = "AND"
+paths = ['''^packages/nebula/src/modules/k8s/trustee/chart\.ts$''']
+regexTarget = "secret"
+regexes = ['''^72da4e974317fc5f98de3f9085fba56ab5d200d1a2c585423ca0612ad9c2378e$''']

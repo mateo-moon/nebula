@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-20",
+  "scope": "Argo-managed Trustee and encrypted MEV on the existing dev SEV-SNP host. Sanitized consolidation of the owned-image qualification, original-image restoration and administrator audit.",
+  "sourceRevisions": {
+    "nebula": "f9b283af837f020bb9d16c1b11598ecf6ba7019d",
+    "devops": "7dc613a13daae55a5c6b3afab77ff1252b83cd41"
+  },
+  "runtime": "kata-qemu-snp",
+  "bootstrap": {
+    "externalBootstrapTrustee": false,
+    "nativeGenpolicy": true,
+    "clientVerifiesTrusteeBeforeImageKeyRetrieval": true,
+    "trusteeStateInGuestMemory": true
+  },
+  "ownedQualificationImage": {
+    "encryptedImageBoot": true,
+    "encryptedPayloadMarkerVerified": true,
+    "pinnedSshHostKey": true,
+    "ownerSshAccepted": true,
+    "wrongOwnerSshDenied": true,
+    "httpRpc": true,
+    "webSocketRpc": true,
+    "ownerAndLivePolicyMatch": true,
+    "argoHardRefreshCount": 2,
+    "podUnchangedAcrossRefreshes": true,
+    "containerRestarts": 0
+  },
+  "originalOperatorRestoration": {
+    "originalImageConfigurationAndSshOwnerKeysPreserved": true,
+    "freshBootWithEmptyCiphertextCache": true,
+    "readyContainers": 4,
+    "containerRestarts": 0,
+    "ownerAndLivePolicyMatch": true,
+    "argoHardRefreshCount": 2,
+    "podUnchangedAcrossRefreshes": true,
+    "scope": "Boot, readiness, attested key release and isolation. Original operator authentication and business logic were not tested."
+  },
+  "administratorAudit": {
+    "usedOwnerPrivateKey": false,
+    "confidentialContainersRejectingExec": 6,
+    "trusteeKubernetesSecrets": 0,
+    "trusteePersistentVolumeClaims": 0,
+    "hostGuestVolumeDirectoriesEmpty": true,
+    "guestKbsAndAttestationAgentPortsRefusedFromHost": true,
+    "unauthorizedApi": {
+      "requests": 15,
+      "credentials": ["none", "attacker-signed owner JWT", "unsigned owner JWT"],
+      "operations": ["resource reads", "resource-policy reads and writes", "attestation-policy writes"],
+      "allHttpStatus": 401
+    },
+    "unapprovedRealSnpGuest": {
+      "nativeAttestationTokenObtained": true,
+      "attestedTransportReady": true,
+      "keyRequestHttpStatus": 403,
+      "guestRemoved": true
+    },
+    "changedTrusteeCommandAndImageRejected": true,
+    "wrongServerVmAndWorkloadIdentityRejected": true,
+    "nativePolicyEvaluation": {
+      "engine": "Regorus against exact live guest policies and owner-approved resource policy",
+      "guestRequestsDenied": ["ExecProcess", "ReadStream", "WriteStream", "SetPolicy", "GetDiagnosticData", "AddSwap", "StartTracing", "UpdateEphemeralMounts", "AllowRequestsFailingPolicy", "CopyFile", "UpdateInterface", "UpdateRoutes", "AddARPNeighbors"],
+      "exactApprovedRecipientAllowed": true,
+      "sameVmDifferentWorkloadDenied": true,
+      "sameWorkloadDifferentVmDenied": true
+    },
+    "liveProbeQualification": "The live unapproved guest changed both startup options and workload policy. The isolated same-VM/different-workload case was checked by native policy evaluation, not a separate live guest.",
+    "testCanariesRemoved": true,
+    "trusteeReadyContainers": 2,
+    "mevReadyContainers": 4,
+    "originalPodsUnchanged": true,
+    "containerRestarts": 0
+  },
+  "cleanup": {
+    "temporaryTrusteeKeyDeleted": true,
+    "temporaryPlaintextImagesAndTestCredentialsDeleted": true,
+    "originalActiveImageKeyAndTlsCustodyRetainedByProvisioner": true
+  },
+  "limits": [
+    "Identical approved instances can qualify; instance binding is deferred.",
+    "VM replacement loses Trustee state and requires owner verification and reprovisioning; durable recovery is deferred.",
+    "Cluster and host administrators can deny availability.",
+    "Trusted workstation provisioning credentials and retained migration keys are outside the cluster-administrator boundary; original-image-owner-exclusive custody is not established.",
+    "No automatic certificate renewal, rollback protection or continuous attestation freshness.",
+    "Targeted checks do not replace independent image provenance verification or a production security review."
+  ],
+  "privacy": "Raw reports, chip identity, node names, addresses, image references, resource names, credentials and private keys omitted."
+}

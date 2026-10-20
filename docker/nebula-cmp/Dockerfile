@@ -2,7 +2,20 @@
 #   docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<owner>/nebula-cmp:latest --push .
 # node:*-alpine is already multi-arch; TARGETARCH is set by buildx per platform
 # (amd64 | arm64), which matches both the Helm and vals release asset naming.
+FROM rust:1.98.1-alpine AS genpolicy
+ARG GENPOLICY_REVISION=5b57d5c41ffb9d9515e76ef51cfa851068cfc439
+RUN apk add --no-cache git make musl-dev perl protobuf-dev
+WORKDIR /source
+RUN git init --quiet \
+    && git remote add origin https://github.com/kata-containers/kata-containers.git \
+    && git fetch --depth=1 origin "$GENPOLICY_REVISION" \
+    && git checkout --detach FETCH_HEAD \
+    && test "$(git rev-parse HEAD)" = "$GENPOLICY_REVISION" \
+    && make -C src/tools/genpolicy src/version.rs \
+    && cargo build --locked --release -j 2 -p genpolicy
+
 FROM node:24-alpine
+COPY --from=genpolicy /source/target/release/genpolicy /usr/local/bin/genpolicy
 
 ARG HELM_VERSION=3.17.0
 ARG VALS_VERSION=0.43.1
