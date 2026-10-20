@@ -62,7 +62,10 @@ nebula-trustee put-resource default/image/application ./image.key \
 ```
 
 Provision each declared volume key the same way, using a separate random
-32-byte key. Store owner credentials, keys and the private enrollment directory
+32-byte key. The measured bootstrap waits until every declared resource can be
+retrieved through guest-local CDH before starting the application. This keeps
+the enrollment endpoint available while its encrypted image is still locked.
+Store owner credentials, keys and the private enrollment directory
 outside Git and Kubernetes. `storage-status` reads the helper's non-secret phase
 through the enrolled, attested connection.
 
@@ -84,5 +87,6 @@ another instance and provision the same keys. Preventing that, or detecting
 valid ciphertext rollback, needs additional coordination.
 
 This initial implementation uses the existing CLI's short-lived local verifier
-certificates. Keep the enrollment pin when managing expired verifier state;
-do not automatically enroll whatever endpoint responds after expiry.
+certificates. `nebula-trustee renew <new-state> --state <current-state>`
+renews the local verifier while preserving the enrollment pin and workload
+approval. It does not contact or enroll a replacement.

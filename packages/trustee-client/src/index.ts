@@ -1,4 +1,4 @@
-export { prepareClient, type PrepareClientOptions } from "./prepare";
+export { prepareClient, renewClient, type PrepareClientOptions } from "./prepare";
 export { TrusteeClient, type TrusteeClientOptions, TrusteeHttpError } from "./client";
 export { createOwnerToken } from "./owner-token";
 export { enrollInstance, type EnrollOptions, type InstanceEnrollment } from "./enrollment";

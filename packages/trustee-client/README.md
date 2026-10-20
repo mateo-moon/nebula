@@ -90,7 +90,11 @@ nebula-trustee verify --state /path/to/new/client-state \
 
 Preparation is offline, refuses existing state, writes a private signing chain
 and approved configuration, and removes the CA private key. Certificates last
-two days. Use a new state directory to renew or change approval; connection
+two days. Renew them offline with
+`nebula-trustee renew /private/new-state --state /private/current-state`.
+This preserves the approved measurements,
+endpoint, workload policy and enrolled instance pin; it does not contact or
+enroll a replacement. Use the new state for subsequent commands. Connection
 refuses expired certificates or edited policies/configuration. Optional
 `--vcek public-vcek.der` uses AS's native offline endorsement store; AS still
 validates the certificate chain and report signature. Otherwise AS uses its

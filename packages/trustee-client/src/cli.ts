@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { enroll } from "./commands/enroll";
+import { renewClient } from "./prepare";
 import { prepareWorkloadCommand, configureWorkload, storageStatus } from "./commands/workload";
 import {
   prepare, ownerHeader, verify, listResourcePolicies, putResource, deleteResource,
@@ -42,6 +43,14 @@ program.command("owner-header <new-file>")
   .requiredOption("--owner-key <file>", "Private P-256 owner key")
   .requiredOption("--audience <name>", "Trustee deployment name")
   .action(ownerHeader);
+
+program.command("renew <new-state>")
+  .description("Renew local verifier credentials offline, preserving the enrolled instance and workload approval")
+  .requiredOption("--state <directory>", "Existing private verifier state")
+  .action(async (destination: string, options: { state: string }) => {
+    await renewClient(options.state, destination);
+    console.log("Renewed local verifier credentials; the approved identity and instance pin are unchanged.");
+  });
 
 function connected(command: Command): Command {
   return command

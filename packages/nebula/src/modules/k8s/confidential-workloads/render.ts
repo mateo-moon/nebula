@@ -93,6 +93,9 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       resources: limits, volumeDevices: [{ name: volumeName, devicePath: "/dev/coco-data" }],
       volumeMounts: [mount(`state-${binding.name}`, "/run/volume")] });
   }
+  initContainers.push({ name: "nebula-await-owner", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
+    command: ["node", "/app/dist/main.js"], args: ["await-owner", JSON.stringify(spec.resources.map(path => path.join("/")))],
+    securityContext: security(10001), resources: limits });
   const containers = spec.containers.map(container => {
     const blockMounts = (container.mounts ?? []).filter(m => encrypted.some(binding => binding.name === m.storage));
     const directMounts = (container.mounts ?? []).filter(m => !blockMounts.includes(m));

@@ -6,8 +6,7 @@
   "license": "Apache-2.0",
   "engines": { "node": ">=24" },
   "scripts": {
-    "build": "tsc",
-    "test": "tsx --test test/*.test.ts"
+    "build": "tsc"
   },
   "devDependencies": {
     "@types/node": "22.19.8",

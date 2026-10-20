@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { request } from "node:https";
 import { join } from "node:path";
 import { test } from "node:test";
 import { gateway, ownerRoute } from "../../confidential-runtime/src/gateway";
-import { enrollInstance, TrusteeClient } from "../src/index";
+import { enrollInstance, TrusteeClient, renewClient } from "../src/index";
+import { readEnrollment } from "../src/enrollment";
 import { fixture, port } from "./support";
 
 test("guest gateway exposes only owner administration, never remote key consumption", () => {
@@ -50,6 +51,19 @@ test("enrollment pins the guest key and rejects a replacement before any owner H
   assert.match(enrolled.publicKeySha256, /^[a-f0-9]{64}$/);
   assert.equal(statSync(join(f.stateDirectory, "instance.json")).mode & 0o777, 0o600);
   await assert.rejects(enrollInstance(f.options), /already enrolled/);
+  const renewed = join(f.directory, "renewed");
+  writeFileSync(join(f.stateDirectory, "workload.json"), JSON.stringify({
+    version: 1, audience: f.options.audience, resources: [["default", "key", "example"]],
+  }), { mode: 0o600 });
+  await renewClient(f.stateDirectory, renewed);
+  assert.deepEqual(readEnrollment(renewed, f.options.audience), enrolled);
+  assert.deepEqual(readFileSync(join(renewed, "workload.json")), readFileSync(join(f.stateDirectory, "workload.json")));
+  assert.notDeepEqual(readFileSync(join(renewed, "signer.key")), readFileSync(join(f.stateDirectory, "signer.key")));
+  await assert.rejects(renewClient(f.stateDirectory, renewed), /EEXIST/);
+  const malformed = join(f.directory, "malformed-renewal");
+  writeFileSync(join(renewed, "instance.json"), JSON.stringify({ ...enrolled, publicKeySha256: "0".repeat(64) }));
+  await assert.rejects(renewClient(renewed, malformed), /enrollment differs/);
+  assert.equal(existsSync(malformed), false);
   const client = await TrusteeClient.connect(f.options);
   t.after(() => client.close());
   await client.putResource(["default", "key", "example"], Buffer.from("synthetic-secret"));

@@ -88,6 +88,10 @@ export function prepareClient(options: PrepareClientOptions): string {
 
 /** Refuse relaxed policies, moved state and modified trust configuration. */
 export function readPreparedClient(directory: string) {
+  return readClientState(directory, false);
+}
+
+function readClientState(directory: string, allowExpiredVerifier: boolean) {
   const out = realpathSync(directory);
   if (out.includes(",") || /[\x00-\x1f]/.test(out)) throw new TypeError("Unsupported state directory name");
   if ((lstatSync(out).mode & 0o077) !== 0) throw new Error("Client state must be private (mode 0700)");
@@ -111,9 +115,47 @@ export function readPreparedClient(directory: string) {
   if (!ca.ca || signer.ca || !signer.verify(ca.publicKey) ||
       !isDeepStrictEqual(signer.keyUsage, ["1.3.6.1.5.5.7.3.2"]) ||
       !key.equals(signer.publicKey.export({ format: "der", type: "spki" })) ||
-      [ca, signer].some(cert => Date.parse(cert.validFrom) > Date.now() || Date.parse(cert.validTo) <= Date.now() + 60_000)) {
-    throw new Error("Invalid or expired verifier signing chain; prepare fresh state");
+      [ca, signer].some(cert => Date.parse(cert.validFrom) > Date.now() ||
+        (!allowExpiredVerifier && Date.parse(cert.validTo) <= Date.now() + 60_000))) {
+    throw new Error("Invalid or expired verifier signing chain; renew local verifier state while preserving enrollment");
   }
   if (profile.offlineVcek) read(`kds-store/vcek/${profile.identity.chipId}/vcek.der`);
   return { directory: out, profile };
+}
+
+/** Renew only local verifier credentials. Keep the approved guest identity,
+ * endpoint, workload policy and existing instance pin, with no network contact
+ * or discovery of a replacement. The original state remains untouched. */
+export async function renewClient(stateDirectory: string, newStateDirectory: string): Promise<string> {
+  const { directory, profile } = readClientState(stateDirectory, true);
+  const out = prepareClient({
+    stateDirectory: newStateDirectory, identity: profile.identity, target: profile.target,
+    localPort: profile.localPort, verifierPort: profile.verifierPort, instanceBound: profile.instanceBound,
+    vcekFile: profile.offlineVcek ? join(directory, "kds-store", "vcek", profile.identity.chipId, "vcek.der") : undefined,
+  });
+  try {
+    const copyPrivate = (name: string, limit: number) => {
+      const file = join(directory, name), stat = lstatSync(file);
+      if (!stat.isFile() || (stat.mode & 0o077) !== 0 || stat.size > limit) throw new Error("Invalid private enrollment state");
+      const bytes = readFileSync(file);
+      writeFileSync(join(out, name), bytes, { mode: 0o600, flag: "wx" });
+      return JSON.parse(bytes.toString());
+    };
+    if (profile.instanceBound) {
+      // Missing or invalid enrollment is an error, never an invitation to enroll.
+      const pin = copyPrivate("instance.json", 16384);
+      const { readEnrollment } = await import("./enrollment");
+      readEnrollment(out, pin.audience);
+      try {
+        lstatSync(join(directory, "workload.json"));
+        copyPrivate("workload.json", 65536);
+        const { preparedWorkloadPolicies } = await import("./workload");
+        preparedWorkloadPolicies(out, pin.audience);
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
+    return out;
+  } catch (error) {
+    rmSync(out, { recursive: true, force: true });
+    throw error;
+  }
 }
