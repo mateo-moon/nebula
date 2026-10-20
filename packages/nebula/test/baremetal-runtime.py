@@ -431,6 +431,107 @@ class Qualification(unittest.TestCase):
     def test_bootstrap_shell_is_valid(self):
         subprocess.run(["sh", "-n"], input=transport.BOOTSTRAP, text=True, check=True)
 
+    def test_additional_ipv4_aliases_preserve_primary_network_and_installer_seed(self):
+        spec, facts = copy.deepcopy(SPEC), copy.deepcopy(FACTS)
+        aliases = ["192.0.2.11", "192.0.2.12", "198.51.100.20"]
+        spec["additionalIpv4Addresses"] = aliases
+        baseline = installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
+        # Already configured aliases can appear before the primary on the source.
+        facts["network"]["addresses"] = ["192.0.2.11/24", "192.0.2.12/32"] + facts["network"][
+            "addresses"
+        ]
+        original_facts = copy.deepcopy(facts)
+        files = installer.render_files(spec, facts, "ssh-ed25519 AAAA", {"uid": "test"})
+        self.assertEqual(facts, original_facts)
+        network = files["nebula/uplink.network"].decode()
+        added = "".join("Address=" + address + "/32\n" for address in aliases)
+        self.assertEqual(
+            network, baseline["nebula/uplink.network"].decode().replace("DNS=", added + "DNS=", 1)
+        )
+        for address in aliases:
+            self.assertEqual(network.count("Address=" + address + "/"), 1)
+        seed = files["preseed.cfg"].decode()
+        self.assertIn("netcfg/get_ipaddress string 192.0.2.10", seed)
+        self.assertIn("netcfg/get_netmask string 255.255.255.0", seed)
+        self.assertIn("netcfg/get_gateway string 192.0.2.1", seed)
+        self.assertEqual(files["nebula/late.sh"], baseline["nebula/late.sh"])
+        facts["network"]["addresses"] = ["192.0.2.11/24", "2001:db8::10/64"]
+        with self.assertRaisesRegex(ValueError, "besides the additional aliases"):
+            installer.render_files(spec, facts, "ssh-ed25519 AAAA", {"uid": "test"})
+
+    def test_empty_aliases_preserve_network_and_legacy_receipts(self):
+        spec = {**SPEC, "additionalIpv4Addresses": []}
+        original = installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
+        empty = installer.render_files(spec, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
+        self.assertEqual(original["nebula/uplink.network"], empty["nebula/uplink.network"])
+        legacy_fingerprint = "3f9c338edcb25b59ada6a4ae225a2feba35fa8d3d45deab9f5fad41716e98f94"
+        self.assertEqual(installer.fingerprint(SPEC), legacy_fingerprint)
+        self.assertEqual(installer.fingerprint(spec), legacy_fingerprint)
+        self.assertNotEqual(
+            installer.fingerprint({**SPEC, "additionalIpv4Addresses": ["192.0.2.11"]}),
+            legacy_fingerprint,
+        )
+
+    def test_alias_validation_at_the_host_boundary_precedes_side_effects(self):
+        for addresses in [
+            None,
+            "192.0.2.11",
+            {},
+            [1],
+            [None],
+            [""],
+            ["192.0.2.11/32"],
+            ["192.0.2.11/24"],
+            ["2001:db8::1"],
+            ["256.1.2.3"],
+            ["01.2.3.4"],
+            [" 192.0.2.11"],
+            ["192.0.2.11\nGateway=192.0.2.1"],
+            ["0.0.0.0"],
+            ["0.1.2.3"],
+            ["127.0.0.1"],
+            ["169.254.1.1"],
+            ["224.0.0.1"],
+            ["240.0.0.1"],
+            ["255.255.255.255"],
+            [SPEC["address"]],
+            ["192.0.2.11", "192.0.2.11"],
+            [f"198.51.100.{i}" for i in range(65)],
+        ]:
+            with self.subTest(addresses=addresses), patch.object(host_agent, "probe") as probe:
+                spec = {**SPEC, "additionalIpv4Addresses": addresses}
+                with self.assertRaisesRegex(ValueError, "additionalIpv4Addresses"):
+                    host_agent.dispatch("probe", {"uid": "test", "spec": spec})
+                probe.assert_not_called()
+                with self.assertRaisesRegex(ValueError, "additionalIpv4Addresses"):
+                    installer.render_files(spec, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
+        for addresses in [
+            [],
+            ["192.0.2.11", "10.0.0.1", "198.51.100.255"],
+            [f"198.51.100.{i}" for i in range(64)],
+        ]:
+            host_agent.validate_spec({**SPEC, "additionalIpv4Addresses": addresses})
+
+    def test_handoff_requires_all_aliases_as_usable_32s_on_the_primary_uplink(self):
+        aliases = ["192.0.2.11", "192.0.2.12", "198.51.100.20"]
+        spec = {**SPEC, "additionalIpv4Addresses": aliases}
+        primary = {"family": "inet", "scope": "global", "local": SPEC["address"], "prefixlen": 24}
+        extra = [{**primary, "local": address, "prefixlen": 32} for address in aliases]
+        host_agent.verify_additional_ipv4_addresses(spec, [{"addr_info": [primary, *extra]}])
+        for interfaces in [
+            [{"addr_info": [primary, *extra[:-1]]}],
+            [{"addr_info": [primary]}, {"addr_info": extra}],
+            [{"addr_info": [primary, *extra[:-1], {**extra[-1], "prefixlen": 24}]}],
+            [{"addr_info": [primary, *extra[:-1], {**extra[-1], "tentative": True}]}],
+            [{"addr_info": [primary, *extra[:-1], {**extra[-1], "deprecated": True}]}],
+            [{"addr_info": [primary, *extra[:-1], {**extra[-1], "scope": "link"}]}],
+        ]:
+            with (
+                self.subTest(interfaces=interfaces),
+                self.assertRaisesRegex(ValueError, "additional IPv4 /32"),
+            ):
+                host_agent.verify_additional_ipv4_addresses(spec, interfaces)
+
     def test_additional_workload_disks_use_stable_identity_and_require_explicit_erasure(self):
         spec, facts = copy.deepcopy(SPEC), copy.deepcopy(FACTS)
         spec["installation"]["disk"].update(
@@ -525,6 +626,21 @@ class Qualification(unittest.TestCase):
         ):
             free_bytes, root_bytes = 16 * 1024**3, 16 * 1024**3
             self.assertTrue(host_agent.verify({"uid": "request-123", "spec": SPEC})["verified"])
+            alias_spec = {**SPEC, "additionalIpv4Addresses": ["192.0.2.11"]}
+            with self.assertRaisesRegex(ValueError, "another request or profile"):
+                host_agent.verify({"uid": "request-123", "spec": alias_spec})
+            responses["/var/lib/nebula-baremetal/installed.json"] = json.dumps(
+                {**receipt, "fingerprint": installer.fingerprint(alias_spec)}
+            )
+            with self.assertRaisesRegex(ValueError, "additional IPv4 /32"):
+                host_agent.verify({"uid": "request-123", "spec": alias_spec})
+            addresses[0]["addr_info"].append(
+                {"family": "inet", "scope": "global", "local": "192.0.2.11", "prefixlen": 32}
+            )
+            self.assertTrue(
+                host_agent.verify({"uid": "request-123", "spec": alias_spec})["verified"]
+            )
+            responses["/var/lib/nebula-baremetal/installed.json"] = json.dumps(receipt)
             free_bytes, root_bytes = 0, 32 * 1024**3
             with self.assertRaisesRegex(ValueError, "storage"):
                 host_agent.verify({"uid": "request-123", "spec": SPEC})

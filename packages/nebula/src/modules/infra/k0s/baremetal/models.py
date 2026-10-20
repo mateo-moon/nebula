@@ -106,11 +106,15 @@ class SshSettings(SshIdentity, total=False):
     trustOnFirstUse: bool
 
 
-class WorkerSpec(TypedDict):
+class WorkerRequirements(TypedDict):
     address: str
     hostname: str
     ssh: SshSettings
     installation: Installation
+
+
+class WorkerSpec(WorkerRequirements, total=False):
+    additionalIpv4Addresses: list[str]
 
 
 class Receipt(TypedDict):

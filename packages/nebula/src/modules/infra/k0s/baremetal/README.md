@@ -199,6 +199,7 @@ topology, SSH access, labels and taints:
 ```ts
 baremetalWorker(chart, { compositionName: "baremetal-worker" }, {
   address: "192.0.2.11",
+  additionalIpv4Addresses: ["192.0.2.12", "192.0.2.13"], // optional /32 aliases
   name: "worker-1", // installed hostname, pool and CAPI deployment identity
   sshUser: "admin", // source OS; installed SSH uses the worker key and root
   sshPort: 2222,
@@ -215,6 +216,24 @@ selection pins the profile for an existing host; new declarations select the lat
 identity or cluster-target changes on an already bound host fail reconciliation
 without withdrawing its existing graph. Template/rollout changes remain subject
 to CAPI's rules and require an explicitly selected CompositionRevision.
+
+`additionalIpv4Addresses` accepts up to 64 unique, bare unicast IPv4 literals
+(no CIDRs, primary address, loopback, link-local, multicast or reserved addresses).
+The installer adds `Address=<IP>/32` entries to the same MAC-matched
+`/etc/systemd/network/10-nebula.network` file as the primary uplink. It keeps the
+primary address/prefix, IPv6, routes and DNS; it adds no gateways or virtual MACs.
+If a declared alias was already discovered on the source OS, it is emitted once
+with `/32`. The Debian installer still uses the discovered primary network.
+Before CAPI handoff, every alias must be usable with `/32` on the interface that
+carries the primary IPv4 address.
+
+Omitting the list or passing `[]` preserves the existing network rendering,
+request hash and installation receipt. A nonempty list is immutable installation
+intent, included in both the request hash and receipt fingerprint. Upgrade the
+package and install the updated XRD/Composition before declaring aliases for a
+fresh worker. Existing workers stay pinned to their reviewed revision: adding
+aliases to an already installed XR is rejected and requires a separate reviewed
+network-only update workflow. Do not recreate an XR to change host networking.
 
 ## Installation and handoff
 

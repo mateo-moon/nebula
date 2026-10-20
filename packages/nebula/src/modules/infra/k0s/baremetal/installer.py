@@ -69,7 +69,7 @@ def validate_volume_groups(
             raise ProvisioningError("requested volume group already exists on another disk")
 
 
-def network_config(facts: JsonObject) -> str:
+def network_config(facts: JsonObject, additional_ipv4: list[str]) -> str:
     network = facts["network"]
     lines = [
         "[Match]",
@@ -81,7 +81,13 @@ def network_config(facts: JsonObject) -> str:
         "LinkLocalAddressing=ipv6",
     ]
     for address in network["addresses"]:
-        lines.append("Address=" + str(ipaddress.ip_interface(address)))
+        interface = ipaddress.ip_interface(address)
+        if str(interface.ip) not in additional_ipv4:
+            lines.append("Address=" + str(interface))
+    # Declared aliases use /32 even if the source OS had a broader prefix.
+    # Append them after the discovered primary addresses and only emit each once.
+    for address in additional_ipv4:
+        lines.append("Address=" + str(ipaddress.IPv4Address(address)) + "/32")
     for address in network["dns"]:
         lines.append("DNS=" + str(ipaddress.ip_address(address)))
     for route in network["routes"]:
@@ -130,10 +136,18 @@ def render_files(
         raise ProvisioningError("worker key must be an OpenSSH public key")
     installation, network = spec["installation"], facts["network"]
     v4 = next(
-        ipaddress.ip_interface(a)
-        for a in network["addresses"]
-        if ipaddress.ip_interface(a).version == 4
+        (
+            ipaddress.ip_interface(a)
+            for a in network["addresses"]
+            if ipaddress.ip_interface(a).version == 4
+            and str(ipaddress.ip_interface(a).ip) not in spec.get("additionalIpv4Addresses", [])
+        ),
+        None,
     )
+    if v4 is None:
+        raise ProvisioningError(
+            "installer requires a discovered IPv4 address besides the additional aliases"
+        )
     gateway = next(r["gateway"] for r in network["routes"] if r["destination"] == "0.0.0.0/0")
     if not any(ipaddress.ip_address(dns).version == 4 for dns in network["dns"]):
         raise ProvisioningError("the installer needs at least one IPv4 DNS resolver")
@@ -271,7 +285,9 @@ chmod 0600 /target/var/lib/nebula-baremetal/installed.json
         "nebula/sshd.conf": (
             f"Port {spec['ssh']['port']}\nPermitRootLogin prohibit-password\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitEmptyPasswords no\n"
         ).encode(),
-        "nebula/uplink.network": network_config(facts).encode(),
+        "nebula/uplink.network": network_config(
+            facts, spec.get("additionalIpv4Addresses", [])
+        ).encode(),
         "nebula/receipt.json": canonical(receipt).encode(),
     }
 

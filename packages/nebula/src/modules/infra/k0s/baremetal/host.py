@@ -315,6 +315,26 @@ def commit_locked(payload: JsonObject) -> JsonObject:
     return {"committed": True}
 
 
+def verify_additional_ipv4_addresses(spec: WorkerSpec, interfaces: list[JsonObject]) -> None:
+    expected = set(spec.get("additionalIpv4Addresses", []))
+    if not expected:
+        return
+    for interface in interfaces:
+        usable = [
+            a
+            for a in interface.get("addr_info", [])
+            if a.get("scope") == "global"
+            and a.get("family") == "inet"
+            and not a.get("tentative")
+            and not a.get("deprecated")
+        ]
+        if any(a["local"] == spec["address"] for a in usable) and expected <= {
+            a["local"] for a in usable if a.get("prefixlen") == 32
+        }:
+            return
+    raise ProvisioningError("installed uplink lacks the requested additional IPv4 /32 addresses")
+
+
 def verify(payload: JsonObject) -> JsonObject:
     spec = payload["spec"]
     receipt = json.loads(Path("/var/lib/nebula-baremetal/installed.json").read_text())
@@ -352,6 +372,7 @@ def verify(payload: JsonObject) -> JsonObject:
         )
     command(["systemctl", "is-active", "ssh"])
     addresses = json_command(["ip", "-j", "address"])
+    verify_additional_ipv4_addresses(spec, addresses)
     usable = [
         a
         for interface in addresses

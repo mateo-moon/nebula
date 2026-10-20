@@ -84,6 +84,7 @@ const TEMPLATE = String.raw`
 {{- $request := dict "uid" $uid "spec" (dict "address" $xr.spec.address "hostname" $hostname "ssh" $ssh "installation" $profile.installation)
   "context" (dict "namespace" $namespace "cluster" $profile.clusterName "provider" $profile.kubeProviderConfigName
     "workloadProvider" ($profile.workloadKubeProviderConfigName | default "") "podPrefix" ($profile.ipv6PodCidrPrefix | default "")) -}}
+{{- if $xr.spec.additionalIpv4Addresses -}}{{- $_ := set $request.spec "additionalIpv4Addresses" $xr.spec.additionalIpv4Addresses -}}{{- end -}}
 {{- $requestJSON := $request | toJson -}}
 {{- $hash := $requestJSON | sha256sum -}}
 {{- $previousHash := dig "status" "requestHash" "" $xr -}}
