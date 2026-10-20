@@ -224,13 +224,27 @@ expected identities. The live SNP workload matched the owner copy; two Argo hard
 refreshes preserved its policy, Deployment generation and Pod UID without
 container restarts. The actual Nebula CLI passed owner policy/resource operations
 and wrong-owner/audience/VM/workload/chip rejection. Guest policy denied exec and
-changed command/image canaries. The Argo-managed deployment remains running with
-deny-all resource release; temporary test resources, canaries and tunnel were
-removed. Resource retrieval by a second confidential workload was not tested.
+changed command/image canaries. That qualification ended with deny-all resource
+release; temporary test resources, canaries and its tunnel were removed. Its
+scope was owner administration. The subsequent MEV qualification below covers
+release to a second confidential workload.
+
+The [MEV and administrator qualification](../../../../test/evidence/trustee-mev-admin-snp-dev-2026-10-20.json)
+records native encrypted-image key retrieval through the guest's attested TNG
+connection. An owned qualification image passed authenticated SSH and HTTP/
+WebSocket RPC; the original operator image was then restored and passed a boot
+with an empty ciphertext cache. Original operator SSH access and business logic
+were not exercised. Six confidential containers rejected administrator exec;
+unauthorized policy/resource API requests returned 401, and a real unapproved
+SNP guest obtained an attestation token but received 403 on its key request.
+Additional guest policy rules were evaluated with native Regorus. These are
+targeted checks, not a proof against every runtime vulnerability.
 
 This remains a prototype. State is deliberately ephemeral: PodVM replacement
 loses resources and keys and requires owner verification and provisioning
-again. Persistent creation latches prevent in-place container recreation.
+again. Verification can match the existing approved measurements automatically;
+durable recovery and instance-specific admission are deferred. Persistent
+creation latches prevent in-place container recreation.
 Short-lived certificates have no renewal orchestration. The native client uses a
 [pinned, unmodified upstream TNG revision](../../../../../../tools/tng-client/README.md)
 containing merged PR #263; the deployed TNG and Trustee images are unchanged.
