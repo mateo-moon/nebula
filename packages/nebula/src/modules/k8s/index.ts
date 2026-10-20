@@ -528,6 +528,7 @@ export {
   Kyverno, KyvernoPolicy, kyvernoValues,
   KYVERNO_CHART_VERSION, KYVERNO_CHART_REPOSITORY,
 } from "./kyverno";
+export * from "./confidential-workloads";
 export type {
   KyvernoConfig, KyvernoPolicyConfig, KyvernoRbacRule, KyvernoController,
 } from "./kyverno";

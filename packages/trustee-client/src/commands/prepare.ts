@@ -9,6 +9,7 @@ export interface PrepareOptions {
   localPort: number;
   verifierPort: number;
   vcek?: string;
+  instanceBound?: boolean;
 }
 
 export function prepare(options: PrepareOptions): void {
@@ -20,6 +21,7 @@ export function prepare(options: PrepareOptions): void {
     localPort: options.localPort,
     verifierPort: options.verifierPort,
     vcekFile: options.vcek,
+    instanceBound: options.instanceBound,
   });
   console.log("Prepared local verifier state.");
 }

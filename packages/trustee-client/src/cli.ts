@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { enroll } from "./commands/enroll";
+import { prepareWorkloadCommand, configureWorkload, storageStatus } from "./commands/workload";
 import {
   prepare, ownerHeader, verify, listResourcePolicies, putResource, deleteResource,
   setResourcePolicy, setAttestationPolicy,
@@ -19,7 +21,21 @@ program.command("prepare")
   .option("--local-port <number>", "Local TNG port", Number, 18080)
   .option("--verifier-port <number>", "Local AS port", Number, 18082)
   .option("--vcek <file>", "Public VCEK certificate for offline verification")
+  .option("--instance-bound", "Require enrollment and pinned instance TLS for all owner requests")
   .action(prepare);
+
+program.command("prepare-workload <manifest>")
+  .description("Independently synthesize reviewed ConfidentialWorkload and ConfidentialStorage declarations")
+  .requiredOption("--name <name>", "ConfidentialWorkload name in the declaration")
+  .requiredOption("--host <host>", "Selected instance endpoint through L4 pass-through")
+  .option("--port <number>", "Remote TLS port", Number, 8443)
+  .requiredOption("--state <directory>", "New private state directory")
+  .option("--local-port <number>", "Local TNG port", Number, 18080)
+  .option("--verifier-port <number>", "Local AS port", Number, 18082)
+  .option("--vcek <file>", "Public VCEK certificate for offline verification")
+  .option("--genpolicy <file>", "Qualified native genpolicy executable")
+  .option("--cache <directory>", "Public image metadata cache")
+  .action(prepareWorkloadCommand);
 
 program.command("owner-header <new-file>")
   .description("Write a private five-minute native admin header for manual use")
@@ -37,6 +53,12 @@ function connected(command: Command): Command {
 
 connected(program.command("verify").description("Verify attested TLS and owner authorization with a native KBS request"))
   .action(verify);
+connected(program.command("enroll").description("Enroll one attested instance; refuses existing enrollment"))
+  .action(enroll);
+connected(program.command("configure-workload").description("Install the independently prepared local release policy on the enrolled instance"))
+  .action(configureWorkload);
+connected(program.command("storage-status").description("Read non-secret storage phase through the enrolled attested connection"))
+  .action(storageStatus);
 connected(program.command("list-resource-policies").description("List installed resource policy IDs"))
   .action(listResourcePolicies);
 connected(program.command("put-resource <path> <file>").description("Provision bytes at repository/type/tag"))

@@ -1,8 +1,11 @@
 import { type KeyObject } from "node:crypto";
 import { request } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
 import { createOwnerToken, ownerKey } from "./owner-token";
 import { startRuntime, type RuntimeOptions } from "./runtime";
+import { readPreparedClient } from "./prepare";
+import { readEnrollment, instanceTls, type InstanceEnrollment } from "./enrollment";
 
 export interface TrusteeClientOptions extends RuntimeOptions {
   readonly ownerPrivateKey: string | Buffer | KeyObject;
@@ -28,11 +31,13 @@ export class TrusteeClient {
   #audience: string;
   #timeout: number;
   #signal: AbortSignal;
+  #enrollment?: InstanceEnrollment;
 
-  private constructor(runtime: Runtime, key: KeyObject, options: TrusteeClientOptions) {
+  private constructor(runtime: Runtime, key: KeyObject, options: TrusteeClientOptions, enrollment?: InstanceEnrollment) {
     this.#runtime = runtime; this.#key = key; this.#audience = options.audience;
     this.#timeout = options.requestTimeoutMs ?? 30_000;
     this.#signal = options.signal ? AbortSignal.any([options.signal, runtime.signal]) : runtime.signal;
+    this.#enrollment = enrollment;
   }
 
   /** Starts the local verifier and TNG, then verifies an authenticated round trip. */
@@ -41,8 +46,10 @@ export class TrusteeClient {
     createOwnerToken(key, options.audience); // validate before starting processes
     if (options.requestTimeoutMs !== undefined && (!Number.isInteger(options.requestTimeoutMs) ||
         options.requestTimeoutMs < 1 || options.requestTimeoutMs > 300_000)) throw new TypeError("Invalid request timeout");
+    const { profile } = readPreparedClient(options.stateDirectory);
+    const enrollment = profile.instanceBound ? readEnrollment(options.stateDirectory, options.audience) : undefined;
     const runtime = await startRuntime(options);
-    const client = new TrusteeClient(runtime, key, options);
+    const client = new TrusteeClient(runtime, key, options, enrollment);
     try { await client.listResourcePolicies(); return client; }
     catch (error) {
       try { await client.close(); }
@@ -52,6 +59,17 @@ export class TrusteeClient {
   }
 
   close(): Promise<void> { return this.#runtime.close(); }
+
+  async storageStatus(): Promise<{ version: 1; storage: Record<string, { phase: string }> }> {
+    if (!this.#enrollment) throw new Error("Storage status requires instance enrollment");
+    const status = JSON.parse((await this.#request("GET", "/nebula/v1/storage")).toString("utf8"));
+    if (status.version !== 1 || !status.storage || typeof status.storage !== "object" ||
+        Object.values(status.storage).some((s: any) =>
+          !["starting", "awaiting-owner", "ready", "unlock-denied", "closed"].includes(s?.phase))) {
+      throw new Error("Invalid attested storage status");
+    }
+    return status;
+  }
 
   async listResourcePolicies(): Promise<string[]> {
     const bytes = await this.#request("GET", "resource-policy");
@@ -90,8 +108,10 @@ export class TrusteeClient {
     return new Promise((accept, reject) => {
       // node:http goes straight to loopback, ignores proxy environment variables,
       // follows no redirects, and performs no automatic retries of writes.
-      const req = request({ host: "127.0.0.1", port: this.#runtime.port, method, path: `/kbs/v0/${path}`,
+      const send = this.#enrollment ? httpsRequest : request;
+      const req = send({ host: "127.0.0.1", port: this.#runtime.port, method, path: path.startsWith("/") ? path : `/kbs/v0/${path}`,
         agent: false, signal: this.#signal,
+        ...(this.#enrollment ? instanceTls(this.#enrollment) : {}),
         headers: { Authorization: `Bearer ${createOwnerToken(this.#key, this.#audience)}`,
           "Content-Type": contentType, "Content-Length": body.length } }, response => {
         const chunks: Buffer[] = []; let size = 0;

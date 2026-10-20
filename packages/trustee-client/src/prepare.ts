@@ -17,6 +17,8 @@ export interface PrepareClientOptions {
   readonly opensslBinary?: string;
   /** Optional public AMD endorsement certificate; AS still verifies the chain. */
   readonly vcekFile?: string;
+  /** Require explicit enrollment and pinned instance TLS for every owner request. */
+  readonly instanceBound?: boolean;
 }
 
 interface Profile {
@@ -26,6 +28,7 @@ interface Profile {
   localPort: number;
   verifierPort: number;
   offlineVcek: boolean;
+  instanceBound?: boolean;
 }
 
 const save = (path: string, value: unknown) => writeFileSync(path, JSON.stringify(value, null, 2) + "\n", { mode: 0o600, flag: "wx" });
@@ -40,7 +43,8 @@ function planFor(directory: string, profile: Profile) {
 /** Offline preparation. Refuses existing state and never writes the owner's key. */
 export function prepareClient(options: PrepareClientOptions): string {
   const profile: Profile = { version: 1, identity: snpIdentity(options.identity), target: { ...options.target },
-    localPort: options.localPort ?? 18080, verifierPort: options.verifierPort ?? 18082, offlineVcek: options.vcekFile !== undefined };
+    localPort: options.localPort ?? 18080, verifierPort: options.verifierPort ?? 18082, offlineVcek: options.vcekFile !== undefined,
+    ...(options.instanceBound ? { instanceBound: true } : {}) };
   const directory = resolve(options.stateDirectory);
   // Validate before creating state. Docker's --mount parser treats commas specially.
   if (directory.includes(",") || /[\x00-\x1f]/.test(directory)) throw new TypeError("Unsupported state directory name");
@@ -94,6 +98,7 @@ export function readPreparedClient(directory: string) {
   };
   const profile = JSON.parse(read("client.json").toString()) as Profile;
   if (profile.version !== 1 || typeof profile.offlineVcek !== "boolean" ||
+      (profile.instanceBound !== undefined && typeof profile.instanceBound !== "boolean") ||
       !Number.isInteger(profile.localPort) || !Number.isInteger(profile.verifierPort)) throw new Error("Unsupported client state");
   const plan = planFor(out, profile);
   if (!isDeepStrictEqual(JSON.parse(read("as.json").toString()), plan.asConfig) ||

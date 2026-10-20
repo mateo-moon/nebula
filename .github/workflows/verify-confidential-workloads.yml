@@ -1,0 +1,74 @@
+name: Validate confidential workloads
+
+on:
+  pull_request:
+    paths:
+      - packages/confidential-operator/**
+      - packages/confidential-runtime/**
+      - packages/nebula/**
+      - packages/trustee-client/**
+      - docker/confidential-operator/**
+      - docker/confidential-runtime/**
+      - .dockerignore
+      - .github/workflows/verify-confidential-workloads.yml
+  push:
+    branches: [main]
+    paths:
+      - packages/confidential-operator/**
+      - packages/confidential-runtime/**
+      - packages/nebula/**
+      - packages/trustee-client/**
+      - docker/confidential-operator/**
+      - docker/confidential-runtime/**
+      - .dockerignore
+      - .github/workflows/verify-confidential-workloads.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: confidential-workloads-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  operator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm --dir packages/confidential-operator install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-operator typecheck
+      - run: pnpm --dir packages/confidential-operator test
+      - run: pnpm --dir packages/confidential-runtime install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-runtime build
+      - name: Check public runtime sources
+        run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-runtime packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-runtime
+
+  images:
+    needs: operator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [operator, runtime]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/confidential-${{ matrix.role }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=confidential-${{ matrix.role }}
+          cache-to: type=gha,mode=max,scope=confidential-${{ matrix.role }}

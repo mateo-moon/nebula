@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { verify } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, request } from "node:http";
-import { createServer as tcpServer } from "node:net";
+import { createServer as tcpServer, createConnection } from "node:net";
 import { join } from "node:path";
 
 export interface FixtureConfig {
@@ -12,6 +12,8 @@ export interface FixtureConfig {
   targetPort?: number;
   targetHost?: string;
   forwardPort?: number;
+  tcpForwardPort?: number;
+  instanceBound?: boolean;
   status?: number;
   redirectPort?: number;
 }
@@ -47,6 +49,17 @@ function runFixture(mode: string, directory: string): void {
   } else if (mode === "tng") {
     const mapping = JSON.parse(args[args.indexOf("--config-content") + 1]);
     if (mapping.add_ingress[0].mapping.out.host !== "127.0.0.1") throw new Error("TNG requires resolved IPv4 mapping endpoints");
+    if (config.tcpForwardPort) {
+      tcpServer(downstream => {
+        const upstream = createConnection({ host: "127.0.0.1", port: config.tcpForwardPort! });
+        downstream.pipe(upstream).pipe(downstream);
+        downstream.on("error", () => upstream.destroy());
+        upstream.on("error", () => downstream.destroy());
+        downstream.on("close", () => upstream.destroy());
+        upstream.on("close", () => downstream.destroy());
+      }).listen(config.localPort, "127.0.0.1");
+      return;
+    }
     createServer((req, res) => {
       const chunks: Buffer[] = [];
       req.on("data", chunk => chunks.push(chunk));

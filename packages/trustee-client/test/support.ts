@@ -27,7 +27,8 @@ export async function fixture(t: TestContext, overrides: Partial<Omit<FixtureCon
   const localPort = await port(), verifierPort = await port();
   const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const stateDirectory = prepareClient({ stateDirectory: join(directory, "state"), identity: identity(),
-    target: { host: overrides.targetHost ?? "127.0.0.1", port: overrides.targetPort ?? 18443 }, localPort, verifierPort });
+    target: { host: overrides.targetHost ?? "127.0.0.1", port: overrides.targetPort ?? 18443 }, localPort, verifierPort,
+    instanceBound: overrides.instanceBound });
   writeFileSync(join(directory, "owner.pub"), pair.publicKey.export({ format: "pem", type: "spki" }));
   const privateKey = pair.privateKey.export({ format: "pem", type: "pkcs8" });
   writeFileSync(join(directory, "owner.key"), privateKey, { mode: 0o600 });

@@ -19,7 +19,8 @@
   "dependencies": {
     "commander": "^13.0.0",
     "nebula-cdk8s": "file:../nebula",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "yaml": "^2.8.1"
   },
   "devDependencies": { "@types/node": "^22.13.9", "typescript": "^5.7.2" }
 }
