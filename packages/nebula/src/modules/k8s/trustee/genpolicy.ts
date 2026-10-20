@@ -116,8 +116,8 @@ function generateWorkloadPolicy(workload: GuestPodManifest,
     delete security.seccompProfile;
   }
   if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always" &&
-      !(block && c.name === "nebula-install-storage" && c.restartPolicy === undefined))) {
-    throw new TypeError("Only persistent bootstrap sidecars and the measured storage installer are supported");
+      !(block && ["nebula-install-storage", "nebula-await-owner"].includes(c.name) && c.restartPolicy === undefined))) {
+    throw new TypeError("Only persistent bootstrap sidecars and the measured installer/owner gate are supported");
   }
   delete spec.automountServiceAccountToken;
   delete spec.enableServiceLinks;
