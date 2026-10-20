@@ -45,7 +45,8 @@ test("bootstrap never starts guest attestation before owner policy installation"
 });
 
 test("bootstrap diagnostics require native owner authorization and discard successful resource bytes", async t => {
-  let resourceReads = 0;
+  let resourceReads = 0, storageReads = 0;
+  const storage = () => { storageReads++; return { data: { phase: "unlock-denied", error: "Test refusal" } }; };
   const kbs = createServer((req, res) => {
     req.resume();
     res.writeHead(req.headers.authorization === "Bearer valid.owner" ? 200 : 401).end("[]");
@@ -56,12 +57,15 @@ test("bootstrap diagnostics require native owner authorization and discard succe
     t.after(() => { server.closeAllConnections(); server.close(); });
   }
   const port = (server: typeof kbs) => { const address = server.address(); assert.ok(address && typeof address !== "string"); return address.port; };
-  assert.equal((await bootstrapStatus(["default/image/app"], "Bearer invalid", port(kbs), true, port(cdh))).status, 401);
+  assert.equal((await bootstrapStatus(["default/image/app"], "Bearer invalid", port(kbs), true, port(cdh), storage)).status, 401);
   assert.equal(resourceReads, 0);
+  assert.equal(storageReads, 0);
   await bootstrapStatus(["default/image/app"], "Bearer valid.owner", port(kbs), false, port(cdh));
   assert.equal(resourceReads, 0);
-  const result = await bootstrapStatus(["default/image/app"], "Bearer valid.owner", port(kbs), true, port(cdh));
+  const result = await bootstrapStatus(["default/image/app"], "Bearer valid.owner", port(kbs), true, port(cdh), storage);
   assert.equal(result.status, 200);
   assert.equal(resourceReads, 1);
+  assert.equal(storageReads, 1);
+  assert.deepEqual(result.body?.storage, { data: { phase: "unlock-denied", error: "Test refusal" } });
   assert.ok(!JSON.stringify(result).includes("synthetic-secret"));
 });

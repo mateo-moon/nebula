@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, statfsSync } from "node:fs";
 import { createServer } from "node:https";
 import { request } from "node:http";
 import { join } from "node:path";
-import { bootstrapStatus, validResource } from "./bootstrap.js";
+import { bootstrapStatus, storageDiagnostics, validResource } from "./bootstrap.js";
 
 const MAX_BODY = 2 * 1024 * 1024;
 
@@ -43,7 +43,8 @@ export function gateway(options: GatewayOptions) {
       incoming.resume();
       const authorization = incoming.headers.authorization ?? "";
       if (!/^Bearer [A-Za-z0-9_.-]+$/.test(authorization)) { outgoing.writeHead(403).end(); return; }
-      bootstrapStatus(resources, authorization, options.upstreamPort ?? 8080, attestationConfigured && resourcesConfigured).then(result => {
+      bootstrapStatus(resources, authorization, options.upstreamPort ?? 8080,
+        attestationConfigured && resourcesConfigured, 8006, () => storageDiagnostics(storageNames)).then(result => {
         outgoing.writeHead(result.status, { "Content-Type": "application/json" });
         outgoing.end(result.body ? JSON.stringify(result.body) : "");
       }).catch(() => { if (!outgoing.headersSent) outgoing.writeHead(502); outgoing.end(); });
@@ -60,7 +61,7 @@ export function gateway(options: GatewayOptions) {
         let phase = "starting";
         try {
           const status = JSON.parse(readFileSync(`/run/nebula-storage/${name}/status.json`, "utf8"));
-          if (["awaiting-owner", "ready", "unlock-denied", "closed"].includes(status.phase)) phase = status.phase;
+          if (["awaiting-owner", "ready", "unlock-denied", "failed", "closed"].includes(status.phase)) phase = status.phase;
         } catch { /* No status exists until the measured helper starts. */ }
         return [name, { phase }];
       }));

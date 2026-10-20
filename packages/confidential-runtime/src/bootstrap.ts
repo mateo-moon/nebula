@@ -1,4 +1,22 @@
 import { request } from "node:http";
+import { readFileSync } from "node:fs";
+
+/** Detailed errors stay behind native owner authorization. The public storage
+ * endpoint reports only the fixed phase vocabulary. */
+export function storageDiagnostics(names: readonly string[]) {
+  return Object.fromEntries(names.map(name => {
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error("Invalid storage name");
+    try {
+      const text = readFileSync(`/run/nebula-storage/${name}/status.json`, "utf8");
+      if (text.length > 4096) throw new Error("Oversized storage status");
+      const value = JSON.parse(text);
+      return [name, {
+        phase: typeof value.phase === "string" ? value.phase.slice(0, 40) : "unknown",
+        ...(typeof value.error === "string" ? { error: value.error.slice(0, 1024) } : {}),
+      }];
+    } catch { return [name, { phase: "starting" }]; }
+  }));
+}
 
 export const validResource = (value: unknown): value is string => typeof value === "string" &&
   /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/.test(value);
@@ -6,7 +24,7 @@ export const validResource = (value: unknown): value is string => typeof value =
 /** Fixed guest-loopback diagnostics. Success bodies are discarded and erased;
  * errors are available only after native owner authorization in the gateway. */
 export async function bootstrapStatus(resources: readonly string[], authorization: string, upstreamPort: number,
-  configured = true, cdhPort = 8006) {
+  configured = true, cdhPort = 8006, storage: () => unknown = () => ({})) {
   const read = (port: number, path: string, auth?: string) => new Promise<{ status: number; size: number; error?: string }>((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -40,5 +58,5 @@ export async function bootstrapStatus(resources: readonly string[], authorizatio
     checks[resource] = await read(cdhPort, `/cdh/resource/${resource}`).catch(() => ({ status: 0, size: 0, error: "Guest-local request failed or timed out" }));
     if (checks[resource].status !== 200) break;
   }
-  return { status: 200, body: { version: 1, resources: checks } };
+  return { status: 200, body: { version: 1, resources: checks, storage: storage() } };
 }
