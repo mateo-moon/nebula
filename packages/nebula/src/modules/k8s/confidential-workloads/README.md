@@ -24,7 +24,8 @@ evidence. Changing them cannot update the owner's enrollment.
 | `Memory` | Guest `emptyDir` with `medium: Memory` | None; lost with the VM |
 | `EncryptedBlock` | An existing raw-block PVC | Random owner key in that VM's local Trustee |
 
-Encrypted storage uses the tool-node-coco LUKS runtime. A qualified local PV or
+Encrypted storage uses the [Nebula LUKS runtime](../../../../../confidential-storage/README.md),
+built and published from this repository. A qualified local PV or
 CSI driver supplies ciphertext blocks. `ConfidentialStorageDevices` installs
 the namespace-scoped NRI device plumbing on the selected node. The measured
 policy permits its control devices only in the storage helper.

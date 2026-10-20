@@ -15,7 +15,7 @@ export interface ConfidentialStorageDevicesConfig {
   nriDirectory?: string;
 }
 
-/** Host device plumbing, using tool-node-coco's namespace-scoped NRI plugin.
+/** Host device plumbing, using Nebula's namespace-scoped NRI plugin.
  * Device injection grants no key access; the guest's native policy independently
  * restricts the controls to its measured storage helper. */
 export class ConfidentialStorageDevices extends BaseConstruct<ConfidentialStorageDevicesConfig> {

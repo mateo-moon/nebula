@@ -37,9 +37,13 @@ export const DEFAULT_SCOPE = [
   "packages/trustee-client",
   "packages/confidential-operator",
   "packages/confidential-runtime",
+  "packages/confidential-storage",
+  "packages/confidential-storage-devices",
   "packages/nebula/src/modules/k8s/confidential-workloads",
   "docker/confidential-operator",
   "docker/confidential-runtime",
+  "docker/confidential-storage",
+  "docker/confidential-storage-devices",
   "tools/tng-client",
   "packages/nebula/src/modules/k8s/trustee",
   ":(glob)packages/nebula/test/*trustee*.ts",
@@ -81,6 +85,8 @@ const UPSTREAM_OWNERS = new Set([
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
   "kedacore", "kyverno", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
   "datasone", "pbatard", // Public setup_var.efi and EDK2 UEFI-Shell release sources.
+  // Public containerd NRI dependencies.
+  "brianvoe", "golang", "knqyf263", "sirupsen", "tetratelabs",
   // Public controller-runtime dependency graph (Go module checksums).
   "masterminds", "beorn7", "cespare", "davecgh", "emicklei", "evanphx", "fsnotify", "fxamacker", "go-logr", "go-openapi", "go-task", "google", "json-iterator", "klauspost", "kr", "kylelemons", "modern-go", "munnerz", "onsi", "pkg", "pmezard", "prometheus", "rogpeppe", "spf13", "stretchr", "x448",
 ]);
@@ -101,6 +107,7 @@ const UPSTREAM_DOMAINS = [
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
   "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com",
   "kubebuilder.io", "gopkg.in", "go.yaml.in", "gomodules.xyz", "uber.org",
+  "nri.io", // Public containerd NRI annotation namespace.
   "nebula.dev", // Public CRD API group used in Kubebuilder project metadata.
 ];
 // Bare names are only matched under these TLDs (others collide with code:

@@ -76,7 +76,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   if (encrypted.length) {
     volumes.push(memory("storage-runtime", "32Mi"));
     initContainers.push({ name: "nebula-install-storage", image: spec.storageImage, imagePullPolicy: "Always",
-      command: ["/usr/local/bin/coco-key-api"], args: ["generic-install"],
+      command: ["/usr/local/bin/nebula-confidential-storage"], args: ["install"],
       securityContext: security(0), resources: limits,
       volumeMounts: [mount("storage-runtime", "/run/nebula-runtime")] });
   }
@@ -94,7 +94,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     const storageConfig = { version: 1, name: binding.name, sizeBytes: storage.sizeBytes,
       keyResource: storage.keyResource.join("/"), initialization: storage.initialization, clients };
     initContainers.push({ name: `nebula-storage-${binding.name}`, image: spec.storageImage, imagePullPolicy: "Always",
-      command: ["/usr/local/bin/coco-key-api"], args: ["generic-serve", JSON.stringify(storageConfig)],
+      command: ["/usr/local/bin/nebula-confidential-storage"], args: ["serve", JSON.stringify(storageConfig)],
       restartPolicy: "Always", securityContext: security(0, 0, ["SYS_ADMIN", "MKNOD", "CHOWN"]),
       resources: limits, volumeDevices: [{ name: volumeName, devicePath: "/dev/coco-data" }],
       volumeMounts: [mount(`state-${binding.name}`, "/run/volume")] });
@@ -106,8 +106,8 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       mounts: blockMounts.map(m => ({ socket: `/run/nebula-mounts/${m.storage}/mount.sock`, path: m.path })) };
     return {
       name: container.name, image: container.image, imagePullPolicy: "Always",
-      command: blockMounts.length ? ["/run/nebula-runtime/coco-key-api"] : [...container.command],
-      args: blockMounts.length ? ["generic-launch", JSON.stringify(launch), "--", ...container.command, ...(container.args ?? [])] : [...(container.args ?? [])],
+      command: blockMounts.length ? ["/run/nebula-runtime/nebula-confidential-storage"] : [...container.command],
+      args: blockMounts.length ? ["launch", JSON.stringify(launch), "--", ...container.command, ...(container.args ?? [])] : [...(container.args ?? [])],
       env: Object.entries(container.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value })),
       securityContext: blockMounts.length ? security(0, 0, ["SYS_ADMIN", "SETPCAP", "SETUID", "SETGID"]) : security(container.uid, container.gid),
       resources: container.resources ?? limits,
