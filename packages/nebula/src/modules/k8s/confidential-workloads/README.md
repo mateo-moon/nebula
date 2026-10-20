@@ -5,11 +5,13 @@ verifies the VM and native genpolicy, enrolls that VM's generated TLS identity,
 then provisions its image and volume keys. An identical replacement starts
 empty and has a different identity.
 
-`ConfidentialOperator` installs the namespaced controller and the
+`ConfidentialOperator` installs the standalone Kubebuilder/Go controller and the
 `ConfidentialWorkload` / `ConfidentialStorage` CRDs. The controller composes the
 official pinned Trustee Helm dependency, TNG, the owner gateway, storage helpers
 and application containers. It runs native genpolicy on that final Pod.
-The owner CLI independently runs the same renderer from reviewed declarations.
+The owner CLI independently runs the same TypeScript renderer from reviewed
+declarations. The Go controller uses namespace-scoped watches, a leader lease
+and queued reconciliation; it retains existing guests across restarts.
 
 The controller holds no owner credentials or decryption keys. Kubernetes names,
 UIDs, labels and status are routing and operational information, not trust

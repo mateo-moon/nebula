@@ -69,24 +69,39 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
     const metadata = { name, namespace, annotations: { "argocd.argoproj.io/sync-wave": "-2" } };
     new ApiObject(this, "account", { apiVersion: "v1", kind: "ServiceAccount", metadata });
     for (const target of config.watchNamespaces) {
-      const role = { name, namespace: target };
+      const role = { ...metadata, namespace: target };
       new ApiObject(this, `role-${target}`, { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role", metadata: role,
         rules: [
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads", "confidentialstorages"], verbs: ["get", "list", "watch"] },
           { apiGroups: [CONFIDENTIAL_GROUP], resources: ["confidentialworkloads/status", "confidentialstorages/status"], verbs: ["get", "patch", "update"] },
-          { apiGroups: [""], resources: ["pods", "services"], verbs: ["get", "list", "create"] },
-          { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get"] },
+          { apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch", "create"] },
+          { apiGroups: [""], resources: ["services"], verbs: ["get", "list", "watch", "create", "patch"] },
+          { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "list", "watch"] },
         ] });
       new ApiObject(this, `binding-${target}`, { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding", metadata: role,
         roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name },
         subjects: [{ kind: "ServiceAccount", name, namespace }] });
     }
+    new ApiObject(this, "leader-role", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role",
+      metadata: { ...metadata, name: `${name}-leader` }, rules: [
+        { apiGroups: ["coordination.k8s.io"], resources: ["leases"], verbs: ["get", "create", "update"] },
+        { apiGroups: [""], resources: ["events"], verbs: ["create", "patch"] },
+      ] });
+    new ApiObject(this, "leader-binding", { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding",
+      metadata: { ...metadata, name: `${name}-leader` },
+      roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: `${name}-leader` },
+      subjects: [{ kind: "ServiceAccount", name, namespace }] });
     this.deployment = new ApiObject(this, "deployment", { apiVersion: "apps/v1", kind: "Deployment", metadata,
       spec: { replicas: 1, strategy: { type: "Recreate" }, selector: { matchLabels: { app: name } },
         template: { metadata: { labels: { app: name } }, spec: {
           serviceAccountName: name, containers: [{ name: "operator", image: config.image,
-            command: ["/app/node_modules/.bin/tsx", "/app/src/main.ts"], args: [],
-            env: [{ name: "WATCH_NAMESPACES", value: config.watchNamespaces.join(",") }, { name: "HOME", value: "/tmp" }],
+            command: ["/manager"], args: ["--leader-elect"],
+            env: [{ name: "WATCH_NAMESPACES", value: config.watchNamespaces.join(",") },
+              { name: "POD_NAMESPACE", valueFrom: { fieldRef: { fieldPath: "metadata.namespace" } } },
+              { name: "HOME", value: "/tmp" }],
+            ports: [{ name: "health", containerPort: 8081 }],
+            readinessProbe: { httpGet: { path: "/readyz", port: "health" }, initialDelaySeconds: 5 },
+            livenessProbe: { httpGet: { path: "/healthz", port: "health" }, initialDelaySeconds: 15 },
             securityContext: { runAsUser: 10001, runAsGroup: 10001, runAsNonRoot: true,
               allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
             resources: { requests: { cpu: "100m", memory: "256Mi" }, limits: { memory: "2Gi" } },

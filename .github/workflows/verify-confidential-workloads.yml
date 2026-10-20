@@ -46,6 +46,22 @@ jobs:
       - run: pnpm --dir packages/confidential-operator install --frozen-lockfile
       - run: pnpm --dir packages/confidential-operator typecheck
       - run: pnpm --dir packages/confidential-operator test
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: packages/confidential-operator/go.mod
+          cache-dependency-path: packages/confidential-operator/go.sum
+      - name: Controller race tests and generated API parity
+        working-directory: packages/confidential-operator
+        run: |
+          make generate manifests
+          git diff --exit-code -- api config/crd
+          go test -race ./...
+      - name: Kubernetes API reconciliation tests
+        working-directory: packages/confidential-operator
+        run: |
+          KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3-0.20261012174806-32759fab3119 use -p path 1.35.0)
+          export KUBEBUILDER_ASSETS
+          make envtest
       - run: pnpm --dir packages/confidential-runtime install --frozen-lockfile
       - run: pnpm --dir packages/confidential-runtime build
       - name: Check public runtime sources
