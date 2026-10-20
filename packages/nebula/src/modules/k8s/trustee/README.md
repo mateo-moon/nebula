@@ -153,6 +153,12 @@ administration, attestation policy, resource policy and provisioning APIs.
 Workload retrieval continues to use the native CoCo KBS protocol. Owner JWTs
 authorize administration; recipient attestation authorizes secret release.
 
+`trusteeClientSidecars` prepares a private verifier and TNG inside a client
+PodVM before native CoCo pulls its encrypted workload. Its HTTP startup probe
+requests KBS `/healthz` through the attested TNG connection. Encrypted-container
+creation therefore waits for a verified upstream round trip, not just a local
+listening socket. The verifier API remains on guest loopback.
+
 ## Administrator isolation
 
 SNP attestation authenticates the approved guest measurement and Init-Data

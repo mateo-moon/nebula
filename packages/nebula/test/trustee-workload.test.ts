@@ -21,7 +21,8 @@ test("guest client starts its private verifier before opening the KBS transport"
   assert.match(script(tng), /until curl .*http:\/\/127\.0\.0\.1:18082/);
   assert.match(script(tng), /getent ahostsv4 'trustee.keys.svc'/);
   assert.match(script(tng), /exec tng launch/);
-  assert.deepEqual(tng.startupProbe, { tcpSocket: { port: 18080 }, periodSeconds: 2, failureThreshold: 60 });
+  assert.deepEqual(tng.startupProbe, { httpGet: { path: "/healthz", port: 18080 },
+    timeoutSeconds: 10, periodSeconds: 2, failureThreshold: 60 });
   for (const container of plan.initContainers) {
     execFileSync("/bin/sh", ["-n"], { input: script(container) });
     assert.equal(container.securityContext.runAsUser, 10001);

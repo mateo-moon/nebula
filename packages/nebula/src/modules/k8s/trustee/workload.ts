@@ -20,9 +20,9 @@ export function trusteeClientSidecars(options: {
     if (!/@sha256:[a-f0-9]{64}$/.test(image)) throw new TypeError("Trustee client images must be digest-pinned");
   }
   const plan = tngTrusteeClientPlan(options.identity, options.target);
-  // Kubelet gates restartable init sidecars with a TCP startup probe. Exposing
-  // this verified transport does not expose the AS control API (loopback only),
-  // and native KBS recipient attestation still protects every released key.
+  // Probe native KBS health through TNG so startup requires a verified upstream
+  // round trip. A listening TCP socket alone precedes the attested handshake.
+  // AS stays on loopback and KBS still attests every resource recipient.
   plan.tngConfig.add_ingress[0].mapping.in.host = "0.0.0.0";
   // Upstream mapping endpoints are IPv4 literals. Resolve service DNS inside
   // the measured guest; routing never replaces verification of Trustee identity.
@@ -68,7 +68,8 @@ export function trusteeClientSidecars(options: {
     initContainers: [container("trustee-verifier", options.verifierImage, verifierScript, false),
       { ...container("trustee-client", options.tngImage, tngScript, true),
         ports: [{ name: "kbs-client", containerPort: 18080 }],
-        startupProbe: { tcpSocket: { port: 18080 }, periodSeconds: 2, failureThreshold: 60 },
+        startupProbe: { httpGet: { path: "/healthz", port: 18080 },
+          timeoutSeconds: 10, periodSeconds: 2, failureThreshold: 60 },
       }],
     volumes: ["trustee-verifier-state", "trustee-verifier-tmp", "trustee-verifier-cache", "trustee-client-tmp"].map(name => ({
       name, emptyDir: { medium: "Memory", sizeLimit: "64Mi" },
