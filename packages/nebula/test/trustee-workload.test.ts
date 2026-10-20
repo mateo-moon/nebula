@@ -19,6 +19,7 @@ test("guest client starts its private verifier before opening the KBS transport"
   assert.match(script(as), /rm -f ca\.key/);
   assert.ok(as.volumeMounts.some(mount => mount.mountPath === "/opt/confidential-containers/attestation-service"));
   assert.match(script(tng), /until curl .*http:\/\/127\.0\.0\.1:18082/);
+  assert.match(script(tng), /getent ahostsv4 'trustee.keys.svc'/);
   assert.match(script(tng), /exec tng launch/);
   assert.deepEqual(tng.startupProbe, { tcpSocket: { port: 18080 }, periodSeconds: 2, failureThreshold: 60 });
   for (const container of plan.initContainers) {

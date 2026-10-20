@@ -24,6 +24,9 @@ export function trusteeClientSidecars(options: {
   // this verified transport does not expose the AS control API (loopback only),
   // and native KBS recipient attestation still protects every released key.
   plan.tngConfig.add_ingress[0].mapping.in.host = "0.0.0.0";
+  // Upstream mapping endpoints are IPv4 literals. Resolve service DNS inside
+  // the measured guest; routing never replaces verification of Trustee identity.
+  plan.tngConfig.add_ingress[0].mapping.out.host = "TRUSTEE_IPV4";
   const verifierScript = [
     "set -eu", "umask 077", "cd /state", "mkdir -p storage/attestation_service_policy",
     write("as.json", JSON.stringify(plan.asConfig)),
@@ -40,9 +43,11 @@ export function trusteeClientSidecars(options: {
   ].join("\n");
   const tngScript = [
     "set -eu", "umask 077",
-    write("/tmp/tng.json", JSON.stringify(plan.tngConfig)),
+    write("/tmp/tng.template.json", JSON.stringify(plan.tngConfig)),
     "until test -s /state/ca.pem; do sleep 1; done",
     "until curl --silent --output /dev/null --max-time 2 http://127.0.0.1:18082/; do sleep 1; done",
+    `until trustee_address="$(getent ahostsv4 '${options.target.host}' | awk 'NF && $1 ~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$/ { n=split($1,a,"."); if(n==4 && a[1]<=255 && a[2]<=255 && a[3]<=255 && a[4]<=255) { print $1; exit } }')"; test -n "$trustee_address"; do sleep 1; done`,
+    'sed "s/TRUSTEE_IPV4/$trustee_address/" /tmp/tng.template.json > /tmp/tng.json',
     "exec tng launch --config-file /tmp/tng.json",
   ].join("\n");
   const container = (name: string, image: string, script: string, readOnly: boolean) => ({

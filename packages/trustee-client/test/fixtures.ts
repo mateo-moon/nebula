@@ -10,6 +10,7 @@ export interface FixtureConfig {
   localPort: number;
   verifierPort: number;
   targetPort?: number;
+  targetHost?: string;
   forwardPort?: number;
   status?: number;
   redirectPort?: number;
@@ -44,6 +45,8 @@ function runFixture(mode: string, directory: string): void {
       rmSync(pidFile, { force: true });
     } else process.exitCode = 1;
   } else if (mode === "tng") {
+    const mapping = JSON.parse(args[args.indexOf("--config-content") + 1]);
+    if (mapping.add_ingress[0].mapping.out.host !== "127.0.0.1") throw new Error("TNG requires resolved IPv4 mapping endpoints");
     createServer((req, res) => {
       const chunks: Buffer[] = [];
       req.on("data", chunk => chunks.push(chunk));

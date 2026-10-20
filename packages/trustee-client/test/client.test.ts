@@ -60,7 +60,7 @@ test("owner JWT is native ES256 with bounded lifetime; CLI never prints or overw
 });
 
 test("managed client uses native admin encoding, validates paths, isolates keys and cleans up", async t => {
-  const f = await fixture(t), client = await TrusteeClient.connect(f.options); t.after(() => client.close());
+  const f = await fixture(t, { targetHost: "localhost" }), client = await TrusteeClient.connect(f.options); t.after(() => client.close());
   await assert.rejects(TrusteeClient.connect(f.options), /EEXIST/);
   assert.deepEqual(await client.listResourcePolicies(), ["resource-policy"]);
   const policies = trusteePolicies([{ path: ["owner", "key", "release-1"], recipients: [identity()] }]);

@@ -15,4 +15,7 @@ test("client uses local mainline verification with exact VM/workload approval an
   assert.throws(() => tngTrusteeClientPlan({ ...identity(), initDataSha256: "" }, { host: "localhost", port: 8443 }));
   assert.equal(tngTrusteeClientPlan(identity(), { host: "trustee.example.test", port: 443 }).tngConfig.add_ingress[0].mapping.out.port, 443);
   assert.throws(() => tngTrusteeClientPlan(identity(), { host: "localhost", port: 8443 }, 443));
+  const target = { host: "trustee.example.test", port: 443 };
+  tngTrusteeClientPlan(identity(), target).tngConfig.add_ingress[0].mapping.out.host = "127.0.0.1";
+  assert.equal(target.host, "trustee.example.test");
 });

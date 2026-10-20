@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { rmSync, writeFileSync } from "node:fs";
+import { lookup } from "node:dns/promises";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -114,7 +115,12 @@ export async function startRuntime(options: RuntimeOptions) {
       throw new Error("Local Trustee client startup timed out");
     };
     await waitFor(profile.verifierPort, true);
-    tng = spawn(options.tngBinary, ["launch", "--config-file", join(directory, "tng.json")], {
+    // Mapping mode accepts IPv4 literals. DNS selects a route, while the local
+    // AS continues to verify the independently approved VM and workload identity.
+    const config = JSON.parse(readFileSync(join(directory, "tng.json"), "utf8"));
+    config.add_ingress[0].mapping.out.host = (await lookup(profile.target.host, { family: 4 })).address;
+    assertAlive();
+    tng = spawn(options.tngBinary, ["launch", "--config-content", JSON.stringify(config)], {
       stdio: "ignore", env: { ...process.env, RUST_LOG: "off", RUST_BACKTRACE: "0" },
     });
     tng.once("error", () => { failed = true; });
