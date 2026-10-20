@@ -66,6 +66,8 @@ export interface ConfidentialWorkloadSpec {
   resources: readonly TrusteeResourcePath[];
   /** Public registry routing only. Credentials cannot be embedded in this API. */
   registryMirrors?: readonly { prefix: string; location: string; insecure: boolean }[];
+  /** Kata base resources. With static resource management, workload resource
+   * limits are added at launch; approve the resulting total vCPU measurement. */
   runtime?: { memoryMiB?: number; vcpus?: number; k8sDistribution?: "k0s" | "kubernetes"; ociVersion?: "1.1.0" | "1.2.0" | "1.3.0" };
 }
 

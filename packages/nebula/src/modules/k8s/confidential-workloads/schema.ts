@@ -5,7 +5,7 @@ type Schema = Record<string, unknown>;
 const str = (extra: Schema = {}): Schema => ({ type: "string", maxLength: 4096, ...extra });
 const int = (minimum: number, maximum: number): Schema => ({ type: "integer", minimum, maximum });
 const obj = (properties: Record<string, Schema>, required = Object.keys(properties)): Schema =>
-  ({ type: "object", properties, required });
+  ({ type: "object", properties, ...(required.length ? { required } : {}) });
 const list = (items: Schema, maxItems = 64, minItems = 0): Schema => ({ type: "array", items, maxItems, minItems });
 const labels = { type: "object", maxProperties: 64, additionalProperties: str() };
 const name = str({ pattern: namePattern, maxLength: 40 });
@@ -61,8 +61,8 @@ export function confidentialCrds() {
     apiVersion: "apiextensions.k8s.io/v1", kind: "CustomResourceDefinition",
     metadata: { name: `${plural}.${CONFIDENTIAL_GROUP}`,
       annotations: { "argocd.argoproj.io/sync-wave": "-3", "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } },
-    spec: { group: CONFIDENTIAL_GROUP, scope: "Namespaced",
-      names: { kind, plural, singular: String(kind).toLowerCase(), shortNames: [short] },
+    spec: { group: CONFIDENTIAL_GROUP, scope: "Namespaced", conversion: { strategy: "None" },
+      names: { kind, listKind: `${kind}List`, plural, singular: String(kind).toLowerCase(), shortNames: [short] },
       versions: [{ name: "v1alpha1", served: true, storage: true,
         subresources: { status: {} },
         additionalPrinterColumns: [{ name: "Phase", type: "string", jsonPath: ".status.phase" }],

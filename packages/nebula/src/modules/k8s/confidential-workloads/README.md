@@ -45,6 +45,10 @@ rollback prevention or a global singleton guarantee.
 Keep a reviewed YAML file containing the workload and its storage declarations.
 Pin every image and the Helm chart. Supply the independently approved SNP
 launch measurement, chip identity, TCB floor and owner public key.
+`runtime.vcpus` and `runtime.memoryMiB` set Kata's base resources. When the
+qualified runtime uses static resource management, it adds the workload's
+resource limits. Calculate the approved launch measurement with the resulting
+total CPU count, not the base count alone.
 
 ```sh
 nebula-trustee prepare-workload workload.yaml \
