@@ -160,6 +160,9 @@ private regular files (mode 0600).
 | Command | Operation |
 | --- | --- |
 | `prepare` | Create private verifier state from approved identity; no server contact. |
+| `prepare-workload <manifest>` | Independently render reviewed CRDs with native genpolicy into fresh owner state. |
+| `enroll` | Pin one attested guest's TLS identity; refuses an existing enrollment. |
+| `configure-workload` | Install the privately prepared policies on that enrolled instance. |
 | `verify` | Verify attested TLS and native owner authorization. |
 | `list-resource-policies` | List installed resource policy IDs. |
 | `put-resource <repository/type/tag> <file>` | Provision exact binary bytes. |
@@ -167,6 +170,14 @@ private regular files (mode 0600).
 | `set-resource-policy <file>` | Install reviewed resource-release Rego. |
 | `set-attestation-policy <file>` | Install reviewed appraisal Rego; `--policy-id` defaults to `default_cpu`. |
 | `owner-header <new-file>` | For manual integrations: write a private short-lived header without printing or overwriting it. |
+| `storage-status` | Read the enrolled guest's storage phase. |
+| `bootstrap-status` | Read owner-authorized retrieval and storage diagnostics, without returning keys. |
+| `renew <new-state>` | Renew local verifier credentials offline while retaining the approval and instance pin. |
+
+For workloads with their own Trustee and encrypted storage, follow the
+[ConfidentialWorkload guide](../nebula/src/modules/k8s/confidential-workloads/README.md).
+Kubernetes status is operational information; enrollment and storage checks
+use the attested guest connection.
 
 The package also exports `tngTrusteeClientPlan`, `trusteePolicies`,
 `createOwnerToken`, `TrusteeHttpError`, and their public types.

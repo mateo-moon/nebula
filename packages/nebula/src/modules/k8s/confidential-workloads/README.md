@@ -75,6 +75,8 @@ outside Git and Kubernetes. `storage-status` reads the helper's non-secret phase
 through the enrolled, attested connection.
 `bootstrap-status` requires native owner authorization and reports guest-local
 retrieval errors without returning successful resource contents.
+An unlock refusal stays visible until the guest is retired; it cannot trigger
+reformatting or an automatic retry with another key.
 
 Every owner request uses pinned inner TLS inside TNG's attested TLS connection.
 A routing change after enrollment fails before the owner token or resource
@@ -93,7 +95,14 @@ instance before the owner's first selection. An owner can explicitly enroll
 another instance and provision the same keys. Preventing that, or detecting
 valid ciphertext rollback, needs additional coordination.
 
+Application ports retain the application's protocol. Configure application TLS
+when its traffic needs encryption; the owner gateway protects administration.
+
 This initial implementation uses the existing CLI's short-lived local verifier
 certificates. `nebula-trustee renew <new-state> --state <current-state>`
 renews the local verifier while preserving the enrollment pin and workload
 approval. It does not contact or enroll a replacement.
+
+The [dev SNP qualification](../../../../test/evidence/confidential-workloads-snp-dev-2026-10-20.json)
+records encrypted application boot, instance substitution rejection and
+copied-disk refusal with these CRDs.
