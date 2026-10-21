@@ -52,9 +52,9 @@ test("owner JWT is native ES256 with bounded lifetime; CLI never prints or overw
   assert.deepEqual([claims.iss, claims.aud, claims.role, claims.exp - claims.iat, claims.nbf], ["nebula-owner", "trustee", "owner", 300, claims.iat]);
   const output = join(f.directory, "owner.header");
   const args = ["owner-header", output, "--owner-key", join(f.directory, "owner.key"), "--audience", "trustee"];
-  assert.equal(execFileSync("bin/nebula-trustee", args, { encoding: "utf8" }), "");
+  assert.equal(execFileSync("bin/confidential-client", args, { encoding: "utf8" }), "");
   assert.equal(statSync(output).mode & 0o777, 0o600);
-  assert.throws(() => execFileSync("bin/nebula-trustee", args, { stdio: "pipe" }));
+  assert.throws(() => execFileSync("bin/confidential-client", args, { stdio: "pipe" }));
   assert.throws(() => createOwnerToken(generateKeyPairSync("ed25519").privateKey, "trustee"), /P-256/);
   assert.throws(() => createOwnerToken(f.pair.publicKey, "trustee"), /private/);
 });

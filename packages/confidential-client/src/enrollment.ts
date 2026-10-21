@@ -1,4 +1,4 @@
-import { createHash, X509Certificate } from "node:crypto";
+import { createHash, createPublicKey, X509Certificate } from "node:crypto";
 import { lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:https";
 import { join } from "node:path";
@@ -6,6 +6,7 @@ import { checkServerIdentity, type TLSSocket } from "node:tls";
 import { readPreparedClient } from "./prepare";
 import { startRuntime, type RuntimeOptions } from "./runtime";
 import { createOwnerToken, ownerKey } from "./owner-token";
+import { claimSha256, readClaimToken } from "./claim";
 
 export const INSTANCE_SERVER_NAME = "nebula-instance";
 const FILE = "instance.json";
@@ -76,6 +77,7 @@ export function instanceTls(enrolled: InstanceEnrollment) {
 export interface EnrollOptions extends RuntimeOptions {
   readonly ownerPrivateKey: Parameters<typeof ownerKey>[0];
   readonly audience: string;
+  readonly claimTokenFile?: string;
 }
 
 /** Explicit first enrollment. Existing enrollment is never overwritten. No
@@ -89,7 +91,19 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   const key = ownerKey(options.ownerPrivateKey);
   createOwnerToken(key, options.audience);
-  const runtime = await startRuntime(options);
+  let claimToken: Buffer | undefined;
+  if (options.claimTokenFile) {
+    const approvalPath = join(directory, "workload.json"), stat = lstatSync(approvalPath);
+    if (!stat.isFile() || (stat.mode & 0o077) !== 0 || stat.size > 65536) throw new Error("Invalid private workload approval");
+    const approval = JSON.parse(readFileSync(approvalPath, "utf8"));
+    claimToken = readClaimToken(options.claimTokenFile);
+    if (approval.audience !== options.audience || approval.ownerClaimSha256 !== claimSha256(claimToken)) {
+      throw new Error("Claim token does not match the prepared workload approval");
+    }
+  }
+  let runtime: Awaited<ReturnType<typeof startRuntime>>;
+  try { runtime = await startRuntime(options); }
+  catch (error) { claimToken?.fill(0); throw error; }
   try {
     const pem = await new Promise<string>((accept, reject) => {
       runtime.assertAlive();
@@ -109,6 +123,28 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
     });
     const enrolled: InstanceEnrollment = { version: 1, approvalSha256: approval(profile.identity),
       audience: options.audience, certificate: pem, publicKeySha256: fingerprint(certificate(pem)) };
+    if (claimToken) {
+      const body = Buffer.from(JSON.stringify({ token: claimToken.toString("hex"),
+        ownerPublicKeyPem: createPublicKey(key).export({ type: "spki", format: "pem" }).toString() }));
+      try {
+        await new Promise<void>((accept, reject) => {
+          runtime.assertAlive();
+          const req = request({ host: "127.0.0.1", port: runtime.port, path: "/nebula/v1/claim", method: "POST",
+            agent: false, signal: runtime.signal, ...instanceTls(enrolled),
+            headers: { Authorization: `Bearer ${createOwnerToken(key, options.audience)}`,
+              "Content-Type": "application/json", "Content-Length": body.length } }, response => {
+            response.resume();
+            // A lost response after a successful claim is recoverable only if
+            // the following owner-authorized round trip succeeds.
+            if (response.statusCode === 200 || response.statusCode === 409) accept();
+            else reject(new Error("Instance claim was refused"));
+          });
+          req.setTimeout(30_000, () => req.destroy());
+          req.on("error", () => reject(new Error("Instance claim failed or timed out")));
+          req.end(body);
+        });
+      } finally { body.fill(0); claimToken.fill(0); }
+    }
     await new Promise<void>((accept, reject) => {
       runtime.assertAlive();
       const req = request({ host: "127.0.0.1", port: runtime.port, path: "/kbs/v0/resource-policy",
@@ -126,6 +162,7 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
     writeFileSync(path, JSON.stringify(enrolled, null, 2) + "\n", { mode: 0o600, flag: "wx" });
     return enrolled;
   } finally {
+    claimToken?.fill(0);
     await runtime.close();
   }
 }

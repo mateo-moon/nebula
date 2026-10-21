@@ -27,6 +27,18 @@ type testRenderer struct {
 	document string
 }
 
+type publicationRenderer struct {
+	testRenderer
+	pending bool
+}
+
+func (r *publicationRenderer) Render(ctx context.Context, w *api.ConfidentialWorkload, s []api.ConfidentialStorage) (*Plan, error) {
+	if r.pending {
+		return nil, &renderDiagnostic{reason: "ImageNotPublished", message: "Confidential workload: encrypted publication is not yet available"}
+	}
+	return r.testRenderer.Render(ctx, w, s)
+}
+
 func (r *testRenderer) Render(_ context.Context, w *api.ConfidentialWorkload, _ []api.ConfidentialStorage) (*Plan, error) {
 	r.calls++
 	document := r.document
@@ -77,6 +89,25 @@ func getPods(t *testing.T, c client.Client) []corev1.Pod {
 		t.Fatal(err)
 	}
 	return pods.Items
+}
+
+func TestUnpublishedImageRetriesWithoutCreatingAPod(t *testing.T) {
+	w, s, pvc := fixture("qualified", "future-image")
+	scheme := testScheme()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(w, s).WithObjects(w, s, pvc).Build()
+	render := &publicationRenderer{pending: true}
+	r := &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: render}
+	result, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(w)})
+	if err != nil || result.RequeueAfter <= 0 || len(getPods(t, c)) != 0 {
+		t.Fatalf("unpublished image did not wait safely: result=%+v err=%v", result, err)
+	}
+	if got := getWorkload(t, c, w); got.Status.Phase != "AwaitingPublication" || got.Status.Reason != "ImageNotPublished" {
+		t.Fatalf("wrong publication status: %+v", got.Status)
+	}
+	render.pending = false
+	if err := run(t, r, w); err != nil || len(getPods(t, c)) != 1 {
+		t.Fatalf("published image did not boot automatically: %v", err)
+	}
 }
 func TestReconcileIdempotenceReplacementAndOwnership(t *testing.T) {
 	ctx := context.Background()

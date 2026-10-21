@@ -19,7 +19,7 @@ export async function port() {
   return address.port;
 }
 export async function fixture(t: TestContext, overrides: Partial<Omit<FixtureConfig, "localPort" | "verifierPort">> = {}) {
-  const directory = mkdtempSync(join(tmpdir(), "nebula-trustee-client-")); chmodSync(directory, 0o700);
+  const directory = mkdtempSync(join(tmpdir(), "confidential-client-")); chmodSync(directory, 0o700);
   t.after(() => {
     try { process.kill(Number(readFileSync(join(directory, "verifier.pid"))), "SIGTERM"); } catch {}
     rmSync(directory, { recursive: true, force: true });

@@ -8,7 +8,7 @@ on:
       - packages/confidential-storage/**
       - packages/confidential-storage-devices/**
       - packages/nebula/**
-      - packages/trustee-client/**
+      - packages/confidential-client/**
       - docker/confidential-operator/**
       - docker/confidential-runtime/**
       - docker/confidential-storage/**
@@ -24,7 +24,7 @@ on:
       - packages/confidential-storage/**
       - packages/confidential-storage-devices/**
       - packages/nebula/**
-      - packages/trustee-client/**
+      - packages/confidential-client/**
       - docker/confidential-operator/**
       - docker/confidential-runtime/**
       - docker/confidential-storage/**

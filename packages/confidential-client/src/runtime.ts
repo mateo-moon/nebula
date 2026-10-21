@@ -51,7 +51,7 @@ export async function startRuntime(options: RuntimeOptions) {
   const { directory, profile } = readPreparedClient(options.stateDirectory);
   options.signal?.throwIfAborted();
   const lock = join(directory, "runtime.lock");
-  const name = `nebula-trustee-client-${randomUUID()}`;
+  const name = `confidential-client-${randomUUID()}`;
   writeFileSync(lock, JSON.stringify({ pid: process.pid, container: name }), { mode: 0o600, flag: "wx" });
   const stopped = new AbortController();
   let tng: ChildProcess | undefined, failed = false, containerAttempted = false, endpoint = "";

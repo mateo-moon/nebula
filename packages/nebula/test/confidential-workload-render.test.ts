@@ -48,3 +48,22 @@ test("native renderer binds the final Pod and keeps repeated measurements stable
   reserved.spec.containers[0].name = "nebula-bypass";
   assert.throws(() => renderConfidentialWorkload(reserved, [], options), /non-reserved/);
 });
+
+test("native policy binds a claimed guest to the published image digest", {
+  skip: !native, timeout: 600_000,
+}, () => {
+  const declaration = fixture();
+  delete declaration.spec.ownerPublicKeyPem;
+  declaration.spec.ownerClaimSha256 = "a".repeat(64);
+  const tag = "ghcr.io/confidential-containers/staged-images/kbs:owner-release";
+  declaration.spec.containers[0].image = tag;
+  declaration.spec.containers[0].imageKeyResource = ["default", "image", "app"];
+  const result = renderConfidentialWorkload(declaration, [], {
+    genpolicy: { executable: native, cacheDirectory: process.env.TRUSTEE_GENPOLICY_CACHE },
+    publishedImageDigests: { [tag]: kbs.slice(kbs.indexOf("@") + 1) },
+  });
+  assert.equal(result.pod.spec!.containers![0].image, kbs);
+  const gateway = result.pod.spec!.initContainers!.find(container => container.name === "nebula-owner")!;
+  assert.match(gateway.args!.join(" "), /aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
+  assert.match(result.identity.initDataSha256, /^[a-f0-9]{64}$/);
+});

@@ -7,6 +7,16 @@ import type { ConfidentialStorageResource, ConfidentialWorkloadResource, Workloa
 import { CONFIDENTIAL_API } from "./types";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 
+const taggedImage = (image: unknown): image is string => {
+  if (typeof image !== "string" || image.length > 384) return false;
+  const match = /^([a-zA-Z0-9][a-zA-Z0-9.:-]*)\/([a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*):([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$/.exec(image);
+  if (!match) return false;
+  const [, host, repository] = match;
+  return (host.includes(".") || host.includes(":") || host === "localhost") &&
+    !["index.docker.io", "registry-1.docker.io"].includes(host) &&
+    (host !== "docker.io" || repository.includes("/"));
+};
+
 export const namePattern = "^[a-z][a-z0-9-]{0,39}$";
 export const pathPattern = "^/[A-Za-z0-9_/-]+$";
 const name = (value: unknown) => typeof value === "string" && new RegExp(namePattern).test(value);
@@ -44,14 +54,16 @@ export function validateStorage(resource: ConfidentialStorageResource): void {
 }
 
 function validateContainer(container: WorkloadContainer): void {
-  fields(container, ["name", "image", "command", "args", "env", "uid", "gid", "mounts", "applicationResources", "ports", "resources"]);
-  if (!name(container.name) || container.name.startsWith("nebula-") || !isDigestImage(container.image) ||
+  fields(container, ["name", "image", "imageKeyResource", "command", "args", "env", "uid", "gid", "mounts", "applicationResources", "ports", "resources"]);
+  if (!name(container.name) || container.name.startsWith("nebula-") ||
+      !(isDigestImage(container.image) || (container.imageKeyResource && taggedImage(container.image))) ||
       !Array.isArray(container.command) || !container.command.length ||
       ![...container.command, ...(container.args ?? [])].every(value => typeof value === "string" && !value.includes("\0")) ||
       !container.command[0].startsWith("/") ||
       !integer(container.uid, 11000, 65534) || !integer(container.gid, 11000, 65534)) {
-    fail("containers need pinned images, explicit commands and non-reserved non-root uid/gid");
+    fail("containers need digest images or an owner-keyed publication tag, explicit commands and non-reserved non-root uid/gid");
   }
+  if (container.imageKeyResource) resourcePath(container.imageKeyResource);
   if (Object.entries(container.env ?? {}).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string")) {
     fail("environment must contain public literal strings");
   }
@@ -77,13 +89,19 @@ function validateContainer(container: WorkloadContainer): void {
 export function validateWorkload(resource: ConfidentialWorkloadResource, storages: readonly ConfidentialStorageResource[]): void {
   const spec = resource.spec;
   publicConfig("ConfidentialWorkload", spec);
-  fields(spec, ["profile", "ownerPublicKeyPem", "guest", "nodeSelector", "network", "trustee", "storageImage",
+  fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "guest", "nodeSelector", "network", "trustee", "storageImage",
     "containers", "storage", "resources", "registryMirrors", "runtime"]);
   if (resource.apiVersion !== CONFIDENTIAL_API || resource.kind !== "ConfidentialWorkload" ||
       !name(resource.metadata.name) || !name(resource.metadata.namespace) || !name(spec.profile)) fail("invalid workload resource");
-  if (!/^-----BEGIN PUBLIC KEY-----/.test(spec.ownerPublicKeyPem)) fail("owner must be a public key");
-  const owner = createPublicKey(spec.ownerPublicKeyPem);
-  if (owner.asymmetricKeyType !== "ec" || owner.asymmetricKeyDetails?.namedCurve !== "prime256v1") fail("owner key must be P-256");
+  if ((spec.ownerPublicKeyPem === undefined) === (spec.ownerClaimSha256 === undefined)) {
+    fail("supply either the owner public key or one-time claim hash");
+  }
+  if (spec.ownerPublicKeyPem !== undefined) {
+    if (!/^-----BEGIN PUBLIC KEY-----/.test(spec.ownerPublicKeyPem)) fail("owner must be a public key");
+    const owner = createPublicKey(spec.ownerPublicKeyPem);
+    if (owner.asymmetricKeyType !== "ec" || owner.asymmetricKeyDetails?.namedCurve !== "prime256v1") fail("owner key must be P-256");
+  }
+  if (spec.ownerClaimSha256 !== undefined && !/^[a-f0-9]{64}$/.test(spec.ownerClaimSha256)) fail("invalid owner claim hash");
   snpIdentity({ ...spec.guest, initDataSha256: "1".repeat(64) });
   validateNetwork(spec.network);
   fields(spec.trustee, ["chart", "repository", "version", "kbsImage", "tngImage", "gatewayImage"]);
@@ -118,10 +136,15 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   const volumeKeys = new Set(bindings.map(binding => storages.find(storage =>
     storage.metadata.name === binding.resource)!.spec).filter(storage => storage.type === "EncryptedBlock")
     .map(storage => resourcePath(storage.keyResource)));
+  const imageKeys = new Set(spec.containers.filter(container => container.imageKeyResource)
+    .map(container => resourcePath(container.imageKeyResource!)));
+  for (const imageKey of imageKeys) if (!spec.resources.some(path => resourcePath(path) === imageKey)) {
+    fail("image key must be included in local resource admission");
+  }
   for (const container of spec.containers) for (const resource of container.applicationResources ?? []) {
     const path = resourcePath(resource);
-    if (!spec.resources.some(declared => resourcePath(declared) === path) || volumeKeys.has(path)) {
-      fail("application resource must be declared and cannot be a volume key");
+    if (!spec.resources.some(declared => resourcePath(declared) === path) || volumeKeys.has(path) || imageKeys.has(path)) {
+      fail("application resource must be declared and cannot be a volume key or image key");
     }
   }
   for (const container of spec.containers) {

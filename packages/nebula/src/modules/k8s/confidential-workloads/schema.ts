@@ -11,6 +11,7 @@ const list = (items: Schema, maxItems = 64, minItems = 0): Schema => ({ type: "a
 const labels = { type: "object", maxProperties: 64, additionalProperties: str() };
 const name = str({ pattern: namePattern, maxLength: 40 });
 const image = str({ pattern: "^.+@sha256:[a-f0-9]{64}$" });
+const publishedImage = str({ pattern: "^[A-Za-z0-9][A-Za-z0-9.:-]*/[a-z0-9][a-z0-9/._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$" });
 const resource = list(str({ pattern: "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$", maxLength: 128 }), 3, 3);
 const runtime = obj({
   memoryMiB: int(2048, 65536), vcpus: int(1, 32),
@@ -36,25 +37,33 @@ export const storageSpecSchema: Schema = {
 };
 export const workloadSpecSchema = obj({
   profile: name, ownerPublicKeyPem: str({ maxLength: 2048 }),
+  ownerClaimSha256: str({ pattern: "^[a-f0-9]{64}$", maxLength: 64 }),
   guest: guestIdentitySchema, nodeSelector: labels,
   network: obj({ ipv4AddressPattern: str({ maxLength: 256 }), ipv6AddressPattern: str({ maxLength: 256 }) }),
   trustee: obj({ chart: str({ enum: [TRUSTEE_CHART] }), version: str({ enum: [TRUSTEE_CHART_VERSION] }),
     kbsImage: image, tngImage: image, gatewayImage: image },
     ["chart", "kbsImage", "tngImage", "gatewayImage"]),
   storageImage: image,
-  containers: list(obj({
-    name, image, command: list(str(), 64, 1), args: list(str(), 128), env: labels,
+  containers: list({ ...obj({
+    name, image: { oneOf: [image, publishedImage] }, imageKeyResource: resource,
+    command: list(str(), 64, 1), args: list(str(), 128), env: labels,
     uid: int(11000, 65534), gid: int(11000, 65534),
     mounts: list(obj({ storage: name, path: str({ pattern: pathPattern }) }), 8),
     applicationResources: list(resource, 64),
     ports: list(obj({ name: str({ maxLength: 15 }), port: int(1024, 65535) }), 16),
     resources: obj({ requests: labels, limits: labels }),
-  }, ["name", "image", "command", "uid", "gid"]), 8, 1),
+  }, ["name", "image", "command", "uid", "gid"]),
+    "x-kubernetes-validations": [{ rule: "self.image.matches('.*@sha256:[a-f0-9]{64}$') || has(self.imageKeyResource)",
+      message: "A publication tag requires an image key resource" }] }, 8, 1),
   storage: list(obj({ name, resource: name }), 8),
   resources: list(resource, 64, 1),
   registryMirrors: list(obj({ prefix: str(), location: str(), insecure: { type: "boolean" } }), 16),
   runtime,
-}, ["profile", "ownerPublicKeyPem", "guest", "nodeSelector", "network", "trustee", "storageImage", "containers", "resources"]);
+}, ["profile", "guest", "nodeSelector", "network", "trustee", "storageImage", "containers", "resources"]);
+(workloadSpecSchema as Schema)["x-kubernetes-validations"] = [
+  { rule: "has(self.ownerPublicKeyPem) != has(self.ownerClaimSha256)",
+    message: "Choose a measured owner public key or a one-use claim hash" },
+];
 
 export function confidentialCrds() {
   return [

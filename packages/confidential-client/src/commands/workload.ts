@@ -6,6 +6,7 @@ export interface WorkloadOptions extends Omit<PrepareOptions, "identity" | "inst
   name: string;
   genpolicy?: string;
   cache?: string;
+  claimToken?: string;
 }
 
 export function prepareWorkloadCommand(manifest: string, options: WorkloadOptions): void {
@@ -15,6 +16,7 @@ export function prepareWorkloadCommand(manifest: string, options: WorkloadOption
     target: { host, port: options.port },
     localPort: options.localPort, verifierPort: options.verifierPort, vcekFile: options.vcek,
     genpolicy: { executable: options.genpolicy, cacheDirectory: options.cache },
+    claimTokenFile: options.claimToken,
   });
   console.log("Prepared independent workload approval. Enroll the selected instance before provisioning.");
 }

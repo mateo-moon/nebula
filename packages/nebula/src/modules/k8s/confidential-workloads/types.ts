@@ -34,7 +34,11 @@ export interface ConfidentialStorageResource {
 
 export interface WorkloadContainer {
   name: string;
+  /** An immutable digest, or a reserved release tag that the operator resolves
+   * only after the owner publishes its encrypted OCI manifest. */
   image: string;
+  /** CoCo key ID for an owner-published encrypted image. Required with a tag. */
+  imageKeyResource?: TrusteeResourcePath;
   command: readonly string[];
   args?: readonly string[];
   env?: Readonly<Record<string, string>>;
@@ -55,7 +59,12 @@ export interface ConfidentialWorkloadSpec {
   /** Security profile/audience shared by identical deployments. Resource names,
    * Pod UIDs and claim names are routing metadata, never instance credentials. */
   profile: string;
-  ownerPublicKeyPem: string;
+  /** Legacy pre-enrolled public key. New stacks use ownerClaimSha256 instead. */
+  ownerPublicKeyPem?: string;
+  /** SHA-256 of the administrator-issued, one-use claim token. The first
+   * attested claimant installs their own P-256 key. A stolen token can deny
+   * enrollment but cannot access keys that the owner has not provisioned. */
+  ownerClaimSha256?: string;
   guest: Omit<TrusteeSnpIdentity, "initDataSha256">;
   nodeSelector: Readonly<Record<string, string>>;
   network: TrusteeNetworkConfig;
@@ -84,4 +93,7 @@ export interface ConfidentialWorkloadResource {
 export interface WorkloadRenderOptions {
   /** Operator installation/owner tool setting, never executable code from a CR. */
   genpolicy?: TrusteeConfig["genpolicy"];
+  /** Owner-side digest from the verified encrypted publication. The operator
+   * resolves the same tag independently before constructing its Pod. */
+  publishedImageDigests?: Readonly<Record<string, string>>;
 }

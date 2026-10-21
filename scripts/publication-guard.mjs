@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
-  "packages/trustee-client",
+  "packages/confidential-client",
   "packages/confidential-operator",
   "packages/confidential-runtime",
   "packages/confidential-storage",

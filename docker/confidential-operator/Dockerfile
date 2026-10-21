@@ -39,6 +39,7 @@ RUN npm install -g pnpm@11.9.0 \
 
 FROM ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446
 USER 0
+RUN apk add --no-cache skopeo
 COPY --from=build /workspace/packages/confidential-operator/dist /app/dist
 COPY --from=manager /manager /manager
 WORKDIR /app

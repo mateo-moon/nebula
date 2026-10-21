@@ -75,7 +75,7 @@ func (r CommandRenderer) run(ctx context.Context, input any, output any) error {
 		} `json:"error"`
 	}
 	if json.Unmarshal(result.Bytes(), &diagnostic) == nil && diagnostic.Error != nil {
-		if diagnostic.Error.Reason != "InvalidDeclaration" || len(diagnostic.Error.Message) > 256 ||
+		if (diagnostic.Error.Reason != "InvalidDeclaration" && diagnostic.Error.Reason != "ImageNotPublished") || len(diagnostic.Error.Message) > 256 ||
 			!strings.HasPrefix(diagnostic.Error.Message, "Confidential workload: ") ||
 			strings.ContainsAny(diagnostic.Error.Message, "\r\n\x00") {
 			return errors.New("invalid renderer diagnostic")

@@ -65,6 +65,11 @@
                     "type": "string",
                     "maxLength": 2048
                   },
+                  "ownerClaimSha256": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
                   "guest": {
                     "type": "object",
                     "properties": {
@@ -197,9 +202,28 @@
                           "pattern": "^[a-z][a-z0-9-]{0,39}$"
                         },
                         "image": {
-                          "type": "string",
-                          "maxLength": 4096,
-                          "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                          "oneOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 4096,
+                              "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 4096,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9.:-]*/[a-z0-9][a-z0-9/._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+                            }
+                          ]
+                        },
+                        "imageKeyResource": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3
                         },
                         "command": {
                           "type": "array",
@@ -331,6 +355,12 @@
                         "command",
                         "uid",
                         "gid"
+                      ],
+                      "x-kubernetes-validations": [
+                        {
+                          "rule": "self.image.matches('.*@sha256:[a-f0-9]{64}$') || has(self.imageKeyResource)",
+                          "message": "A publication tag requires an image key resource"
+                        }
                       ]
                     },
                     "maxItems": 8,
@@ -436,7 +466,6 @@
                 },
                 "required": [
                   "profile",
-                  "ownerPublicKeyPem",
                   "guest",
                   "nodeSelector",
                   "network",
@@ -444,6 +473,12 @@
                   "storageImage",
                   "containers",
                   "resources"
+                ],
+                "x-kubernetes-validations": [
+                  {
+                    "rule": "has(self.ownerPublicKeyPem) != has(self.ownerClaimSha256)",
+                    "message": "Choose a measured owner public key or a one-use claim hash"
+                  }
                 ]
               },
               "status": {

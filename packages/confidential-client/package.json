@@ -1,11 +1,11 @@
 {
-  "name": "@nebula/trustee-client",
+  "name": "@nebula/confidential-client",
   "version": "0.1.0",
-  "description": "Owner client for Nebula's attested, self-sufficient Trustee deployment",
+  "description": "Owner CLI for attested Nebula workloads, Trustee and encrypted images",
   "license": "Apache-2.0",
   "type": "module",
   "engines": { "node": ">=20.19" },
-  "bin": { "nebula-trustee": "./bin/nebula-trustee" },
+  "bin": { "confidential-client": "./bin/confidential-client" },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

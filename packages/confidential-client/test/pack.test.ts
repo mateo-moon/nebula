@@ -32,7 +32,7 @@ test("packed TypeScript API and CLI work with declared dependencies outside the 
   const version = (name: string): string => JSON.parse(readFileSync(require.resolve(`${name}/package.json`), "utf8")).version;
   writeFileSync(join(consumer, "package.json"), JSON.stringify({
     private: true, type: "module",
-    dependencies: { "@nebula/trustee-client": `file:${join(directory, packed.filename)}`, tsx: version("tsx") },
+    dependencies: { "@nebula/confidential-client": `file:${join(directory, packed.filename)}`, tsx: version("tsx") },
     devDependencies: { typescript: version("typescript"), "@types/node": version("@types/node") },
   }));
   // Select the matching Nebula archive instead of its repository-relative file dependency.
@@ -43,8 +43,8 @@ test("packed TypeScript API and CLI work with declared dependencies outside the 
     target: "ES2022", module: "ESNext", moduleResolution: "Bundler", strict: true, skipLibCheck: true, noEmit: true,
   }, include: ["*.ts"] }));
   writeFileSync(join(consumer, "consumer.ts"), `
-import { TrusteeClient, prepareClient, trusteePolicies, type TrusteeClientOptions, type TrusteeResourcePath } from "@nebula/trustee-client";
-import * as api from "@nebula/trustee-client";
+import { TrusteeClient, prepareClient, trusteePolicies, type TrusteeClientOptions, type TrusteeResourcePath } from "@nebula/confidential-client";
+import * as api from "@nebula/confidential-client";
 const connect: (options: TrusteeClientOptions) => Promise<TrusteeClient> = TrusteeClient.connect;
 const path: TrusteeResourcePath = ["owner", "key", "release"];
 // @ts-expect-error The native resource path must have three components.
@@ -56,15 +56,15 @@ console.log(typeof connect, typeof trusteePolicies, typeof prepareClient);
 `);
   run(join(consumer, "node_modules/.bin/tsc"), ["--noEmit"], consumer);
   assert.match(run(process.execPath, ["--import", "tsx", "consumer.ts"], consumer), /function function function/);
-  const cli = join(consumer, "node_modules/.bin/nebula-trustee");
+  const cli = join(consumer, "node_modules/.bin/confidential-client");
   const help = run(cli, ["--help"], consumer);
   assert.match(help, /put-resource/);
   assert.doesNotMatch(help, /build-tng/);
 
   // Also launch through an npm-style symlink from a directory with no node_modules.
   const external = join(directory, "external"); mkdirSync(external);
-  const linkedCli = join(external, "nebula-trustee");
-  symlinkSync(join(consumer, "node_modules/@nebula/trustee-client/bin/nebula-trustee"), linkedCli);
+  const linkedCli = join(external, "confidential-client");
+  symlinkSync(join(consumer, "node_modules/@nebula/confidential-client/bin/confidential-client"), linkedCli);
   assert.match(run(linkedCli, ["--help"], external), /put-resource/);
   const identity = { measurement: "a".repeat(96), initDataSha256: "b".repeat(64), chipId: "c".repeat(128),
     minimumReportedTcb: { bootloader: 1, tee: 0, snp: 1, microcode: 1 } };

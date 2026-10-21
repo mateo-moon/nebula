@@ -4,4 +4,5 @@ export * from "./types";
 export { confidentialCrds } from "./schema";
 export { validateWorkload, validateStorage, ConfidentialValidationError } from "./validation";
 export { renderConfidentialWorkload } from "./render";
+export { ConfidentialPublicationPending, encryptedManifestDigest, resolvePublishedImage } from "./published-image";
 export { ConfidentialStorageDevices, type ConfidentialStorageDevicesConfig } from "./devices";

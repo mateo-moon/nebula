@@ -1,7 +1,7 @@
 import { enrollInstance } from "../enrollment";
 import { readOwnerKey, type ConnectionOptions } from "./shared";
 
-export async function enroll(options: ConnectionOptions): Promise<void> {
+export async function enroll(options: ConnectionOptions & { claimToken?: string }): Promise<void> {
   const key = readOwnerKey(options.ownerKey);
   const controller = new AbortController();
   const interrupt = () => { process.exitCode = 130; controller.abort(); };
@@ -9,7 +9,7 @@ export async function enroll(options: ConnectionOptions): Promise<void> {
   process.once("SIGTERM", interrupt);
   try {
     const instance = await enrollInstance({ stateDirectory: options.state, tngBinary: options.tng,
-      ownerPrivateKey: key, audience: options.audience, signal: controller.signal });
+      ownerPrivateKey: key, audience: options.audience, claimTokenFile: options.claimToken, signal: controller.signal });
     console.log(`Enrolled confidential instance ${instance.publicKeySha256}.`);
   } finally {
     key.fill(0);

@@ -6,11 +6,14 @@ import { renderConfidentialWorkload, type ConfidentialStorageResource, type Conf
 import { resourcePath, trusteePolicies, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
 import { prepareClient, readPreparedClient, type PrepareClientOptions } from "./prepare";
 import { readEnrollment } from "./enrollment";
+import { claimSha256, readClaimToken } from "./claim";
 
 export interface PrepareWorkloadOptions extends Omit<PrepareClientOptions, "identity" | "instanceBound"> {
   readonly manifest: string;
   readonly name: string;
   readonly genpolicy?: WorkloadRenderOptions["genpolicy"];
+  readonly claimTokenFile?: string;
+  readonly publishedImageDigests?: Readonly<Record<string, string>>;
 }
 
 /** Compile owner-reviewed declarations independently of the cluster. The
@@ -24,11 +27,24 @@ export function prepareWorkload(options: PrepareWorkloadOptions): string {
   const candidates = values.filter(value => value?.kind === "ConfidentialWorkload" && value.metadata?.name === options.name);
   if (candidates.length !== 1) throw new Error("Select exactly one ConfidentialWorkload from the reviewed declaration");
   const workload = candidates[0] as ConfidentialWorkloadResource;
+  const expectedClaim = workload.spec.ownerClaimSha256;
+  if (expectedClaim !== undefined) {
+    if (!options.claimTokenFile) throw new Error("The private claim token is required for this workload");
+    const token = readClaimToken(options.claimTokenFile);
+    const actual = claimSha256(token);
+    token.fill(0);
+    if (actual !== expectedClaim) {
+      throw new Error("The private claim token does not match the measured workload declaration");
+    }
+  } else if (options.claimTokenFile) throw new Error("This workload does not use first-connection claiming");
   const storages = values.filter(value => value?.kind === "ConfidentialStorage") as ConfidentialStorageResource[];
-  const plan = renderConfidentialWorkload(workload, storages, { genpolicy: options.genpolicy });
+  const plan = renderConfidentialWorkload(workload, storages, {
+    genpolicy: options.genpolicy, publishedImageDigests: options.publishedImageDigests,
+  });
   const directory = prepareClient({ ...options, identity: plan.identity, instanceBound: true });
   writeFileSync(join(directory, "workload.json"), JSON.stringify({
     version: 1, audience: plan.audience, resources: workload.spec.resources,
+    ...(expectedClaim ? { ownerClaimSha256: expectedClaim } : {}),
   }, null, 2) + "\n", { mode: 0o600, flag: "wx" });
   return directory;
 }
@@ -42,9 +58,10 @@ export function preparedWorkloadPolicies(directory: string, audience: string) {
   const path = join(prepared.directory, "workload.json"), stat = lstatSync(path);
   if (!stat.isFile() || (stat.mode & 0o077) !== 0 || stat.size > 65536) throw new Error("Invalid private workload approval");
   const approval = JSON.parse(readFileSync(path, "utf8")) as {
-    version: number; audience: string; resources: TrusteeResourcePath[];
+    version: number; audience: string; resources: TrusteeResourcePath[]; ownerClaimSha256?: string;
   };
-  if (Object.keys(approval).sort().join() !== "audience,resources,version" ||
+  if (Object.keys(approval).sort().join() !==
+      (approval.ownerClaimSha256 ? "audience,ownerClaimSha256,resources,version" : "audience,resources,version") ||
       approval.version !== 1 || approval.audience !== audience || !Array.isArray(approval.resources)) {
     throw new Error("Workload approval does not match the enrolled audience");
   }

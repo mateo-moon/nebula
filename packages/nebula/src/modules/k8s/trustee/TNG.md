@@ -7,7 +7,7 @@ there is no separate prepare/bind workflow or external bootstrap Trustee.
 
 TNG runs as a sidecar in the same SNP PodVM as unmodified KBS with built-in
 AS/RVPS. It binds CoCo attestation-agent evidence to TLS. The owner uses
-[`@nebula/trustee-client`](../../../../../trustee-client/README.md), passing the
+[`@nebula/confidential-client`](../../../../../confidential-client/README.md), passing the
 construct's generated `identity` directly to `prepareClient`.
 
 The deployed TNG image supports `coco_asr` without modification. The native

@@ -1,7 +1,7 @@
 # Native TNG client build
 
 Maintainer and CI tooling for the native runtime consumed by
-[`@nebula/trustee-client`](../../packages/trustee-client/README.md).
+[`@nebula/confidential-client`](../../packages/confidential-client/README.md).
 This directory is outside both Node package archives. The Node client accepts
 an already-built TNG executable through `tngBinary` / `--tng`.
 

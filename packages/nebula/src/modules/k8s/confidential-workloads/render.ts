@@ -11,6 +11,7 @@ import { snpIdentity, trusteePolicies } from "../trustee/policies";
 import type { TrusteeConfig } from "../trustee/types";
 import { validateWorkload } from "./validation";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
+import { resolvePublishedImage } from "./published-image";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
@@ -33,7 +34,8 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const config: TrusteeConfig = {
     ...spec.trustee, chart: TRUSTEE_CHART, repository: undefined, version: TRUSTEE_CHART_VERSION,
     name: spec.profile, namespace: metadata.namespace,
-    ownerPublicKeyPem: spec.ownerPublicKeyPem, guest: spec.guest, network: spec.network,
+    ownerPublicKeyPem: spec.ownerPublicKeyPem, ownerClaimSha256: spec.ownerClaimSha256,
+    guest: spec.guest, network: spec.network,
     nodeSelector: spec.nodeSelector, clients: [{ namespace: metadata.namespace, podLabels: { app: spec.profile } }],
     genpolicy: options.genpolicy, k8sDistribution: runtime.k8sDistribution, ociVersion: runtime.ociVersion,
   };
@@ -50,6 +52,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const kbs: any = structuredClone(kbsSource);
   kbs.securityContext = security(10001);
   kbs.restartPolicy = "Always";
+  if (spec.ownerClaimSha256) kbs.volumeMounts.push(mount("instance", "/run/instance"));
   // Kubelet TCP probes target the Pod IP; KBS is intentionally guest-loopback.
   // Start ordering requires a guest-local probe and would need ExecProcess,
   // which is denied. The later gateway can start independently; requests fail
@@ -77,7 +80,8 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     spec: storages.find(storage => storage.metadata.namespace === metadata.namespace && storage.metadata.name === binding.resource)!.spec }));
   const encrypted = bindings.filter(binding => binding.spec.type === "EncryptedBlock");
   gateway.args.push(JSON.stringify({ storageNames: encrypted.map(binding => binding.name),
-    resources: spec.resources.map(path => path.join("/")) }));
+    resources: spec.resources.map(path => path.join("/")),
+    ...(spec.ownerClaimSha256 ? { ownerClaimSha256: spec.ownerClaimSha256, audience: spec.profile } : {}) }));
   gateway.volumeMounts.push(...encrypted.map(binding =>
     mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`, true)));
   const resourceClients = spec.containers.filter(container => container.applicationResources?.length);
@@ -124,7 +128,11 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     const launch = { version: 1, uid: container.uid, gid: container.gid,
       mounts: blockMounts.map(m => ({ socket: `/run/nebula-mounts/${m.storage}/mount.sock`, path: m.path })) };
     return {
-      name: container.name, image: container.image, imagePullPolicy: "Always",
+      name: container.name,
+      image: container.imageKeyResource && !container.image.includes("@sha256:")
+        ? resolvePublishedImage(container.image, container.imageKeyResource,
+          options.publishedImageDigests?.[container.image]) : container.image,
+      imagePullPolicy: "Always",
       command: ["/run/nebula-runtime/nebula-confidential-storage"],
       args: ["launch", JSON.stringify(launch), "--", ...container.command, ...(container.args ?? [])],
       env: Object.entries(container.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value })),

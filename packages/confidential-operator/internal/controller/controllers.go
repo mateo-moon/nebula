@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -161,7 +162,12 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if errors.As(err, &reasoned) {
 			state.Reason = reasoned.Reason()
 		}
-		state.Message = err.Error()
+		if state.Reason == "ImageNotPublished" {
+			state.Phase = "AwaitingPublication"
+			state.Message = "Waiting for the encrypted image tag to appear in the registry"
+		} else {
+			state.Message = err.Error()
+		}
 	}
 	state.ObservedGeneration = w.Generation
 	if len(state.Message) > 512 {
@@ -185,6 +191,9 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Every status message is fixed or comes from a typed public declaration
 		// diagnostic. Native stderr and raw API response bodies stay private.
 		log.FromContext(ctx).Info("workload reconciliation failed", "reason", state.Reason, "message", state.Message)
+	}
+	if state.Phase == "AwaitingPublication" {
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 	return ctrl.Result{}, err
 }

@@ -5,6 +5,8 @@ import { createServer } from "node:https";
 import { request } from "node:http";
 import { join } from "node:path";
 import { bootstrapStatus, storageDiagnostics, validResource } from "./bootstrap.js";
+import { claimOwner, internalOwnerToken, loadInternalOwnerKey, readClaimedOwner, verifyOwnerJwt,
+  type ClaimConfig } from "./claim.js";
 
 const MAX_BODY = 2 * 1024 * 1024;
 
@@ -24,6 +26,7 @@ export interface GatewayOptions {
   readonly upstreamPort?: number;
   readonly storageNames?: readonly string[];
   readonly resources?: readonly string[];
+  readonly claim?: ClaimConfig;
 }
 
 export function gateway(options: GatewayOptions) {
@@ -35,14 +38,24 @@ export function gateway(options: GatewayOptions) {
   }
   const cert = new X509Certificate(options.cert);
   const instance = createHash("sha256").update(cert.publicKey.export({ type: "spki", format: "der" })).digest("hex");
+  const claim = options.claim;
+  if (claim && (!/^[a-f0-9]{64}$/.test(claim.sha256) ||
+      !/^[a-z][a-z0-9-]{0,39}$/.test(claim.audience))) throw new Error("Invalid measured owner claim");
+  const ownerAuthorization = (header: string | undefined): string | undefined => {
+    if (!/^Bearer [A-Za-z0-9_.-]+$/.test(header ?? "")) return undefined;
+    if (!claim) return header;
+    const owner = readClaimedOwner(claim.directory);
+    if (!owner || !verifyOwnerJwt(header, owner, claim.audience)) return undefined;
+    return `Bearer ${internalOwnerToken(claim.internalOwnerKey, claim.audience)}`;
+  };
   let attestationConfigured = false, resourcesConfigured = false;
   const server = createServer({ key: options.key, cert: options.cert, minVersion: "TLSv1.3" }, (incoming, outgoing) => {
     const path = incoming.url ?? "", method = incoming.method ?? "";
     outgoing.setHeader("Cache-Control", "no-store");
     if (method === "GET" && path === "/nebula/v1/bootstrap") {
       incoming.resume();
-      const authorization = incoming.headers.authorization ?? "";
-      if (!/^Bearer [A-Za-z0-9_.-]+$/.test(authorization)) { outgoing.writeHead(403).end(); return; }
+      const authorization = ownerAuthorization(incoming.headers.authorization);
+      if (!authorization) { outgoing.writeHead(403).end(); return; }
       bootstrapStatus(resources, authorization, options.upstreamPort ?? 8080,
         attestationConfigured && resourcesConfigured, 8006, () => storageDiagnostics(storageNames)).then(result => {
         outgoing.writeHead(result.status, { "Content-Type": "application/json" });
@@ -76,7 +89,33 @@ export function gateway(options: GatewayOptions) {
       incoming.resume();
       return;
     }
-    if (!ownerRoute(method, path) || !/^Bearer [A-Za-z0-9_.-]+$/.test(incoming.headers.authorization ?? "")) {
+    if (method === "POST" && path === "/nebula/v1/claim" && claim) {
+      if (readClaimedOwner(claim.directory)) { outgoing.writeHead(409).end(); incoming.resume(); return; }
+      const chunks: Buffer[] = [];
+      let size = 0;
+      incoming.on("data", (bytes: Buffer) => {
+        size += bytes.length;
+        if (size > 4096) { chunks.forEach(chunk => chunk.fill(0)); outgoing.writeHead(413).end(); incoming.destroy(); }
+        else chunks.push(bytes);
+      });
+      incoming.on("end", () => {
+        if (size > 4096) return;
+        const body = Buffer.concat(chunks);
+        chunks.forEach(chunk => chunk.fill(0));
+        try {
+          const value = JSON.parse(body.toString("utf8"));
+          if (Object.keys(value).sort().join() !== "ownerPublicKeyPem,token") throw new Error("Invalid claim");
+          const fingerprint = claimOwner(claim, value.token, value.ownerPublicKeyPem, incoming.headers.authorization);
+          outgoing.writeHead(200, { "Content-Type": "application/json" });
+          outgoing.end(JSON.stringify({ version: 1, ownerPublicKeySha256: fingerprint }));
+        } catch { outgoing.writeHead(readClaimedOwner(claim.directory) ? 409 : 403).end(); }
+        body.fill(0);
+      });
+      incoming.once("error", () => chunks.forEach(chunk => chunk.fill(0)));
+      return;
+    }
+    const authorization = ownerAuthorization(incoming.headers.authorization);
+    if (!ownerRoute(method, path) || !authorization) {
       outgoing.writeHead(403).end();
       incoming.resume();
       return;
@@ -100,7 +139,7 @@ export function gateway(options: GatewayOptions) {
       for (const chunk of chunks) chunk.fill(0);
       const upstream = request({ host: "127.0.0.1", port: options.upstreamPort ?? 8080,
         method, path, agent: false, headers: {
-          Authorization: incoming.headers.authorization!,
+          Authorization: authorization,
           "Content-Type": method === "POST" && path.endsWith("-policy") ? "application/json" : "application/octet-stream",
           "Content-Length": body.length,
         },
@@ -184,7 +223,11 @@ export function loadOrCreateIdentity(directory: string): { key: Buffer; cert: Bu
   return credential;
 }
 
-export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = []): void {
+export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = [],
+  ownerClaimSha256?: string, audience?: string): void {
   const credential = loadOrCreateIdentity(directory);
-  gateway({ ...credential, storageNames, resources }).listen(8444, "127.0.0.1");
+  if ((ownerClaimSha256 === undefined) !== (audience === undefined)) throw new Error("Incomplete owner claim configuration");
+  const claim = ownerClaimSha256 && audience ? { sha256: ownerClaimSha256, audience, directory,
+    internalOwnerKey: loadInternalOwnerKey(directory) } : undefined;
+  gateway({ ...credential, storageNames, resources, claim }).listen(8444, "127.0.0.1");
 }
