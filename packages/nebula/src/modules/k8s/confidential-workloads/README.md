@@ -96,6 +96,11 @@ through the enrolled, attested connection.
 `bootstrap-status` requires native owner authorization and reports guest-local
 retrieval errors, disk initialization, LUKS UUID and marker hash without
 returning successful resource contents.
+If a shell-less application fails before it can report status, its trusted
+static launcher returns a non-secret stage code: 10 for the guard marker, 11
+for owner readiness, 12 for an image mount target, 13 for the privilege drop,
+or 14 for the mount lease or application process. Application standard streams
+remain disconnected from the host.
 An unlock refusal stays visible until the guest is retired; it cannot trigger
 reformatting or an automatic retry with another key.
 
@@ -127,3 +132,8 @@ approval. It does not contact or enroll a replacement.
 The [dev SNP qualification](../../../../test/evidence/confidential-storage-nebula-snp-dev-2026-10-21.json)
 records encrypted application boot, instance substitution rejection and
 copied-disk refusal with the Nebula-owned storage runtime and these CRDs.
+The [audit requalification](../../../../test/evidence/confidential-workload-audit-snp-dev-2026-10-21.json)
+records a fresh disposable guest using the hardened guard and shell-less
+launcher. Its owner-key proof showed that direct CDH and the application's
+resource broker both denied the storage key. The retained qualification guests
+and disks were left untouched.

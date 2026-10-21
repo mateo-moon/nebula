@@ -19,6 +19,24 @@ const MAGIC: &[u8; 4] = b"CM01";
 const SYS_ADMIN: u64 = 1 << 21;
 pub(crate) static SIGNAL: AtomicI32 = AtomicI32::new(0);
 
+/// Kubernetes receives only the stage's numeric exit code when guest
+/// diagnostic retrieval is denied by the measured policy. No resource bytes or
+/// application output are returned to the host.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum LauncherStage {
+    Guard = 10,
+    Owner = 11,
+    Image = 12,
+    Credentials = 13,
+    Client = 14,
+}
+impl std::fmt::Display for LauncherStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "launcher stage {}", *self as i32)
+    }
+}
+impl std::error::Error for LauncherStage {}
+
 fn check(result: libc::c_long) -> std::io::Result<libc::c_long> {
     if result == -1 {
         Err(std::io::Error::last_os_error())
@@ -277,10 +295,9 @@ pub(crate) fn launch_generic(
     config: &crate::generic_config::Launcher,
     args: &[String],
 ) -> Result<()> {
-    // Redirect inside the trusted static binary. A wrapper shell supplied by
-    // the application image would execute as guest root before this launcher
-    // can remove capabilities.
-    private_stdio()?;
+    // Only the trusted static launcher can report startup failures. The
+    // application child gets no host-visible standard streams; a wrapper from
+    // the application image must never run with the launcher's credentials.
     // A malicious kubelet may request a measured application before the
     // regular guard init container has completed. The trusted static launcher
     // must refuse to exec application code until the guest kernel boundary is
@@ -288,15 +305,21 @@ pub(crate) fn launch_generic(
     wait_marker(
         "/run/nebula-guard/installed",
         0,
+        None,
+        0o600,
         b"nebula-guest-guard-v1\n",
         Duration::from_secs(60),
-    )?;
+    )
+    .context(LauncherStage::Guard)?;
     wait_marker(
         "/run/nebula-owner-ready/ready",
         10001,
+        Some(10001),
+        0o640,
         b"nebula-owner-ready-v1\n",
         Duration::from_secs(1800),
-    )?;
+    )
+    .context(LauncherStage::Owner)?;
     ensure!(
         !args.is_empty() && args[0].starts_with('/'),
         "explicit client program required"
@@ -306,14 +329,17 @@ pub(crate) fn launch_generic(
     for mount in &config.mounts {
         let target = std::path::Path::new(&mount.path);
         ensure!(
-            fs::canonicalize(target)? == target && fs::symlink_metadata(target)?.is_dir(),
+            fs::canonicalize(target).context(LauncherStage::Image)? == target
+                && fs::symlink_metadata(target)
+                    .context(LauncherStage::Image)?
+                    .is_dir(),
             "mount target must be an existing real directory in the image"
         );
     }
     signals()?;
     // The measured Pod's fsGroup permits shared Memory volumes. Drop group 0,
     // and retain only this explicit group in the capability-free child.
-    startup_credentials(config.uid, config.gid, &[10001])?;
+    startup_credentials(config.uid, config.gid, &[10001]).context(LauncherStage::Credentials)?;
     let mounts: Vec<_> = config
         .mounts
         .iter()
@@ -326,24 +352,17 @@ pub(crate) fn launch_generic(
         &mounts,
         args,
     )
+    .context(LauncherStage::Client)
 }
 
-fn private_stdio() -> Result<()> {
-    let devnull = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open("/dev/null")?;
-    let fd = devnull.as_raw_fd();
-    for target in [0, 1, 2] {
-        check(unsafe { libc::dup2(fd, target) } as _)?;
-    }
-    if fd <= 2 {
-        mem::forget(devnull);
-    }
-    Ok(())
-}
-
-fn wait_marker(path: &str, uid: u32, contents: &[u8], timeout: Duration) -> Result<()> {
+fn wait_marker(
+    path: &str,
+    uid: u32,
+    gid: Option<u32>,
+    mode: u32,
+    contents: &[u8],
+    timeout: Duration,
+) -> Result<()> {
     let start = Instant::now();
     loop {
         match fs::symlink_metadata(path) {
@@ -351,7 +370,8 @@ fn wait_marker(path: &str, uid: u32, contents: &[u8], timeout: Duration) -> Resu
                 ensure!(
                     info.is_file()
                         && info.uid() == uid
-                        && info.mode() & 0o7777 == 0o600
+                        && gid.is_none_or(|expected| info.gid() == expected)
+                        && info.mode() & 0o7777 == mode
                         && info.len() == contents.len() as u64
                         && fs::read(path)? == contents,
                     "invalid guest readiness marker"
@@ -435,7 +455,11 @@ fn supervise(
         });
     }
     let mut command = Command::new(&args[0]);
-    command.args(&args[1..]).stdin(Stdio::null());
+    command
+        .args(&args[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     unsafe {
         command.pre_exec(|| {
             set_caps(0)?;
@@ -540,18 +564,23 @@ mod tests {
         let _ = fs::remove_file(&path);
         let contents = b"nebula-owner-ready-v1\n";
         let uid = unsafe { libc::geteuid() };
+        let gid = unsafe { libc::getegid() };
         assert!(wait_marker(
             path.to_str().unwrap(),
             uid,
+            Some(gid),
+            0o640,
             contents,
             Duration::from_millis(1)
         )
         .is_err());
         fs::write(&path, contents).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
         assert!(wait_marker(
             path.to_str().unwrap(),
             uid,
+            Some(gid),
+            0o640,
             contents,
             Duration::from_millis(1)
         )
@@ -560,6 +589,8 @@ mod tests {
         assert!(wait_marker(
             path.to_str().unwrap(),
             uid,
+            Some(gid),
+            0o640,
             contents,
             Duration::from_millis(1)
         )

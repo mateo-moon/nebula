@@ -2,7 +2,7 @@ import { request } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, fsyncSync, openSync, renameSync, statfsSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fsyncSync, openSync, renameSync, statfsSync, unlinkSync, writeSync } from "node:fs";
 
 const resourceName = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/;
 
@@ -78,6 +78,10 @@ export function publishOwnerReady(directory = "/run/nebula-owner-ready"): void {
   const file = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try {
     writeSync(file, "nebula-owner-ready-v1\n");
+    // The static launcher starts as UID 0 without DAC_OVERRIDE, but belongs to
+    // the measured Pod's group 10001. Its application child gets read-only
+    // access to this volume and cannot alter the marker.
+    fchmodSync(file, 0o640);
     fsyncSync(file);
     renameSync(temporary, `${directory}/ready`);
   } finally { closeSync(file); try { unlinkSync(temporary); } catch { /* Renamed. */ } }

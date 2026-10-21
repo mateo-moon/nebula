@@ -20,6 +20,9 @@ impl std::error::Error for Exit {}
 
 /// The process exit code: typed lifecycle/device failure, otherwise generic 1.
 pub fn exit_code(error: &anyhow::Error) -> i32 {
+    if let Some(stage) = error.downcast_ref::<crate::mount_handoff::LauncherStage>() {
+        return *stage as i32;
+    }
     error.downcast_ref::<Exit>().map_or_else(
         || {
             if error

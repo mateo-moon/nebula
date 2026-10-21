@@ -13,6 +13,6 @@ test("measured owner gate publishes a private atomic guest-memory marker", { ski
     const marker = `${directory}/ready`;
     assert.equal(readFileSync(marker, "utf8"), "nebula-owner-ready-v1\n");
     assert.equal(statSync(marker).uid, 10001);
-    assert.equal(statSync(marker).mode & 0o7777, 0o600);
+    assert.equal(statSync(marker).mode & 0o7777, 0o640);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
