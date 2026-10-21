@@ -43,7 +43,10 @@ export class ConfidentialWorkload extends BaseConstruct<ConfidentialWorkloadConf
     this.declaration = { apiVersion: CONFIDENTIAL_API, kind: "ConfidentialWorkload",
       metadata: { name: config.name, namespace: config.namespace }, spec: config.spec };
     validateWorkload(this.declaration, config.storages ?? []);
-    this.resource = new ApiObject(this, "resource", { ...this.declaration });
+    this.resource = new ApiObject(this, "resource", { ...this.declaration,
+      metadata: { ...this.declaration.metadata, annotations: {
+        "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",
+      } } });
   }
 }
 
@@ -77,6 +80,7 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
           { apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch", "create"] },
           { apiGroups: [""], resources: ["services"], verbs: ["get", "list", "watch", "create", "patch"] },
           { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "list", "watch"] },
+          { apiGroups: [""], resources: ["events"], verbs: ["create", "patch"] },
         ] });
       new ApiObject(this, `binding-${target}`, { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding", metadata: role,
         roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name },

@@ -11,13 +11,16 @@ importers:
       nebula-cdk8s:
         specifier: file:../nebula
         version: file:../nebula
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
     devDependencies:
       '@types/node':
         specifier: 22.19.8
         version: 22.19.8
+      esbuild:
+        specifier: 0.27.7
+        version: 0.27.7
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3

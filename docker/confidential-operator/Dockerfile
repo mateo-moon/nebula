@@ -17,11 +17,23 @@ WORKDIR /workspace/packages
 COPY packages/nebula ./nebula
 COPY packages/confidential-operator ./confidential-operator
 RUN npm install -g pnpm@11.9.0 \
-    && cd confidential-operator && pnpm install --frozen-lockfile && pnpm typecheck
+    && cd confidential-operator && pnpm install --frozen-lockfile && pnpm typecheck \
+    && pnpm exec esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 \
+      --banner:js='import { createRequire as __bundleCreateRequire } from "node:module"; import { fileURLToPath as __bundleFileURLToPath } from "node:url"; var require = __bundleCreateRequire(import.meta.url); var __dirname = __bundleFileURLToPath(new URL(".", import.meta.url));' \
+      --outfile=dist/main.mjs \
+    && set -- node_modules/.pnpm/cdk8s@*/node_modules/cdk8s/lib/_loadurl.mjs \
+    && test "$#" -eq 1 && test -f "$1" \
+    && pnpm exec esbuild "$1" --bundle --platform=node --format=esm --target=node24 \
+      --banner:js='import { createRequire as __bundleCreateRequire } from "node:module"; var require = __bundleCreateRequire(import.meta.url);' \
+      --outfile=dist/_loadurl.mjs \
+    && mkdir -p dist/assets/genpolicy \
+    && cp ../nebula/src/modules/k8s/trustee/assets/genpolicy/* dist/assets/genpolicy/ \
+    && printf '%s' '{"operation":"validate-storage","storage":{"apiVersion":"confidential.nebula.dev/v1alpha1","kind":"ConfidentialStorage","metadata":{"name":"scratch","namespace":"qualified"},"spec":{"type":"Memory","sizeLimit":"32Mi"}}}' \
+      | node dist/main.mjs | grep -qx '{}'
 
 FROM ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446
 USER 0
-COPY --from=build /workspace/packages/confidential-operator /app
+COPY --from=build /workspace/packages/confidential-operator/dist /app/dist
 COPY --from=manager /manager /manager
 WORKDIR /app
 USER 10001:10001

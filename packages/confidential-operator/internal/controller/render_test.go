@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Run the test binary as an external renderer to exercise the actual process
@@ -44,6 +46,12 @@ func TestRendererProcess(t *testing.T) {
 	case "oversize":
 		fmt.Fprint(os.Stdout, strings.Repeat("x", 17*1024*1024))
 		os.Exit(0)
+	case "diagnostic":
+		fmt.Fprint(os.Stdout, `{"error":{"reason":"InvalidDeclaration","message":"Confidential workload: owner key must be P-256"}}`)
+		os.Exit(0)
+	case "hostile-diagnostic":
+		fmt.Fprint(os.Stdout, `{"error":{"reason":"InvalidDeclaration","message":"Confidential workload: private credential\nleak"}}`)
+		os.Exit(0)
 	case "wait":
 		time.Sleep(time.Minute)
 	}
@@ -71,7 +79,7 @@ func TestCommandRendererBoundary(t *testing.T) {
 	w.Status.Phase = "Untrusted"
 	s.Annotations = w.Annotations
 	s.Status.Phase = "Untrusted"
-	for _, mode := range []string{"success", "failure", "oversize", "wrong-namespace", "wait"} {
+	for _, mode := range []string{"success", "failure", "oversize", "diagnostic", "hostile-diagnostic", "wrong-namespace", "wait"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("CONFIDENTIAL_TEST_RENDERER", mode)
 			ctx := context.Background()
@@ -90,9 +98,33 @@ func TestCommandRendererBoundary(t *testing.T) {
 			if err == nil || plan != nil {
 				t.Fatal("unsafe renderer response accepted")
 			}
+			if mode == "diagnostic" && err.Error() != "Confidential workload: owner key must be P-256" {
+				t.Fatal("fixed public validation diagnostic was lost")
+			}
 			if strings.Contains(err.Error(), "credential") || strings.Contains(err.Error(), "subprocess") {
 				t.Fatal("subprocess diagnostics leaked into reconciliation error")
 			}
 		})
+	}
+}
+
+func TestActualTypeScriptRendererProtocol(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node is required for the TypeScript renderer protocol test")
+	}
+	if _, err := os.Stat("../../node_modules/tsx"); err != nil {
+		t.Skip("install the operator's frozen Node dependencies before running this test")
+	}
+	renderer := CommandRenderer{Command: node, Args: []string{"--import", "tsx", "../../src/main.ts"}}
+	storage := &api.ConfidentialStorage{ObjectMeta: metav1.ObjectMeta{Name: "scratch", Namespace: "qualified"},
+		Spec: runtime.RawExtension{Raw: []byte(`{"type":"Memory","sizeLimit":"32Mi"}`)}}
+	if err := renderer.ValidateStorage(context.Background(), storage); err != nil {
+		t.Fatalf("real renderer refused a valid public declaration: %v", err)
+	}
+	storage.Spec.Raw = []byte(`{"type":"Memory","sizeLimit":"invalid"}`)
+	err = renderer.ValidateStorage(context.Background(), storage)
+	if err == nil || err.Error() != "Confidential workload: memory size must be a positive Mi/Gi quantity" {
+		t.Fatalf("real renderer did not return its fixed public validation diagnostic: %v", err)
 	}
 }

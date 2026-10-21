@@ -10,11 +10,12 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "nebula-cdk8s": "file:../nebula",
-    "tsx": "4.21.0"
+    "nebula-cdk8s": "file:../nebula"
   },
   "devDependencies": {
     "@types/node": "22.19.8",
+    "esbuild": "0.27.7",
+    "tsx": "4.21.0",
     "typescript": "5.9.3"
   }
 }

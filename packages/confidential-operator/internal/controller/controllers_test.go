@@ -1,14 +1,19 @@
 package controller
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -17,11 +22,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-type testRenderer struct{ calls int }
+type testRenderer struct {
+	calls    int
+	document string
+}
 
 func (r *testRenderer) Render(_ context.Context, w *api.ConfidentialWorkload, _ []api.ConfidentialStorage) (*Plan, error) {
 	r.calls++
-	return &Plan{Pod: corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: w.Namespace, GenerateName: "same-code-"}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "example.invalid/test@sha256:" + strings.Repeat("a", 64)}}}}, SpecSHA256: fmt.Sprintf("%064d", w.Generation), InitDataSHA256: strings.Repeat("b", 64)}, nil
+	document := r.document
+	if document == "" {
+		document = "reviewed guest v1"
+	}
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	_, _ = writer.Write([]byte(document))
+	_ = writer.Close()
+	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: w.Namespace, GenerateName: "same-code-",
+		Annotations: map[string]string{initDataAnnotation: base64.StdEncoding.EncodeToString(compressed.Bytes())}},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "example.invalid/test@sha256:" + strings.Repeat("a", 64)}}}}
+	hash, _ := podInitDataSHA256(&pod)
+	return &Plan{Pod: pod, SpecSHA256: fmt.Sprintf("%064d", w.Generation), InitDataSHA256: hash}, nil
 }
 func (r *testRenderer) ValidateStorage(context.Context, *api.ConfidentialStorage) error { return nil }
 func testScheme() *runtime.Scheme {
@@ -90,12 +110,98 @@ func TestReconcileIdempotenceReplacementAndOwnership(t *testing.T) {
 	if got := getWorkload(t, c, w); got.Status.Phase != "UpdatePending" {
 		t.Fatal(got.Status)
 	}
+	if got := getWorkload(t, c, w); got.Status.InitDataSHA256 != before.Annotations[measurementAnnotation] {
+		t.Fatal("updated status described a prospective measurement rather than the existing Pod")
+	}
 	if pods = getPods(t, c); len(pods) != 1 || pods[0].Name != before.Name || pods[0].Annotations[renderLabel] != before.Annotations[renderLabel] {
 		t.Fatal("configuration update replaced measured Pod")
+	}
+	terminating := pods[0].DeepCopy()
+	terminating.Finalizers = []string{"test.nebula.dev/retain-during-deletion"}
+	if err := c.Update(ctx, terminating); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete(ctx, terminating); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(t, r, w); err != nil {
+		t.Fatal(err)
+	}
+	if got := getWorkload(t, c, w); got.Status.Phase != "Retiring" || got.Status.InitDataSHA256 != before.Annotations[measurementAnnotation] {
+		t.Fatal("a terminating Pod was reported as a new measurement", got.Status)
 	}
 	var claim corev1.PersistentVolumeClaim
 	if err := c.Get(ctx, client.ObjectKeyFromObject(pvc), &claim); err != nil {
 		t.Fatal("claim was removed")
+	}
+}
+func TestRendererUpgradeReportsExistingPodMeasurement(t *testing.T) {
+	w, s, pvc := fixture("qualified", "upgrade")
+	scheme := testScheme()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(w, s).WithObjects(w, s, pvc).Build()
+	r := &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: &testRenderer{}}
+	if err := run(t, r, w); err != nil {
+		t.Fatal(err)
+	}
+	pod := getPods(t, c)[0]
+	original := pod.Annotations[measurementAnnotation]
+	// A new operator process has a new renderer, but the declaration is unchanged.
+	r = &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme,
+		Renderer: &testRenderer{document: "reviewed guest v2"}}
+	if err := run(t, r, w); err != nil {
+		t.Fatal(err)
+	}
+	state := getWorkload(t, c, w).Status
+	if state.Phase != "UpdatePending" || state.Reason != "MeasurementChanged" ||
+		state.InitDataSHA256 != original || len(getPods(t, c)) != 1 {
+		t.Fatalf("renderer upgrade misreported or replaced the enrolled Pod: %+v", state)
+	}
+}
+
+func TestStoppedStorageReasonUsesOnlyTypedExitCodes(t *testing.T) {
+	for _, candidate := range []struct {
+		code   int32
+		reason string
+	}{{5, "StorageUnlockDenied"}, {6, "StorageFormatDenied"}, {8, "DevicePrerequisiteMissing"}, {1, "PodStopped"}} {
+		pod := &corev1.Pod{Status: corev1.PodStatus{InitContainerStatuses: []corev1.ContainerStatus{{
+			Name: "nebula-storage-data", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: candidate.code}},
+		}}}}
+		if got := podStopReason(pod); got != candidate.reason {
+			t.Fatalf("exit %d: got %s, expected %s", candidate.code, got, candidate.reason)
+		}
+	}
+}
+
+func TestStoredPodMeasurementRejectsTrailingGzipData(t *testing.T) {
+	w, _, _ := fixture("qualified", "measure")
+	plan, err := (&testRenderer{}).Render(context.Background(), w, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod := plan.Pod
+	if _, err := podInitDataSHA256(&pod); err != nil {
+		t.Fatalf("valid measured Pod rejected: %v", err)
+	}
+	compressed, err := base64.StdEncoding.DecodeString(pod.Annotations[initDataAnnotation])
+	if err != nil {
+		t.Fatal(err)
+	}
+	compressed = append(compressed, []byte("unmeasured trailing data")...)
+	pod.Annotations[initDataAnnotation] = base64.StdEncoding.EncodeToString(compressed)
+	if _, err := podInitDataSHA256(&pod); err == nil {
+		t.Fatal("unmeasured bytes after the first gzip member were accepted")
+	}
+}
+
+func TestKubernetesFailureExposesOnlyItsStatusCategory(t *testing.T) {
+	failure := kubeFailure("PodCreateFailed", "workload Pod creation failed", errors.New("sensitive admission detail"))
+	if failure.Error() != "workload Pod creation failed (Unknown)" ||
+		failure.(*publicFailure).Reason() != "PodCreateFailed" {
+		t.Fatalf("raw API failure escaped into workload status: %v", failure)
+	}
+	forged := &apierrors.StatusError{ErrStatus: metav1.Status{Reason: "secret-from-admission-webhook", Message: "sensitive detail"}}
+	if got := kubeFailure("PodCreateFailed", "workload Pod creation failed", forged).Error(); got != "workload Pod creation failed (Unknown)" {
+		t.Fatalf("unrecognized Kubernetes status reason escaped: %s", got)
 	}
 }
 func TestIdenticalWorkloadsSeparatePodsAndServices(t *testing.T) {

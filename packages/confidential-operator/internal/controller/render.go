@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
@@ -36,6 +37,14 @@ type CommandRenderer struct {
 
 type boundedOutput struct{ bytes.Buffer }
 
+type renderDiagnostic struct {
+	reason  string
+	message string
+}
+
+func (d *renderDiagnostic) Error() string  { return d.message }
+func (d *renderDiagnostic) Reason() string { return d.reason }
+
 func (b *boundedOutput) Write(p []byte) (int, error) {
 	if b.Len()+len(p) > 16*1024*1024 {
 		return 0, errors.New("renderer output limit exceeded")
@@ -58,6 +67,20 @@ func (r CommandRenderer) run(ctx context.Context, input any, output any) error {
 	cmd.Stdout = &result
 	if err := cmd.Run(); err != nil {
 		return errors.New("declaration validation or native policy rendering failed")
+	}
+	var diagnostic struct {
+		Error *struct {
+			Reason  string `json:"reason"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(result.Bytes(), &diagnostic) == nil && diagnostic.Error != nil {
+		if diagnostic.Error.Reason != "InvalidDeclaration" || len(diagnostic.Error.Message) > 256 ||
+			!strings.HasPrefix(diagnostic.Error.Message, "Confidential workload: ") ||
+			strings.ContainsAny(diagnostic.Error.Message, "\r\n\x00") {
+			return errors.New("invalid renderer diagnostic")
+		}
+		return &renderDiagnostic{reason: diagnostic.Error.Reason, message: diagnostic.Error.Message}
 	}
 	if err := json.Unmarshal(result.Bytes(), output); err != nil {
 		return errors.New("invalid renderer response")

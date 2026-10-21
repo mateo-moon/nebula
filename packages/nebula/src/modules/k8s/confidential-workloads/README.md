@@ -5,7 +5,7 @@ verifies the VM and native genpolicy, enrolls that VM's generated TLS identity,
 then provisions its image and volume keys. An identical replacement starts
 empty and has a different identity.
 
-`ConfidentialOperator` installs the standalone Kubebuilder/Go controller and the
+`ConfidentialOperator` installs the standalone Go controller and the
 `ConfidentialWorkload` / `ConfidentialStorage` CRDs. The controller composes the
 official pinned Trustee Helm dependency, TNG, the owner gateway, storage helpers
 and application containers. It runs native genpolicy on that final Pod.
@@ -96,6 +96,10 @@ through the enrolled, attested connection.
 `bootstrap-status` requires native owner authorization and reports guest-local
 retrieval errors, disk initialization, LUKS UUID and marker hash without
 returning successful resource contents.
+The helper reports a non-success CDH HTTP status to the owner without returning
+its response body. If a mount lease fails after `ready`, the helper changes its
+status to `failed` and holds the mapping until guest shutdown; it does not
+silently retry a disk with another key.
 If a shell-less application fails before it can report status, its trusted
 static launcher returns a non-secret stage code: 10 for the guard marker, 11
 for owner readiness, 12 for an image mount target, 13 for the privilege drop,
@@ -112,9 +116,14 @@ resource-consumption routes. CDH consumes resources through guest loopback.
 ## Replacements
 
 The controller does not silently replace a running Pod when its declaration
-changes; status becomes `UpdatePending`. Retire the old Pod explicitly, review
+or measured renderer output changes; status becomes `UpdatePending` while
+`initDataSha256` still describes the running Pod. Retire the old Pod explicitly, review
 the replacement, and enroll it in a new owner state directory. The new Trustee
 requires key reprovisioning. A copied disk alone cannot restore its identity.
+The Nebula workload construct has Argo `Prune=false,Delete=false` so removing it
+from Git does not garbage-collect an enrolled guest. An explicit Kubernetes
+deletion of the `ConfidentialWorkload` still garbage-collects its Pod and
+Service; retire and back up the instance before deleting its declaration.
 
 Enrollment selects one approved instance; it cannot identify an intended
 instance before the owner's first selection. An owner can explicitly enroll

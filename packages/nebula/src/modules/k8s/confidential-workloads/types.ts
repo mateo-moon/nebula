@@ -62,7 +62,7 @@ export interface ConfidentialWorkloadSpec {
   trustee: Pick<TrusteeConfig, "chart" | "repository" | "version" | "kbsImage" | "tngImage"> & {
     gatewayImage: string;
   };
-  storageImage?: string;
+  storageImage: string;
   containers: readonly WorkloadContainer[];
   storage?: readonly { name: string; resource: string }[];
   /** Image keys and other resources this VM may consume locally. */

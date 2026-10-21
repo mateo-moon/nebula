@@ -12,6 +12,7 @@ import (
 type Status struct {
 	ObservedGeneration int64  `json:"observedGeneration,omitempty"`
 	Phase              string `json:"phase,omitempty"`
+	Reason             string `json:"reason,omitempty"`
 	Message            string `json:"message,omitempty"`
 	PodName            string `json:"podName,omitempty"`
 	PodUID             string `json:"podUid,omitempty"`

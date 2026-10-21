@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
@@ -19,10 +20,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -55,11 +58,33 @@ type cachedPlan struct {
 	plan *Plan
 }
 
+type publicFailure struct {
+	reason  string
+	message string
+	cause   error
+}
+
+func (e *publicFailure) Error() string  { return e.message }
+func (e *publicFailure) Unwrap() error  { return e.cause }
+func (e *publicFailure) Reason() string { return e.reason }
+
+func kubeFailure(reason, action string, err error) error {
+	category := string(apierrors.ReasonForError(err))
+	switch category {
+	case "NotFound", "Forbidden", "Conflict", "AlreadyExists", "Invalid", "Timeout",
+		"ServerTimeout", "ServiceUnavailable", "TooManyRequests", "ResourceExpired":
+	default:
+		category = "Unknown"
+	}
+	return &publicFailure{reason: reason, message: fmt.Sprintf("%s (%s)", action, category), cause: err}
+}
+
 type WorkloadReconciler struct {
 	client.Client
 	Reader   client.Reader // uncached read before creation prevents duplicate Pods
 	Scheme   *runtime.Scheme
 	Renderer Renderer
+	Recorder record.EventRecorder
 	mu       sync.Mutex
 	plans    map[types.NamespacedName]cachedPlan
 }
@@ -131,6 +156,11 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		state = w.Status
 		state.Phase = "Error"
+		state.Reason = "ReconcileFailed"
+		var reasoned interface{ Reason() string }
+		if errors.As(err, &reasoned) {
+			state.Reason = reasoned.Reason()
+		}
 		state.Message = err.Error()
 	}
 	state.ObservedGeneration = w.Generation
@@ -141,11 +171,21 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		before := w.DeepCopy()
 		w.Status = state
 		if e := r.Status().Patch(ctx, &w, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); e != nil {
-			return ctrl.Result{}, errors.New("workload status update failed")
+			return ctrl.Result{}, kubeFailure("StatusUpdateFailed", "workload status update failed", e)
+		}
+		if r.Recorder != nil {
+			kind := corev1.EventTypeNormal
+			if state.Phase == "Error" || state.Phase == "Stopped" {
+				kind = corev1.EventTypeWarning
+			}
+			r.Recorder.Event(&w, kind, state.Reason, state.Message)
 		}
 	}
-	// Errors use the controller-runtime rate-limited work queue, including missing
-	// referenced resources. No fixed polling loop or raw API response is logged.
+	if err != nil {
+		// Every status message is fixed or comes from a typed public declaration
+		// diagnostic. Native stderr and raw API response bodies stay private.
+		log.FromContext(ctx).Info("workload reconciliation failed", "reason", state.Reason, "message", state.Message)
+	}
 	return ctrl.Result{}, err
 }
 func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialWorkload) (api.Status, error) {
@@ -162,7 +202,7 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		seen[binding.Resource] = true
 		var s api.ConfidentialStorage
 		if err := r.Get(ctx, types.NamespacedName{Namespace: w.Namespace, Name: binding.Resource}, &s); err != nil {
-			return api.Status{}, errors.New("referenced storage is unavailable")
+			return api.Status{}, kubeFailure("StorageLookupFailed", "referenced storage is unavailable", err)
 		}
 		if !s.DeletionTimestamp.IsZero() {
 			return api.Status{}, errors.New("referenced storage is being deleted")
@@ -185,7 +225,7 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 	}
 	var pods corev1.PodList
 	if err := r.Reader.List(ctx, &pods, client.InNamespace(w.Namespace), client.MatchingLabels{ownerLabel: string(w.UID)}); err != nil {
-		return api.Status{}, errors.New("workload Pod lookup failed")
+		return api.Status{}, kubeFailure("PodLookupFailed", "workload Pod lookup failed", err)
 	}
 	if len(pods.Items) > 1 {
 		return api.Status{}, errors.New("conflicting workload Pods; owner intervention required")
@@ -196,14 +236,12 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 		if !ownedBy(pod, w) {
 			return api.Status{}, errors.New("conflicting Pod ownership; owner intervention required")
 		}
-		if pod.Annotations[renderLabel] != plan.SpecSHA256 {
-			return api.Status{Phase: "UpdatePending", Message: "Configuration changed. Explicitly retire the current Pod and enroll its replacement.", PodName: pod.Name, PodUID: string(pod.UID)}, nil
-		}
-		if !pod.DeletionTimestamp.IsZero() {
-			return api.Status{Phase: "Retiring", Message: "Waiting for the current Pod to terminate before creating a replacement", PodName: pod.Name, PodUID: string(pod.UID)}, nil
-		}
 	} else {
 		pod = plan.Pod.DeepCopy()
+		actualHash, err := podInitDataSHA256(pod)
+		if err != nil || actualHash != plan.InitDataSHA256 {
+			return api.Status{}, errors.New("renderer init-data does not match its reported measurement")
+		}
 		pod.OwnerReferences = []metav1.OwnerReference{ownerReference(w)}
 		if pod.Labels == nil {
 			pod.Labels = map[string]string{}
@@ -213,25 +251,72 @@ func (r *WorkloadReconciler) reconcile(ctx context.Context, w *api.ConfidentialW
 			pod.Annotations = map[string]string{}
 		}
 		pod.Annotations[renderLabel] = plan.SpecSHA256
+		pod.Annotations[measurementAnnotation] = actualHash
 		if err := r.Create(ctx, pod); err != nil {
-			return api.Status{}, errors.New("workload Pod creation failed")
+			return api.Status{}, kubeFailure("PodCreateFailed", "workload Pod creation failed", err)
 		}
+	}
+	actualHash, measurementErr := podInitDataSHA256(pod)
+	current := api.Status{PodName: pod.Name, PodUID: string(pod.UID),
+		SpecSHA256: pod.Annotations[renderLabel], InitDataSHA256: actualHash}
+	if measurementErr != nil || (pod.Annotations[measurementAnnotation] != "" &&
+		pod.Annotations[measurementAnnotation] != actualHash) {
+		current.Phase = "Error"
+		current.Reason = "PodMeasurementUnavailable"
+		current.Message = "The running Pod init-data cannot be verified; owner inspection is required"
+		return current, nil
+	}
+	if !pod.DeletionTimestamp.IsZero() {
+		current.Phase = "Retiring"
+		current.Reason = "PodTerminating"
+		current.Message = "Waiting for the current Pod to terminate before creating a replacement"
+		return current, nil
+	}
+	if current.SpecSHA256 != plan.SpecSHA256 || actualHash != plan.InitDataSHA256 {
+		current.Phase = "UpdatePending"
+		current.Reason = "MeasurementChanged"
+		if current.SpecSHA256 != plan.SpecSHA256 {
+			current.Reason = "DeclarationChanged"
+		}
+		current.Message = "Configuration or measured runtime changed. Explicitly retire the current Pod and enroll its replacement."
+		return current, nil
 	}
 	if err := r.service(ctx, w, routing); err != nil {
 		return api.Status{}, err
 	}
-	state := api.Status{Phase: "AwaitingOwner", Message: "Owner verification and enrollment are required before provisioning keys", PodName: pod.Name, PodUID: string(pod.UID), SpecSHA256: plan.SpecSHA256, InitDataSHA256: plan.InitDataSHA256}
+	state := current
+	state.Phase = "AwaitingOwner"
+	state.Reason = "OwnerEnrollmentRequired"
+	state.Message = "Owner verification and enrollment are required before provisioning keys"
 	for _, c := range pod.Status.Conditions {
 		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
 			state.Phase = "Running"
+			state.Reason = "PodReady"
 			state.Message = "Kubernetes reports ready; verify guest attestation with the owner CLI"
 		}
 	}
 	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
 		state.Phase = "Stopped"
+		state.Reason = podStopReason(pod)
 		state.Message = "Explicitly retire the stopped Pod and enroll its replacement"
 	}
 	return state, nil
+}
+func podStopReason(pod *corev1.Pod) string {
+	for _, container := range pod.Status.InitContainerStatuses {
+		if !strings.HasPrefix(container.Name, "nebula-storage-") || container.State.Terminated == nil {
+			continue
+		}
+		switch container.State.Terminated.ExitCode {
+		case 5:
+			return "StorageUnlockDenied"
+		case 6:
+			return "StorageFormatDenied"
+		case 8:
+			return "DevicePrerequisiteMissing"
+		}
+	}
+	return "PodStopped"
 }
 func ownerReference(w *api.ConfidentialWorkload) metav1.OwnerReference {
 	yes, no := true, false
@@ -252,13 +337,13 @@ func (r *WorkloadReconciler) service(ctx context.Context, w *api.ConfidentialWor
 	err := r.Reader.Get(ctx, client.ObjectKeyFromObject(w), &s)
 	if apierrors.IsNotFound(err) {
 		s = corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: w.Name, Namespace: w.Namespace, OwnerReferences: []metav1.OwnerReference{ownerReference(w)}}, Spec: corev1.ServiceSpec{Selector: map[string]string{ownerLabel: string(w.UID)}, Ports: ports}}
-		if r.Create(ctx, &s) != nil {
-			return errors.New("workload Service creation failed")
+		if err := r.Create(ctx, &s); err != nil {
+			return kubeFailure("ServiceCreateFailed", "workload Service creation failed", err)
 		}
 		return nil
 	}
 	if err != nil {
-		return errors.New("workload Service lookup failed")
+		return kubeFailure("ServiceLookupFailed", "workload Service lookup failed", err)
 	}
 	if !ownedBy(&s, w) || len(s.Spec.Selector) != 1 || s.Spec.Selector[ownerLabel] != string(w.UID) {
 		return errors.New("Service belongs to another resource")
@@ -266,16 +351,16 @@ func (r *WorkloadReconciler) service(ctx context.Context, w *api.ConfidentialWor
 	if !reflect.DeepEqual(s.Spec.Ports, ports) {
 		before := s.DeepCopy()
 		s.Spec.Ports = ports
-		if r.Patch(ctx, &s, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})) != nil {
-			return errors.New("workload Service update failed")
+		if err := r.Patch(ctx, &s, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+			return kubeFailure("ServiceUpdateFailed", "workload Service update failed", err)
 		}
 	}
 	return nil
 }
 func blockClaim(ctx context.Context, reader client.Reader, namespace, name string) (*corev1.PersistentVolumeClaim, error) {
 	var pvc corev1.PersistentVolumeClaim
-	if reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &pvc) != nil {
-		return nil, errors.New("block claim is unavailable")
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &pvc); err != nil {
+		return nil, kubeFailure("ClaimLookupFailed", "block claim is unavailable", err)
 	}
 	if !pvc.DeletionTimestamp.IsZero() || pvc.Spec.VolumeMode == nil || *pvc.Spec.VolumeMode != corev1.PersistentVolumeBlock {
 		return nil, errors.New("encrypted storage requires an available raw block claim")
@@ -297,7 +382,7 @@ func (r *StorageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if !s.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
-	state := api.Status{ObservedGeneration: s.Generation, Phase: "Available", Message: "Guest memory storage"}
+	state := api.Status{ObservedGeneration: s.Generation, Phase: "Available", Reason: "StorageAvailable", Message: "Guest memory storage"}
 	err := r.Renderer.ValidateStorage(ctx, &s)
 	var spec storageRouting
 	if err == nil {
@@ -310,11 +395,13 @@ func (r *StorageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			state.Message = "Ciphertext claim only; key custody and volume opening remain inside the guest"
 			if pvc.Status.Phase != corev1.ClaimBound {
 				state.Phase = "AwaitingBinding"
+				state.Reason = "ClaimUnbound"
 			}
 		}
 	}
 	if err != nil {
 		state.Phase = "Invalid"
+		state.Reason = "StorageValidationFailed"
 		state.Message = "Storage validation failed or its raw block claim is unavailable"
 		err = errors.New(state.Message)
 	}
@@ -329,6 +416,9 @@ func (r *StorageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *WorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorderFor("confidential-workload-operator")
+	}
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &api.ConfidentialWorkload{}, storageIndex, func(o client.Object) []string {
 		var s workloadRouting
 		if json.Unmarshal(o.(*api.ConfidentialWorkload).Spec.Raw, &s) != nil {

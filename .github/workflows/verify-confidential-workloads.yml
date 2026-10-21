@@ -99,8 +99,30 @@ jobs:
           file: docker/confidential-${{ matrix.role }}/Dockerfile
           platforms: linux/amd64
           push: false
+          load: ${{ matrix.role == 'operator' }}
+          tags: nebula-confidential-${{ matrix.role }}:ci
           cache-from: type=gha,scope=confidential-${{ matrix.role }}
           cache-to: type=gha,mode=max,scope=confidential-${{ matrix.role }}
+      - name: Exercise the compiled operator image
+        if: matrix.role == 'operator'
+        run: node packages/confidential-operator/test/compiled-image.mjs
+
+  native-render:
+    name: Native confidential Pod synthesis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exercise the measured renderer with the pinned native generator
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/workspace" -w /workspace/packages/nebula \
+            -e TRUSTEE_GENPOLICY=/usr/local/bin/genpolicy \
+            -e TRUSTEE_GENPOLICY_CACHE=/tmp/genpolicy-cache \
+            ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446 \
+            sh -ec 'pnpm install --frozen-lockfile && node --import tsx --test test/confidential-workload-render.test.ts'
 
   storage-headers:
     runs-on: ubuntu-24.04

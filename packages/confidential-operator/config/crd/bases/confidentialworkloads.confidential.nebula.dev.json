@@ -458,6 +458,10 @@
                     "type": "string",
                     "maxLength": 4096
                   },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
                   "message": {
                     "type": "string",
                     "maxLength": 1024

@@ -42,7 +42,12 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const helm = new Helm(chart, "trustee", trusteeHelmProps(config, settings));
   extendTrusteeHelm(helm, settings);
   const base = readTrusteeHelmPlan(helm, config, settings).pod;
-  const kbs: any = structuredClone(base.spec.containers[0]);
+  const kbsSource = base.spec.containers.find(container => container.name === "kbs");
+  const tngSource = base.spec.containers.find(container => container.name === "tng");
+  if (base.spec.containers.length !== 2 || !kbsSource || !tngSource) {
+    throw new TypeError("Confidential workload: unexpected Trustee container topology");
+  }
+  const kbs: any = structuredClone(kbsSource);
   kbs.securityContext = security(10001);
   kbs.restartPolicy = "Always";
   // Kubelet TCP probes target the Pod IP; KBS is intentionally guest-loopback.
@@ -52,7 +57,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   delete kbs.ports;
   const tngConfig = structuredClone(settings.tngConfig) as any;
   tngConfig.add_egress[0].mapping.out.port = 8444;
-  const tng: any = structuredClone(base.spec.containers[1]);
+  const tng: any = structuredClone(tngSource);
   tng.name = "nebula-tng";
   tng.securityContext = security(10001);
   tng.args = measuredFragments(Buffer.from(tngBootstrapScript(tngConfig)).toString("base64"));

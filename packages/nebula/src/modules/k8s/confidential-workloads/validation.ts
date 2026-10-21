@@ -10,7 +10,10 @@ import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 export const namePattern = "^[a-z][a-z0-9-]{0,39}$";
 export const pathPattern = "^/[A-Za-z0-9_/-]+$";
 const name = (value: unknown) => typeof value === "string" && new RegExp(namePattern).test(value);
-const fail = (message: string): never => { throw new TypeError(`Confidential workload: ${message}`); };
+/** Only fixed, public declaration errors may cross the operator's renderer
+ * boundary. Native registry and policy tool errors remain private. */
+export class ConfidentialValidationError extends TypeError {}
+const fail = (message: string): never => { throw new ConfidentialValidationError(`Confidential workload: ${message}`); };
 const integer = (value: unknown, low: number, high: number) => Number.isSafeInteger(value) && Number(value) >= low && Number(value) <= high;
 const path = (value: string) => new RegExp(pathPattern).test(value) && value !== "/" &&
   !value.endsWith("/") && !value.includes("//") &&
@@ -124,7 +127,6 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   for (const container of spec.containers) {
     for (const mount of container.mounts ?? []) if (!bindings.some(binding => binding.name === mount.storage)) fail("unknown mounted storage");
   }
-  const encrypted = bindings.some(binding => storages.find(storage => storage.metadata.name === binding.resource)?.spec.type === "EncryptedBlock");
   if (!isDigestImage(spec.storageImage ?? "")) fail("workloads require a pinned runtime for guarded application launch");
   if (!Array.isArray(spec.resources) || !spec.resources.length || spec.resources.length > 64 ||
       new Set(spec.resources.map(resourcePath)).size !== spec.resources.length) fail("invalid resource admission list");

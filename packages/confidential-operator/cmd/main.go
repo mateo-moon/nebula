@@ -47,7 +47,7 @@ func main() {
 		ctrl.Log.Error(err, "cannot start controller manager")
 		os.Exit(1)
 	}
-	renderer := controller.CommandRenderer{Command: "/app/node_modules/.bin/tsx", Args: []string{"/app/src/main.ts"}}
+	renderer := controller.CommandRenderer{Command: "/usr/local/bin/node", Args: []string{"/app/dist/main.mjs"}}
 	if err := (&controller.WorkloadReconciler{Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Scheme: scheme, Renderer: renderer}).SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "cannot initialize workload controller")
 		os.Exit(1)

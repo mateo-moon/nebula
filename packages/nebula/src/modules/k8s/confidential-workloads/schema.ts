@@ -71,7 +71,7 @@ export function confidentialCrds() {
         additionalPrinterColumns: [{ name: "Phase", type: "string", jsonPath: ".status.phase" }],
         schema: { openAPIV3Schema: obj({ apiVersion: str(), kind: str(), metadata: { type: "object" },
           spec: spec as Schema,
-          status: obj({ observedGeneration: int(0, Number.MAX_SAFE_INTEGER), phase: str(), message: str({ maxLength: 1024 }),
+          status: obj({ observedGeneration: int(0, Number.MAX_SAFE_INTEGER), phase: str(), reason: str({ maxLength: 128 }), message: str({ maxLength: 1024 }),
             podName: str(), podUid: str(), specSha256: str(), initDataSha256: str() }, []),
         }, ["spec"]) },
       }],

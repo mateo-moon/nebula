@@ -27,11 +27,12 @@ cargo +"$toolchain" build --locked --release --target-dir "$target_dir" -p tng -
 cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-cert --lib --no-default-features \
   --features crypto-rustcrypto,attester-coco,verifier-coco,attester-ita,verifier-ita,jsonwebtoken/use_pem \
   tee::coco::verifier::
- cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-cert --lib --no-default-features \
+cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-cert --lib --no-default-features \
   --features crypto-rustcrypto,attester-coco,verifier-coco,attester-ita,verifier-ita,jsonwebtoken/use_pem \
   fail_closed_challenge
-git -C "$source_dir" diff --binary -- rats-cert/src/tee/coco/converter/restful.rs | cmp - "$tool_dir/fail-closed-challenge.patch"
-git diff --exit-code -- . ':(exclude)rats-cert/src/tee/coco/converter/restful.rs'
+# The reviewed patch must be the entire tracked source delta, not merely the
+# delta of its expected file. Build or test hooks must not alter another file.
+git diff --binary | cmp - "$tool_dir/fail-closed-challenge.patch"
 git diff --cached --exit-code
 cp "$target_dir/release/tng" "$artifact_dir/tng"
 cp LICENSE "$artifact_dir/LICENSE"

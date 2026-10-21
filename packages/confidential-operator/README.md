@@ -1,14 +1,17 @@
 # Confidential workload operator
 
-A standalone Go operator scaffolded with Kubebuilder 4.16.0 and built on
-controller-runtime. Install through Nebula's `ConfidentialOperator` construct;
+A standalone Go operator built on controller-runtime. Its Go API follows the
+Kubebuilder layout, while Nebula owns the structural CRD and RBAC generation.
+Install through Nebula's `ConfidentialOperator` construct;
 declare `ConfidentialWorkload` and `ConfidentialStorage` resources as described
 in the [module guide](../nebula/src/modules/k8s/confidential-workloads/README.md).
 
 The controller watches declarations, Pods, Services and block claims in explicit
 namespaces. A namespace-scoped leader lease serializes reconciliation. It
 reuses existing guests after restarts, repairs owned Service ports, and reports
-`UpdatePending` for changed workload declarations. Retire the current Pod
+`UpdatePending` for changed workload declarations or measured renderer output.
+`status.initDataSha256` is decoded from the existing Pod, so an operator
+upgrade never advertises a future measurement for an older guest. Retire the current Pod
 explicitly, then enroll and provision its replacement. Storage claims are never
 deleted or adopted by the controller.
 
@@ -16,6 +19,11 @@ The bundled TypeScript renderer uses the pinned official Trustee chart and
 native genpolicy. The owner CLI independently uses that same implementation.
 Its bounded JSON protocol carries public declarations and rendered manifests;
 Kubernetes status does not establish trust in a guest.
+Fixed public validation errors appear in status; native registry output is
+discarded. Workload status also exposes a machine-readable `reason`, and
+Kubernetes events report phase changes. For guest-side diagnosis, use the
+owner-authorized `bootstrap-status` and `storage-status` CLI commands plus
+the init-container exit reason; application output is intentionally private.
 
 Owner credentials, enrollment pins and image/storage keys never enter this
 operator. Its namespace Roles grant no Secret, exec, attach, Pod update/delete,
@@ -49,5 +57,11 @@ docker build -f docker/confidential-operator/Dockerfile -t confidential-operator
 ```
 
 Pin the published image digest when installing. The image bundles the Go
-manager and qualified Nebula synthesis toolchain; it does not rebuild Helm
-chart dependencies.
+manager, a build-time-compiled JavaScript renderer and the qualified native
+Helm/genpolicy toolchain. It does not transpile TypeScript at runtime or
+rebuild Helm chart dependencies.
+The `Publish confidential workload images` workflow builds the four operator,
+gateway, storage and device images after a reviewed main-branch change (or a
+manual qualification run). Its summary records the immutable GHCR digest for
+each image. Dev qualification images must be promoted by pinning reviewed
+digests; a mutable tag is not a workload identity.

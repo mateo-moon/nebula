@@ -48,9 +48,9 @@ no longer substitute a dummy nonce for a verifier-issued challenge. The build
 uses the locked dependency graph, runs the CoCo verifier and challenge regression
 tests, and checks that the patch is the only tracked source change. Those tests
 cover pinned roots and certificate bundles, invalid trust files, token verification
-and standard/legacy Base64 JWT `x5c` decoding. No local patch is applied.
-Certificate and token verification remain enabled. The upstream server image
-is unchanged; this patch qualifies the owner-side verifier binary.
+and standard/legacy Base64 JWT `x5c` decoding. Certificate and token
+verification remain enabled. The patch qualifies only the owner-side verifier
+binary; the server image stays upstream.
 
 The upstream source is licensed under Apache-2.0.
 The server deployment continues to use unmodified upstream images.

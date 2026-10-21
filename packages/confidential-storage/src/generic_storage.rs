@@ -50,7 +50,11 @@ pub(crate) fn install() -> Result<()> {
 // Buffer even error bodies in zeroizing memory; never return them in errors.
 fn local_resource(resource: &str) -> Result<Option<Zeroizing<Vec<u8>>>> {
     let address: SocketAddr = "127.0.0.1:8006".parse()?;
-    let mut socket = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
+    local_resource_at(resource, &address)
+}
+
+fn local_resource_at(resource: &str, address: &SocketAddr) -> Result<Option<Zeroizing<Vec<u8>>>> {
+    let mut socket = TcpStream::connect_timeout(address, Duration::from_secs(2))?;
     // Native api-server-rest can wait up to 50 seconds for CDH.
     socket.set_read_timeout(Some(Duration::from_secs(60)))?;
     socket.set_write_timeout(Some(Duration::from_secs(2)))?;
@@ -68,8 +72,16 @@ fn local_resource(resource: &str) -> Result<Option<Zeroizing<Vec<u8>>>> {
     let header = std::str::from_utf8(&response[..split])?;
     let mut lines = header.split("\r\n");
     let status = lines.next().context("missing local response status")?;
-    if !matches!(status.split_whitespace().nth(1), Some("200")) {
-        return Ok(None);
+    let code = status
+        .split_whitespace()
+        .nth(1)
+        .and_then(|part| part.parse::<u16>().ok())
+        .filter(|code| (100..=599).contains(code))
+        .context("invalid guest CDH HTTP status")?;
+    if code != 200 {
+        // Never include the response body: it can contain a resource or a
+        // credential. The numeric status is safe for owner diagnostics.
+        bail!("guest CDH returned HTTP {code}");
     }
     let mut length = None;
     for line in lines {
@@ -187,13 +199,22 @@ fn serve_resource_client(client: &ResourceClient, mut stream: UnixStream) -> Res
 }
 
 fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {
+    let mut last_error = String::new();
     loop {
         ensure!(
             handoff::SIGNAL.load(Ordering::SeqCst) == 0,
             "guest shutdown interrupted owner provisioning"
         );
-        if let Ok(Some(key)) = local_key(resource) {
-            return Ok(key);
+        match local_key(resource) {
+            Ok(Some(key)) => return Ok(key),
+            Ok(None) => {}
+            Err(error) => {
+                let description = format!("{error:#}");
+                if description != last_error {
+                    publish_status("awaiting-owner", Some(&error), None)?;
+                    last_error = description;
+                }
+            }
         }
         thread::sleep(Duration::from_secs(1));
     }
@@ -280,19 +301,40 @@ pub(crate) fn serve(json: &str) -> Result<()> {
     let Some(mut active) = active else {
         return hold_refusal("unlock-denied", Exit::UnlockDenied.into());
     };
+    // Keep the mapping alive and the failure visible if a lease or listener
+    // fails. Restarting this sidecar is never an owner-authorized disk retry.
+    if let Err(error) = serve_mounted(&config, profile, &mut active, &report) {
+        return hold_refusal("failed", error);
+    }
+    Ok(())
+}
+
+fn serve_mounted(
+    config: &Volume,
+    profile: &'static volume::Profile,
+    active: &mut volume::ActiveVolume,
+    report: &serde_json::Value,
+) -> Result<()> {
     if let Err(error) = directories(
-        &config,
+        config,
         report["formatted"] == true,
         Path::new(profile.mount),
     ) {
-        return hold_refusal("failed", error);
+        return Err(error);
     }
     fs::set_permissions("/run/volume", Permissions::from_mode(0o755))?;
     let socket = "/run/volume/mount.sock";
+    if let Ok(stale) = fs::symlink_metadata(socket) {
+        ensure!(
+            stale.file_type().is_socket() && stale.uid() == 0,
+            "unexpected mount socket at restart"
+        );
+        fs::remove_file(socket)?;
+    }
     let listener = UnixListener::bind(socket)?;
     fs::set_permissions(socket, Permissions::from_mode(0o666))?;
     listener.set_nonblocking(true)?;
-    publish_status("ready", None, Some(&report))?;
+    publish_status("ready", None, Some(report))?;
     let count = config.clients.len();
     let mut leases: Vec<Option<UnixStream>> = (0..count).map(|_| None).collect();
     let mut pending: Vec<Option<handoff::PendingMount>> = (0..count).map(|_| None).collect();
@@ -386,6 +428,36 @@ fn write_new(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::TcpListener;
+
+    #[test]
+    fn local_cdh_reports_only_status_not_error_body() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let mut part = [0; 256];
+                let n = socket.read(&mut part).unwrap();
+                assert!(n > 0 && request.len() + n <= 512);
+                request.extend_from_slice(&part[..n]);
+            }
+            socket
+                .write_all(
+                    b"HTTP/1.0 403 Forbidden\r\nContent-Length: 18\r\n\r\nprivate-key-secret",
+                )
+                .unwrap();
+        });
+        let error = local_resource_at("default/volume/data", &address)
+            .unwrap_err()
+            .to_string();
+        server.join().unwrap();
+        assert_eq!(error, "guest CDH returned HTTP 403");
+    }
 
     #[test]
     fn reopening_a_client_directory_tolerates_client_chmod_and_chgrp() {
