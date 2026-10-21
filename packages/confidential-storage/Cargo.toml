@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 publish = false
+# Fixtures are included by crate-private unit tests, not standalone test crates.
+autotests = false
 
 [dependencies]
 anyhow = "1"

@@ -106,6 +106,6 @@ certificates. `nebula-trustee renew <new-state> --state <current-state>`
 renews the local verifier while preserving the enrollment pin and workload
 approval. It does not contact or enroll a replacement.
 
-The [dev SNP qualification](../../../../test/evidence/confidential-workloads-snp-dev-2026-10-20.json)
+The [dev SNP qualification](../../../../test/evidence/confidential-storage-nebula-snp-dev-2026-10-21.json)
 records encrypted application boot, instance substitution rejection and
-copied-disk refusal with these CRDs.
+copied-disk refusal with the Nebula-owned storage runtime and these CRDs.

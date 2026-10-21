@@ -7,7 +7,7 @@ COPY packages/confidential-storage/Cargo.toml packages/confidential-storage/Carg
 COPY packages/confidential-storage/src ./src
 COPY packages/confidential-storage/tests ./tests
 # The launcher is installed into arbitrary application images, so it must be static.
-RUN cargo test --lib --locked --target x86_64-unknown-linux-musl -j 2 \
+RUN cargo test --locked --target x86_64-unknown-linux-musl -j 2 \
  && cargo build --release --locked --target x86_64-unknown-linux-musl -j 2 \
  && readelf --program-headers target/x86_64-unknown-linux-musl/release/nebula-confidential-storage > /tmp/launcher-headers \
  && ! grep -q INTERP /tmp/launcher-headers
