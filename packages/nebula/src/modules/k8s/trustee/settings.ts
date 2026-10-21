@@ -1,7 +1,7 @@
 import { createPublicKey } from "node:crypto";
 import { stringify } from "smol-toml";
 import { isDigestImage } from "../confidential-guests/types";
-import { measuredFragments } from "../envoy";
+import { measuredFragments } from "../envoy/measured-fragments";
 import { TRUSTEE_STATE as STATE } from "./tng-bootstrap";
 import { confidentialTrusteeHelmSettings } from "./helm";
 import { tngBootstrapScript, tngTrusteeBootstrapScript } from "./tng-bootstrap";

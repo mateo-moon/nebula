@@ -47,9 +47,15 @@ jobs:
           node scripts/publication-guard.mjs
           packages/confidential-operator packages/confidential-runtime
           packages/confidential-storage packages/confidential-storage-devices
+          packages/nebula/package.json packages/nebula/src/core/base-construct.ts
+          packages/nebula/src/utils/secrets.ts
+          packages/nebula/src/modules/k8s/confidential-guests
           packages/nebula/src/modules/k8s/confidential-workloads
+          packages/nebula/src/modules/k8s/trustee
+          packages/nebula/src/modules/k8s/envoy/measured-fragments.ts
           docker/confidential-operator docker/confidential-runtime
           docker/confidential-storage docker/confidential-storage-devices
+          .dockerignore
 
   publish:
     name: Publish ${{ matrix.role }} (linux/amd64)

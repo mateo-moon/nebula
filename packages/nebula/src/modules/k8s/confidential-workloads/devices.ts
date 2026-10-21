@@ -1,6 +1,6 @@
 import { ApiObject } from "cdk8s";
 import type { Construct } from "constructs";
-import { BaseConstruct } from "../../../core";
+import { BaseConstruct } from "../../../core/base-construct";
 import { isDigestImage } from "../confidential-guests/types";
 import { publicConfig } from "../trustee/validation";
 

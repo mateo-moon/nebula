@@ -2,7 +2,7 @@ import { App, Chart, Helm } from "cdk8s";
 import { stringify } from "smol-toml";
 import { canonicalJson, sha256Hex } from "../confidential-guests/canonical";
 import { INIT_DATA_ANNOTATION, type GuestPodManifest } from "../confidential-guests/measured";
-import { measuredFragments } from "../envoy";
+import { measuredFragments } from "../envoy/measured-fragments";
 import { extendTrusteeHelm, readTrusteeHelmPlan, trusteeHelmProps } from "../trustee/helm";
 import { trusteeSettings } from "../trustee/settings";
 import { tngBootstrapScript } from "../trustee/tng-bootstrap";

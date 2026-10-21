@@ -14,7 +14,13 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -
 FROM ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446 AS build
 USER 0
 WORKDIR /workspace/packages
-COPY packages/nebula ./nebula
+COPY packages/nebula/package.json ./nebula/
+COPY packages/nebula/src/core/base-construct.ts ./nebula/src/core/
+COPY packages/nebula/src/utils/secrets.ts ./nebula/src/utils/
+COPY packages/nebula/src/modules/k8s/confidential-guests ./nebula/src/modules/k8s/confidential-guests
+COPY packages/nebula/src/modules/k8s/confidential-workloads ./nebula/src/modules/k8s/confidential-workloads
+COPY packages/nebula/src/modules/k8s/trustee ./nebula/src/modules/k8s/trustee
+COPY packages/nebula/src/modules/k8s/envoy/measured-fragments.ts ./nebula/src/modules/k8s/envoy/
 COPY packages/confidential-operator ./confidential-operator
 RUN npm install -g pnpm@11.9.0 \
     && cd confidential-operator && pnpm install --frozen-lockfile && pnpm typecheck \
