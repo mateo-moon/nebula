@@ -126,6 +126,9 @@ export function gateway(options: GatewayOptions) {
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   server.maxHeadersCount = 16;
+  // Each unauthenticated request may buffer up to MAX_BODY. A hard TLS
+  // connection cap keeps aggregate pre-auth memory bounded below the pod limit.
+  server.maxConnections = 32;
   return server;
 }
 

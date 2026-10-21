@@ -5,6 +5,7 @@ import { validateNetwork } from "../trustee/genpolicy";
 import { createPublicKey } from "node:crypto";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadContainer } from "./types";
 import { CONFIDENTIAL_API } from "./types";
+import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 
 export const namePattern = "^[a-z][a-z0-9-]{0,39}$";
 export const pathPattern = "^/[A-Za-z0-9_/-]+$";
@@ -83,6 +84,10 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   snpIdentity({ ...spec.guest, initDataSha256: "1".repeat(64) });
   validateNetwork(spec.network);
   fields(spec.trustee, ["chart", "repository", "version", "kbsImage", "tngImage", "gatewayImage"]);
+  if (spec.trustee.chart !== TRUSTEE_CHART || spec.trustee.repository !== undefined ||
+      (spec.trustee.version !== undefined && spec.trustee.version !== TRUSTEE_CHART_VERSION)) {
+    fail("Trustee chart source and version must match the operator-pinned package");
+  }
   for (const image of [spec.trustee.kbsImage, spec.trustee.tngImage, spec.trustee.gatewayImage]) {
     if (!isDigestImage(image)) fail("bootstrap images must be digest-pinned");
   }

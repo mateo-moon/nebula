@@ -143,11 +143,17 @@ function generatePolicy(workload: any, containers: readonly any[], guestConfig: 
     if (block) {
       // Select stricter device predicates in genpolicy's INPUT rules. Generated
       // policy data and native output are never patched after synthesis.
-      nativeRules = nativeRules
-        .replace("allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)",
-          "confidential_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)")
-        .replace("allow_volume_devices(p_volume_devices, i_volume_devices)",
-          "confidential_volume_devices(p_volume_devices, i_volume_devices)");
+      for (const [original, hardened] of [
+        ["allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)",
+          "confidential_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)"],
+        ["allow_volume_devices(p_volume_devices, i_volume_devices)",
+          "confidential_volume_devices(p_volume_devices, i_volume_devices)"],
+      ]) {
+        if (nativeRules.split(original).length !== 2) {
+          throw new TypeError("Trustee: native genpolicy device predicate changed; review required");
+        }
+        nativeRules = nativeRules.replace(original, hardened);
+      }
       profile += `\n${asset("confidential-block.rego")}`;
     }
     const rules = `${nativeRules}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;

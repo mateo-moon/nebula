@@ -1,6 +1,8 @@
 import { request } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
+import { randomUUID } from "node:crypto";
+import { closeSync, constants, fsyncSync, openSync, renameSync, statfsSync, unlinkSync, writeSync } from "node:fs";
 
 const resourceName = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/;
 
@@ -63,4 +65,20 @@ export async function awaitOwner(resources: unknown, signal: AbortSignal,
     await delay(1_000, undefined, { signal });
   }
   signal.throwIfAborted();
+}
+
+/** A guest-memory completion marker makes host-selected container start order
+ * irrelevant: the static launcher never starts application bytes before the
+ * measured owner gate has observed all declared resources. */
+export function publishOwnerReady(directory = "/run/nebula-owner-ready"): void {
+  if (process.getuid?.() !== 10001 || Number(statfsSync(directory).type) !== 0x01021994) {
+    throw new Error("Owner readiness requires measured guest tmpfs and helper UID");
+  }
+  const temporary = `${directory}/.ready-${randomUUID()}`;
+  const file = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try {
+    writeSync(file, "nebula-owner-ready-v1\n");
+    fsyncSync(file);
+    renameSync(temporary, `${directory}/ready`);
+  } finally { closeSync(file); try { unlinkSync(temporary); } catch { /* Renamed. */ } }
 }

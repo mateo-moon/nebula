@@ -260,7 +260,9 @@ fn command(program: &str, args: &[&str]) -> Result<()> {
     ensure!(
         Command::new(program)
             .args(args)
+            .env_clear()
             .env("LC_ALL", "C")
+            .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -320,7 +322,7 @@ fn plan(luks: bool, format: Format, blank: impl FnOnce() -> Result<bool>) -> Res
 // Multi-mount protection (D15) makes a second guest's mount fail while the
 // first still updates the MMP block.
 fn mkfs_args(profile: &Profile, mmp: bool) -> Vec<&str> {
-    let mut args = vec!["-q", "-F"];
+    let mut args = vec!["-q", "-F", "-e", "remount-ro"];
     if mmp {
         args.extend(["-O", "mmp", "-E", "mmp_update_interval=5"]);
     }
@@ -341,7 +343,7 @@ fn mount_ext4(profile: &Profile) -> std::io::Result<()> {
             target.as_ptr(),
             fstype,
             flags,
-            std::ptr::null(),
+            c"errors=remount-ro".as_ptr().cast(),
         )
     } {
         0 => Ok(()),
@@ -569,7 +571,7 @@ fn open_with(
                     "-t",
                     "ext4",
                     "-o",
-                    "nosuid,nodev,noexec",
+                    "nosuid,nodev,noexec,errors=remount-ro",
                     profile.mapped,
                     profile.mount,
                 ],
@@ -730,13 +732,15 @@ mod tests {
         let mapped = "/dev/mapper/nebula-data";
         assert_eq!(
             mkfs_args(Profile::generic("data", 1024 * 1024 * 1024), false),
-            ["-q", "-F", mapped]
+            ["-q", "-F", "-e", "remount-ro", mapped]
         );
         assert_eq!(
             mkfs_args(Profile::generic("data", 1024 * 1024 * 1024), true),
             [
                 "-q",
                 "-F",
+                "-e",
+                "remount-ro",
                 "-O",
                 "mmp",
                 "-E",

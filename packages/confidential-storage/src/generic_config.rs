@@ -52,7 +52,7 @@ pub struct ResourceBroker {
     pub clients: Vec<ResourceClient>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceClient {
     pub name: String,

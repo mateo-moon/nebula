@@ -31,6 +31,7 @@ cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-c
   --features crypto-rustcrypto,attester-coco,verifier-coco,attester-ita,verifier-ita,jsonwebtoken/use_pem \
   fail_closed_challenge
 git -C "$source_dir" diff --binary -- rats-cert/src/tee/coco/converter/restful.rs | cmp - "$tool_dir/fail-closed-challenge.patch"
+git diff --exit-code -- . ':(exclude)rats-cert/src/tee/coco/converter/restful.rs'
 git diff --cached --exit-code
 cp "$target_dir/release/tng" "$artifact_dir/tng"
 cp LICENSE "$artifact_dir/LICENSE"

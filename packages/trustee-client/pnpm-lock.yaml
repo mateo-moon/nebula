@@ -18,7 +18,7 @@ importers:
         specifier: ^4.21.0
         version: 4.23.15
       yaml:
-        specifier: ^2.8.1
+        specifier: ^2.9.0
         version: 2.9.1
     devDependencies:
       '@types/node':
@@ -219,9 +219,9 @@ packages:
   constructs@10.8.1:
     resolution: {integrity: sha512-98yGXYyhePqPYh3cYu8nzBERmAhC0DONe3UD03okK0nehZ7hYP4wgZuf02a04+uOWxnTJ5Rpp5m0GRNpwyLGGA==}
 
-  deepmerge-ts@7.1.6:
-    resolution: {integrity: sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw==}
-    engines: {node: '>=16.0.0'}
+  deepmerge-ts@8.0.2:
+    resolution: {integrity: sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==}
+    engines: {node: '>=16.9.0'}
 
   esbuild@0.28.2:
     resolution: {integrity: sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==}
@@ -361,7 +361,7 @@ snapshots:
 
   constructs@10.8.1: {}
 
-  deepmerge-ts@7.1.6: {}
+  deepmerge-ts@8.0.2: {}
 
   esbuild@0.28.2:
     optionalDependencies:
@@ -403,7 +403,7 @@ snapshots:
       cdk8s: 2.70.111(constructs@10.8.1)
       cdk8s-plus-33: 2.5.63(cdk8s@2.70.111(constructs@10.8.1))(constructs@10.8.1)
       constructs: 10.8.1
-      deepmerge-ts: 7.1.6
+      deepmerge-ts: 8.0.2
       fflate: 0.8.3
       smol-toml: 1.9.0
       yaml: 2.9.1

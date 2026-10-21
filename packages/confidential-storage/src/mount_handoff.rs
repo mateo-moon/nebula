@@ -277,30 +277,26 @@ pub(crate) fn launch_generic(
     config: &crate::generic_config::Launcher,
     args: &[String],
 ) -> Result<()> {
+    // Redirect inside the trusted static binary. A wrapper shell supplied by
+    // the application image would execute as guest root before this launcher
+    // can remove capabilities.
+    private_stdio()?;
     // A malicious kubelet may request a measured application before the
     // regular guard init container has completed. The trusted static launcher
     // must refuse to exec application code until the guest kernel boundary is
     // installed; the marker is in a root-owned guest tmpfs, mounted read-only.
-    let guard = std::path::Path::new("/run/nebula-guard/installed");
-    let start = Instant::now();
-    loop {
-        if let Ok(info) = fs::symlink_metadata(guard) {
-            let bytes = fs::read(guard)?;
-            if info.is_file()
-                && info.uid() == 0
-                && info.mode() & 0o7777 == 0o600
-                && bytes == b"nebula-guest-guard-v1\n"
-            {
-                break;
-            }
-            bail!("invalid guest guard marker");
-        }
-        ensure!(
-            start.elapsed() < Duration::from_secs(60),
-            "guest guard unavailable"
-        );
-        thread::sleep(Duration::from_millis(100));
-    }
+    wait_marker(
+        "/run/nebula-guard/installed",
+        0,
+        b"nebula-guest-guard-v1\n",
+        Duration::from_secs(60),
+    )?;
+    wait_marker(
+        "/run/nebula-owner-ready/ready",
+        10001,
+        b"nebula-owner-ready-v1\n",
+        Duration::from_secs(1800),
+    )?;
     ensure!(
         !args.is_empty() && args[0].starts_with('/'),
         "explicit client program required"
@@ -330,6 +326,44 @@ pub(crate) fn launch_generic(
         &mounts,
         args,
     )
+}
+
+fn private_stdio() -> Result<()> {
+    let devnull = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")?;
+    let fd = devnull.as_raw_fd();
+    for target in [0, 1, 2] {
+        check(unsafe { libc::dup2(fd, target) } as _)?;
+    }
+    if fd <= 2 {
+        mem::forget(devnull);
+    }
+    Ok(())
+}
+
+fn wait_marker(path: &str, uid: u32, contents: &[u8], timeout: Duration) -> Result<()> {
+    let start = Instant::now();
+    loop {
+        match fs::symlink_metadata(path) {
+            Ok(info) => {
+                ensure!(
+                    info.is_file()
+                        && info.uid() == uid
+                        && info.mode() & 0o7777 == 0o600
+                        && info.len() == contents.len() as u64
+                        && fs::read(path)? == contents,
+                    "invalid guest readiness marker"
+                );
+                return Ok(());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        ensure!(start.elapsed() < timeout, "guest readiness unavailable");
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 struct MountLease {
@@ -497,5 +531,39 @@ mod tests {
             attached: false,
         };
         assert!(lease.close().is_ok());
+    }
+
+    #[test]
+    fn launcher_refuses_missing_or_tampered_owner_readiness() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = std::env::temp_dir().join(format!("nebula-owner-gate-{}", std::process::id()));
+        let _ = fs::remove_file(&path);
+        let contents = b"nebula-owner-ready-v1\n";
+        let uid = unsafe { libc::geteuid() };
+        assert!(wait_marker(
+            path.to_str().unwrap(),
+            uid,
+            contents,
+            Duration::from_millis(1)
+        )
+        .is_err());
+        fs::write(&path, contents).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(wait_marker(
+            path.to_str().unwrap(),
+            uid,
+            contents,
+            Duration::from_millis(1)
+        )
+        .is_ok());
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(wait_marker(
+            path.to_str().unwrap(),
+            uid,
+            contents,
+            Duration::from_millis(1)
+        )
+        .is_err());
+        fs::remove_file(path).unwrap();
     }
 }

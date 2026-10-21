@@ -2,7 +2,7 @@
 //! Identical replacement guests start with an empty Trustee. There is no
 //! hardware-derived fallback and no persistent copy of the instance credential.
 use crate::{
-    generic_config::{Initialization, ResourceBroker, Volume},
+    generic_config::{Initialization, ResourceBroker, ResourceClient, Volume},
     lifecycle::{Exit, Format},
     mount_handoff as handoff, volume,
 };
@@ -12,11 +12,14 @@ use std::{
     io::{Read, Write},
     net::{SocketAddr, TcpStream},
     os::unix::{
-        fs::{MetadataExt, PermissionsExt},
+        fs::{FileTypeExt, MetadataExt, PermissionsExt},
         net::{UnixListener, UnixStream},
     },
     path::Path,
-    sync::atomic::Ordering,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -112,6 +115,15 @@ pub(crate) fn serve_resources(json: &str) -> Result<()> {
         let directory = format!("/run/nebula-resources/{}", client.name);
         tmpfs(&directory)?;
         let socket = format!("{directory}/resource.sock");
+        if let Ok(stale) = fs::symlink_metadata(&socket) {
+            ensure!(
+                stale.file_type().is_socket() && stale.uid() == client.uid,
+                "unexpected resource broker socket at restart"
+            );
+            // The old container is gone after a restart, but its socket inode
+            // remains in the pod-lifetime tmpfs. The app mounts it read-only.
+            fs::remove_file(&socket)?;
+        }
         let listener = UnixListener::bind(&socket)?;
         let path = std::ffi::CString::new(socket)?;
         fs::set_permissions(path.to_str()?, Permissions::from_mode(0o600))?;
@@ -122,35 +134,56 @@ pub(crate) fn serve_resources(json: &str) -> Result<()> {
         listener.set_nonblocking(true)?;
         listeners.push(listener);
     }
+    let busy: Vec<_> = (0..config.clients.len())
+        .map(|_| Arc::new(AtomicBool::new(false)))
+        .collect();
     loop {
-        for (client, listener) in config.clients.iter().zip(&listeners) {
-            if let Ok((mut stream, _)) = listener.accept() {
-                stream.set_read_timeout(Some(Duration::from_secs(2)))?;
-                stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-                let (uid, gid) = handoff::peer_credentials(&stream)?;
-                if uid != client.uid || gid != client.gid {
+        for (index, (client, listener)) in config.clients.iter().zip(&listeners).enumerate() {
+            if busy[index].load(Ordering::Acquire) {
+                continue;
+            }
+            if let Ok((stream, _)) = listener.accept() {
+                if busy[index].swap(true, Ordering::AcqRel) {
                     continue;
                 }
-                let mut request = [0u8; 512];
-                let n = stream.read(&mut request)?;
-                let path = request[..n]
-                    .strip_prefix(b"GET ")
-                    .and_then(|r| r.strip_suffix(b"\n"));
-                let Some(path) = path.and_then(|r| std::str::from_utf8(r).ok()) else {
-                    continue;
-                };
-                if !client.resources.iter().any(|allowed| allowed == path) {
-                    continue;
-                }
-                if let Ok(Some(response)) = local_resource(path) {
-                    let len = u32::try_from(response.len())?.to_be_bytes();
-                    stream.write_all(&len)?;
-                    stream.write_all(&response)?;
-                }
+                let client = client.clone();
+                let busy = Arc::clone(&busy[index]);
+                // One bounded worker per declared recipient prevents an idle
+                // client or native CDH timeout from stalling other recipients.
+                thread::spawn(move || {
+                    let _ = std::panic::catch_unwind(|| serve_resource_client(&client, stream));
+                    busy.store(false, Ordering::Release);
+                });
             }
         }
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+fn serve_resource_client(client: &ResourceClient, mut stream: UnixStream) -> Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+    let (uid, gid) = handoff::peer_credentials(&stream)?;
+    if uid != client.uid || gid != client.gid {
+        return Ok(());
+    }
+    let mut request = [0u8; 512];
+    let n = stream.read(&mut request)?;
+    let path = request[..n]
+        .strip_prefix(b"GET ")
+        .and_then(|r| r.strip_suffix(b"\n"));
+    let Some(path) = path.and_then(|r| std::str::from_utf8(r).ok()) else {
+        return Ok(());
+    };
+    if !client.resources.iter().any(|allowed| allowed == path) {
+        return Ok(());
+    }
+    if let Ok(Some(response)) = local_resource(path) {
+        let len = u32::try_from(response.len())?.to_be_bytes();
+        stream.write_all(&len)?;
+        stream.write_all(&response)?;
+    }
+    Ok(())
 }
 
 fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {
@@ -167,29 +200,35 @@ fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {
 }
 
 fn publish(phase: &str) -> Result<()> {
-    publish_status(phase, None)
+    publish_status(phase, None, None)
 }
 
-fn publish_status(phase: &str, error: Option<&anyhow::Error>) -> Result<()> {
+fn publish_status(
+    phase: &str,
+    error: Option<&anyhow::Error>,
+    report: Option<&serde_json::Value>,
+) -> Result<()> {
     let target = Path::new("/run/volume/status.json");
     let temporary = target.with_extension("tmp");
     let _ = fs::remove_file(&temporary);
-    write_new(
-        &temporary,
-        &serde_json::to_vec(&serde_json::json!({
-            "version":1,"phase":phase,
-            // Local operations never include keys or resource responses in
-            // errors. Only the authenticated owner diagnostic exposes this.
-            "error":error.map(|e| format!("{e:#}").chars().take(1024).collect::<String>())
-        }))?,
-        0o444,
-    )?;
+    let mut status = serde_json::json!({
+        "version":1,"phase":phase,
+        "error":error.map(|e| format!("{e:#}").chars().take(1024).collect::<String>())
+    });
+    if let Some(report) = report {
+        for field in ["formatted", "marker_sha256", "luks_uuid"] {
+            if let Some(value) = report.get(field) {
+                status[field] = value.clone();
+            }
+        }
+    }
+    write_new(&temporary, &serde_json::to_vec(&status)?, 0o444)?;
     fs::rename(temporary, target)?;
     Ok(())
 }
 
 fn hold_refusal(phase: &str, error: anyhow::Error) -> Result<()> {
-    publish_status(phase, Some(&error))?;
+    publish_status(phase, Some(&error), None)?;
     // Keep the measured helper and its diagnosis alive. A Kubernetes restart
     // is not an owner-authorized retry, and must not reset the refusal state.
     while handoff::SIGNAL.load(Ordering::SeqCst) == 0 {
@@ -211,11 +250,10 @@ fn directories(config: &Volume, created: bool, root: &Path) -> Result<()> {
             );
         }
         let stat = fs::symlink_metadata(&path)?;
+        // The app may chmod/chgrp its own exported directory. Its parent is
+        // not writable through the handoff, so only type and owner matter.
         ensure!(
-            stat.is_dir()
-                && stat.uid() == client.uid
-                && stat.gid() == client.gid
-                && stat.mode() & 0o7777 == 0o700,
+            stat.is_dir() && stat.uid() == client.uid,
             "invalid persistent client directory"
         );
     }
@@ -242,17 +280,19 @@ pub(crate) fn serve(json: &str) -> Result<()> {
     let Some(mut active) = active else {
         return hold_refusal("unlock-denied", Exit::UnlockDenied.into());
     };
-    directories(
+    if let Err(error) = directories(
         &config,
         report["formatted"] == true,
         Path::new(profile.mount),
-    )?;
+    ) {
+        return hold_refusal("failed", error);
+    }
     fs::set_permissions("/run/volume", Permissions::from_mode(0o755))?;
     let socket = "/run/volume/mount.sock";
     let listener = UnixListener::bind(socket)?;
     fs::set_permissions(socket, Permissions::from_mode(0o666))?;
     listener.set_nonblocking(true)?;
-    publish("ready")?;
+    publish_status("ready", None, Some(&report))?;
     let count = config.clients.len();
     let mut leases: Vec<Option<UnixStream>> = (0..count).map(|_| None).collect();
     let mut pending: Vec<Option<handoff::PendingMount>> = (0..count).map(|_| None).collect();
@@ -341,4 +381,31 @@ fn write_new(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
     file.write_all(bytes)?;
     file.sync_all()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reopening_a_client_directory_tolerates_client_chmod_and_chgrp() {
+        if unsafe { libc::geteuid() } != 0 {
+            return;
+        }
+        let root = std::env::temp_dir().join(format!("nebula-client-dir-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir(&root).unwrap();
+        let config = Volume::parse(
+            r#"{"version":1,"name":"data","sizeBytes":1073741824,
+            "keyResource":"default/volume/data","initialization":"Never",
+            "clients":[{"name":"app","uid":11000,"gid":11000}]}"#,
+        )
+        .unwrap();
+        directories(&config, true, &root).unwrap();
+        fs::set_permissions(root.join("app"), Permissions::from_mode(0o755)).unwrap();
+        let path = std::ffi::CString::new(root.join("app").as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::chown(path.as_ptr(), 11000, 10001) }, 0);
+        directories(&config, false, &root).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
 }

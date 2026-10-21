@@ -146,15 +146,17 @@
                     "properties": {
                       "chart": {
                         "type": "string",
-                        "maxLength": 4096
-                      },
-                      "repository": {
-                        "type": "string",
-                        "maxLength": 4096
+                        "maxLength": 4096,
+                        "enum": [
+                          "oci://ghcr.io/mateo-moon/helm/trustee@sha256:371376d5c4b135890f6b9b0071ad5a8f7c9975af797994b4aaf5efbea2e21cb5"
+                        ]
                       },
                       "version": {
                         "type": "string",
-                        "maxLength": 4096
+                        "maxLength": 4096,
+                        "enum": [
+                          "0.21.0"
+                        ]
                       },
                       "kbsImage": {
                         "type": "string",

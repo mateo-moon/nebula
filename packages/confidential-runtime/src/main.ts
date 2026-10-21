@@ -1,5 +1,5 @@
 import { startGateway } from "./gateway.js";
-import { awaitOwner } from "./await-owner.js";
+import { awaitOwner, publishOwnerReady } from "./await-owner.js";
 import { installGuestGuard } from "./guard.js";
 
 process.umask(0o077);
@@ -16,4 +16,5 @@ else if (process.argv[2] === "gateway") {
   process.on("SIGTERM", () => stop.abort());
   process.on("SIGINT", () => stop.abort());
   await awaitOwner(config, stop.signal);
+  publishOwnerReady();
 } else throw new Error("Unknown measured runtime role");

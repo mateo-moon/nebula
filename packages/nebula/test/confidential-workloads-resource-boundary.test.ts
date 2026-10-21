@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { test } from "node:test";
 import { validateWorkload } from "../src/modules/k8s/confidential-workloads/validation";
+import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource } from "../src/modules/k8s/confidential-workloads/types";
 
 const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
@@ -22,7 +23,7 @@ const workload = (): ConfidentialWorkloadResource => ({
       minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
     nodeSelector: { "kubernetes.io/hostname": "test-node" },
     network: { ipv4AddressPattern: "^[0-9.]+$", ipv6AddressPattern: "^[a-f0-9:]+$" },
-    trustee: { chart: "oci://example.invalid/trustee", repository: "example.invalid", version: "0.21.0",
+    trustee: { chart: TRUSTEE_CHART, version: "0.21.0",
       kbsImage: image, tngImage: image, gatewayImage: image }, storageImage: image,
     containers: [{ name: "app", image, command: ["/bin/true"], uid: 11000, gid: 11000,
       mounts: [{ storage: "data", path: "/data" }], applicationResources: [["default", "proof", "session"]] }],
@@ -42,4 +43,18 @@ test("application resources are explicit and never include a declared volume key
   const unguarded: any = workload();
   delete unguarded.spec.storageImage;
   assert.throws(() => validateWorkload(unguarded, [storage]), /guarded application launch/);
+});
+
+test("tenant chart arguments cannot reach the Helm renderer", () => {
+  for (const chart of ["--post-renderer=sh", "oci://attacker.invalid/trustee", "./unreviewed-chart.tgz"]) {
+    const input: any = workload();
+    input.spec.trustee.chart = chart;
+    assert.throws(() => validateWorkload(input, [storage]), /operator-pinned package/);
+  }
+  const repository: any = workload();
+  repository.spec.trustee.repository = "https://attacker.invalid/charts";
+  assert.throws(() => validateWorkload(repository, [storage]), /operator-pinned package/);
+  const version: any = workload();
+  version.spec.trustee.version = "--post-renderer=sh";
+  assert.throws(() => validateWorkload(version, [storage]), /operator-pinned package/);
 });

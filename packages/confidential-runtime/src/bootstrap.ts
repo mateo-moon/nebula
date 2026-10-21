@@ -13,6 +13,11 @@ export function storageDiagnostics(names: readonly string[]) {
       return [name, {
         phase: typeof value.phase === "string" ? value.phase.slice(0, 40) : "unknown",
         ...(typeof value.error === "string" ? { error: value.error.slice(0, 1024) } : {}),
+        ...(typeof value.formatted === "boolean" ? { formatted: value.formatted } : {}),
+        ...(typeof value.marker_sha256 === "string" && /^[a-f0-9]{64}$/.test(value.marker_sha256)
+          ? { markerSha256: value.marker_sha256 } : {}),
+        ...(typeof value.luks_uuid === "string" && /^[a-f0-9-]{36}$/.test(value.luks_uuid)
+          ? { luksUuid: value.luks_uuid } : {}),
       }];
     } catch { return [name, { phase: "starting" }]; }
   }));

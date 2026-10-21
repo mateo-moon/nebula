@@ -32,13 +32,16 @@ policy permits its control devices only in the storage helper.
 
 Each application receives its own directory through a Unix mount lease,
 authenticated by its measured UID/GID. The launcher drops all capabilities
-before starting the application. The image must contain a shell and its real
-mount-point directories; applications cannot run as root.
+before starting the application. The image needs its real mount-point
+directories and an absolute application command; it does not need a shell.
+Applications cannot run as root.
 
 The guest installs an `nftables` rule before any application can start. Kernel
 socket ownership keeps application UIDs away from the local AA, CDH, KBS and
-owner gateway ports. A measured static launcher waits for the guard's private
-tmpfs marker and drops privileges before executing application code. Storage
+owner gateway ports, including replies from a listener that tries to replace
+a stopped KBS. A measured static launcher is the first executable in the
+application container. It waits for private guard and owner-readiness markers
+and drops privileges before executing application code. Storage
 helpers retain local CDH access. If an application needs a Trustee resource,
 declare it under that container's `applicationResources`; a private Unix socket
 broker then checks kernel peer credentials and an exact per-container allowlist.
@@ -58,7 +61,9 @@ rollback prevention or a global singleton guarantee.
 ## Owner workflow
 
 Keep a reviewed YAML file containing the workload and its storage declarations.
-Pin every image and the Helm chart. Supply the independently approved SNP
+Pin every image. The official Trustee Helm chart and version are fixed in this
+module; a change requires a reviewed Nebula release and fresh owner approval.
+Supply the independently approved SNP
 launch measurement, chip identity, TCB floor and owner public key.
 `runtime.vcpus` and `runtime.memoryMiB` set Kata's base resources. When the
 qualified runtime uses static resource management, it adds the workload's
@@ -89,7 +94,8 @@ Store owner credentials, keys and the private enrollment directory
 outside Git and Kubernetes. `storage-status` reads the helper's non-secret phase
 through the enrolled, attested connection.
 `bootstrap-status` requires native owner authorization and reports guest-local
-retrieval errors without returning successful resource contents.
+retrieval errors, disk initialization, LUKS UUID and marker hash without
+returning successful resource contents.
 An unlock refusal stays visible until the guest is retired; it cannot trigger
 reformatting or an automatic retry with another key.
 

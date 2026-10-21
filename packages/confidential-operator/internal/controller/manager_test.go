@@ -106,7 +106,7 @@ func TestManager(t *testing.T) {
 	spec := map[string]any{
 		"profile": "same-code", "ownerPublicKeyPem": "public-fixture", "guest": map[string]any{"measurement": strings.Repeat("a", 96), "chipId": strings.Repeat("b", 128), "minimumReportedTcb": map[string]any{"bootloader": 1, "tee": 0, "snp": 1, "microcode": 1}},
 		"nodeSelector": map[string]string{"kubernetes.io/hostname": "qualified-node"}, "network": map[string]string{"ipv4AddressPattern": "^10[.].+$", "ipv6AddressPattern": "^fd42:.+$"},
-		"trustee":      map[string]string{"chart": "official-chart.tgz", "kbsImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64), "tngImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64), "gatewayImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64)},
+		"trustee":      map[string]string{"chart": "oci://ghcr.io/mateo-moon/helm/trustee@sha256:371376d5c4b135890f6b9b0071ad5a8f7c9975af797994b4aaf5efbea2e21cb5", "kbsImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64), "tngImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64), "gatewayImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64)},
 		"storageImage": "example.invalid/image@sha256:" + strings.Repeat("a", 64),
 		"containers":   []any{map[string]any{"name": "app", "image": "example.invalid/image@sha256:" + strings.Repeat("a", 64), "command": []string{"/app"}, "uid": 11000, "gid": 11000}},
 		"storage":      []any{map[string]string{"name": "scratch", "resource": "memory"}}, "resources": [][]string{{"default", "image", "generic"}},

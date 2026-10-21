@@ -1,4 +1,5 @@
 import { CONFIDENTIAL_GROUP } from "./types";
+import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 import { namePattern, pathPattern } from "./validation";
 
 type Schema = Record<string, unknown>;
@@ -37,7 +38,8 @@ export const workloadSpecSchema = obj({
   profile: name, ownerPublicKeyPem: str({ maxLength: 2048 }),
   guest: guestIdentitySchema, nodeSelector: labels,
   network: obj({ ipv4AddressPattern: str({ maxLength: 256 }), ipv6AddressPattern: str({ maxLength: 256 }) }),
-  trustee: obj({ chart: str(), repository: str(), version: str(), kbsImage: image, tngImage: image, gatewayImage: image },
+  trustee: obj({ chart: str({ enum: [TRUSTEE_CHART] }), version: str({ enum: [TRUSTEE_CHART_VERSION] }),
+    kbsImage: image, tngImage: image, gatewayImage: image },
     ["chart", "kbsImage", "tngImage", "gatewayImage"]),
   storageImage: image,
   containers: list(obj({

@@ -47,10 +47,10 @@
     "cdk8s": "^2.69.0",
     "cdk8s-plus-33": "^2.4.23",
     "constructs": "^10.4.2",
-    "deepmerge-ts": "^7.1.5",
+    "deepmerge-ts": "^8.0.2",
     "fflate": "0.8.3",
     "smol-toml": "1.9.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@marcbachmann/cel-js": "8.0.0",

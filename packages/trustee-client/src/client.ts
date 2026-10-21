@@ -70,7 +70,7 @@ export class TrusteeClient {
     const status = JSON.parse((await this.#request("GET", "/nebula/v1/storage")).toString("utf8"));
     if (status.version !== 1 || !status.storage || typeof status.storage !== "object" ||
         Object.values(status.storage).some((s: any) =>
-          !["starting", "awaiting-owner", "ready", "unlock-denied", "closed"].includes(s?.phase))) {
+          !["starting", "awaiting-owner", "ready", "unlock-denied", "failed", "closed"].includes(s?.phase))) {
       throw new Error("Invalid attested storage status");
     }
     return status;

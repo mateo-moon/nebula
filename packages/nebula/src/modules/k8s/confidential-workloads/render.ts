@@ -10,6 +10,7 @@ import { generateConfidentialWorkloadPolicy } from "../trustee/genpolicy";
 import { snpIdentity, trusteePolicies } from "../trustee/policies";
 import type { TrusteeConfig } from "../trustee/types";
 import { validateWorkload } from "./validation";
+import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
@@ -30,7 +31,8 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const { spec, metadata } = resource;
   const runtime = spec.runtime ?? {};
   const config: TrusteeConfig = {
-    ...spec.trustee, name: spec.profile, namespace: metadata.namespace,
+    ...spec.trustee, chart: TRUSTEE_CHART, repository: undefined, version: TRUSTEE_CHART_VERSION,
+    name: spec.profile, namespace: metadata.namespace,
     ownerPublicKeyPem: spec.ownerPublicKeyPem, guest: spec.guest, network: spec.network,
     nodeSelector: spec.nodeSelector, clients: [{ namespace: metadata.namespace, podLabels: { app: spec.profile } }],
     genpolicy: options.genpolicy, k8sDistribution: runtime.k8sDistribution, ociVersion: runtime.ociVersion,
@@ -65,7 +67,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     volumeMounts: [mount("guest-guard", "/run/nebula-guard")] };
   const initContainers: any[] = [guard, kbs, gateway, tng];
   const volumes: any[] = [...structuredClone(base.spec.volumes), memory("instance"), memory("owner-tmp"),
-    memory("guest-guard", "1Mi"), memory("storage-runtime", "32Mi")];
+    memory("guest-guard", "1Mi"), memory("owner-ready", "1Mi"), memory("storage-runtime", "32Mi")];
   const bindings = (spec.storage ?? []).map(binding => ({ ...binding,
     spec: storages.find(storage => storage.metadata.namespace === metadata.namespace && storage.metadata.name === binding.resource)!.spec }));
   const encrypted = bindings.filter(binding => binding.spec.type === "EncryptedBlock");
@@ -86,7 +88,8 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   // Native clients may cache that non-affirming token until it expires.
   initContainers.push({ name: "nebula-await-owner", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
     command: ["node", "/app/dist/main.js"], args: ["await-owner", JSON.stringify(spec.resources.map(path => path.join("/")))],
-    securityContext: security(10001), resources: limits });
+    securityContext: security(10001), resources: limits,
+    volumeMounts: [mount("owner-ready", "/run/nebula-owner-ready")] });
   initContainers.push({ name: "nebula-install-storage", image: spec.storageImage, imagePullPolicy: "Always",
     command: ["/usr/local/bin/nebula-confidential-storage"], args: ["install"],
     securityContext: security(0), resources: limits,
@@ -126,6 +129,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
         ...directMounts.map(m => mount(`app-${m.storage}`, m.path)),
         mount("storage-runtime", "/run/nebula-runtime", true),
         mount("guest-guard", "/run/nebula-guard", true),
+        mount("owner-ready", "/run/nebula-owner-ready", true),
         ...(container.applicationResources?.length ? [mount(`resource-${container.name}`, "/run/nebula-resources", true)] : []),
         ...blockMounts.map(m => mount(`state-${m.storage}`, `/run/nebula-mounts/${m.storage}`, true)),
       ],
@@ -146,7 +150,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     terminationGracePeriodSeconds: 90, securityContext: { fsGroup: 10001, supplementalGroups: [0, 10001] },
     initContainers, containers, volumes,
   } };
-  for (const container of [...initContainers, ...containers]) container.command = privateStdio(container.command);
+  // Only trusted helper images may execute their own shell. The application
+  // image's first instruction must be the measured static launcher, which
+  // drops root/capabilities before running any bytes from that image.
+  for (const container of initContainers) container.command = privateStdio(container.command);
   const aa = stringify({ token_configs: { kbs: { url: "http://127.0.0.1:8080" } }, log: { level: "off" } });
   const cdh = stringify({ kbc: { name: "cc_kbc", url: "http://127.0.0.1:8080" }, log: { level: "off" },
     image: { kbc: "cc_kbc", kbs_uri: "http://127.0.0.1:8080", max_concurrent_layer_downloads_per_image: 1,
