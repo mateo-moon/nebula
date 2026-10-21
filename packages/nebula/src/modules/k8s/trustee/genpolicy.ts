@@ -144,10 +144,10 @@ function generatePolicy(workload: any, containers: readonly any[], guestConfig: 
       // Select stricter device predicates in genpolicy's INPUT rules. Generated
       // policy data and native output are never patched after synthesis.
       for (const [original, hardened] of [
-        ["allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)",
-          "confidential_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)"],
-        ["allow_volume_devices(p_volume_devices, i_volume_devices)",
-          "confidential_volume_devices(p_volume_devices, i_volume_devices)"],
+        ["    allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)",
+          "    confidential_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)"],
+        ["    allow_volume_devices(p_volume_devices, i_volume_devices)",
+          "    confidential_volume_devices(p_volume_devices, i_volume_devices)"],
       ]) {
         if (nativeRules.split(original).length !== 2) {
           throw new TypeError("Trustee: native genpolicy device predicate changed; review required");
