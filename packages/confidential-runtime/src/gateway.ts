@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { createHash, X509Certificate } from "node:crypto";
-import { mkdirSync, readFileSync, statfsSync } from "node:fs";
+import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
+import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, statfsSync } from "node:fs";
 import { createServer } from "node:https";
 import { request } from "node:http";
 import { join } from "node:path";
@@ -129,17 +129,49 @@ export function gateway(options: GatewayOptions) {
   return server;
 }
 
-export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = []): void {
+function checkedFile(path: string): Buffer {
+  const file = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const info = fstatSync(file);
+    if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o7777) !== 0o600 ||
+        info.size < 1 || info.size > 8192) throw new Error("Invalid instance credential file");
+    return readFileSync(file);
+  } finally { closeSync(file); }
+}
+
+/** Reuse the same guest-memory identity after an ordinary sidecar restart.
+ * A partial or tampered state never causes key regeneration or replacement. */
+export function loadOrCreateIdentity(directory: string): { key: Buffer; cert: Buffer } {
   if (Number(statfsSync(directory).type) !== 0x01021994) throw new Error("Instance custody requires guest tmpfs");
-  // Refuse reuse, including state mounted from a disk or another startup.
   const state = join(directory, "identity");
-  mkdirSync(state, { mode: 0o700 });
+  let fresh = false;
+  try { mkdirSync(state, { mode: 0o700 }); fresh = true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+  const info = lstatSync(state);
+  if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o7777) !== 0o700 ||
+      Number(statfsSync(state).type) !== 0x01021994) throw new Error("Invalid guest identity directory");
   const key = join(state, "key.pem"), cert = join(state, "cert.pem");
-  execFileSync("openssl", ["req", "-new", "-x509", "-newkey", "ec",
+  if (fresh) execFileSync("openssl", ["req", "-new", "-x509", "-newkey", "ec",
     "-pkeyopt", "ec_paramgen_curve:P-256", "-noenc", "-sha256", "-days", "365",
     "-subj", "/CN=nebula-instance", "-addext", "subjectAltName=DNS:nebula-instance",
     "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
     "-addext", "keyUsage=critical,digitalSignature,keyCertSign",
     "-keyout", key, "-out", cert], { stdio: "ignore", timeout: 15_000 });
-  gateway({ key: readFileSync(key), cert: readFileSync(cert), storageNames, resources }).listen(8444, "127.0.0.1");
+  const credential = { key: checkedFile(key), cert: checkedFile(cert) };
+  const certificate = new X509Certificate(credential.cert);
+  const privateKey = createPrivateKey(credential.key);
+  const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "der" });
+  if (privateKey.asymmetricKeyType !== "ec" || privateKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
+      !certificate.publicKey.export({ type: "spki", format: "der" }).equals(publicKey) ||
+      !certificate.verify(certificate.publicKey) || !certificate.ca ||
+      certificate.subjectAltName !== "DNS:nebula-instance" ||
+      Date.parse(certificate.validFrom) > Date.now() || Date.parse(certificate.validTo) <= Date.now()) {
+    throw new Error("Invalid or expired guest identity");
+  }
+  return credential;
+}
+
+export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = []): void {
+  const credential = loadOrCreateIdentity(directory);
+  gateway({ ...credential, storageNames, resources }).listen(8444, "127.0.0.1");
 }

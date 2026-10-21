@@ -2,7 +2,7 @@
 //! Identical replacement guests start with an empty Trustee. There is no
 //! hardware-derived fallback and no persistent copy of the instance credential.
 use crate::{
-    generic_config::{Initialization, Volume},
+    generic_config::{Initialization, ResourceBroker, Volume},
     lifecycle::{Exit, Format},
     mount_handoff as handoff, volume,
 };
@@ -45,7 +45,7 @@ pub(crate) fn install() -> Result<()> {
 // HTTP/1.0 requires a length or connection-close response, never chunked
 // transfer coding. Both the peer and endpoint are fixed guest components.
 // Buffer even error bodies in zeroizing memory; never return them in errors.
-fn local_key(resource: &str) -> Result<Option<Zeroizing<[u8; 32]>>> {
+fn local_resource(resource: &str) -> Result<Option<Zeroizing<Vec<u8>>>> {
     let address: SocketAddr = "127.0.0.1:8006".parse()?;
     let mut socket = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
     // Native api-server-rest can wait up to 50 seconds for CDH.
@@ -56,8 +56,8 @@ fn local_key(resource: &str) -> Result<Option<Zeroizing<[u8; 32]>>> {
         "GET /cdh/resource/{resource} HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n"
     )?;
     let mut response = Zeroizing::new(Vec::new());
-    socket.take(8193).read_to_end(&mut response)?;
-    ensure!(response.len() <= 8192, "invalid local key response");
+    socket.take(65_537).read_to_end(&mut response)?;
+    ensure!(response.len() <= 65_536, "invalid local resource response");
     let split = response
         .windows(4)
         .position(|v| v == b"\r\n\r\n")
@@ -82,13 +82,72 @@ fn local_key(resource: &str) -> Result<Option<Zeroizing<[u8; 32]>>> {
     }
     let body = &response[split + 4..];
     ensure!(
-        body.len() == 32 && length.is_none_or(|n| n == 32),
-        "volume key must be exactly 32 bytes"
+        !body.is_empty() && body.len() <= 64 * 1024 && length.is_none_or(|n| n == body.len()),
+        "invalid local resource length"
     );
+    Ok(Some(Zeroizing::new(body.to_vec())))
+}
+
+fn local_key(resource: &str) -> Result<Option<Zeroizing<[u8; 32]>>> {
+    let Some(response) = local_resource(resource)? else {
+        return Ok(None);
+    };
+    ensure!(response.len() == 32, "volume key must be exactly 32 bytes");
     let mut key = Zeroizing::new([0; 32]);
-    key.copy_from_slice(body);
+    key.copy_from_slice(&response);
     ensure!(key.iter().any(|b| *b != 0), "invalid volume key");
     Ok(Some(key))
+}
+
+/// The application receives only its measured allowlist over a dedicated
+/// memory-backed Unix socket. Kernel peer credentials are checked for every
+/// request; a matching path string alone is never authorization.
+pub(crate) fn serve_resources(json: &str) -> Result<()> {
+    let config = ResourceBroker::parse(json)?;
+    let mut listeners = Vec::with_capacity(config.clients.len());
+    for client in &config.clients {
+        let directory = format!("/run/nebula-resources/{}", client.name);
+        tmpfs(&directory)?;
+        let socket = format!("{directory}/resource.sock");
+        let listener = UnixListener::bind(&socket)?;
+        let path = std::ffi::CString::new(socket)?;
+        ensure!(
+            unsafe { libc::chown(path.as_ptr(), client.uid, client.gid) } == 0,
+            "cannot assign resource socket"
+        );
+        fs::set_permissions(path.to_str()?, Permissions::from_mode(0o600))?;
+        listener.set_nonblocking(true)?;
+        listeners.push(listener);
+    }
+    loop {
+        for (client, listener) in config.clients.iter().zip(&listeners) {
+            if let Ok((mut stream, _)) = listener.accept() {
+                stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+                stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+                let (uid, gid) = handoff::peer_credentials(&stream)?;
+                if uid != client.uid || gid != client.gid {
+                    continue;
+                }
+                let mut request = [0u8; 512];
+                let n = stream.read(&mut request)?;
+                let path = request[..n]
+                    .strip_prefix(b"GET ")
+                    .and_then(|r| r.strip_suffix(b"\n"));
+                let Some(path) = path.and_then(|r| std::str::from_utf8(r).ok()) else {
+                    continue;
+                };
+                if !client.resources.iter().any(|allowed| allowed == path) {
+                    continue;
+                }
+                if let Ok(Some(response)) = local_resource(path) {
+                    let len = u32::try_from(response.len())?.to_be_bytes();
+                    stream.write_all(&len)?;
+                    stream.write_all(&response)?;
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {

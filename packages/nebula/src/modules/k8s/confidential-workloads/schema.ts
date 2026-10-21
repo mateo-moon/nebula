@@ -44,6 +44,7 @@ export const workloadSpecSchema = obj({
     name, image, command: list(str(), 64, 1), args: list(str(), 128), env: labels,
     uid: int(11000, 65534), gid: int(11000, 65534),
     mounts: list(obj({ storage: name, path: str({ pattern: pathPattern }) }), 8),
+    applicationResources: list(resource, 64),
     ports: list(obj({ name: str({ maxLength: 15 }), port: int(1024, 65535) }), 16),
     resources: obj({ requests: labels, limits: labels }),
   }, ["name", "image", "command", "uid", "gid"]), 8, 1),
@@ -51,7 +52,7 @@ export const workloadSpecSchema = obj({
   resources: list(resource, 64, 1),
   registryMirrors: list(obj({ prefix: str(), location: str(), insecure: { type: "boolean" } }), 16),
   runtime,
-}, ["profile", "ownerPublicKeyPem", "guest", "nodeSelector", "network", "trustee", "containers", "resources"]);
+}, ["profile", "ownerPublicKeyPem", "guest", "nodeSelector", "network", "trustee", "storageImage", "containers", "resources"]);
 
 export function confidentialCrds() {
   return [

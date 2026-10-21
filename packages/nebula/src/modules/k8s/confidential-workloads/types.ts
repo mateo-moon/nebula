@@ -41,6 +41,9 @@ export interface WorkloadContainer {
   uid: number;
   gid: number;
   mounts?: readonly { storage: string; path: string }[];
+  /** Explicit resources exposed through this container's private Unix socket.
+   * Encrypted volume keys may never appear here. */
+  applicationResources?: readonly TrusteeResourcePath[];
   ports?: readonly { name: string; port: number }[];
   resources?: {
     requests: Readonly<Record<string, string>>;

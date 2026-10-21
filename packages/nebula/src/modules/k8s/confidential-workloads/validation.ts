@@ -40,7 +40,7 @@ export function validateStorage(resource: ConfidentialStorageResource): void {
 }
 
 function validateContainer(container: WorkloadContainer): void {
-  fields(container, ["name", "image", "command", "args", "env", "uid", "gid", "mounts", "ports", "resources"]);
+  fields(container, ["name", "image", "command", "args", "env", "uid", "gid", "mounts", "applicationResources", "ports", "resources"]);
   if (!name(container.name) || container.name.startsWith("nebula-") || !isDigestImage(container.image) ||
       !Array.isArray(container.command) || !container.command.length ||
       ![...container.command, ...(container.args ?? [])].every(value => typeof value === "string" && !value.includes("\0")) ||
@@ -56,6 +56,10 @@ function validateContainer(container: WorkloadContainer): void {
     if (!name(mount.storage) || !path(mount.path)) fail("invalid application mount");
   }
   const mounts = container.mounts ?? [];
+  if (!Array.isArray(container.applicationResources ?? []) ||
+      new Set((container.applicationResources ?? []).map(resourcePath)).size !== (container.applicationResources ?? []).length) {
+    fail("invalid or duplicate application resources");
+  }
   if (new Set(mounts.map(mount => mount.storage)).size !== mounts.length ||
       mounts.some((mount, index) => mounts.some((other, j) => j !== index &&
         (mount.path === other.path || mount.path.startsWith(`${other.path}/`))))) fail("overlapping or duplicate mounts");
@@ -87,6 +91,7 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   if (!Array.isArray(spec.containers) || !spec.containers.length || spec.containers.length > 8) fail("one to eight containers required");
   spec.containers.forEach(validateContainer);
   for (const values of [spec.containers.map(c => c.name), spec.containers.map(c => String(c.uid)),
+    spec.containers.map(c => String(c.gid)),
     spec.containers.flatMap(c => (c.ports ?? []).map(p => String(p.port))),
     spec.containers.flatMap(c => (c.ports ?? []).map(p => p.name))]) {
     if (new Set(values).size !== values.length) fail("duplicate container identity or port");
@@ -102,11 +107,20 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
     validateStorage(matches[0]);
     if (!spec.containers.some(c => c.mounts?.some(m => m.storage === binding.name))) fail("storage binding has no application recipient");
   }
+  const volumeKeys = new Set(bindings.map(binding => storages.find(storage =>
+    storage.metadata.name === binding.resource)!.spec).filter(storage => storage.type === "EncryptedBlock")
+    .map(storage => resourcePath(storage.keyResource)));
+  for (const container of spec.containers) for (const resource of container.applicationResources ?? []) {
+    const path = resourcePath(resource);
+    if (!spec.resources.some(declared => resourcePath(declared) === path) || volumeKeys.has(path)) {
+      fail("application resource must be declared and cannot be a volume key");
+    }
+  }
   for (const container of spec.containers) {
     for (const mount of container.mounts ?? []) if (!bindings.some(binding => binding.name === mount.storage)) fail("unknown mounted storage");
   }
   const encrypted = bindings.some(binding => storages.find(storage => storage.metadata.name === binding.resource)?.spec.type === "EncryptedBlock");
-  if (encrypted && !isDigestImage(spec.storageImage ?? "")) fail("encrypted volumes require a pinned storage runtime");
+  if (!isDigestImage(spec.storageImage ?? "")) fail("workloads require a pinned runtime for guarded application launch");
   if (!Array.isArray(spec.resources) || !spec.resources.length || spec.resources.length > 64 ||
       new Set(spec.resources.map(resourcePath)).size !== spec.resources.length) fail("invalid resource admission list");
   for (const binding of bindings) {

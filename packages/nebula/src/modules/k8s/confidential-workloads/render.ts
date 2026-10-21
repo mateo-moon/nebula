@@ -59,8 +59,13 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     command: ["node", "/app/dist/main.js"], args: ["gateway"], restartPolicy: "Always",
     securityContext: security(10001), resources: limits,
     volumeMounts: [mount("instance", "/run/instance"), mount("owner-tmp", "/tmp")] };
-  const initContainers: any[] = [kbs, gateway, tng];
-  const volumes: any[] = [...structuredClone(base.spec.volumes), memory("instance"), memory("owner-tmp")];
+  const guard = { name: "nebula-guard", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
+    command: ["node", "/app/dist/main.js"], args: ["guard"],
+    securityContext: security(0, 0, ["NET_ADMIN"]), resources: limits,
+    volumeMounts: [mount("guest-guard", "/run/nebula-guard")] };
+  const initContainers: any[] = [guard, kbs, gateway, tng];
+  const volumes: any[] = [...structuredClone(base.spec.volumes), memory("instance"), memory("owner-tmp"),
+    memory("guest-guard", "1Mi"), memory("storage-runtime", "32Mi")];
   const bindings = (spec.storage ?? []).map(binding => ({ ...binding,
     spec: storages.find(storage => storage.metadata.namespace === metadata.namespace && storage.metadata.name === binding.resource)!.spec }));
   const encrypted = bindings.filter(binding => binding.spec.type === "EncryptedBlock");
@@ -68,18 +73,24 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     resources: spec.resources.map(path => path.join("/")) }));
   gateway.volumeMounts.push(...encrypted.map(binding =>
     mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`, true)));
+  const resourceClients = spec.containers.filter(container => container.applicationResources?.length);
+  for (const client of resourceClients) volumes.push(memory(`resource-${client.name}`, "1Mi"));
+  if (resourceClients.length) initContainers.push({ name: "nebula-resource-broker", image: spec.storageImage, imagePullPolicy: "Always",
+    command: ["/usr/local/bin/nebula-confidential-storage"],
+    args: ["resource-broker", JSON.stringify({ version: 1, clients: resourceClients.map(client => ({
+      name: client.name, uid: client.uid, gid: client.gid,
+      resources: client.applicationResources!.map(path => path.join("/")),
+    })) })], restartPolicy: "Always", securityContext: security(0, 0, ["CHOWN"]), resources: limits,
+    volumeMounts: resourceClients.map(client => mount(`resource-${client.name}`, `/run/nebula-resources/${client.name}`)) });
   // Do not create a CDH attestation session under the initial deny policy.
   // Native clients may cache that non-affirming token until it expires.
   initContainers.push({ name: "nebula-await-owner", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
     command: ["node", "/app/dist/main.js"], args: ["await-owner", JSON.stringify(spec.resources.map(path => path.join("/")))],
     securityContext: security(10001), resources: limits });
-  if (encrypted.length) {
-    volumes.push(memory("storage-runtime", "32Mi"));
-    initContainers.push({ name: "nebula-install-storage", image: spec.storageImage, imagePullPolicy: "Always",
-      command: ["/usr/local/bin/nebula-confidential-storage"], args: ["install"],
-      securityContext: security(0), resources: limits,
-      volumeMounts: [mount("storage-runtime", "/run/nebula-runtime")] });
-  }
+  initContainers.push({ name: "nebula-install-storage", image: spec.storageImage, imagePullPolicy: "Always",
+    command: ["/usr/local/bin/nebula-confidential-storage"], args: ["install"],
+    securityContext: security(0), resources: limits,
+    volumeMounts: [mount("storage-runtime", "/run/nebula-runtime")] });
   for (const binding of bindings) {
     const volumeName = `app-${binding.name}`;
     if (binding.spec.type === "Memory") {
@@ -106,14 +117,16 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       mounts: blockMounts.map(m => ({ socket: `/run/nebula-mounts/${m.storage}/mount.sock`, path: m.path })) };
     return {
       name: container.name, image: container.image, imagePullPolicy: "Always",
-      command: blockMounts.length ? ["/run/nebula-runtime/nebula-confidential-storage"] : [...container.command],
-      args: blockMounts.length ? ["launch", JSON.stringify(launch), "--", ...container.command, ...(container.args ?? [])] : [...(container.args ?? [])],
+      command: ["/run/nebula-runtime/nebula-confidential-storage"],
+      args: ["launch", JSON.stringify(launch), "--", ...container.command, ...(container.args ?? [])],
       env: Object.entries(container.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value })),
-      securityContext: blockMounts.length ? security(0, 0, ["SYS_ADMIN", "SETPCAP", "SETUID", "SETGID"]) : security(container.uid, container.gid),
+      securityContext: security(0, 0, ["SYS_ADMIN", "SETPCAP", "SETUID", "SETGID"]),
       resources: container.resources ?? limits,
       volumeMounts: [
         ...directMounts.map(m => mount(`app-${m.storage}`, m.path)),
-        ...(blockMounts.length ? [mount("storage-runtime", "/run/nebula-runtime", true)] : []),
+        mount("storage-runtime", "/run/nebula-runtime", true),
+        mount("guest-guard", "/run/nebula-guard", true),
+        ...(container.applicationResources?.length ? [mount(`resource-${container.name}`, "/run/nebula-resources", true)] : []),
         ...blockMounts.map(m => mount(`state-${m.storage}`, `/run/nebula-mounts/${m.storage}`, true)),
       ],
       ...(container.ports?.length ? { ports: container.ports.map(p => ({ name: p.name, containerPort: p.port })) } : {}),

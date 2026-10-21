@@ -7,7 +7,7 @@ use std::{
     mem,
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
-        unix::{net::UnixStream, process::CommandExt},
+        unix::{fs::MetadataExt, net::UnixStream, process::CommandExt},
     },
     process::{Command, Stdio},
     sync::atomic::{AtomicI32, Ordering},
@@ -277,6 +277,30 @@ pub(crate) fn launch_generic(
     config: &crate::generic_config::Launcher,
     args: &[String],
 ) -> Result<()> {
+    // A malicious kubelet may request a measured application before the
+    // regular guard init container has completed. The trusted static launcher
+    // must refuse to exec application code until the guest kernel boundary is
+    // installed; the marker is in a root-owned guest tmpfs, mounted read-only.
+    let guard = std::path::Path::new("/run/nebula-guard/installed");
+    let start = Instant::now();
+    loop {
+        if let Ok(info) = fs::symlink_metadata(guard) {
+            let bytes = fs::read(guard)?;
+            if info.is_file()
+                && info.uid() == 0
+                && info.mode() & 0o7777 == 0o600
+                && bytes == b"nebula-guest-guard-v1\n"
+            {
+                break;
+            }
+            bail!("invalid guest guard marker");
+        }
+        ensure!(
+            start.elapsed() < Duration::from_secs(60),
+            "guest guard unavailable"
+        );
+        thread::sleep(Duration::from_millis(100));
+    }
     ensure!(
         !args.is_empty() && args[0].starts_with('/'),
         "explicit client program required"

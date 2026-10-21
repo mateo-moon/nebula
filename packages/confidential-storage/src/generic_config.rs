@@ -45,6 +45,22 @@ pub struct Mount {
     pub path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceBroker {
+    pub version: u8,
+    pub clients: Vec<ResourceClient>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceClient {
+    pub name: String,
+    pub uid: u32,
+    pub gid: u32,
+    pub resources: Vec<String>,
+}
+
 fn name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 40
@@ -129,10 +145,7 @@ impl Launcher {
             value.version == 1 && identity(value.uid, value.gid),
             "invalid client identity"
         );
-        ensure!(
-            !value.mounts.is_empty() && value.mounts.len() <= 8,
-            "invalid mount count"
-        );
+        ensure!(value.mounts.len() <= 8, "invalid mount count");
         let mut sockets = BTreeSet::new();
         for mount in &value.mounts {
             let storage = mount
@@ -156,6 +169,47 @@ impl Launcher {
                     == 1,
                 "overlapping mount targets"
             );
+        }
+        Ok(value)
+    }
+}
+
+impl ResourceBroker {
+    pub fn parse(json: &str) -> Result<Self> {
+        ensure!(json.len() <= 16384, "broker configuration too large");
+        let value: Self = serde_json::from_str(json)?;
+        ensure!(
+            value.version == 1 && !value.clients.is_empty() && value.clients.len() <= 8,
+            "invalid resource broker configuration"
+        );
+        let mut names = BTreeSet::new();
+        let mut users = BTreeSet::new();
+        for client in &value.clients {
+            ensure!(
+                name(&client.name)
+                    && identity(client.uid, client.gid)
+                    && names.insert(&client.name)
+                    && users.insert(client.uid)
+                    && !client.resources.is_empty()
+                    && client.resources.len() <= 64,
+                "invalid resource client"
+            );
+            let mut resources = BTreeSet::new();
+            for resource in &client.resources {
+                let parts: Vec<_> = resource.split('/').collect();
+                ensure!(
+                    parts.len() == 3
+                        && parts.iter().all(|part| !part.is_empty()
+                            && part.len() <= 128
+                            && (part.as_bytes()[0].is_ascii_alphanumeric()
+                                || b"_-".contains(&part.as_bytes()[0]))
+                            && part
+                                .bytes()
+                                .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c)))
+                        && resources.insert(resource),
+                    "invalid resource path"
+                );
+            }
         }
         Ok(value)
     }
@@ -221,5 +275,33 @@ mod tests {
         changed = config;
         changed["uid"] = json!(0);
         assert!(Launcher::parse(&changed.to_string()).is_err());
+    }
+
+    #[test]
+    fn resource_broker_rejects_unmeasured_clients_and_paths() {
+        let sample = json!({"version":1,"clients":[{"name":"app","uid":11000,"gid":11000,
+            "resources":["default/proof/session"]}]});
+        assert!(ResourceBroker::parse(&sample.to_string()).is_ok());
+        for path in [
+            "default/volume/../data",
+            "default/proof/session?key=1",
+            "default/proof/session\nGET default/volume/data",
+        ] {
+            let mut changed = sample.clone();
+            changed["clients"][0]["resources"][0] = json!(path);
+            assert!(
+                ResourceBroker::parse(&changed.to_string()).is_err(),
+                "{path}"
+            );
+        }
+        let mut changed = sample.clone();
+        changed["clients"][0]["uid"] = json!(0);
+        assert!(ResourceBroker::parse(&changed.to_string()).is_err());
+        changed = sample.clone();
+        changed["clients"]
+            .as_array_mut()
+            .unwrap()
+            .push(sample["clients"][0].clone());
+        assert!(ResourceBroker::parse(&changed.to_string()).is_err());
     }
 }

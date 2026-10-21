@@ -16,6 +16,8 @@ git -C "$source_dir" remote add origin https://github.com/inclavare-containers/T
 git -C "$source_dir" fetch --depth 1 origin "$revision"
 git -C "$source_dir" checkout --detach FETCH_HEAD
 test "$(git -C "$source_dir" rev-parse HEAD)" = "$revision"
+git -C "$source_dir" apply --check "$tool_dir/fail-closed-challenge.patch"
+git -C "$source_dir" apply "$tool_dir/fail-closed-challenge.patch"
 mkdir -- "$2"
 artifact_dir=$(CDPATH= cd -- "$2" && pwd)
 cd "$source_dir"
@@ -25,14 +27,18 @@ cargo +"$toolchain" build --locked --release --target-dir "$target_dir" -p tng -
 cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-cert --lib --no-default-features \
   --features crypto-rustcrypto,attester-coco,verifier-coco,attester-ita,verifier-ita,jsonwebtoken/use_pem \
   tee::coco::verifier::
-git diff --exit-code
+ cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-cert --lib --no-default-features \
+  --features crypto-rustcrypto,attester-coco,verifier-coco,attester-ita,verifier-ita,jsonwebtoken/use_pem \
+  fail_closed_challenge
+git -C "$source_dir" diff --binary -- rats-cert/src/tee/coco/converter/restful.rs | cmp - "$tool_dir/fail-closed-challenge.patch"
 git diff --cached --exit-code
 cp "$target_dir/release/tng" "$artifact_dir/tng"
 cp LICENSE "$artifact_dir/LICENSE"
 {
   echo 'TNG source: https://github.com/inclavare-containers/TNG'
   printf 'TNG revision: %s\n' "$revision"
-  echo 'Source modifications: none'
+  echo 'Source modifications: reviewed fail-closed challenge patch'
+  shasum -a 256 "$tool_dir/fail-closed-challenge.patch"
   printf 'Nebula revision: '
   git -C "$tool_dir" rev-parse HEAD
   rustc +"$toolchain" --version --verbose

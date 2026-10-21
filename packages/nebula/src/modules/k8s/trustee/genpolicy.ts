@@ -108,7 +108,7 @@ function generateWorkloadPolicy(workload: GuestPodManifest,
         !Number.isSafeInteger(security.runAsGroup) || security.runAsGroup < 0 ||
         security.capabilities?.drop?.join() !== "ALL" ||
         security.capabilities?.add?.some((cap: string) => !(block
-          ? ["SETUID", "SETGID", "SYS_CHROOT", "SYS_ADMIN", "SETPCAP", "MKNOD", "CHOWN"]
+          ? ["SETUID", "SETGID", "SYS_CHROOT", "SYS_ADMIN", "SETPCAP", "MKNOD", "CHOWN", "NET_ADMIN"]
           : ["SETUID", "SETGID", "SYS_CHROOT"]).includes(cap))) {
       throw new TypeError(`Invalid attested workload container ${container.name}`);
     }
@@ -116,7 +116,7 @@ function generateWorkloadPolicy(workload: GuestPodManifest,
     delete security.seccompProfile;
   }
   if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always" &&
-      !(block && ["nebula-install-storage", "nebula-await-owner"].includes(c.name) && c.restartPolicy === undefined))) {
+      !(block && ["nebula-guard", "nebula-install-storage", "nebula-await-owner"].includes(c.name) && c.restartPolicy === undefined))) {
     throw new TypeError("Only persistent bootstrap sidecars and the measured installer/owner gate are supported");
   }
   delete spec.automountServiceAccountToken;

@@ -1,6 +1,6 @@
 # Reuse the qualified Nebula synthesis toolchain. Helm dependencies continue to
 # use their pinned upstream package; the operator doesn't build charts.
-FROM --platform=$BUILDPLATFORM golang:1.27.1 AS manager
+FROM --platform=$BUILDPLATFORM golang:1.27.1@sha256:162be5298a40ed317005c8339c6de4d10d3eef336d66dc8e9259b03ab9d3a6d2 AS manager
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /workspace

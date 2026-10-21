@@ -15,6 +15,7 @@ on:
       - docker/confidential-storage-devices/**
       - .dockerignore
       - .github/workflows/verify-confidential-workloads.yml
+      - scripts/check-confidential-docker-bases.mjs
   push:
     branches: [main]
     paths:
@@ -30,6 +31,7 @@ on:
       - docker/confidential-storage-devices/**
       - .dockerignore
       - .github/workflows/verify-confidential-workloads.yml
+      - scripts/check-confidential-docker-bases.mjs
   workflow_dispatch: {}
 
 permissions:
@@ -50,6 +52,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
+      - name: Pin every external container build base
+        run: node scripts/check-confidential-docker-bases.mjs
       - run: npm install -g pnpm@11.9.0
       - run: pnpm --dir packages/confidential-operator install --frozen-lockfile
       - run: pnpm --dir packages/confidential-operator typecheck
@@ -72,6 +76,7 @@ jobs:
           make envtest
       - run: pnpm --dir packages/confidential-runtime install --frozen-lockfile
       - run: pnpm --dir packages/confidential-runtime build
+      - run: pnpm --dir packages/confidential-runtime test
       - name: Check public runtime sources
         run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-runtime packages/confidential-storage packages/confidential-storage-devices packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-runtime docker/confidential-storage docker/confidential-storage-devices
 

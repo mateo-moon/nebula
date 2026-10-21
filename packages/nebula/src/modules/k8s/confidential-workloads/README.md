@@ -35,6 +35,18 @@ authenticated by its measured UID/GID. The launcher drops all capabilities
 before starting the application. The image must contain a shell and its real
 mount-point directories; applications cannot run as root.
 
+The guest installs an `nftables` rule before any application can start. Kernel
+socket ownership keeps application UIDs away from the local AA, CDH, KBS and
+owner gateway ports. A measured static launcher waits for the guard's private
+tmpfs marker and drops privileges before executing application code. Storage
+helpers retain local CDH access. If an application needs a Trustee resource,
+declare it under that container's `applicationResources`; a private Unix socket
+broker then checks kernel peer credentials and an exact per-container allowlist.
+Volume key resources cannot be delegated to an application. This also applies
+to memory-only workloads, which require the pinned storage runtime for the
+guarded launcher. Existing measured guests keep their prior policy until
+explicit replacement and fresh owner enrollment.
+
 `initialization: IfEmpty` permits formatting only an entirely zero device.
 `Never` permits existing volumes only. A wrong key, malformed header or
 nonempty unrecognized disk never authorizes formatting. The controller does
