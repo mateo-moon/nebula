@@ -258,8 +258,15 @@ func TestIdenticalWorkloadsSeparatePodsAndServices(t *testing.T) {
 	}
 	var services corev1.ServiceList
 	_ = c.List(context.Background(), &services)
-	if len(services.Items) != 2 {
+	if len(services.Items) != 4 {
 		t.Fatal("service collision")
+	}
+	for _, service := range services.Items {
+		ownerEndpoint := strings.HasSuffix(service.Name, "-owner")
+		if service.Spec.PublishNotReadyAddresses != ownerEndpoint ||
+			(ownerEndpoint && (len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Port != 8443)) {
+			t.Fatal("only the attested owner endpoint may bypass application readiness")
+		}
 	}
 	// Restarting the process must recover existing Pods without creation.
 	r = &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: &testRenderer{}}
@@ -273,7 +280,7 @@ func TestIdenticalWorkloadsSeparatePodsAndServices(t *testing.T) {
 	}
 }
 func TestConflictsAndFilesystemClaimsFailClosed(t *testing.T) {
-	for _, scenario := range []string{"filesystem", "foreign-pod", "multiple-pods", "foreign-service"} {
+	for _, scenario := range []string{"filesystem", "foreign-pod", "multiple-pods", "foreign-service", "foreign-owner-service"} {
 		t.Run(scenario, func(t *testing.T) {
 			w, s, pvc := fixture("qualified", "first")
 			scheme := testScheme()
@@ -290,8 +297,12 @@ func TestConflictsAndFilesystemClaimsFailClosed(t *testing.T) {
 					other.Name = "another"
 					objects = append(objects, other)
 				}
-			case "foreign-service":
-				objects = append(objects, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: w.Name, Namespace: w.Namespace}})
+			case "foreign-service", "foreign-owner-service":
+				name := w.Name
+				if scenario == "foreign-owner-service" {
+					name += "-owner"
+				}
+				objects = append(objects, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: w.Namespace}})
 			}
 			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(w, s).WithObjects(objects...).Build()
 			r := &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: &testRenderer{}}
@@ -327,6 +338,18 @@ func TestServiceDriftAndStorageStatus(t *testing.T) {
 	_ = c.Get(ctx, client.ObjectKeyFromObject(w), &service)
 	if service.Spec.Ports[0].Port != 8443 {
 		t.Fatal("service drift persisted")
+	}
+	ownerKey := types.NamespacedName{Namespace: w.Namespace, Name: w.Name + "-owner"}
+	_ = c.Get(ctx, ownerKey, &service)
+	service.Spec.PublishNotReadyAddresses = false
+	service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{Name: "app", Port: 9080})
+	_ = c.Update(ctx, &service)
+	if err := run(t, r, w); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Get(ctx, ownerKey, &service)
+	if !service.Spec.PublishNotReadyAddresses || len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Port != 8443 {
+		t.Fatal("owner bootstrap endpoint lost readiness-independent, owner-only routing")
 	}
 	storage := &StorageReconciler{Client: c, Reader: c, Renderer: renderer}
 	if _, err := storage.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(s)}); err != nil {

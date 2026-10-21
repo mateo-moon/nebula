@@ -65,3 +65,5 @@ gateway, storage and device images after a reviewed main-branch change (or a
 manual qualification run). Its summary records the immutable GHCR digest for
 each image. Dev qualification images must be promoted by pinning reviewed
 digests; a mutable tag is not a workload identity.
+
+Owner provisioning uses `<workload-name>-owner:8443`, whose endpoint is available before application readiness. The ordinary workload Service retains normal readiness gating.

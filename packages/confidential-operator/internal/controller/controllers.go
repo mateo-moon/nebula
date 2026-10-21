@@ -336,16 +336,26 @@ func ownedBy(object client.Object, w *api.ConfidentialWorkload) bool {
 	return o != nil && o.UID == w.UID && o.Kind == "ConfidentialWorkload" && o.APIVersion == api.GroupVersion.String() && o.Name == w.Name
 }
 func (r *WorkloadReconciler) service(ctx context.Context, w *api.ConfidentialWorkload, routing workloadRouting) error {
-	ports := []corev1.ServicePort{{Name: "owner", Port: 8443, TargetPort: intstr.FromInt32(8443), Protocol: corev1.ProtocolTCP}}
+	ownerPorts := []corev1.ServicePort{{Name: "owner", Port: 8443, TargetPort: intstr.FromInt32(8443), Protocol: corev1.ProtocolTCP}}
+	ports := append([]corev1.ServicePort(nil), ownerPorts...)
 	for _, c := range routing.Containers {
 		for _, p := range c.Ports {
 			ports = append(ports, corev1.ServicePort{Name: p.Name, Port: p.Port, TargetPort: intstr.FromInt32(p.Port), Protocol: corev1.ProtocolTCP})
 		}
 	}
+	if err := r.ensureService(ctx, w, w.Name, ports, false); err != nil {
+		return err
+	}
+	// Owner enrollment must work before the encrypted application is ready.
+	// Keep unready endpoints confined to the attested owner API; application
+	// ports remain behind the ordinary readiness-gated Service.
+	return r.ensureService(ctx, w, w.Name+"-owner", ownerPorts, true)
+}
+func (r *WorkloadReconciler) ensureService(ctx context.Context, w *api.ConfidentialWorkload, name string, ports []corev1.ServicePort, publishNotReady bool) error {
 	var s corev1.Service
-	err := r.Reader.Get(ctx, client.ObjectKeyFromObject(w), &s)
+	err := r.Reader.Get(ctx, types.NamespacedName{Namespace: w.Namespace, Name: name}, &s)
 	if apierrors.IsNotFound(err) {
-		s = corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: w.Name, Namespace: w.Namespace, OwnerReferences: []metav1.OwnerReference{ownerReference(w)}}, Spec: corev1.ServiceSpec{Selector: map[string]string{ownerLabel: string(w.UID)}, Ports: ports}}
+		s = corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: w.Namespace, OwnerReferences: []metav1.OwnerReference{ownerReference(w)}}, Spec: corev1.ServiceSpec{Selector: map[string]string{ownerLabel: string(w.UID)}, Ports: ports, PublishNotReadyAddresses: publishNotReady}}
 		if err := r.Create(ctx, &s); err != nil {
 			return kubeFailure("ServiceCreateFailed", "workload Service creation failed", err)
 		}
@@ -357,9 +367,10 @@ func (r *WorkloadReconciler) service(ctx context.Context, w *api.ConfidentialWor
 	if !ownedBy(&s, w) || len(s.Spec.Selector) != 1 || s.Spec.Selector[ownerLabel] != string(w.UID) {
 		return errors.New("Service belongs to another resource")
 	}
-	if !reflect.DeepEqual(s.Spec.Ports, ports) {
+	if !reflect.DeepEqual(s.Spec.Ports, ports) || s.Spec.PublishNotReadyAddresses != publishNotReady {
 		before := s.DeepCopy()
 		s.Spec.Ports = ports
+		s.Spec.PublishNotReadyAddresses = publishNotReady
 		if err := r.Patch(ctx, &s, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
 			return kubeFailure("ServiceUpdateFailed", "workload Service update failed", err)
 		}

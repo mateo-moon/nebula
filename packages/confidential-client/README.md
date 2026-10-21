@@ -4,7 +4,7 @@
 
 ## First deployment
 
-DevOps installs `ConfidentialOperator`, `ConfidentialWorkload` and any `ConfidentialStorage` resources, reserves an image tag, and routes raw TCP to the operator-created workload Service. DevOps generates a private one-use invitation with `confidential-client invite claim-token.txt`, commits **only its printed SHA-256 hash** to `ownerClaimSha256`, and gives the token file and reviewed public declaration to the user. The user independently reviews the pinned helper images, SNP launch identity, network and storage bindings. The invitation authenticates first claim; it never authorizes later Trustee administration.
+DevOps installs `ConfidentialOperator`, `ConfidentialWorkload` and any `ConfidentialStorage` resources, reserves an image tag, and routes raw TCP to the operator-created `<workload-name>-owner` Service on port 8443. DevOps generates a private one-use invitation with `confidential-client invite claim-token.txt`, commits **only its printed SHA-256 hash** to `ownerClaimSha256`, and gives the token file and reviewed public declaration to the user. The user independently reviews the pinned helper images, SNP launch identity, network and storage bindings. The invitation authenticates first claim; it never authorizes later Trustee administration.
 
 Build or load a local `linux/amd64` image whose absolute command and mount points match the declaration. Then run one command on a trusted owner machine with local Docker, registry credentials, native `genpolicy` and the qualified TNG binary:
 

@@ -70,5 +70,5 @@ new ApiObject(chart, "owner-gateway", { apiVersion: "gateway.networking.k8s.io/v
     listeners: [{ name: "owner", protocol: "TLS", port: 8443, tls: { mode: "Passthrough" } }] } });
 new ApiObject(chart, "owner-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TLSRoute",
   metadata: { name: "example-owner", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "owner" }],
-    hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "workload", port: 8443 }] }] } });
+    hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "workload-owner", port: 8443 }] }] } });
 app.synth();
