@@ -202,15 +202,13 @@
                           "pattern": "^[a-z][a-z0-9-]{0,39}$"
                         },
                         "image": {
+                          "type": "string",
+                          "maxLength": 4096,
                           "oneOf": [
                             {
-                              "type": "string",
-                              "maxLength": 4096,
                               "pattern": "^.+@sha256:[a-f0-9]{64}$"
                             },
                             {
-                              "type": "string",
-                              "maxLength": 4096,
                               "pattern": "^[A-Za-z0-9][A-Za-z0-9.:-]*/[a-z0-9][a-z0-9/._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
                             }
                           ]

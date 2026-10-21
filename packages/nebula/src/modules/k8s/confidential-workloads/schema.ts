@@ -10,8 +10,10 @@ const obj = (properties: Record<string, Schema>, required = Object.keys(properti
 const list = (items: Schema, maxItems = 64, minItems = 0): Schema => ({ type: "array", items, maxItems, minItems });
 const labels = { type: "object", maxProperties: 64, additionalProperties: str() };
 const name = str({ pattern: namePattern, maxLength: 40 });
-const image = str({ pattern: "^.+@sha256:[a-f0-9]{64}$" });
-const publishedImage = str({ pattern: "^[A-Za-z0-9][A-Za-z0-9.:-]*/[a-z0-9][a-z0-9/._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$" });
+const imagePattern = "^.+@sha256:[a-f0-9]{64}$";
+const publishedImagePattern = "^[A-Za-z0-9][A-Za-z0-9.:-]*/[a-z0-9][a-z0-9/._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$";
+const image = str({ pattern: imagePattern });
+const workloadImage = str({ oneOf: [{ pattern: imagePattern }, { pattern: publishedImagePattern }] });
 const resource = list(str({ pattern: "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$", maxLength: 128 }), 3, 3);
 const runtime = obj({
   memoryMiB: int(2048, 65536), vcpus: int(1, 32),
@@ -45,7 +47,7 @@ export const workloadSpecSchema = obj({
     ["chart", "kbsImage", "tngImage", "gatewayImage"]),
   storageImage: image,
   containers: list({ ...obj({
-    name, image: { oneOf: [image, publishedImage] }, imageKeyResource: resource,
+    name, image: workloadImage, imageKeyResource: resource,
     command: list(str(), 64, 1), args: list(str(), 128), env: labels,
     uid: int(11000, 65534), gid: int(11000, 65534),
     mounts: list(obj({ storage: name, path: str({ pattern: pathPattern }) }), 8),
