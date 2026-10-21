@@ -138,6 +138,7 @@ export interface DeployOptions {
   manifest: string; name: string; host: string; port?: number; sourceImage: string;
   releaseDirectory: string; tngBinary: string; claimTokenFile?: string;
   registryAuthFile?: string; awsProfile?: string; helperImage?: string;
+  localPort?: number; verifierPort?: number;
   genpolicy?: string; cache?: string; volumeKey?: string[]; resourceFile?: string[]; waitSeconds?: number;
 }
 
@@ -173,12 +174,17 @@ export async function deploy(options: DeployOptions) {
   } else writeFileSync(deployment, JSON.stringify(identity) + "\n", { flag: "wx", mode: 0o600 });
   if (!existsSync(state)) prepareWorkload({ manifest: options.manifest, name: options.name, stateDirectory: state,
     target: { host, port: options.port ?? 8443 },
+    localPort: options.localPort, verifierPort: options.verifierPort,
     claimTokenFile: options.claimTokenFile,
     publishedImageDigests: { [container.image]: published.digest },
     genpolicy: { executable: options.genpolicy, cacheDirectory: options.cache } });
   const prepared = readPreparedClient(state);
   if (prepared.profile.target.host !== host || prepared.profile.target.port !== (options.port ?? 8443)) {
     throw new Error("Prepared state is bound to a different owner endpoint");
+  }
+  if ((options.localPort !== undefined && prepared.profile.localPort !== options.localPort) ||
+      (options.verifierPort !== undefined && prepared.profile.verifierPort !== options.verifierPort)) {
+    throw new Error("Prepared state uses different local verifier ports");
   }
   const ownerKey = privateFile(ownerKeyPath);
   let client: TrusteeClient | undefined;

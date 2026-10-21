@@ -40,6 +40,8 @@ program.command("deploy <manifest>")
   .option("--helper-image <digest>", "Reviewed CoCo encryption helper image, pinned by digest")
   .option("--genpolicy <file>", "Qualified native genpolicy executable")
   .option("--cache <directory>", "Public image metadata cache")
+  .option("--local-port <number>", "Local TNG port (default 18080 for fresh state)", Number)
+  .option("--verifier-port <number>", "Local attestation verifier port (default 18082 for fresh state)", Number)
   .option("--volume-key <binding=file>", "Existing private 32-byte volume key; repeat per binding", (value, values: string[]) => [...values, value], [])
   .option("--resource-file <path=file>", "Private application resource; repeat for every extra declared path", (value, values: string[]) => [...values, value], [])
   .option("--wait-seconds <number>", "Maximum time for publication, attestation and bootstrap", Number, 900)
@@ -49,6 +51,7 @@ program.command("deploy <manifest>")
       sourceImage: options.sourceImage, releaseDirectory: options.releaseDir, claimTokenFile: options.claimToken,
       tngBinary: options.tng, registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile,
       helperImage: options.helperImage, genpolicy: options.genpolicy, cache: options.cache,
+      localPort: options.localPort, verifierPort: options.verifierPort,
       volumeKey: options.volumeKey, resourceFile: options.resourceFile, waitSeconds: options.waitSeconds });
     console.log(JSON.stringify(result, null, 2));
   });

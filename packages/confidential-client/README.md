@@ -21,6 +21,8 @@ The client creates its own private P-256 owner key and random image/volume keys,
 
 For ECR, the client uses the local AWS profile and `--aws-profile` if needed. For another registry, provide a private skopeo auth JSON through `--registry-auth-file`. The operator needs read access to the published image so it can resolve and measure the same digest. Reserve an immutable tag at the registry; changing a tag after the guest is created cannot change the running Pod or its measured digest, but it can prevent a fresh deployment. The local Docker daemon and owner machine are part of the owner's trust boundary.
 
+If the default local ports are busy, choose unused ports with `--local-port` and `--verifier-port` on the first deployment. Retries must use the same prepared state and port choices.
+
 `--volume-key name=/private/existing.key` supplies a retained 32-byte disk key; the client generates a new key only for `initialization: IfEmpty`. Preserve `private-release/` securely. A replacement VM has a new TLS key and empty Trustee; it requires explicit re-enrollment and key reprovisioning. Neither the claim token nor Kubernetes metadata proves a unique global instance. An administrator who uses the invitation first can block deployment, but a client that cannot prove control with its own key releases no image or disk key.
 
 If the declaration includes additional application resources, pass each private
