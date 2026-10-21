@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
-import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, statfsSync } from "node:fs";
+import { chmodSync, constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, statfsSync } from "node:fs";
 import { createServer } from "node:https";
 import { request } from "node:http";
 import { join } from "node:path";
@@ -145,18 +145,28 @@ export function loadOrCreateIdentity(directory: string): { key: Buffer; cert: Bu
   if (Number(statfsSync(directory).type) !== 0x01021994) throw new Error("Instance custody requires guest tmpfs");
   const state = join(directory, "identity");
   let fresh = false;
-  try { mkdirSync(state, { mode: 0o700 }); fresh = true; }
+  try {
+    mkdirSync(state, { mode: 0o700 });
+    fresh = true;
+    // Kubernetes fsGroup sets SGID on the emptyDir root. A new directory
+    // inherits that bit even when mkdir requests 0700; clear it explicitly.
+    chmodSync(state, 0o700);
+  }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const info = lstatSync(state);
   if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o7777) !== 0o700 ||
       Number(statfsSync(state).type) !== 0x01021994) throw new Error("Invalid guest identity directory");
   const key = join(state, "key.pem"), cert = join(state, "cert.pem");
-  if (fresh) execFileSync("openssl", ["req", "-new", "-x509", "-newkey", "ec",
-    "-pkeyopt", "ec_paramgen_curve:P-256", "-noenc", "-sha256", "-days", "365",
-    "-subj", "/CN=nebula-instance", "-addext", "subjectAltName=DNS:nebula-instance",
-    "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
-    "-addext", "keyUsage=critical,digitalSignature,keyCertSign",
-    "-keyout", key, "-out", cert], { stdio: "ignore", timeout: 15_000 });
+  if (fresh) {
+    execFileSync("openssl", ["req", "-new", "-x509", "-newkey", "ec",
+      "-pkeyopt", "ec_paramgen_curve:P-256", "-noenc", "-sha256", "-days", "365",
+      "-subj", "/CN=nebula-instance", "-addext", "subjectAltName=DNS:nebula-instance",
+      "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0",
+      "-addext", "keyUsage=critical,digitalSignature,keyCertSign",
+      "-keyout", key, "-out", cert], { stdio: "ignore", timeout: 15_000 });
+    chmodSync(key, 0o600);
+    chmodSync(cert, 0o600);
+  }
   const credential = { key: checkedFile(key), cert: checkedFile(cert) };
   const certificate = new X509Certificate(credential.cert);
   const privateKey = createPrivateKey(credential.key);

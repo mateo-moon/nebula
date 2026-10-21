@@ -104,6 +104,9 @@ fn local_key(resource: &str) -> Result<Option<Zeroizing<[u8; 32]>>> {
 /// request; a matching path string alone is never authorization.
 pub(crate) fn serve_resources(json: &str) -> Result<()> {
     let config = ResourceBroker::parse(json)?;
+    // The socket must be private from its first instant, before the
+    // application UID is assigned and before any client can connect.
+    unsafe { libc::umask(0o077) };
     let mut listeners = Vec::with_capacity(config.clients.len());
     for client in &config.clients {
         let directory = format!("/run/nebula-resources/{}", client.name);
@@ -111,11 +114,11 @@ pub(crate) fn serve_resources(json: &str) -> Result<()> {
         let socket = format!("{directory}/resource.sock");
         let listener = UnixListener::bind(&socket)?;
         let path = std::ffi::CString::new(socket)?;
+        fs::set_permissions(path.to_str()?, Permissions::from_mode(0o600))?;
         ensure!(
             unsafe { libc::chown(path.as_ptr(), client.uid, client.gid) } == 0,
             "cannot assign resource socket"
         );
-        fs::set_permissions(path.to_str()?, Permissions::from_mode(0o600))?;
         listener.set_nonblocking(true)?;
         listeners.push(listener);
     }

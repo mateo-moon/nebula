@@ -259,6 +259,21 @@
                           "maxItems": 8,
                           "minItems": 0
                         },
+                        "applicationResources": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"
+                            },
+                            "maxItems": 3,
+                            "minItems": 3
+                          },
+                          "maxItems": 64,
+                          "minItems": 0
+                        },
                         "ports": {
                           "type": "array",
                           "items": {
@@ -424,6 +439,7 @@
                   "nodeSelector",
                   "network",
                   "trustee",
+                  "storageImage",
                   "containers",
                   "resources"
                 ]

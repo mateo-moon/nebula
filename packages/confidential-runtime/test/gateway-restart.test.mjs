@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, statfsSync } from "node:fs";
+import { chmodSync, lstatSync, mkdtempSync, rmSync, statfsSync } from "node:fs";
 import { test } from "node:test";
 import { loadOrCreateIdentity } from "../dist/gateway.js";
 
@@ -31,5 +31,14 @@ test("a killed gateway reuses the exact guest identity; invalid custody fails cl
     await stop(second.child);
     chmodSync(`${directory}/identity/key.pem`, 0o644);
     assert.throws(() => loadOrCreateIdentity(directory), /credential file/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("an fsGroup SGID tmpfs parent still produces a private identity directory", { skip: !guestMemory }, () => {
+  const directory = mkdtempSync("/dev/shm/nebula-gateway-sgid-");
+  try {
+    chmodSync(directory, 0o2770);
+    loadOrCreateIdentity(directory);
+    assert.equal(lstatSync(`${directory}/identity`).mode & 0o7777, 0o700);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
