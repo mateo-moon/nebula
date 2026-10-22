@@ -23,6 +23,14 @@ For ECR, the client uses the local AWS profile and `--aws-profile` if needed. Fo
 
 If the default local ports are busy, choose unused ports with `--local-port` and `--verifier-port` on the first deployment. Retries must use the same prepared state and port choices.
 
+To avoid AMD certificate-service rate limits, pass a public AMD VCEK certificate
+with `deploy --vcek /path/vcek.der`. Trustee uses its native offline certificate
+store and still verifies the AMD signing chain and the approved guest identity.
+For existing state, `renew ./new-state --state ./private-release/owner-state
+--vcek /path/vcek.der` preserves the enrolled instance and workload approval while
+changing the endorsement source. Use the new state for later commands; never
+re-enroll to work around a certificate-service failure.
+
 `--volume-key name=/private/existing.key` supplies a retained 32-byte disk key; the client generates a new key only for `initialization: IfEmpty`. Preserve `private-release/` securely. A replacement VM has a new TLS key and empty Trustee; it requires explicit re-enrollment and key reprovisioning. Neither the claim token nor Kubernetes metadata proves a unique global instance. An administrator who uses the invitation first can block deployment, but a client that cannot prove control with its own key releases no image or disk key.
 
 If the declaration includes additional application resources, pass each private

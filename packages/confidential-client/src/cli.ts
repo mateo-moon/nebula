@@ -35,6 +35,7 @@ program.command("deploy <manifest>")
   .requiredOption("--release-dir <directory>", "Private output directory for owner and image keys")
   .requiredOption("--claim-token <file>", "Private one-use claim token provided by DevOps (0600)")
   .requiredOption("--tng <file>", "Qualified native TNG client executable")
+  .option("--vcek <file>", "Public AMD VCEK certificate for native offline verification")
   .option("--registry-auth-file <file>", "Private skopeo auth JSON; ECR uses local AWS credentials by default")
   .option("--aws-profile <name>", "AWS profile for ECR publication")
   .option("--helper-image <digest>", "Reviewed CoCo encryption helper image, pinned by digest")
@@ -51,6 +52,7 @@ program.command("deploy <manifest>")
       sourceImage: options.sourceImage, releaseDirectory: options.releaseDir, claimTokenFile: options.claimToken,
       tngBinary: options.tng, registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile,
       helperImage: options.helperImage, genpolicy: options.genpolicy, cache: options.cache,
+      vcekFile: options.vcek,
       localPort: options.localPort, verifierPort: options.verifierPort,
       volumeKey: options.volumeKey, resourceFile: options.resourceFile, waitSeconds: options.waitSeconds });
     console.log(JSON.stringify(result, null, 2));
@@ -106,8 +108,9 @@ program.command("owner-header <new-file>")
 program.command("renew <new-state>")
   .description("Renew local verifier credentials offline, preserving the enrolled instance and workload approval")
   .requiredOption("--state <directory>", "Existing private verifier state")
-  .action(async (destination: string, options: { state: string }) => {
-    await renewClient(options.state, destination);
+  .option("--vcek <file>", "Public AMD VCEK certificate to use for native offline verification")
+  .action(async (destination: string, options: { state: string; vcek?: string }) => {
+    await renewClient(options.state, destination, { vcekFile: options.vcek });
     console.log("Renewed local verifier credentials; the approved identity and instance pin are unchanged.");
   });
 

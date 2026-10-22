@@ -126,12 +126,14 @@ function readClientState(directory: string, allowExpiredVerifier: boolean) {
 /** Renew only local verifier credentials. Keep the approved guest identity,
  * endpoint, workload policy and existing instance pin, with no network contact
  * or discovery of a replacement. The original state remains untouched. */
-export async function renewClient(stateDirectory: string, newStateDirectory: string): Promise<string> {
+export async function renewClient(stateDirectory: string, newStateDirectory: string,
+  options: Pick<PrepareClientOptions, "vcekFile"> = {}): Promise<string> {
   const { directory, profile } = readClientState(stateDirectory, true);
   const out = prepareClient({
     stateDirectory: newStateDirectory, identity: profile.identity, target: profile.target,
     localPort: profile.localPort, verifierPort: profile.verifierPort, instanceBound: profile.instanceBound,
-    vcekFile: profile.offlineVcek ? join(directory, "kds-store", "vcek", profile.identity.chipId, "vcek.der") : undefined,
+    vcekFile: options.vcekFile ?? (profile.offlineVcek ?
+      join(directory, "kds-store", "vcek", profile.identity.chipId, "vcek.der") : undefined),
   });
   try {
     const copyPrivate = (name: string, limit: number) => {

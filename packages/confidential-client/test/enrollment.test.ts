@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { X509Certificate } from "node:crypto";
 import { readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { request } from "node:https";
@@ -8,6 +9,7 @@ import { test } from "node:test";
 import { gateway, ownerRoute } from "../../confidential-runtime/src/gateway";
 import { enrollInstance, TrusteeClient, renewClient } from "../src/index";
 import { readEnrollment } from "../src/enrollment";
+import { readPreparedClient } from "../src/prepare";
 import { fixture, port } from "./support";
 
 test("guest gateway exposes only owner administration, never remote key consumption", () => {
@@ -59,6 +61,19 @@ test("enrollment pins the guest key and rejects a replacement before any owner H
   assert.deepEqual(readEnrollment(renewed, f.options.audience), enrolled);
   assert.deepEqual(readFileSync(join(renewed, "workload.json")), readFileSync(join(f.stateDirectory, "workload.json")));
   assert.notDeepEqual(readFileSync(join(renewed, "signer.key")), readFileSync(join(f.stateDirectory, "signer.key")));
+  // This fixture certificate checks local cache plumbing only. Native SNP
+  // verification remains responsible for validating the AMD signing chain.
+  const cached = join(f.directory, "cached-endorsement"), endorsement = join(f.stateDirectory, "ca.pem");
+  execFileSync("bin/confidential-client", ["renew", cached, "--state", f.stateDirectory, "--vcek", endorsement]);
+  assert.equal(readPreparedClient(cached).profile.offlineVcek, true);
+  assert.equal(readPreparedClient(f.stateDirectory).profile.offlineVcek, false);
+  assert.deepEqual(readEnrollment(cached, f.options.audience), enrolled);
+  const certificate = readFileSync(join(cached, "kds-store", "vcek", readPreparedClient(cached).profile.identity.chipId, "vcek.der"));
+  assert.deepEqual(certificate, new X509Certificate(readFileSync(endorsement)).raw);
+  const cachedAgain = join(f.directory, "cached-again");
+  await renewClient(cached, cachedAgain);
+  assert.equal(readPreparedClient(cachedAgain).profile.offlineVcek, true);
+  assert.deepEqual(readEnrollment(cachedAgain, f.options.audience), enrolled);
   await assert.rejects(renewClient(f.stateDirectory, renewed), /EEXIST/);
   const malformed = join(f.directory, "malformed-renewal");
   writeFileSync(join(renewed, "instance.json"), JSON.stringify({ ...enrolled, publicKeySha256: "0".repeat(64) }));
