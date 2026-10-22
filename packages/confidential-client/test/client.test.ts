@@ -90,6 +90,15 @@ test("managed client uses native admin encoding, validates paths, isolates keys 
   await assert.rejects(client.listResourcePolicies(), /closed|exited/);
 });
 
+test("TNG waits for verifier HTTP readiness behind an early-accepting published port", async t => {
+  const f = await fixture(t, { verifierHttpDelayMs: 750 });
+  const client = await TrusteeClient.connect(f.options);
+  try {
+    assert.equal(readFileSync(join(f.directory, "verifier-http-ready"), "utf8"), "ready");
+    assert.deepEqual(await client.listResourcePolicies(), ["resource-policy"]);
+  } finally { await client.close(); }
+});
+
 test("redirects and HTTP failures never leak credentials or response content, and clean up", async t => {
   let redirected = 0;
   const trap = createServer((_req, res) => { redirected++; res.end(); });

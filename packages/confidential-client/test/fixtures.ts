@@ -16,6 +16,7 @@ export interface FixtureConfig {
   instanceBound?: boolean;
   status?: number;
   redirectPort?: number;
+  verifierHttpDelayMs?: number;
 }
 
 export interface RecordedRequest {
@@ -32,7 +33,12 @@ function runFixture(mode: string, directory: string): void {
   const args = process.argv.slice(4);
   const pidFile = join(directory, "verifier.pid");
   if (mode === "verifier") {
-    tcpServer(socket => socket.destroy()).listen(config.verifierPort, "127.0.0.1");
+    const readyAt = Date.now() + (config.verifierHttpDelayMs ?? 0);
+    createServer((req, res) => {
+      if (Date.now() < readyAt) { req.socket.destroy(); return; }
+      writeFileSync(join(directory, "verifier-http-ready"), "ready");
+      res.writeHead(404).end();
+    }).listen(config.verifierPort, "127.0.0.1");
   } else if (mode === "docker") {
     if (args[0] === "--host") args.splice(0, 2);
     appendFileSync(join(directory, "docker-args.jsonl"), JSON.stringify(args) + "\n");
@@ -47,6 +53,9 @@ function runFixture(mode: string, directory: string): void {
       rmSync(pidFile, { force: true });
     } else process.exitCode = 1;
   } else if (mode === "tng") {
+    if (config.verifierHttpDelayMs && !existsSync(join(directory, "verifier-http-ready"))) {
+      throw new Error("Verifier accepted TCP before its HTTP API was ready");
+    }
     const mapping = JSON.parse(args[args.indexOf("--config-content") + 1]);
     if (mapping.add_ingress[0].mapping.out.host !== "127.0.0.1") throw new Error("TNG requires resolved IPv4 mapping endpoints");
     if (config.tcpForwardPort) {

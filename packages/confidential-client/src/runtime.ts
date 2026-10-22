@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
 import { createConnection, createServer } from "node:net";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -33,6 +34,19 @@ async function listening(port: number): Promise<boolean> {
     socket.once("connect", () => finish(true));
     socket.once("error", () => finish(false));
     socket.once("timeout", () => finish(false));
+  });
+}
+async function verifierResponding(port: number): Promise<boolean> {
+  // A published Docker port may accept TCP before the verifier binds inside
+  // its container. Require an HTTP response before TNG requests a challenge.
+  // This is readiness only; TNG still verifies the signed attestation token.
+  return new Promise(accept => {
+    const req = request({ host: "127.0.0.1", port, path: "/", method: "GET", agent: false }, response => {
+      response.resume(); accept(true);
+    });
+    req.setTimeout(500, () => { req.destroy(); accept(false); });
+    req.once("error", () => accept(false));
+    req.end();
   });
 }
 async function stop(child?: ChildProcess) {
@@ -109,7 +123,7 @@ export async function startRuntime(options: RuntimeOptions) {
         if (verifier && await docker(["inspect", "--format", "{{.State.Running}}", name], 5_000) !== "true") {
           throw new Error("Local Trustee verifier exited during startup");
         }
-        if (await listening(port)) return;
+        if (await (verifier ? verifierResponding(port) : listening(port))) return;
         await delay(100);
       } while (Date.now() < deadline);
       throw new Error("Local Trustee client startup timed out");
