@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-21",
+  "node": "bm-65-108-201-226",
+  "scope": "Disposable confidential-audit PodVM and loop246 only",
+  "ownerApproval": {
+    "method": "Independent Nebula Trustee CLI prepare-workload with pinned native genpolicy and public offline VCEK",
+    "initDataSha256": "bd8320453d3c44a48df82661bba97e672b0a9135b5a083efe00ab3a040128f39",
+    "matchedDeployment": true,
+    "attestedEnrollmentSucceeded": true,
+    "instancePublicKeySha256": "e17d0e373a97ea5faa4c08df05f6496a966f7decfac0bba86f766f3343433fd0"
+  },
+  "measuredImages": {
+    "ownerGateway": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:33b123b1411c607ce49c541699cefbaf2e3dcba044e295deaf1add23f7dec116",
+    "storageRuntime": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:4ee026aa15c00e34a78021394014a8bfa3cd98eba9ad2b03cf511c4fc73c0bd4",
+    "shelllessApplication": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:5b0be2ff2e75d7275e9b508374aea38910ff99010f270916d49d5dba57cf051e"
+  },
+  "liveChecks": {
+    "pod": "cw-audit-smxhs",
+    "zeroContainerRestarts": true,
+    "attestedStoragePhase": "ready",
+    "freshOwnerProofsVerified": 2,
+    "encryptedDataFilesystem": "ext4",
+    "memoryFilesystem": "tmpfs",
+    "applicationUid": 11000,
+    "applicationGid": 11000,
+    "applicationEffectiveCapabilities": "0000000000000000",
+    "directCdhStorageKeyReadDenied": true,
+    "undeclaredBrokerStorageKeyReadDenied": true,
+    "adminExecRequestDeniedByGuestPolicy": true
+  },
+  "cleanup": {
+    "auditNamespaceAbsent": true,
+    "auditPvPvcAbsent": true,
+    "loop246Detached": true,
+    "auditBackingDirectoryAbsent": true,
+    "retainedQualificationPodsUnchanged": true,
+    "retainedLoop244And245MappingsUnchanged": true
+  },
+  "limits": [
+    "The retained qualification guests continue to use their earlier measurement and were not replaced.",
+    "This test does not establish a global singleton or ciphertext rollback protection."
+  ]
+}

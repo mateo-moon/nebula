@@ -1,7 +1,7 @@
 # Native TNG client build
 
 Maintainer and CI tooling for the native runtime consumed by
-[`@nebula/trustee-client`](../../packages/trustee-client/README.md).
+[`@nebula/confidential-client`](../../packages/confidential-client/README.md).
 This directory is outside both Node package archives. The Node client accepts
 an already-built TNG executable through `tngBinary` / `--tng`.
 
@@ -39,14 +39,18 @@ successful completion; a partial output directory must not be distributed.
 The script also supports the qualified macOS host toolchain; CI currently
 publishes only the explicitly labelled Linux amd64 artifact.
 
-The recipe builds unmodified upstream commit
+The recipe builds pinned upstream commit
 [`839da075e8dbe667fd79833181df079cd019102e`](https://github.com/inclavare-containers/TNG/commit/839da075e8dbe667fd79833181df079cd019102e),
 which includes [merged compatibility PR #263](https://github.com/inclavare-containers/TNG/pull/263).
-It verifies the exact revision, uses the locked dependency graph, runs the CoCo
-verifier tests, and checks that tracked sources remain unmodified. Those tests
+It applies the reviewed [fail-closed challenge patch](fail-closed-challenge.patch)
+after verifying the exact revision. A legacy Attestation Service response can
+no longer substitute a dummy nonce for a verifier-issued challenge. The build
+uses the locked dependency graph, runs the CoCo verifier and challenge regression
+tests, and checks that the patch is the only tracked source change. Those tests
 cover pinned roots and certificate bundles, invalid trust files, token verification
-and standard/legacy Base64 JWT `x5c` decoding. No local patch is applied.
-Certificate and token verification remain enabled.
+and standard/legacy Base64 JWT `x5c` decoding. Certificate and token
+verification remain enabled. The patch qualifies only the owner-side verifier
+binary; the server image stays upstream.
 
 The upstream source is licensed under Apache-2.0.
 The server deployment continues to use unmodified upstream images.

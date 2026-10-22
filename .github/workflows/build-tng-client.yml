@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - tools/tng-client/**
-      - packages/trustee-client/**
+      - packages/confidential-client/**
       - packages/nebula/package.json
       - packages/nebula/src/modules/k8s/trustee/client-plan.ts
       - packages/nebula/src/modules/k8s/trustee/policies.ts
@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: "24"
       - name: Check source publication boundary
-        run: node scripts/publication-guard.mjs tools/tng-client packages/trustee-client
+        run: node scripts/publication-guard.mjs tools/tng-client packages/confidential-client
       - name: Install native build prerequisites
         run: |
           sudo apt-get update
@@ -40,7 +40,7 @@ jobs:
       - name: Build and test the pinned runtime
         run: sh tools/tng-client/build.sh "$RUNNER_TEMP/tng-source" "$RUNNER_TEMP/native-artifact"
       - name: Qualify the artifact with the Node client and native Trustee AS
-        working-directory: packages/trustee-client
+        working-directory: packages/confidential-client
         env:
           TNG_TEST_BINARY: ${{ runner.temp }}/native-artifact/tng
           TRUSTEE_TEST_IMAGE: ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68

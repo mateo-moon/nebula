@@ -72,13 +72,28 @@ type NativePolicyConfig = Pick<TrusteeConfig, "network" | "genpolicy" | "k8sDist
  * a pre-generated policy or an observed identity. */
 export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
   guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig) {
+  return generateWorkloadPolicy(workload, guestConfig, config, false);
+}
+
+/** Combined-workload builder entry point. Raw block devices remain ciphertext;
+ * only the measured storage helper and mount launcher receive added capabilities. */
+export function generateConfidentialWorkloadPolicy(workload: GuestPodManifest,
+  guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig) {
+  return generateWorkloadPolicy(workload, guestConfig, config, true);
+}
+
+function generateWorkloadPolicy(workload: GuestPodManifest,
+  guestConfig: { "aa.toml": string; "cdh.toml": string }, config: NativePolicyConfig, block: boolean) {
   if (workload.kind !== "Pod" || !workload.spec) throw new TypeError("Attested workload requires a Pod");
   const copy = structuredClone(workload) as any;
   const spec = copy.spec;
   if (!["kata-qemu-snp", "kata-qemu-tdx"].includes(spec.runtimeClassName) ||
       spec.automountServiceAccountToken !== false || spec.enableServiceLinks !== false ||
       spec.hostNetwork || spec.hostPID || spec.hostIPC || spec.shareProcessNamespace || spec.ephemeralContainers?.length ||
-      spec.volumes?.some((volume: any) => Object.keys(volume).sort().join() !== "emptyDir,name" || volume.emptyDir.medium !== "Memory")) {
+      spec.volumes?.some((volume: any) =>
+        !(Object.keys(volume).sort().join() === "emptyDir,name" && volume.emptyDir.medium === "Memory") &&
+        !(block && Object.keys(volume).sort().join() === "name,persistentVolumeClaim" &&
+          Object.keys(volume.persistentVolumeClaim).join() === "claimName"))) {
     throw new TypeError("Attested workload requires private namespaces, no API credentials and only guest tmpfs");
   }
   const containers = [...(spec.initContainers ?? []), ...spec.containers];
@@ -92,13 +107,18 @@ export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
         !Number.isSafeInteger(security.runAsUser) || security.runAsUser < 0 ||
         !Number.isSafeInteger(security.runAsGroup) || security.runAsGroup < 0 ||
         security.capabilities?.drop?.join() !== "ALL" ||
-        security.capabilities?.add?.some((cap: string) => !["SETUID", "SETGID", "SYS_CHROOT"].includes(cap))) {
+        security.capabilities?.add?.some((cap: string) => !(block
+          ? ["SETUID", "SETGID", "SYS_CHROOT", "SYS_ADMIN", "SETPCAP", "MKNOD", "CHOWN", "NET_ADMIN"]
+          : ["SETUID", "SETGID", "SYS_CHROOT"]).includes(cap))) {
       throw new TypeError(`Invalid attested workload container ${container.name}`);
     }
     delete security.runAsNonRoot;
     delete security.seccompProfile;
   }
-  if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always")) throw new TypeError("Only persistent bootstrap sidecars are supported");
+  if (spec.initContainers?.some((c: any) => c.restartPolicy !== "Always" &&
+      !(block && ["nebula-guard", "nebula-install-storage", "nebula-await-owner"].includes(c.name) && c.restartPolicy === undefined))) {
+    throw new TypeError("Only persistent bootstrap sidecars and the measured installer/owner gate are supported");
+  }
   delete spec.automountServiceAccountToken;
   delete spec.enableServiceLinks;
   // RuntimeClass overhead affects host scheduling only. VM sizing remains in
@@ -111,15 +131,32 @@ export function generateAttestedWorkloadPolicy(workload: GuestPodManifest,
   if (Object.keys(guestConfig).sort().join() !== "aa.toml,cdh.toml" || Object.values(guestConfig).some(v => typeof v !== "string")) {
     throw new TypeError("Expected measured AA and CDH configuration");
   }
-  return generatePolicy(copy, containers, guestConfig, config, asset("client.rego"), false);
+  return generatePolicy(copy, containers, guestConfig, config, asset("client.rego"), false, block);
 }
 
 function generatePolicy(workload: any, containers: readonly any[], guestConfig: Record<string, string>,
-  config: NativePolicyConfig, profile: string, trustee: boolean) {
+  config: NativePolicyConfig, profile: string, trustee: boolean, block = false) {
   validateNetwork(config.network);
   const directory = mkdtempSync(join(tmpdir(), "nebula-trustee-genpolicy-"));
   try {
-    const rules = `${asset("rules.rego")}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
+    let nativeRules = asset("rules.rego");
+    if (block) {
+      // Select stricter device predicates in genpolicy's INPUT rules. Generated
+      // policy data and native output are never patched after synthesis.
+      for (const [original, hardened] of [
+        ["    allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)",
+          "    confidential_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)"],
+        ["    allow_volume_devices(p_volume_devices, i_volume_devices)",
+          "    confidential_volume_devices(p_volume_devices, i_volume_devices)"],
+      ]) {
+        if (nativeRules.split(original).length !== 2) {
+          throw new TypeError("Trustee: native genpolicy device predicate changed; review required");
+        }
+        nativeRules = nativeRules.replace(original, hardened);
+      }
+      profile += `\n${asset("confidential-block.rego")}`;
+    }
+    const rules = `${nativeRules}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
     const rulesPath = join(directory, "rules.rego");
     const settingsPath = join(directory, "genpolicy-settings.json");
     const initdataPath = join(directory, "initdata.toml");

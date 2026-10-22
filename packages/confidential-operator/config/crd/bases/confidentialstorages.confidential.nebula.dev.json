@@ -1,0 +1,173 @@
+{
+  "apiVersion": "apiextensions.k8s.io/v1",
+  "kind": "CustomResourceDefinition",
+  "metadata": {
+    "name": "confidentialstorages.confidential.nebula.dev",
+    "annotations": {
+      "argocd.argoproj.io/sync-wave": "-3",
+      "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
+    }
+  },
+  "spec": {
+    "group": "confidential.nebula.dev",
+    "scope": "Namespaced",
+    "conversion": {
+      "strategy": "None"
+    },
+    "names": {
+      "kind": "ConfidentialStorage",
+      "listKind": "ConfidentialStorageList",
+      "plural": "confidentialstorages",
+      "singular": "confidentialstorage",
+      "shortNames": [
+        "cs"
+      ]
+    },
+    "versions": [
+      {
+        "name": "v1alpha1",
+        "served": true,
+        "storage": true,
+        "subresources": {
+          "status": {}
+        },
+        "additionalPrinterColumns": [
+          {
+            "name": "Phase",
+            "type": "string",
+            "jsonPath": ".status.phase"
+          }
+        ],
+        "schema": {
+          "openAPIV3Schema": {
+            "type": "object",
+            "properties": {
+              "apiVersion": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "kind": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "spec": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "enum": [
+                      "Memory",
+                      "EncryptedBlock"
+                    ]
+                  },
+                  "sizeLimit": {
+                    "type": "string",
+                    "maxLength": 16,
+                    "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+                  },
+                  "claimName": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "sizeBytes": {
+                    "type": "integer",
+                    "minimum": 67108864,
+                    "maximum": 1125899906842624
+                  },
+                  "keyResource": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128,
+                      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3
+                  },
+                  "initialization": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "enum": [
+                      "Never",
+                      "IfEmpty"
+                    ]
+                  },
+                  "retention": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "enum": [
+                      "Retain"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "x-kubernetes-validations": [
+                  {
+                    "rule": "self.type == 'Memory' ? has(self.sizeLimit) && !has(self.claimName) && !has(self.keyResource) && !has(self.sizeBytes) && !has(self.initialization) && !has(self.retention) : has(self.claimName) && has(self.sizeBytes) && has(self.keyResource) && has(self.initialization) && has(self.retention) && !has(self.sizeLimit)",
+                    "message": "Specify memory size or a complete encrypted block declaration"
+                  },
+                  {
+                    "rule": "!has(self.sizeBytes) || self.sizeBytes % 512 == 0",
+                    "message": "Block size must be a multiple of 512"
+                  },
+                  {
+                    "rule": "self == oldSelf",
+                    "message": "Storage declarations are immutable; use a new resource for a changed binding"
+                  }
+                ]
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "observedGeneration": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "phase": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "podName": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "podUid": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "specSha256": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "initDataSha256": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                }
+              }
+            },
+            "required": [
+              "spec"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

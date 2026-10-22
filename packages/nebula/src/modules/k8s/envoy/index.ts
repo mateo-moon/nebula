@@ -1,5 +1,8 @@
 import type { Container } from "cdk8s-plus-33/lib/imports/k8s";
 import { isDigestImage } from "../confidential-guests/types";
+import { measuredFragments } from "./measured-fragments";
+
+export { measuredFragments } from "./measured-fragments";
 
 export interface EnvoyTlsFiles {
   certificateChain: string;
@@ -110,18 +113,6 @@ export class EnvoyTcpProxy {
         .map(route => ({ name: route.name, containerPort: route.listenPort, protocol: "TCP" })),
     };
   }
-}
-
-/** Split measured argv literals below the pinned policy parser's line bound.
- * Concatenation preserves the existing bootstrap representation exactly. */
-export function measuredFragments(text: string): string[] {
-  const pieces: string[] = [];
-  while (text.length) {
-    let size = Math.min(text.length, 650);
-    while (JSON.stringify(text.slice(0, size)).length > 700) size--;
-    pieces.push(text.slice(0, size)); text = text.slice(size);
-  }
-  return pieces;
 }
 
 /** Preserve the proxy container and measured bootstrap, joining argv as literal
