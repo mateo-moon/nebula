@@ -434,6 +434,32 @@ async function start() {
     });
   });
   (document.querySelector(".security-card") ?? document.body).append(checks, checksOutput);
+  const recoveryButton = document.createElement("button"), recoveryOutput = document.createElement("p");
+  recoveryButton.type = "button";
+  recoveryButton.className = "secondary";
+  recoveryButton.textContent = "Back up current enrollment";
+  let recoveryUrl;
+  recoveryButton.addEventListener("click", () => {
+    recoveryButton.disabled = true;
+    void (async () => {
+      const password = document.getElementById("recovery-password");
+      if (password.value.length < 12) throw new Error("Enter at least 12 characters in Recovery backup password, then try again");
+      const backup = await encryptedBackup(owner, password.value);
+      password.value = "";
+      if (recoveryUrl) URL.revokeObjectURL(recoveryUrl);
+      recoveryUrl = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = recoveryUrl;
+      link.download = "nebula-owner-recovery-updated.json";
+      link.textContent = "Download current encrypted recovery backup";
+      recoveryOutput.replaceChildren(link);
+    })().catch((error) => {
+      recoveryOutput.textContent = error instanceof Error ? error.message : "Recovery backup failed";
+    }).finally(() => {
+      recoveryButton.disabled = false;
+    });
+  });
+  (document.querySelector(".security-card") ?? document.body).append(recoveryButton, recoveryOutput);
 }
 if (typeof document !== "undefined") {
   document.getElementById("restore-form")?.addEventListener("submit", (event) => {
