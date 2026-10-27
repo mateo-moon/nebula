@@ -1,56 +1,65 @@
 # Confidential client
 
-`confidential-client` is the owner-side interface to a Nebula Confidential stack. It publishes an encrypted OCI image, independently measures the declared guest with native CoCo `genpolicy`, verifies SEV-SNP through TNG, claims the guest with the owner's public key, and provisions image and volume keys only to that verified instance. It also exposes Trustee administration and storage diagnostics.
-
-## First deployment
-
-DevOps installs `ConfidentialOperator`, `ConfidentialWorkload` and any `ConfidentialStorage` resources, reserves an image tag, and routes raw TCP to the operator-created `<workload-name>-owner` Service on port 8443. DevOps generates a private one-use invitation with `confidential-client invite claim-token.txt`, commits **only its printed SHA-256 hash** to `ownerClaimSha256`, and gives the token file and reviewed public declaration to the user. The user independently reviews the pinned helper images, SNP launch identity, network and storage bindings. The invitation authenticates first claim; it never authorizes later Trustee administration.
-
-Build or load a local `linux/amd64` image whose absolute command and mount points match the declaration. Then run one command on a trusted owner machine with local Docker, registry credentials, native `genpolicy` and the qualified TNG binary:
+Deploy an encrypted image to a Nebula Confidential stack from one page:
 
 ```sh
-confidential-client deploy reviewed-workload.yaml \
-  --name workload --host owner.example.test --port 8443 \
-  --source-image my-local-image:release \
-  --claim-token ./claim-token.txt \
-  --release-dir ./private-release \
-  --tng /opt/tng/bin/tng
+confidential-client ui
 ```
 
-The client creates its own private P-256 owner key and random image/volume keys, encrypts every OCI layer to the declared Trustee key path, uploads only ciphertext, and checks the registry's exact manifest digest. The controller retries policy rendering until the publication tag exists, then creates the Pod with that **digest**, not the mutable tag. The client independently generates the policy for the published digest and compares the attested guest to its reviewed identity before submitting the invitation or any key. It then verifies that its own key controls the claimed Trustee, installs policies, provisions keys and waits for guest-local bootstrap. The output includes the verified SNP identity, instance TLS key fingerprint, immutable image digest and bootstrap status. No user Kubernetes access or manual resource creation is required.
+1. Open the public connection settings provided by your administrator.
+2. Select a local `linux/amd64` image and paste your temporary access token.
+3. Provide registry access and any existing disk keys requested by the page.
+4. Review the prepared stack, then select **Encrypt & deploy**.
 
-For ECR, the client uses the local AWS profile and `--aws-profile` if needed. For another registry, provide a private skopeo auth JSON through `--registry-auth-file`. The operator needs read access to the published image so it can resolve and measure the same digest. Reserve an immutable tag at the registry; changing a tag after the guest is created cannot change the running Pod or its measured digest, but it can prevent a fresh deployment. The local Docker daemon and owner machine are part of the owner's trust boundary.
+The page shows publication, independent measurement, attestation, ownership and startup progress. It provisions keys only after verifying the approved VM/workload and proving control with your own local owner key. **Verify again & check status** rechecks the enrolled instance. No Kubernetes access or further administrator action is required for this deployment.
 
-If the default local ports are busy, choose unused ports with `--local-port` and `--verifier-port` on the first deployment. Retries must use the same prepared state and port choices.
+Install the reviewed client package, local Docker, qualified TNG and native CoCo `genpolicy` once. Put the native tools on PATH, or start with `ui --tng /opt/tng/bin/tng --genpolicy /opt/kata/bin/genpolicy`. Native tools are installed separately; the UI never downloads or builds them. `--connection stack.json` preloads the public settings and `--no-open` prints the address. Private releases default to `~/.nebula/confidential`; override with `--directory`.
 
-To avoid AMD certificate-service rate limits, pass a public AMD VCEK certificate
-with `deploy --vcek /path/vcek.der`. Trustee uses its native offline certificate
-store and still verifies the AMD signing chain and the approved guest identity.
-For existing state, `renew ./new-state --state ./private-release/owner-state
---vcek /path/vcek.der` preserves the enrolled instance and workload approval while
-changing the endorsement source. Use the new state for later commands; never
-re-enroll to work around a certificate-service failure.
+The browser is a presentation layer backed by your local client, following the UI/local-custody separation used by Polkadot.js. Signing, plaintext image processing, registry credentials and attestation verification stay on your computer. The owner private key is never returned to the page. The service binds only `127.0.0.1`, uses a random per-process browser capability, checks Origin/Host, and serves all assets locally with a restrictive CSP. Keep its private local address private while it runs.
 
-`--volume-key name=/private/existing.key` supplies a retained 32-byte disk key; the client generates a new key only for `initialization: IfEmpty`. Preserve `private-release/` securely. A replacement VM has a new TLS key and empty Trustee; it requires explicit re-enrollment and key reprovisioning. Neither the claim token nor Kubernetes metadata proves a unique global instance. An administrator who uses the invitation first can block deployment, but a client that cannot prove control with its own key releases no image or disk key.
+Use an image with an absolute executable path in its ENTRYPOINT or CMD. The page shows the prepared UID, mounts and ports; your image must support them. OCI commands are hash-bound to the immutable manifest and enter native policy. Registry tags are release slots: replacing a running measured guest or changing its contract is a separate, explicitly approved lifecycle operation.
 
-If the declaration includes additional application resources, pass each private
-file as `--resource-file repository/type/tag=/private/file`. The client refuses
-to start provisioning until every declared resource has a corresponding file.
+## Administrator handoff
 
-## Later operations
+Pass `accessToken` to the Nebula `ConfidentialWorkload` construct during deployment. Use 32 random bytes encoded as 64 hex digits. The construct retains/emits only its SHA-256 commitment; the token is temporary first-claim authority. Keep plaintext tokens out of Git. For deterministic GitOps replay, retain the resulting public `ownerClaimSha256` in the deployment declaration. Set `commandFromImage: true` for a generic image slot.
 
-All connected commands use `--state ./private-release/owner-state`, `--tng /opt/tng/bin/tng`, `--owner-key ./private-release/owner.key` and `--audience <profile>`:
+Export one public connection file from the prepared declarations:
+
+```sh
+confidential-client connection workload.yaml --name workload \
+  --host owner.example.test --port 8443 \
+  --vcek /public/vcek.der --output stack.json
+```
+
+Give the user `stack.json`, their token and registry push access. Route raw TCP to `<workload-name>-owner:8443`. The connection file contains the reviewed workload/storage declaration, endpoint and optional public AMD certificate; it contains no token or key. The native verifier validates the certificate's AMD chain. The [full Nebula example](../nebula/example/confidential-workload-stack.ts) includes the operator, CRDs, retained disk, device helper and owner route.
+
+The controller waits for publication, verifies encrypted layer annotations, pins the manifest digest and creates the measured guest automatically. It needs registry read access; it never needs a decryption key. The user independently reviews the public settings and pinned helpers before provisioning. An administrator who claims first can deny service; the client then refuses to release its keys. No external bootstrap Trustee is used.
+
+## CLI and recovery
+
+The browser uses the same TypeScript API as the CLI. Headless deployment accepts the temporary token directly, without an invitation file:
+
+```sh
+confidential-client deploy workload.yaml --name workload \
+  --host owner.example.test --source-image my-app:release \
+  --access-token "$CONFIDENTIAL_ACCESS_TOKEN" \
+  --release-dir ./private-release --tng /opt/tng/bin/tng
+```
+
+Alternatively set `CONFIDENTIAL_ACCESS_TOKEN` and omit the argument. The CLI removes it from subprocess environments. `--registry-auth-file` supplies a private skopeo auth JSON; ECR uses your local AWS profile. `--vcek` enables native offline endorsement verification, avoiding AMD service throttling. `--volume-key name=/private/key` supplies an existing 32-byte volume key; new keys are generated only for an `IfEmpty` disk. `--resource-file repository/type/tag=/private/file` supplies declared application resources. Legacy `--claim-token <file>` remains supported.
+
+Preserve your private release directory: owner key, image/disk keys, publication receipt and instance enrollment are required for recovery. Retrying uses the same ciphertext and keys. The UI stops safely and retains the release on failure. A new guest has a different TLS identity and empty Trustee; it must never be silently accepted as the enrolled instance.
+
+Connected CLI commands use `--state <release>/owner-state --owner-key <release>/owner.key --audience <profile> --tng /opt/tng/bin/tng`:
 
 | Command | Purpose |
 | --- | --- |
-| `attest` | Verify SNP and the pinned instance again; print the approved identity. |
-| `status` | Read owner-authorized bootstrap and storage status without key bytes. |
-| `verify` | Verify attested TLS and owner authorization. |
-| `list-resource-policies` | List installed Trustee policy IDs. |
-| `put-resource`, `delete-resource` | Provision or remove an explicitly named resource. |
-| `set-resource-policy`, `set-attestation-policy` | Install reviewed Trustee policy. |
-| `renew <new-state>` | Renew local verifier credentials without selecting a new instance. |
+| `attest`, `verify` | Verify SNP, workload identity and owner authorization. |
+| `status`, `storage-status`, `bootstrap-status` | Read non-secret startup/storage diagnostics. |
+| `put-resource`, `delete-resource` | Provision/remove an explicitly named resource. |
+| `list-resource-policies`, `set-resource-policy`, `set-attestation-policy` | Manage reviewed Trustee policy. |
+| `renew <new-state>` | Renew local verifier credentials while preserving enrollment. Add `--vcek` to cache a public AMD endorsement. |
 
-Advanced commands `encrypt-publish`, `prepare-workload`, `enroll` and `configure-workload` expose individual stages for review or recovery. `owner-header` writes a short-lived native admin header to a private file. See `confidential-client --help` for options. The TypeScript API exports `deploy`, `publishImage`, `prepareWorkload`, `enrollInstance`, `TrusteeClient` and policy helpers.
+Advanced `encrypt-publish`, `prepare-workload`, `enroll` and `configure-workload` expose individual stages. `owner-key` and `owner-header` support explicit key administration. `invite` is retained for legacy file-based invitations. See `confidential-client --help` for options.
 
-The Node package ships TypeScript sources and uses a matching reviewed `nebula-cdk8s` revision. Native TNG and `genpolicy` are separate reviewed executables; the client never downloads or builds them. The [TNG workflow](../../.github/workflows/build-tng-client.yml) and [workload guide](../nebula/src/modules/k8s/confidential-workloads/README.md) describe their provenance and guest boundary.
+Enrollment selects one approved instance; it does not enforce a global singleton. Disk rollback resistance and automatic Trustee replacement custody are not provided. The local machine and Docker runtime remain in the owner's trust boundary.

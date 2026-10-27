@@ -6,7 +6,7 @@ import { checkServerIdentity, type TLSSocket } from "node:tls";
 import { readPreparedClient } from "./prepare";
 import { startRuntime, type RuntimeOptions } from "./runtime";
 import { createOwnerToken, ownerKey } from "./owner-token";
-import { claimSha256, readClaimToken } from "./claim";
+import { claimSha256, accessTokenBytes } from "./claim";
 
 export const INSTANCE_SERVER_NAME = "nebula-instance";
 const FILE = "instance.json";
@@ -78,6 +78,7 @@ export interface EnrollOptions extends RuntimeOptions {
   readonly ownerPrivateKey: Parameters<typeof ownerKey>[0];
   readonly audience: string;
   readonly claimTokenFile?: string;
+  readonly accessToken?: string;
 }
 
 /** Explicit first enrollment. Existing enrollment is never overwritten. No
@@ -92,11 +93,11 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
   const key = ownerKey(options.ownerPrivateKey);
   createOwnerToken(key, options.audience);
   let claimToken: Buffer | undefined;
-  if (options.claimTokenFile) {
+  if (options.claimTokenFile || options.accessToken !== undefined) {
     const approvalPath = join(directory, "workload.json"), stat = lstatSync(approvalPath);
     if (!stat.isFile() || (stat.mode & 0o077) !== 0 || stat.size > 65536) throw new Error("Invalid private workload approval");
     const approval = JSON.parse(readFileSync(approvalPath, "utf8"));
-    claimToken = readClaimToken(options.claimTokenFile);
+    claimToken = accessTokenBytes(options);
     if (approval.audience !== options.audience || approval.ownerClaimSha256 !== claimSha256(claimToken)) {
       throw new Error("Claim token does not match the prepared workload approval");
     }

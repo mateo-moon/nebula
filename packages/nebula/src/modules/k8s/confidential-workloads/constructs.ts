@@ -5,6 +5,7 @@ import { isDigestImage } from "../confidential-guests/types";
 import { publicConfig } from "../trustee/validation";
 import { confidentialCrds } from "./schema";
 import { validateStorage, validateWorkload } from "./validation";
+import { confidentialAccessTokenHash } from "./access-token";
 import { CONFIDENTIAL_API, CONFIDENTIAL_GROUP, type ConfidentialStorageResource, type ConfidentialStorageSpec,
   type ConfidentialWorkloadResource, type ConfidentialWorkloadSpec } from "./types";
 
@@ -34,15 +35,24 @@ export interface ConfidentialWorkloadConfig {
   spec: ConfidentialWorkloadSpec;
   /** Public declarations for validating references during Nebula synthesis. */
   storages?: readonly ConfidentialStorageResource[];
+  /** Temporary user access capability supplied during deployment. Never emitted
+   * in Kubernetes or retained by the construct; only its SHA-256 is measured. */
+  accessToken?: string;
 }
 export class ConfidentialWorkload extends BaseConstruct<ConfidentialWorkloadConfig> {
   readonly resource: ApiObject;
   readonly declaration: ConfidentialWorkloadResource;
   constructor(scope: Construct, id: string, config: ConfidentialWorkloadConfig) {
-    super(scope, id, publicConfig("ConfidentialWorkload", config));
+    const { accessToken, ...publicPart } = config;
+    const hash = accessToken === undefined ? undefined : confidentialAccessTokenHash(accessToken);
+    if (hash && config.spec.ownerClaimSha256 && hash !== config.spec.ownerClaimSha256) {
+      throw new TypeError("Access token differs from the declared claim commitment");
+    }
+    const safe = { ...publicPart, spec: { ...config.spec, ...(hash ? { ownerClaimSha256: hash } : {}) } };
+    super(scope, id, publicConfig("ConfidentialWorkload", safe));
     this.declaration = { apiVersion: CONFIDENTIAL_API, kind: "ConfidentialWorkload",
-      metadata: { name: config.name, namespace: config.namespace }, spec: config.spec };
-    validateWorkload(this.declaration, config.storages ?? []);
+      metadata: { name: safe.name, namespace: safe.namespace }, spec: safe.spec };
+    validateWorkload(this.declaration, safe.storages ?? []);
     this.resource = new ApiObject(this, "resource", { ...this.declaration,
       metadata: { ...this.declaration.metadata, annotations: {
         "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",

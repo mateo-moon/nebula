@@ -1,4 +1,5 @@
-/** Complete declaration example. Replace the public pins and invitation hash
+/** Complete declaration example. Replace public pins and supply the temporary
+ * CONFIDENTIAL_ACCESS_TOKEN deployment parameter (32 random bytes, hex).
  * with independently reviewed values before applying its synthesized YAML.
  * No private key, image key or registry password belongs in this file.
  *
@@ -46,7 +47,7 @@ const storages: ConfidentialStorageResource[] = [{ apiVersion: "confidential.neb
 for (const storage of storages) new ConfidentialStorage(chart, storage.metadata.name,
   { name: storage.metadata.name, namespace, spec: storage.spec });
 new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, storages, spec: {
-  profile, ownerClaimSha256: "6".repeat(64),
+  profile, ...(process.env.CONFIDENTIAL_ACCESS_TOKEN ? {} : { ownerClaimSha256: "6".repeat(64) }),
   guest: { measurement: "7".repeat(96), chipId: "8".repeat(128),
     minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
   nodeSelector: { "kubernetes.io/hostname": node },
@@ -56,13 +57,13 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
     tngImage: images.tng, gatewayImage: images.gateway },
   storageImage: images.storage,
   containers: [{ name: "app", image: "ghcr.io/example/workload:owner-release-1",
-    imageKeyResource: ["default", "image", "app"], command: ["/app/server"], uid: 11000, gid: 11000,
+    imageKeyResource: ["default", "image", "app"], commandFromImage: true, uid: 11000, gid: 11000,
     mounts: [{ storage: "data", path: "/data" }, { storage: "scratch", path: "/scratch" }],
     ports: [{ name: "app", port: 9080 }] }],
   storage: [{ name: "data", resource: "data" }, { name: "scratch", resource: "scratch" }],
   resources: [["default", "image", "app"], ["default", "volume", "data"]],
   runtime: { memoryMiB: 4096, vcpus: 2, k8sDistribution: "k0s", ociVersion: "1.3.0" },
-} });
+}, accessToken: process.env.CONFIDENTIAL_ACCESS_TOKEN });
 // Route only raw TCP to the Service created by the operator. Select a Gateway
 // implementation and public address supported by the target cluster.
 new ApiObject(chart, "owner-gateway", { apiVersion: "gateway.networking.k8s.io/v1", kind: "Gateway",

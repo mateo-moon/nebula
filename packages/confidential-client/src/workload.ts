@@ -6,14 +6,16 @@ import { renderConfidentialWorkload, type ConfidentialStorageResource, type Conf
 import { resourcePath, trusteePolicies, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
 import { prepareClient, readPreparedClient, type PrepareClientOptions } from "./prepare";
 import { readEnrollment } from "./enrollment";
-import { claimSha256, readClaimToken } from "./claim";
+import { claimSha256, accessTokenBytes } from "./claim";
 
 export interface PrepareWorkloadOptions extends Omit<PrepareClientOptions, "identity" | "instanceBound"> {
   readonly manifest: string;
   readonly name: string;
   readonly genpolicy?: WorkloadRenderOptions["genpolicy"];
   readonly claimTokenFile?: string;
+  readonly accessToken?: string;
   readonly publishedImageDigests?: Readonly<Record<string, string>>;
+  readonly publishedImageConfigs?: WorkloadRenderOptions["publishedImageConfigs"];
 }
 
 /** Compile owner-reviewed declarations independently of the cluster. The
@@ -29,17 +31,17 @@ export function prepareWorkload(options: PrepareWorkloadOptions): string {
   const workload = candidates[0] as ConfidentialWorkloadResource;
   const expectedClaim = workload.spec.ownerClaimSha256;
   if (expectedClaim !== undefined) {
-    if (!options.claimTokenFile) throw new Error("The private claim token is required for this workload");
-    const token = readClaimToken(options.claimTokenFile);
+    const token = accessTokenBytes(options);
     const actual = claimSha256(token);
     token.fill(0);
     if (actual !== expectedClaim) {
       throw new Error("The private claim token does not match the measured workload declaration");
     }
-  } else if (options.claimTokenFile) throw new Error("This workload does not use first-connection claiming");
+  } else if (options.claimTokenFile || options.accessToken !== undefined) throw new Error("This workload does not use first-connection claiming");
   const storages = values.filter(value => value?.kind === "ConfidentialStorage") as ConfidentialStorageResource[];
   const plan = renderConfidentialWorkload(workload, storages, {
     genpolicy: options.genpolicy, publishedImageDigests: options.publishedImageDigests,
+    publishedImageConfigs: options.publishedImageConfigs,
   });
   const directory = prepareClient({ ...options, identity: plan.identity, instanceBound: true });
   writeFileSync(join(directory, "workload.json"), JSON.stringify({

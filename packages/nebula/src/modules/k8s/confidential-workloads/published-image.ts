@@ -49,3 +49,32 @@ export function resolvePublishedImage(tag: string, resource: TrusteeResourcePath
   const digest = encryptedManifestDigest(raw, resource);
   return `${tag.slice(0, tag.lastIndexOf(":"))}@${digest}`;
 }
+
+/** Never trust registry command metadata without binding it to the measured
+ * manifest. Config bytes remain public; decryption keys are not needed here. */
+export function imageCommand(image: string, supplied?: { manifest: Uint8Array; config: Uint8Array }): string[] {
+  const expected = image.split("@")[1];
+  if (!digestPattern.test(expected ?? "")) throw new Error("Image command requires an immutable digest");
+  const inspect = (config: boolean): Buffer => execFileSync("skopeo", ["--insecure-policy", "inspect", "--raw",
+    ...(config ? ["--config"] : []), `docker://${image}`],
+  { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, maxBuffer: 4 * 1024 * 1024 });
+  const manifest = Buffer.from(supplied?.manifest ?? inspect(false));
+  if (manifest.length > 4 * 1024 * 1024 || `sha256:${createHash("sha256").update(manifest).digest("hex")}` !== expected) {
+    throw new Error("Image command manifest differs from the approved digest");
+  }
+  const descriptor = JSON.parse(manifest.toString("utf8")).config;
+  if (!digestPattern.test(descriptor?.digest ?? "")) throw new Error("Invalid image configuration descriptor");
+  const raw = Buffer.from(supplied?.config ?? inspect(true));
+  if (raw.length > 4 * 1024 * 1024 || raw.length !== descriptor.size ||
+      `sha256:${createHash("sha256").update(raw).digest("hex")}` !== descriptor.digest) {
+    throw new Error("Image command configuration differs from the measured manifest");
+  }
+  const value = JSON.parse(raw.toString("utf8"));
+  if (value.architecture !== "amd64" || value.os !== "linux") throw new Error("Image must be linux/amd64");
+  const entrypoint = value.config?.Entrypoint ?? [], cmd = value.config?.Cmd ?? [];
+  if (!Array.isArray(entrypoint) || !Array.isArray(cmd)) throw new Error("Invalid OCI entrypoint");
+  const command = [...entrypoint, ...cmd];
+  if (!command.length || command.length > 128 || command.some(arg => typeof arg !== "string" || arg.includes("\0") || arg.length > 16384) ||
+      !command[0].startsWith("/")) throw new Error("Image entrypoint must start with an absolute executable path");
+  return command;
+}

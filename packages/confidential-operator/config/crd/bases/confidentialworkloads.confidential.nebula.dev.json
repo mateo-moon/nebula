@@ -232,6 +232,12 @@
                           "maxItems": 64,
                           "minItems": 1
                         },
+                        "commandFromImage": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
                         "args": {
                           "type": "array",
                           "items": {
@@ -350,7 +356,6 @@
                       "required": [
                         "name",
                         "image",
-                        "command",
                         "uid",
                         "gid"
                       ],
@@ -358,6 +363,14 @@
                         {
                           "rule": "self.image.matches('.*@sha256:[a-f0-9]{64}$') || has(self.imageKeyResource)",
                           "message": "A publication tag requires an image key resource"
+                        },
+                        {
+                          "rule": "has(self.command) != has(self.commandFromImage)",
+                          "message": "Choose an explicit command or the image entrypoint"
+                        },
+                        {
+                          "rule": "!has(self.commandFromImage) || !has(self.args)",
+                          "message": "Image entrypoint includes the image Cmd; do not supply args"
                         }
                       ]
                     },

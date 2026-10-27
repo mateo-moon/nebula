@@ -54,14 +54,16 @@ export function validateStorage(resource: ConfidentialStorageResource): void {
 }
 
 function validateContainer(container: WorkloadContainer): void {
-  fields(container, ["name", "image", "imageKeyResource", "command", "args", "env", "uid", "gid", "mounts", "applicationResources", "ports", "resources"]);
+  fields(container, ["name", "image", "imageKeyResource", "command", "commandFromImage", "args", "env", "uid", "gid", "mounts", "applicationResources", "ports", "resources"]);
+  const imageCommand = container.commandFromImage === true && container.command === undefined && container.args === undefined;
+  const explicitCommand = container.commandFromImage === undefined && Array.isArray(container.command) &&
+    container.command.length > 0 && [...container.command, ...(container.args ?? [])].every(value =>
+      typeof value === "string" && !value.includes("\0")) && container.command[0].startsWith("/");
   if (!name(container.name) || container.name.startsWith("nebula-") ||
       !(isDigestImage(container.image) || (container.imageKeyResource && taggedImage(container.image))) ||
-      !Array.isArray(container.command) || !container.command.length ||
-      ![...container.command, ...(container.args ?? [])].every(value => typeof value === "string" && !value.includes("\0")) ||
-      !container.command[0].startsWith("/") ||
+      !(imageCommand || explicitCommand) ||
       !integer(container.uid, 11000, 65534) || !integer(container.gid, 11000, 65534)) {
-    fail("containers need digest images or an owner-keyed publication tag, explicit commands and non-reserved non-root uid/gid");
+    fail("containers need digest images or an owner-keyed publication tag, an explicit command or commandFromImage, and non-reserved non-root uid/gid");
   }
   if (container.imageKeyResource) resourcePath(container.imageKeyResource);
   if (Object.entries(container.env ?? {}).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string")) {

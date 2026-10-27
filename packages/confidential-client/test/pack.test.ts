@@ -21,6 +21,9 @@ test("packed TypeScript API and CLI work with declared dependencies outside the 
   const files = packed.files.map(file => file.path);
   assert.ok(files.includes("src/index.ts"));
   assert.ok(files.includes("src/commands/prepare.ts"));
+  assert.ok(files.includes("src/ui/browser.ts"));
+  assert.ok(files.includes("src/ui/index.html"));
+  assert.ok(files.includes("src/ui/style.css"));
   assert.ok(files.includes("tsconfig.json"));
   assert.ok(!files.some(file => /build-tng|\.patch$|Cargo\.(toml|lock)$|^tools\//.test(file)),
     "native build tooling must not ship in the Node archive");
@@ -59,6 +62,7 @@ console.log(typeof connect, typeof trusteePolicies, typeof prepareClient);
   const cli = join(consumer, "node_modules/.bin/confidential-client");
   const help = run(cli, ["--help"], consumer);
   assert.match(help, /put-resource/);
+  assert.match(help, /\bui\b/);
   assert.doesNotMatch(help, /build-tng/);
 
   // Also launch through an npm-style symlink from a directory with no node_modules.

@@ -1,5 +1,20 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync } from "node:fs";
+import { confidentialAccessTokenHash } from "nebula-cdk8s/confidential-workloads";
+
+export interface AccessTokenOptions { accessToken?: string; claimTokenFile?: string }
+
+export function accessTokenBytes(options: AccessTokenOptions): Buffer {
+  if (options.accessToken !== undefined && options.claimTokenFile !== undefined) {
+    throw new Error("Supply an access token or a token file, not both");
+  }
+  if (options.accessToken !== undefined) {
+    confidentialAccessTokenHash(options.accessToken); // validate without echoing it
+    return Buffer.from(options.accessToken, "hex");
+  }
+  if (options.claimTokenFile) return readClaimToken(options.claimTokenFile);
+  throw new Error("The temporary access token is required");
+}
 
 /** The invitation is a one-use 256-bit claim capability. It never authorizes
  * Trustee administration after the user's key has been claimed. */

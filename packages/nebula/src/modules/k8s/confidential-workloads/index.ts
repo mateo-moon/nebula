@@ -6,3 +6,4 @@ export { validateWorkload, validateStorage, ConfidentialValidationError } from "
 export { renderConfidentialWorkload } from "./render";
 export { ConfidentialPublicationPending, encryptedManifestDigest, resolvePublishedImage } from "./published-image";
 export { ConfidentialStorageDevices, type ConfidentialStorageDevicesConfig } from "./devices";
+export { confidentialAccessTokenHash } from "./access-token";

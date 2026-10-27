@@ -11,7 +11,7 @@ import { snpIdentity, trusteePolicies } from "../trustee/policies";
 import type { TrusteeConfig } from "../trustee/types";
 import { validateWorkload } from "./validation";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
-import { resolvePublishedImage } from "./published-image";
+import { resolvePublishedImage, imageCommand } from "./published-image";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
@@ -123,18 +123,21 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       volumeMounts: [mount(`state-${binding.name}`, "/run/volume")] });
   }
   const containers = spec.containers.map(container => {
+    const image = container.imageKeyResource && !container.image.includes("@sha256:")
+      ? resolvePublishedImage(container.image, container.imageKeyResource,
+        options.publishedImageDigests?.[container.image]) : container.image;
+    const command = container.commandFromImage ? imageCommand(image, options.publishedImageConfigs?.[container.image])
+      : [...container.command!, ...(container.args ?? [])];
     const blockMounts = (container.mounts ?? []).filter(m => encrypted.some(binding => binding.name === m.storage));
     const directMounts = (container.mounts ?? []).filter(m => !blockMounts.includes(m));
     const launch = { version: 1, uid: container.uid, gid: container.gid,
       mounts: blockMounts.map(m => ({ socket: `/run/nebula-mounts/${m.storage}/mount.sock`, path: m.path })) };
     return {
       name: container.name,
-      image: container.imageKeyResource && !container.image.includes("@sha256:")
-        ? resolvePublishedImage(container.image, container.imageKeyResource,
-          options.publishedImageDigests?.[container.image]) : container.image,
+      image,
       imagePullPolicy: "Always",
       command: ["/run/nebula-runtime/nebula-confidential-storage"],
-      args: ["launch", JSON.stringify(launch), "--", ...container.command, ...(container.args ?? [])],
+      args: ["launch", JSON.stringify(launch), "--", ...command],
       env: Object.entries(container.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value })),
       securityContext: security(0, 0, ["SYS_ADMIN", "SETPCAP", "SETUID", "SETGID"]),
       resources: container.resources ?? limits,

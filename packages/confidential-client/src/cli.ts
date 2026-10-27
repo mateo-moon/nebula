@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { startUi } from "./ui/server";
+import { connectionFromManifest } from "./ui/connection";
 import { enroll } from "./commands/enroll";
 import { createInvitation, createOwnerKey, deploy } from "./deploy";
 import { publishImage } from "./publisher";
@@ -17,6 +23,49 @@ const program = new Command()
   .name("confidential-client")
   .version("0.1.0")
   .description("Publish encrypted workloads and manage an attested Nebula Confidential stack");
+const environmentToken = process.env.CONFIDENTIAL_ACCESS_TOKEN;
+delete process.env.CONFIDENTIAL_ACCESS_TOKEN; // Never inherit it in native subprocess environments.
+const accessToken = (options: { accessToken?: string; claimToken?: string }) => options.accessToken ??
+  (options.claimToken ? undefined : environmentToken);
+
+program.command("ui")
+  .description("Open the one-page owner interface; signing, encryption and verification stay on this computer")
+  .option("--directory <path>", "Private local release directory", join(homedir(), ".nebula", "confidential"))
+  .option("--connection <file>", "Public administrator connection settings")
+  .option("--tng <file>", "Qualified native TNG executable (otherwise PATH)")
+  .option("--genpolicy <file>", "Qualified native genpolicy executable (otherwise PATH)")
+  .option("--cache <path>", "Public image metadata cache")
+  .option("--port <number>", "Local browser port (otherwise a random free port)", Number)
+  .option("--local-port <number>", "Local TNG verifier tunnel port", Number)
+  .option("--verifier-port <number>", "Local AS port", Number)
+  .option("--no-open", "Print the local address without opening a browser")
+  .action(async (options: any) => {
+    const ui = await startUi({ directory: options.directory, connectionFile: options.connection,
+      tngBinary: options.tng, genpolicy: options.genpolicy, cache: options.cache,
+      port: options.port, localPort: options.localPort, verifierPort: options.verifierPort });
+    console.log(`Open ${ui.url}\nKeep this process running. Private releases: ${options.directory}`);
+    if (options.open) {
+      const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
+      const child = spawn(opener, [ui.url], { stdio: "ignore" }); child.on("error", () => {}); child.unref();
+    }
+    const close = async () => { await ui.close(); };
+    process.once("SIGINT", close); process.once("SIGTERM", close);
+  });
+
+program.command("connection <manifest>")
+  .description("Administrator: export one public connection file for the browser interface")
+  .requiredOption("--name <name>", "Workload name")
+  .requiredOption("--host <host>", "User-reachable owner endpoint")
+  .option("--port <number>", "Owner endpoint port", Number, 8443)
+  .option("--vcek <file>", "Public AMD VCEK certificate")
+  .requiredOption("--output <file>", "New public connection settings file")
+  .action((manifest: string, options: any) => {
+    const { host, port } = options;
+    const connection = connectionFromManifest(readFileSync(manifest, "utf8"), options.name,
+      { host, port }, options.vcek ? readFileSync(options.vcek) : undefined);
+    writeFileSync(options.output, JSON.stringify(connection, null, 2) + "\n", { flag: "wx", mode: 0o600 });
+    console.log(`Public connection settings: ${options.output}`);
+  });
 
 program.command("invite <file>")
   .description("Administrator: create a private one-use claim token and print its public SHA-256 commitment")
@@ -33,7 +82,8 @@ program.command("deploy <manifest>")
   .option("--port <number>", "Owner endpoint port", Number, 8443)
   .requiredOption("--source-image <image>", "Local linux/amd64 OCI image")
   .requiredOption("--release-dir <directory>", "Private output directory for owner and image keys")
-  .requiredOption("--claim-token <file>", "Private one-use claim token provided by DevOps (0600)")
+  .option("--access-token <token>", "Temporary deployment-time token (or CONFIDENTIAL_ACCESS_TOKEN)")
+  .option("--claim-token <file>", "Legacy private claim token file")
   .requiredOption("--tng <file>", "Qualified native TNG client executable")
   .option("--vcek <file>", "Public AMD VCEK certificate for native offline verification")
   .option("--registry-auth-file <file>", "Private skopeo auth JSON; ECR uses local AWS credentials by default")
@@ -50,6 +100,7 @@ program.command("deploy <manifest>")
     const { host } = options;
     const result = await deploy({ manifest, name: options.name, host, port: options.port,
       sourceImage: options.sourceImage, releaseDirectory: options.releaseDir, claimTokenFile: options.claimToken,
+      accessToken: accessToken(options),
       tngBinary: options.tng, registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile,
       helperImage: options.helperImage, genpolicy: options.genpolicy, cache: options.cache,
       vcekFile: options.vcek,
@@ -97,7 +148,8 @@ program.command("prepare-workload <manifest>")
   .option("--genpolicy <file>", "Qualified native genpolicy executable")
   .option("--cache <directory>", "Public image metadata cache")
   .option("--claim-token <file>", "Private one-use Trustee claim token (0600)")
-  .action(prepareWorkloadCommand);
+  .option("--access-token <token>", "Temporary deployment-time token (or CONFIDENTIAL_ACCESS_TOKEN)")
+  .action((manifest, options) => prepareWorkloadCommand(manifest, { ...options, accessToken: accessToken(options) }));
 
 program.command("owner-header <new-file>")
   .description("Write a private five-minute native admin header for manual use")
@@ -139,7 +191,8 @@ connected(program.command("status").description("Read owner-authorized bootstrap
   }));
 connected(program.command("enroll").description("Claim and enroll one attested instance; refuses existing enrollment"))
   .option("--claim-token <file>", "Private one-use Trustee claim token (0600)")
-  .action(enroll);
+  .option("--access-token <token>", "Temporary deployment-time token (or CONFIDENTIAL_ACCESS_TOKEN)")
+  .action(options => enroll({ ...options, accessToken: accessToken(options) }));
 connected(program.command("configure-workload").description("Install the independently prepared local release policy on the enrolled instance"))
   .action(configureWorkload);
 connected(program.command("storage-status").description("Read non-secret storage phase through the enrolled attested connection"))

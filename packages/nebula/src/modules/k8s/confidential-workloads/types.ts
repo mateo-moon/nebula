@@ -39,7 +39,9 @@ export interface WorkloadContainer {
   image: string;
   /** CoCo key ID for an owner-published encrypted image. Required with a tag. */
   imageKeyResource?: TrusteeResourcePath;
-  command: readonly string[];
+  command?: readonly string[];
+  /** Derive Entrypoint + Cmd from the published, digest-bound OCI config. */
+  commandFromImage?: true;
   args?: readonly string[];
   env?: Readonly<Record<string, string>>;
   uid: number;
@@ -96,4 +98,6 @@ export interface WorkloadRenderOptions {
   /** Owner-side digest from the verified encrypted publication. The operator
    * resolves the same tag independently before constructing its Pod. */
   publishedImageDigests?: Readonly<Record<string, string>>;
+  /** Owner publisher's verified OCI metadata; the operator resolves its own. */
+  publishedImageConfigs?: Readonly<Record<string, { manifest: Uint8Array; config: Uint8Array }>>;
 }

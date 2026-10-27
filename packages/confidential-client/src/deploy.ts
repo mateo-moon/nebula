@@ -6,7 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { parseAllDocuments } from "yaml";
 import { validateWorkload, type ConfidentialStorageResource, type ConfidentialWorkloadResource } from "nebula-cdk8s/confidential-workloads";
 import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
-import { readClaimToken, claimSha256 } from "./claim";
+import { accessTokenBytes, claimSha256 } from "./claim";
 import { TrusteeClient, TrusteeHttpError } from "./client";
 import { enrollInstance, readEnrollment } from "./enrollment";
 import { readPreparedClient } from "./prepare";
@@ -126,10 +126,11 @@ function reachable(host: string, port: number): Promise<boolean> {
   });
 }
 
-async function waitForEndpoint(host: string, port: number, deadline: number) {
+async function waitForEndpoint(host: string, port: number, deadline: number, signal?: AbortSignal) {
   while (Date.now() < deadline) {
+    signal?.throwIfAborted();
     if (await reachable(host, port)) return;
-    await delay(3000);
+    await delay(3000, undefined, { signal });
   }
   throw new Error("The measured workload endpoint did not become reachable after publication");
 }
@@ -140,19 +141,23 @@ export interface DeployOptions {
   registryAuthFile?: string; awsProfile?: string; helperImage?: string;
   localPort?: number; verifierPort?: number;
   vcekFile?: string;
+  accessToken?: string;
+  onProgress?: (phase: DeployPhase) => void;
+  signal?: AbortSignal;
   genpolicy?: string; cache?: string; volumeKey?: string[]; resourceFile?: string[]; waitSeconds?: number;
 }
+export type DeployPhase = "encrypting" | "published" | "measuring" | "waiting" | "attesting" | "provisioning" | "starting" | "ready";
 
 /** One owner command: publish ciphertext, wait for the operator-created guest,
  * verify attestation, claim it, install policy, and provision keys. */
 export async function deploy(options: DeployOptions) {
+  options.signal?.throwIfAborted();
   const { host } = options;
   const { workload, storages, sha256 } = declaration(options.manifest, options.name);
   const container = publishedContainer(workload);
   const claim = workload.spec.ownerClaimSha256;
   if (!claim) throw new Error("The one-command deployment requires a claimable stack");
-  if (!options.claimTokenFile) throw new Error("The invitation token is required");
-  const token = readClaimToken(options.claimTokenFile);
+  const token = accessTokenBytes(options);
   const tokenHash = claimSha256(token);
   token.fill(0);
   if (tokenHash !== claim) throw new Error("The invitation token does not match the reviewed measured stack");
@@ -160,9 +165,12 @@ export async function deploy(options: DeployOptions) {
   mkdirSync(release, { recursive: true, mode: 0o700 });
   if ((lstatSync(release).mode & 0o077) !== 0) throw new Error("Release directory must be private (0700)");
   createOwnerKey(ownerKeyPath);
+  options.onProgress?.("encrypting");
   const published: PublishedImage = publishImage({ sourceImage: options.sourceImage, destination: container.image,
     imageKeyResource: container.imageKeyResource!, releaseDirectory: release,
     registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile, helperImage: options.helperImage });
+  options.onProgress?.("published");
+  options.signal?.throwIfAborted();
   const volumes = volumeKeys(workload, storages, release, options.volumeKey ?? []);
   const reserved = new Set([resourcePath(published.resource), ...volumes.map(volume => resourcePath(volume.path))]);
   const applicationResources = applicationResourceFiles(workload, reserved, options.resourceFile ?? []);
@@ -173,12 +181,20 @@ export async function deploy(options: DeployOptions) {
       throw new Error("Release directory was approved for another declaration or image digest");
     }
   } else writeFileSync(deployment, JSON.stringify(identity) + "\n", { flag: "wx", mode: 0o600 });
+  const manifestBytes = container.commandFromImage ? readFileSync(join(release, "encrypted-image", "manifest.json")) : undefined;
+  const configDigest = manifestBytes ? JSON.parse(manifestBytes.toString("utf8")).config?.digest : undefined;
+  if (manifestBytes && !/^sha256:[a-f0-9]{64}$/.test(configDigest ?? "")) throw new Error("Invalid encrypted image configuration");
+  const publishedImageConfigs = manifestBytes ? { [container.image]: { manifest: manifestBytes,
+    config: readFileSync(join(release, "encrypted-image", configDigest.slice(7))) } } : undefined;
+  options.onProgress?.("measuring");
   if (!existsSync(state)) prepareWorkload({ manifest: options.manifest, name: options.name, stateDirectory: state,
     target: { host, port: options.port ?? 8443 },
     localPort: options.localPort, verifierPort: options.verifierPort,
     vcekFile: options.vcekFile,
     claimTokenFile: options.claimTokenFile,
+    accessToken: options.accessToken,
     publishedImageDigests: { [container.image]: published.digest },
+    publishedImageConfigs,
     genpolicy: { executable: options.genpolicy, cacheDirectory: options.cache } });
   const prepared = readPreparedClient(state);
   if (options.vcekFile && (!prepared.profile.offlineVcek ||
@@ -197,14 +213,18 @@ export async function deploy(options: DeployOptions) {
   let client: TrusteeClient | undefined;
   try {
     const deadline = Date.now() + (options.waitSeconds ?? 900) * 1000;
-    await waitForEndpoint(host, options.port ?? 8443, deadline);
+    options.onProgress?.("waiting");
+    await waitForEndpoint(host, options.port ?? 8443, deadline, options.signal);
+    options.onProgress?.("attesting");
     if (!existsSync(join(state, "instance.json"))) {
       await enrollInstance({ stateDirectory: state, tngBinary: options.tngBinary,
-        ownerPrivateKey: ownerKey, audience: workload.spec.profile, claimTokenFile: options.claimTokenFile });
+        ownerPrivateKey: ownerKey, audience: workload.spec.profile, claimTokenFile: options.claimTokenFile,
+        accessToken: options.accessToken, signal: options.signal });
     }
     const enrolled = readEnrollment(state, workload.spec.profile);
     client = await TrusteeClient.connect({ stateDirectory: state, tngBinary: options.tngBinary,
-      ownerPrivateKey: ownerKey, audience: workload.spec.profile });
+      ownerPrivateKey: ownerKey, audience: workload.spec.profile, signal: options.signal });
+    options.onProgress?.("provisioning");
     const policies = preparedWorkloadPolicies(state, workload.spec.profile);
     await client.setAttestationPolicy(policies.attestationPolicy);
     await client.setResourcePolicy(policies.resourcePolicy);
@@ -218,25 +238,27 @@ export async function deploy(options: DeployOptions) {
     for (const [path, file] of applicationResources) {
       await provision(path.split("/") as [string, string, string], file, 2 * 1024 * 1024);
     }
+    options.onProgress?.("starting");
     let bootstrap: any;
     const expectedResources = workload.spec.resources.map(path => resourcePath(path));
     do {
       try { bootstrap = await client.bootstrapStatus(); }
       catch (error) {
         if (!(error instanceof TrusteeHttpError) || error.status !== 502) throw error;
-        await delay(3000);
+        await delay(3000, undefined, { signal: options.signal });
         continue;
       }
       if (bootstrap.phase !== "awaiting-configuration" &&
           expectedResources.every(path => bootstrap.resources?.[path]?.status === 200) &&
           Object.values(bootstrap.storage ?? {}).every((value: any) => value.phase === "ready")) break;
-      await delay(3000);
+      await delay(3000, undefined, { signal: options.signal });
     } while (Date.now() < deadline);
     if (!bootstrap || bootstrap.phase === "awaiting-configuration" ||
         !expectedResources.every(path => bootstrap.resources?.[path]?.status === 200) ||
         !Object.values(bootstrap.storage ?? {}).every((value: any) => value.phase === "ready")) {
       throw new Error("Keys were provisioned to the verified guest, but bootstrap did not reach ready; inspect status and retry");
     }
+    options.onProgress?.("ready");
     return { verified: true, identity: prepared.profile.identity,
       instancePublicKeySha256: enrolled.publicKeySha256, image: published.image, bootstrap,
       releaseDirectory: release };
