@@ -220,7 +220,7 @@ var profiles_default = {
       image: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:1fc64c90d704a8c702f85116282fddde5c1e12b777f9d579cb9245bc75231de3",
       sourceRevision: "26c890de1eb9ee47c9c1ce4a39d249efd50f9c20",
       identity: {
-        measurement: "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
+        measurement: "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
         initDataSha256: "3a6179fdd5137b989929ba0d011fad8fb70565f493275827e8813e522602044f",
         minimumReportedTcb: {
           bootloader: 10,
