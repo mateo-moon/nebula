@@ -2,7 +2,7 @@
 
 Open the one-time HTTPS link supplied by your administrator. Nothing is installed on your computer. The independent Nebula loader verifies AMD SEV-SNP evidence in TNG WASM, checks the approved VM and native workload-policy measurements, and pins the preparation VM's transport key. It then fetches **all UI assets through that attested encrypted channel**.
 
-Choose a `linux/amd64` image archive (up to 256 MiB), or an image in the destination registry. Enter registry push credentials, supply an existing disk key only when requested, and choose a recovery password. Review the stack, then select **Encrypt & deploy**. Keep the latest downloaded encrypted recovery file and its password.
+Choose a `linux/amd64` image archive (up to 256 MiB), or an image in the destination registry. For a registry source, use an owner-controlled registry and an immutable `@sha256:…` reference; its plaintext source remains in that registry. Enter registry push credentials, supply an existing disk key only when requested, and choose a recovery password. Review the stack, then select **Encrypt & deploy**. Keep the latest downloaded encrypted recovery file and its password.
 
 The preparation VM encrypts and publishes the image and independently runs native CoCo `genpolicy`. Kubernetes automatically creates the final workload when its reserved tag becomes available. Your browser verifies its resulting measurement, enrolls its transport key, claims its unmodified Trustee and sends image, disk and application keys directly to that enrolled VM. Disk keys are never sent to the preparation service. No external bootstrap Trustee is used.
 
@@ -21,7 +21,7 @@ Use `ConfidentialBrowser` alongside `ConfidentialOperator`, `ConfidentialStorage
 
 Route public stack discovery to `confidential-operator-access:8083` and allow only the named access Secret in the operator. Publish neither port 8089 nor guest-loopback services. The preparation VM generates the one-time token in guest memory; the operator exports the resulting URL into the named Kubernetes Secret. Retrieve its `url` entry and give that link and registry access to the user.
 
-The loader's trusted profile comes from the reviewed release, never from discovery or the workload it verifies. A new preparation image, native policy template or guest launch identity needs a reviewed profile. A reverse proxy may terminate ordinary HTTPS: application credentials and keys remain encrypted inside OHTTP. Keep the loader origin independently controlled from the cluster administrators whose workloads it authenticates.
+The loader's trusted profile comes from the reviewed release, never from discovery or the workload it verifies. A new preparation image, native policy template or guest launch identity needs a reviewed profile. A reverse proxy may terminate ordinary HTTPS: application credentials and keys remain encrypted inside OHTTP. Keep the loader origin independently controlled from the cluster administrators whose workloads it authenticates. Publish each loader release to a new versioned directory and give deployments that release URL, so browser caching cannot mix SDK or policy versions.
 
 ## Release and trust boundary
 
