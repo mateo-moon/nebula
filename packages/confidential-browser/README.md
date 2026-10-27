@@ -30,3 +30,5 @@ Build the pinned SNP SDK with `sh tools/tng-browser/build.sh NEW_SOURCE OUTPUT`.
 The independent loader origin, browser, approved guest image and preparation software are trusted. Owner signing and wrapping keys are non-extractable WebCrypto keys; local state and exported backups are encrypted. The preparation service handles plaintext images and registry credentials in guest tmpfs and erases them after publication. Kubernetes holds temporary claim authority and public owner metadata, never decryption keys.
 
 Administrators can deny service or claim first; the real owner then stops before uploading their image. An enrolled instance key cannot silently change. An older backup missing the final pin cannot enroll a replacement automatically. Global singleton enforcement, disk rollback prevention and automatic Trustee replacement custody remain outside scope.
+
+The [SEV-SNP hardware qualification](qualification/sev-snp-browser-2026-10-27.json) records the tested software, measurements, fresh and returning browser flows, encrypted storage, application isolation and preserved resources. Its fixture was an owner-controlled registry image pinned by digest.
