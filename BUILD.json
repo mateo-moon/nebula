@@ -1,5 +1,5 @@
 {
-  "nebulaSource": "4c4664a5c53636442d8885897e9d01a82f346905",
+  "nebulaSource": "7f02e8f894373c260fabc97d307e935a03176421",
   "tng": {
     "repository": "https://github.com/mateo-moon/TNG.git",
     "revision": "ca71333c24d7d909003ef7eb78caa9ec1455f03c",
@@ -11,6 +11,21 @@
   "profiles": {
     "version": 1,
     "profiles": [
+      {
+        "id": "nebula-snp-browser-preparation-worker-2026-10",
+        "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:4ec0d6098a422258264b5d22e26889ea0cc85b788becef7239e323dcaefd1491",
+        "sourceRevision": "8f712eabb7bb3911d8983a382e9c5313cb7686a9",
+        "identity": {
+          "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+          "initDataSha256": "fa45d788d6d129378cbc065abeec8e1ce76faf019895b5c708e1db43ccbb47d6",
+          "minimumReportedTcb": {
+            "bootloader": 10,
+            "tee": 0,
+            "snp": 24,
+            "microcode": 88
+          }
+        }
+      },
       {
         "id": "nebula-snp-browser-preparation-policy-2026-10",
         "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d63a5865a9fd0f29ab99e70687d28160ca9fedba72151b2fa5a6c7351aff80dc",
@@ -63,7 +78,7 @@
     "_headers": "ca240155e86aa6825d91a648fa78cae980fac93a2b3f7878c48ea2e1dae9e9e9",
     ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "coi.js": "4784b087bc04e64214dcfb1962caf64f3442279dc1d622f37bb5c54d32f4b6f7",
-    "loader.js": "f28af18a46fe18ed957331decf8f7c8075914e650240d76a9227cbb9a6159eb0",
+    "loader.js": "3daead7a15e9bbb522fafe85b0536eb19af98f7b25901a6fe92032a6136fa2bc",
     "sdk/tng_wasm_bg.wasm": "d46294617b85bdb4da76bcd589a8318255049ab4c768ff579b21a04e74c13fb9",
     "sdk/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "sdk/tng_wasm.d.ts": "3af6cf7f0e1c0ff26d53ae50d2af1c036a1cdc1498b0ed261f365bc6741ca790",
