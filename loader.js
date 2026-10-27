@@ -217,11 +217,11 @@ var profiles_default = {
   profiles: [
     {
       id: "nebula-snp-browser-preparation-2026-10",
-      image: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:cc051eaf51e6c82bbd40e633becce822345f4ed6c6580b5103be7b13962552a0",
-      sourceRevision: "17da388a20ea16fc2645dfe6caaab0171bfe9d44",
+      image: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:1fc64c90d704a8c702f85116282fddde5c1e12b777f9d579cb9245bc75231de3",
+      sourceRevision: "26c890de1eb9ee47c9c1ce4a39d249efd50f9c20",
       identity: {
         measurement: "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
-        initDataSha256: "3ecd4aa11407414574d29c911e66b7daec9c247506ef8c972703363d7cb2abb6",
+        initDataSha256: "3a6179fdd5137b989929ba0d011fad8fb70565f493275827e8813e522602044f",
         minimumReportedTcb: {
           bootloader: 10,
           tee: 0,
