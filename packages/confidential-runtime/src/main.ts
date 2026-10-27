@@ -9,7 +9,7 @@ if (process.argv[2] === "guard" && process.argv.length === 3) {
 else if (process.argv[2] === "gateway") {
   const config = JSON.parse(process.argv[3]);
   if (!Array.isArray(config.storageNames) || !Array.isArray(config.resources)) throw new Error("Expected measured storage and resource names");
-  startGateway("/run/instance", config.storageNames, config.resources, config.ownerClaimSha256, config.audience);
+  startGateway("/run/instance", config.storageNames, config.resources, config.ownerClaimSha256, config.audience, config.browser === true);
 } else if (process.argv[2] === "await-owner") {
   const config = JSON.parse(process.argv[3]);
   const stop = new AbortController();

@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { createHash, createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
-import { chmodSync, constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, statfsSync } from "node:fs";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, X509Certificate } from "node:crypto";
+import { chmodSync, constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, statfsSync, writeFileSync } from "node:fs";
 import { createServer } from "node:https";
-import { request } from "node:http";
+import { request, createServer as createHttpServer, type RequestListener } from "node:http";
+import { collateralProxy } from "./snp-collateral.js";
 import { join } from "node:path";
 import { bootstrapStatus, storageDiagnostics, validResource } from "./bootstrap.js";
 import { claimOwner, internalOwnerToken, loadInternalOwnerKey, readClaimedOwner, verifyOwnerJwt,
@@ -27,6 +28,7 @@ export interface GatewayOptions {
   readonly storageNames?: readonly string[];
   readonly resources?: readonly string[];
   readonly claim?: ClaimConfig;
+  readonly browser?: boolean;
 }
 
 export function gateway(options: GatewayOptions) {
@@ -49,7 +51,7 @@ export function gateway(options: GatewayOptions) {
     return `Bearer ${internalOwnerToken(claim.internalOwnerKey, claim.audience)}`;
   };
   let attestationConfigured = false, resourcesConfigured = false;
-  const server = createServer({ key: options.key, cert: options.cert, minVersion: "TLSv1.3" }, (incoming, outgoing) => {
+  const handler: RequestListener = (incoming, outgoing) => {
     const path = incoming.url ?? "", method = incoming.method ?? "";
     outgoing.setHeader("Cache-Control", "no-store");
     if (method === "GET" && path === "/nebula/v1/bootstrap") {
@@ -165,7 +167,15 @@ export function gateway(options: GatewayOptions) {
       outgoing.once("close", () => upstream.destroy());
     });
     incoming.once("error", () => { for (const chunk of chunks) chunk.fill(0); });
-  });
+  };
+  const server = createServer({ key: options.key, cert: options.cert, minVersion: "TLSv1.3" }, handler);
+  if (options.browser) {
+    const http = createHttpServer(handler);
+    http.maxConnections = 32; http.requestTimeout = 30_000; http.headersTimeout = 10_000;
+    http.listen(8447, "127.0.0.1");
+    const collateral = collateralProxy();
+    server.once("close", () => { http.close(); collateral.close(); });
+  }
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   server.maxHeadersCount = 16;
@@ -228,10 +238,19 @@ export function loadOrCreateIdentity(directory: string): { key: Buffer; cert: Bu
 }
 
 export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = [],
-  ownerClaimSha256?: string, audience?: string): void {
+  ownerClaimSha256?: string, audience?: string, browser = false): void {
   const credential = loadOrCreateIdentity(directory);
   if ((ownerClaimSha256 === undefined) !== (audience === undefined)) throw new Error("Incomplete owner claim configuration");
+  if (browser) {
+    const ohttpKey = join(directory, "identity", "ohttp.pem");
+    try { checkedFile(ohttpKey); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      writeFileSync(ohttpKey, generateKeyPairSync("x25519").privateKey.export({ type: "pkcs8", format: "pem" }),
+        { mode: 0o600, flag: "wx" });
+    }
+  }
   const claim = ownerClaimSha256 && audience ? { sha256: ownerClaimSha256, audience, directory,
     internalOwnerKey: loadInternalOwnerKey(directory) } : undefined;
-  gateway({ ...credential, storageNames, resources, claim }).listen(8444, "127.0.0.1");
+  gateway({ ...credential, storageNames, resources, claim, browser }).listen(8444, "127.0.0.1");
 }

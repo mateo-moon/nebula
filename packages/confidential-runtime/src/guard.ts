@@ -10,8 +10,8 @@ import { randomUUID } from "node:crypto";
 export const GUARD_RULES = `table inet nebula_guest {
   chain protected_local {
     type filter hook output priority -150; policy accept;
-    oifname "lo" meta skuid != { 0, 10001 } tcp dport { 8006, 8080, 8443, 8444 } reject
-    oifname "lo" meta skuid != { 0, 10001 } tcp sport { 8006, 8080, 8443, 8444 } reject
+    oifname "lo" meta skuid != { 0, 10001 } tcp dport { 8006, 8007, 8080, 8443, 8444, 8445, 8447 } reject
+    oifname "lo" meta skuid != { 0, 10001 } tcp sport { 8006, 8007, 8080, 8443, 8444, 8445, 8447 } reject
   }
 }\n`;
 

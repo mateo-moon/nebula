@@ -53,7 +53,7 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     writeFileSync(`${directory}/internal-owner/public.pem`, internalPem, { mode: 0o600 });
     const credential = loadOrCreateIdentity(directory);
     const port = await listen(kbs);
-    publicGateway = gateway({ ...credential, upstreamPort: port, claim: {
+    publicGateway = gateway({ ...credential, upstreamPort: port, browser: true, claim: {
       sha256: createHash("sha256").update(token).digest("hex"), audience, directory, internalOwnerKey: internalKey,
     } });
     const gatewayPort = await listen(publicGateway);
@@ -77,6 +77,14 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     assert.equal(kbsCalls, 0);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", ownerJwt), 200);
     assert.equal(kbsCalls, 1);
+    const httpCall = (path, authorization) => fetch(`http://127.0.0.1:8447${path}`, {
+      headers: authorization ? { Authorization: authorization } : {}, redirect: "error",
+    }).then(response => response.status);
+    assert.equal(await httpCall("/nebula/v1/storage"), 403);
+    assert.equal(await httpCall("/kbs/v0/resource-policy", adversaryJwt), 403);
+    assert.equal(await httpCall("/kbs/v0/resource-policy", ownerJwt), 200);
+    assert.equal(await httpCall("/kbs/v0/resource/guest/storage/key", ownerJwt), 403);
+    assert.equal(await httpCall("/aa/evidence", ownerJwt), 403);
     assert.equal(sawInternal, true);
   } finally {
     if (publicGateway) await close(publicGateway);
