@@ -287,6 +287,7 @@ async function start() {
   await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
   const fetcher = sdk.fetch;
   let channel;
+  let verificationFailure = "No independently approved preparation profile matched";
   for (const profile of profiles_default.profiles) {
     try {
       const candidate = new AttestedChannel(fetcher, target, profile.identity, saved?.preparationPin);
@@ -295,10 +296,11 @@ async function start() {
         channel = candidate;
         break;
       }
-    } catch {
+    } catch (error) {
+      verificationFailure = error instanceof Error ? error.message.slice(0, 2e3) : String(error).slice(0, 2e3);
     }
   }
-  if (!channel) throw new Error("SNP, workload policy or enrolled instance verification failed. No owner credential or image was sent.");
+  if (!channel) throw new Error(`SNP, workload policy or enrolled instance verification failed. No owner credential or image was sent. ${verificationFailure}`);
   status("SNP and measured preparation workload verified. Loading its UI\u2026");
   const assets = await verifiedAssets(channel);
   const owner = saved ?? await newOwner();
