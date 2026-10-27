@@ -13,9 +13,11 @@ export interface UiJob {
 export interface Upload { name: string; base64: string }
 export interface UiDeployInput {
   sourceImage: string;
-  accessToken: string;
+  accessToken?: string;
   reviewed: boolean;
   registryAuth?: string;
+  registryUsername?: string;
+  registryPassword?: string;
   awsProfile?: string;
   volumeKeys?: Upload[];
   resourceFiles?: Upload[];

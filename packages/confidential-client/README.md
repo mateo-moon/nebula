@@ -11,13 +11,15 @@ confidential-client ui
 3. Provide registry access and any existing disk keys requested by the page.
 4. Review the prepared stack, then select **Encrypt & deploy**.
 
-The page shows publication, independent measurement, attestation, ownership and startup progress. It provisions keys only after verifying the approved VM/workload and proving control with your own local owner key. **Verify again & check status** rechecks the enrolled instance. No Kubernetes access or further administrator action is required for this deployment.
+The page shows publication, independent measurement, attestation, ownership and startup progress. It provisions keys only after verifying the approved VM/workload and proving control with your own local owner key. **Verify again & check status** rechecks the enrolled instance. Reopen the same local client and select **Resume saved release** to retry without the temporary token or re-entering saved credentials. No Kubernetes access or further administrator action is required for this deployment.
 
 Install the reviewed client package, local Docker, qualified TNG and native CoCo `genpolicy` once. Put the native tools on PATH, or start with `ui --tng /opt/tng/bin/tng --genpolicy /opt/kata/bin/genpolicy`. Native tools are installed separately; the UI never downloads or builds them. `--connection stack.json` preloads the public settings and `--no-open` prints the address. Private releases default to `~/.nebula/confidential`; override with `--directory`.
 
 The browser is a presentation layer backed by your local client, following the UI/local-custody separation used by Polkadot.js. Signing, plaintext image processing, registry credentials and attestation verification stay on your computer. The owner private key is never returned to the page. The service binds only `127.0.0.1`, uses a random per-process browser capability, checks Origin/Host, and serves all assets locally with a restrictive CSP. Keep its private local address private while it runs.
 
 Use an image with an absolute executable path in its ENTRYPOINT or CMD. The page shows the prepared UID, mounts and ports; your image must support them. OCI commands are hash-bound to the immutable manifest and enter native policy. Registry tags are release slots: replacing a running measured guest or changing its contract is a separate, explicitly approved lifecycle operation.
+
+For registry access, enter a username and push token, choose an existing auth JSON, or use a local AWS profile for ECR. Registry credentials are stored only in the private local release directory.
 
 ## Administrator handoff
 

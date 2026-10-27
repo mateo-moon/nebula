@@ -9,7 +9,7 @@ import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/pol
 import { accessTokenBytes, claimSha256 } from "./claim";
 import { TrusteeClient, TrusteeHttpError } from "./client";
 import { enrollInstance, readEnrollment } from "./enrollment";
-import { readPreparedClient } from "./prepare";
+import { readPreparedClient, releaseStateDirectory } from "./prepare";
 import { publishImage, type PublishedImage } from "./publisher";
 import { prepareWorkload, preparedWorkloadPolicies } from "./workload";
 
@@ -157,11 +157,13 @@ export async function deploy(options: DeployOptions) {
   const container = publishedContainer(workload);
   const claim = workload.spec.ownerClaimSha256;
   if (!claim) throw new Error("The one-command deployment requires a claimable stack");
-  const token = accessTokenBytes(options);
-  const tokenHash = claimSha256(token);
-  token.fill(0);
-  if (tokenHash !== claim) throw new Error("The invitation token does not match the reviewed measured stack");
-  const release = resolve(options.releaseDirectory), state = join(release, "owner-state"), ownerKeyPath = join(release, "owner.key");
+  const release = resolve(options.releaseDirectory), state = releaseStateDirectory(release), ownerKeyPath = join(release, "owner.key");
+  if (!existsSync(join(state, "instance.json")) || options.accessToken !== undefined || options.claimTokenFile !== undefined) {
+    const token = accessTokenBytes(options);
+    const tokenHash = claimSha256(token);
+    token.fill(0);
+    if (tokenHash !== claim) throw new Error("The invitation token does not match the reviewed measured stack");
+  }
   mkdirSync(release, { recursive: true, mode: 0o700 });
   if ((lstatSync(release).mode & 0o077) !== 0) throw new Error("Release directory must be private (0700)");
   createOwnerKey(ownerKeyPath);

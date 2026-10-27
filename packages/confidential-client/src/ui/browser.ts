@@ -33,13 +33,20 @@ function updateControls() {
   element<HTMLButtonElement>("inspect").disabled = running;
   element("inspect").hidden = !hasRelease;
   element("cancel").hidden = !running;
+  element("access-token-group").hidden = hasRelease;
+  element<HTMLInputElement>("access-token").required = !hasRelease;
+  element<HTMLInputElement>("source-image").readOnly = hasRelease;
+  element("deploy-label").textContent = hasRelease ? "Resume saved release" : "Encrypt & deploy";
+  for (const input of document.querySelectorAll<HTMLInputElement>("#volume-keys input, #resource-files input")) {
+    input.required = !hasRelease && input.dataset.required === "true";
+  }
 }
 function fileInputs(id: string, fields: { name: string; required: boolean }[], kind: string) {
   const parent = element(id); parent.replaceChildren();
   for (const field of fields) {
     const label = document.createElement("label"); label.textContent = `${kind}: ${field.name}${field.required ? " (required)" : " (optional)"}`;
     const input = document.createElement("input"); input.type = "file"; input.dataset.name = field.name;
-    input.required = field.required; label.append(input); parent.append(label);
+    input.dataset.required = String(field.required); input.required = field.required; label.append(input); parent.append(label);
   }
 }
 function showStack(value: StackSummary, saved: boolean) {
@@ -59,17 +66,18 @@ function showStack(value: StackSummary, saved: boolean) {
 function showJob(job?: UiJob) {
   running = job?.status === "running";
   if (!job) { updateControls(); return; }
+  const verified = job.status === "succeeded" && job.result?.verified === true;
+  const ready = verified && (job.action === "deploy" || job.result?.ready === true);
   let index = stages.indexOf(job.phase);
   if (job.phase === "published") index = 1;
   if (job.phase === "starting") index = 5;
   if (job.phase === "checking") index = 3;
+  if (verified && !ready) index = 4;
   for (const item of document.querySelectorAll<HTMLElement>("#steps li")) {
     const position = stages.indexOf(item.dataset.phase!);
-    item.classList.toggle("done", job.status === "succeeded" || position < index);
+    item.classList.toggle("done", ready || position < index);
     item.classList.toggle("active", running && position === index);
   }
-  const verified = job.status === "succeeded" && job.result?.verified === true;
-  const ready = verified && (job.action === "deploy" || job.result?.ready === true);
   element("verified").hidden = !verified;
   element("job-title").textContent = job.status === "failed" ? "Deployment needs attention" : ready ? "Verified and ready" : verified ? "Instance verified" : "Working on your deployment";
   element("job-description").textContent = job.status === "failed" ? job.error ?? "The operation stopped safely." : verified && !ready ?
@@ -116,12 +124,18 @@ element("deploy-form").addEventListener("submit", async event => {
     const value = await api("/api/deploy", { sourceImage: element<HTMLInputElement>("source-image").value.trim(),
       accessToken: element<HTMLInputElement>("access-token").value.trim(), reviewed: element<HTMLInputElement>("reviewed").checked,
       ...(registryAuth ? { registryAuth: await registryAuth.text() } : {}),
+      ...(element<HTMLInputElement>("registry-username").value || element<HTMLInputElement>("registry-password").value ? {
+        registryUsername: element<HTMLInputElement>("registry-username").value,
+        registryPassword: element<HTMLInputElement>("registry-password").value,
+      } : {}),
       ...(element<HTMLInputElement>("aws-profile").value.trim() ? { awsProfile: element<HTMLInputElement>("aws-profile").value.trim() } : {}),
       volumeKeys: await uploadFiles("volume-keys"), resourceFiles: await uploadFiles("resource-files") });
     showJob(value.job);
   } catch (error) { running = false; notice((error as Error).message); updateControls(); }
   finally {
     element<HTMLInputElement>("access-token").value = "";
+    element<HTMLInputElement>("registry-password").value = "";
+    element<HTMLInputElement>("registry-username").value = "";
     for (const input of document.querySelectorAll<HTMLInputElement>("#deploy-form input[type=file]")) input.value = "";
   }
 });
@@ -139,6 +153,9 @@ async function refresh() {
     const value = await api("/api/context");
     if (!stack && value.stack) showStack(value.stack, value.hasRelease);
     hasRelease = value.hasRelease;
+    if (!element<HTMLInputElement>("source-image").value && typeof value.sourceImage === "string") {
+      element<HTMLInputElement>("source-image").value = value.sourceImage;
+    }
     element("tools").textContent = value.tools.tng && value.tools.genpolicy ? "Native verification tools available." : "Qualified TNG or genpolicy is missing. Add them to PATH, or start the UI with --tng and --genpolicy.";
     showJob(value.job);
   } catch (error) { notice((error as Error).message); }

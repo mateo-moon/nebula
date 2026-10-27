@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { deploy, type DeployOptions } from "../deploy";
 import { TrusteeClient } from "../client";
-import { renewClient } from "../prepare";
+import { renewClient, releaseStateDirectory } from "../prepare";
 
 export function uiError(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
@@ -32,16 +32,16 @@ process.once("message", async (input: { action: "deploy" | "inspect"; options: D
   process.on("message", (event: any) => { if (event?.type === "cancel") cancel(); });
   process.once("SIGINT", cancel); process.once("SIGTERM", cancel);
   try {
+    let state = releaseStateDirectory(options.releaseDirectory);
+    if (existsSync(join(state, "instance.json"))) {
+      const next = join(options.releaseDirectory, `verifier-${Date.now()}`);
+      state = await renewClient(state, next);
+      writeFileSync(join(options.releaseDirectory, "active-state.json"), JSON.stringify({ path: state }) + "\n", { mode: 0o600 });
+    }
     let result: unknown;
     if (input.action === "deploy") {
       result = await deploy({ ...options, signal: stop.signal, onProgress: phase => process.send?.({ type: "progress", phase }) });
     } else {
-      const pointer = join(options.releaseDirectory, "active-state.json");
-      let state = existsSync(pointer) ? JSON.parse(readFileSync(pointer, "utf8")).path : join(options.releaseDirectory, "owner-state");
-      // Renewal preserves the enrolled certificate, identity and resource list.
-      const next = join(options.releaseDirectory, `verifier-${Date.now()}`);
-      state = await renewClient(state, next);
-      writeFileSync(pointer, JSON.stringify({ path: state }) + "\n", { mode: 0o600 });
       const key = readFileSync(join(options.releaseDirectory, "owner.key"));
       let client: TrusteeClient | undefined;
       try {

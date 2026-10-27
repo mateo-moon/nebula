@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createPrivateKey, createPublicKey, X509Certificate } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { tngTrusteeClientPlan } from "nebula-cdk8s/trustee/client-plan";
 import { snpIdentity, type TrusteeSnpIdentity } from "nebula-cdk8s/trustee/policies";
@@ -32,6 +32,22 @@ interface Profile {
 }
 
 const save = (path: string, value: unknown) => writeFileSync(path, JSON.stringify(value, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+
+/** A renewed local verifier remains inside the same private release. This is
+ * never an endpoint discovery or permission to replace the enrolled guest. */
+export function releaseStateDirectory(releaseDirectory: string): string {
+  const release = resolve(releaseDirectory), pointer = join(release, "active-state.json");
+  let stat;
+  try { stat = lstatSync(pointer); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return join(release, "owner-state"); throw error; }
+  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) || stat.size > 8192) throw new Error("Invalid private verifier pointer");
+  const value = JSON.parse(readFileSync(pointer, "utf8"));
+  if (Object.keys(value).join() !== "path" || typeof value.path !== "string" ||
+      dirname(value.path) !== release || !/^verifier-[0-9]+$/.test(basename(value.path))) throw new Error("Verifier state must remain inside this release");
+  const directory = lstatSync(value.path);
+  if (!directory.isDirectory() || directory.isSymbolicLink() || (directory.mode & 0o077)) throw new Error("Invalid private verifier directory");
+  return value.path;
+}
 const policyFile = (directory: string) => join(directory, "storage", "attestation_service_policy", "approved_cpu.rego");
 function planFor(directory: string, profile: Profile) {
   const plan = tngTrusteeClientPlan(profile.identity, profile.target, profile.localPort, profile.verifierPort, join(directory, "ca.pem"));

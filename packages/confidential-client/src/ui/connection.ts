@@ -25,6 +25,10 @@ export function readConnection(text: string): ConfidentialConnection {
   }
   validateWorkload(value.workload, value.storages);
   if (!value.workload.spec.ownerClaimSha256) throw new Error("This stack does not support temporary access tokens");
+  const published = value.workload.spec.containers.filter(container => container.imageKeyResource);
+  if (published.length !== 1 || published[0].image.includes("@sha256:")) {
+    throw new Error("The deployment page requires one reserved encrypted-image tag");
+  }
   if (value.vcekCertificate !== undefined && (typeof value.vcekCertificate !== "string" ||
       value.vcekCertificate.length > 32768)) throw new Error("Invalid public AMD endorsement certificate");
   if (value.vcekCertificate) new X509Certificate(value.vcekCertificate);

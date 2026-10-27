@@ -118,7 +118,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
     ["/style.css", { type: "text/css; charset=utf-8", bytes: readFileSync(new URL("./style.css", import.meta.url)) }],
   ]);
   const session = randomBytes(32).toString("hex");
-  let origin = "", lastAccess = Date.now(), connection: ConfidentialConnection | undefined, job: UiJob | undefined;
+  let origin = "", connection: ConfidentialConnection | undefined, job: UiJob | undefined;
   let active: Promise<void> | undefined;
   let closing = false;
   const settings = join(root, "connection.json");
@@ -126,7 +126,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
   const releaseFor = (profile: ConfidentialConnection) => join(root, `release-${createHash("sha256").update(JSON.stringify(profile)).digest("hex").slice(0, 32)}`);
   function authorize(req: IncomingMessage) {
     const header = req.headers.authorization ?? "", expected = `Bearer ${session}`;
-    return Date.now() - lastAccess < 30 * 60_000 && Buffer.byteLength(header) === Buffer.byteLength(expected) &&
+    return Buffer.byteLength(header) === Buffer.byteLength(expected) &&
       timingSafeEqual(Buffer.from(header), Buffer.from(expected));
   }
   const reply = (res: ServerResponse, status: number, body: unknown) => {
@@ -147,12 +147,13 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
     if (req.method === "GET" && asset) { res.writeHead(200, { "Content-Type": asset.type }).end(asset.bytes); return; }
     if (!authorize(req)) { reply(res, 403, { error: "Open the local address printed by confidential-client ui" }); return; }
     if (req.method === "POST" && req.headers.origin !== origin) { reply(res, 403, { error: "A same-origin request is required" }); return; }
-    lastAccess = Date.now();
     try {
       if (closing) { reply(res, 503, { error: "The local client is closing" }); return; }
       if (req.method === "GET" && req.url === "/api/context") {
+        const saved = connection ? join(releaseFor(connection), "ui-release.json") : undefined;
         reply(res, 200, { tools: { tng: Boolean(tng), genpolicy: Boolean(genpolicy) },
           stack: connection ? connectionSummary(connection) : undefined,
+          sourceImage: saved && existsSync(saved) ? JSON.parse(readFileSync(saved, "utf8")).sourceImage : undefined,
           hasRelease: Boolean(connection && existsSync(join(releaseFor(connection), "owner-state", "instance.json"))), job }); return;
       }
       if (req.method === "GET" && req.url === "/api/images") {
@@ -190,15 +191,31 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
           tngBinary: tng, genpolicy, cache: options.cache ?? join(root, "cache"),
           localPort: options.localPort, verifierPort: options.verifierPort };
         if (action === "deploy") {
-          if (Object.keys(input).some(key => !["sourceImage", "accessToken", "reviewed", "registryAuth", "awsProfile", "volumeKeys", "resourceFiles"].includes(key))) throw new InputError("Unexpected deployment option");
+          if (Object.keys(input).some(key => !["sourceImage", "accessToken", "reviewed", "registryAuth", "registryUsername", "registryPassword", "awsProfile", "volumeKeys", "resourceFiles"].includes(key))) throw new InputError("Unexpected deployment option");
           if (input.reviewed !== true) throw new InputError("Review and approve the stack settings first");
           if (typeof input.sourceImage !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,1023}$/.test(input.sourceImage)) throw new InputError("Choose a valid local image");
-          try {
-            if (confidentialAccessTokenHash(input.accessToken) !== connection.workload.spec.ownerClaimSha256) throw new Error();
-          } catch { throw new InputError("The access token does not match this stack"); }
-          native = { ...native, sourceImage: input.sourceImage, accessToken: input.accessToken };
+          const alreadyEnrolled = existsSync(join(release, "owner-state", "instance.json"));
+          if (!alreadyEnrolled || input.accessToken) {
+            try {
+              if (confidentialAccessTokenHash(input.accessToken!) !== connection.workload.spec.ownerClaimSha256) throw new Error();
+            } catch { throw new InputError("The access token does not match this stack"); }
+          }
+          native = { ...native, sourceImage: input.sourceImage, accessToken: input.accessToken || undefined };
           if (input.awsProfile !== undefined && (typeof input.awsProfile !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(input.awsProfile))) throw new InputError("Invalid local AWS profile");
           native.awsProfile = input.awsProfile;
+          if (input.registryUsername !== undefined || input.registryPassword !== undefined) {
+            if (input.registryAuth || typeof input.registryUsername !== "string" || !input.registryUsername.length ||
+                input.registryUsername.length > 256 || /[:\r\n\0]/.test(input.registryUsername) ||
+                typeof input.registryPassword !== "string" || !input.registryPassword.length ||
+                input.registryPassword.length > 8192 || /[\r\n\0]/.test(input.registryPassword)) {
+              throw new InputError("Supply both registry username and token, or choose an auth JSON file");
+            }
+            const destination = connection.workload.spec.containers.find(container => container.imageKeyResource)!.image;
+            const registry = destination.slice(0, destination.indexOf("/"));
+            input.registryAuth = JSON.stringify({ auths: { [registry]: {
+              auth: Buffer.from(`${input.registryUsername}:${input.registryPassword}`).toString("base64"),
+            } } });
+          }
           if (input.registryAuth) {
             try {
               const auth = JSON.parse(input.registryAuth);
@@ -222,6 +239,17 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
                 savePrivate(path, bytes);
                 result.push(`${file.name}=${path}`);
               } finally { bytes.fill(0); }
+            }
+            // Retry uses the same private files; it never asks the user to
+            // upload an existing disk key or application secret a second time.
+            for (const name of allowed) {
+              if (seen.has(name)) continue;
+              const path = join(release, `${volume ? "supplied-volume" : "application-resource"}-${allowed.indexOf(name)}.bin`);
+              if (!existsSync(path)) continue;
+              const stat = lstatSync(path);
+              if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || (stat.mode & 0o077) ||
+                  (volume ? stat.size !== 32 : stat.size < 1 || stat.size > 2 * 1024 * 1024)) throw new InputError("Unsafe saved resource file");
+              seen.add(name); result.push(`${name}=${path}`);
             }
             if (required.some(name => !seen.has(name))) throw new InputError("Supply every required existing volume key and application resource");
             return result;

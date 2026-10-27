@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -10,6 +10,7 @@ import { startUi, type UiRunner } from "../src/ui/server";
 import { readConnection, type ConfidentialConnection } from "../src/ui/connection";
 import { accessTokenBytes } from "../src/claim";
 import { identity } from "./support";
+import { releaseStateDirectory } from "../src/prepare";
 
 function connection(token: string): ConfidentialConnection {
   const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
@@ -27,12 +28,17 @@ test("local web boundary rejects foreign sites, wrong capabilities and unreviewe
   const directory = mkdtempSync(join(tmpdir(), "confidential-ui-"));
   const token = randomBytes(32).toString("hex"); let started = 0;
   const registrySecret = "test-only-registry-credential";
+  const applicationSecret = "test-only-private-configuration";
   let finish!: () => void;
   const runner: UiRunner = { async images() { return ["local/app:test"]; }, async start(_action, options, report) {
-    started++; assert.equal(options.accessToken, token);
+    started++; assert.equal(options.accessToken, started === 1 ? token : undefined);
     assert.equal(options.claimTokenFile, undefined);
-    assert.ok(readFileSync(options.registryAuthFile!, "utf8").includes(registrySecret));
+    const auth = JSON.parse(readFileSync(options.registryAuthFile!, "utf8")).auths["example.invalid"].auth;
+    assert.equal(Buffer.from(auth, "base64").toString("utf8"), `test-owner:${registrySecret}`);
+    assert.equal(readFileSync(options.resourceFile![0].split("=")[1], "utf8"), applicationSecret);
     await new Promise<void>(resolve => { finish = resolve; });
+    mkdirSync(join(options.releaseDirectory, "owner-state"), { mode: 0o700, recursive: true });
+    writeFileSync(join(options.releaseDirectory, "owner-state", "instance.json"), "{}", { mode: 0o600 });
     report({ type: "result", result: { verified: true, instance: "public-fingerprint" } });
   } };
   const ui = await startUi({ directory, tngBinary: process.execPath, genpolicy: process.execPath }, runner);
@@ -52,23 +58,33 @@ test("local web boundary rejects foreign sites, wrong capabilities and unreviewe
   assert.equal((await call("/api/context", undefined, { Authorization: "Bearer wrong" })).status, 403);
   const page = await fetch(ui.origin + "/"); assert.match(page.headers.get("content-security-policy")!, /frame-ancestors 'none'/);
   assert.ok(!(await page.text()).includes(token));
-  assert.equal((await call("/api/connection", { text: JSON.stringify(connection(token)) })).status, 200);
+  const original = connection(token);
+  const settings = { ...original, workload: { ...original.workload, spec: { ...original.workload.spec,
+    resources: [...original.workload.spec.resources, ["default", "application", "config"] as const] } } };
+  assert.equal((await call("/api/connection", { text: JSON.stringify(settings) })).status, 200);
+  assert.equal((await call("/api/deploy", { sourceImage: "local/app:test", reviewed: true })).status, 400);
   assert.equal((await call("/api/deploy", { accessToken: "0".repeat(64), sourceImage: "local/app:test", reviewed: true })).status, 400);
   assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: false })).status, 400);
   assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "--format=evil", reviewed: true })).status, 400);
   assert.equal(started, 0);
   const response = await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: true,
-    registryAuth: JSON.stringify({ auths: { "example.invalid": { auth: registrySecret } } }) });
+    registryUsername: "test-owner", registryPassword: registrySecret,
+    resourceFiles: [{ name: "default/application/config", base64: Buffer.from(applicationSecret).toString("base64") }] });
   assert.equal(response.status, 202);
   assert.equal((await call("/api/deploy", {})).status, 409);
   const pending = await call("/api/context"); assert.equal(pending.status, 200, "HTTP remains responsive while native work runs");
   const publicState = await pending.text();
-  assert.ok(!publicState.includes(token)); assert.ok(!publicState.includes(registrySecret));
+  assert.ok(!publicState.includes(token)); assert.ok(!publicState.includes(registrySecret)); assert.ok(!publicState.includes(applicationSecret));
   finish(); await new Promise(resolve => setTimeout(resolve, 10));
   const completed = await (await call("/api/context")).json();
   assert.equal(completed.job.status, "succeeded"); assert.equal(completed.job.result.verified, true);
   assert.ok(!readFileSync(join(directory, "connection.json"), "utf8").includes(token));
   assert.equal(existsSync(join(directory, "claim-token.txt")), false);
+  assert.equal((await call("/api/deploy", { accessToken: "0".repeat(64), sourceImage: "local/app:test", reviewed: true })).status, 400);
+  assert.equal((await call("/api/deploy", { sourceImage: "local/app:test", reviewed: true })).status, 202,
+    "An enrolled release reuses its private registry/resource files without the temporary token");
+  assert.equal(started, 2);
+  finish();
 });
 
 test("parameter tokens retain file compatibility and cannot silently override a second credential", () => {
@@ -79,5 +95,7 @@ test("parameter tokens retain file compatibility and cannot silently override a 
     assert.throws(() => accessTokenBytes({ accessToken: token, claimTokenFile: file }), /not both/);
     assert.throws(() => readConnection(JSON.stringify({ ...connection(token), accessToken: token })), /credentials/);
     assert.throws(() => readConnection(JSON.stringify({ ...connection(token), endpoint: { host: "evil.invalid/path", port: 8443 } })), /settings/);
+    writeFileSync(join(directory, "active-state.json"), JSON.stringify({ path: "/different-release/verifier-1" }), { mode: 0o600 });
+    assert.throws(() => releaseStateDirectory(directory), /inside this release/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
