@@ -3,16 +3,23 @@
  * No private key, image key or registry password belongs in this file.
  *
  *   pnpm exec cdk8s synth --app 'tsx example/confidential-workload-stack.ts'
+ *
+ * Set CONFIDENTIAL_BROWSER_IMAGE to a reviewed digest-pinned preparation
+ * image to enable the installation-free browser flow. Independently qualify
+ * this preparation template in the loader release before handing out links.
  */
 import { App, Chart, ApiObject } from "cdk8s";
 import { SealedDisks } from "../src/modules/k8s/confidential-guests/sealed-disks";
-import { ConfidentialOperator, ConfidentialStorage, ConfidentialStorageDevices,
+import { ConfidentialBrowser, ConfidentialOperator, ConfidentialStorage, ConfidentialStorageDevices,
   ConfidentialWorkload, type ConfidentialStorageResource } from "../src/modules/k8s/confidential-workloads";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 
 const namespace = "confidential-example";
 const node = "replace-with-snp-node";
 const profile = "example-workload";
+const browserImage = process.env.CONFIDENTIAL_BROWSER_IMAGE;
+const nodeSelector = { "kubernetes.io/hostname": node };
+const network = { ipv4AddressPattern: "^10[.]244[.][0-9]{1,3}[.][0-9]{1,3}$", ipv6AddressPattern: "^2001:db8::[0-9a-f:]+$" };
 const images = {
   operator: "ghcr.io/example/confidential-operator@sha256:" + "1".repeat(64),
   injector: "ghcr.io/example/confidential-storage-devices@sha256:" + "2".repeat(64),
@@ -29,6 +36,8 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
 } });
 new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
+if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example-preparation", namespace,
+  image: browserImage, tngImage: images.tng, nodeSelector, network });
 new SealedDisks(chart, "ciphertext-disk", {
   namespace, nodeName: node, image: images.disks,
   stateDir: "/var/lib/confidential-example", roles: [{ role: "data", claim: "example-data",
@@ -47,12 +56,16 @@ const storages: ConfidentialStorageResource[] = [{ apiVersion: "confidential.neb
 for (const storage of storages) new ConfidentialStorage(chart, storage.metadata.name,
   { name: storage.metadata.name, namespace, spec: storage.spec });
 new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, storages, spec: {
-  profile, accessLink: { url: "https://owner.example.test/", ownerPort: 8443, secretName: "workload-access" },
+  profile, ...(browserImage ? { browserOwner: true as const } : {}),
+  accessLink: { url: "https://owner.example.test/", ownerPort: 8443, secretName: "workload-access",
+    ...(browserImage ? { browser: {
+      invitationEndpoint: `http://example-preparation-invitation.${namespace}.svc:8089/invitation`,
+      workloadEndpoint: "https://preparation.example.test/", ownerEndpoint: "https://workload.example.test/",
+      loaderUrl: "https://release.example.test/confidential/",
+    } } : {}) },
   guest: { measurement: "7".repeat(96), chipId: "8".repeat(128),
     minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
-  nodeSelector: { "kubernetes.io/hostname": node },
-  network: { ipv4AddressPattern: "^10[.]244[.][0-9]{1,3}[.][0-9]{1,3}$",
-    ipv6AddressPattern: "^2001:db8::[0-9a-f:]+$" },
+  nodeSelector, network,
   trustee: { chart: TRUSTEE_CHART, version: "0.21.0", kbsImage: images.kbs,
     tngImage: images.tng, gatewayImage: images.gateway },
   storageImage: images.storage,
@@ -69,11 +82,22 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
 new ApiObject(chart, "owner-gateway", { apiVersion: "gateway.networking.k8s.io/v1", kind: "Gateway",
   metadata: { name: "example-owner", namespace }, spec: { gatewayClassName: "replace-with-gateway-class",
     listeners: [{ name: "owner", protocol: "TCP", port: 8443 }, { name: "access", protocol: "HTTPS", port: 443,
-      hostname: "owner.example.test", tls: { mode: "Terminate", certificateRefs: [{ name: "replace-with-discovery-certificate" }] } }] } });
+      hostname: "owner.example.test", tls: { mode: "Terminate", certificateRefs: [{ name: "replace-with-discovery-certificate" }] } },
+      ...(browserImage ? ["preparation", "workload"].map(name => ({ name, protocol: "HTTPS", port: 443,
+        hostname: `${name}.example.test`, tls: { mode: "Terminate", certificateRefs: [{ name: `replace-with-${name}-certificate` }] } })) : [])] } });
 new ApiObject(chart, "owner-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TCPRoute",
   metadata: { name: "example-owner", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "owner" }],
     rules: [{ backendRefs: [{ name: "workload-owner", port: 8443 }] }] } });
 new ApiObject(chart, "access-route", { apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
   metadata: { name: "example-access", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "access" }],
     hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "confidential-operator-access", port: 8083 }] }] } });
+if (browserImage) for (const [name, service] of [["preparation", "example-preparation"], ["workload", "workload-owner"]]) {
+  // HTTPS termination carries only OHTTP ciphertext. This proxy never sees
+  // owner JWTs, image plaintext, registry credentials or decryption keys.
+  new ApiObject(chart, `${name}-browser-route`, { apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
+    metadata: { name: `${name}-browser`, namespace }, spec: {
+      parentRefs: [{ name: "example-owner", sectionName: name }], hostnames: [`${name}.example.test`],
+      rules: [{ backendRefs: [{ name: service, port: 8445 }] }],
+    } });
+}
 app.synth();

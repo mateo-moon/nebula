@@ -1,0 +1,52 @@
+name: Build confidential browser loader
+
+on:
+  pull_request:
+    paths:
+      - packages/confidential-browser/**
+      - packages/confidential-client/**
+      - packages/confidential-runtime/**
+      - packages/nebula/**
+      - tools/tng-browser/**
+      - .github/workflows/build-confidential-browser.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: confidential-browser-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  loader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Scan release sources before building
+        run: node scripts/publication-guard.mjs tools/tng-browser packages/confidential-browser
+      - name: Install native WASM build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang cmake pkg-config protobuf-compiler libprotobuf-dev jq
+      - name: Build the exact reviewed SNP verifier
+        run: sh tools/tng-browser/build.sh "$RUNNER_TEMP/tng-browser-source" "$RUNNER_TEMP/tng-browser-sdk"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-browser typecheck
+      - name: Build the independent loader and reject unresolved crypto imports
+        env:
+          TNG_WASM_PATH: ${{ runner.temp }}/tng-browser-sdk
+        run: pnpm --dir packages/confidential-browser build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: confidential-browser-${{ github.sha }}
+          path: packages/confidential-browser/dist/loader
+          if-no-files-found: error
+          retention-days: 14
