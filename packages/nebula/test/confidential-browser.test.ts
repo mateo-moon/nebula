@@ -27,7 +27,7 @@ test("native browser policy is deterministic and permits no host disks, cluster 
   assert.equal(kbc.name, "cc_kbc");
   assert.equal(kbc.url, "http://127.0.0.1:8080");
   assert.equal(first.pod.spec!.automountServiceAccountToken, false);
-  assert.equal(first.pod.spec!.restartPolicy, "Never");
+  assert.equal(first.pod.spec!.restartPolicy, "Always");
   assert.deepEqual(first.pod.spec!.containers!.map(container => container.name), ["preparation", "tng"]);
   assert.ok(first.pod.spec!.volumes!.every(volume => "emptyDir" in volume && volume.emptyDir!.medium === "Memory"));
   for (const container of first.pod.spec!.containers!) {

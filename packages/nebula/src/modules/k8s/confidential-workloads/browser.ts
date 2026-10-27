@@ -39,7 +39,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
       "io.katacontainers.config.hypervisor.default_vcpus": "2",
       "io.katacontainers.config.hypervisor.kernel_params": "agent.guest_components_procs=api-server-rest agent.guest_components_rest_api=all agent.aa_kbc_params=cc_kbc::http://127.0.0.1:8080",
     } }, spec: { runtimeClassName: "kata-qemu-snp", nodeSelector: config.nodeSelector,
-    automountServiceAccountToken: false, enableServiceLinks: false, restartPolicy: "Never", terminationGracePeriodSeconds: 30,
+    automountServiceAccountToken: false, enableServiceLinks: false, restartPolicy: "Always", terminationGracePeriodSeconds: 30,
     securityContext: { fsGroup: 10001, supplementalGroups: [0, 10001] },
     containers: [
       { name: "preparation", image: config.image, imagePullPolicy: "Always", command: privateCommand(["node", "/app/dist/service/main.mjs"]), args: ["serve"],
@@ -70,8 +70,9 @@ export class ConfidentialBrowser extends BaseConstruct<ConfidentialBrowserConfig
     super(scope, id, publicConfig("ConfidentialBrowser", config));
     const plan = confidentialBrowserPlan(config);
     this.initDataSha256 = plan.initDataSha256;
-    // A named retained Pod is deliberate: an enrolled preparation VM is never
-    // silently replaced by a Deployment rollout or Argo pruning.
+    // A named retained Pod has no Deployment rollout or rescheduling owner.
+    // Container restarts retain guest tmpfs. A lost sandbox has a new key and
+    // must fail the browser's persisted instance pin before receiving secrets.
     const metadata = { ...plan.pod.metadata, name: config.name, generateName: undefined,
       annotations: { ...plan.pod.metadata.annotations, "argocd.argoproj.io/sync-wave": "-1", "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } };
     new ApiObject(this, "pod", { ...plan.pod, apiVersion: "v1", kind: "Pod", metadata });
