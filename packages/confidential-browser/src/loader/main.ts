@@ -56,14 +56,19 @@ async function start() {
   await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
   const fetcher = sdk.fetch as AttestedFetch;
   let channel: AttestedChannel | undefined;
+  let verificationFailure = "No independently approved preparation profile matched";
   for (const profile of profiles.profiles as { identity: SnpIdentity }[]) {
     try {
       const candidate = new AttestedChannel(fetcher, target, profile.identity, saved?.preparationPin);
       const response = await candidate.request("/nebula/v1/browser");
       if (response.status === 200) { channel = candidate; break; }
-    } catch { /* No secret has been sent; try the next independently approved release. */ }
+    } catch (error) {
+      // This request is GET-only and precedes every owner credential. Surface
+      // its diagnostic without logging any later authenticated request.
+      verificationFailure = error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000);
+    }
   }
-  if (!channel) throw new Error("SNP, workload policy or enrolled instance verification failed. No owner credential or image was sent.");
+  if (!channel) throw new Error(`SNP, workload policy or enrolled instance verification failed. No owner credential or image was sent. ${verificationFailure}`);
   status("SNP and measured preparation workload verified. Loading its UI…");
   const assets = await verifiedAssets(channel);
   const owner: OwnerState = saved ?? await newOwner();

@@ -13,7 +13,7 @@ const ACCESS_PROFILE = {
   storageImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:4d6bd8371595c90eb309099171c2c00d9051ad300663339305678de6ee931fbd",
 } as const;
 export const TRUSTED_STACKS = [ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-snp-browser-2026-10",
-  gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:071b9ef9dc86c0275ffcc5cdc256ad3b87d41a42536c305855061876185827d7",
+  gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:eb1b8d91dbc0729d7f0b901e7d0e8c036be3b02bd0905788fdd53b86d9031318",
 }] as const;
 
 export function trustedStack(connection: ConfidentialConnection): string {
