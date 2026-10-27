@@ -90,6 +90,24 @@ async function start() {
   script.src = URL.createObjectURL(new Blob([assets.get("/ui/app.js")! as BlobPart], { type: "text/javascript" }));
   script.onload = () => URL.revokeObjectURL(script.src);
   document.body.append(script);
+  // Keep a release-owned status control available even when an earlier served
+  // UI cannot explain an interrupted job. It uses the same pinned channel and
+  // owner proof; it exposes only the service's non-secret job state.
+  const diagnostics = document.createElement("button");
+  diagnostics.type = "button"; diagnostics.className = "secondary";
+  diagnostics.textContent = "Check preparation status";
+  const diagnosticOutput = document.createElement("pre");
+  diagnosticOutput.hidden = true;
+  diagnostics.addEventListener("click", () => {
+    diagnostics.disabled = true;
+    void (async () => {
+      const response = await bound.request("/nebula/v1/job", { headers: { Authorization: `Bearer ${await jwt(owner, "nebula-browser")}` } });
+      if (response.status !== 200) throw new Error("Owner-authenticated preparation status is unavailable");
+      diagnosticOutput.textContent = JSON.stringify(await response.json(), null, 2);
+    })().catch(error => { diagnosticOutput.textContent = error instanceof Error ? error.message : "Status unavailable"; })
+      .finally(() => { diagnostics.disabled = false; diagnosticOutput.hidden = false; });
+  });
+  (document.querySelector(".progress-card") ?? document.body).append(diagnostics, diagnosticOutput);
 }
 if (typeof document !== "undefined") {
   document.getElementById("restore-form")?.addEventListener("submit", event => {

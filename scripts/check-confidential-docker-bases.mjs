@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 
 const stages = new Set();
-for (const role of ["operator", "runtime", "storage", "storage-devices", "browser"]) {
-  const file = `docker/confidential-${role}/Dockerfile`;
+const files = ["operator", "runtime", "storage", "storage-devices", "browser"].map(role => `docker/confidential-${role}/Dockerfile`);
+files.push("docker/confidential-browser/Dockerfile.keyprovider", "docker/confidential-browser/Dockerfile.skopeo");
+for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");
   stages.clear();
   for (const [index, line] of lines.entries()) {

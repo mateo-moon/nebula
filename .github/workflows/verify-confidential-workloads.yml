@@ -136,6 +136,30 @@ jobs:
             ghcr.io/mateo-moon/nebula-cmp:1b67ec0@sha256:27ae309e158862e821f6de6ea7e91803d020bca81fa9e1d1ae826359fea76446 \
             sh -ec 'pnpm install --frozen-lockfile && node --import tsx --test test/confidential-workload-render.test.ts'
 
+  browser-encryption:
+    name: Native CoCo browser image encryption
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/confidential-browser/Dockerfile
+          target: native-test
+          platforms: linux/amd64
+          load: true
+          tags: nebula-browser-encryption:ci
+          cache-from: type=gha,scope=confidential-browser
+          cache-to: type=gha,mode=max,scope=confidential-browser
+      - name: Exercise the actual gRPC key-provider transport without network access
+        run: >-
+          docker run --rm --network none --read-only --cap-drop ALL
+          --tmpfs /tmp:rw,nosuid,nodev,size=128m nebula-browser-encryption:ci
+
   storage-headers:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
