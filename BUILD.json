@@ -1,5 +1,5 @@
 {
-  "nebulaSource": "77eee461379b9a812ae5ca962f312a94adeeec71",
+  "nebulaSource": "1ffa3e7cc5064ed4aadfee7f173e37b1ffc5570a",
   "tng": {
     "repository": "https://github.com/mateo-moon/TNG.git",
     "revision": "0c432325865882a22f28ce702e7a700665053759",
@@ -12,11 +12,26 @@
     "version": 1,
     "profiles": [
       {
+        "id": "nebula-snp-browser-preparation-coco-2026-10",
+        "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:882424a9f0444a645458a7dfef0e3a3e7961a42cb5a67b60be4b6e1fe7a3b968",
+        "sourceRevision": "9c954447c006ab220ccc9626dcb7c304bcc34173",
+        "identity": {
+          "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+          "initDataSha256": "633d1b2fe7ce6cd964e65b1799aef88b69646729ee7bd8a03eb50d153ace3a97",
+          "minimumReportedTcb": {
+            "bootloader": 10,
+            "tee": 0,
+            "snp": 24,
+            "microcode": 88
+          }
+        }
+      },
+      {
         "id": "nebula-snp-browser-preparation-2026-10",
         "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:1fc64c90d704a8c702f85116282fddde5c1e12b777f9d579cb9245bc75231de3",
         "sourceRevision": "26c890de1eb9ee47c9c1ce4a39d249efd50f9c20",
         "identity": {
-          "measurement": "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
+          "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
           "initDataSha256": "3a6179fdd5137b989929ba0d011fad8fb70565f493275827e8813e522602044f",
           "minimumReportedTcb": {
             "bootloader": 10,
@@ -27,5 +42,20 @@
         }
       }
     ]
+  },
+  "assets": {
+    "index.html": "e1ab5fc55967cdc4889cfe6979af45cfd5ab0a496a2a7b29a35fed06582b4990",
+    "_headers": "ca240155e86aa6825d91a648fa78cae980fac93a2b3f7878c48ea2e1dae9e9e9",
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "coi.js": "4784b087bc04e64214dcfb1962caf64f3442279dc1d622f37bb5c54d32f4b6f7",
+    "loader.js": "0f24fe2fed1858c6b504c378bffe17c8e281cda43b0cf59089191d6a202df57c",
+    "sdk/tng_wasm_bg.wasm": "71152a03f7096df5a039874b066a572de30520214436dfb59980764059d5cd39",
+    "sdk/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "sdk/tng_wasm.d.ts": "3af6cf7f0e1c0ff26d53ae50d2af1c036a1cdc1498b0ed261f365bc6741ca790",
+    "sdk/README.md": "ae497ab6bd7e3100dc04d7a1c047bbee18a2ed05f0b5e354a7c51b935aa0fa90",
+    "sdk/.gitignore": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1",
+    "sdk/package.json": "72efecd4272698418a7c49f5ff2ddab1a4387064e73592b876e24f0a46d8b699",
+    "sdk/tng_wasm_bg.wasm.d.ts": "59eb0a4d2cbe4fbf9272b845eac477f984f284a4fd9d23dd96f3ce21a10a297f",
+    "sdk/tng_wasm.js": "36a839c1c059df47f1d047f62552cd01a59567b969ecd97d63627a7fce7d68be"
   }
 }

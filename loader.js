@@ -216,6 +216,21 @@ var profiles_default = {
   version: 1,
   profiles: [
     {
+      id: "nebula-snp-browser-preparation-coco-2026-10",
+      image: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:882424a9f0444a645458a7dfef0e3a3e7961a42cb5a67b60be4b6e1fe7a3b968",
+      sourceRevision: "9c954447c006ab220ccc9626dcb7c304bcc34173",
+      identity: {
+        measurement: "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+        initDataSha256: "633d1b2fe7ce6cd964e65b1799aef88b69646729ee7bd8a03eb50d153ace3a97",
+        minimumReportedTcb: {
+          bootloader: 10,
+          tee: 0,
+          snp: 24,
+          microcode: 88
+        }
+      }
+    },
+    {
       id: "nebula-snp-browser-preparation-2026-10",
       image: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:1fc64c90d704a8c702f85116282fddde5c1e12b777f9d579cb9245bc75231de3",
       sourceRevision: "26c890de1eb9ee47c9c1ce4a39d249efd50f9c20",
