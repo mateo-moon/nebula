@@ -156,7 +156,6 @@ async function provision() {
   await inspect();
 }
 async function inspect() {
-  if (busy && !final) return;
   const channel = final ?? await finalConnection();
   const deadline = Date.now() + 300_000;
   progress("ready", "Checking workload and encrypted storage…");
