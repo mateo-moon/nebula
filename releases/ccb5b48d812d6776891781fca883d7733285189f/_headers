@@ -1,0 +1,6 @@
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  Content-Security-Policy: default-src 'none'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src https: http://127.0.0.1:*; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'

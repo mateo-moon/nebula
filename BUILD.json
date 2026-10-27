@@ -1,5 +1,5 @@
 {
-  "nebulaSource": "dc4ec23d873af54df2a8e33e6df604407110b094",
+  "nebulaSource": "ccb5b48d812d6776891781fca883d7733285189f",
   "tng": {
     "repository": "https://github.com/mateo-moon/TNG.git",
     "revision": "ca71333c24d7d909003ef7eb78caa9ec1455f03c",
@@ -11,6 +11,21 @@
   "profiles": {
     "version": 1,
     "profiles": [
+      {
+        "id": "nebula-snp-browser-preparation-returning-2026-10",
+        "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:29c80adc1a2369c7d0fca983cd03e9138026ff4be057ee4c412d6a1fb39f06e6",
+        "sourceRevision": "a94117c4698a9c5ad7b29dd337f7d475f0798ea3",
+        "identity": {
+          "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+          "initDataSha256": "d7eb303a952b6f4b98c9aa122478e60765b6e1c582ee2c9c185273d0da15ddbe",
+          "minimumReportedTcb": {
+            "bootloader": 10,
+            "tee": 0,
+            "snp": 24,
+            "microcode": 88
+          }
+        }
+      },
       {
         "id": "nebula-snp-browser-preparation-worker-2026-10",
         "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:4ec0d6098a422258264b5d22e26889ea0cc85b788becef7239e323dcaefd1491",
@@ -76,16 +91,10 @@
   "assets": {
     "index.html": "e1ab5fc55967cdc4889cfe6979af45cfd5ab0a496a2a7b29a35fed06582b4990",
     "_headers": "ca240155e86aa6825d91a648fa78cae980fac93a2b3f7878c48ea2e1dae9e9e9",
-    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "coi.js": "4784b087bc04e64214dcfb1962caf64f3442279dc1d622f37bb5c54d32f4b6f7",
-    "loader.js": "1eaff18c78110b1b644745fa6f5ed60cffc7bf9402baa70e82c02d189b7cf8e7",
+    "loader.js": "ab00265a591c424758ac7684292b60cc9c3d81f1e7b7c7150d5b998072a4cfcb",
     "sdk/tng_wasm_bg.wasm": "d46294617b85bdb4da76bcd589a8318255049ab4c768ff579b21a04e74c13fb9",
     "sdk/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-    "sdk/tng_wasm.d.ts": "3af6cf7f0e1c0ff26d53ae50d2af1c036a1cdc1498b0ed261f365bc6741ca790",
-    "sdk/README.md": "ae497ab6bd7e3100dc04d7a1c047bbee18a2ed05f0b5e354a7c51b935aa0fa90",
-    "sdk/.gitignore": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1",
-    "sdk/package.json": "72efecd4272698418a7c49f5ff2ddab1a4387064e73592b876e24f0a46d8b699",
-    "sdk/tng_wasm_bg.wasm.d.ts": "59eb0a4d2cbe4fbf9272b845eac477f984f284a4fd9d23dd96f3ce21a10a297f",
     "sdk/tng_wasm.js": "36a839c1c059df47f1d047f62552cd01a59567b969ecd97d63627a7fce7d68be"
   }
 }
