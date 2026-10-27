@@ -69,9 +69,11 @@ function showJob(job?: UiJob) {
     item.classList.toggle("active", running && position === index);
   }
   const verified = job.status === "succeeded" && job.result?.verified === true;
+  const ready = verified && (job.action === "deploy" || job.result?.ready === true);
   element("verified").hidden = !verified;
-  element("job-title").textContent = job.status === "failed" ? "Deployment needs attention" : verified ? "Verified and ready" : "Working on your deployment";
-  element("job-description").textContent = job.status === "failed" ? job.error ?? "The operation stopped safely." : descriptions[job.phase];
+  element("job-title").textContent = job.status === "failed" ? "Deployment needs attention" : ready ? "Verified and ready" : verified ? "Instance verified" : "Working on your deployment";
+  element("job-description").textContent = job.status === "failed" ? job.error ?? "The operation stopped safely." : verified && !ready ?
+    "Attestation passed. The workload or storage is not ready yet; review its status below." : descriptions[job.phase];
   if (job.status === "failed") notice(job.error);
   if (verified) {
     hasRelease = true;

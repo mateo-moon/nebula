@@ -47,8 +47,13 @@ process.once("message", async (input: { action: "deploy" | "inspect"; options: D
       try {
         client = await TrusteeClient.connect({ stateDirectory: state, ownerPrivateKey: key,
           audience: JSON.parse(readFileSync(join(state, "instance.json"), "utf8")).audience, tngBinary: options.tngBinary, signal: stop.signal });
-        result = { verified: true, instance: JSON.parse(readFileSync(join(state, "instance.json"), "utf8")).publicKeySha256,
-          bootstrap: await client.bootstrapStatus(), storage: await client.storageStatus() };
+        const bootstrap: any = await client.bootstrapStatus(), storage = await client.storageStatus();
+        const ready = bootstrap.phase !== "awaiting-configuration" &&
+          Object.values(bootstrap.resources ?? {}).length > 0 &&
+          Object.values(bootstrap.resources ?? {}).every((value: any) => value.status === 200) &&
+          Object.values(storage.storage).every(value => value.phase === "ready");
+        result = { verified: true, ready, instance: JSON.parse(readFileSync(join(state, "instance.json"), "utf8")).publicKeySha256,
+          bootstrap, storage };
       } finally { key.fill(0); await client?.close(); }
     }
     process.send?.({ type: "result", result });
