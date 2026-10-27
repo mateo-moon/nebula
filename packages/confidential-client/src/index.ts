@@ -10,3 +10,4 @@ export { createInvitation, createOwnerKey, deploy, type DeployOptions, type Depl
 export { publishImage, validateEncryptedManifest, type PublishOptions, type PublishedImage } from "./publisher";
 export { startUi, type UiOptions } from "./ui/server";
 export { connectionFromManifest, readConnection, type ConfidentialConnection } from "./ui/connection";
+export { accessLink, discoverStack, consumeAccessLink, type DiscoveredStack } from "./discovery";

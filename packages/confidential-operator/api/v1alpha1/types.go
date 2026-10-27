@@ -18,6 +18,8 @@ type Status struct {
 	PodUID             string `json:"podUid,omitempty"`
 	SpecSHA256         string `json:"specSha256,omitempty"`
 	InitDataSHA256     string `json:"initDataSha256,omitempty"`
+	AccessTokenSHA256  string `json:"accessTokenSha256,omitempty"`
+	AccessSecretName   string `json:"accessSecretName,omitempty"`
 }
 
 // +kubebuilder:object:root=true

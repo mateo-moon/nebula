@@ -40,6 +40,9 @@ export const storageSpecSchema: Schema = {
 export const workloadSpecSchema = obj({
   profile: name, ownerPublicKeyPem: str({ maxLength: 2048 }),
   ownerClaimSha256: str({ pattern: "^[a-f0-9]{64}$", maxLength: 64 }),
+  accessLink: obj({ url: str({ maxLength: 1024, pattern: "^(https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?|http://127[.]0[.]0[.]1(:[0-9]+)?)/$" }),
+    secretName: name, ownerPort: int(1, 65535), vcekCertificate: str({ maxLength: 32768, pattern: "^-----BEGIN CERTIFICATE-----\\n" }) },
+    ["url", "secretName", "ownerPort"]),
   guest: guestIdentitySchema, nodeSelector: labels,
   network: obj({ ipv4AddressPattern: str({ maxLength: 256 }), ipv6AddressPattern: str({ maxLength: 256 }) }),
   trustee: obj({ chart: str({ enum: [TRUSTEE_CHART] }), version: str({ enum: [TRUSTEE_CHART_VERSION] }),
@@ -65,8 +68,8 @@ export const workloadSpecSchema = obj({
   runtime,
 }, ["profile", "guest", "nodeSelector", "network", "trustee", "storageImage", "containers", "resources"]);
 (workloadSpecSchema as Schema)["x-kubernetes-validations"] = [
-  { rule: "has(self.ownerPublicKeyPem) != has(self.ownerClaimSha256)",
-    message: "Choose a measured owner public key or a one-use claim hash" },
+  { rule: "(has(self.ownerPublicKeyPem) ? 1 : 0) + (has(self.ownerClaimSha256) ? 1 : 0) + (has(self.accessLink) ? 1 : 0) == 1",
+    message: "Choose an owner public key, one-use claim hash or generated access link" },
 ];
 
 export function confidentialCrds() {
@@ -85,7 +88,8 @@ export function confidentialCrds() {
         schema: { openAPIV3Schema: obj({ apiVersion: str(), kind: str(), metadata: { type: "object" },
           spec: spec as Schema,
           status: obj({ observedGeneration: int(0, Number.MAX_SAFE_INTEGER), phase: str(), reason: str({ maxLength: 128 }), message: str({ maxLength: 1024 }),
-            podName: str(), podUid: str(), specSha256: str(), initDataSha256: str() }, []),
+            podName: str(), podUid: str(), specSha256: str(), initDataSha256: str(),
+            accessTokenSha256: str({ pattern: "^[a-f0-9]{64}$" }), accessSecretName: name }, []),
         }, ["spec"]) },
       }],
     },

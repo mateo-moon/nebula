@@ -91,12 +91,26 @@ function validateContainer(container: WorkloadContainer): void {
 export function validateWorkload(resource: ConfidentialWorkloadResource, storages: readonly ConfidentialStorageResource[]): void {
   const spec = resource.spec;
   publicConfig("ConfidentialWorkload", spec);
-  fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "guest", "nodeSelector", "network", "trustee", "storageImage",
+  fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "accessLink", "guest", "nodeSelector", "network", "trustee", "storageImage",
     "containers", "storage", "resources", "registryMirrors", "runtime"]);
   if (resource.apiVersion !== CONFIDENTIAL_API || resource.kind !== "ConfidentialWorkload" ||
       !name(resource.metadata.name) || !name(resource.metadata.namespace) || !name(spec.profile)) fail("invalid workload resource");
-  if ((spec.ownerPublicKeyPem === undefined) === (spec.ownerClaimSha256 === undefined)) {
-    fail("supply either the owner public key or one-time claim hash");
+  if ([spec.ownerPublicKeyPem, spec.ownerClaimSha256, spec.accessLink].filter(value => value !== undefined).length !== 1) {
+    fail("supply an owner public key, one-time claim hash or generated access link");
+  }
+  if (spec.accessLink) {
+    fields(spec.accessLink, ["url", "secretName", "ownerPort", "vcekCertificate"]);
+    let url: URL;
+    try { url = new URL(spec.accessLink.url); } catch { fail("invalid access link endpoint"); }
+    if (!name(spec.accessLink.secretName) || !integer(spec.accessLink.ownerPort, 1, 65535) ||
+        url!.username || url!.password || url!.hash || url!.search || url!.pathname !== "/" ||
+        !["https:", ...(url!.hostname === "127.0.0.1" ? ["http:"] : [])].includes(url!.protocol) ||
+        !/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(url!.hostname) || spec.accessLink.url !== url!.origin + "/") {
+      fail("access link needs a canonical HTTPS endpoint (HTTP only on loopback), Secret name and owner port");
+    }
+    if (spec.accessLink.vcekCertificate !== undefined &&
+        (typeof spec.accessLink.vcekCertificate !== "string" || spec.accessLink.vcekCertificate.length > 32768 ||
+         !spec.accessLink.vcekCertificate.startsWith("-----BEGIN CERTIFICATE-----\n"))) fail("invalid public endorsement certificate");
   }
   if (spec.ownerPublicKeyPem !== undefined) {
     if (!/^-----BEGIN PUBLIC KEY-----/.test(spec.ownerPublicKeyPem)) fail("owner must be a public key");

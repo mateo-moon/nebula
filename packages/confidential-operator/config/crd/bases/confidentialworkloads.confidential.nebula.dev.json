@@ -70,6 +70,36 @@
                     "maxLength": 64,
                     "pattern": "^[a-f0-9]{64}$"
                   },
+                  "accessLink": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "maxLength": 1024,
+                        "pattern": "^(https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?|http://127[.]0[.]0[.]1(:[0-9]+)?)/$"
+                      },
+                      "secretName": {
+                        "type": "string",
+                        "maxLength": 40,
+                        "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                      },
+                      "ownerPort": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "vcekCertificate": {
+                        "type": "string",
+                        "maxLength": 32768,
+                        "pattern": "^-----BEGIN CERTIFICATE-----\\n"
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "secretName",
+                      "ownerPort"
+                    ]
+                  },
                   "guest": {
                     "type": "object",
                     "properties": {
@@ -487,8 +517,8 @@
                 ],
                 "x-kubernetes-validations": [
                   {
-                    "rule": "has(self.ownerPublicKeyPem) != has(self.ownerClaimSha256)",
-                    "message": "Choose a measured owner public key or a one-use claim hash"
+                    "rule": "(has(self.ownerPublicKeyPem) ? 1 : 0) + (has(self.ownerClaimSha256) ? 1 : 0) + (has(self.accessLink) ? 1 : 0) == 1",
+                    "message": "Choose an owner public key, one-use claim hash or generated access link"
                   }
                 ]
               },
@@ -527,6 +557,16 @@
                   "initDataSha256": {
                     "type": "string",
                     "maxLength": 4096
+                  },
+                  "accessTokenSha256": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "accessSecretName": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
                   }
                 }
               }

@@ -28,7 +28,7 @@ delete process.env.CONFIDENTIAL_ACCESS_TOKEN; // Never inherit it in native subp
 const accessToken = (options: { accessToken?: string; claimToken?: string }) => options.accessToken ??
   (options.claimToken ? undefined : environmentToken);
 
-program.command("ui")
+program.command("ui [access-link]")
   .description("Open the one-page owner interface; signing, encryption and verification stay on this computer")
   .option("--directory <path>", "Private local release directory", join(homedir(), ".nebula", "confidential"))
   .option("--connection <file>", "Public administrator connection settings")
@@ -39,8 +39,9 @@ program.command("ui")
   .option("--local-port <number>", "Local TNG verifier tunnel port", Number)
   .option("--verifier-port <number>", "Local AS port", Number)
   .option("--no-open", "Print the local address without opening a browser")
-  .action(async (options: any) => {
+  .action(async (link: string | undefined, options: any) => {
     const ui = await startUi({ directory: options.directory, connectionFile: options.connection,
+      accessLink: link,
       tngBinary: options.tng, genpolicy: options.genpolicy, cache: options.cache,
       port: options.port, localPort: options.localPort, verifierPort: options.verifierPort });
     console.log(`Open ${ui.url}\nKeep this process running. Private releases: ${options.directory}`);

@@ -51,3 +51,19 @@ test("workload declarations are retained by Argo instead of pruning enrolled gue
   const resource = Testing.synth(chart).find(r => r.kind === "ConfidentialWorkload")!;
   assert.equal(resource.metadata.annotations["argocd.argoproj.io/sync-options"], "Prune=false,Delete=false");
 });
+
+test("access-link support can read only the named bootstrap Secrets and never expands disk or exec permissions", () => {
+  const chart = Testing.chart();
+  new ConfidentialOperator(chart, "operator", { namespace: "operators", watchNamespaces: ["first", "second"],
+    image: `example.invalid/operator@sha256:${"a".repeat(64)}`, accessLinkSecrets: [{ namespace: "first", name: "workload-access" }] });
+  const resources = Testing.synth(chart), first = resources.find(r => r.kind === "Role" && r.metadata.namespace === "first")!;
+  const read = first.rules.find((r: any) => r.resources.includes("secrets") && r.verbs.includes("get"));
+  assert.deepEqual(read.resourceNames, ["workload-access"]);
+  assert.ok(!read.verbs.includes("list") && !read.verbs.includes("watch"));
+  assert.ok(!resources.find(r => r.kind === "Role" && r.metadata.namespace === "second")!.rules.some((r: any) => r.resources.includes("secrets")));
+  assert.ok(resources.some(r => r.kind === "Service" && r.metadata.name === "confidential-operator-access"));
+  for (const role of resources.filter(r => r.kind === "Role")) for (const rule of role.rules) {
+    assert.ok(!rule.resources.includes("pods/exec"));
+    if (rule.resources.includes("persistentvolumeclaims")) assert.deepEqual(rule.verbs, ["get", "list", "watch"]);
+  }
+});

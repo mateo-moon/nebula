@@ -70,6 +70,7 @@ export function gateway(options: GatewayOptions) {
       return;
     }
     if (method === "GET" && path === "/nebula/v1/storage") {
+      if (!ownerAuthorization(incoming.headers.authorization)) { outgoing.writeHead(403).end(); incoming.resume(); return; }
       const storage = Object.fromEntries(storageNames.map(name => {
         let phase = "starting";
         try {
@@ -84,6 +85,9 @@ export function gateway(options: GatewayOptions) {
       return;
     }
     if (method === "GET" && path === "/nebula/v1/instance") {
+      if (claim && readClaimedOwner(claim.directory) && !ownerAuthorization(incoming.headers.authorization)) {
+        outgoing.writeHead(403).end(); incoming.resume(); return;
+      }
       outgoing.setHeader("Content-Type", "application/json");
       outgoing.end(JSON.stringify({ version: 1, publicKeySha256: instance }));
       incoming.resume();

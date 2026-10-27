@@ -66,6 +66,9 @@ export interface ConfidentialOperatorConfig {
   image: string;
   watchNamespaces: readonly string[];
   installCrds?: boolean;
+  /** Exact bootstrap Secrets the controller may read/update. No owner or
+   * decryption credential is ever stored in these Secrets. */
+  accessLinkSecrets?: readonly { namespace: string; name: string }[];
 }
 
 /** Installs orchestration only. No owner credentials, enrollment pins or
@@ -75,9 +78,11 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
   constructor(scope: Construct, id: string, config: ConfidentialOperatorConfig) {
     super(scope, id, publicConfig("ConfidentialOperator", config));
     const name = config.name ?? "confidential-operator", namespace = config.namespace;
+    const accessSecrets = config.accessLinkSecrets ?? [];
     if (!isDigestImage(config.image) || !config.watchNamespaces.length ||
         [name, namespace, ...config.watchNamespaces].some(value => !/^[a-z][a-z0-9-]{0,39}$/.test(value)) ||
-        new Set(config.watchNamespaces).size !== config.watchNamespaces.length) throw new Error("Invalid operator configuration");
+        new Set(config.watchNamespaces).size !== config.watchNamespaces.length || accessSecrets.some(secret =>
+          !config.watchNamespaces.includes(secret.namespace) || !/^[a-z][a-z0-9-]{0,39}$/.test(secret.name))) throw new Error("Invalid operator configuration");
     if (config.installCrds !== false) for (const crd of confidentialCrds()) new ApiObject(this, crd.metadata.name, crd);
     const metadata = { name, namespace, annotations: { "argocd.argoproj.io/sync-wave": "-2" } };
     new ApiObject(this, "account", { apiVersion: "v1", kind: "ServiceAccount", metadata });
@@ -91,6 +96,13 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
           { apiGroups: [""], resources: ["services"], verbs: ["get", "list", "watch", "create", "patch"] },
           { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "list", "watch"] },
           { apiGroups: [""], resources: ["events"], verbs: ["create", "patch"] },
+          ...(accessSecrets.some(secret => secret.namespace === target) ? [
+            // Kubernetes cannot restrict Secret create by resourceNames. Reads
+            // and mutations remain restricted to the explicitly named links.
+            { apiGroups: [""], resources: ["secrets"], verbs: ["create"] },
+            { apiGroups: [""], resources: ["secrets"], verbs: ["get", "update"],
+              resourceNames: accessSecrets.filter(secret => secret.namespace === target).map(secret => secret.name) },
+          ] : []),
         ] });
       new ApiObject(this, `binding-${target}`, { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding", metadata: role,
         roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name },
@@ -111,9 +123,10 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
           serviceAccountName: name, containers: [{ name: "operator", image: config.image,
             command: ["/manager"], args: ["--leader-elect"],
             env: [{ name: "WATCH_NAMESPACES", value: config.watchNamespaces.join(",") },
+              ...(accessSecrets.length ? [{ name: "ACCESS_LINKS", value: "true" }] : []),
               { name: "POD_NAMESPACE", valueFrom: { fieldRef: { fieldPath: "metadata.namespace" } } },
               { name: "HOME", value: "/tmp" }],
-            ports: [{ name: "health", containerPort: 8081 }],
+            ports: [{ name: "health", containerPort: 8081 }, ...(accessSecrets.length ? [{ name: "access", containerPort: 8083 }] : [])],
             readinessProbe: { httpGet: { path: "/readyz", port: "health" }, initialDelaySeconds: 5 },
             livenessProbe: { httpGet: { path: "/healthz", port: "health" }, initialDelaySeconds: 15 },
             securityContext: { runAsUser: 10001, runAsGroup: 10001, runAsNonRoot: true,
@@ -123,5 +136,7 @@ export class ConfidentialOperator extends BaseConstruct<ConfidentialOperatorConf
           }], volumes: [{ name: "tmp", emptyDir: { sizeLimit: "2Gi" } }],
         } } },
     });
+    if (accessSecrets.length) new ApiObject(this, "access-service", { apiVersion: "v1", kind: "Service", metadata: {
+      name: `${name}-access`, namespace }, spec: { selector: { app: name }, ports: [{ name: "http", port: 8083, targetPort: "access" }] } });
   }
 }

@@ -10,11 +10,15 @@ import { confidentialAccessTokenHash } from "nebula-cdk8s/confidential-workloads
 import type { DeployOptions } from "../deploy";
 import { connectionManifest, connectionSummary, readConnection, type ConfidentialConnection } from "./connection";
 import type { UiDeployInput, UiJob } from "./protocol";
+import { accessLink, discoverStack, type DiscoveredStack } from "../discovery";
+import { accessTokenBytes } from "../claim";
+import { trustedStack } from "./trusted-profiles";
 
 export interface UiOptions {
   directory: string;
   port?: number;
   connectionFile?: string;
+  accessLink?: string;
   tngBinary?: string;
   genpolicy?: string;
   cache?: string;
@@ -122,8 +126,31 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
   let active: Promise<void> | undefined;
   let closing = false;
   const settings = join(root, "connection.json");
+  const sourceFile = join(root, "connection-source.json");
   if (options.connectionFile || existsSync(settings)) connection = readConnection(readFileSync(options.connectionFile ?? settings, "utf8"));
   const releaseFor = (profile: ConfidentialConnection) => join(root, `release-${createHash("sha256").update(JSON.stringify(profile)).digest("hex").slice(0, 32)}`);
+  let source: Omit<DiscoveredStack, "connection"> | undefined = !options.connectionFile && existsSync(sourceFile) ?
+    JSON.parse(readFileSync(sourceFile, "utf8")) ?? undefined : undefined;
+  if (source && connection) { accessLink(source.endpoint); trustedStack(connection); }
+  const enrolled = () => Boolean(connection && existsSync(join(releaseFor(connection), "owner-state", "instance.json")));
+  async function connect(link: string) {
+    const parsed = accessLink(link);
+    let key: Buffer | undefined;
+    try {
+      if (source?.endpoint === parsed.endpoint && enrolled()) key = readFileSync(join(releaseFor(connection!), "owner.key"));
+      const { connection: candidate, ...metadata } = await discoverStack(parsed.endpoint, { token: parsed.token, ownerKey: key });
+      if (key && JSON.stringify(candidate) !== JSON.stringify(connection)) throw new InputError("The fetched declaration changed. Your enrolled instance and approved settings were preserved");
+      if (!key && (!parsed.token || confidentialAccessTokenHash(parsed.token) !== candidate.workload.spec.ownerClaimSha256)) {
+        throw new InputError("The link token does not match the stack commitment");
+      }
+      const release = releaseFor(candidate); privateDirectory(release);
+      if (!key) savePrivate(join(release, "bootstrap-token.txt"), parsed.token!);
+      savePrivate(settings, JSON.stringify(candidate) + "\n", true);
+      savePrivate(sourceFile, JSON.stringify(metadata) + "\n", true);
+      connection = candidate; source = metadata; job = undefined;
+    } finally { key?.fill(0); }
+  }
+  if (options.accessLink) await connect(options.accessLink);
   function authorize(req: IncomingMessage) {
     const header = req.headers.authorization ?? "", expected = `Bearer ${session}`;
     return Buffer.byteLength(header) === Buffer.byteLength(expected) &&
@@ -153,6 +180,8 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
         const saved = connection ? join(releaseFor(connection), "ui-release.json") : undefined;
         reply(res, 200, { tools: { tng: Boolean(tng), genpolicy: Boolean(genpolicy) },
           stack: connection ? connectionSummary(connection) : undefined,
+          configuration: connection,
+          source, bootstrapReady: Boolean(connection && existsSync(join(releaseFor(connection), "bootstrap-token.txt"))),
           sourceImage: saved && existsSync(saved) ? JSON.parse(readFileSync(saved, "utf8")).sourceImage : undefined,
           hasRelease: Boolean(connection && existsSync(join(releaseFor(connection), "owner-state", "instance.json"))), job }); return;
       }
@@ -171,9 +200,19 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
         try { connection = readConnection(input.text); }
         catch { throw new InputError("Invalid connection settings. Ask for the public connection file, without private credentials"); }
         savePrivate(settings, JSON.stringify(connection) + "\n", true);
+        source = undefined; savePrivate(sourceFile, "null\n", true);
         job = undefined;
-        reply(res, 200, { stack: connectionSummary(connection),
+        reply(res, 200, { stack: connectionSummary(connection), configuration: connection,
           hasRelease: existsSync(join(releaseFor(connection), "owner-state", "instance.json")) }); return;
+      }
+      if (req.method === "POST" && req.url === "/api/connect") {
+        if (active) { reply(res, 409, { error: "Wait for the current operation" }); return; }
+        const input = await jsonBody(req);
+        if (typeof input?.link !== "string" || Object.keys(input).join() !== "link") throw new InputError("Paste your stack access link");
+        try { await connect(input.link); }
+        catch (error) { throw new InputError(error instanceof Error ? error.message : "The stack could not be discovered"); }
+        reply(res, 200, { stack: connectionSummary(connection!), configuration: connection, source,
+          bootstrapReady: !enrolled(), hasRelease: enrolled() }); return;
       }
       if (req.method === "POST" && ["/api/deploy", "/api/inspect"].includes(req.url ?? "")) {
         if (active) { reply(res, 409, { error: "An operation is already running" }); return; }
@@ -190,17 +229,23 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
           host, port, sourceImage: "", releaseDirectory: release,
           tngBinary: tng, genpolicy, cache: options.cache ?? join(root, "cache"),
           localPort: options.localPort, verifierPort: options.verifierPort };
+        if (source) { trustedStack(connection); native.discoveryEndpoint = source.endpoint; }
         if (action === "deploy") {
           if (Object.keys(input).some(key => !["sourceImage", "accessToken", "reviewed", "registryAuth", "registryUsername", "registryPassword", "awsProfile", "volumeKeys", "resourceFiles"].includes(key))) throw new InputError("Unexpected deployment option");
           if (input.reviewed !== true) throw new InputError("Review and approve the stack settings first");
           if (typeof input.sourceImage !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,1023}$/.test(input.sourceImage)) throw new InputError("Choose a valid local image");
           const alreadyEnrolled = existsSync(join(release, "owner-state", "instance.json"));
-          if (!alreadyEnrolled || input.accessToken) {
+          let token = input.accessToken;
+          if (!token && source && existsSync(join(release, "bootstrap-token.txt"))) {
+            const bytes = accessTokenBytes({ claimTokenFile: join(release, "bootstrap-token.txt") });
+            try { token = bytes.toString("hex"); } finally { bytes.fill(0); }
+          }
+          if (!alreadyEnrolled || token) {
             try {
-              if (confidentialAccessTokenHash(input.accessToken!) !== connection.workload.spec.ownerClaimSha256) throw new Error();
+              if (confidentialAccessTokenHash(token!) !== connection.workload.spec.ownerClaimSha256) throw new Error();
             } catch { throw new InputError("The access token does not match this stack"); }
           }
-          native = { ...native, sourceImage: input.sourceImage, accessToken: input.accessToken || undefined };
+          native = { ...native, sourceImage: input.sourceImage, accessToken: token || undefined };
           if (input.awsProfile !== undefined && (typeof input.awsProfile !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(input.awsProfile))) throw new InputError("Invalid local AWS profile");
           native.awsProfile = input.awsProfile;
           if (input.registryUsername !== undefined || input.registryPassword !== undefined) {

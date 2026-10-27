@@ -67,6 +67,15 @@ export interface ConfidentialWorkloadSpec {
    * attested claimant installs their own P-256 key. A stolen token can deny
    * enrollment but cannot access keys that the owner has not provisioned. */
   ownerClaimSha256?: string;
+  /** Generate first-access credentials at reconciliation, outside deterministic
+   * synthesis. The Secret holds bootstrap authority only, never workload keys. */
+  accessLink?: {
+    url: string;
+    secretName: string;
+    ownerPort: number;
+    /** Public AMD endorsement in PEM; native AS still validates the chain. */
+    vcekCertificate?: string;
+  };
   guest: Omit<TrusteeSnpIdentity, "initDataSha256">;
   nodeSelector: Readonly<Record<string, string>>;
   network: TrusteeNetworkConfig;

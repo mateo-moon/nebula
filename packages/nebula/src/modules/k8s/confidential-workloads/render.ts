@@ -30,6 +30,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   storages: readonly ConfidentialStorageResource[], options: WorkloadRenderOptions = {}) {
   validateWorkload(resource, storages);
   const { spec, metadata } = resource;
+  if (spec.accessLink) throw new TypeError("Confidential workload: access link must be resolved to its public token commitment before rendering");
   const runtime = spec.runtime ?? {};
   const config: TrusteeConfig = {
     ...spec.trustee, chart: TRUSTEE_CHART, repository: undefined, version: TRUSTEE_CHART_VERSION,

@@ -115,7 +115,10 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
       }, response => {
         const raw = (response.socket as TLSSocket).getPeerCertificate().raw;
         response.resume();
-        if (response.statusCode !== 200 || !raw) reject(new Error("Instance discovery failed"));
+        // A previously claimed guest returns 403 without a JWT. Its certificate
+        // is public TLS data; only a subsequent pinned owner-authorized request
+        // can establish enrollment, including recovery after a lost claim reply.
+        if (![200, 403].includes(response.statusCode ?? 0) || !raw) reject(new Error("Instance discovery failed"));
         else accept(new X509Certificate(raw).toString());
       });
       req.setTimeout(30_000, () => req.destroy());

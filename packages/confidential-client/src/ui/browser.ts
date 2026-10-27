@@ -2,7 +2,8 @@ import type { StackSummary, UiJob, Upload } from "./protocol";
 
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const token = new URLSearchParams(location.hash.slice(1)).get("session");
-let stack: StackSummary | undefined, hasRelease = false, running = false;
+let stack: StackSummary | undefined, hasRelease = false, running = false, bootstrapReady = false;
+let source: any, configuration: any, verification: any;
 const stages = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
 const descriptions: Record<string, string> = {
   encrypting: "Encrypting your local image and uploading ciphertext.",
@@ -12,7 +13,7 @@ const descriptions: Record<string, string> = {
   attesting: "Verifying the guest and establishing ownership before sending any key.",
   provisioning: "The instance is verified and owner-authorized. Provisioning its keys.",
   starting: "Waiting for the encrypted image and storage to start.",
-  ready: "Your image and storage are running in the verified confidential instance.",
+  ready: "Keys are provisioned and storage is ready in the verified confidential instance.",
   checking: "Verifying the enrolled instance again and checking guest-local status.",
 };
 function notice(message?: string) {
@@ -30,16 +31,62 @@ async function api(path: string, body?: unknown): Promise<any> {
 function updateControls() {
   element<HTMLButtonElement>("deploy").disabled = !stack || running;
   element<HTMLInputElement>("connection").disabled = running;
+  element<HTMLButtonElement>("connect").disabled = running;
   element<HTMLButtonElement>("inspect").disabled = running;
   element("inspect").hidden = !hasRelease;
   element("cancel").hidden = !running;
-  element("access-token-group").hidden = hasRelease;
-  element<HTMLInputElement>("access-token").required = !hasRelease;
+  element("access-token-group").hidden = hasRelease || bootstrapReady;
+  element<HTMLInputElement>("access-token").required = !hasRelease && !bootstrapReady;
   element<HTMLInputElement>("source-image").readOnly = hasRelease;
   element("deploy-label").textContent = hasRelease ? "Resume saved release" : "Encrypt & deploy";
   for (const input of document.querySelectorAll<HTMLInputElement>("#volume-keys input, #resource-files input")) {
     input.required = !hasRelease && input.dataset.required === "true";
   }
+}
+const short = (value: string) => value.length > 40 ? `${value.slice(0, 18)}…${value.slice(-18)}` : value;
+function security(job?: UiJob) {
+  const current = job?.status === "succeeded" && job.result?.verified === true;
+  const receipt: any = current ? job.result?.verification : undefined;
+  if (receipt) verification = receipt;
+  const badge = element("attestation-status");
+  badge.textContent = receipt ? "Attestation verified locally" : running ? "Verification in progress" : "Not attested this session";
+  badge.className = `badge ${receipt ? "verified" : "pending"}`;
+  element("profile-status").textContent = source ? `Reviewed profile · ${source.profile}` : stack ? "Owner-reviewed settings" : "No stack connected";
+  element("security-description").textContent = receipt ?
+    "Native verification passed and your owner key is authorized for the enrolled guest. The constraints below were enforced locally." :
+    source ? "Fetched settings match a reviewed profile installed with this client. Live attestation is still required before any key is provisioned." :
+    "The local verifier checks the stack before any image or disk key leaves your computer.";
+  const values = element("security-values"); values.replaceChildren();
+  const row = (name: string, value: string) => {
+    const group = document.createElement("div"), key = document.createElement("dt"), data = document.createElement("dd");
+    key.textContent = name; data.textContent = short(value); data.title = value; group.append(key, data); values.append(group);
+  };
+  if (stack) {
+    row("Expected VM measurement", stack.identity.measurement);
+    row("Native workload policy measurement", receipt?.expectedConstraints?.initDataSha256 ?? "Calculated locally after image publication");
+    row("Storage", stack.volumes.map(v => `${v.name}: ${v.type === "Memory" ? "guest memory" : "LUKS encrypted disk"}`).join(" · ") || "None declared");
+    row("Access", hasRelease ? "Your local owner key · instance pinned" : bootstrapReady ? "One-time link loaded · owner claim pending" : "Awaiting owner enrollment");
+  }
+  if (receipt) {
+    row("Enrolled guest public key", receipt.instance.publicKeySha256);
+    row("Your owner public key", receipt.instance.ownerPublicKeySha256);
+    if (receipt.image?.digest) row("Encrypted image digest", receipt.image.digest);
+  }
+  const checks = element("security-checks"); checks.replaceChildren();
+  for (const check of receipt?.checks ?? []) { const item = document.createElement("li"); item.textContent = `✓ ${check}`; checks.append(item); }
+  element("verification-time").hidden = !receipt;
+  element("verification-time").textContent = receipt ? `Locally verified ${new Date(receipt.verifiedAt).toLocaleString()}. New checks use fresh native attestation.` : "";
+  const cluster: any = job?.result?.cluster ?? source?.status;
+  element("cluster-status").hidden = !cluster;
+  element("cluster-status").textContent = cluster ? `Cluster-reported status: ${cluster.unavailable ? "unavailable" : cluster.phase ?? "Unknown"}. Operational information; this does not prove attestation.` : "";
+  element("verification-details").hidden = !verification;
+  element("verification-record").textContent = verification ? JSON.stringify(verification, null, 2) : "";
+}
+function connected(value: any) {
+  source = value.source; bootstrapReady = Boolean(value.bootstrapReady); configuration = value.configuration;
+  element("configuration").textContent = configuration ? JSON.stringify(configuration, null, 2) : "";
+  element("connection-hint").textContent = source ? "Settings fetched automatically. Your one-time token is kept only in private local state until ownership is established." : "Public settings loaded locally.";
+  showStack(value.stack, value.hasRelease); showJob();
 }
 function fileInputs(id: string, fields: { name: string; required: boolean }[], kind: string) {
   const parent = element(id); parent.replaceChildren();
@@ -65,7 +112,7 @@ function showStack(value: StackSummary, saved: boolean) {
 }
 function showJob(job?: UiJob) {
   running = job?.status === "running";
-  if (!job) { updateControls(); return; }
+  if (!job) { security(); updateControls(); return; }
   const verified = job.status === "succeeded" && job.result?.verified === true;
   const ready = verified && (job.action === "deploy" || job.result?.ready === true);
   let index = stages.indexOf(job.phase);
@@ -90,6 +137,7 @@ function showJob(job?: UiJob) {
     element("result-details").hidden = false;
   }
   updateControls();
+  security(job);
 }
 async function refreshImages() {
   try {
@@ -113,8 +161,19 @@ element<HTMLInputElement>("connection").addEventListener("change", async event =
   try {
     const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return;
     const value = await api("/api/connection", { text: await file.text() });
-    showStack(value.stack, value.hasRelease); showJob();
+    connected(value);
   } catch (error) { notice((error as Error).message); }
+});
+element("connect-form").addEventListener("submit", async event => {
+  event.preventDefault(); notice(); element<HTMLButtonElement>("connect").disabled = true;
+  try { connected(await api("/api/connect", { link: element<HTMLInputElement>("access-link").value.trim() })); }
+  catch (error) { notice((error as Error).message); }
+  finally { element<HTMLInputElement>("access-link").value = ""; updateControls(); }
+});
+element("download-verification").addEventListener("click", () => {
+  if (!verification) return;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(verification, null, 2) + "\n"], { type: "application/json" }));
+  const link = document.createElement("a"); link.href = url; link.download = "nebula-verification.json"; link.click(); URL.revokeObjectURL(url);
 });
 element("refresh-images").addEventListener("click", refreshImages);
 element("deploy-form").addEventListener("submit", async event => {
@@ -151,7 +210,8 @@ element("cancel").addEventListener("click", async () => {
 async function refresh() {
   try {
     const value = await api("/api/context");
-    if (!stack && value.stack) showStack(value.stack, value.hasRelease);
+    if (!stack && value.stack) connected(value);
+    bootstrapReady = Boolean(value.bootstrapReady);
     hasRelease = value.hasRelease;
     if (!element<HTMLInputElement>("source-image").value && typeof value.sourceImage === "string") {
       element<HTMLInputElement>("source-image").value = value.sourceImage;

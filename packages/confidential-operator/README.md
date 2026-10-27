@@ -25,10 +25,23 @@ Kubernetes events report phase changes. For guest-side diagnosis, use the
 owner-authorized `bootstrap-status` and `storage-status` CLI commands plus
 the init-container exit reason; application output is intentionally private.
 
-Owner credentials, enrollment pins and image/storage keys never enter this
-operator. Its namespace Roles grant no Secret, exec, attach, Pod update/delete,
-or storage mutation permissions. Keys are provisioned by the owner directly to
-the attested, enrolled guest.
+Owner private keys, enrollment pins and image/storage keys never enter this
+operator. With `accessLink` enabled, it generates one bootstrap URL per workload
+and stores it in the explicitly named Kubernetes Secret. Only the token's hash
+enters the measured declaration. After the real guest is enrolled, the local
+client consumes the link: the Secret loses its token/URL and retains only the
+commitment and owner public key for metadata access. Later discovery requests
+require short-lived, owner-signed metadata JWTs whose audience and role cannot
+authorize Trustee operations.
+
+Secret reads/updates are restricted to `accessLinkSecrets` named in the operator
+installation; Secrets are never listed or watched. Kubernetes cannot restrict
+Secret creation by name, so enabling this feature also grants namespace-scoped
+Secret creation. Exec, attach, Pod update/delete and disk mutation remain denied.
+The optional port 8083 serves bootstrap metadata through ordinary HTTPS. Each
+workload has a unique public endpoint. It is not an attestation authority: the
+local client checks a bundled reviewed profile, independently synthesizes native
+policy and verifies the guest through TNG before provisioning any key.
 
 ## Development
 

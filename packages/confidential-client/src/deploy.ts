@@ -9,6 +9,7 @@ import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/pol
 import { accessTokenBytes, claimSha256 } from "./claim";
 import { TrusteeClient, TrusteeHttpError } from "./client";
 import { enrollInstance, readEnrollment } from "./enrollment";
+import { consumeAccessLink } from "./discovery";
 import { readPreparedClient, releaseStateDirectory } from "./prepare";
 import { publishImage, type PublishedImage } from "./publisher";
 import { prepareWorkload, preparedWorkloadPolicies } from "./workload";
@@ -142,6 +143,8 @@ export interface DeployOptions {
   localPort?: number; verifierPort?: number;
   vcekFile?: string;
   accessToken?: string;
+  /** Public metadata endpoint. Its JWT audience is separate from Trustee. */
+  discoveryEndpoint?: string;
   onProgress?: (phase: DeployPhase) => void;
   signal?: AbortSignal;
   genpolicy?: string; cache?: string; volumeKey?: string[]; resourceFile?: string[]; waitSeconds?: number;
@@ -226,6 +229,7 @@ export async function deploy(options: DeployOptions) {
     const enrolled = readEnrollment(state, workload.spec.profile);
     client = await TrusteeClient.connect({ stateDirectory: state, tngBinary: options.tngBinary,
       ownerPrivateKey: ownerKey, audience: workload.spec.profile, signal: options.signal });
+    if (options.discoveryEndpoint) await consumeAccessLink(options.discoveryEndpoint, ownerKey, options.accessToken);
     options.onProgress?.("provisioning");
     const policies = preparedWorkloadPolicies(state, workload.spec.profile);
     await client.setAttestationPolicy(policies.attestationPolicy);

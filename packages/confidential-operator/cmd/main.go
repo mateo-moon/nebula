@@ -1,19 +1,23 @@
 package main
 
 import (
+	"context"
 	"flag"
 	api "github.com/mateo-moon/nebula/packages/confidential-operator/api/v1alpha1"
 	"github.com/mateo-moon/nebula/packages/confidential-operator/internal/controller"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"net/http"
 	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -55,6 +59,22 @@ func main() {
 	if err := (&controller.StorageReconciler{Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Renderer: renderer}).SetupWithManager(mgr); err != nil {
 		ctrl.Log.Error(err, "cannot initialize storage controller")
 		os.Exit(1)
+	}
+	if os.Getenv("ACCESS_LINKS") == "true" {
+		server := &http.Server{Addr: ":8083", Handler: controller.AccessManager{Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Namespaces: names},
+			ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
+		utilruntime.Must(mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+			go func() {
+				<-ctx.Done()
+				shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = server.Shutdown(shutdown)
+			}()
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				return err
+			}
+			return nil
+		})))
 	}
 	utilruntime.Must(mgr.AddHealthzCheck("healthz", healthz.Ping))
 	utilruntime.Must(mgr.AddReadyzCheck("readyz", healthz.Ping))

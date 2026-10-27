@@ -59,12 +59,18 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     const gatewayPort = await listen(publicGateway);
     const ownerJwt = ownerToken(owner.privateKey, audience);
     const adversaryJwt = ownerToken(adversary.privateKey, audience);
+    assert.equal(await call(gatewayPort, "/nebula/v1/storage"), 403);
+    assert.equal(await call(gatewayPort, "/nebula/v1/instance"), 200);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", ownerJwt), 403);
     assert.equal(kbsCalls, 0);
     assert.equal(await call(gatewayPort, "/nebula/v1/claim", adversaryJwt,
       { token: token.toString("hex"), ownerPublicKeyPem: ownerPem }), 403);
     assert.equal(await call(gatewayPort, "/nebula/v1/claim", ownerJwt,
       { token: token.toString("hex"), ownerPublicKeyPem: ownerPem }), 200);
+    assert.equal(await call(gatewayPort, "/nebula/v1/instance"), 403);
+    assert.equal(await call(gatewayPort, "/nebula/v1/instance", ownerJwt), 200);
+    assert.equal(await call(gatewayPort, "/nebula/v1/storage", adversaryJwt), 403);
+    assert.equal(await call(gatewayPort, "/nebula/v1/storage", ownerJwt), 200);
     assert.equal(await call(gatewayPort, "/nebula/v1/claim", adversaryJwt,
       { token: token.toString("hex"), ownerPublicKeyPem: adversary.publicKey.export({ type: "spki", format: "pem" }).toString() }), 409);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", adversaryJwt), 403);

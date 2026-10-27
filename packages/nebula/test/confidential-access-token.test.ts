@@ -42,3 +42,14 @@ test("image commands are hash-bound to the measured manifest, never trusted regi
   workload.spec.containers[0].command = ["/bin/sh"];
   assert.throws(() => validateWorkload(workload, []), /explicit command or commandFromImage/);
 });
+
+test("generated access links remain deterministic declarations and cannot mix owner modes", () => {
+  const config = { ...spec(), accessLink: { url: "https://stack.example/", secretName: "workload-access", ownerPort: 8443 } };
+  const first = new ConfidentialWorkload(Testing.chart(), "guest", { name: "guest", namespace: "test", spec: config });
+  const second = new ConfidentialWorkload(Testing.chart(), "guest", { name: "guest", namespace: "test", spec: config });
+  assert.deepEqual(first.declaration, second.declaration);
+  assert.equal(first.declaration.spec.ownerClaimSha256, undefined, "Random credentials belong to runtime reconciliation, not synthesis");
+  assert.throws(() => validateWorkload({ ...first.declaration, spec: { ...config, ownerClaimSha256: "f".repeat(64) } }, []), /generated access link/);
+  assert.throws(() => validateWorkload({ ...first.declaration, spec: { ...config, accessLink: { ...config.accessLink, url: "http://stack.example/" } } }, []), /HTTPS/);
+  assert.throws(() => validateWorkload({ ...first.declaration, spec: { ...config, accessLink: { ...config.accessLink, url: "https://stack.example/#secret" } } }, []), /HTTPS/);
+});

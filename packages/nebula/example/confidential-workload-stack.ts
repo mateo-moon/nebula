@@ -1,5 +1,4 @@
-/** Complete declaration example. Replace public pins and supply the temporary
- * CONFIDENTIAL_ACCESS_TOKEN deployment parameter (32 random bytes, hex).
+/** Complete declaration example. Replace public pins and host configuration
  * with independently reviewed values before applying its synthesized YAML.
  * No private key, image key or registry password belongs in this file.
  *
@@ -28,7 +27,8 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
   name: namespace, annotations: { "argocd.argoproj.io/sync-wave": "-6",
     "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" },
 } });
-new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace] });
+new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
+  accessLinkSecrets: [{ namespace, name: "workload-access" }] });
 new SealedDisks(chart, "ciphertext-disk", {
   namespace, nodeName: node, image: images.disks,
   stateDir: "/var/lib/confidential-example", roles: [{ role: "data", claim: "example-data",
@@ -47,7 +47,7 @@ const storages: ConfidentialStorageResource[] = [{ apiVersion: "confidential.neb
 for (const storage of storages) new ConfidentialStorage(chart, storage.metadata.name,
   { name: storage.metadata.name, namespace, spec: storage.spec });
 new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, storages, spec: {
-  profile, ...(process.env.CONFIDENTIAL_ACCESS_TOKEN ? {} : { ownerClaimSha256: "6".repeat(64) }),
+  profile, accessLink: { url: "https://owner.example.test/", ownerPort: 8443, secretName: "workload-access" },
   guest: { measurement: "7".repeat(96), chipId: "8".repeat(128),
     minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
   nodeSelector: { "kubernetes.io/hostname": node },
@@ -63,13 +63,17 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
   storage: [{ name: "data", resource: "data" }, { name: "scratch", resource: "scratch" }],
   resources: [["default", "image", "app"], ["default", "volume", "data"]],
   runtime: { memoryMiB: 4096, vcpus: 2, k8sDistribution: "k0s", ociVersion: "1.3.0" },
-}, accessToken: process.env.CONFIDENTIAL_ACCESS_TOKEN });
-// Route only raw TCP to the Service created by the operator. Select a Gateway
-// implementation and public address supported by the target cluster.
+} });
+// HTTPS serves bootstrap metadata; guest ownership uses a separate raw TCP
+// listener. The discovery service never terminates the guest's TNG/TLS channel.
 new ApiObject(chart, "owner-gateway", { apiVersion: "gateway.networking.k8s.io/v1", kind: "Gateway",
   metadata: { name: "example-owner", namespace }, spec: { gatewayClassName: "replace-with-gateway-class",
-    listeners: [{ name: "owner", protocol: "TLS", port: 8443, tls: { mode: "Passthrough" } }] } });
-new ApiObject(chart, "owner-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TLSRoute",
+    listeners: [{ name: "owner", protocol: "TCP", port: 8443 }, { name: "access", protocol: "HTTPS", port: 443,
+      hostname: "owner.example.test", tls: { mode: "Terminate", certificateRefs: [{ name: "replace-with-discovery-certificate" }] } }] } });
+new ApiObject(chart, "owner-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TCPRoute",
   metadata: { name: "example-owner", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "owner" }],
-    hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "workload-owner", port: 8443 }] }] } });
+    rules: [{ backendRefs: [{ name: "workload-owner", port: 8443 }] }] } });
+new ApiObject(chart, "access-route", { apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
+  metadata: { name: "example-access", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "access" }],
+    hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "confidential-operator-access", port: 8083 }] }] } });
 app.synth();

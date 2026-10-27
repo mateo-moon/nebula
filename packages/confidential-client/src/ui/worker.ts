@@ -1,8 +1,10 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { deploy, type DeployOptions } from "../deploy";
 import { TrusteeClient } from "../client";
 import { renewClient, releaseStateDirectory } from "../prepare";
+import { verificationReceipt } from "./security";
+import { discoverStack } from "../discovery";
 
 export function uiError(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
@@ -40,7 +42,10 @@ process.once("message", async (input: { action: "deploy" | "inspect"; options: D
     }
     let result: unknown;
     if (input.action === "deploy") {
-      result = await deploy({ ...options, signal: stop.signal, onProgress: phase => process.send?.({ type: "progress", phase }) });
+      result = await deploy({ ...options, signal: stop.signal, onProgress: phase => {
+        if (phase === "provisioning" && options.discoveryEndpoint) rmSync(join(options.releaseDirectory, "bootstrap-token.txt"), { force: true });
+        process.send?.({ type: "progress", phase });
+      } });
     } else {
       const key = readFileSync(join(options.releaseDirectory, "owner.key"));
       let client: TrusteeClient | undefined;
@@ -56,6 +61,16 @@ process.once("message", async (input: { action: "deploy" | "inspect"; options: D
           bootstrap, storage };
       } finally { key.fill(0); await client?.close(); }
     }
+    const verification = verificationReceipt(options.releaseDirectory, options.tngBinary);
+    let cluster: unknown;
+    if (options.discoveryEndpoint) {
+      const key = readFileSync(join(options.releaseDirectory, "owner.key"));
+      try { const found = await discoverStack(options.discoveryEndpoint, { ownerKey: key }); cluster = { ...found.status, source: "cluster-reported-unverified", fetchedAt: found.fetchedAt }; }
+      catch { cluster = { source: "cluster-reported-unverified", unavailable: true }; }
+      finally { key.fill(0); }
+    }
+    result = { ...(result as Record<string, unknown>), verification, ...(cluster ? { cluster } : {}) };
+    writeFileSync(join(options.releaseDirectory, "verification.json"), JSON.stringify(verification, null, 2) + "\n", { mode: 0o600 });
     process.send?.({ type: "result", result });
   } catch (error) {
     // Detailed errors may name local files. Keep them off the browser API.

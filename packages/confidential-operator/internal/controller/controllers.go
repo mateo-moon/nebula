@@ -153,7 +153,22 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		r.forget(req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
-	state, err := r.reconcile(ctx, &w)
+	effective := w.DeepCopy()
+	accessHash, accessName := w.Status.AccessTokenSHA256, w.Status.AccessSecretName
+	var state api.Status
+	a, err := accessLink(&w)
+	if err == nil && a != nil {
+		manager := AccessManager{Client: r.Client, Reader: r.Reader}
+		var secret *corev1.Secret
+		secret, err = manager.secret(ctx, &w, a, true)
+		if err == nil {
+			accessHash, accessName = string(secret.Data["commitment"]), a.SecretName
+			effective, err = resolveAccess(&w, secret)
+		}
+	}
+	if err == nil {
+		state, err = r.reconcile(ctx, effective)
+	}
 	if err != nil {
 		state = w.Status
 		state.Phase = "Error"
@@ -169,6 +184,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			state.Message = err.Error()
 		}
 	}
+	state.AccessTokenSHA256, state.AccessSecretName = accessHash, accessName
 	state.ObservedGeneration = w.Generation
 	if len(state.Message) > 512 {
 		state.Message = "Reconciliation failed"
