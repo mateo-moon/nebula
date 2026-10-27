@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, cpSync, existsSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, cpSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 const output = resolve("dist");
@@ -26,7 +26,16 @@ if (process.env.TNG_WASM_PATH) {
   await build({ entryPoints: ["src/loader/main.ts"], bundle: true, platform: "browser", format: "esm", target: "es2022", outfile: join(output, "loader/loader.js") });
   cpSync("src/loader/index.html", join(output, "loader/index.html"));
   cpSync("src/loader/coi.js", join(output, "loader/coi.js"));
-  cpSync(resolve(process.env.TNG_WASM_PATH), join(output, "loader/sdk"), { recursive: true });
+  const sdk = resolve(process.env.TNG_WASM_PATH);
+  const wasm = readFileSync(join(sdk, "tng_wasm_bg.wasm"));
+  if (WebAssembly.Module.imports(new WebAssembly.Module(wasm)).some(item => item.module === "env")) {
+    throw new Error("WASM has unresolved native crypto imports; clean the release C archives and rebuild with LLVM ar");
+  }
+  rmSync(join(output, "loader/sdk"), { recursive: true, force: true });
+  mkdirSync(join(output, "loader/sdk"), { recursive: true });
+  for (const name of ["tng_wasm.js", "tng_wasm_bg.wasm"]) cpSync(join(sdk, name), join(output, "loader/sdk", name));
+  const license = existsSync(join(sdk, "LICENSE")) ? join(sdk, "LICENSE") : resolve(sdk, "../../LICENSE");
+  cpSync(license, join(output, "loader/sdk/LICENSE"));
   // Host the independent loader with these headers. Never host it on the
   // infrastructure origin whose workload it is supposed to authenticate.
   writeFileSync(join(output, "loader/_headers"), `/*

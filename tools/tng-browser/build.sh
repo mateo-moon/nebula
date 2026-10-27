@@ -14,4 +14,5 @@ test "$(git -C "$1" rev-parse HEAD)" = "$revision"
 make -C "$1" wasm-build-release
 mkdir -p "$2"
 cp -R "$1/tng-wasm/pkg/." "$2/"
+cp "$1/LICENSE" "$2/LICENSE"
 cp "$metadata" "$2/BUILD.json"

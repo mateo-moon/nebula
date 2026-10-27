@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { confidentialBrowserPlan } from "../src/modules/k8s/confidential-workloads/browser";
-import { INIT_DATA_ANNOTATION, initDataSha256 } from "../src/modules/k8s/confidential-guests/measured";
+import { INIT_DATA_ANNOTATION, initDataSha256, initDataDocument } from "../src/modules/k8s/confidential-guests/measured";
+import { parse } from "smol-toml";
 
 const native = process.env.TRUSTEE_GENPOLICY;
 const image = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:071b9ef9dc86c0275ffcc5cdc256ad3b87d41a42536c305855061876185827d7";
@@ -21,6 +22,8 @@ test("native browser policy is deterministic and permits no host disks, cluster 
   const first = confidentialBrowserPlan(config), second = confidentialBrowserPlan(config);
   assert.deepEqual(second, first);
   assert.equal(first.initDataSha256, initDataSha256(first.pod.metadata!.annotations![INIT_DATA_ANNOTATION]));
+  const data = parse(initDataDocument(first.pod.metadata!.annotations![INIT_DATA_ANNOTATION]).toString()).data as Record<string, string>;
+  assert.deepEqual(parse(data["cdh.toml"]).kbc, { name: "cc_kbc", url: "http://127.0.0.1:8080" });
   assert.equal(first.pod.spec!.automountServiceAccountToken, false);
   assert.equal(first.pod.spec!.restartPolicy, "Never");
   assert.deepEqual(first.pod.spec!.containers!.map(container => container.name), ["preparation", "tng"]);

@@ -51,7 +51,14 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
         securityContext: security, volumeMounts: [{ name: "state", mountPath: "/run/browser", readOnly: true }, { name: "tng-tmp", mountPath: "/tmp" }] },
     ], volumes: ["state", "tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit: name === "tmp" ? "512Mi" : "2Gi" } })),
   } };
-  const generated = generateConfidentialWorkloadPolicy(pod, { "aa.toml": stringify({ log: { level: "off" } }), "cdh.toml": stringify({ log: { level: "off" } }) },
+  // CDH requires an explicit KBC configuration when loading its TOML. Public
+  // helper image pulls need no key; the guest-local URL is never contacted for
+  // bootstrap. Keeping it local prevents an external bootstrap Trustee.
+  const generated = generateConfidentialWorkloadPolicy(pod, {
+    "aa.toml": stringify({ token_configs: { kbs: { url: "http://127.0.0.1:8080" } }, log: { level: "off" } }),
+    "cdh.toml": stringify({ kbc: { name: "cc_kbc", url: "http://127.0.0.1:8080" }, log: { level: "off" },
+      image: { kbc: "cc_kbc", kbs_uri: "http://127.0.0.1:8080", max_concurrent_layer_downloads_per_image: 1 } }),
+  },
     { network: config.network, genpolicy: config.genpolicy, k8sDistribution: "k0s", ociVersion: "1.3.0" });
   return { pod: { ...pod, metadata: { ...pod.metadata, annotations: { ...pod.metadata!.annotations, [INIT_DATA_ANNOTATION]: generated.ccInitData } } },
     initDataSha256: generated.initDataSha256 };
