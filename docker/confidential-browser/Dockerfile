@@ -4,7 +4,13 @@ FROM ghcr.io/mateo-moon/nebula-coco-canary@sha256:5468f55e9636184cce37cb2213bad9
 
 FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS build
 WORKDIR /workspace/packages
-COPY packages/nebula ./nebula
+COPY packages/nebula/package.json ./nebula/
+COPY packages/nebula/src/core/base-construct.ts ./nebula/src/core/
+COPY packages/nebula/src/utils/secrets.ts ./nebula/src/utils/
+COPY packages/nebula/src/modules/k8s/confidential-guests ./nebula/src/modules/k8s/confidential-guests
+COPY packages/nebula/src/modules/k8s/confidential-workloads ./nebula/src/modules/k8s/confidential-workloads
+COPY packages/nebula/src/modules/k8s/trustee ./nebula/src/modules/k8s/trustee
+COPY packages/nebula/src/modules/k8s/envoy/measured-fragments.ts ./nebula/src/modules/k8s/envoy/
 COPY packages/confidential-client ./confidential-client
 COPY packages/confidential-runtime ./confidential-runtime
 COPY packages/confidential-browser ./confidential-browser

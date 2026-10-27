@@ -41,5 +41,9 @@ try {
   const annotation = JSON.parse(Buffer.from(manifest.layers[0].annotations["org.opencontainers.image.enc.keys.provider.attestation-agent"], "base64"));
   assert.equal(annotation.kid, "kbs:///default/image/test-only");
   assert.notEqual(manifest.layers[0].digest, digest(layer));
+  // Exercise publication's policy-free local source path and preserve every
+  // ciphertext digest. No distribution policy is installed in this image.
+  await run("skopeo", ["--insecure-policy", "copy", "--preserve-digests", "dir:" + work + "/encrypted", "dir:" + work + "/publication"], { timeout: 30_000 });
+  assert.deepEqual(JSON.parse(await readFile(work + "/publication/manifest.json", "utf8")), manifest);
   console.log("Native CoCo key-provider encryption passed with no network access");
 } finally { provider?.kill("SIGTERM"); await rm(work, { recursive: true, force: true }); }

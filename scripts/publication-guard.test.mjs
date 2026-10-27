@@ -310,10 +310,11 @@ const IMAGES = [
   { context: "packages/nebula/src/modules/infra/k0s/baremetal", workflow: "publish-baremetal-provisioner.yml", retired: "build-baremetal-provisioner.yml", file: "Dockerfile" },
 ];
 
-const CONFIDENTIAL_ROLES = ["operator", "runtime", "storage", "storage-devices"];
+const CONFIDENTIAL_ROLES = ["operator", "runtime", "storage", "storage-devices", "browser"];
 const CONFIDENTIAL_SOURCES = [
   "packages/confidential-operator", "packages/confidential-runtime",
   "packages/confidential-storage", "packages/confidential-storage-devices",
+  "packages/confidential-client", "packages/confidential-browser",
   "packages/nebula/package.json", "packages/nebula/src/core/base-construct.ts",
   "packages/nebula/src/utils/secrets.ts",
   "packages/nebula/src/modules/k8s/confidential-guests",
@@ -587,7 +588,7 @@ function confidentialPublisherViolations(workflow) {
   check(publishingJobs(jobs).join() === "publish" && /\n\s+needs: guard\n/.test(publish) &&
     !/continue-on-error|\n\s+if:|\n\s+(?:ref|repository):/.test(publish),
   "publication depends on the unskippable guard and the same tree");
-  check(publish.includes("role: [operator, runtime, storage, storage-devices]") &&
+  check(publish.includes("role: [operator, runtime, storage, storage-devices, browser]") &&
     (publish.match(/uses: docker\/build-push-action@/g) ?? []).length === 1 &&
     publish.includes("context: .") &&
     publish.includes("file: docker/confidential-${{ matrix.role }}/Dockerfile") &&
@@ -596,7 +597,7 @@ function confidentialPublisherViolations(workflow) {
     !/\n\s+build-contexts:/.test(publish) &&
     (publish.match(/\n\s+- uses:/g) ?? []).length === 4 &&
     (publish.match(/\n\s+run:/g) ?? []).length === 1,
-  "publication builds only the four reviewed source-pinned roles");
+  "publication builds only the five reviewed source-pinned roles");
   const summary = `        run: |
           test -n "$DIGEST"
           printf 'nebula-confidential-%s: ghcr.io/%s/nebula-confidential-%s@%s\\n' \\
@@ -623,7 +624,8 @@ test("confidential image publication scans every Docker input before publishing"
     ["skip guard", workflow.replace("    needs: guard\n", "")],
     ["publish another Dockerfile", workflow.replace("file: docker/confidential-${{ matrix.role }}/Dockerfile", "file: Dockerfile")],
     ["omit scanned source", workflow.replace("          packages/nebula/src/utils/secrets.ts\n", "")],
-    ["publish a fifth role", workflow.replace("role: [operator, runtime, storage, storage-devices]", "role: [operator, runtime, storage, storage-devices, extra]")],
+    ["publish an unreviewed role", workflow.replace("role: [operator, runtime, storage, storage-devices, browser]", "role: [operator, runtime, storage, storage-devices, browser, extra]")],
+    ["omit the browser source scan", workflow.replace("packages/confidential-client packages/confidential-browser", "packages/confidential-client")],
     ["build from another ref", workflow.replace("          persist-credentials: false\n", "          persist-credentials: false\n          ref: main\n")],
     ["add an unscanned shell command", workflow.replace('          test -n "$DIGEST"\n', '          test -n "$DIGEST"\n          echo changed\n')],
   ]) assert.notDeepEqual(confidentialPublisherViolations(changed), [], name);

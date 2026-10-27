@@ -42,7 +42,7 @@ export function start() {
     connection = readConnection(readFileSync(join(directory, "connection.json"), "utf8"));
     trustedStack(connection);
   }
-  let job: { state: "running" | "ready" | "failed"; phase?: string; result?: unknown } | undefined;
+  let job: { state: "running" | "ready" | "failed"; phase?: string; error?: string; result?: unknown } | undefined;
   if (existsSync(join(directory, "job.json"))) job = JSON.parse(readFileSync(join(directory, "job.json"), "utf8"));
   const saveJob = () => writeFileSync(join(directory, "job.json"), JSON.stringify(job), { mode: 0o600 });
   const server = createServer(async (request, response) => {
@@ -94,7 +94,8 @@ export function start() {
         if (Object.keys(input).some(k => !["registryUsername", "registryPassword", "imageKey", "sourceImage"].includes(k))) throw new Error("Invalid publication input");
         job = { state: "running" };
         void publish(directory, connection, input, phase => { if (job) job.phase = phase; }).then(result => { job = { state: "ready", result }; saveJob(); })
-          .catch(() => { job = { state: "failed", phase: job?.phase }; saveJob(); });
+          .catch(error => { job = { state: "failed", phase: job?.phase,
+            error: error instanceof Error ? error.message.slice(0, 2048) : "Native preparation failed" }; saveJob(); });
         json(response, 202, { state: "running" }); return;
       }
       if (request.method === "GET" && path === "/nebula/v1/job") { json(response, 200, job ?? { state: "idle" }); return; }

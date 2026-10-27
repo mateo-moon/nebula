@@ -12,7 +12,12 @@ const execute = promisify(execFile);
 async function run(command: string, args: string[], cwd: string) {
   try { return await execute(command, args, { cwd, env: { ...process.env, RUST_LOG: "error" },
     timeout: 600_000, maxBuffer: 8 * 1024 * 1024 }); }
-  catch { throw new Error("Native image publication or policy generation failed"); }
+  catch (error) {
+    // Returned only through the pinned, owner-authenticated job endpoint. Do
+    // not log commands, credentials or whole native error objects.
+    const stderr = String((error as { stderr?: string }).stderr ?? "").replace(/\b(Bearer|Basic)\s+[^\s"']+/gi, "$1 [redacted]");
+    throw new Error(`${command} failed: ${stderr.slice(-1600) || "native operation unsuccessful"}`);
+  }
 }
 export interface PublicConnection {
   version: 1; endpoint: { host: string; port: number };
@@ -88,7 +93,9 @@ export async function publish(directory: string, connection: PublicConnection, i
       if (validateEncryptedManifest(previous, keyId) !== digest) throw new Error("The image tag contains another release");
     } else {
       if (!absent || receipt.published) throw new Error("The image tag is unavailable or cannot be checked");
-      await run("skopeo", ["copy", "--authfile", auth, "--preserve-digests", `dir:${join(work, "encrypted")}`, `docker://${destination}`], work);
+      // This source was encrypted here and its complete manifest validated
+      // above. Signature-policy files are not part of the minimal image.
+      await run("skopeo", ["--insecure-policy", "copy", "--authfile", auth, "--preserve-digests", `dir:${join(work, "encrypted")}`, `docker://${destination}`], work);
     }
     const remote = await run("skopeo", ["inspect", "--raw", "--authfile", auth, `docker://${destination}`], work);
     if (validateEncryptedManifest(Buffer.from(remote.stdout), keyId) !== digest) throw new Error("Published image digest changed");

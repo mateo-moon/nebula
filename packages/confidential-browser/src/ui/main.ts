@@ -7,6 +7,7 @@ const text = (id: string, value: string) => { el(id).textContent = value; };
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let connection: any = owner.connection, final: AttestedChannel | undefined;
 let busy = false;
+let recoveryUrl: string | undefined;
 const jwtPayload = (jwt: string) => JSON.parse(new TextDecoder().decode(bytes(jwt.split(".")[1].replaceAll("-", "+").replaceAll("_", "/"))));
 function evidence() {
   const value = { version: 1, checkedAt: new Date().toISOString(), preparation: {
@@ -21,7 +22,16 @@ function evidence() {
 }
 function download(name: string, value: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
-  const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  const a = document.createElement("a"); a.href = url; a.download = name;
+  if (name.startsWith("nebula-owner-recovery")) {
+    if (recoveryUrl) URL.revokeObjectURL(recoveryUrl);
+    recoveryUrl = url;
+    document.getElementById("recovery-download")?.remove();
+    a.id = "recovery-download"; a.className = "secondary";
+    a.textContent = name.includes("updated") ? "Download updated encrypted recovery backup" : "Download encrypted recovery backup";
+    el("deploy-form").after(a);
+  } else setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  a.click();
 }
 function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
@@ -199,7 +209,7 @@ el("deploy-form").addEventListener("submit", event => {
       if (Date.now() >= deadline) throw new Error("Preparation is still pending. Your keys and release checkpoint were preserved.");
       await sleep(3000);
       const job = await (await request(api.channel, "/nebula/v1/job")).json();
-      if (job.state === "failed") throw new Error("Native publication or policy generation failed inside the verified preparation VM");
+      if (job.state === "failed") throw new Error(`Preparation stopped during ${job.phase ?? "publication"}: ${job.error ?? "native publication or policy generation failed"}`);
       if (job.state === "ready") { owner.prepared = job.result; await api.save(); break; }
     }
     await provision(); busy = false;
