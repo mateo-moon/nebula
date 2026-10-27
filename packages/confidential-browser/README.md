@@ -8,6 +8,8 @@ The preparation VM encrypts and publishes the image and independently runs nativ
 
 Reopen the same link to use the owner key saved in this browser. The one-time token is no longer needed. A different browser needs your latest encrypted recovery file. **Verify again & check status** performs fresh attestation of the enrolled instance. Startup/key-delivery status is shown separately from application health.
 
+Keep the updated recovery file, which includes the final instance enrollment. If an automatic download is blocked, use its visible download link. Returning owners can enter a recovery password and choose **Back up current enrollment** to export it again. **Check key and policy isolation** checks that remote key reads and unauthorized policy changes are refused.
+
 ## Administrator setup
 
 Use `ConfidentialBrowser` alongside `ConfidentialOperator`, `ConfidentialStorage` and `ConfidentialWorkload`. Pin a reviewed preparation image and its native policy in the independently hosted loader release. Configure `browserOwner: true` and `accessLink.browser` with:
