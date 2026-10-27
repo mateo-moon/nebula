@@ -221,7 +221,7 @@ var profiles_default = {
       sourceRevision: "17da388a20ea16fc2645dfe6caaab0171bfe9d44",
       identity: {
         measurement: "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
-        initDataSha256: "ff71cfae3e8a30828fa88eb56b6e196845506b3d4a86dbe3fbf1421a12539294",
+        initDataSha256: "3ecd4aa11407414574d29c911e66b7daec9c247506ef8c972703363d7cb2abb6",
         minimumReportedTcb: {
           bootloader: 10,
           tee: 0,
