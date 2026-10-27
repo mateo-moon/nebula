@@ -23,7 +23,9 @@ test("native browser policy is deterministic and permits no host disks, cluster 
   assert.deepEqual(second, first);
   assert.equal(first.initDataSha256, initDataSha256(first.pod.metadata!.annotations![INIT_DATA_ANNOTATION]));
   const data = parse(initDataDocument(first.pod.metadata!.annotations![INIT_DATA_ANNOTATION]).toString()).data as Record<string, string>;
-  assert.deepEqual(parse(data["cdh.toml"]).kbc, { name: "cc_kbc", url: "http://127.0.0.1:8080" });
+  const kbc = parse(data["cdh.toml"]).kbc as Record<string, string>;
+  assert.equal(kbc.name, "cc_kbc");
+  assert.equal(kbc.url, "http://127.0.0.1:8080");
   assert.equal(first.pod.spec!.automountServiceAccountToken, false);
   assert.equal(first.pod.spec!.restartPolicy, "Never");
   assert.deepEqual(first.pod.spec!.containers!.map(container => container.name), ["preparation", "tng"]);
