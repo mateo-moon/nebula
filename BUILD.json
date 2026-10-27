@@ -1,8 +1,8 @@
 {
-  "nebulaSource": "1ffa3e7cc5064ed4aadfee7f173e37b1ffc5570a",
+  "nebulaSource": "08221623e75ef481d2d5bc5717350be439e36664",
   "tng": {
     "repository": "https://github.com/mateo-moon/TNG.git",
-    "revision": "0c432325865882a22f28ce702e7a700665053759",
+    "revision": "ca71333c24d7d909003ef7eb78caa9ec1455f03c",
     "upstreamPullRequest": "https://github.com/inclavare-containers/TNG/pull/284",
     "trusteePullRequest": "https://github.com/openanolis/trustee/pull/243",
     "rustToolchain": "nightly-2025-07-07",
@@ -11,6 +11,21 @@
   "profiles": {
     "version": 1,
     "profiles": [
+      {
+        "id": "nebula-snp-browser-preparation-policy-2026-10",
+        "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d63a5865a9fd0f29ab99e70687d28160ca9fedba72151b2fa5a6c7351aff80dc",
+        "sourceRevision": "0271bb64fc0ce805fd93bd79d1a26388f2bd45cb",
+        "identity": {
+          "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
+          "initDataSha256": "aa387b373d4eaf5a026f57c0db4f709de0b8eade664b3c3cd2bc86b1fb075bd5",
+          "minimumReportedTcb": {
+            "bootloader": 10,
+            "tee": 0,
+            "snp": 24,
+            "microcode": 88
+          }
+        }
+      },
       {
         "id": "nebula-snp-browser-preparation-coco-2026-10",
         "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:882424a9f0444a645458a7dfef0e3a3e7961a42cb5a67b60be4b6e1fe7a3b968",
@@ -48,8 +63,8 @@
     "_headers": "ca240155e86aa6825d91a648fa78cae980fac93a2b3f7878c48ea2e1dae9e9e9",
     ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "coi.js": "4784b087bc04e64214dcfb1962caf64f3442279dc1d622f37bb5c54d32f4b6f7",
-    "loader.js": "0f24fe2fed1858c6b504c378bffe17c8e281cda43b0cf59089191d6a202df57c",
-    "sdk/tng_wasm_bg.wasm": "71152a03f7096df5a039874b066a572de30520214436dfb59980764059d5cd39",
+    "loader.js": "10701a83e591e28857ea39b685abc3252baa9abd3e49c5a0597ef1203308f9f6",
+    "sdk/tng_wasm_bg.wasm": "d46294617b85bdb4da76bcd589a8318255049ab4c768ff579b21a04e74c13fb9",
     "sdk/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "sdk/tng_wasm.d.ts": "3af6cf7f0e1c0ff26d53ae50d2af1c036a1cdc1498b0ed261f365bc6741ca790",
     "sdk/README.md": "ae497ab6bd7e3100dc04d7a1c047bbee18a2ed05f0b5e354a7c51b935aa0fa90",
