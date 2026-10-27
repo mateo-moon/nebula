@@ -25,9 +25,16 @@ export function snpPolicy(identity: SnpIdentity): string {
   if (Object.keys(floors).sort().join() !== "bootloader,microcode,snp,tee" || Object.values(floors).some(v => !Number.isInteger(v) || v < 0 || v > 255)) throw new Error("Invalid TCB floor");
   const measurement = b64(Uint8Array.from(identity.measurement.match(/../g)!, c => parseInt(c, 16)));
   return `package policy
-default trust_claims := {"executables": 33, "hardware": 97, "configuration": 36}
-extensions := []
-trust_claims := {"executables": 3, "hardware": 2, "configuration": 2} if {
+import rego.v1
+default executables := 33
+default hardware := 97
+default configuration := 36
+default file_system := 35
+executables := 3 if approved
+hardware := 2 if approved
+configuration := 2 if approved
+file_system := 2 if approved
+approved if {
   input.init_data == ${JSON.stringify(identity.initDataSha256)}
   input.snp.measurement == ${JSON.stringify(measurement)}
   input.snp.policy_debug_allowed == "0"
@@ -59,7 +66,7 @@ export class AttestedChannel {
     const response = await this.fetcher(this.origin + path, { ...init, credentials: "omit", redirect: "error", cache: "no-store" }, {
       ohttp: { ...(this.pin ? { expected_server_public_key: this.pin } : {}) },
       verify: { model: "background_check", as_provider: "coco", as_type: "builtin",
-        attestation_policy: { type: "inline", content: snpPolicy(this.identity) }, reference_values: [] },
+        attestation_policy: { type: "inline", content: b64(utf8(snpPolicy(this.identity))) }, reference_values: [] },
     });
     const info = response.attest_info;
     if (!info || !/^[a-f0-9]{64}$/.test(info.server_public_key) || !info.attestation_result ||

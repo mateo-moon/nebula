@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { AttestedChannel, endpoint, hash, utf8, type VerifiedResponse } from "../src/loader/transport";
+import { AttestedChannel, endpoint, hash, utf8, snpPolicy, type VerifiedResponse } from "../src/loader/transport";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { verifiedAssets } from "../src/loader/main";
 import { jwt, newOwner, encryptedBackup, restoreBackup } from "../src/loader/owner";
 import { verifyOwnerJwt } from "@nebula/confidential-runtime";
@@ -8,6 +11,27 @@ import { verifyOwnerJwt } from "@nebula/confidential-runtime";
 const identity = { measurement: "a".repeat(96), initDataSha256: "b".repeat(64),
   minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } };
 const pin = "c".repeat(64);
+const runner = process.env.POLICY_TEST_RUNNER ?? fileURLToPath(new URL("../../nebula/test/support/broker-policy-runner/target/debug/broker-policy-test-runner", import.meta.url));
+
+test("the actual Rego evaluator and EAR appraisal affirm only the complete approved SNP identity", { skip: !existsSync(runner) }, () => {
+  const expected = { ...identity, chipId: "d".repeat(128) };
+  const input = { init_data: expected.initDataSha256, snp: {
+    measurement: Buffer.from(expected.measurement, "hex").toString("base64"), chip_id: expected.chipId,
+    policy_debug_allowed: "0", policy_migrate_ma: "0", reported_tcb_bootloader: "10",
+    reported_tcb_tee: "0", reported_tcb_snp: "24", reported_tcb_microcode: "88",
+  } };
+  const policy = snpPolicy(expected) + '\ntrust_vector := {"executables": executables, "hardware": hardware, "configuration": configuration, "file-system": file_system}\n';
+  const altered = [
+    { ...input, init_data: "0".repeat(64) },
+    ...Object.entries({ measurement: "different", chip_id: "0".repeat(128), policy_debug_allowed: "1", policy_migrate_ma: "1", reported_tcb_microcode: "87" })
+      .map(([key, value]) => ({ ...input, snp: { ...input.snp, [key]: value } })),
+    { init_data: expected.initDataSha256, snp: {} },
+  ];
+  const cases = [input, ...altered].map(input => ({ input, policy, query: "data.policy.trust_vector", appraise: true }));
+  const result = execFileSync(runner, { input: JSON.stringify(cases), encoding: "utf8" }).trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(result[0]["ear.status"], "affirming");
+  for (const decision of result.slice(1)) assert.notEqual(decision["ear.status"], "affirming");
+});
 function response(body: BodyInit) {
   return Object.assign(new Response(body), { attest_info: { server_public_key: pin, attestation_result: "verified-by-sdk" } }) as VerifiedResponse;
 }
@@ -19,8 +43,11 @@ test("owner credentials cannot be sent before instance enrollment; later request
     if (init.method === "POST") assert.equal(config.ohttp.expected_server_public_key, pin);
     assert.equal(config.verify.as_type, "builtin");
     assert.equal(config.verify.attestation_policy.type, "inline");
-    assert.match(config.verify.attestation_policy.content, /input\.init_data ==/);
-    assert.match(config.verify.attestation_policy.content, /policy_debug_allowed == "0"/);
+    const policy = Buffer.from(config.verify.attestation_policy.content, "base64").toString();
+    assert.match(policy, /input\.init_data ==/);
+    assert.match(policy, /policy_debug_allowed == "0"/);
+    assert.match(policy, /default hardware := 97/);
+    assert.match(policy, /hardware := 2 if approved/);
     return response("{}");
   }, "https://workload.example", identity);
   await assert.rejects(channel.request("/nebula/v1/claim", { method: "POST", body: "private" }), /Enroll/);

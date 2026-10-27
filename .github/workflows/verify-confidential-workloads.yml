@@ -85,6 +85,8 @@ jobs:
       - run: pnpm --dir packages/confidential-runtime test
       - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
       - run: pnpm --dir packages/confidential-browser typecheck
+      - name: Build the actual Rego and EAR test evaluator
+        run: cargo build --locked --manifest-path packages/nebula/test/support/broker-policy-runner/Cargo.toml
       - run: pnpm --dir packages/confidential-browser test
       - run: pnpm --dir packages/confidential-browser build
       - name: Check public runtime sources
