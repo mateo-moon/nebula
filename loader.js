@@ -157,6 +157,9 @@ async function jwt(owner, audience, discovery = false) {
   const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, owner.privateKey, utf8(unsigned));
   return `${unsigned}.${url64(new Uint8Array(signature))}`;
 }
+async function discoveryAudience(endpoint2) {
+  return "nebula-discovery:" + await hash(utf8(endpoint2));
+}
 async function encryptedBackup(owner, password) {
   if (password.length < 12) throw new Error("Use a recovery password of at least 12 characters");
   const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
@@ -380,6 +383,42 @@ async function start() {
     });
   });
   (document.querySelector(".progress-card") ?? document.body).append(diagnostics, diagnosticOutput);
+  const checks = document.createElement("button"), checksOutput = document.createElement("pre");
+  checks.type = "button";
+  checks.className = "secondary";
+  checks.textContent = "Check key and policy isolation";
+  checksOutput.hidden = true;
+  checks.addEventListener("click", () => {
+    checks.disabled = true;
+    void (async () => {
+      if (!owner.finalPin || !owner.prepared || !owner.connection?.browserEndpoint) throw new Error("Finish final instance enrollment before checking access controls");
+      const final = new AttestedChannel(fetcher, owner.connection.browserEndpoint, owner.prepared.identity, owner.finalPin);
+      const authorization = `Bearer ${await jwt(owner, owner.prepared.audience)}`;
+      const results = {};
+      const refused = async (name, path, init) => {
+        const response = await final.request(path, init);
+        await response.body?.cancel();
+        results[name] = response.status;
+        if (response.status !== 403) throw new Error(`${name}: expected refusal, received ${response.status}`);
+      };
+      await refused("Remote image-key read", "/kbs/v0/resource/" + owner.prepared.imageKeyResource.join("/"), { headers: { Authorization: authorization } });
+      for (const storage of owner.connection.storages) if (storage.spec.type === "EncryptedBlock") {
+        await refused("Remote disk-key read: " + storage.metadata.name, "/kbs/v0/resource/" + storage.spec.keyResource.join("/"), { headers: { Authorization: authorization } });
+      }
+      const policy = btoa("package policy\ndefault allow := false\n").replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+      const body = JSON.stringify({ policy });
+      await refused("Unsigned policy write", "/kbs/v0/resource-policy", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const discoveryProof = await jwt(owner, await discoveryAudience(discovery + "/"), true);
+      await refused("Discovery proof cannot change Trustee policy", "/kbs/v0/resource-policy", { method: "POST", headers: { Authorization: `Bearer ${discoveryProof}`, "Content-Type": "application/json" }, body });
+      checksOutput.textContent = "Fresh SNP and enrolled-instance verification passed. All tested access controls refused the requests:\n" + JSON.stringify(results, null, 2);
+    })().catch((error) => {
+      checksOutput.textContent = error instanceof Error ? error.message : "Access-control check failed";
+    }).finally(() => {
+      checks.disabled = false;
+      checksOutput.hidden = false;
+    });
+  });
+  (document.querySelector(".security-card") ?? document.body).append(checks, checksOutput);
 }
 if (typeof document !== "undefined") {
   document.getElementById("restore-form")?.addEventListener("submit", (event) => {
