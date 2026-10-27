@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { connect } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
-import { renderConfidentialWorkload, type ConfidentialStorageResource, type ConfidentialWorkloadResource } from "nebula-cdk8s/confidential-workloads";
+import type { ConfidentialStorageResource, ConfidentialWorkloadResource } from "nebula-cdk8s/confidential-workloads";
 import { validateEncryptedManifest } from "@nebula/confidential-client";
+import { measure } from "./measure";
 
 const execute = promisify(execFile);
 async function run(command: string, args: string[], cwd: string) {
@@ -104,19 +105,7 @@ export async function publish(directory: string, connection: PublicConnection, i
     phase("measuring");
     // genpolicy uses native docker_credential authentication. Supply only this
     // operation's guest-tmpfs config, with no external credential helpers.
-    const previousDockerConfig = process.env.DOCKER_CONFIG;
-    process.env.DOCKER_CONFIG = work;
-    let plan;
-    try {
-      plan = renderConfidentialWorkload(connection.workload, connection.storages, {
-        genpolicy: { executable: "/usr/local/bin/genpolicy", cacheDirectory: join(directory, "genpolicy-cache") },
-        publishedImageDigests: { [destination]: digest },
-        publishedImageConfigs: { [destination]: { manifest, config: imageConfig } },
-      });
-    } finally {
-      if (previousDockerConfig === undefined) delete process.env.DOCKER_CONFIG;
-      else process.env.DOCKER_CONFIG = previousDockerConfig;
-    }
+    const plan = await measure(connection, manifest, imageConfig, digest, join(directory, "genpolicy-cache"), work);
     return { version: 1, digest, identity: plan.identity, policies: plan.policies,
       audience: plan.audience, imageKeyResource: application.imageKeyResource,
       specSha256: plan.specSha256, manifestSha256: createHash("sha256").update(manifest).digest("hex") };
