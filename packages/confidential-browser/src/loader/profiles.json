@@ -1,1 +1,20 @@
-{"version":1,"profiles":[]}
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "nebula-snp-browser-preparation-2026-10",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:cc051eaf51e6c82bbd40e633becce822345f4ed6c6580b5103be7b13962552a0",
+      "sourceRevision": "17da388a20ea16fc2645dfe6caaab0171bfe9d44",
+      "identity": {
+        "measurement": "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
+        "initDataSha256": "ff71cfae3e8a30828fa88eb56b6e196845506b3d4a86dbe3fbf1421a12539294",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 88
+        }
+      }
+    }
+  ]
+}
