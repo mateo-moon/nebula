@@ -11,3 +11,5 @@ export { publishImage, validateEncryptedManifest, type PublishOptions, type Publ
 export { startUi, type UiOptions } from "./ui/server";
 export { connectionFromManifest, readConnection, type ConfidentialConnection } from "./ui/connection";
 export { accessLink, discoverStack, consumeAccessLink, type DiscoveredStack } from "./discovery";
+
+export { trustedStack } from "./ui/trusted-profiles";

@@ -2,7 +2,7 @@ import type { StackSummary, UiJob, Upload } from "./protocol";
 
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const token = new URLSearchParams(location.hash.slice(1)).get("session");
-let stack: StackSummary | undefined, hasRelease = false, running = false, bootstrapReady = false;
+let stack: StackSummary | undefined, hasRelease = false, running = false, bootstrapReady = false, connecting = false;
 let source: any, configuration: any, verification: any;
 const stages = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
 const descriptions: Record<string, string> = {
@@ -29,14 +29,15 @@ async function api(path: string, body?: unknown): Promise<any> {
   return value;
 }
 function updateControls() {
-  element<HTMLButtonElement>("deploy").disabled = !stack || running;
-  element<HTMLInputElement>("connection").disabled = running;
-  element<HTMLButtonElement>("connect").disabled = running;
-  element<HTMLButtonElement>("inspect").disabled = running;
+  const locked = running || connecting;
+  element<HTMLButtonElement>("deploy").disabled = !stack || locked;
+  element<HTMLInputElement>("connection").disabled = locked;
+  element<HTMLButtonElement>("connect").disabled = locked;
+  element<HTMLButtonElement>("inspect").disabled = locked;
   element("inspect").hidden = !hasRelease;
   element("cancel").hidden = !running;
-  element("access-token-group").hidden = hasRelease || bootstrapReady;
-  element<HTMLInputElement>("access-token").required = !hasRelease && !bootstrapReady;
+  element("access-token-group").hidden = !stack || hasRelease || bootstrapReady;
+  element<HTMLInputElement>("access-token").required = Boolean(stack) && !hasRelease && !bootstrapReady;
   element<HTMLInputElement>("source-image").readOnly = hasRelease;
   element("deploy-label").textContent = hasRelease ? "Resume saved release" : "Encrypt & deploy";
   for (const input of document.querySelectorAll<HTMLInputElement>("#volume-keys input, #resource-files input")) {
@@ -165,10 +166,10 @@ element<HTMLInputElement>("connection").addEventListener("change", async event =
   } catch (error) { notice((error as Error).message); }
 });
 element("connect-form").addEventListener("submit", async event => {
-  event.preventDefault(); notice(); element<HTMLButtonElement>("connect").disabled = true;
+  event.preventDefault(); notice(); connecting = true; updateControls();
   try { connected(await api("/api/connect", { link: element<HTMLInputElement>("access-link").value.trim() })); }
   catch (error) { notice((error as Error).message); }
-  finally { element<HTMLInputElement>("access-link").value = ""; updateControls(); }
+  finally { element<HTMLInputElement>("access-link").value = ""; connecting = false; updateControls(); }
 });
 element("download-verification").addEventListener("click", () => {
   if (!verification) return;

@@ -9,9 +9,12 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +23,69 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+func TestBrowserInvitationComesFromGuestAndIsNotRegenerated(t *testing.T) {
+	token := bytes.Repeat([]byte{0x42}, 32)
+	commitment := sha256.Sum256(token)
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(out http.ResponseWriter, in *http.Request) {
+		calls++
+		if in.Header.Get("Authorization") != "" {
+			t.Error("credentials sent to invitation exporter")
+		}
+		json.NewEncoder(out).Encode(map[string]string{"token": hex.EncodeToString(token), "commitment": hex.EncodeToString(commitment[:])})
+	}))
+	defer server.Close()
+	w, _, _ := fixture("qualified", "browser")
+	c := fake.NewClientBuilder().WithScheme(testScheme()).WithObjects(w).Build()
+	manager := AccessManager{Client: c, Reader: c}
+	a := &AccessLink{URL: "https://stack.example/", SecretName: "browser-access", OwnerPort: 8443,
+		Browser: &BrowserAccess{InvitationEndpoint: server.URL, WorkloadEndpoint: "https://preparation.example/", LoaderURL: "https://release.example/client/"}}
+	secret, err := manager.secret(context.Background(), w, a, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(secret.Data["token"], []byte(hex.EncodeToString(token))) {
+		t.Fatal("operator replaced the guest invitation")
+	}
+	link, err := url.Parse(string(secret.Data["url"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fragment, _ := url.ParseQuery(link.Fragment)
+	if fragment.Get("token") != string(secret.Data["token"]) || fragment.Get("endpoint") != a.Browser.WorkloadEndpoint || fragment.Get("stack") != a.URL || link.RawQuery != "" {
+		t.Fatal("browser capability must be carried only in the generated fragment")
+	}
+	if _, err := manager.secret(context.Background(), w, a, true); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatal("issued invitation was fetched or regenerated again")
+	}
+	w.Spec.Raw = []byte(`{"accessLink":{"url":"https://stack.example/","ownerPort":8443,"secretName":"browser-access","browser":{"invitationEndpoint":"http://metadata.internal/latest/","workloadEndpoint":"https://preparation.example/","loaderUrl":"https://release.example/"}}}`)
+	if _, err := accessLink(w); err == nil {
+		t.Fatal("invitation exporter accepted an arbitrary infrastructure URL")
+	}
+}
+
+func TestBrowserInvitationRefusesUnboundTokenAndRedirect(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(out http.ResponseWriter, in *http.Request) {
+		if in.URL.Path == "/redirect" {
+			http.Redirect(out, in, "/invitation", 302)
+			return
+		}
+		json.NewEncoder(out).Encode(map[string]string{"token": strings.Repeat("a", 64), "commitment": strings.Repeat("b", 64)})
+	}))
+	defer server.Close()
+	a := &AccessLink{Browser: &BrowserAccess{InvitationEndpoint: server.URL + "/invitation"}}
+	if _, err := browserInvitation(context.Background(), a); err == nil {
+		t.Fatal("unbound token accepted")
+	}
+	a.Browser.InvitationEndpoint = server.URL + "/redirect"
+	if _, err := browserInvitation(context.Background(), a); err == nil {
+		t.Fatal("exporter redirect accepted")
+	}
+}
 
 func discoveryProof(t *testing.T, key *ecdsa.PrivateKey, endpoint, role string) (string, string) {
 	t.Helper()

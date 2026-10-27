@@ -84,7 +84,7 @@ function validateContainer(container: WorkloadContainer): void {
   for (const port of container.ports ?? []) {
     fields(port, ["name", "port"]);
     if (!name(port.name) || port.name.length > 15 || !integer(port.port, 1024, 65535) ||
-        [8006, 8080, 8443, 8444].includes(port.port)) fail("invalid or reserved application port");
+        [8006, 8007, 8080, 8443, 8444, 8445, 8447].includes(port.port)) fail("invalid or reserved application port");
   }
 }
 
@@ -92,14 +92,14 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   const spec = resource.spec;
   publicConfig("ConfidentialWorkload", spec);
   fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "accessLink", "guest", "nodeSelector", "network", "trustee", "storageImage",
-    "containers", "storage", "resources", "registryMirrors", "runtime"]);
+    "containers", "storage", "resources", "registryMirrors", "runtime", "browserOwner"]);
   if (resource.apiVersion !== CONFIDENTIAL_API || resource.kind !== "ConfidentialWorkload" ||
       !name(resource.metadata.name) || !name(resource.metadata.namespace) || !name(spec.profile)) fail("invalid workload resource");
   if ([spec.ownerPublicKeyPem, spec.ownerClaimSha256, spec.accessLink].filter(value => value !== undefined).length !== 1) {
     fail("supply an owner public key, one-time claim hash or generated access link");
   }
   if (spec.accessLink) {
-    fields(spec.accessLink, ["url", "secretName", "ownerPort", "vcekCertificate"]);
+    fields(spec.accessLink, ["url", "secretName", "ownerPort", "vcekCertificate", "browser"]);
     let url: URL;
     try { url = new URL(spec.accessLink.url); } catch { fail("invalid access link endpoint"); }
     if (!name(spec.accessLink.secretName) || !integer(spec.accessLink.ownerPort, 1, 65535) ||
@@ -107,6 +107,17 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
         !["https:", ...(url!.hostname === "127.0.0.1" ? ["http:"] : [])].includes(url!.protocol) ||
         !/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(url!.hostname) || spec.accessLink.url !== url!.origin + "/") {
       fail("access link needs a canonical HTTPS endpoint (HTTP only on loopback), Secret name and owner port");
+    }
+    if (spec.accessLink.browser) {
+      fields(spec.accessLink.browser, ["invitationEndpoint", "workloadEndpoint", "loaderUrl", "ownerEndpoint"]);
+      const b = spec.accessLink.browser;
+      if (!/^http:\/\/[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.svc:8089\/invitation$/.test(b.invitationEndpoint)) fail("browser invitation must use the cluster-internal export service");
+      for (const value of [b.workloadEndpoint, b.loaderUrl, ...(b.ownerEndpoint ? [b.ownerEndpoint] : [])]) {
+        const u = new URL(value);
+        if (u.username || u.password || u.search || u.hash || !u.pathname.endsWith("/") ||
+            !(u.protocol === "https:" || u.protocol === "http:" && u.hostname === "127.0.0.1")) fail("browser endpoints require HTTPS (HTTP only on loopback)");
+      }
+      if (spec.browserOwner !== true) fail("browser invitation requires the browser owner endpoint");
     }
     if (spec.accessLink.vcekCertificate !== undefined &&
         (typeof spec.accessLink.vcekCertificate !== "string" || spec.accessLink.vcekCertificate.length > 32768 ||
@@ -118,6 +129,7 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
     if (owner.asymmetricKeyType !== "ec" || owner.asymmetricKeyDetails?.namedCurve !== "prime256v1") fail("owner key must be P-256");
   }
   if (spec.ownerClaimSha256 !== undefined && !/^[a-f0-9]{64}$/.test(spec.ownerClaimSha256)) fail("invalid owner claim hash");
+  if (spec.browserOwner !== undefined && spec.browserOwner !== true) fail("browserOwner must be true when supplied");
   snpIdentity({ ...spec.guest, initDataSha256: "1".repeat(64) });
   validateNetwork(spec.network);
   fields(spec.trustee, ["chart", "repository", "version", "kbsImage", "tngImage", "gatewayImage"]);

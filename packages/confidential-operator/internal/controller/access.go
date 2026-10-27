@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -32,11 +33,19 @@ import (
 const discoveryPath = "/.well-known/nebula/confidential"
 const accessSecretType corev1.SecretType = "confidential.nebula.dev/access-link"
 
+type BrowserAccess struct {
+	OwnerEndpoint      string `json:"ownerEndpoint,omitempty"`
+	InvitationEndpoint string `json:"invitationEndpoint"`
+	WorkloadEndpoint   string `json:"workloadEndpoint"`
+	LoaderURL          string `json:"loaderUrl"`
+}
+
 type AccessLink struct {
-	URL             string `json:"url"`
-	SecretName      string `json:"secretName"`
-	OwnerPort       int    `json:"ownerPort"`
-	VCEKCertificate string `json:"vcekCertificate,omitempty"`
+	Browser         *BrowserAccess `json:"browser,omitempty"`
+	URL             string         `json:"url"`
+	SecretName      string         `json:"secretName"`
+	OwnerPort       int            `json:"ownerPort"`
+	VCEKCertificate string         `json:"vcekCertificate,omitempty"`
 }
 
 func accessLink(w *api.ConfidentialWorkload) (*AccessLink, error) {
@@ -56,6 +65,22 @@ func accessLink(w *api.ConfidentialWorkload) (*AccessLink, error) {
 		u.Hostname() == "" || a.SecretName == "" || a.OwnerPort < 1 || a.OwnerPort > 65535 {
 		return nil, errors.New("invalid access endpoint")
 	}
+	if a.Browser != nil {
+		if !regexp.MustCompile(`^http://[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.svc:8089/invitation$`).MatchString(a.Browser.InvitationEndpoint) {
+			return nil, errors.New("invalid invitation export")
+		}
+		endpoints := []string{a.Browser.LoaderURL, a.Browser.WorkloadEndpoint}
+		if a.Browser.OwnerEndpoint != "" {
+			endpoints = append(endpoints, a.Browser.OwnerEndpoint)
+		}
+		for _, value := range endpoints {
+			u, err := url.Parse(value)
+			if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Hostname() == "" || !strings.HasSuffix(u.Path, "/") ||
+				(u.Scheme != "https" && !(u.Scheme == "http" && u.Hostname() == "127.0.0.1")) {
+				return nil, errors.New("invalid browser endpoint")
+			}
+		}
+	}
 	return a, nil
 }
 
@@ -67,6 +92,44 @@ type AccessManager struct {
 	Namespaces []string
 }
 
+func browserAccessURL(a *AccessLink, token string) string {
+	if a.Browser == nil {
+		return a.URL + "#" + token
+	}
+	fragment := url.Values{"endpoint": {a.Browser.WorkloadEndpoint}, "stack": {a.URL}, "token": {token}}
+	return a.Browser.LoaderURL + "#" + fragment.Encode()
+}
+
+func browserInvitation(ctx context.Context, a *AccessLink) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.Browser.InvitationEndpoint, nil)
+	if err != nil {
+		return nil, errors.New("invalid invitation export request")
+	}
+	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	defer client.CloseIdleConnections()
+	response, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("preparation invitation is not available yet")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, errors.New("preparation invitation is not available")
+	}
+	var value struct {
+		Token      string `json:"token"`
+		Commitment string `json:"commitment"`
+	}
+	if json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&value) != nil {
+		return nil, errors.New("invalid preparation invitation")
+	}
+	token, err := hex.DecodeString(value.Token)
+	sum := sha256.Sum256(token)
+	if err != nil || len(token) != 32 || hex.EncodeToString(sum[:]) != value.Commitment {
+		return nil, errors.New("invalid preparation invitation commitment")
+	}
+	return token, nil
+}
+
 func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, a *AccessLink, create bool) (*corev1.Secret, error) {
 	key := types.NamespacedName{Namespace: w.Namespace, Name: a.SecretName}
 	var secret corev1.Secret
@@ -75,15 +138,22 @@ func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, 
 		if w.Status.AccessTokenSHA256 != "" || w.Status.PodUID != "" {
 			return nil, errors.New("access Secret is missing; existing invitation and guest were preserved")
 		}
-		var random [32]byte
-		if _, err := rand.Read(random[:]); err != nil {
+		random := make([]byte, 32)
+		if a.Browser != nil {
+			var err error
+			random, err = browserInvitation(ctx, a)
+			if err != nil {
+				return nil, err
+			}
+		} else if _, err := rand.Read(random); err != nil {
 			return nil, errors.New("cannot generate access credentials")
 		}
-		token := hex.EncodeToString(random[:])
-		digest := sha256.Sum256(random[:])
+		token := hex.EncodeToString(random)
+		digest := sha256.Sum256(random)
+
 		secret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: a.SecretName, Namespace: w.Namespace,
 			OwnerReferences: []metav1.OwnerReference{ownerReference(w)}}, Type: accessSecretType,
-			Data: map[string][]byte{"token": []byte(token), "url": []byte(a.URL + "#" + token),
+			Data: map[string][]byte{"token": []byte(token), "url": []byte(browserAccessURL(a, token)),
 				"endpoint": []byte(a.URL), "commitment": []byte(hex.EncodeToString(digest[:]))}}
 		if err := m.Client.Create(ctx, &secret); err != nil {
 			if !apierrors.IsAlreadyExists(err) {
@@ -106,7 +176,7 @@ func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, 
 		raw, err := hex.DecodeString(string(secret.Data["token"]))
 		sum := sha256.Sum256(raw)
 		if err != nil || len(raw) != 32 || subtle.ConstantTimeCompare(sum[:], decoded) != 1 ||
-			string(secret.Data["url"]) != a.URL+"#"+string(secret.Data["token"]) {
+			string(secret.Data["url"]) != browserAccessURL(a, string(secret.Data["token"])) {
 			return nil, errors.New("invalid bootstrap credentials")
 		}
 	} else if _, err := accessPublicKey(secret.Data["owner-public-key.pem"]); err != nil {
@@ -213,13 +283,20 @@ func bootstrapAuthorized(header string, secret *corev1.Secret) bool {
 }
 
 func (m AccessManager) ServeHTTP(out http.ResponseWriter, in *http.Request) {
+	out.Header().Set("Access-Control-Allow-Origin", "*")
+	out.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	out.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+	if in.Method == http.MethodOptions && (in.URL.Path == discoveryPath || in.URL.Path == discoveryPath+"/claim") {
+		out.WriteHeader(204)
+		return
+	}
 	out.Header().Set("Cache-Control", "no-store")
 	out.Header().Set("Referrer-Policy", "no-referrer")
 	out.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 	out.Header().Set("X-Content-Type-Options", "nosniff")
 	if in.URL.Path == "/" && in.Method == http.MethodGet {
 		out.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprint(out, "Nebula Confidential\nOpen confidential-client ui on your computer and paste this access link.\nKeep the #token private. This endpoint never accepts image or storage keys.\n")
+		fmt.Fprint(out, "Nebula Confidential\nOpen the stack access link supplied by your administrator to verify the confidential workload.\nKeep the #token private. This endpoint never accepts image or storage keys.\n")
 		return
 	}
 	if in.URL.RawQuery != "" || (in.URL.Path != discoveryPath && in.URL.Path != discoveryPath+"/claim") {
@@ -340,6 +417,9 @@ func (m AccessManager) ServeHTTP(out http.ResponseWriter, in *http.Request) {
 	}
 	u, _ := url.Parse(config.URL)
 	connection := map[string]any{"version": 1, "endpoint": map[string]any{"host": u.Hostname(), "port": config.OwnerPort}, "workload": clean, "storages": storages}
+	if config.Browser != nil && config.Browser.OwnerEndpoint != "" {
+		connection["browserEndpoint"] = config.Browser.OwnerEndpoint
+	}
 	if config.VCEKCertificate != "" {
 		connection["vcekCertificate"] = config.VCEKCertificate
 	}

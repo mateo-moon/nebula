@@ -353,6 +353,15 @@ func ownedBy(object client.Object, w *api.ConfidentialWorkload) bool {
 }
 func (r *WorkloadReconciler) service(ctx context.Context, w *api.ConfidentialWorkload, routing workloadRouting) error {
 	ownerPorts := []corev1.ServicePort{{Name: "owner", Port: 8443, TargetPort: intstr.FromInt32(8443), Protocol: corev1.ProtocolTCP}}
+	var browser struct {
+		BrowserOwner bool `json:"browserOwner"`
+	}
+	if json.Unmarshal(w.Spec.Raw, &browser) != nil {
+		return errors.New("invalid browser owner declaration")
+	}
+	if browser.BrowserOwner {
+		ownerPorts = append(ownerPorts, corev1.ServicePort{Name: "browser", Port: 8445, TargetPort: intstr.FromInt32(8445), Protocol: corev1.ProtocolTCP})
+	}
 	ports := append([]corev1.ServicePort(nil), ownerPorts...)
 	for _, c := range routing.Containers {
 		for _, p := range c.Ports {

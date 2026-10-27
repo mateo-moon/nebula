@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const stages = new Set();
-for (const role of ["operator", "runtime", "storage", "storage-devices"]) {
+for (const role of ["operator", "runtime", "storage", "storage-devices", "browser"]) {
   const file = `docker/confidential-${role}/Dockerfile`;
   const lines = readFileSync(file, "utf8").split("\n");
   stages.clear();

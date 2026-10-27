@@ -61,10 +61,18 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   delete kbs.ports;
   const tngConfig = structuredClone(settings.tngConfig) as any;
   tngConfig.add_egress[0].mapping.out.port = 8444;
+  if (spec.browserOwner) tngConfig.add_egress.push({
+    mapping: { in: { host: "0.0.0.0", port: 8445 }, out: { host: "127.0.0.1", port: 8447 } },
+    attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: 0 },
+    ohttp: { key: { source: "file", path: "/run/instance/identity/ohttp.pem" }, forward_client_ip: false,
+      cors: { allow_origins: ["*"], allow_methods: ["GET", "POST", "OPTIONS"], allow_headers: ["*"], expose_headers: [], allow_credentials: false } },
+  });
   const tng: any = structuredClone(tngSource);
   tng.name = "nebula-tng";
   tng.securityContext = security(10001);
-  tng.args = measuredFragments(Buffer.from(tngBootstrapScript(tngConfig)).toString("base64"));
+  const tngStartup = tngBootstrapScript(tngConfig);
+  tng.args = measuredFragments(Buffer.from(spec.browserOwner ? tngStartup.replace("exec tng launch", "while [ ! -s /run/instance/identity/ohttp.pem ]; do sleep 1; done\nexec tng launch") : tngStartup).toString("base64"));
+  if (spec.browserOwner) tng.volumeMounts.push(mount("instance", "/run/instance", true));
   tng.restartPolicy = "Always";
   const gateway = { name: "nebula-owner", image: spec.trustee.gatewayImage, imagePullPolicy: "Always",
     command: ["node", "/app/dist/main.js"], args: ["gateway"], restartPolicy: "Always",
@@ -82,6 +90,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const encrypted = bindings.filter(binding => binding.spec.type === "EncryptedBlock");
   gateway.args.push(JSON.stringify({ storageNames: encrypted.map(binding => binding.name),
     resources: spec.resources.map(path => path.join("/")),
+    ...(spec.browserOwner ? { browser: true } : {}),
     ...(spec.ownerClaimSha256 ? { ownerClaimSha256: spec.ownerClaimSha256, audience: spec.profile } : {}) }));
   gateway.volumeMounts.push(...encrypted.map(binding =>
     mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`, true)));
@@ -155,6 +164,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   });
   const pod: GuestPodManifest = { apiVersion: "v1", kind: "Pod", metadata: {
     generateName: `${spec.profile}-`, namespace: metadata.namespace,
+    ...(spec.browserOwner ? { labels: { "confidential.nebula.dev/profile": spec.profile } } : {}),
     annotations: { ...base.metadata.annotations,
       "io.katacontainers.config.hypervisor.default_memory": String(runtime.memoryMiB ?? 4096),
       "io.katacontainers.config.hypervisor.default_vcpus": String(runtime.vcpus ?? 2),

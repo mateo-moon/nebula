@@ -123,7 +123,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
   ]);
   const session = randomBytes(32).toString("hex");
   let origin = "", connection: ConfidentialConnection | undefined, job: UiJob | undefined;
-  let active: Promise<void> | undefined;
+  let active: Promise<void> | undefined, connecting = false;
   let closing = false;
   const settings = join(root, "connection.json");
   const sourceFile = join(root, "connection-source.json");
@@ -134,7 +134,9 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
   if (source && connection) { accessLink(source.endpoint); trustedStack(connection); }
   const enrolled = () => Boolean(connection && existsSync(join(releaseFor(connection), "owner-state", "instance.json")));
   async function connect(link: string) {
+    if (active || connecting) throw new InputError("Wait for the current operation");
     const parsed = accessLink(link);
+    connecting = true;
     let key: Buffer | undefined;
     try {
       if (source?.endpoint === parsed.endpoint && enrolled()) key = readFileSync(join(releaseFor(connection!), "owner.key"));
@@ -148,7 +150,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
       savePrivate(settings, JSON.stringify(candidate) + "\n", true);
       savePrivate(sourceFile, JSON.stringify(metadata) + "\n", true);
       connection = candidate; source = metadata; job = undefined;
-    } finally { key?.fill(0); }
+    } finally { key?.fill(0); connecting = false; }
   }
   if (options.accessLink) await connect(options.accessLink);
   function authorize(req: IncomingMessage) {
@@ -194,7 +196,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
         await jsonBody(req); runner.cancel?.(); reply(res, 202, { stopping: Boolean(active) }); return;
       }
       if (req.method === "POST" && req.url === "/api/connection") {
-        if (active) { reply(res, 409, { error: "Wait for the current operation" }); return; }
+        if (active || connecting) { reply(res, 409, { error: "Wait for the current operation" }); return; }
         const input = await jsonBody(req);
         if (typeof input.text !== "string") throw new InputError("Select a connection settings file");
         try { connection = readConnection(input.text); }
@@ -206,7 +208,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
           hasRelease: existsSync(join(releaseFor(connection), "owner-state", "instance.json")) }); return;
       }
       if (req.method === "POST" && req.url === "/api/connect") {
-        if (active) { reply(res, 409, { error: "Wait for the current operation" }); return; }
+        if (active || connecting) { reply(res, 409, { error: "Wait for the current operation" }); return; }
         const input = await jsonBody(req);
         if (typeof input?.link !== "string" || Object.keys(input).join() !== "link") throw new InputError("Paste your stack access link");
         try { await connect(input.link); }
@@ -215,7 +217,7 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
           bootstrapReady: !enrolled(), hasRelease: enrolled() }); return;
       }
       if (req.method === "POST" && ["/api/deploy", "/api/inspect"].includes(req.url ?? "")) {
-        if (active) { reply(res, 409, { error: "An operation is already running" }); return; }
+        if (active || connecting) { reply(res, 409, { error: "An operation is already running" }); return; }
         if (!connection) throw new InputError("Load your administrator's connection settings first");
         if (!tng || !genpolicy) throw new InputError("Install the qualified TNG and genpolicy tools; put them on PATH or pass --tng and --genpolicy when starting the UI");
         const input = await jsonBody(req) as UiDeployInput;

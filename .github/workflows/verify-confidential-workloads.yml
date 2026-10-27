@@ -9,10 +9,13 @@ on:
       - packages/confidential-storage-devices/**
       - packages/nebula/**
       - packages/confidential-client/**
+      - packages/confidential-browser/**
+      - tools/tng-browser/**
       - docker/confidential-operator/**
       - docker/confidential-runtime/**
       - docker/confidential-storage/**
       - docker/confidential-storage-devices/**
+      - docker/confidential-browser/**
       - .dockerignore
       - .github/workflows/verify-confidential-workloads.yml
       - scripts/check-confidential-docker-bases.mjs
@@ -25,10 +28,13 @@ on:
       - packages/confidential-storage-devices/**
       - packages/nebula/**
       - packages/confidential-client/**
+      - packages/confidential-browser/**
+      - tools/tng-browser/**
       - docker/confidential-operator/**
       - docker/confidential-runtime/**
       - docker/confidential-storage/**
       - docker/confidential-storage-devices/**
+      - docker/confidential-browser/**
       - .dockerignore
       - .github/workflows/verify-confidential-workloads.yml
       - scripts/check-confidential-docker-bases.mjs
@@ -77,8 +83,12 @@ jobs:
       - run: pnpm --dir packages/confidential-runtime install --frozen-lockfile
       - run: pnpm --dir packages/confidential-runtime build
       - run: pnpm --dir packages/confidential-runtime test
+      - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-browser typecheck
+      - run: pnpm --dir packages/confidential-browser test
+      - run: pnpm --dir packages/confidential-browser build
       - name: Check public runtime sources
-        run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-runtime packages/confidential-storage packages/confidential-storage-devices packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-runtime docker/confidential-storage docker/confidential-storage-devices
+        run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-runtime packages/confidential-storage packages/confidential-storage-devices packages/confidential-browser/src packages/confidential-browser/test packages/confidential-browser/package.json packages/confidential-browser/pnpm-lock.yaml tools/tng-browser packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-runtime docker/confidential-storage docker/confidential-storage-devices docker/confidential-browser
 
   images:
     needs: operator
@@ -87,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [operator, runtime, storage, storage-devices]
+        role: [operator, runtime, storage, storage-devices, browser]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

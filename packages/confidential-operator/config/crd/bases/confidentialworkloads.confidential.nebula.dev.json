@@ -78,6 +78,33 @@
                         "maxLength": 1024,
                         "pattern": "^(https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?|http://127[.]0[.]0[.]1(:[0-9]+)?)/$"
                       },
+                      "browser": {
+                        "type": "object",
+                        "properties": {
+                          "invitationEndpoint": {
+                            "type": "string",
+                            "maxLength": 4096,
+                            "pattern": "^http://[a-z][a-z0-9-]*[.][a-z][a-z0-9-]*[.]svc:8089/invitation$"
+                          },
+                          "workloadEndpoint": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "loaderUrl": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "ownerEndpoint": {
+                            "type": "string",
+                            "maxLength": 4096
+                          }
+                        },
+                        "required": [
+                          "invitationEndpoint",
+                          "workloadEndpoint",
+                          "loaderUrl"
+                        ]
+                      },
                       "secretName": {
                         "type": "string",
                         "maxLength": 40,
@@ -98,6 +125,12 @@
                       "url",
                       "secretName",
                       "ownerPort"
+                    ]
+                  },
+                  "browserOwner": {
+                    "type": "boolean",
+                    "enum": [
+                      true
                     ]
                   },
                   "guest": {

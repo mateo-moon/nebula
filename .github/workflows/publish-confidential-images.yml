@@ -8,6 +8,8 @@ on:
       - packages/confidential-runtime/**
       - packages/confidential-storage/**
       - packages/confidential-storage-devices/**
+      - packages/confidential-client/**
+      - packages/confidential-browser/**
       - packages/nebula/src/modules/k8s/confidential-workloads/**
       - packages/nebula/src/modules/k8s/trustee/**
       - packages/nebula/src/modules/k8s/confidential-guests/**
@@ -22,6 +24,7 @@ on:
       - docker/confidential-runtime/**
       - docker/confidential-storage/**
       - docker/confidential-storage-devices/**
+      - docker/confidential-browser/**
       - .dockerignore
       - .github/workflows/publish-confidential-images.yml
   workflow_dispatch: {}
@@ -47,6 +50,7 @@ jobs:
           node scripts/publication-guard.mjs
           packages/confidential-operator packages/confidential-runtime
           packages/confidential-storage packages/confidential-storage-devices
+          packages/confidential-client packages/confidential-browser
           packages/nebula/package.json packages/nebula/src/core/base-construct.ts
           packages/nebula/src/utils/secrets.ts
           packages/nebula/src/modules/k8s/confidential-guests
@@ -55,6 +59,7 @@ jobs:
           packages/nebula/src/modules/k8s/envoy/measured-fragments.ts
           docker/confidential-operator docker/confidential-runtime
           docker/confidential-storage docker/confidential-storage-devices
+          docker/confidential-browser
           .dockerignore
 
   publish:
@@ -65,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [operator, runtime, storage, storage-devices]
+        role: [operator, runtime, storage, storage-devices, browser]
     permissions:
       contents: read
       packages: write

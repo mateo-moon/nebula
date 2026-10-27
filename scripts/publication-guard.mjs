@@ -35,6 +35,7 @@ import { gunzipSync } from "node:zlib";
 
 export const DEFAULT_SCOPE = [
   "packages/confidential-client",
+  "packages/confidential-browser",
   "packages/confidential-operator",
   "packages/confidential-runtime",
   "packages/confidential-storage",
@@ -42,9 +43,11 @@ export const DEFAULT_SCOPE = [
   "packages/nebula/src/modules/k8s/confidential-workloads",
   "docker/confidential-operator",
   "docker/confidential-runtime",
+  "docker/confidential-browser",
   "docker/confidential-storage",
   "docker/confidential-storage-devices",
   "tools/tng-client",
+  "tools/tng-browser",
   "packages/nebula/src/modules/k8s/trustee",
   ":(glob)packages/nebula/test/*trustee*.ts",
   "tools/genpolicy",

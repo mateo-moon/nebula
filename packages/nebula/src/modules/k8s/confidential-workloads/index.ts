@@ -7,3 +7,5 @@ export { renderConfidentialWorkload } from "./render";
 export { ConfidentialPublicationPending, encryptedManifestDigest, resolvePublishedImage } from "./published-image";
 export { ConfidentialStorageDevices, type ConfidentialStorageDevicesConfig } from "./devices";
 export { confidentialAccessTokenHash } from "./access-token";
+
+export { ConfidentialBrowser, confidentialBrowserPlan, type ConfidentialBrowserConfig } from "./browser";

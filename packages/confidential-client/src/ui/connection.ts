@@ -10,6 +10,8 @@ export interface ConfidentialConnection {
   storages: ConfidentialStorageResource[];
   /** Public AMD certificate in PEM form. The native verifier validates it. */
   vcekCertificate?: string;
+  /** Browser OHTTP endpoint, separately verified against the prepared identity. */
+  browserEndpoint?: string;
 }
 
 export function readConnection(text: string): ConfidentialConnection {
@@ -17,11 +19,16 @@ export function readConnection(text: string): ConfidentialConnection {
   const documents = parseAllDocuments(text);
   if (documents.length !== 1 || documents[0].errors.length) throw new Error("Choose a connection settings file from your administrator");
   const value = documents[0].toJS({ maxAliasCount: 0 }) as ConfidentialConnection;
-  if (!value || Object.keys(value).some(key => !["version", "endpoint", "workload", "storages", "vcekCertificate"].includes(key)) ||
+  if (!value || Object.keys(value).some(key => !["version", "endpoint", "workload", "storages", "vcekCertificate", "browserEndpoint"].includes(key)) ||
       value.version !== 1 || !value.endpoint || Object.keys(value.endpoint).sort().join() !== "host,port" ||
       typeof value.endpoint.host !== "string" || !/^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$/.test(value.endpoint.host) ||
       !Number.isInteger(value.endpoint.port) || value.endpoint.port < 1 || value.endpoint.port > 65535 || !Array.isArray(value.storages)) {
     throw new Error("Invalid public connection settings; do not include access tokens or credentials in this file");
+  }
+  if (value.browserEndpoint !== undefined) {
+    const u = new URL(value.browserEndpoint);
+    if (u.username || u.password || u.search || u.hash || u.pathname !== "/" ||
+        !(u.protocol === "https:" || u.protocol === "http:" && u.hostname === "127.0.0.1")) throw new Error("Invalid browser owner endpoint");
   }
   validateWorkload(value.workload, value.storages);
   if (!value.workload.spec.ownerClaimSha256) throw new Error("This stack does not support temporary access tokens");

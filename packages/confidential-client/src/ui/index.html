@@ -22,7 +22,7 @@
       </section>
       <section class="card"><div class="section-title"><span class="number">2</span><h2>Deploy your image</h2></div>
         <form id="deploy-form">
-          <div id="access-token-group"><label for="access-token">Temporary access token</label><input id="access-token" type="password" autocomplete="off" placeholder="Paste the token from your administrator" pattern="[a-fA-F0-9]{64}" required>
+          <div id="access-token-group" hidden><label for="access-token">Temporary access token</label><input id="access-token" type="password" autocomplete="off" placeholder="Paste the token from your administrator" pattern="[a-fA-F0-9]{64}">
           <p class="hint">Used for the first claim. Your local owner key controls the stack afterwards.</p>
           </div>
           <div class="label-row"><label for="source-image">Local container image</label><button id="refresh-images" type="button" class="text-button">Refresh</button></div>
