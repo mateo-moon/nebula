@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { createServer as httpsServer, request as httpsRequest } from "node:https";
 import type { AddressInfo } from "node:net";
 import { startHttps } from "../src/https/main";
-import { createHttpsAuthorization, readHttpsIdentity } from "../../confidential-client/src/https-enrollment";
+import { createHttpsAuthorization, readHttpsIdentity } from "@nebula/confidential-client";
 
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const authority = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
