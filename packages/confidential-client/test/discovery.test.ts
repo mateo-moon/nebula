@@ -23,6 +23,20 @@ export function discoveredConnection(token: string): ConfidentialConnection {
       resources: [["default", "image", "app"]] } } };
 }
 
+test("the tested gateway and owner runtime are approved as an exact pair; earlier profiles remain usable", () => {
+  const connection = discoveredConnection("45".repeat(32));
+  assert.equal(trustedStack(connection), "nebula-snp-access-2026-10");
+  connection.workload.spec.trustee = { ...connection.workload.spec.trustee,
+    tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
+    gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d732ff99a900f6100fbd50392aa4cafc4226cd2389d6d3c9d9a4752f374bd410" };
+  assert.equal(trustedStack(readConnection(JSON.stringify(connection))), "nebula-snp-browser-tested-2026-10-28");
+  const approved = structuredClone(connection);
+  connection.workload.spec.trustee = { ...connection.workload.spec.trustee, tngImage: TRUSTED_STACKS[0].tngImage };
+  assert.throws(() => trustedStack(connection), /reviewed profile/);
+  connection.workload.spec.trustee = { ...approved.workload.spec.trustee, gatewayImage: TRUSTED_STACKS[0].gatewayImage };
+  assert.throws(() => trustedStack(connection), /reviewed profile/);
+});
+
 test("discovered declarations cannot approve their own software, CPU policy or owner route", async t => {
   const token = "19".repeat(32), baseline = discoveredConnection(token);
   let connection = structuredClone(baseline), redirect = false, lastPath = "", lastAuthorization = "";
