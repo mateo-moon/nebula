@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sourceRevision": "e0250d008784efe8833b93c7a68472a35a74aa66",
+  "tngRevision": "6985f6832b0c60fcd8bfd7cd2c91e918ac9606ec",
+  "trusteeVerifierRevision": "2de41693c4b40fbf8e86e20cba7a78817836b4bd",
+  "preparation": {
+    "preparation": "browser-v7-preparation",
+    "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:36f2d2a3f119fcbfd1b03ecb3efcd9a0f6228b511cabd2ca9d7f635cc4334e1c",
+    "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
+    "initDataSha256": "c10daf64ec9a197464e8d0eacc8f3b6f98d1de6bbec37f7a2d5c324cf607c665",
+    "source": "671bd81e867fc5247e726c2186eab6821dfbfaae",
+    "earlierPreparationPoliciesUnchanged": true
+  },
+  "sdkSha256": {
+    "tng_wasm.js": "b64bc778cb3ca7a4afa29d3bb5877ad27180d6f6f197f092a205908cbc68abef",
+    "tng_wasm_bg.wasm": "23fc0164ed68fddf2abf0ad399602d456bed07a883476f5bc13adfafcce6fb55"
+  }
+}
