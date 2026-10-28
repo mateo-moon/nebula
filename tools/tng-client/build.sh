@@ -3,16 +3,16 @@
 set -eu
 if [ "$#" -ne 2 ]; then echo 'Usage: build.sh NEW_SOURCE_DIRECTORY NEW_ARTIFACT_DIRECTORY' >&2; exit 2; fi
 tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-revision=839da075e8dbe667fd79833181df079cd019102e
+revision=6985f6832b0c60fcd8bfd7cd2c91e918ac9606ec
 test ! -e "$1" && test ! -e "$2" || { echo 'Refusing to overwrite existing source or artifact directories' >&2; exit 1; }
-toolchain=${TNG_BUILD_TOOLCHAIN:-1.98.1}
+toolchain=${TNG_BUILD_TOOLCHAIN:-1.89.0}
 case "$(rustc +"$toolchain" --version)" in
-  'rustc 1.98.1 '*) ;;
-  *) echo 'The qualified client requires Rust 1.98.1.' >&2; exit 1 ;;
+  'rustc 1.89.0 '*) ;;
+  *) echo 'The qualified client requires Rust 1.89.0.' >&2; exit 1 ;;
 esac
 git init --quiet "$1"
 source_dir=$(CDPATH= cd -- "$1" && pwd)
-git -C "$source_dir" remote add origin https://github.com/inclavare-containers/TNG.git
+git -C "$source_dir" remote add origin https://github.com/mateo-moon/TNG.git
 git -C "$source_dir" fetch --depth 1 origin "$revision"
 git -C "$source_dir" checkout --detach FETCH_HEAD
 test "$(git -C "$source_dir" rev-parse HEAD)" = "$revision"

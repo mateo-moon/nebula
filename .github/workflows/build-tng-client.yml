@@ -36,7 +36,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y build-essential cmake pkg-config protobuf-compiler libprotobuf-dev libssl-dev
-          rustup toolchain install 1.98.1 --profile minimal
+          rustup toolchain install 1.89.0 --profile minimal
       - name: Build and test the pinned runtime
         run: sh tools/tng-client/build.sh "$RUNNER_TEMP/tng-source" "$RUNNER_TEMP/native-artifact"
       - name: Qualify the artifact with the Node client and native Trustee AS

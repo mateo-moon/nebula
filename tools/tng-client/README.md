@@ -25,23 +25,25 @@ source checkout is required on the client machine.
 
 ## Maintainer build
 
-Requires Git, Rust 1.98.1, a C/C++ toolchain, CMake, pkg-config and protobuf.
+Requires Git, Rust 1.89.0, a C/C++ toolchain, CMake, pkg-config and protobuf.
 The source and output directories must not exist. Run from the repository root:
 
 ```sh
-rustup toolchain install 1.98.1 --profile minimal
+rustup toolchain install 1.89.0 --profile minimal
 sh tools/tng-client/build.sh /path/to/new/tng-source /path/to/new/native-artifact
 ```
 
-`TNG_BUILD_TOOLCHAIN=stable` is supported only when it resolves to Rust 1.98.1.
+`TNG_BUILD_TOOLCHAIN=stable` is supported only when it resolves to Rust 1.89.0.
 `CARGO_TARGET_DIR` can reuse a local build cache. Build and test failures prevent
 successful completion; a partial output directory must not be distributed.
 The script also supports the qualified macOS host toolchain; CI currently
 publishes only the explicitly labelled Linux amd64 artifact.
 
-The recipe builds pinned upstream commit
-[`839da075e8dbe667fd79833181df079cd019102e`](https://github.com/inclavare-containers/TNG/commit/839da075e8dbe667fd79833181df079cd019102e),
-which includes [merged compatibility PR #263](https://github.com/inclavare-containers/TNG/pull/263).
+The recipe builds tested TNG commit
+[`6985f68`](https://github.com/mateo-moon/TNG/commit/6985f6832b0c60fcd8bfd7cd2c91e918ac9606ec),
+which pins Trustee [`2de4169`](https://github.com/mateo-moon/trustee/commit/2de41693c4b40fbf8e86e20cba7a78817836b4bd).
+These revisions are proposed in [TNG #284](https://github.com/inclavare-containers/TNG/pull/284)
+and [Trustee #243](https://github.com/openanolis/trustee/pull/243).
 It applies the reviewed [fail-closed challenge patch](fail-closed-challenge.patch)
 after verifying the exact revision. A legacy Attestation Service response can
 no longer substitute a dummy nonce for a verifier-issued challenge. The build
