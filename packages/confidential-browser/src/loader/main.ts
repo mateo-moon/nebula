@@ -45,12 +45,22 @@ async function start() {
   if (!await isolation()) return;
   sessionStorage.removeItem("nebula-isolation-reload");
   const parameters = new URLSearchParams(location.hash.slice(1));
-  const target = endpoint(parameters.get("endpoint") ?? ""), discovery = endpoint(parameters.get("stack") ?? "");
+  // A workload-hosted HTTPS entry has already been authenticated by the
+  // browser. Only that same origin may supply its default routing metadata.
+  // Preparation identity still comes from the reviewed, bundled profiles.
+  let entry: { version: number; endpoint: string; stack: string } | undefined;
+  if (!parameters.get("endpoint") || !parameters.get("stack")) {
+    const response = await fetch("./entry.json", { credentials: "omit", redirect: "error", cache: "no-store" });
+    if (!response.ok) throw new Error("The HTTPS entry configuration is unavailable");
+    entry = await response.json();
+    if (entry?.version !== 1) throw new Error("Invalid HTTPS entry configuration");
+  }
+  const target = endpoint(parameters.get("endpoint") ?? entry?.endpoint ?? ""), discovery = endpoint(parameters.get("stack") ?? entry?.stack ?? "");
   let token = parameters.get("token") ?? "";
   const saved = await storedOwner(target);
   if (!saved && !/^[a-f0-9]{64}$/.test(token)) throw new Error("Open the one-time access link from your administrator");
   history.replaceState(null, "", location.pathname + `#endpoint=${encodeURIComponent(target)}&stack=${encodeURIComponent(discovery)}`);
-  // Only the independent release origin supplies this SDK and profile list.
+  // The trusted release/attested HTTPS origin supplies this SDK and profiles.
   const sdkUrl = new URL("./sdk/tng_wasm.js", location.href).href;
   const sdk: any = await import(/* @vite-ignore */ sdkUrl);
   await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);

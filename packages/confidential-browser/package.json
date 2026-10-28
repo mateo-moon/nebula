@@ -11,10 +11,11 @@
   },
   "dependencies": {
     "@nebula/confidential-client": "file:../confidential-client",
-    "nebula-cdk8s": "file:../nebula",
+    "@nebula/confidential-runtime": "file:../confidential-runtime",
+    "acme-client": "5.4.0",
     "esbuild": "0.27.7",
-    "tsx": "4.21.0",
-    "@nebula/confidential-runtime": "file:../confidential-runtime"
+    "nebula-cdk8s": "file:../nebula",
+    "tsx": "4.21.0"
   },
   "devDependencies": {
     "@types/node": "22.19.8",

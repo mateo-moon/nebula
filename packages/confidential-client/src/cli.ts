@@ -13,6 +13,7 @@ import { readPreparedClient } from "./prepare";
 import { readEnrollment } from "./enrollment";
 import { withClient, pathTuple } from "./commands/shared";
 import { renewClient } from "./prepare";
+import { connectHttpsEnrollment } from "./https-enrollment";
 import { prepareWorkloadCommand, configureWorkload, storageStatus, bootstrapStatus } from "./commands/workload";
 import {
   prepare, ownerHeader, verify, listResourcePolicies, putResource, deleteResource,
@@ -27,6 +28,25 @@ const environmentToken = process.env.CONFIDENTIAL_ACCESS_TOKEN;
 delete process.env.CONFIDENTIAL_ACCESS_TOKEN; // Never inherit it in native subprocess environments.
 const accessToken = (options: { accessToken?: string; claimToken?: string }) => options.accessToken ??
   (options.claimToken ? undefined : environmentToken);
+
+program.command("https-enroll")
+  .description("DNS custodian: attest a measured HTTPS front end and authorize its guest-held key")
+  .requiredOption("--state <directory>", "Independently prepared SNP/native-policy verifier state")
+  .requiredOption("--tng <file>", "Qualified native TNG executable")
+  .option("--authority-key <file>", "Private DNS-custodian key, kept outside Kubernetes")
+  .option("--hostname <name>", "Independently controlled hostname to authorize")
+  .option("--preparation <origin>", "Approved preparation HTTPS origin")
+  .option("--stack <origin>", "Public stack discovery HTTPS origin")
+  .action(async (options: any) => {
+    const client = await connectHttpsEnrollment({ stateDirectory: options.state, tngBinary: options.tng });
+    try {
+      if ([options.hostname, options.preparation, options.stack, options.authorityKey].some(Boolean)) {
+        if (![options.hostname, options.preparation, options.stack, options.authorityKey].every(Boolean)) throw new Error("Supply hostname, preparation, stack and authority-key together");
+        await client.configure({ hostname: options.hostname, preparation: options.preparation, stack: options.stack }, readFileSync(options.authorityKey));
+      }
+      console.log(JSON.stringify(await client.inspect(), null, 2));
+    } finally { await client.close(); }
+  });
 
 program.command("ui [access-link]")
   .description("Open the one-page owner interface; signing, encryption and verification stay on this computer")

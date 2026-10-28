@@ -1,4 +1,5 @@
 import { ApiObject } from "cdk8s";
+import { createPublicKey } from "node:crypto";
 import type { Construct } from "constructs";
 import { stringify } from "smol-toml";
 import { BaseConstruct } from "../../../core/base-construct";
@@ -15,6 +16,10 @@ export interface ConfidentialBrowserConfig {
   nodeSelector: Readonly<Record<string, string>>;
   network: ConfidentialWorkloadSpec["network"];
   genpolicy?: WorkloadRenderOptions["genpolicy"];
+  /** Optional workload-hosted HTTPS bootstrap. The independent DNS custodian
+   * must attest this plan before granting certificate authority to its account.
+   * Only its public authorization key belongs in Kubernetes. */
+  https?: { authorityPublicKeyPem: string; acmeDirectory?: string };
 }
 
 /** A reusable preparation TEE, containing no Trustee and no persistent disk.
@@ -24,10 +29,23 @@ export interface ConfidentialBrowserConfig {
 export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   if (![config.image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(config.namespace)) throw new Error("Browser preparation requires pinned images and valid names");
+  if (config.https) {
+    if (typeof config.https.authorityPublicKeyPem !== "string" || !config.https.authorityPublicKeyPem.startsWith("-----BEGIN PUBLIC KEY-----\n")) {
+      throw new Error("HTTPS accepts only a public DNS-authority key");
+    }
+    const key = createPublicKey(config.https.authorityPublicKeyPem);
+    if (key.asymmetricKeyType !== "ec" || key.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
+        config.https.authorityPublicKeyPem.length > 2048) throw new Error("HTTPS requires a public P-256 DNS-authority key");
+    if (config.https.acmeDirectory && !["https://acme-v02.api.letsencrypt.org/directory", "https://acme-staging-v02.api.letsencrypt.org/directory"].includes(config.https.acmeDirectory)) {
+      throw new Error("HTTPS requires an approved ACME directory");
+    }
+  }
   const tngConfig: any = { add_egress: [{ mapping: { in: { host: "0.0.0.0", port: 8445 }, out: { host: "127.0.0.1", port: 8446 } },
     attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: 0 },
     ohttp: { key: { source: "file", path: "/run/browser/ohttp.pem" }, forward_client_ip: false,
       cors: { allow_origins: ["*"], allow_methods: ["GET", "POST", "OPTIONS"], allow_headers: ["*"], expose_headers: [], allow_credentials: false } } }] };
+  if (config.https) tngConfig.add_egress.push({ mapping: { in: { host: "0.0.0.0", port: 8447 }, out: { host: "127.0.0.1", port: 8446 } },
+    attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: 0 }, rats_tls: { multiplex: false } });
   const script = tngBootstrapScript(tngConfig).replace("exec tng launch", "while [ ! -s /run/browser/ohttp.pem ]; do sleep 1; done\nexec tng launch");
   const security = { runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false,
     readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
@@ -42,8 +60,10 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     automountServiceAccountToken: false, enableServiceLinks: false, restartPolicy: "Always", terminationGracePeriodSeconds: 30,
     securityContext: { fsGroup: 10001, supplementalGroups: [0, 10001] },
     containers: [
-      { name: "preparation", image: config.image, imagePullPolicy: "Always", command: privateCommand(["node", "/app/dist/service/main.mjs"]), args: ["serve"],
-        env: [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" }],
+      { name: "preparation", image: config.image, imagePullPolicy: "Always", command: privateCommand(["node", config.https ? "/app/dist/https/main.mjs" : "/app/dist/service/main.mjs"]), args: ["serve"],
+        env: [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" },
+          ...(config.https ? [{ name: "NEBULA_HTTPS_AUTHORITY_PUBLIC_KEY", value: config.https.authorityPublicKeyPem },
+            { name: "NEBULA_ACME_DIRECTORY", value: config.https.acmeDirectory ?? "https://acme-v02.api.letsencrypt.org/directory" }] : [])],
         securityContext: security, volumeMounts: mounts },
       { name: "tng", image: config.tngImage, imagePullPolicy: "Always", command: privateCommand(["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"]),
         args: measuredFragments(Buffer.from(script).toString("base64")),
@@ -76,13 +96,15 @@ export class ConfidentialBrowser extends BaseConstruct<ConfidentialBrowserConfig
     const metadata = { ...plan.pod.metadata, name: config.name, generateName: undefined,
       annotations: { ...plan.pod.metadata.annotations, "argocd.argoproj.io/sync-wave": "-1", "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } };
     new ApiObject(this, "pod", { ...plan.pod, apiVersion: "v1", kind: "Pod", metadata });
-    for (const [suffix, port] of [["", 8445], ["-invitation", 8089]] as const) new ApiObject(this, `service${suffix}`, {
+    const services = config.https ? [["", 8445], ["-enrollment", 8447], ["-http", 10080], ["-https", 10443]] as const : [["", 8445], ["-invitation", 8089]] as const;
+    for (const [suffix, port] of services) new ApiObject(this, `service${suffix}`, {
       apiVersion: "v1", kind: "Service", metadata: { name: config.name + suffix, namespace: config.namespace },
       spec: { selector: { "confidential.nebula.dev/browser": config.name }, ports: [{ name: "http", port, targetPort: port }] },
     });
     new ApiObject(this, "invitation-network", { apiVersion: "networking.k8s.io/v1", kind: "NetworkPolicy",
       metadata: { name: config.name, namespace: config.namespace }, spec: { podSelector: { matchLabels: { "confidential.nebula.dev/browser": config.name } },
-        policyTypes: ["Ingress"], ingress: [{ ports: [{ protocol: "TCP", port: 8445 }] },
-          { from: [{ podSelector: { matchLabels: { app: "confidential-operator" } } }], ports: [{ protocol: "TCP", port: 8089 }] }] } });
+        policyTypes: ["Ingress"], ingress: [{ ports: [{ protocol: "TCP", port: 8445 },
+          ...(config.https ? [8447, 10080, 10443].map(port => ({ protocol: "TCP", port })) : [])] },
+          ...(!config.https ? [{ from: [{ podSelector: { matchLabels: { app: "confidential-operator" } } }], ports: [{ protocol: "TCP", port: 8089 }] }] : [])] } });
   }
 }
