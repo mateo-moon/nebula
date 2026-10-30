@@ -1,8 +1,5 @@
 # Confidential browser
 
-For the workload-hosted first page, see the [attested HTTPS PoC](HTTPS.md).
-It requires DNS and certificate custody independent of the administrators being excluded.
-
 Open the one-time HTTPS link supplied by your administrator. Nothing is installed on your computer. The independent Nebula loader verifies AMD SEV-SNP evidence in TNG WASM, checks the approved VM and native workload-policy measurements, and pins the preparation VM's transport key. It then fetches **all UI assets through that attested encrypted channel**.
 
 Choose a `linux/amd64` image archive (up to 256 MiB), or an image in the destination registry. For a registry source, use an owner-controlled registry and an immutable `@sha256:…` reference; its plaintext source remains in that registry. Enter registry push credentials, supply an existing disk key only when requested, and choose a recovery password. Review the stack, then select **Encrypt & deploy**. Keep the latest downloaded encrypted recovery file and its password.

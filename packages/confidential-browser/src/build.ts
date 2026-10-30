@@ -15,8 +15,6 @@ await build({ entryPoints: ["src/service/main.ts"], bundle: true, platform: "nod
   banner: { js: 'import { createRequire as __createRequire } from "node:module"; import { fileURLToPath as __fileURLToPath } from "node:url"; var require = __createRequire(import.meta.url); var __dirname = __fileURLToPath(new URL(".", import.meta.url));' } });
 await build({ entryPoints: ["src/service/measure-worker.ts"], bundle: true, platform: "node", format: "esm", target: "node24", outfile: join(output, "service/measure-worker.mjs"),
   banner: { js: 'import { createRequire as __createRequire } from "node:module"; import { fileURLToPath as __fileURLToPath } from "node:url"; var require = __createRequire(import.meta.url); var __dirname = __fileURLToPath(new URL(".", import.meta.url));' } });
-await build({ entryPoints: ["src/https/main.ts"], bundle: true, platform: "node", format: "esm", target: "node24", outfile: join(output, "https/main.mjs"),
-  banner: { js: 'import { createRequire as __createRequire } from "node:module"; var require = __createRequire(import.meta.url);' } });
 mkdirSync(join(output, "service/assets/genpolicy"), { recursive: true });
 cpSync("../nebula/src/modules/k8s/trustee/assets/genpolicy", join(output, "service/assets/genpolicy"), { recursive: true });
 const cdkPaths = readdirSync("node_modules/.pnpm").filter(name => name.startsWith("cdk8s@")).map(name => resolve("node_modules/.pnpm", name, "node_modules/cdk8s/lib/_loadurl.mjs"));

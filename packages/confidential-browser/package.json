@@ -12,7 +12,6 @@
   "dependencies": {
     "@nebula/confidential-client": "file:../confidential-client",
     "@nebula/confidential-runtime": "file:../confidential-runtime",
-    "acme-client": "5.4.0",
     "esbuild": "0.27.7",
     "nebula-cdk8s": "file:../nebula",
     "tsx": "4.21.0"

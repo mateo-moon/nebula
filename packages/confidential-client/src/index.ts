@@ -13,4 +13,3 @@ export { connectionFromManifest, readConnection, type ConfidentialConnection } f
 export { accessLink, discoverStack, consumeAccessLink, type DiscoveredStack } from "./discovery";
 
 export { trustedStack } from "./ui/trusted-profiles";
-export { connectHttpsEnrollment, createHttpsAuthorization, readHttpsIdentity, type HttpsEnrollmentIdentity } from "./https-enrollment";
