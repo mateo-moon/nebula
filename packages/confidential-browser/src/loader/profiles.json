@@ -3,19 +3,20 @@
   "profiles": [
     {
       "id": "nebula-snp-browser-preparation-manual-2026-10-30",
-      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:7541bc8343b08886e3e7dfb62b8d63cf5c11ab63f57a0874b70782cd834c4b9d",
-      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
-      "sourceSnapshotSha256": "947f1f6bd4a6b8e4c1d6309f3cc9fb838329bc3bb9be06450bad9688a46aff0e",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:edcdb6342b1fb9c7aeb6d63c1af095594bb3b8339c835e02aa9254adfa3a22a2",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
       "identity": {
         "measurement": "ab3c7da48cbd331623f6de8bb929c4a848a1d6ebee0504c84053c6c648ef807925c314b9d20bcca27075bcff3357dadc",
-        "initDataSha256": "fbbd890d4e9d596af7f34c37de30d296387937691c9a77760fc1bc30dcd96b26",
+        "initDataSha256": "4d2997d88093bf5f54766777c0af80497d483d4de096c06403db680abf120da2",
         "minimumReportedTcb": {
           "bootloader": 10,
           "tee": 0,
           "snp": 24,
           "microcode": 88
         }
-      }
+      },
+      "sourceRevision": "3f12499e001d646a77a5b1736f8d40fe5733aab3",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
     },
     {
       "id": "nebula-snp-browser-preparation-v7-2026-10-28",
