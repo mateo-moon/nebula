@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/mateo-moon/TNG.git",
+  "revision": "cc494fd65fe22817e20a39c04b173efa14bc316a",
+  "upstreamPullRequest": "https://github.com/inclavare-containers/TNG/pull/284",
+  "trusteePullRequest": "https://github.com/openanolis/trustee/pull/243",
+  "trusteeRevision": "2de41693c4b40fbf8e86e20cba7a78817836b4bd",
+  "rustToolchain": "nightly-2025-07-07",
+  "target": "wasm32-unknown-unknown"
+}

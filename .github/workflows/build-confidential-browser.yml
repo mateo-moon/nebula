@@ -1,0 +1,68 @@
+name: Build confidential browser loader
+
+on:
+  pull_request:
+    paths:
+      - packages/confidential-browser/**
+      - packages/confidential-client/**
+      - packages/confidential-runtime/**
+      - packages/nebula/**
+      - tools/tng-browser/**
+      - docker/confidential-browser/Dockerfile.tls
+      - .github/workflows/build-confidential-browser.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: confidential-browser-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  loader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Scan release sources before building
+        run: node scripts/publication-guard.mjs tools/tng-browser packages/confidential-browser
+      - name: Install native WASM build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang cmake pkg-config protobuf-compiler libprotobuf-dev jq
+      - name: Build the exact reviewed SNP verifier
+        run: sh tools/tng-browser/build.sh "$RUNNER_TEMP/tng-browser-source" "$RUNNER_TEMP/tng-browser-sdk"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-browser typecheck
+      - name: Build the independent loader and reject unresolved crypto imports
+        env:
+          TNG_WASM_PATH: ${{ runner.temp }}/tng-browser-sdk
+        run: pnpm --dir packages/confidential-browser build
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build the guest HTTPS frontend
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/confidential-browser/Dockerfile.tls
+          build-contexts: browser-assets=./packages/confidential-browser/dist/loader
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: nebula-browser-tls:ci
+          cache-from: type=gha,scope=confidential-browser-tls
+          cache-to: type=gha,mode=max,scope=confidential-browser-tls
+      - name: Exercise the compiled public frontend without network access
+        run: node packages/confidential-browser/test/compiled-tls-image.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: confidential-browser-${{ github.sha }}
+          path: packages/confidential-browser/dist/loader
+          if-no-files-found: error
+          retention-days: 14

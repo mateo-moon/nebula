@@ -1,0 +1,621 @@
+{
+  "apiVersion": "apiextensions.k8s.io/v1",
+  "kind": "CustomResourceDefinition",
+  "metadata": {
+    "name": "confidentialworkloads.confidential.nebula.dev",
+    "annotations": {
+      "argocd.argoproj.io/sync-wave": "-3",
+      "argocd.argoproj.io/sync-options": "Prune=false,Delete=false"
+    }
+  },
+  "spec": {
+    "group": "confidential.nebula.dev",
+    "scope": "Namespaced",
+    "conversion": {
+      "strategy": "None"
+    },
+    "names": {
+      "kind": "ConfidentialWorkload",
+      "listKind": "ConfidentialWorkloadList",
+      "plural": "confidentialworkloads",
+      "singular": "confidentialworkload",
+      "shortNames": [
+        "cw"
+      ]
+    },
+    "versions": [
+      {
+        "name": "v1alpha1",
+        "served": true,
+        "storage": true,
+        "subresources": {
+          "status": {}
+        },
+        "additionalPrinterColumns": [
+          {
+            "name": "Phase",
+            "type": "string",
+            "jsonPath": ".status.phase"
+          }
+        ],
+        "schema": {
+          "openAPIV3Schema": {
+            "type": "object",
+            "properties": {
+              "apiVersion": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "kind": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "spec": {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "ownerPublicKeyPem": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "ownerClaimSha256": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "accessLink": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "maxLength": 1024,
+                        "pattern": "^(https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?|http://127[.]0[.]0[.]1(:[0-9]+)?)/$"
+                      },
+                      "browser": {
+                        "type": "object",
+                        "properties": {
+                          "invitationEndpoint": {
+                            "type": "string",
+                            "maxLength": 4096,
+                            "pattern": "^http://[a-z][a-z0-9-]*[.][a-z][a-z0-9-]*[.]svc:8089/invitation$"
+                          },
+                          "workloadEndpoint": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "loaderUrl": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "ownerEndpoint": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "manualTls": {
+                            "type": "boolean",
+                            "enum": [
+                              true
+                            ]
+                          }
+                        },
+                        "required": [
+                          "invitationEndpoint",
+                          "workloadEndpoint",
+                          "loaderUrl"
+                        ]
+                      },
+                      "secretName": {
+                        "type": "string",
+                        "maxLength": 40,
+                        "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                      },
+                      "ownerPort": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "vcekCertificate": {
+                        "type": "string",
+                        "maxLength": 32768,
+                        "pattern": "^-----BEGIN CERTIFICATE-----\\n"
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "secretName",
+                      "ownerPort"
+                    ]
+                  },
+                  "browserOwner": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "guest": {
+                    "type": "object",
+                    "properties": {
+                      "measurement": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "pattern": "^[a-f0-9]{96}$"
+                      },
+                      "chipId": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "pattern": "^[a-f0-9]{128}$"
+                      },
+                      "minimumReportedTcb": {
+                        "type": "object",
+                        "properties": {
+                          "bootloader": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "tee": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "snp": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          },
+                          "microcode": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                          }
+                        },
+                        "required": [
+                          "bootloader",
+                          "tee",
+                          "snp",
+                          "microcode"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "measurement",
+                      "chipId",
+                      "minimumReportedTcb"
+                    ]
+                  },
+                  "nodeSelector": {
+                    "type": "object",
+                    "maxProperties": 64,
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4096
+                    }
+                  },
+                  "network": {
+                    "type": "object",
+                    "properties": {
+                      "ipv4AddressPattern": {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      "ipv6AddressPattern": {
+                        "type": "string",
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "ipv4AddressPattern",
+                      "ipv6AddressPattern"
+                    ]
+                  },
+                  "trustee": {
+                    "type": "object",
+                    "properties": {
+                      "chart": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "enum": [
+                          "oci://ghcr.io/mateo-moon/helm/trustee@sha256:371376d5c4b135890f6b9b0071ad5a8f7c9975af797994b4aaf5efbea2e21cb5"
+                        ]
+                      },
+                      "version": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "enum": [
+                          "0.21.0"
+                        ]
+                      },
+                      "kbsImage": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                      },
+                      "tngImage": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                      },
+                      "gatewayImage": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "chart",
+                      "kbsImage",
+                      "tngImage",
+                      "gatewayImage"
+                    ]
+                  },
+                  "storageImage": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                  },
+                  "containers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                        },
+                        "image": {
+                          "type": "string",
+                          "maxLength": 4096,
+                          "oneOf": [
+                            {
+                              "pattern": "^.+@sha256:[a-f0-9]{64}$"
+                            },
+                            {
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9.:-]*/[a-z0-9][a-z0-9/._-]*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+                            }
+                          ]
+                        },
+                        "imageKeyResource": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3
+                        },
+                        "command": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "maxItems": 64,
+                          "minItems": 1
+                        },
+                        "commandFromImage": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 4096
+                          },
+                          "maxItems": 128,
+                          "minItems": 0
+                        },
+                        "env": {
+                          "type": "object",
+                          "maxProperties": 64,
+                          "additionalProperties": {
+                            "type": "string",
+                            "maxLength": 4096
+                          }
+                        },
+                        "uid": {
+                          "type": "integer",
+                          "minimum": 11000,
+                          "maximum": 65534
+                        },
+                        "gid": {
+                          "type": "integer",
+                          "minimum": 11000,
+                          "maximum": 65534
+                        },
+                        "mounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "storage": {
+                                "type": "string",
+                                "maxLength": 40,
+                                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                              },
+                              "path": {
+                                "type": "string",
+                                "maxLength": 4096,
+                                "pattern": "^/[A-Za-z0-9_/-]+$"
+                              }
+                            },
+                            "required": [
+                              "storage",
+                              "path"
+                            ]
+                          },
+                          "maxItems": 8,
+                          "minItems": 0
+                        },
+                        "applicationResources": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"
+                            },
+                            "maxItems": 3,
+                            "minItems": 3
+                          },
+                          "maxItems": 64,
+                          "minItems": 0
+                        },
+                        "ports": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "maxLength": 15
+                              },
+                              "port": {
+                                "type": "integer",
+                                "minimum": 1024,
+                                "maximum": 65535
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "port"
+                            ]
+                          },
+                          "maxItems": 16,
+                          "minItems": 0
+                        },
+                        "resources": {
+                          "type": "object",
+                          "properties": {
+                            "requests": {
+                              "type": "object",
+                              "maxProperties": 64,
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 4096
+                              }
+                            },
+                            "limits": {
+                              "type": "object",
+                              "maxProperties": 64,
+                              "additionalProperties": {
+                                "type": "string",
+                                "maxLength": 4096
+                              }
+                            }
+                          },
+                          "required": [
+                            "requests",
+                            "limits"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "image",
+                        "uid",
+                        "gid"
+                      ],
+                      "x-kubernetes-validations": [
+                        {
+                          "rule": "self.image.matches('.*@sha256:[a-f0-9]{64}$') || has(self.imageKeyResource)",
+                          "message": "A publication tag requires an image key resource"
+                        },
+                        {
+                          "rule": "has(self.command) != has(self.commandFromImage)",
+                          "message": "Choose an explicit command or the image entrypoint"
+                        },
+                        {
+                          "rule": "!has(self.commandFromImage) || !has(self.args)",
+                          "message": "Image entrypoint includes the image Cmd; do not supply args"
+                        }
+                      ]
+                    },
+                    "maxItems": 8,
+                    "minItems": 1
+                  },
+                  "storage": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                        },
+                        "resource": {
+                          "type": "string",
+                          "maxLength": 40,
+                          "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "resource"
+                      ]
+                    },
+                    "maxItems": 8,
+                    "minItems": 0
+                  },
+                  "resources": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3
+                    },
+                    "maxItems": 64,
+                    "minItems": 1
+                  },
+                  "registryMirrors": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prefix": {
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        "location": {
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        "insecure": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "prefix",
+                        "location",
+                        "insecure"
+                      ]
+                    },
+                    "maxItems": 16,
+                    "minItems": 0
+                  },
+                  "runtime": {
+                    "type": "object",
+                    "properties": {
+                      "memoryMiB": {
+                        "type": "integer",
+                        "minimum": 2048,
+                        "maximum": 65536
+                      },
+                      "vcpus": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 32
+                      },
+                      "k8sDistribution": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "enum": [
+                          "k0s",
+                          "kubernetes"
+                        ]
+                      },
+                      "ociVersion": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "enum": [
+                          "1.1.0",
+                          "1.2.0",
+                          "1.3.0"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "profile",
+                  "guest",
+                  "nodeSelector",
+                  "network",
+                  "trustee",
+                  "storageImage",
+                  "containers",
+                  "resources"
+                ],
+                "x-kubernetes-validations": [
+                  {
+                    "rule": "(has(self.ownerPublicKeyPem) ? 1 : 0) + (has(self.ownerClaimSha256) ? 1 : 0) + (has(self.accessLink) ? 1 : 0) == 1",
+                    "message": "Choose an owner public key, one-use claim hash or generated access link"
+                  }
+                ]
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "observedGeneration": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "phase": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "podName": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "podUid": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "specSha256": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "initDataSha256": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "accessTokenSha256": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "accessSecretName": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  }
+                }
+              }
+            },
+            "required": [
+              "spec"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

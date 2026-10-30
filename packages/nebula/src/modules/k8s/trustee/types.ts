@@ -23,7 +23,11 @@ export interface TrusteeConfig {
   readonly kbsImage: string;
   /** Unmodified upstream TNG with coco_asr, pinned by digest. */
   readonly tngImage: string;
-  readonly ownerPublicKeyPem: string;
+  /** Existing deployments pin the owner's public key in measured init-data. */
+  readonly ownerPublicKeyPem?: string;
+  /** Claimable workloads pin a one-time token hash instead. The guest creates
+   * an internal Trustee admin key and accepts the user's key only once. */
+  readonly ownerClaimSha256?: string;
   readonly nodeSelector: Readonly<Record<string, string>>;
   readonly clients: readonly { readonly namespace: string; readonly podLabels: Readonly<Record<string, string>> }[];
   readonly network: TrusteeNetworkConfig;

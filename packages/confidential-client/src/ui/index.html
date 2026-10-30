@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Nebula Confidential</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<header><div class="brand">nebula<span> / confidential</span></div><span class="local">LOCAL CLIENT</span></header>
+<main>
+  <div class="intro"><p class="eyebrow">YOUR WORKLOAD. YOUR KEYS.</p><h1>Deploy with confidence.</h1><p>Publish an encrypted image to your confidential stack. Verify it before sharing any key.</p></div>
+  <div id="notice" role="alert" hidden></div>
+  <div class="columns">
+    <div>
+      <section class="card"><div class="section-title"><span class="number">1</span><h2>Connect your stack</h2></div>
+        <p>Paste the one-time access link provided by your administrator. Your local client fetches and checks the settings.</p>
+        <form id="connect-form"><label for="access-link">Stack access link</label><input id="access-link" type="password" autocomplete="off" placeholder="https://stack.example:443/#one-time-token" required>
+          <button id="connect" type="submit" class="secondary">Connect to stack</button></form>
+        <p class="hint" id="connection-hint">The #token stays out of URLs sent over the network. Sensitive work runs on this computer.</p>
+        <details><summary>Advanced: import public settings</summary><label for="connection">Connection settings</label><input id="connection" type="file" accept=".json,.yaml,.yml,application/json"></details>
+        <div id="stack" hidden><div class="stack-name" id="stack-name"></div><div class="muted" id="endpoint"></div>
+          <div id="storage-summary" class="chips"></div>
+          <details><summary>Review the prepared stack</summary><div id="image-contract"></div><label>Expected guest and pinned helper images</label><pre id="identity"></pre></details>
+          <details><summary>All fetched settings</summary><p class="hint">These declarations are checked against the local trusted profile and measured independently before keys are released.</p><pre id="configuration"></pre></details>
+        </div>
+      </section>
+      <section class="card"><div class="section-title"><span class="number">2</span><h2>Deploy your image</h2></div>
+        <form id="deploy-form">
+          <div id="access-token-group" hidden><label for="access-token">Temporary access token</label><input id="access-token" type="password" autocomplete="off" placeholder="Paste the token from your administrator" pattern="[a-fA-F0-9]{64}">
+          <p class="hint">Used for the first claim. Your local owner key controls the stack afterwards.</p>
+          </div>
+          <div class="label-row"><label for="source-image">Local container image</label><button id="refresh-images" type="button" class="text-button">Refresh</button></div>
+          <input id="source-image" list="images" placeholder="my-app:release" autocomplete="off" required><datalist id="images"></datalist><p id="image-hint" class="hint">Choose a linux/amd64 image available in your local Docker runtime.</p>
+          <details><summary>Registry access and existing storage</summary>
+            <label for="registry-username">Registry username</label><input id="registry-username" autocomplete="off" placeholder="Your registry account">
+            <label for="registry-password">Registry token or password</label><input id="registry-password" type="password" autocomplete="off" placeholder="Used locally to publish ciphertext">
+            <label for="registry-auth">Or load registry auth JSON <span class="muted">optional</span></label><input id="registry-auth" type="file" accept=".json,application/json">
+            <label for="aws-profile">Local AWS profile <span class="muted">for ECR</span></label><input id="aws-profile" placeholder="default" autocomplete="off">
+            <div id="volume-keys"></div><div id="resource-files"></div>
+          </details>
+          <label class="check"><input id="reviewed" type="checkbox" required><span>I approve this stack’s guest, helper images, storage and image requirements.</span></label>
+          <button id="deploy" type="submit" class="primary" disabled><span id="deploy-label">Encrypt &amp; deploy</span><span aria-hidden="true">→</span></button>
+        </form>
+        <p class="privacy">Images are encrypted locally. Owner and storage keys stay in your private local release directory and the verified guest.</p>
+      </section>
+    </div>
+    <aside>
+      <section class="card security-card"><p class="eyebrow">SECURITY OVERVIEW</p><h2>Know what you trust.</h2>
+        <div class="security-badges"><span id="profile-status" class="badge">No stack connected</span><span id="attestation-status" class="badge">Not attested yet</span></div>
+        <p id="security-description">The local verifier checks the stack before any image or disk key leaves your computer.</p>
+        <dl id="security-values"></dl>
+        <ul id="security-checks" class="security-checks"></ul>
+        <p id="cluster-status" class="hint" hidden></p><p id="verification-time" class="hint" hidden></p>
+        <details id="verification-details" hidden><summary>Native verification record</summary><p class="hint">A record of the checks performed locally. Expected constraints are labelled separately from observations; this is not a raw hardware quote.</p><pre id="verification-record"></pre><button id="download-verification" type="button" class="secondary">Download verification record</button></details>
+        <details><summary>Protection and limits</summary><p class="hint">Keys reach only the independently verified, owner-authorized guest. Native policy blocks administrator exec and access to key helpers. Your local computer and Docker runtime remain trusted. Administrators can deny service. Enrollment does not provide global singleton enforcement or encrypted-disk rollback protection.</p></details>
+      </section>
+      <section class="card progress-card"><p class="eyebrow">DEPLOYMENT</p><h2 id="job-title">Ready when you are</h2><p id="job-description">Load your stack settings to begin. No Kubernetes access is needed.</p>
+        <ol id="steps"><li data-phase="encrypting"><span></span>Encrypt and publish your image</li><li data-phase="measuring"><span></span>Prepare the expected measurements</li><li data-phase="waiting"><span></span>Wait for your confidential VM</li><li data-phase="attesting"><span></span>Verify attestation and claim ownership</li><li data-phase="provisioning"><span></span>Provision keys to the verified instance</li><li data-phase="ready"><span></span>Start the workload and storage</li></ol>
+        <div id="verified" hidden><strong>✓ Attestation verified</strong><p id="instance" class="fingerprint"></p></div>
+        <button id="inspect" type="button" class="secondary" hidden>Verify again &amp; check status</button>
+        <button id="cancel" type="button" class="secondary" hidden>Stop local operation</button>
+        <details id="result-details" hidden><summary>Attestation and storage details</summary><pre id="result"></pre></details>
+      </section>
+      <div class="owner-note"><strong>Keys remain with you.</strong><p>Like a local signer, this client performs sensitive work on your computer. The browser never receives your owner private key. Keep the private release directory to recover access.</p><p id="tools" class="hint"></p></div>
+    </aside>
+  </div>
+</main>
+<footer>Nebula Confidential · Owner-controlled deployment</footer>
+</body></html>

@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-20",
+  "scope": "Standalone Kubebuilder operator deployed through the isolated dev Argo application, followed by fresh owner enrollment and encrypted storage qualification on the existing SEV-SNP host.",
+  "sourceRevisions": {
+    "nebula": "ada1ad856ecb302191eb1639b6bbd45232020206",
+    "storageRuntime": "a722e8ac608e772b1c1f40be44dac75f47cd523f",
+    "devops": "666660a36bd67b81f10a6d0a57196b6fa7392a09"
+  },
+  "controller": {
+    "scaffold": "Kubebuilder 4.16.0",
+    "runtime": "controller-runtime v0.25.0",
+    "architecture": "linux/amd64",
+    "imageDigest": "sha256:40009e10a72b8fb75c8cd78378fcbadfb7f06d75e26dbf6d413c51f4cfdc8aa1",
+    "namespaceScopedWatchesAndRoles": true,
+    "leaderLeaseAcquired": true,
+    "sharedTypeScriptRendererAndStructuralSchemas": true,
+    "previousRunningAndStoppedGuestUidsPreservedDuringMigration": true,
+    "freshGuestsCreatedAfterExplicitRetirement": true,
+    "controllerRestartPreservedBothEnrolledGuests": true,
+    "guestContainerRestarts": 0,
+    "secretReadExecPodDeleteAndPvcPatchPermissionsDenied": true
+  },
+  "composition": {
+    "runtimeClass": "kata-qemu-snp",
+    "officialTrusteeChartVersion": "0.21.0",
+    "unmodifiedTrustee": true,
+    "upstreamTng": true,
+    "externalBootstrapTrustee": false,
+    "nativeGenpolicyRevision": "5b57d5c41ffb9d9515e76ef51cfa851068cfc439",
+    "ownerAndOperatorPolicyAgree": true,
+    "measurementUnchangedByControllerMigration": true,
+    "guestStateInMemory": true,
+    "ownerRequestsUsePinnedInnerTls": true
+  },
+  "fixture": {
+    "ownedGenericImageReused": true,
+    "encryptedLayers": 7,
+    "previouslyUploadedToEcr": true,
+    "publicCiphertextMirror": true,
+    "retainedBlockClaims": 2,
+    "bytesPerClaim": 1073741824,
+    "guestMemoryStorage": "32Mi",
+    "newCloudDisks": 0
+  },
+  "positiveGuest": {
+    "ownerCliAttestationEnrollmentAndProvisioning": true,
+    "provisionedResources": 3,
+    "nativeCdhRetrievalStatuses": [200, 200, 200],
+    "attestedStoragePhase": "ready",
+    "freshNonceHmacProofVerifiedBeforeAndAfterControllerRestart": true,
+    "encryptedImageAndPersistentDataMarkersVerified": true,
+    "dataFilesystem": "ext4",
+    "scratchFilesystem": "tmpfs",
+    "applicationUid": 11000,
+    "applicationGid": 11000,
+    "effectiveApplicationCapabilities": "none"
+  },
+  "identicalGuest": {
+    "sameApprovedVmAndNativeWorkloadIdentity": true,
+    "distinctGuestGeneratedTlsKeys": true,
+    "firstEnrollmentRoutedToSecondRejectedByActualCli": true,
+    "secondInstanceSeparatelyEnrolled": true,
+    "requestOrdering": "Pinned TLS precedes owner HTTP requests in the client and instrumented software tests. The live test established rejection of the substituted instance, not a packet-level observation of request contents."
+  },
+  "copiedDisk": {
+    "copiedBytes": 1073741824,
+    "sourceWasQuiescent": true,
+    "freshGuestsWereUnprovisionedDuringFinalCopy": true,
+    "luksHeaderConfirmed": true,
+    "ciphertextHashBeforeAndAfterMatches": true,
+    "secondGuestNeverProvisionedOriginalVolumeKey": true,
+    "differentVolumeKeyProvisionedThroughAttestedCli": true,
+    "attestedStoragePhase": "unlock-denied",
+    "helperRestartsAfterRefusal": 0,
+    "applicationEndpointClosed": true
+  },
+  "isolation": {
+    "adminExecDeniedByMeasuredPolicy": ["Trustee", "storage helper", "application"],
+    "remoteResourceGetHttpStatus": 403,
+    "remoteRcarHttpStatus": 403,
+    "invalidOwnerPolicyMutationHttpStatus": 401,
+    "kubernetesSecrets": 0,
+    "testKeysAbsentFromKubernetesConfiguration": true,
+    "kbsCdhAndInnerTlsUnavailableFromHost": true
+  },
+  "argocd": {
+    "syncedHealthy": true,
+    "hardRefreshPreservedGuestUids": true,
+    "existingMevAndTrusteeUnchanged": true
+  },
+  "softwareValidation": {
+    "goRaceTests": true,
+    "realKubernetesApiAdmissionWatchesAndRestartTest": true,
+    "rendererProcessBoundaryTests": true,
+    "nativeStoragePolicyCasesPassed": 14,
+    "localModuleTestsPassed": 509,
+    "localModuleOptionalTestsSkipped": 18,
+    "argocdPolicyTestsPassed": 13,
+    "deterministicDevopsSynthesis": true,
+    "nebulaAndDevopsImplementationCiPassed": true
+  },
+  "limits": [
+    "First enrollment selects an approved instance; it does not prove intent before selection.",
+    "An owner can explicitly provision the same volume key to another VM and permit opening the copy.",
+    "Guest Trustee custody and the instance key are ephemeral; VM replacement needs fresh enrollment and provisioning.",
+    "LUKS-XTS does not provide general data integrity, rollback protection or a global singleton guarantee.",
+    "Kubernetes readiness is not an attested application or storage result. A refused mount is observable while its guest remains alive; the bounded launcher wait can eventually stop the Pod.",
+    "Application transport encryption is configured separately. Targeted qualification is not an exhaustive security audit."
+  ],
+  "privacy": "Raw reports, chip identity, node addresses, instance pins, credentials and key material are omitted. Private receipts remain with the owner."
+}

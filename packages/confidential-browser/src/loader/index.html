@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Nebula Confidential</title><link rel="stylesheet" href="./bootstrap.css"><script type="module" src="./loader.js"></script></head>
+<body><header><div class="brand">Nebula <span>Confidential</span></div><span class="badge">OWNER-CONTROLLED DEPLOYMENT</span></header><main>
+<div class="intro"><p class="eyebrow">START WITH VERIFICATION</p><h1>Your workload. Your trust.</h1><p id="loader-status">Checking the confidential stack…</p></div>
+<section id="tls-verification" class="card" hidden><h2>Verify this connection before entering secrets.</h2>
+<p>This page is served from the confidential guest through TNG. Your browser does not automatically check remote attestation. Accepting its certificate warning alone does not establish trust.</p>
+<ol><li>Open the browser's own certificate viewer and export the certificate for this page.</li><li>Use an independent verifier to check the AMD evidence, approved VM/workload measurements and the binding to that certificate's public key.</li><li>Continue only after that check. Recheck a changed certificate or guest key.</li></ol>
+<p class="hint">The checker below is provided by this page for convenience. Its result cannot independently authenticate the page's own JavaScript. Obtain expected measurements from a release or policy you independently trust.</p>
+<details><summary>Certificate reported by the guest</summary><pre id="tls-details"></pre><a href="/certificate.der" download="guest-certificate.der">Download reported certificate</a><p class="hint">Compare with the browser-exported certificate. A server-provided download alone does not prove which certificate your browser received.</p></details>
+<details><summary>Convenience certificate checker</summary><form id="certificate-check">
+<label>Certificate exported by your browser<input id="browser-certificate" type="file" accept=".der,.cer,.crt,.pem"></label>
+<label>Or paste that certificate in PEM format<textarea id="browser-certificate-text" rows="5" maxlength="100000" placeholder="-----BEGIN CERTIFICATE-----" spellcheck="false"></textarea></label>
+<label>Approved VM measurement<input id="tls-measurement" pattern="[a-f0-9]{96}" required></label>
+<label>Approved native workload policy SHA-256<input id="tls-policy" pattern="[a-f0-9]{64}" placeholder="From your independently reviewed deployment" required></label>
+<button id="check-certificate" type="submit" class="secondary">Check exported certificate</button><pre id="certificate-result"></pre></form></details>
+<form id="manual-verification"><label class="check"><input id="independently-verified" type="checkbox" required><span>I independently verified this browser's certificate and approved the VM and workload measurements.</span></label><button type="submit" class="primary">Continue to owner access</button></form>
+<form id="manual-owner" hidden><h2>Access your confidential stack</h2>
+<label>One-time access token<input id="claim-token" type="password" pattern="[a-f0-9]{64}" maxlength="64" autocomplete="off"></label>
+<label>Owner / recovery password<input id="vault-password" type="password" minlength="12" required autocomplete="off"></label><p class="hint">At least 12 characters. Only password-encrypted owner state stays in this browser. Keep your encrypted recovery backup and password.</p>
+<label>Or restore an encrypted recovery file<input id="manual-recovery" type="file" accept=".json"></label>
+<button id="unlock-owner" type="submit" class="primary">Unlock &amp; connect</button><p id="owner-login-status" role="alert"></p></form></section>
+<form id="restore-form" class="card" hidden><p>Returning on another browser? Restore your latest encrypted recovery file.</p><label>Recovery file<input id="restore-file" type="file" accept=".json" required></label><label>Password<input id="restore-password" type="password" required autocomplete="off"></label><button type="submit">Restore owner access</button></form>
+</main></body></html>

@@ -1,0 +1,18 @@
+# Static browser assets are a public, reviewed release build, without secrets.
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS build
+WORKDIR /workspace/packages/confidential-browser
+COPY packages/confidential-browser/package.json packages/confidential-browser/pnpm-lock.yaml ./
+COPY packages/confidential-client /workspace/packages/confidential-client
+COPY packages/confidential-runtime /workspace/packages/confidential-runtime
+COPY packages/nebula /workspace/packages/nebula
+RUN npm install -g pnpm@11.9.0 && pnpm install --frozen-lockfile --ignore-scripts
+COPY packages/confidential-browser/src ./src
+RUN pnpm exec esbuild src/manual-tls/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=/manual-tls.mjs
+
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+WORKDIR /app
+COPY --from=build /manual-tls.mjs ./dist/manual-tls/main.mjs
+COPY --from=browser-assets / ./loader/
+USER 10001:10001
+ENV HOME=/tmp
+ENTRYPOINT ["node", "/app/dist/manual-tls/main.mjs", "serve"]

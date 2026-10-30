@@ -23,6 +23,9 @@ export class Trustee extends BaseConstruct<TrusteeConfig> {
 
   constructor(scope: Construct, id: string, config: TrusteeConfig) {
     super(scope, id, publicConfig("Trustee", config));
+    if (this.config.ownerClaimSha256 !== undefined) {
+      throw new TypeError("Trustee: first-connection claiming requires the ConfidentialWorkload owner gateway");
+    }
     const settings = trusteeSettings(this.config);
     try {
       this.helm = new Helm(this, "helm", trusteeHelmProps(this.config, settings));

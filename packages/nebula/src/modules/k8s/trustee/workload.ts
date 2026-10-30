@@ -1,4 +1,4 @@
-import { measuredFragments } from "../envoy";
+import { measuredFragments } from "../envoy/measured-fragments";
 import { tngTrusteeClientPlan } from "./client-plan";
 import type { TrusteeSnpIdentity } from "./policies";
 export { generateAttestedWorkloadPolicy } from "./genpolicy";
