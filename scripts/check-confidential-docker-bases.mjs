@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 const stages = new Set();
 const files = ["operator", "runtime", "storage", "storage-devices", "browser"].map(role => `docker/confidential-${role}/Dockerfile`);
-files.push("docker/confidential-browser/Dockerfile.keyprovider", "docker/confidential-browser/Dockerfile.skopeo", "docker/confidential-browser/Dockerfile.https");
+files.push("docker/confidential-browser/Dockerfile.keyprovider", "docker/confidential-browser/Dockerfile.skopeo", "docker/confidential-browser/Dockerfile.tls");
 for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");
   stages.clear();
