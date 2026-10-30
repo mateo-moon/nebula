@@ -87,6 +87,26 @@ func TestBrowserInvitationRefusesUnboundTokenAndRedirect(t *testing.T) {
 	}
 }
 
+func TestManualTLSInvitationKeepsClaimTokenOutOfURL(t *testing.T) {
+	token := strings.Repeat("a", 64)
+	a := &AccessLink{URL: "https://stack.example/", SecretName: "manual-access", OwnerPort: 8443,
+		Browser: &BrowserAccess{InvitationEndpoint: "http://preparation.qualified.svc:8089/invitation",
+			WorkloadEndpoint: "https://preparation.example/", LoaderURL: "https://192.0.2.1:9443/", ManualTLS: true}}
+	if actual := browserAccessURL(a, token); actual != a.Browser.LoaderURL || strings.Contains(actual, token) {
+		t.Fatal("manual first page received a usable claim token")
+	}
+	w, _, _ := fixture("qualified", "manual")
+	w.Spec.Raw, _ = json.Marshal(map[string]any{"accessLink": a})
+	if _, err := accessLink(w); err != nil {
+		t.Fatal(err)
+	}
+	a.Browser.LoaderURL = "https://192.0.2.1:9443/loader/"
+	w.Spec.Raw, _ = json.Marshal(map[string]any{"accessLink": a})
+	if _, err := accessLink(w); err == nil {
+		t.Fatal("manual TLS accepted a shared path origin")
+	}
+}
+
 func discoveryProof(t *testing.T, key *ecdsa.PrivateKey, endpoint, role string) (string, string) {
 	t.Helper()
 	encode := func(v any) string { b, _ := json.Marshal(v); return base64.RawURLEncoding.EncodeToString(b) }

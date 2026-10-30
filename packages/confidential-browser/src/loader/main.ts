@@ -1,14 +1,25 @@
 import { AttestedChannel, endpoint, hash, type AttestedFetch, type SnpIdentity } from "./transport";
 import { newOwner, storedOwner, saveOwner, jwt, encryptedBackup, restoreBackup, discoveryAudience, type OwnerState } from "./owner";
 import profiles from "./profiles.json";
+import { manualFragment, manualSession, type ManualSession } from "./manual";
 
 declare global { interface Window { nebula: any } }
+// Until this origin's mode is known, errors must not reveal a credential form.
+let manualMode = true;
+let sdkPromise: Promise<any> | undefined;
+function loadSdk(): Promise<any> {
+  return sdkPromise ??= (async () => {
+    const sdk: any = await import(/* @vite-ignore */ new URL("./sdk/tng_wasm.js", location.href).href);
+    await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
+    return sdk;
+  })();
+}
 const status = (text: string) => {
   const output = document.getElementById("loader-status"); if (output) output.textContent = text;
 };
 const failure = (error: unknown) => {
   status(error instanceof Error ? error.message : "Verification failed");
-  const recovery = document.getElementById("restore-form"); if (recovery) recovery.hidden = false;
+  const recovery = document.getElementById("restore-form"); if (recovery && !manualMode) recovery.hidden = false;
 };
 
 /** Fetch every executable byte through the pinned attested channel. An ordinary
@@ -45,25 +56,38 @@ async function start() {
   if (!await isolation()) return;
   sessionStorage.removeItem("nebula-isolation-reload");
   const parameters = new URLSearchParams(location.hash.slice(1));
-  // A workload-hosted HTTPS entry has already been authenticated by the
-  // browser. Only that same origin may supply its default routing metadata.
-  // Preparation identity still comes from the reviewed, bundled profiles.
-  let entry: { version: number; endpoint: string; stack: string } | undefined;
-  if (!parameters.get("endpoint") || !parameters.get("stack")) {
+  // These routing defaults cannot authenticate the page that supplied them.
+  // A manually checked origin stays locked until the user confirms its actual
+  // browser certificate; preparation identity remains release-owned.
+  let entry: { version: number; endpoint: string; stack: string; verification?: "manual" } | undefined;
+  {
+    // Always consult this origin's mode. A fragment must not bypass the
+    // manual gate by supplying both legacy routing parameters.
     const response = await fetch("./entry.json", { credentials: "omit", redirect: "error", cache: "no-store" });
-    if (!response.ok) throw new Error("The HTTPS entry configuration is unavailable");
+    if (!response.ok && (!parameters.get("endpoint") || !parameters.get("stack"))) throw new Error("The HTTPS entry configuration is unavailable");
+    if (response.ok) {
     entry = await response.json();
-    if (entry?.version !== 1) throw new Error("Invalid HTTPS entry configuration");
+    if (entry?.version !== 1 || (entry.verification !== undefined && entry.verification !== "manual")) throw new Error("Invalid HTTPS entry configuration");
+    }
+  }
+  manualMode = entry?.verification === "manual";
+  if (manualMode) {
+    const fragment = location.hash;
+    history.replaceState(null, "", location.pathname);
+    manualFragment(fragment);
   }
   const target = endpoint(parameters.get("endpoint") ?? entry?.endpoint ?? ""), discovery = endpoint(parameters.get("stack") ?? entry?.stack ?? "");
-  let token = parameters.get("token") ?? "";
-  const saved = await storedOwner(target);
+  let manual: ManualSession | undefined;
+  if (manualMode) {
+    status("Independently verify this browser's TLS certificate and approve its workload measurements before continuing.");
+    const profile = profiles.profiles[0].identity;
+    manual = await manualSession(target, loadSdk, profile);
+  }
+  let token = manual ? manual.owner.token ?? "" : parameters.get("token") ?? "";
+  const saved = manual?.owner ?? await storedOwner(target);
   if (!saved && !/^[a-f0-9]{64}$/.test(token)) throw new Error("Open the one-time access link from your administrator");
-  history.replaceState(null, "", location.pathname + `#endpoint=${encodeURIComponent(target)}&stack=${encodeURIComponent(discovery)}`);
-  // The trusted release/attested HTTPS origin supplies this SDK and profiles.
-  const sdkUrl = new URL("./sdk/tng_wasm.js", location.href).href;
-  const sdk: any = await import(/* @vite-ignore */ sdkUrl);
-  await sdk.default(new URL("./sdk/tng_wasm_bg.wasm", location.href).href);
+  if (!manualMode) history.replaceState(null, "", location.pathname + `#endpoint=${encodeURIComponent(target)}&stack=${encodeURIComponent(discovery)}`);
+  const sdk = await loadSdk();
   const fetcher = sdk.fetch as AttestedFetch;
   let channel: AttestedChannel | undefined;
   let verificationFailure = "No independently approved preparation profile matched";
@@ -85,17 +109,24 @@ async function start() {
   if (saved?.preparationPin && saved.preparationPin !== channel.pin) throw new Error("The preparation instance changed");
   owner.preparationPin = channel.pin;
   owner.token ??= token; token = "";
+  if (manual) await manual.save(owner);
   const bound = channel;
   Object.defineProperty(window, "nebula", { value: Object.freeze({
     target, discovery, channel: bound, owner, fetcher,
-    save: () => saveOwner(target, owner), jwt: (audience: string, discovery = false) => jwt(owner, audience, discovery),
-    backup: (password: string) => encryptedBackup(owner, password),
+    save: () => manual ? manual.save(owner) : saveOwner(target, owner), jwt: (audience: string, discovery = false) => jwt(owner, audience, discovery),
+    backup: (password: string) => manual ? manual.backup(owner, password) : encryptedBackup(owner, password),
+    manualTls: manual?.certificate,
     finalChannel: (origin: string, identity: SnpIdentity, pin?: string) => new AttestedChannel(fetcher, origin, identity, pin),
   }), writable: false, configurable: false });
   const html = new DOMParser().parseFromString(new TextDecoder().decode(assets.get("/ui/index.html")), "text/html");
   if (html.querySelector("script, iframe, object, embed, base, link, meta[http-equiv]")) throw new Error("UI document contains an unlisted executable resource");
   const style = document.createElement("style"); style.textContent = new TextDecoder().decode(assets.get("/ui/style.css")); document.head.append(style);
   document.body.replaceChildren(...html.body.childNodes);
+  if (manual) {
+    (document.getElementById("recovery-password") as HTMLInputElement).value = manual.password();
+    document.getElementById("security-description")!.textContent = "You independently approved the first page's TLS certificate. TNG WASM then verified the preparation VM, its native workload policy and its transport key before loading this interface. Owner state is stored only as password-encrypted ciphertext.";
+    document.getElementById("trust-limits")!.textContent = "Your independent certificate and workload-policy check authenticates this first page. Its built-in checker is only a convenience. Your browser and approved guest software remain trusted. Administrators can deny service or claim first; instance substitution is rejected after enrollment. There is no global singleton or disk rollback guarantee.";
+  }
   const script = document.createElement("script");
   script.src = URL.createObjectURL(new Blob([assets.get("/ui/app.js")! as BlobPart], { type: "text/javascript" }));
   script.onload = () => URL.revokeObjectURL(script.src);
@@ -171,6 +202,7 @@ async function start() {
 if (typeof document !== "undefined") {
   document.getElementById("restore-form")?.addEventListener("submit", event => {
     event.preventDefault();
+    if (manualMode) return;
     void (async () => {
       const file = (document.getElementById("restore-file") as HTMLInputElement).files?.[0];
       const password = document.getElementById("restore-password") as HTMLInputElement;

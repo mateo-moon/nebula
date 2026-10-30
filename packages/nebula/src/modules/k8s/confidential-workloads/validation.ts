@@ -109,8 +109,10 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
       fail("access link needs a canonical HTTPS endpoint (HTTP only on loopback), Secret name and owner port");
     }
     if (spec.accessLink.browser) {
-      fields(spec.accessLink.browser, ["invitationEndpoint", "workloadEndpoint", "loaderUrl", "ownerEndpoint"]);
+      fields(spec.accessLink.browser, ["invitationEndpoint", "workloadEndpoint", "loaderUrl", "ownerEndpoint", "manualTls"]);
       const b = spec.accessLink.browser;
+      if (b.manualTls !== undefined && b.manualTls !== true) fail("manualTls must be true when enabled");
+      if (b.manualTls && new URL(b.loaderUrl).pathname !== "/") fail("manual TLS needs a dedicated HTTPS origin");
       if (!/^http:\/\/[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.svc:8089\/invitation$/.test(b.invitationEndpoint)) fail("browser invitation must use the cluster-internal export service");
       for (const value of [b.workloadEndpoint, b.loaderUrl, ...(b.ownerEndpoint ? [b.ownerEndpoint] : [])]) {
         const u = new URL(value);

@@ -1,34 +1,45 @@
 # Confidential browser
 
-Open the one-time HTTPS link supplied by your administrator. Nothing is installed on your computer. The independent Nebula loader verifies AMD SEV-SNP evidence in TNG WASM, checks the approved VM and native workload-policy measurements, and pins the preparation VM's transport key. It then fetches **all UI assets through that attested encrypted channel**.
+The browser interface can be served from a measured SEV-SNP guest through TNG. No client installation, browser extension or settings upload is required. The user authenticates the first page by independently checking the browser's actual TLS certificate and attestation.
 
-Choose a `linux/amd64` image archive (up to 256 MiB), or an image in the destination registry. For a registry source, use an owner-controlled registry and an immutable `@sha256:…` reference; its plaintext source remains in that registry. Enter registry push credentials, supply an existing disk key only when requested, and choose a recovery password. Review the stack, then select **Encrypt & deploy**. Keep the latest downloaded encrypted recovery file and its password.
+## User
 
-The preparation VM encrypts and publishes the image and independently runs native CoCo `genpolicy`. Kubernetes automatically creates the final workload when its reserved tag becomes available. Your browser verifies its resulting measurement, enrolls its transport key, claims its unmodified Trustee and sends image, disk and application keys directly to that enrolled VM. Disk keys are never sent to the preparation service. No external bootstrap Trustee is used.
+1. Open the endpoint supplied by DevOps. Its self-signed certificate may produce a browser warning; accepting that warning alone does not verify attestation.
+2. Export the certificate through the browser's own certificate viewer. Independently verify its AMD evidence, approved VM/native workload-policy measurements and binding to the certificate's public key. Obtain those expected measurements from an independently trusted release or review. Checking another connection to the same address alone is insufficient.
+3. Confirm that independent check in the page. Enter the separately supplied one-time access token and an owner/recovery password of at least 12 characters. The page's certificate checker is available for convenience; it cannot authenticate its own initial JavaScript.
+4. Choose a local `linux/amd64` image archive, up to 256 MiB, or an owner-controlled registry image pinned by digest. Enter registry push credentials, supply any requested existing disk key, and select **Encrypt & deploy**. Keep the latest encrypted recovery backup and its password.
 
-Reopen the same link to use the owner key saved in this browser. The one-time token is no longer needed. A different browser needs your latest encrypted recovery file. **Verify again & check status** performs fresh attestation of the enrolled instance. Startup/key-delivery status is shown separately from application health.
+TNG WASM verifies the preparation VM and its enrolled transport key before sending the image or credentials. That VM encrypts and publishes the image and independently runs native CoCo genpolicy. Kubernetes starts the final workload when its reserved tag becomes available. The browser then verifies that workload, enrolls its unique transport key, claims its unmodified Trustee and provisions keys directly to it. Disk keys never go to the preparation service. No external bootstrap Trustee is used.
 
-Keep the updated recovery file, which includes the final instance enrollment. If an automatic download is blocked, use its visible download link. Returning owners can enter a recovery password and choose **Back up current enrollment** to export it again. **Check key and policy isolation** checks that remote key reads and unauthorized policy changes are refused.
+Returning users repeat the certificate check, then unlock their password-encrypted browser vault or restore the latest encrypted recovery file. This mode stores no usable signing or wrapping keys in browser storage. **Verify again & check status**, **Check key and policy isolation**, and the downloadable verification record show the final enrollment, attestation and access-control results. An old recovery file without the final instance pin cannot silently enroll a replacement.
 
-## Administrator setup
+## Administrator
 
-Use `ConfidentialBrowser` alongside `ConfidentialOperator`, `ConfidentialStorage` and `ConfidentialWorkload`. Pin a reviewed preparation image and its native policy in the independently hosted loader release. Configure `browserOwner: true` and `accessLink.browser` with:
+Use `ConfidentialOperator`, `ConfidentialStorage` and `ConfidentialWorkload` for the generic workload, a `ConfidentialBrowser` preparation VM, and a separate diskless `ConfidentialBrowser` frontend:
 
-- `invitationEndpoint`: the preparation service's internal `/invitation` endpoint on port 8089.
-- `workloadEndpoint`: the public HTTPS preparation OHTTP endpoint (service port 8445).
-- `ownerEndpoint`: the public HTTPS final OHTTP endpoint (owner service port 8445).
-- `loaderUrl`: the independent HTTPS loader release.
+```ts
+new ConfidentialBrowser(chart, "browser-ui", {
+  name: "browser-ui", namespace, image: frontendImage, tngImage: http1TngImage,
+  nodeSelector, network,
+  manualTls: {
+    preparationEndpoint: "https://preparation.example.org/",
+    stackEndpoint: "https://stack.example.org/",
+  },
+});
+```
 
-Route public stack discovery to `confidential-operator-access:8083` and allow only the named access Secret in the operator. Publish neither port 8089 nor guest-loopback services. The preparation VM generates the one-time token in guest memory; the operator exports the resulting URL into the named Kubernetes Secret. Retrieve its `url` entry and give that link and registry access to the user.
+Pin the images and generate native policy during synthesis. The frontend image contains the reviewed browser assets and approved preparation profiles. Forward public TCP directly to its TNG service on port 10443; TLS must terminate inside the guest. This first-page path needs no ACME, DNS-custodian key or administrator-controlled CA. Do not put TLS private keys in Kubernetes.
 
-The loader's trusted profile comes from the reviewed release, never from discovery or the workload it verifies. A new preparation image, native policy template or guest launch identity needs a reviewed profile. A reverse proxy may terminate ordinary HTTPS: application credentials and keys remain encrypted inside OHTTP. Keep the loader origin independently controlled from the cluster administrators whose workloads it authenticates. Publish each loader release to a new versioned directory and give deployments that release URL, so browser caching cannot mix SDK or policy versions.
+Configure the workload with `browserOwner: true` and `accessLink.browser.manualTls: true`. Set `loaderUrl` to the frontend's dedicated HTTPS origin, `invitationEndpoint` to the preparation's internal `/invitation` service on port 8089, and `workloadEndpoint`/`ownerEndpoint` to its preparation/final OHTTP endpoints. Allow only its named access Secret in the operator.
 
-## Release and trust boundary
+The preparation VM generates the disposable token in guest memory. The operator stores the frontend endpoint in Secret `url` and the credential separately in Secret `token`. Give them to the user separately. Neither the URL nor its fragment may contain a usable token. After ownership is claimed, owner signatures authenticate subsequent operations. Never publish the invitation port or guest-loopback services.
 
-Build the pinned SNP SDK with `sh tools/tng-browser/build.sh NEW_SOURCE OUTPUT`. Then run `TNG_WASM_PATH=OUTPUT pnpm --dir packages/confidential-browser build`. Host `dist/loader` on an independent HTTPS origin. `_headers` supplies isolation/CSP headers on supporting hosts; the release-owned `coi.js` enables isolation on static hosts such as GitHub Pages. The build refuses unresolved native crypto imports. The service image contains `dist/ui` and the native encryption/policy tools; the loader carries no replacement UI.
+Ordinary proxies may carry the preparation/final OHTTP endpoints: their contents remain encrypted to the separately attested VM. Their DNS/HTTPS authority does not authenticate the initial page. The generic [full-stack example](../nebula/example/confidential-workload-stack.ts) includes a TCP route for the frontend; the DevOps testcase uses the existing SNP host and preserves earlier guests and disks.
 
-The independent loader origin, browser, approved guest image and preparation software are trusted. Owner signing and wrapping keys are non-extractable WebCrypto keys; local state and exported backups are encrypted. The preparation service handles plaintext images and registry credentials in guest tmpfs and erases them after publication. Kubernetes holds temporary claim authority and public owner metadata, never decryption keys.
+## Build and limits
 
-Administrators can deny service or claim first; the real owner then stops before uploading their image. An enrolled instance key cannot silently change. An older backup missing the final pin cannot enroll a replacement automatically. Global singleton enforcement, disk rollback prevention and automatic Trustee replacement custody remain outside scope.
+Build the pinned SNP SDK with `sh tools/tng-browser/build.sh NEW_SOURCE OUTPUT`, then run `TNG_WASM_PATH=OUTPUT pnpm --dir packages/confidential-browser build`. Build `docker/confidential-browser/Dockerfile.tls` with the resulting public `dist/loader` directory as its `browser-assets` build context. The frontend has no owner credentials, persistent disk, Kubernetes credential or certificate-enrollment API. Its private TLS key stays in TNG memory. Recheck renewed certificates and changed guest keys.
 
-The [SEV-SNP hardware qualification](qualification/sev-snp-browser-2026-10-27.json) records the tested software, measurements, fresh and returning browser flows, encrypted storage, application isolation and preserved resources. Its fixture was an owner-controlled registry image pinned by digest.
+The independent user check, browser and approved guest software are trusted. The served checker and server-reported fingerprints are conveniences, not independent authorities. Administrators can deny service or claim first; a legitimate owner must stop before uploading secrets to an already claimed stack. Instance substitution is rejected after enrollment. Global singleton enforcement, disk rollback protection and automatic Trustee replacement custody remain outside scope.
+
+Earlier independently hosted loader releases remain compatible with retained testcases. Their browser qualification is recorded in [the existing report](qualification/sev-snp-browser-2026-10-27.json); it does not qualify the new manual TLS frontend.

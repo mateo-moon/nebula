@@ -41,7 +41,7 @@ export const workloadSpecSchema = obj({
   profile: name, ownerPublicKeyPem: str({ maxLength: 2048 }),
   ownerClaimSha256: str({ pattern: "^[a-f0-9]{64}$", maxLength: 64 }),
   accessLink: obj({ url: str({ maxLength: 1024, pattern: "^(https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?|http://127[.]0[.]0[.]1(:[0-9]+)?)/$" }),
-    browser: obj({ invitationEndpoint: str({ pattern: "^http://[a-z][a-z0-9-]*[.][a-z][a-z0-9-]*[.]svc:8089/invitation$" }), workloadEndpoint: str(), loaderUrl: str(), ownerEndpoint: str() }, ["invitationEndpoint", "workloadEndpoint", "loaderUrl"]),
+    browser: obj({ invitationEndpoint: str({ pattern: "^http://[a-z][a-z0-9-]*[.][a-z][a-z0-9-]*[.]svc:8089/invitation$" }), workloadEndpoint: str(), loaderUrl: str(), ownerEndpoint: str(), manualTls: { type: "boolean", enum: [true] } }, ["invitationEndpoint", "workloadEndpoint", "loaderUrl"]),
     secretName: name, ownerPort: int(1, 65535), vcekCertificate: str({ maxLength: 32768, pattern: "^-----BEGIN CERTIFICATE-----\\n" }) },
     ["url", "secretName", "ownerPort"]),
   browserOwner: { type: "boolean", enum: [true] },

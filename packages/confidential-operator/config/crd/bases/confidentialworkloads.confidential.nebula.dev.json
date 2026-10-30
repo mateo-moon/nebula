@@ -97,6 +97,12 @@
                           "ownerEndpoint": {
                             "type": "string",
                             "maxLength": 4096
+                          },
+                          "manualTls": {
+                            "type": "boolean",
+                            "enum": [
+                              true
+                            ]
                           }
                         },
                         "required": [

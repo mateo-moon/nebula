@@ -52,6 +52,19 @@ export async function saveOwner(endpoint: string, value: OwnerState) {
     transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error);
   }); } finally { database.close(); }
 }
+
+/** A manually authenticated origin must never retain usable CryptoKeys. Its
+ * next first page executes before the user can appraise that TLS connection.
+ * Store only the password-encrypted recovery envelope in this mode. */
+export function encryptedOwnerVault(endpoint: string, storage: Pick<Storage, "getItem"> = localStorage): string | null {
+  return storage.getItem("nebula-confidential-vault-v1:" + endpoint);
+}
+export async function saveEncryptedOwner(endpoint: string, owner: OwnerState, password: string,
+  storage: Pick<Storage, "setItem"> = localStorage) {
+  const envelope = await encryptedBackup(owner, password);
+  storage.setItem("nebula-confidential-vault-v1:" + endpoint, JSON.stringify(envelope));
+  return envelope;
+}
 export async function newOwner(): Promise<OwnerState> {
   const pair = await crypto.subtle.generateKey(algorithm, true, ["sign", "verify"]);
   const encoded = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));

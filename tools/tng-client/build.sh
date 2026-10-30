@@ -3,7 +3,7 @@
 set -eu
 if [ "$#" -ne 2 ]; then echo 'Usage: build.sh NEW_SOURCE_DIRECTORY NEW_ARTIFACT_DIRECTORY' >&2; exit 2; fi
 tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-revision=6985f6832b0c60fcd8bfd7cd2c91e918ac9606ec
+revision=cc494fd65fe22817e20a39c04b173efa14bc316a
 test ! -e "$1" && test ! -e "$2" || { echo 'Refusing to overwrite existing source or artifact directories' >&2; exit 1; }
 toolchain=${TNG_BUILD_TOOLCHAIN:-1.89.0}
 case "$(rustc +"$toolchain" --version)" in
@@ -23,7 +23,7 @@ artifact_dir=$(CDPATH= cd -- "$2" && pwd)
 cd "$source_dir"
 target_dir=${CARGO_TARGET_DIR:-$source_dir/target}
 cargo +"$toolchain" build --locked --release --target-dir "$target_dir" -p tng --bin tng --no-default-features \
-  --features ingress-all,egress-all,metric,trace,tokio-console,tools
+  --features ingress-all,egress-all,metric,trace,tokio-console,tools,builtin-as-snp-rust
 cargo +"$toolchain" test --locked --release --target-dir "$target_dir" -p rats-cert --lib --no-default-features \
   --features crypto-rustcrypto,attester-coco,verifier-coco,attester-ita,verifier-ita,jsonwebtoken/use_pem \
   tee::coco::verifier::

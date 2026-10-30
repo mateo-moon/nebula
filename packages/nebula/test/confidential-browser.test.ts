@@ -16,6 +16,12 @@ test("browser preparation rejects mutable images before running native policy ge
   assert.throws(() => confidentialBrowserPlan({ ...config, image: "registry.example/browser:latest" }), /pinned images/);
 });
 
+test("manual TLS routing rejects credentials, fragments, plaintext and incomplete configuration before native synthesis", () => {
+  for (const value of ["http://host.example/", "https://owner:secret@host.example/", "https://host.example/#token", "https://host.example/settings"])
+    assert.throws(() => confidentialBrowserPlan({ ...config, manualTls: { preparationEndpoint: value, stackEndpoint: "https://stack.example/" } }));
+  assert.throws(() => confidentialBrowserPlan({ ...config, manualTls: {} as any }), /public preparation and stack origins/);
+});
+
 test("native browser policy is deterministic and permits no host disks, cluster credentials or external Trustee", {
   skip: !native, timeout: 600_000,
 }, () => {
@@ -36,4 +42,15 @@ test("native browser policy is deterministic and permits no host disks, cluster 
     assert.deepEqual(container.securityContext!.capabilities, { drop: ["ALL"] });
     assert.match(container.command!.join(" "), /private-stdio/);
   }
+});
+
+test("manual frontend native policy binds routing and runs only the guest TLS service", { skip: !native, timeout: 600_000 }, () => {
+  const manualTls = { preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" };
+  const first = confidentialBrowserPlan({ ...config, manualTls });
+  assert.deepEqual(confidentialBrowserPlan({ ...config, manualTls }), first);
+  assert.notEqual(confidentialBrowserPlan({ ...config, manualTls: { ...manualTls, stackEndpoint: "https://changed.example/" } }).initDataSha256, first.initDataSha256);
+  const frontend = first.pod.spec!.containers![0];
+  assert.ok(frontend.command!.includes("/app/dist/manual-tls/main.mjs"));
+  assert.equal(frontend.env!.find(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY")!.value, JSON.stringify(manualTls));
+  assert.ok(first.pod.spec!.volumes!.every(volume => volume.emptyDir?.medium === "Memory"));
 });

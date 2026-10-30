@@ -76,7 +76,9 @@ export interface ConfidentialWorkloadSpec {
     /** Public AMD endorsement in PEM; native AS still validates the chain. */
     vcekCertificate?: string;
     /** Browser preparation VM exports only its disposable invitation. */
-    browser?: { invitationEndpoint: string; workloadEndpoint: string; loaderUrl: string; ownerEndpoint?: string };
+    browser?: { invitationEndpoint: string; workloadEndpoint: string; loaderUrl: string; ownerEndpoint?: string;
+      /** Export the endpoint only; the user enters Secret.token after their certificate check. */
+      manualTls?: true };
   };
   /** Add an attested OHTTP owner endpoint, retaining the native TLS endpoint. */
   browserOwner?: true;

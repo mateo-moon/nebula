@@ -40,7 +40,7 @@ The script also supports the qualified macOS host toolchain; CI currently
 publishes only the explicitly labelled Linux amd64 artifact.
 
 The recipe builds tested TNG commit
-[`6985f68`](https://github.com/mateo-moon/TNG/commit/6985f6832b0c60fcd8bfd7cd2c91e918ac9606ec),
+[`cc494fd`](https://github.com/mateo-moon/TNG/commit/cc494fd65fe22817e20a39c04b173efa14bc316a),
 which pins Trustee [`2de4169`](https://github.com/mateo-moon/trustee/commit/2de41693c4b40fbf8e86e20cba7a78817836b4bd).
 These revisions are proposed in [TNG #284](https://github.com/inclavare-containers/TNG/pull/284)
 and [Trustee #243](https://github.com/openanolis/trustee/pull/243).

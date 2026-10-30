@@ -10,13 +10,20 @@ let busy = false;
 let recoveryUrl: string | undefined;
 const jwtPayload = (jwt: string) => JSON.parse(new TextDecoder().decode(bytes(jwt.split(".")[1].replaceAll("-", "+").replaceAll("_", "/"))));
 function evidence() {
-  const value = { version: 1, checkedAt: new Date().toISOString(), preparation: {
+  const value = { version: 1, checkedAt: new Date().toISOString(), frontend: api.manualTls ? {
+    authentication: "User acknowledged an independent check of the browser certificate; this page cannot prove its own initial authenticity",
+    reportedCertificate: api.manualTls,
+  } : undefined, preparation: {
     expected: api.channel.identity, transportPublicKey: api.channel.pin,
     result: api.channel.lastAttestation ? jwtPayload(api.channel.lastAttestation.attestation_result) : undefined,
     jwt: api.channel.lastAttestation?.attestation_result,
   }, final: final?.lastAttestation ? { expected: final.identity, transportPublicKey: final.pin,
     result: jwtPayload(final.lastAttestation.attestation_result), jwt: final.lastAttestation.attestation_result } : undefined };
   text("preparation-attestation", JSON.stringify(value.preparation, null, 2));
+  if (value.frontend) {
+    el("frontend-proof").hidden = false;
+    text("frontend-certificate", JSON.stringify(value.frontend, null, 2));
+  }
   if (value.final) text("final-attestation", JSON.stringify(value.final, null, 2));
   return value;
 }

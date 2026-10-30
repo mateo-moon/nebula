@@ -38,6 +38,7 @@ type BrowserAccess struct {
 	InvitationEndpoint string `json:"invitationEndpoint"`
 	WorkloadEndpoint   string `json:"workloadEndpoint"`
 	LoaderURL          string `json:"loaderUrl"`
+	ManualTLS          bool   `json:"manualTls,omitempty"`
 }
 
 type AccessLink struct {
@@ -66,6 +67,12 @@ func accessLink(w *api.ConfidentialWorkload) (*AccessLink, error) {
 		return nil, errors.New("invalid access endpoint")
 	}
 	if a.Browser != nil {
+		if a.Browser.ManualTLS {
+			loader, err := url.Parse(a.Browser.LoaderURL)
+			if err != nil || loader.Scheme != "https" || loader.Path != "/" {
+				return nil, errors.New("manual TLS requires a dedicated HTTPS origin")
+			}
+		}
 		if !regexp.MustCompile(`^http://[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.svc:8089/invitation$`).MatchString(a.Browser.InvitationEndpoint) {
 			return nil, errors.New("invalid invitation export")
 		}
@@ -95,6 +102,9 @@ type AccessManager struct {
 func browserAccessURL(a *AccessLink, token string) string {
 	if a.Browser == nil {
 		return a.URL + "#" + token
+	}
+	if a.Browser.ManualTLS {
+		return a.Browser.LoaderURL
 	}
 	fragment := url.Values{"endpoint": {a.Browser.WorkloadEndpoint}, "stack": {a.URL}, "token": {token}}
 	return a.Browser.LoaderURL + "#" + fragment.Encode()

@@ -5,8 +5,10 @@
  *   pnpm exec cdk8s synth --app 'tsx example/confidential-workload-stack.ts'
  *
  * Set CONFIDENTIAL_BROWSER_IMAGE to a reviewed digest-pinned preparation
- * image to enable the installation-free browser flow. Independently qualify
- * this preparation template in the loader release before handing out links.
+ * image to enable the browser flow. To serve its first page from a TEE, also
+ * set CONFIDENTIAL_BROWSER_TLS_IMAGE and CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE
+ * to the reviewed frontend and HTTP/1.1-capable TNG images. The user checks
+ * the browser certificate before entering the separately supplied token.
  */
 import { App, Chart, ApiObject } from "cdk8s";
 import { SealedDisks } from "../src/modules/k8s/confidential-guests/sealed-disks";
@@ -18,6 +20,10 @@ const namespace = "confidential-example";
 const node = "replace-with-snp-node";
 const profile = "example-workload";
 const browserImage = process.env.CONFIDENTIAL_BROWSER_IMAGE;
+const frontendImage = process.env.CONFIDENTIAL_BROWSER_TLS_IMAGE;
+const frontendTngImage = process.env.CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE;
+const frontendUrl = process.env.CONFIDENTIAL_BROWSER_TLS_ENDPOINT ?? "https://192.0.2.10:9443/";
+if (frontendImage && (!browserImage || !frontendTngImage)) throw new Error("Manual TLS also needs reviewed preparation and HTTP/1.1 TNG images");
 const nodeSelector = { "kubernetes.io/hostname": node };
 const network = { ipv4AddressPattern: "^10[.]244[.][0-9]{1,3}[.][0-9]{1,3}$", ipv6AddressPattern: "^2001:db8::[0-9a-f:]+$" };
 const images = {
@@ -38,6 +44,9 @@ new ConfidentialOperator(chart, "operator", { namespace, image: images.operator,
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
 if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example-preparation", namespace,
   image: browserImage, tngImage: images.tng, nodeSelector, network });
+if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,
+  image: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
+  manualTls: { preparationEndpoint: "https://preparation.example.test/", stackEndpoint: "https://owner.example.test/" } });
 new SealedDisks(chart, "ciphertext-disk", {
   namespace, nodeName: node, image: images.disks,
   stateDir: "/var/lib/confidential-example", roles: [{ role: "data", claim: "example-data",
@@ -61,7 +70,8 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
     ...(browserImage ? { browser: {
       invitationEndpoint: `http://example-preparation-invitation.${namespace}.svc:8089/invitation`,
       workloadEndpoint: "https://preparation.example.test/", ownerEndpoint: "https://workload.example.test/",
-      loaderUrl: "https://release.example.test/confidential/",
+      loaderUrl: frontendImage ? frontendUrl : "https://release.example.test/confidential/",
+      ...(frontendImage ? { manualTls: true as const } : {}),
     } } : {}) },
   guest: { measurement: "7".repeat(96), chipId: "8".repeat(128),
     minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
@@ -83,11 +93,15 @@ new ApiObject(chart, "owner-gateway", { apiVersion: "gateway.networking.k8s.io/v
   metadata: { name: "example-owner", namespace }, spec: { gatewayClassName: "replace-with-gateway-class",
     listeners: [{ name: "owner", protocol: "TCP", port: 8443 }, { name: "access", protocol: "HTTPS", port: 443,
       hostname: "owner.example.test", tls: { mode: "Terminate", certificateRefs: [{ name: "replace-with-discovery-certificate" }] } },
+      ...(frontendImage ? [{ name: "browser-ui", protocol: "TCP", port: 9443 }] : []),
       ...(browserImage ? ["preparation", "workload"].map(name => ({ name, protocol: "HTTPS", port: 443,
         hostname: `${name}.example.test`, tls: { mode: "Terminate", certificateRefs: [{ name: `replace-with-${name}-certificate` }] } })) : [])] } });
 new ApiObject(chart, "owner-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TCPRoute",
   metadata: { name: "example-owner", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "owner" }],
     rules: [{ backendRefs: [{ name: "workload-owner", port: 8443 }] }] } });
+if (frontendImage) new ApiObject(chart, "browser-ui-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TCPRoute",
+  metadata: { name: "example-browser-ui", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "browser-ui" }],
+    rules: [{ backendRefs: [{ name: "example-browser-ui", port: 10443 }] }] } });
 new ApiObject(chart, "access-route", { apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
   metadata: { name: "example-access", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "access" }],
     hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "confidential-operator-access", port: 8083 }] }] } });
