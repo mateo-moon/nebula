@@ -503,6 +503,23 @@ test("custom SSH port and pinned known hosts survive installation and handoff", 
   assert.ok(native(rs, "install").spec.template.spec.volumes.some((v: any) => v.secret?.secretName === "host-keys"));
 });
 
+test("the kernel minimum reaches fresh requests without changing existing installation records", () => {
+  const secured = setup({ ...options, installation: { ...options.installation, minimumKernelVersion: "6.12.113-1" } });
+  const request = JSON.parse(native(render({}, secured.xr, secured.template), "request").data["request.json"]);
+  assert.equal(request.spec.installation.minimumKernelVersion, "6.12.113-1");
+  assert.ok(native(render(installed(secured.template, secured.xr), secured.xr, secured.template), "pool"));
+  const previous = installed();
+  const bound = { ...fixture.xr, status: status(render(previous)) };
+  assert.throws(() => render(previous, bound, secured.template), /installation profile changed/);
+  assert.ok(native(render(installed()), "pool"), "old composition keeps its original bound profile");
+  for (const version of ["6.12.113-1", "6.12.114-1~deb13u1", "1:6.12.113-1"]) {
+    setup({ ...options, installation: { ...options.installation, minimumKernelVersion: version } });
+  }
+  for (const version of [null, 113, "", "6.12.113-1\n", "6.12.113-1; reboot", "-1", "6".repeat(129)]) {
+    assert.throws(() => setup({ ...options, installation: { ...options.installation, minimumKernelVersion: version as any } }), /kernel package version/);
+  }
+});
+
 test("unsafe installation inputs fail before producing resources", () => {
   for (const mutate of [
     (o: any) => { o.trustOnFirstUse = false; }, (o: any) => { o.knownHostsSecretName = "known-hosts"; },

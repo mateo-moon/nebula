@@ -121,6 +121,7 @@ new BaremetalSetup(chart, "baremetal-setup", {
   installation: {
     suite: "trixie",
     mirror: { hostname: "deb.debian.org", directory: "/debian" },
+    minimumKernelVersion: "6.12.113-1", // Debian package version, not uname's release
     kernel: settings.debianKernel, // { url: "https://...", sha256: "..." }
     initrd: settings.debianInitrd,
     disk: { minSizeGiB: 96 },
@@ -139,6 +140,19 @@ const fleet = new BaremetalFleet(chart, "workers", {
 });
 for (const address of ["192.0.2.10", "198.51.100.20"]) fleet.addNode(address);
 ```
+
+`minimumKernelVersion` separates the installed host kernel from the checksummed
+Debian Installer kernel/initrd. When set, a fresh installation enables the signed
+security/update archives, refreshes their indexes without a stale-index fallback,
+and upgrades only `linux-image-amd64`. The package version must meet the declared
+floor. After reboot, verification checks the package for the kernel actually
+running (`linux-image-$(uname -r)`) before allowing CAPI enrollment. Installing a
+newer metapackage while booting an older kernel does not satisfy this check.
+Newer security kernels remain allowed; this does not create an APT hold.
+
+The minimum is part of immutable installation intent. Add it to new profiles;
+keep existing workers on their reviewed Manual CompositionRevision. Changing a
+bound profile must never be used to upgrade or reinstall an existing host.
 
 ### Fresh servers in a rescue OS
 
