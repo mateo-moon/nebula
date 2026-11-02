@@ -83,8 +83,7 @@ const TEMPLATE = String.raw`
 {{- $taintArg := "" -}}{{- if $taints -}}{{- $taintArg = printf "--register-with-taints=%s" (join "," $taints) -}}{{- end -}}
 {{- $request := dict "uid" $uid "spec" (dict "address" $xr.spec.address "hostname" $hostname "ssh" $ssh "installation" $profile.installation)
   "context" (dict "namespace" $namespace "cluster" $profile.clusterName "provider" $profile.kubeProviderConfigName
-    "workloadProvider" (dig "installationContext" "workloadProvider" ($profile.workloadKubeProviderConfigName | default "") $profile)
-    "podPrefix" (dig "installationContext" "podPrefix" ($profile.ipv6PodCidrPrefix | default "") $profile)) -}}
+    "workloadProvider" ($profile.workloadKubeProviderConfigName | default "") "podPrefix" ($profile.ipv6PodCidrPrefix | default "")) -}}
 {{- if $xr.spec.additionalIpv4Addresses -}}{{- $_ := set $request.spec "additionalIpv4Addresses" $xr.spec.additionalIpv4Addresses -}}{{- end -}}
 {{- $requestJSON := $request | toJson -}}
 {{- $hash := $requestJSON | sha256sum -}}

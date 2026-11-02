@@ -275,16 +275,6 @@ receipt, hostname, OS suite, node address families and free VG storage, records
 verification tied to the request hash, then exits successfully. If `installation.uefi`
 is configured, the UEFI phase below completes before that verification is published. Crossplane
 requires both that evidence and the completed Job before composing enrollment.
-When retiring legacy Node admission for operator-managed IPAM, a bound host can
-preserve its immutable request using `installationContext: { workloadProvider,
-podPrefix }`. These are historical receipt strings; they emit no provider
-reference or admission resources. Do not combine this context with active
-`workloadKubeProviderConfigName` / `ipv6PodCidrPrefix`, and omit it for fresh
-operator-managed installations. The exact original installation profile and
-Manual revision still require an explicit reviewed migration; changing the
-current composition does not migrate already-bound hosts. The context does not
-permit changing OS, firmware, storage, SSH or installation intent.
-
 Optional native Cilium admission policies and bindings must first be observed
 ready through the workload ProviderConfig. The Job never receives workload
 credentials. The workload identity needs access to those admission resources;
@@ -572,17 +562,11 @@ It creates a disposable GPT/FAT disk and private NVRAM copy, runs the production
 script through a real BootNext shell boot, checks exact variable bytes and the
 return boot, and verifies that selecting the shell again cannot repeat writes.
 
-For installed hosts whose bound revision contains an older installation profile,
-`BaremetalAdmissionRetirement` constructs a replacement Composition from its
-validated public profile. It retains the original image, scripts ConfigMap
-reference, installation and enrollment manifests. It moves the two legacy
-allocation strings into historical receipt context and emits no remote admission
-Objects. It creates no new installer assets or credentials. Preserve referenced
-script ConfigMaps and manually pin each installed XR to the API-defaulted
-replacement revision after replaying its actual receipt.
 
-Before switching the XR, cover its kubelet identity with native admission and
-retire the four old remote admission Objects through an explicit Delete policy.
-Their original Orphan policy otherwise leaves native rules behind. Keep the
-ProviderConfig until those Objects and ProviderConfigUsages have disappeared.
-Fresh hosts use `BaremetalSetup` without workload admission options.
+For hosts whose OS installation is already complete, the existing
+`baremetalEnrollmentManifests` factory can declare the four active CAPI resources
+directly: pooled machine, remote template, bootstrap template and deployment.
+It creates no installer Job, XR, Composition or historical receipt resources.
+When transferring an installed host to direct GitOps ownership, preserve its
+existing native specs and orphan those four resources from their old provider
+Objects before removing the completed installer.

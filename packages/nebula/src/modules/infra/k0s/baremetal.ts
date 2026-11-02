@@ -116,10 +116,6 @@ export interface BaremetalSetupOptions {
   ipv6PodCidrPrefix?: string;
   /** Existing workload ProviderConfig, used only for native Node admission. */
   workloadKubeProviderConfigName?: string;
-  /** Preserve the immutable receipt of a bound host when retiring its old
-   * network admission. These historical strings create no provider reference.
-   * New installations with operator-managed IPAM must leave this unset. */
-  installationContext?: { workloadProvider: string; podPrefix: string };
   /** Local management-cluster ProviderConfig. */
   kubeProviderConfigName?: string;
   kubernetesProviderServiceAccount?: { name: string; namespace: string };
@@ -259,11 +255,6 @@ export class BaremetalSetup extends Construct {
     requireValue(o.initialSshAuthentication === undefined || ["privateKey", "password"].includes(o.initialSshAuthentication), "invalid initial SSH authentication");
     requireValue(o.initialSshAuthentication !== "password" || Boolean(o.initialSshSecretName && o.initialSshSecretName !== o.sshSecretName), "password bootstrap requires a separate initial SSH Secret");
     requireValue(Boolean(o.ipv6PodCidrPrefix) === Boolean(o.workloadKubeProviderConfigName), "IPv6 pod allocation and workload ProviderConfig must be configured together");
-    if (o.installationContext) {
-      requireValue(!o.ipv6PodCidrPrefix && !o.workloadKubeProviderConfigName, "historical installationContext cannot replace active admission settings");
-      requireValue(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(o.installationContext.workloadProvider), "historical workload provider must be a DNS label");
-      requireValue(/^[a-f0-9]{1,4}:[a-f0-9]{1,4}::$/.test(o.installationContext.podPrefix), "historical pod prefix must be a /32 base");
-    }
     if (o.ipv6PodCidrPrefix) requireValue(/^[a-f0-9]{1,4}:[a-f0-9]{1,4}::$/.test(o.ipv6PodCidrPrefix), "pod prefix must be the base of a /32, e.g. 2001:db8::");
     for (const value of [namespace, o.clusterName, o.sshSecretName, o.initialSshSecretName, o.knownHostsSecretName,
       o.kubeProviderConfigName, o.workloadKubeProviderConfigName].filter(Boolean))
@@ -360,7 +351,6 @@ export class BaremetalSetup extends Construct {
           inline: { template: baremetalWorkerTemplate({ namespace, clusterName: o.clusterName, tagDomain: o.tagDomain, defaults: o.defaults, image: o.image, scriptsName, enrollment,
             kubeProviderConfigName: o.kubeProviderConfigName ?? "kubernetes-provider-config",
             workloadKubeProviderConfigName: o.workloadKubeProviderConfigName, ipv6PodCidrPrefix: o.ipv6PodCidrPrefix,
-            ...(o.installationContext ? { installationContext: o.installationContext } : {}),
             installation: { ...o.installation, dualStack: o.installation.dualStack ?? true, timeoutSeconds: o.installation.timeoutSeconds ?? 3600 },
             ssh: { user: o.initialSshUser ?? "root", port: o.initialSshPort ?? 22,
               authentication: o.initialSshAuthentication ?? "privateKey",
