@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -25,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func TestBrowserInvitationComesFromGuestAndRemainsStableUntilGuestRestart(t *testing.T) {
@@ -86,7 +88,11 @@ func TestBrowserInvitationRefreshPreservesOwnerAndFinalGuestBoundaries(t *testin
 			}))
 			defer server.Close()
 			w, _, _ := fixture("qualified", "refresh")
-			c := fake.NewClientBuilder().WithScheme(testScheme()).WithObjects(w).Build()
+			c := fake.NewClientBuilder().WithScheme(testScheme()).WithObjects(w).WithInterceptorFuncs(interceptor.Funcs{
+				Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
+					return errors.New("the named Secret Role permits update, not patch")
+				},
+			}).Build()
 			manager := AccessManager{Client: c, Reader: c}
 			a := &AccessLink{URL: "https://stack.example/", SecretName: "refresh-access", OwnerPort: 8443,
 				Browser: &BrowserAccess{InvitationEndpoint: server.URL, WorkloadEndpoint: "https://preparation.example/", LoaderURL: "https://192.0.2.1:9443/", ManualTLS: true}}

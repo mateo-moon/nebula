@@ -216,14 +216,13 @@ func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, 
 		sum := sha256.Sum256(invitation)
 		fresh := hex.EncodeToString(sum[:])
 		if fresh != commitment {
-			before := secret.DeepCopy()
 			token := hex.EncodeToString(invitation)
 			secret.Data["token"] = []byte(token)
 			secret.Data["commitment"] = []byte(fresh)
 			secret.Data["url"] = []byte(browserAccessURL(a, token))
 			// Do not restore bootstrap access if an owner consumed the token
 			// while the preparation exporter was being contacted.
-			if err := m.Client.Patch(ctx, &secret, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+			if err := m.Client.Update(ctx, &secret); err != nil {
 				return nil, kubeFailure("AccessSecretFailed", "unclaimed preparation invitation could not be refreshed", err)
 			}
 			commitment = fresh
