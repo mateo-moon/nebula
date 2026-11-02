@@ -20,6 +20,9 @@ test("manual TLS routing rejects credentials, fragments, plaintext and incomplet
   for (const value of ["http://host.example/", "https://owner:secret@host.example/", "https://host.example/#token", "https://host.example/settings"])
     assert.throws(() => confidentialBrowserPlan({ ...config, manualTls: { preparationEndpoint: value, stackEndpoint: "https://stack.example/" } }));
   assert.throws(() => confidentialBrowserPlan({ ...config, manualTls: {} as any }), /public preparation and stack origins/);
+  for (const certificateRefreshSeconds of [0, 59, 18_001, Infinity, 600.5, "600"])
+    assert.throws(() => confidentialBrowserPlan({ ...config, manualTls: { preparationEndpoint: "https://preparation.example/",
+      stackEndpoint: "https://stack.example/", certificateRefreshSeconds: certificateRefreshSeconds as number } }), /certificate refresh/);
 });
 
 test("native browser policy is deterministic and permits no host disks, cluster credentials or external Trustee", {
@@ -53,4 +56,15 @@ test("manual frontend native policy binds routing and runs only the guest TLS se
   assert.ok(frontend.command!.includes("/app/dist/manual-tls/main.mjs"));
   assert.equal(frontend.env!.find(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY")!.value, JSON.stringify(manualTls));
   assert.ok(first.pod.spec!.volumes!.every(volume => volume.emptyDir?.medium === "Memory"));
+  const refresh = (plan: typeof first) => {
+    const tng = plan.pod.spec!.containers!.find(container => container.name === "tng")!;
+    const script = Buffer.from(tng.args!.join(""), "base64").toString();
+    const encoded = /printf '%s' '([^']+)'/.exec(script)![1];
+    return JSON.parse(Buffer.from(encoded, "base64").toString()).add_egress[0].attest.refresh_interval;
+  };
+  assert.equal(refresh(first), 18_000, "Keep the browser leaf stable within TNG's six-hour lifetime");
+  const retained = confidentialBrowserPlan({ ...config, manualTls: { ...manualTls, certificateRefreshSeconds: 600 } });
+  assert.equal(refresh(retained), 600);
+  assert.notEqual(retained.initDataSha256, first.initDataSha256, "Certificate renewal is bound by native policy");
+  assert.equal(retained.pod.spec!.containers![0].env!.find(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY")!.value, JSON.stringify(manualTls));
 });

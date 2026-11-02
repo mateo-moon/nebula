@@ -30,6 +30,8 @@ new ConfidentialBrowser(chart, "browser-ui", {
 
 Pin the images and generate native policy during synthesis. The frontend image contains the reviewed browser assets and approved preparation profiles. Forward public TCP directly to its TNG service on port 10443; TLS must terminate inside the guest. This first-page path needs no ACME, DNS-custodian key or administrator-controlled CA. Do not put TLS private keys in Kubernetes.
 
+The frontend keeps its six-hour TLS certificate stable for five hours so browser exceptions survive setup and SDK downloads. Renewal requires a new manual certificate check. `manualTls.certificateRefreshSeconds` can preserve an older measured renewal interval; its maximum is five hours. Preparation and final OHTTP requests retain their fresh attestation checks.
+
 Configure the workload with `browserOwner: true` and `accessLink.browser.manualTls: true`. Set `loaderUrl` to the frontend's dedicated HTTPS origin, `invitationEndpoint` to the preparation's internal `/invitation` service on port 8089, and `workloadEndpoint`/`ownerEndpoint` to its preparation/final OHTTP endpoints. Allow only its named access Secret in the operator.
 
 The preparation VM generates the disposable token in guest memory. The operator stores the frontend endpoint in Secret `url` and the credential separately in Secret `token`. Give them to the user separately. Neither the URL nor its fragment may contain a usable token. After ownership is claimed, owner signatures authenticate subsequent operations. Never publish the invitation port or guest-loopback services.

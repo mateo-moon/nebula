@@ -18,7 +18,10 @@ export interface ConfidentialBrowserConfig {
   /** Serve the first page through guest-terminated TNG HTTPS. The user must
    * independently verify the browser's certificate before supplying secrets.
    * Both routing origins are public and bound by native genpolicy. */
-  manualTls?: { preparationEndpoint: string; stackEndpoint: string };
+  manualTls?: { preparationEndpoint: string; stackEndpoint: string;
+    /** Browser certificate exceptions bind the leaf, so keep it stable during
+     * owner setup. TNG's pinned certificate lifetime is six hours. */
+    certificateRefreshSeconds?: number };
 }
 
 /** A reusable preparation TEE, containing no Trustee and no persistent disk.
@@ -28,10 +31,14 @@ export interface ConfidentialBrowserConfig {
 export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   if (![config.image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(config.namespace)) throw new Error("Browser preparation requires pinned images and valid names");
-  if (config.manualTls && Object.keys(config.manualTls).sort().join() !== "preparationEndpoint,stackEndpoint") {
+  if (config.manualTls && !["preparationEndpoint,stackEndpoint", "certificateRefreshSeconds,preparationEndpoint,stackEndpoint"].includes(Object.keys(config.manualTls).sort().join())) {
     throw new Error("Manual TLS requires public preparation and stack origins");
   }
-  if (config.manualTls) for (const value of Object.values(config.manualTls)) {
+  const certificateRefreshSeconds = config.manualTls?.certificateRefreshSeconds ?? 18_000;
+  if (config.manualTls && (!Number.isInteger(certificateRefreshSeconds) || certificateRefreshSeconds < 60 || certificateRefreshSeconds > 18_000)) {
+    throw new Error("Manual TLS certificate refresh must be between 60 and 18000 seconds");
+  }
+  if (config.manualTls) for (const value of [config.manualTls.preparationEndpoint, config.manualTls.stackEndpoint]) {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.pathname !== "/" || url.username || url.password || url.search || url.hash) {
       throw new Error("Manual TLS routing requires HTTPS origins without credentials, tokens or paths");
@@ -43,7 +50,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
       cors: { allow_origins: ["*"], allow_methods: ["GET", "POST", "OPTIONS"], allow_headers: ["*"], expose_headers: [], allow_credentials: false } } }] };
   if (config.manualTls) tngConfig.add_egress = [{
     mapping: { in: { host: "0.0.0.0", port: 10443 }, out: { host: "127.0.0.1", port: 8446 } },
-    attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: 600 },
+    attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8007", refresh_interval: certificateRefreshSeconds },
     rats_tls: { http1: true },
   }];
   const script = config.manualTls ? tngBootstrapScript(tngConfig) : tngBootstrapScript(tngConfig).replace("exec tng launch", "while [ ! -s /run/browser/ohttp.pem ]; do sleep 1; done\nexec tng launch");
@@ -62,7 +69,8 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     containers: [
       { name: "preparation", image: config.image, imagePullPolicy: "Always", command: privateCommand(["node", config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]), args: ["serve"],
         env: [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" },
-          ...(config.manualTls ? [{ name: "NEBULA_MANUAL_TLS_ENTRY", value: JSON.stringify(config.manualTls) }] : [])],
+          ...(config.manualTls ? [{ name: "NEBULA_MANUAL_TLS_ENTRY", value: JSON.stringify({
+            preparationEndpoint: config.manualTls.preparationEndpoint, stackEndpoint: config.manualTls.stackEndpoint }) }] : [])],
         securityContext: security, volumeMounts: mounts },
       { name: "tng", image: config.tngImage, imagePullPolicy: "Always", command: privateCommand(["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"]),
         args: measuredFragments(Buffer.from(script).toString("base64")),
