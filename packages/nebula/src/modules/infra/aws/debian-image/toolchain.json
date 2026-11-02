@@ -1,0 +1,13 @@
+{
+  "packerVersion": "1.16.2",
+  "linux": {
+    "amd64": {
+      "url": "https://releases.hashicorp.com/packer/1.16.2/packer_1.16.2_linux_amd64.zip",
+      "sha256": "abbfe0cf74985084112659b53e3565f264f70a20914c3b7c4f789f54f61c2414"
+    },
+    "arm64": {
+      "url": "https://releases.hashicorp.com/packer/1.16.2/packer_1.16.2_linux_arm64.zip",
+      "sha256": "5d7d6de86a49b2d64f3c0eef5766855b580e10a7c45bd6605ba8f1dead7815ea"
+    }
+  }
+}

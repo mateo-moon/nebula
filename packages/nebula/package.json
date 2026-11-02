@@ -11,13 +11,21 @@
     "./trustee/client-plan": "./src/modules/k8s/trustee/client-plan.ts",
     "./imports": "./imports/index.ts",
     "./imports/*": "./imports/*",
-    "./trustee/workload": "./src/modules/k8s/trustee/workload.ts"
+    "./trustee/workload": "./src/modules/k8s/trustee/workload.ts",
+    "./aws/debian-image": {
+      "types": "./src/modules/infra/aws/debian-image/index.d.mts",
+      "default": "./src/modules/infra/aws/debian-image/index.mjs"
+    },
+    "./aws/debian-image/cli": "./src/modules/infra/aws/debian-image/cli.mjs"
   },
   "imports": {
     "#imports/*": "./imports/*"
   },
   "typesVersions": {
     "*": {
+      "aws/debian-image": [
+        "src/modules/infra/aws/debian-image/index.d.mts"
+      ],
       "imports/*": [
         "imports/*"
       ],
@@ -65,5 +73,8 @@
     "tsconfig.json",
     "LICENSE",
     "NOTICE"
-  ]
+  ],
+  "bin": {
+    "nebula-debian-image": "./src/modules/infra/aws/debian-image/cli.mjs"
+  }
 }

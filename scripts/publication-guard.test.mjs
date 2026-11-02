@@ -311,7 +311,7 @@ const IMAGES = [
   { context: "packages/nebula/src/modules/infra/aws/worker-os-rollout", workflow: "publish-worker-os-rollout.yml", retired: "build-worker-os-rollout.yml", file: "Dockerfile" },
 ];
 
-for (const { context, file } of IMAGES) {
+for (const { context, file } of [...IMAGES, { context: "packages/nebula/src/modules/infra/aws/debian-image", file: "synthetic.mjs" }]) {
   test(`the default scope covers the ${context} image build context`, (t) => {
     assert.ok(DEFAULT_SCOPE.includes(context));
     const root = tempDir(t);
@@ -353,6 +353,13 @@ test("the STS audience and k0smotron protocol labels are public; customer AWS ho
   assert.deepEqual(scan('audience: "sts.amazonaws.com"\n"k0smotron.io/machine-name": machine'), []);
   assert.deepEqual(classes(scan('https://private-api.execute-api.eu-central-1.amazonaws.com')), ['domain']);
   assert.deepEqual(classes(scan('https://other.sts.amazonaws.com')), ['domain']);
+});
+
+test("Debian's publisher and official SSM/Packer downloads are public; customer accounts and buckets remain blocked", () => {
+  assert.deepEqual(scan('owner: 136693071363\nurl: https://releases.hashicorp.com/packer/1.16.2/file.zip\nurl: https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1/version/agent.deb'), []);
+  assert.deepEqual(classes(scan('owner: 136693071364')), ['aws-account-id']);
+  assert.deepEqual(classes(scan('https://s3.eu-central-1.amazonaws.com/private-customer/file')), ['domain']);
+  assert.deepEqual(classes(scan('https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1-other/file')), ['domain']);
 });
 
 const WORKFLOWS = join(dirname(GUARD), "..", ".github", "workflows");
