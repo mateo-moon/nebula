@@ -383,6 +383,98 @@ class Qualification(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "another disk"):
             installer.validate_volume_groups("/dev/vda", {"worker-vg": {"/dev/vdb"}}, "worker-vg")
 
+    def test_kernel_floor_is_optional_and_rejects_unsafe_wire_values(self):
+        with patch.object(host_agent, "command") as command:
+            host_agent.verify_kernel(SPEC)
+            command.assert_not_called()
+        self.assertEqual(installer.kernel_setup_script(SPEC["installation"]), "")
+        for value in [None, 113, "", "6.12.113-1\n", "6.12.113-1; reboot", "-1", "6" * 129]:
+            with self.subTest(value=value), patch.object(host_agent, "stage") as stage:
+                spec = copy.deepcopy(SPEC)
+                spec["installation"]["minimumKernelVersion"] = value
+                with self.assertRaisesRegex(ValueError, "kernel package version"):
+                    host_agent.dispatch("stage", {"uid": "request-123", "spec": spec})
+                stage.assert_not_called()
+
+    def test_kernel_upgrade_failure_prevents_installation_receipt(self):
+        spec = copy.deepcopy(SPEC)
+        spec["installation"]["minimumKernelVersion"] = "6.12.113-1"
+        files = installer.render_files(spec, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
+        self.assertIn(
+            b"apt-setup/services-select multiselect security, updates", files["preseed.cfg"]
+        )
+        late = files["nebula/late.sh"].decode()
+        self.assertLess(late.index("apt-get update"), late.index("installed.json"))
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "in-target"
+            # Only this fixture runs: no target root, package manager or host is modified.
+            target.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$*" >> "$TRACE"\n'
+                'case "$*" in\n'
+                '  *"apt-get update"*) exit "$INDEX_RESULT" ;;\n'
+                '  *"apt-get install"*) exit "$INSTALL_RESULT" ;;\n'
+                "  'dpkg-query -W -f=${Version} linux-image-amd64') printf '6.12.113-1\\n' ;;\n"
+                '  "dpkg --compare-versions 6.12.113-1 ge 6.12.113-1") exit "$COMPARE_RESULT" ;;\n'
+                "  *) exit 99 ;;\nesac\n"
+            )
+            target.chmod(0o755)
+            trace = Path(temporary) / "trace"
+            receipt = Path(temporary) / "receipt"
+            script = "set -eu\n" + installer.kernel_setup_script(spec["installation"])
+            script += "touch " + shlex.quote(str(receipt)) + "\n"
+            for failure in ["INDEX_RESULT", "INSTALL_RESULT", "COMPARE_RESULT", None]:
+                trace.write_text("")
+                env = {
+                    "PATH": temporary + ":/usr/bin:/bin",
+                    "TRACE": str(trace),
+                    "INDEX_RESULT": "0",
+                    "INSTALL_RESULT": "0",
+                    "COMPARE_RESULT": "0",
+                }
+                if failure:
+                    env[failure] = "1"
+                result = subprocess.run(["sh", "-c", script], env=env, capture_output=True)
+                self.assertEqual(result.returncode == 0, failure is None, result.stderr)
+                self.assertEqual(receipt.exists(), failure is None)
+                calls = trace.read_text()
+                self.assertIn("APT::Update::Error-Mode=any", calls)
+                if failure != "INDEX_RESULT":
+                    self.assertIn("--no-remove --no-install-recommends linux-image-amd64", calls)
+                if failure is None:
+                    self.assertIn("dpkg --compare-versions 6.12.113-1 ge 6.12.113-1", calls)
+
+    def test_kernel_verification_checks_the_booted_package_not_the_metapackage(self):
+        spec = copy.deepcopy(SPEC)
+        spec["installation"]["minimumKernelVersion"] = "6.12.113-1"
+        for version in ["6.12.107-1", "6.12.113-1", "6.12.114-1"]:
+            calls = []
+
+            def command(args, version=version, calls=calls):
+                calls.append(args)
+                if args[0] == "dpkg-query":
+                    return version
+                if version == "6.12.107-1":
+                    raise subprocess.CalledProcessError(1, args)
+                return ""
+
+            with (
+                patch.object(host_agent, "command", command),
+                patch.object(host_agent.platform, "release", lambda: "fixture-amd64"),
+            ):
+                if version == "6.12.107-1":
+                    with self.assertRaisesRegex(ValueError, "running kernel package"):
+                        host_agent.verify_kernel(spec)
+                else:
+                    host_agent.verify_kernel(spec)
+            self.assertEqual(
+                calls[0], ["dpkg-query", "-W", "-f=${Version}", "linux-image-fixture-amd64"]
+            )
+            self.assertEqual(calls[1], ["dpkg", "--compare-versions", version, "ge", "6.12.113-1"])
+        with patch.object(host_agent, "command", side_effect=subprocess.CalledProcessError(1, [])):
+            with self.assertRaisesRegex(ValueError, "running kernel package"):
+                host_agent.verify_kernel(spec)
+
     def test_installer_network_seed_and_private_cpio(self):
         files = installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
         self.assertIn(b"preseed/late_command", files["preseed.cfg"])
@@ -604,6 +696,10 @@ class Qualification(unittest.TestCase):
         def command(args):
             if args[0] == "cat":
                 return "installed-boot"
+            if args[0] == "dpkg-query":
+                return running_kernel_version
+            if args[0] == "dpkg" and running_kernel_version == "6.12.107-1":
+                raise subprocess.CalledProcessError(1, args)
             if args[0] == "vgs":
                 return str(free_bytes)
             if args[0] == "lvs":
@@ -626,6 +722,17 @@ class Qualification(unittest.TestCase):
         ):
             free_bytes, root_bytes = 16 * 1024**3, 16 * 1024**3
             self.assertTrue(host_agent.verify({"uid": "request-123", "spec": SPEC})["verified"])
+            secured = copy.deepcopy(SPEC)
+            secured["installation"]["minimumKernelVersion"] = "6.12.113-1"
+            responses["/var/lib/nebula-baremetal/installed.json"] = json.dumps(
+                {**receipt, "fingerprint": installer.fingerprint(secured)}
+            )
+            running_kernel_version = "6.12.107-1"
+            with self.assertRaisesRegex(ValueError, "running kernel package"):
+                host_agent.verify({"uid": "request-123", "spec": secured})
+            running_kernel_version = "6.12.113-1"
+            self.assertTrue(host_agent.verify({"uid": "request-123", "spec": secured})["verified"])
+            responses["/var/lib/nebula-baremetal/installed.json"] = json.dumps(receipt)
             alias_spec = {**SPEC, "additionalIpv4Addresses": ["192.0.2.11"]}
             with self.assertRaisesRegex(ValueError, "another request or profile"):
                 host_agent.verify({"uid": "request-123", "spec": alias_spec})

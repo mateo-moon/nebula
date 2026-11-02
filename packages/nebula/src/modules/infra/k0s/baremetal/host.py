@@ -335,6 +335,22 @@ def verify_additional_ipv4_addresses(spec: WorkerSpec, interfaces: list[JsonObje
     raise ProvisioningError("installed uplink lacks the requested additional IPv4 /32 addresses")
 
 
+def verify_kernel(spec: WorkerSpec) -> None:
+    """An upgraded metapackage does not prove the fixed kernel was booted."""
+    minimum = spec["installation"].get("minimumKernelVersion")
+    if minimum is None:
+        return
+    try:
+        version = command(
+            ["dpkg-query", "-W", "-f=${Version}", "linux-image-" + platform.release()]
+        )
+        command(["dpkg", "--compare-versions", version, "ge", minimum])
+    except subprocess.CalledProcessError as error:
+        raise ProvisioningError(
+            "running kernel package does not meet the required minimum"
+        ) from error
+
+
 def verify(payload: JsonObject) -> JsonObject:
     spec = payload["spec"]
     receipt = json.loads(Path("/var/lib/nebula-baremetal/installed.json").read_text())
@@ -353,6 +369,7 @@ def verify(payload: JsonObject) -> JsonObject:
         or os_release.get("VERSION_CODENAME", "").strip('"') != spec["installation"]["suite"]
     ):
         raise ProvisioningError("installed OS does not match the requested suite")
+    verify_kernel(spec)
     vg = spec["installation"]["volumeGroup"]
     workload_serials = spec["installation"]["disk"].get("workloadSerials")
     if workload_serials:
