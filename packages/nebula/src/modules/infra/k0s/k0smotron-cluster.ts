@@ -15,6 +15,7 @@ import {
   type K0sInfraProvider,
   type K0sWorkerPool,
   autoscalerAnnotations,
+  hostBootstrapTemplateName,
 } from "./cluster";
 import {
   K0smotronControlPlane,
@@ -204,7 +205,8 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
         },
       );
 
-      const workerConfigName = `${name}-${poolName}-config`;
+      const hostCommands = provider.hostPreK0sCommands?.(pool.machine) ?? [];
+      const workerConfigName = hostBootstrapTemplateName(`${name}-${poolName}-config`, hostCommands);
       // Dual-stack workers must state their own --node-ip from k0s 1.35 on —
       // see NODE_IP_DISCOVERY_COMMANDS for why name-based detection cannot
       // work under Cluster API.
@@ -220,6 +222,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
               version: workerK0sVersion,
               ...(wargs.length ? { args: wargs } : {}),
               preK0SCommands: [
+                ...hostCommands,
                 ...DEFAULT_PRESTART_COMMANDS,
                 ...(dualStack ? this.config.workerNodeIpDiscoveryCommands ?? NODE_IP_DISCOVERY_COMMANDS : []),
                 ...(pool.extraPreStartCommands ?? []),

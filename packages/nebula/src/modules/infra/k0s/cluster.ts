@@ -1,4 +1,5 @@
 import { Construct } from "constructs";
+import { createHash } from "node:crypto";
 import { BaseConstruct } from "../../../core";
 import { ClusterV1Beta2, MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s.io";
 import { K0sControlPlaneV1Beta2 } from "#imports/controlplane.cluster.x-k8s.io";
@@ -173,6 +174,8 @@ export interface EmitMachineTemplateCtx<M> {
  * K0sControlPlane, and MachineDeployments. `M` is the provider's machine spec.
  */
 export interface K0sInfraProvider<M> {
+  /** Optional, read-only host enrollment checks for a selected machine image. */
+  hostPreK0sCommands?(machine: M): readonly string[];
   /** apiGroup for the CAPI `Cluster.spec.infrastructureRef`. */
   readonly infraClusterApiGroup: string;
   /** kind for the CAPI `Cluster.spec.infrastructureRef` (e.g. "AWSCluster"). */
@@ -240,6 +243,11 @@ export interface K0sClusterConfig<M> {
 export const DEFAULT_PRESTART_COMMANDS: readonly string[] = [
   "sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192",
 ];
+
+/** Keep legacy names; give opt-in host checks their own bootstrap template. */
+export function hostBootstrapTemplateName(base: string, commands: readonly string[]): string {
+  return commands.length ? `${base.slice(0, 50)}-${createHash("sha256").update(JSON.stringify(commands)).digest("hex").slice(0, 12)}` : base;
+}
 
 /**
  * preK0sCommands recording the node's own addresses for `--node-ip`, keyed off
@@ -438,6 +446,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
             },
           },
           preK0SCommands: [
+            ...(provider.hostPreK0sCommands?.(cp.machine) ?? []),
             ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
           ],
@@ -467,7 +476,8 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
         },
       );
 
-      const workerConfigName = `${name}-${poolName}-config`;
+      const hostCommands = provider.hostPreK0sCommands?.(pool.machine) ?? [];
+      const workerConfigName = hostBootstrapTemplateName(`${name}-${poolName}-config`, hostCommands);
       const wargs = renderK0sWorkerArgs(pool);
       new K0sWorkerConfigTemplateV1Beta2(this, `worker-config-${poolName}`, {
         metadata: { name: workerConfigName, namespace },
@@ -477,6 +487,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
               version: k0sVersion,
               ...(wargs.length ? { args: wargs } : {}),
               preK0SCommands: [
+                ...hostCommands,
                 ...DEFAULT_PRESTART_COMMANDS,
                 ...(pool.extraPreStartCommands ?? []),
               ],

@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import { Construct } from "constructs";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
+import { awsHostPreK0sCommands, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import {
   AmiSelection,
   NodeIngressRuleSpec,
@@ -21,6 +22,8 @@ import type {
 
 /** AWS machine spec for a {@link K0sCluster} control plane or worker pool. */
 export interface AwsMachineSpec {
+  /** Explicit host settings for the selected AMI; never inferred from a tag. */
+  hostProfile?: AwsHostProfile;
   /** EC2 instance type. Defaults: "t4g.large" (control plane), "m6i.large" (workers). */
   instanceType?: string;
   /** AMI / image-lookup selection (recommend a region-specific Ubuntu AMI). */
@@ -125,6 +128,10 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
 
   constructor(private readonly config: AwsK0sProviderConfig) {}
 
+  hostPreK0sCommands(machine: AwsMachineSpec): readonly string[] {
+    return awsHostPreK0sCommands(machine?.hostProfile);
+  }
+
   emitInfraCluster(scope: Construct, ctx: EmitInfraClusterCtx): void {
     // Hosted control plane (k0smotron on a management cluster) → k0smotron
     // exposes the API, so CAPA must NOT front it: emit loadBalancerType DISABLED
@@ -163,6 +170,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
     id: string,
     ctx: EmitMachineTemplateCtx<AwsMachineSpec>,
   ): CapiInfraRef {
+    validateAwsHostProfile(ctx.machine?.hostProfile);
     const m = ctx.machine;
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
@@ -218,7 +226,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
         };
     const hash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(templateSpec))
+      .update(JSON.stringify(m.hostProfile ? { ...templateSpec, hostProfile: m.hostProfile } : templateSpec))
       .digest("hex")
       .slice(0, 8);
     const name = `${ctx.baseName}-${hash}`;
