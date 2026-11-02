@@ -470,7 +470,7 @@ export type { ImagePullSecretConfig } from "./image-pull-secret";
 
 export { Calico } from "./calico";
 export { Cilium, CILIUM_WIREGUARD_PORT, IPV6_MIN_MTU } from "./cilium";
-export type { CiliumConfig, CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./cilium";
+export type { CiliumConfig, CiliumIpamConfig, CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./cilium";
 export { CorednsV6Face } from "./coredns-v6-face";
 export type { CorednsV6FaceOptions } from "./coredns-v6-face";
 export {
