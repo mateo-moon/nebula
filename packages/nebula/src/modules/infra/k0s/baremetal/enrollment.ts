@@ -1,3 +1,4 @@
+import type { ApiObjectProps } from "cdk8s";
 import {
   MachineDeploymentV1Beta2,
   type MachineDeploymentV1Beta2Props,
@@ -164,14 +165,14 @@ function baremetalWorkerProps(
   return { pooledMachine, remoteMachineTemplate, workerConfigTemplate, machineDeployment };
 }
 
-/** Serialize typed definitions for embedding in a Crossplane composition.
+/** Serialize typed CAPI definitions for direct charts or Crossplane compositions.
  * Generated manifest() methods apply schema field names and union conversions
  * without adding live enrollment objects to the setup chart. */
 export function baremetalEnrollmentManifests(
   o: EnrollmentOptions,
   node: EnrollmentNode,
   bootstrap: BootstrapOptions = {},
-): readonly Record<string, unknown>[] {
+): readonly ApiObjectProps[] {
   const props = baremetalWorkerProps(o, node, bootstrap);
   return [
     PooledRemoteMachineV1Beta2.manifest(props.pooledMachine),
