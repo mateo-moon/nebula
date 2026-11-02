@@ -47,7 +47,8 @@ function download(name: string, value: unknown) {
 function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
   notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
-  busy = false; input("deploy").disabled = !connection;
+  busy = false; input("deploy").disabled = !connection || !!owner.prepared;
+  if (owner.prepared) el("inspect").hidden = false;
 }
 async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
   const response = await channel.request(path, { method, headers: { "Content-Type": "application/json", ...headers,
@@ -133,7 +134,11 @@ async function finalConnection() {
       const response = await final!.request("/nebula/v1/instance", { headers: { Authorization: `Bearer ${await api.jwt(prepared.audience)}` } });
       if (response.status !== 200) throw new Error("Owner authentication failed");
       break;
-    } catch (error) { if (owner.finalPin || Date.now() >= deadline) throw error; await sleep(4000); }
+    } catch (error) {
+      if (owner.finalPin) throw error;
+      if (Date.now() >= deadline) throw new Error("Your encrypted image and release checkpoint are saved. The final confidential workload is not reachable yet; use Verify again & check status to retry. No keys were sent to an unverified instance.");
+      await sleep(4000);
+    }
   }
   if (!owner.finalPin) {
     if (owner.restored) throw new Error("This recovery file predates final instance enrollment. Restore the updated backup; no replacement instance was adopted.");
@@ -238,6 +243,6 @@ el("deploy-form").addEventListener("submit", event => {
     }
   })().catch(failure);
 });
-el("inspect").addEventListener("click", () => { if (!busy) { busy = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
+el("inspect").addEventListener("click", () => { if (!busy) { busy = true; el("notice").hidden = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
 el("download-verification").addEventListener("click", () => download("nebula-verification.json", evidence()));
 void connect().catch(failure);
