@@ -43,6 +43,7 @@ export function validateCiliumNetwork(
   requireValue("k8s.requireIPv4PodCIDR", expectedK8s.requireIPv4PodCIDR);
   requireValue("k8s.requireIPv6PodCIDR", expectedK8s.requireIPv6PodCIDR);
   if (ipam?.mode === "cluster-pool") {
+    requireValue("operator.rollOutPods", true);
     const pools = (allocation.ipam as Record<string, unknown>).operator as Record<string, unknown>;
     for (const key of ["clusterPoolIPv4PodCIDRList", "clusterPoolIPv4MaskSize", "clusterPoolIPv6PodCIDRList", "clusterPoolIPv6MaskSize"])
       requireValue(`ipam.operator.${key}`, pools[key]);

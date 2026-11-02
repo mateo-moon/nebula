@@ -57,3 +57,25 @@ test("registration inventory rejects duplicate names, duplicate CIDRs and non-IP
     }), /inventory|unique|share/);
   }
 });
+
+test("operator allocation retains kubelet identity validation without assigning Pod CIDRs", () => {
+  const chart = Testing.chart();
+  new CiliumNodeRegistration(chart, "registration", {
+    allocation: "operator", registrationName: "kubelet-registration",
+    nodes: [{ name: "worker-1" }, { name: "worker-2" }],
+  });
+  const resources = Testing.synth(chart);
+  assert.deepEqual(resources.map(r => r.kind).sort(), ["ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"]);
+  assert.ok(!JSON.stringify(resources).includes("ipv6-pod-cidr"));
+  const policy = resources.find(r => r.kind === "ValidatingAdmissionPolicy")!;
+  for (const name of ["worker-1", "worker-2"]) {
+    const object = { metadata: { name } };
+    assert.equal(evaluate(policy.spec.matchConditions[0].expression, { object }), true);
+    assert.equal(evaluate(policy.spec.validations[0].expression, { object, request: { userInfo: { username: `system:node:${name}` } } }), true);
+    assert.equal(evaluate(policy.spec.validations[0].expression, { object, request: { userInfo: { username: "system:node:other" } } }), false);
+  }
+  for (const nodes of [[], [{ name: "worker-1" }, { name: "worker-1" }], [{ name: "invalid name" }]])
+    assert.throws(() => new CiliumNodeRegistration(Testing.chart(), "invalid", {
+      allocation: "operator", registrationName: "identity", nodes,
+    }), /inventory|unique/);
+});

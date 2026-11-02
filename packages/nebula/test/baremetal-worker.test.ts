@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { evaluate } from "@marcbachmann/cel-js";
 import { parseAllDocuments } from "yaml";
 import { BaremetalFleet, BaremetalSetup, baremetalWorker, type BaremetalSetupOptions } from "../src/modules/infra/k0s/baremetal";
+import { BaremetalAdmissionRetirement } from "../src/modules/infra/k0s/baremetal/admission-retirement";
 import type { BaremetalUefiConfiguration } from "../src/modules/infra/k0s/baremetal/uefi";
 
 const options: BaremetalSetupOptions = {
@@ -398,6 +399,34 @@ test("historical receipt context cannot silently replace active admission or cre
   assert.ok(native(result, "worker"));
   assert.equal(native(result, "cidr-policy"), undefined);
   assert.equal(JSON.parse(native(result, "request").data["request.json"]).context.workloadProvider, "");
+});
+
+test("bound-profile retirement reuses installer assets and preserves the original lifecycle", () => {
+  const network = setup({ ...options, ipv6PodCidrPrefix: "2001:db8::", workloadKubeProviderConfigName: "workload" });
+  const encoded = network.template.split("\n")[0].slice("{{- $profile := ".length, -" | fromJson -}}".length);
+  const profile = JSON.parse(JSON.parse(encoded));
+  const original = structuredClone(profile);
+  const chart = Testing.chart();
+  new BaremetalAdmissionRetirement(chart, "retire", { name: "retained-worker", sourceProfile: profile });
+  const resources = Testing.synth(chart);
+  assert.deepEqual(profile, original);
+  assert.equal(resources.length, 1, "retirement must not create fresh installer scripts or credential material");
+  const template = resources[0].spec.pipeline[0].input.inline.template;
+  const ready = installed(network.template);
+  const first = render(ready, network.xr, network.template);
+  const observed = { ...observe(first), ...ready };
+  const bound = { ...network.xr, status: status(render(observed, network.xr, network.template)) };
+  const old = render(observed, bound, network.template);
+  const next = render(observed, bound, template);
+  assert.equal(status(next).requestHash, status(old).requestHash);
+  for (const name of ["request", "state", "install", "pool", "remote-template", "bootstrap-template", "worker"])
+    assert.deepEqual(named(next, name).spec, named(old, name).spec);
+  for (const name of ["cidr-policy", "cidr-binding", "identity-policy", "identity-binding"])
+    assert.equal(named(next, name), undefined);
+  for (const change of [{ image: "mutable:latest" }, { installationContext: {} }, { workloadKubeProviderConfigName: "" }, { enrollment: [] }])
+    assert.throws(() => new BaremetalAdmissionRetirement(Testing.chart(), "invalid", {
+      name: "retained-worker", sourceProfile: { ...profile, ...change },
+    }), /Baremetal retirement/);
 });
 
 test("readiness requires current owned intent and ignores unrelated controller defaults", () => {

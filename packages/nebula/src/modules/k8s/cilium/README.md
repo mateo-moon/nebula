@@ -37,7 +37,7 @@ still works for dual-stack; `ipv6: false` fails both typing and construction.
 
 ## Cilium operator allocation
 
-For a new cluster or a separately qualified network rebuild, declare explicit
+For a new cluster or a separately qualified migration, declare explicit
 cluster-wide pools:
 
 ```typescript
@@ -54,7 +54,8 @@ The operator allocates /24 IPv4 and /64 IPv6 blocks through `CiliumNode`.
 Kubernetes Node PodCIDRs and CIDR admission annotations are not allocation
 inputs in this mode. Both Kubernetes CIDR-wait flags are disabled; the CNI,
 dual-stack, transport, WireGuard, MTU and configuration-source guards remain.
-Kubernetes IPAM remains the default for existing consumers.
+Kubernetes IPAM remains the default for existing consumers. The operator and
+agents both reload changes through their ConfigMap checksum rollout.
 
 Each enabled family requires nonempty, correctly aligned, nonoverlapping pools.
 Pool masks are limited to 16 subdivision bits to bound allocator memory. Raw
@@ -63,9 +64,12 @@ or node mask sizes. Preserve pool order; append capacity instead of editing
 or removing an existing pool entry. An explicit private IPv4 profile omits
 IPv6 pools entirely.
 
-This option does not implement a live Kubernetes-IPAM migration. Cilium
-documents an online migration only from cluster-pool to multi-pool; qualify a
-separate disruptive rebuild or use a fresh cluster for other transitions.
+This option does not automate a live Kubernetes-IPAM migration. Cilium
+documents an online migration only from cluster-pool to multi-pool. Other
+transitions require a separately qualified procedure or a fresh cluster.
+Retained-state adoption must include every existing CiliumNode CIDR in the
+configured pools, verify operator allocation after restart, and test rollback
+before permitting new allocations. Changing the mode alone is insufficient.
 Preserve data and control-plane bindings and plan for confidential guest owner
 re-enrollment before recreating sandboxes. See the upstream
 [IPAM migration guidance](https://docs.cilium.io/en/stable/network/concepts/ipam/).

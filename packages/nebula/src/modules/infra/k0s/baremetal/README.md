@@ -571,3 +571,18 @@ python3 -B test/baremetal-efi-vm.py --artifacts /path/to/efi-artifacts \
 It creates a disposable GPT/FAT disk and private NVRAM copy, runs the production
 script through a real BootNext shell boot, checks exact variable bytes and the
 return boot, and verifies that selecting the shell again cannot repeat writes.
+
+For installed hosts whose bound revision contains an older installation profile,
+`BaremetalAdmissionRetirement` constructs a replacement Composition from its
+validated public profile. It retains the original image, scripts ConfigMap
+reference, installation and enrollment manifests. It moves the two legacy
+allocation strings into historical receipt context and emits no remote admission
+Objects. It creates no new installer assets or credentials. Preserve referenced
+script ConfigMaps and manually pin each installed XR to the API-defaulted
+replacement revision after replaying its actual receipt.
+
+Before switching the XR, cover its kubelet identity with native admission and
+retire the four old remote admission Objects through an explicit Delete policy.
+Their original Orphan policy otherwise leaves native rules behind. Keep the
+ProviderConfig until those Objects and ProviderConfigUsages have disappeared.
+Fresh hosts use `BaremetalSetup` without workload admission options.

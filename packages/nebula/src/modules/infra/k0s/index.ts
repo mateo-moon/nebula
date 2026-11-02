@@ -40,5 +40,7 @@ export type {
 } from "./k0smotron-cluster";
 
 export { BaremetalSetup, BaremetalFleet, baremetalWorker } from "./baremetal";
+export { BaremetalAdmissionRetirement } from "./baremetal/admission-retirement";
+export type { BaremetalAdmissionRetirementConfig } from "./baremetal/admission-retirement";
 export type { BaremetalSetupOptions, BaremetalInstallation, BaremetalBootArtifact, BaremetalFleetOptions, BaremetalNode } from "./baremetal";
 export type { BaremetalUefiConfiguration, BaremetalUefiVariable, BaremetalUefiParameter } from "./baremetal/uefi";

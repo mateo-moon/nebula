@@ -125,6 +125,7 @@ test("explicit operator IPAM allocates both families independently of Kubernetes
     assert.equal(values.MTU, 1400);
     assert.equal(values.encryption.nodeEncryption, true);
     assert.equal(values.annotateK8sNode, true);
+    assert.equal(values.operator.rollOutPods, true);
   });
 });
 
@@ -154,6 +155,7 @@ for (const [name, config, expected] of [
   ["mask raw override", { ipam: clusterPool, values: { ipam: { operator: { clusterPoolIPv4MaskSize: 25 } } } }, /clusterPoolIPv4MaskSize/],
   ["Kubernetes CIDR wait restored", { ipam: clusterPool, values: { k8s: { requireIPv6PodCIDR: true } } }, /requireIPv6PodCIDR/],
   ["operator argument bypass", { ipam: clusterPool, values: { operator: { extraArgs: ["--cluster-pool-ipv6-cidr=fd99::/48"] } } }, /operator.extraArgs/],
+  ["operator configuration rollout disabled", { ipam: clusterPool, values: { operator: { rollOutPods: false } } }, /operator.rollOutPods/],
   ["operator environment bypass", { ipam: clusterPool, values: { operator: { extraEnv: [{ name: "CILIUM_CLUSTER_POOL_IPV4_MASK_SIZE", value: "25" }] } } }, /operator.extraEnv/],
 ] as [string, unknown, RegExp][]) {
   test(`operator IPAM rejects ${name} before rendering Helm`, () => withHelm((render, called) => {
@@ -325,6 +327,8 @@ test("pinned Helm chart enables operator pools without waiting for Kubernetes CI
     writeFileSync(path, JSON.stringify(values));
     const manifest = execFileSync("helm", ["template", "cilium", process.env.CILIUM_TEST_CHART!, "--namespace", "kube-system", "-f", path], { encoding: "utf8" });
     const objects = parseAllDocuments(manifest).map(doc => { assert.deepEqual(doc.errors, []); return doc.toJSON(); });
+    const operator = objects.find(o => o.kind === "Deployment" && o.metadata.name === "cilium-operator");
+    assert.match(operator.spec.template.metadata.annotations["cilium.io/cilium-configmap-checksum"], /^[a-f0-9]{64}$/);
     const data = objects.find(o => o.kind === "ConfigMap" && o.metadata.name === "cilium-config").data;
     assert.equal(data.ipam, "cluster-pool");
     assert.notEqual(data["k8s-require-ipv4-pod-cidr"], "true");

@@ -341,6 +341,9 @@ export class Cilium extends HelmModule<CiliumConfig> {
           serviceMonitor: { enabled: agentServiceMonitor, trustCRDsExist: true },
         },
         operator: {
+          // Operator allocation is loaded at startup. The agent checksum alone
+          // cannot activate or update the pool controller after a GitOps sync.
+          ...(this.config.ipam?.mode === "cluster-pool" ? { rollOutPods: true } : {}),
           ...(this.config.operatorReplicas
             ? { replicas: this.config.operatorReplicas }
             : {}),
