@@ -175,7 +175,7 @@ export interface EmitMachineTemplateCtx<M> {
  */
 export interface K0sInfraProvider<M> {
   /** Optional, read-only host enrollment checks for a selected machine image. */
-  hostPreK0sCommands?(machine: M): readonly string[];
+  hostPreK0sCommands?(machine: M, role?: "control-plane" | "worker"): readonly string[];
   /** apiGroup for the CAPI `Cluster.spec.infrastructureRef`. */
   readonly infraClusterApiGroup: string;
   /** kind for the CAPI `Cluster.spec.infrastructureRef` (e.g. "AWSCluster"). */
@@ -446,7 +446,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
             },
           },
           preK0SCommands: [
-            ...(provider.hostPreK0sCommands?.(cp.machine) ?? []),
+            ...(provider.hostPreK0sCommands?.(cp.machine, "control-plane") ?? []),
             ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
           ],
@@ -476,7 +476,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
         },
       );
 
-      const hostCommands = provider.hostPreK0sCommands?.(pool.machine) ?? [];
+      const hostCommands = provider.hostPreK0sCommands?.(pool.machine, "worker") ?? [];
       const workerConfigName = hostBootstrapTemplateName(`${name}-${poolName}-config`, hostCommands);
       const wargs = renderK0sWorkerArgs(pool);
       new K0sWorkerConfigTemplateV1Beta2(this, `worker-config-${poolName}`, {

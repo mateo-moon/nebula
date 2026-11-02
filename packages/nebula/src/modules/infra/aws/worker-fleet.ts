@@ -35,7 +35,7 @@
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
-import { awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
+import { defaultAwsImage, awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
@@ -208,8 +208,9 @@ export interface AwsWorkerFleetNode {
   /** Per-resource metadata for a staged GitOps ownership handoff. This does
    * not change the EC2 launch specification or trigger instance replacement. */
   launchTemplateAnnotations?: Record<string, string>;
-  ami: string;
-  /** Explicit AMI settings; omission preserves the existing Ubuntu bootstrap. */
+  /** Explicit AMI override; omission uses the official Debian default. */
+  ami?: string;
+  /** Host settings for an explicit AMI; Debian defaults are inferred when AMI is omitted. */
   hostProfile?: AwsHostProfile;
   instanceType: string;
   /** kubelet --node-labels (geo/topology labels are added from the region). */
@@ -883,6 +884,10 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
    *  The EIPAssociation and VolumeAttachment followers are composed by the
    *  Worker XR with instance-id-derived names — never declared here. */
   addNode(region: AwsWorkerFleetRegion, node: AwsWorkerFleetNode, iamProfile: string) {
+    if (!node.ami) {
+      const image = defaultAwsImage(region.region, node.instanceType);
+      node = { ...node, ami: image.ami.id, hostProfile: node.hostProfile ?? image.hostProfile };
+    }
     if (node.imdsPodAccess) {
       assertCiliumImdsHopLimit(
         this.options.cni,

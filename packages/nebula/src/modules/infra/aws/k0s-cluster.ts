@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
-import { awsHostPreK0sCommands, type AwsHostProfile } from "./host-profile";
+import { defaultAwsImage, awsHostPreK0sCommands, type AwsHostProfile } from "./host-profile";
 import {
   K0sCalicoConfig,
   resolveK0sCalico,
@@ -67,8 +67,8 @@ export interface AwsK0sControlPlaneOptions {
    */
   machineTemplateRevision?: string;
   /**
-   * AMI selection. Recommend setting `id` to a region-specific Ubuntu 22.04 AMI
-   * (k0s is installed via cloud-init). Falls back to CAPA's image lookup.
+   * Explicit AMI/lookup override. Defaults to the official Debian image for
+   * the region and control-plane instance architecture.
    */
   ami?: {
     id?: string;
@@ -229,7 +229,10 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
     const podCidr = this.config.podCidr ?? "10.244.0.0/16";
     const serviceCidr = this.config.serviceCidr ?? "10.96.0.0/12";
     const vpcCidr = this.config.vpcCidr ?? "10.0.0.0/16";
-    const cp = this.config.controlPlane ?? {};
+    const requested = this.config.controlPlane ?? {};
+    const image = requested.ami && Object.values(requested.ami).some(Boolean)
+      ? undefined : defaultAwsImage(this.config.region, requested.instanceType ?? "t4g.large");
+    const cp = image ? { ...requested, ami: image.ami, hostProfile: requested.hostProfile ?? image.hostProfile } : requested;
     const networkProvider = this.config.networkProvider ?? "calico";
     // Resolve the Calico defaults ONCE: the same values feed the k0s
     // ClusterConfig below AND the CAPA cniIngressRules, which would otherwise

@@ -1,9 +1,13 @@
 # Explicit EC2 host profiles
 
-An AMI change and an instance replacement are separate operations. Existing
-workers retain their Ubuntu account, root mapping, bootstrap bytes and template
-names when `hostProfile` is omitted. Select a profile per node or CAPA machine
-spec when its AMI is qualified; keep unrelated pools on their current selection.
+Omitting the AMI selects the official Debian 13 EC2 release `20261026-2643` in
+`eu-central-1`, with the architecture selected from the instance type. Nebula
+uses `admin`, `/dev/xvda` and the running-kernel floor `6.12.113-1`. No SSM agent
+or custom image is required. Both CAPA and custom worker fleets share this default.
+Other regions require an explicit region-specific AMI.
+
+An explicit AMI or lookup overrides the default and retains its existing host
+settings. Set `hostProfile` when that override uses a different account or policy.
 
 ```ts
 const hostProfile = {
@@ -13,7 +17,6 @@ const hostProfile = {
   debian: {
     suite: "trixie",
     minimumKernelVersion: "6.12.113-1",
-    requireSsmAgent: true,
   },
 };
 ```

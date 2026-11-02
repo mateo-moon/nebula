@@ -1,4 +1,4 @@
-/** Host settings belong to an explicitly selected AMI, never a fleet default. */
+/** Host settings describe the selected image, including the Debian default. */
 export interface AwsHostProfile {
   architecture: "amd64" | "arm64";
   sshUser: string;
@@ -10,6 +10,21 @@ export interface AwsHostProfile {
     minimumKernelVersion: string;
     requireSsmAgent?: boolean;
   };
+}
+
+/** Official Debian 13 EC2 release 20261026-2643; kernel package 6.12.113-1.
+ * Publisher: https://wiki.debian.org/Cloud/AmazonEC2Image/Trixie
+ * Root mappings and architectures verified with EC2 DescribeImages.
+ */
+export function defaultAwsImage(region: string, instanceType: string): { ami: { id: string }; hostProfile: AwsHostProfile } {
+  if (region !== "eu-central-1") throw new Error(`No default Debian AMI pinned for ${region}; provide an explicit AMI`);
+  // AWS's g processor suffix denotes Graviton; a1 predates that convention.
+  const architecture = /^(?:a1|[a-z]+[0-9]+g[a-z]*)\./.test(instanceType) ? "arm64" : "amd64";
+  const images = { arm64: "ami-0beea5d80ef49e480", amd64: "ami-0921aaa4dfa99a60a" };
+  return { ami: { id: images[architecture] }, hostProfile: {
+    architecture, sshUser: "admin", rootDeviceName: "/dev/xvda",
+    debian: { suite: "trixie", minimumKernelVersion: "6.12.113-1" },
+  } };
 }
 
 const fail = (message: string): never => { throw new Error(`AWS host profile: ${message}`); };
