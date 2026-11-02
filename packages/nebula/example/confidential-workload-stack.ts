@@ -9,6 +9,8 @@
  * set CONFIDENTIAL_BROWSER_TLS_IMAGE and CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE
  * to the reviewed frontend and HTTP/1.1-capable TNG images. The user checks
  * the browser certificate before entering the separately supplied token.
+ * CONFIDENTIAL_MAX_IMAGE_SIZE_MIB=4096 enables 4 GiB archive uploads with
+ * a 32 GiB preparation VM; the host must have that capacity available.
  */
 import { App, Chart, ApiObject } from "cdk8s";
 import { SealedDisks } from "../src/modules/k8s/confidential-guests/sealed-disks";
@@ -20,6 +22,7 @@ const namespace = "confidential-example";
 const node = "replace-with-snp-node";
 const profile = "example-workload";
 const browserImage = process.env.CONFIDENTIAL_BROWSER_IMAGE;
+const maxImageSizeMiB = process.env.CONFIDENTIAL_MAX_IMAGE_SIZE_MIB === undefined ? undefined : Number(process.env.CONFIDENTIAL_MAX_IMAGE_SIZE_MIB);
 const frontendImage = process.env.CONFIDENTIAL_BROWSER_TLS_IMAGE;
 const frontendTngImage = process.env.CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE;
 const frontendUrl = process.env.CONFIDENTIAL_BROWSER_TLS_ENDPOINT ?? "https://192.0.2.10:9443/";
@@ -43,7 +46,7 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
 new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
 if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example-preparation", namespace,
-  image: browserImage, tngImage: images.tng, nodeSelector, network });
+  image: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
 if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,
   image: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
   manualTls: { preparationEndpoint: "https://preparation.example.test/", stackEndpoint: "https://owner.example.test/" } });

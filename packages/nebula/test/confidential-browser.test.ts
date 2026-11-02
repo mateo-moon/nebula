@@ -14,6 +14,22 @@ const config = { name: "browser", namespace: "qualified", image,
 
 test("browser preparation rejects mutable images before running native policy generation", () => {
   assert.throws(() => confidentialBrowserPlan({ ...config, image: "registry.example/browser:latest" }), /pinned images/);
+  for (const maxImageSizeMiB of [0, -1, 4097, Infinity, 256.5, "4096"])
+    assert.throws(() => confidentialBrowserPlan({ ...config, maxImageSizeMiB: maxImageSizeMiB as number }), /image limit/);
+});
+
+test("a 4 GiB preparation has measured guest-only workspace and RAM while legacy plans remain unchanged", {
+  skip: !native, timeout: 600_000,
+}, () => {
+  const legacy = confidentialBrowserPlan(config), large = confidentialBrowserPlan({ ...config, maxImageSizeMiB: 4096 });
+  assert.equal(legacy.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "4096");
+  assert.equal(legacy.pod.spec!.containers![0].env!.some(v => v.name === "NEBULA_MAX_IMAGE_SIZE_MIB"), false);
+  assert.equal(large.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "32768");
+  assert.equal(large.pod.spec!.volumes!.find(v => v.name === "state")!.emptyDir!.sizeLimit, "20480Mi");
+  assert.equal(large.pod.spec!.containers![0].env!.find(v => v.name === "NEBULA_MAX_IMAGE_SIZE_MIB")!.value, "4096");
+  assert.notEqual(large.initDataSha256, legacy.initDataSha256);
+  assert.deepEqual(confidentialBrowserPlan({ ...config, maxImageSizeMiB: 4096 }), large);
+  assert.ok(large.pod.spec!.volumes!.every(v => v.emptyDir?.medium === "Memory"));
 });
 
 test("manual TLS routing rejects credentials, fragments, plaintext and incomplete configuration before native synthesis", () => {

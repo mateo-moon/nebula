@@ -10,9 +10,9 @@ import { validateEncryptedManifest } from "@nebula/confidential-client";
 import { measure } from "./measure";
 
 const execute = promisify(execFile);
-async function run(command: string, args: string[], cwd: string) {
+async function run(command: string, args: string[], cwd: string, timeout = 600_000) {
   try { return await execute(command, args, { cwd, env: { ...process.env, RUST_LOG: "error" },
-    timeout: 600_000, maxBuffer: 8 * 1024 * 1024 }); }
+    timeout, maxBuffer: 8 * 1024 * 1024 }); }
   catch (error) {
     // Returned only through the pinned, owner-authenticated job endpoint. Do
     // not log commands, credentials or whole native error objects.
@@ -30,7 +30,7 @@ export interface PublishInput { registryUsername: string; registryPassword: stri
 /** Native ocicrypt/skopeo run inside the independently attested preparation
  * VM. They never execute the owner image. All plaintext and credentials are
  * bounded to guest tmpfs and erased when publication completes. */
-export async function publish(directory: string, connection: PublicConnection, input: PublishInput, phase: (name: string) => void = () => {}) {
+export async function publish(directory: string, connection: PublicConnection, input: PublishInput, phase: (name: string) => void = () => {}, operationTimeoutMs = 600_000) {
   const application = connection.workload.spec.containers[0];
   const resource = application.imageKeyResource!.join("/"), keyId = `kbs:///${resource}`;
   const destination = application.image, host = destination.split("/")[0];
@@ -60,7 +60,7 @@ export async function publish(directory: string, connection: PublicConnection, i
     if (!cached) {
       phase("reading-image");
       const source = input.sourceImage ? `docker://${input.sourceImage}` : `docker-archive:${join(directory, "image.tar")}`;
-      await run("skopeo", ["--insecure-policy", "--override-arch", "amd64", "copy", "--authfile", auth, source, `dir:${join(work, "plain")}`], work);
+      await run("skopeo", ["--insecure-policy", "--override-arch", "amd64", "copy", "--authfile", auth, source, `dir:${join(work, "plain")}`], work, operationTimeoutMs);
       const plain = JSON.parse(await readFile(join(work, "plain", "manifest.json"), "utf8"));
       const config = JSON.parse(await readFile(join(work, "plain", plain.config.digest.slice(7)), "utf8"));
       if (config.architecture !== "amd64" || config.os !== "linux" || providerError) throw new Error("A linux/amd64 image is required");
@@ -76,7 +76,7 @@ export async function publish(directory: string, connection: PublicConnection, i
       }
       if (!ready || providerError) throw new Error("Image encryption service unavailable");
       await run("skopeo", ["copy", "--insecure-policy", "--encryption-key", `provider:attestation-agent:keypath=${secret}::keyid=${keyId}::algorithm=A256GCM`,
-        `dir:${join(work, "plain")}`, `dir:${join(work, "encrypted")}`], work);
+        `dir:${join(work, "plain")}`, `dir:${join(work, "encrypted")}`], work, operationTimeoutMs);
     }
     const manifest = await readFile(join(work, "encrypted", "manifest.json"));
     const digest = validateEncryptedManifest(manifest, keyId);
@@ -96,7 +96,7 @@ export async function publish(directory: string, connection: PublicConnection, i
       if (!absent || receipt.published) throw new Error("The image tag is unavailable or cannot be checked");
       // This source was encrypted here and its complete manifest validated
       // above. Signature-policy files are not part of the minimal image.
-      await run("skopeo", ["--insecure-policy", "copy", "--authfile", auth, "--preserve-digests", `dir:${join(work, "encrypted")}`, `docker://${destination}`], work);
+      await run("skopeo", ["--insecure-policy", "copy", "--authfile", auth, "--preserve-digests", `dir:${join(work, "encrypted")}`, `docker://${destination}`], work, operationTimeoutMs);
     }
     const remote = await run("skopeo", ["inspect", "--raw", "--authfile", auth, `docker://${destination}`], work);
     if (validateEncryptedManifest(Buffer.from(remote.stdout), keyId) !== digest) throw new Error("Published image digest changed");
@@ -113,6 +113,7 @@ export async function publish(directory: string, connection: PublicConnection, i
     key.fill(0); provider?.kill("SIGTERM");
     await rm(auth, { force: true }); await rm(secret, { force: true });
     await rm(join(work, "plain"), { recursive: true, force: true });
-    await rm(join(directory, "image.tar"), { force: true });
+    // The service removes the archive after the ready result is checkpointed.
+    // Failed jobs retain it privately in guest tmpfs for byte-checked retries.
   }
 }

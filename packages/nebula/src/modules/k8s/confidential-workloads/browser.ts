@@ -15,6 +15,10 @@ export interface ConfidentialBrowserConfig {
   nodeSelector: Readonly<Record<string, string>>;
   network: ConfidentialWorkloadSpec["network"];
   genpolicy?: WorkloadRenderOptions["genpolicy"];
+  /** Preparation archive limit (1–4096 MiB). Larger limits reserve guest-only
+   * workspace and RAM for native encryption and policy generation. Omission
+   * preserves the existing 256 MiB / 4 GiB VM deployment exactly. */
+  maxImageSizeMiB?: number;
   /** Serve the first page through guest-terminated TNG HTTPS. The user must
    * independently verify the browser's certificate before supplying secrets.
    * Both routing origins are public and bound by native genpolicy. */
@@ -31,6 +35,10 @@ export interface ConfidentialBrowserConfig {
 export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   if (![config.image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(config.namespace)) throw new Error("Browser preparation requires pinned images and valid names");
+  if (config.maxImageSizeMiB !== undefined && (config.manualTls || !Number.isInteger(config.maxImageSizeMiB) ||
+      config.maxImageSizeMiB < 1 || config.maxImageSizeMiB > 4096)) throw new Error("Preparation image limit must be between 1 and 4096 MiB");
+  const workspaceMiB = Math.max(2048, (config.maxImageSizeMiB ?? 256) * 5);
+  const memoryMiB = Math.max(4096, (config.maxImageSizeMiB ?? 256) * 8);
   if (config.manualTls && !["preparationEndpoint,stackEndpoint", "certificateRefreshSeconds,preparationEndpoint,stackEndpoint"].includes(Object.keys(config.manualTls).sort().join())) {
     throw new Error("Manual TLS requires public preparation and stack origins");
   }
@@ -60,7 +68,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   const privateCommand = (command: string[]) => ["/bin/sh", "-ec", 'exec "$@" </dev/null >/dev/null 2>&1', "private-stdio", ...command];
   const pod: GuestPodManifest = { apiVersion: "v1", kind: "Pod", metadata: { name: config.name, namespace: config.namespace,
     labels: { "confidential.nebula.dev/browser": config.name }, annotations: {
-      "io.katacontainers.config.hypervisor.default_memory": "4096",
+      "io.katacontainers.config.hypervisor.default_memory": String(memoryMiB),
       "io.katacontainers.config.hypervisor.default_vcpus": "2",
       "io.katacontainers.config.hypervisor.kernel_params": "agent.guest_components_procs=api-server-rest agent.guest_components_rest_api=all agent.aa_kbc_params=cc_kbc::http://127.0.0.1:8080",
     } }, spec: { runtimeClassName: "kata-qemu-snp", nodeSelector: config.nodeSelector,
@@ -69,6 +77,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     containers: [
       { name: "preparation", image: config.image, imagePullPolicy: "Always", command: privateCommand(["node", config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]), args: ["serve"],
         env: [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" },
+          ...(config.maxImageSizeMiB === undefined ? [] : [{ name: "NEBULA_MAX_IMAGE_SIZE_MIB", value: String(config.maxImageSizeMiB) }]),
           ...(config.manualTls ? [{ name: "NEBULA_MANUAL_TLS_ENTRY", value: JSON.stringify({
             preparationEndpoint: config.manualTls.preparationEndpoint, stackEndpoint: config.manualTls.stackEndpoint }) }] : [])],
         securityContext: security, volumeMounts: mounts },
@@ -76,7 +85,8 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
         args: measuredFragments(Buffer.from(script).toString("base64")),
         env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
         securityContext: security, volumeMounts: [{ name: "state", mountPath: "/run/browser", readOnly: true }, { name: "tng-tmp", mountPath: "/tmp" }] },
-    ], volumes: ["state", "tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit: name === "tmp" ? "512Mi" : "2Gi" } })),
+    ], volumes: ["state", "tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit:
+      name === "tmp" ? "512Mi" : name === "state" && config.maxImageSizeMiB !== undefined ? `${workspaceMiB}Mi` : "2Gi" } })),
   } };
   // CDH requires an explicit KBC configuration when loading its TOML. Public
   // helper image pulls need no key; the guest-local URL is never contacted for

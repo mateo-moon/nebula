@@ -7,7 +7,7 @@ The browser interface can be served from a measured SEV-SNP guest through TNG. N
 1. Open the endpoint supplied by DevOps. Its self-signed certificate may produce a browser warning; accepting that warning alone does not verify attestation.
 2. Export the certificate through the browser's own certificate viewer. Independently verify its AMD evidence, approved VM/native workload-policy measurements and binding to the certificate's public key. Obtain those expected measurements from an independently trusted release or review. Checking another connection to the same address alone is insufficient.
 3. Confirm that independent check in the page. Enter the separately supplied one-time access token and an owner/recovery password of at least 12 characters. The page's certificate checker is available for convenience; it cannot authenticate its own initial JavaScript.
-4. Choose a local `linux/amd64` image archive, up to 256 MiB, or an owner-controlled registry image pinned by digest. Enter registry push credentials, supply any requested existing disk key, and select **Encrypt & deploy**. Keep the latest encrypted recovery backup and its password.
+4. Choose a local `linux/amd64` image archive within the limit shown by the verified stack, or an owner-controlled registry image pinned by digest. Enter registry push credentials, supply any requested existing disk key, and select **Encrypt & deploy**. Keep the latest encrypted recovery backup and its password.
 
 TNG WASM verifies the preparation VM and its enrolled transport key before sending the image or credentials. That VM encrypts and publishes the image and independently runs native CoCo genpolicy. Kubernetes starts the final workload when its reserved tag becomes available. The browser then verifies that workload, enrolls its unique transport key, claims its unmodified Trustee and provisions keys directly to it. Disk keys never go to the preparation service. No external bootstrap Trustee is used.
 
@@ -30,6 +30,19 @@ new ConfidentialBrowser(chart, "browser-ui", {
 
 Pin the images and generate native policy during synthesis. The frontend image contains the reviewed browser assets and approved preparation profiles. Forward public TCP directly to its TNG service on port 10443; TLS must terminate inside the guest. This first-page path needs no ACME, DNS-custodian key or administrator-controlled CA. Do not put TLS private keys in Kubernetes.
 
+For archives up to 4 GiB, configure the preparation VM with a reviewed image containing chunk-upload support:
+
+```ts
+new ConfidentialBrowser(chart, "preparation", {
+  name: "preparation", namespace, image: preparationImage, tngImage,
+  nodeSelector, network, maxImageSizeMiB: 4096,
+});
+```
+
+This allocates a 32 GiB preparation VM with 20 GiB of guest-memory workspace. Ensure the existing host has capacity. The application VM's own memory remains a separate workload setting. Omit `maxImageSizeMiB` to preserve the 256 MiB limit and existing 4 GiB VM plan. Limits are bound by native genpolicy and fetched through the attested channel; users do not supply a settings file.
+
+Uploads use owner-authenticated, encrypted requests of at most 8 MiB, with progress shown in the page. Interrupted uploads accept byte-identical retries and reject changed chunks or out-of-order data. Plaintext stays in guest tmpfs. Failed preparation retains the private archive for retry; successful publication removes it after the release result is saved. The guest workspace also bounds native image processing: highly expanded images can exhaust it even when their input archive fits the upload limit.
+
 The frontend keeps its six-hour TLS certificate stable for five hours so browser exceptions survive setup and SDK downloads. Renewal requires a new manual certificate check. `manualTls.certificateRefreshSeconds` can preserve an older measured renewal interval; its maximum is five hours. Preparation and final OHTTP requests retain their fresh attestation checks.
 
 Configure the workload with `browserOwner: true` and `accessLink.browser.manualTls: true`. Set `loaderUrl` to the frontend's dedicated HTTPS origin, `invitationEndpoint` to the preparation's internal `/invitation` service on port 8089, and `workloadEndpoint`/`ownerEndpoint` to its preparation/final OHTTP endpoints. Allow only its named access Secret in the operator.
@@ -43,6 +56,8 @@ Ordinary proxies may carry the preparation/final OHTTP endpoints: their contents
 ## Build and limits
 
 Build the pinned SNP SDK with `sh tools/tng-browser/build.sh NEW_SOURCE OUTPUT`, then run `TNG_WASM_PATH=OUTPUT pnpm --dir packages/confidential-browser build`. Build `docker/confidential-browser/Dockerfile.tls` with the resulting public `dist/loader` directory as its `browser-assets` build context. The frontend has no owner credentials, persistent disk, Kubernetes credential or certificate-enrollment API. Its private TLS key stays in TNG memory. Recheck renewed certificates and changed guest keys.
+
+`LARGE_IMAGE_UPLOAD_TEST=1 pnpm --dir packages/confidential-browser test` also exercises an exact 4 GiB transfer into a temporary archive, using bounded chunks and deleting the test file afterward.
 
 The independent user check, browser and approved guest software are trusted. The served checker and server-reported fingerprints are conveniences, not independent authorities. Administrators can deny service or claim first; a legitimate owner must stop before uploading secrets to an already claimed stack. Instance substitution is rejected after enrollment. Global singleton enforcement, disk rollback protection and automatic Trustee replacement custody remain outside scope.
 

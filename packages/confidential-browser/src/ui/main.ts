@@ -1,5 +1,7 @@
 import { bytes, hash, hex, utf8, b64, AttestedChannel } from "../loader/transport";
 import { discoveryAudience } from "../loader/owner";
+import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "../image-limits";
+import { uploadImage } from "./upload";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
 const input = (id: string) => el<HTMLInputElement>(id);
@@ -8,6 +10,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let connection: any = owner.connection, final: AttestedChannel | undefined;
 let busy = false;
 let recoveryUrl: string | undefined;
+let imageLimits = imageUploadLimits();
 const jwtPayload = (jwt: string) => JSON.parse(new TextDecoder().decode(bytes(jwt.split(".")[1].replaceAll("-", "+").replaceAll("_", "/"))));
 function evidence() {
   const value = { version: 1, checkedAt: new Date().toISOString(), frontend: api.manualTls ? {
@@ -15,6 +18,7 @@ function evidence() {
     reportedCertificate: api.manualTls,
   } : undefined, preparation: {
     expected: api.channel.identity, transportPublicKey: api.channel.pin,
+    imageUpload: imageLimits,
     result: api.channel.lastAttestation ? jwtPayload(api.channel.lastAttestation.attestation_result) : undefined,
     jwt: api.channel.lastAttestation?.attestation_result,
   }, final: final?.lastAttestation ? { expected: final.identity, transportPublicKey: final.pin,
@@ -45,8 +49,9 @@ function failure(error: unknown) {
   notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
   busy = false; input("deploy").disabled = !connection;
 }
-async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser") {
-  const response = await channel.request(path, { method, headers: { Authorization: `Bearer ${await api.jwt(audience)}`, "Content-Type": "application/json" }, ...(body !== undefined ? { body } : {}) });
+async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
+  const response = await channel.request(path, { method, headers: { "Content-Type": "application/json", ...headers,
+    Authorization: `Bearer ${await api.jwt(audience)}` }, ...(body !== undefined ? { body } : {}) });
   if (response.status < 200 || response.status >= 300) throw new Error(`The attested service refused ${path} (${response.status}). Existing enrollment was preserved.`);
   return response;
 }
@@ -64,6 +69,9 @@ async function metadata(method = "GET", claim = false, ownerOnly = false) {
 async function connect() {
   evidence();
   const bootstrap = await (await api.channel.request("/nebula/v1/browser")).json();
+  imageLimits = checkedImageUploadLimits(bootstrap.imageUpload);
+  evidence();
+  text("archive-hint", `Choose a local linux/amd64 Docker image archive, up to ${imageSizeLabel(imageLimits.maxBytes)}. Encrypted chunks travel only to the verified preparation VM.`);
   if (!owner.connection) {
     if (bootstrap.claimed) {
       await request(api.channel, "/nebula/v1/job"); // proves the persisted owner, or fails closed
@@ -181,7 +189,9 @@ el("deploy-form").addEventListener("submit", event => {
   event.preventDefault(); if (busy) return; busy = true; input("deploy").disabled = true;
   void (async () => {
     const archive = input("archive").files?.[0], sourceImage = input("source-image").value.trim();
-    if ((!archive && !sourceImage) || (archive && sourceImage) || (archive && archive.size > 256 * 1024 * 1024)) throw new Error("Choose one image archive up to 256 MiB, or one registry image");
+    if ((!archive && !sourceImage) || (archive && sourceImage) || (archive && (!archive.size || archive.size > imageLimits.maxBytes))) {
+      throw new Error(`Choose one nonempty image archive up to ${imageSizeLabel(imageLimits.maxBytes)}, or one registry image`);
+    }
     if (!input("reviewed").checked) throw new Error("Review and approve the stack first");
     owner.imageKey ??= hex(crypto.getRandomValues(new Uint8Array(32))); owner.volumeKeys ??= {};
     for (const storage of connection.storages) if (storage.spec.type === "EncryptedBlock" && !owner.volumeKeys[storage.metadata.name]) {
@@ -206,11 +216,14 @@ el("deploy-form").addEventListener("submit", event => {
     download("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
     progress("encrypting", "Encrypting and publishing in the verified VM…");
-    if (archive) await request(api.channel, "/nebula/v1/image", "PUT", archive);
+    if (archive) await uploadImage(archive, imageLimits,
+      (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
+      (sent, total) => progress("encrypting", `Uploading image: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
+    progress("encrypting", "Encrypting and publishing in the verified VM…");
     await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({ imageKey: owner.imageKey,
       registryUsername: input("registry-username").value, registryPassword: input("registry-password").value, ...(sourceImage ? { sourceImage } : {}) }));
     input("registry-password").value = "";
-    const deadline = Date.now() + 900_000;
+    const deadline = Date.now() + imageLimits.jobTimeoutMs;
     while (true) {
       if (Date.now() >= deadline) throw new Error("Preparation is still pending. Your keys and release checkpoint were preserved.");
       await sleep(3000);
