@@ -1,3 +1,5 @@
+import { ciliumIpamValues, type CiliumIpamConfig } from "./ipam";
+
 /** Validate the effective Helm values, including the chart's override paths. */
 const NETWORK_OPTIONS = new Set([
   "enable-ipv4", "enable-ipv6", "ipam",
@@ -7,6 +9,8 @@ const NETWORK_OPTIONS = new Set([
   "custom-cni-conf", "read-cni-conf", "write-cni-conf-when-ready",
   "cni-chaining-mode", "cni-chaining-target", "cni-exclusive",
   "config", "config-dir", "config-sources", "config-sources-overrides",
+  "cluster-pool-ipv4-cidr", "cluster-pool-ipv6-cidr",
+  "cluster-pool-ipv4-mask-size", "cluster-pool-ipv6-mask-size",
 ]);
 
 function record(value: unknown, path: string): Record<string, unknown> {
@@ -21,20 +25,27 @@ export function validateCiliumNetwork(
   connectivity: "public" | "private",
   nodeIpv6ConfigSources?: string,
   podAddressFamilies: "dual-stack" | "ipv4" = "dual-stack",
+  ipam?: CiliumIpamConfig,
 ): void {
   const enableIpv6 = podAddressFamilies === "dual-stack";
+  const allocation = ciliumIpamValues(ipam, enableIpv6);
   const requireValue = (path: string, expected: unknown) => {
     let actual: unknown = values;
     for (const key of path.split(".")) actual = record(actual, path)[key];
-    if (actual !== expected) {
-      throw new Error(`Cilium: values.${path} must be ${JSON.stringify(expected)}; the ${podAddressFamilies} profile requires Kubernetes IPAM and the Cilium CNI.`);
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`Cilium: values.${path} must be ${JSON.stringify(expected)}; use the module's selected IPAM and CNI configuration.`);
     }
   };
   requireValue("ipv4.enabled", true);
   requireValue("ipv6.enabled", enableIpv6);
-  requireValue("ipam.mode", "kubernetes");
-  requireValue("k8s.requireIPv4PodCIDR", true);
-  requireValue("k8s.requireIPv6PodCIDR", enableIpv6);
+  requireValue("ipam.mode", (allocation.ipam as Record<string, unknown>).mode);
+  const expectedK8s = allocation.k8s as Record<string, unknown>;
+  requireValue("k8s.requireIPv4PodCIDR", expectedK8s.requireIPv4PodCIDR);
+  requireValue("k8s.requireIPv6PodCIDR", expectedK8s.requireIPv6PodCIDR);
+  if (ipam?.mode === "cluster-pool") {
+    const pools = (allocation.ipam as Record<string, unknown>).operator as Record<string, unknown>;
+    for (const [key, value] of Object.entries(pools)) requireValue(`ipam.operator.${key}`, value);
+  }
   requireValue("routingMode", "tunnel");
   requireValue("cni.install", true);
   requireValue("cni.exclusive", true);
@@ -77,32 +88,37 @@ export function validateCiliumNetwork(
   // extraConfig is appended to the ConfigMap (even duplicating existing keys),
   // CLI flags override it, and CILIUM_* environment variables supply options.
   // Reject network settings here rather than relying on Helm merge order.
+  validateOverrides(values, "values");
+  if (values.operator !== undefined) validateOverrides(record(values.operator, "values.operator"), "values.operator");
+}
+
+function validateOverrides(values: Record<string, unknown>, path: string): void {
   if (values.extraConfig !== undefined) {
-    for (const key of Object.keys(record(values.extraConfig, "values.extraConfig"))) {
+    for (const key of Object.keys(record(values.extraConfig, `${path}.extraConfig`))) {
       if (NETWORK_OPTIONS.has(key)) {
-        throw new Error(`Cilium: values.extraConfig.${key} bypasses network validation; use the module's network settings.`);
+        throw new Error(`Cilium: ${path}.extraConfig.${key} bypasses network validation; use the module's network settings.`);
       }
     }
   }
   if (values.extraArgs !== undefined) {
     if (!Array.isArray(values.extraArgs) || values.extraArgs.some(arg => typeof arg !== "string")) {
-      throw new Error("Cilium: values.extraArgs must be an array of strings.");
+      throw new Error(`Cilium: ${path}.extraArgs must be an array of strings.`);
     }
     for (const arg of values.extraArgs as string[]) {
       const option = arg.replace(/^--?/, "").split(/[=\s]/, 1)[0];
       if (NETWORK_OPTIONS.has(option)) {
-        throw new Error(`Cilium: values.extraArgs cannot override ${option}; use the module's network settings.`);
+        throw new Error(`Cilium: ${path}.extraArgs cannot override ${option}; use the module's network settings.`);
       }
     }
   }
   if (values.extraEnv !== undefined) {
-    if (!Array.isArray(values.extraEnv)) throw new Error("Cilium: values.extraEnv must be an array.");
+    if (!Array.isArray(values.extraEnv)) throw new Error(`Cilium: ${path}.extraEnv must be an array.`);
     for (const env of values.extraEnv) {
-      const name = record(env, "values.extraEnv[]").name;
-      if (typeof name !== "string") throw new Error("Cilium: each values.extraEnv entry must have a name.");
+      const name = record(env, `${path}.extraEnv[]`).name;
+      if (typeof name !== "string") throw new Error(`Cilium: each ${path}.extraEnv entry must have a name.`);
       const option = name.replace(/^CILIUM_/, "").toLowerCase().replaceAll("_", "-");
       if (name.startsWith("CILIUM_") && NETWORK_OPTIONS.has(option)) {
-        throw new Error(`Cilium: values.extraEnv cannot override ${name}; use the module's network settings.`);
+        throw new Error(`Cilium: ${path}.extraEnv cannot override ${name}; use the module's network settings.`);
       }
     }
   }

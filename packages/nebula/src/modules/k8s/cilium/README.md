@@ -1,8 +1,8 @@
 # Cilium networking contract
 
 `Cilium` installs the CNI for a cluster whose k0s network provider is `custom`.
-By default, every Cilium-managed pod receives IPv4 and IPv6. Kubernetes IPAM
-and waiting for each enabled node pod CIDR are mandatory. `hostNetwork` pods
+By default, every Cilium-managed pod receives IPv4 and IPv6, using Kubernetes
+IPAM and waiting for each enabled node pod CIDR. `hostNetwork` pods
 use the node's addresses; Cilium does not allocate addresses to those pods.
 
 The default node transport follows the public-mesh configuration:
@@ -34,6 +34,41 @@ Public meshes reject IPv4/automatic transport and MTUs outside 1280–1400.
 Private meshes can use IPv4 or IPv6 transport and a larger, explicit MTU.
 Public meshes always require dual-stack pods. The old `ipv6: true` spelling
 still works for dual-stack; `ipv6: false` fails both typing and construction.
+
+## Cilium operator allocation
+
+For a new cluster or a separately qualified network rebuild, declare explicit
+cluster-wide pools:
+
+```typescript
+new Cilium(chart, "cilium", {
+  ipam: {
+    mode: "cluster-pool",
+    ipv4PodCidrs: ["10.244.0.0/16"],
+    ipv6PodCidrs: ["fd42:8::/48"],
+  },
+});
+```
+
+The operator allocates /24 IPv4 and /64 IPv6 blocks through `CiliumNode`.
+Kubernetes Node PodCIDRs and CIDR admission annotations are not allocation
+inputs in this mode. Both Kubernetes CIDR-wait flags are disabled; the CNI,
+dual-stack, transport, WireGuard, MTU and configuration-source guards remain.
+Kubernetes IPAM remains the default for existing consumers.
+
+Each enabled family requires nonempty, correctly aligned, nonoverlapping pools.
+Pool masks are limited to 16 subdivision bits to bound allocator memory. Raw
+Helm values and operator flags/environment cannot replace the declared pools
+or node mask sizes. Preserve pool order; append capacity instead of editing
+or removing an existing pool entry. An explicit private IPv4 profile omits
+IPv6 pools entirely.
+
+This option does not implement a live Kubernetes-IPAM migration. Cilium
+documents an online migration only from cluster-pool to multi-pool; qualify a
+separate disruptive rebuild or use a fresh cluster for other transitions.
+Preserve data and control-plane bindings and plan for confidential guest owner
+re-enrollment before recreating sandboxes. See the upstream
+[IPAM migration guidance](https://docs.cilium.io/en/stable/network/concepts/ipam/).
 
 ### Retained private IPv4 clusters
 
@@ -69,7 +104,7 @@ transport and no explicit MTU.
 
 ## Compose the control plane and workers
 
-For the default dual-stack profile, the CNI cannot create control-plane CIDRs
+For Kubernetes IPAM, the CNI cannot create control-plane CIDRs
 or assign IPv6 to a host NIC. These
 must be configured together, even when separate GitOps applications own them:
 
@@ -101,8 +136,8 @@ addresses, never a cloud public-IPv4 metadata address.
 ## Overrides and adoption
 
 Validation runs **after** merging Helm values. It rejects address families
-that conflict with the selected profile, alternate IPAM, custom/chained CNIs,
-disabling an enabled family's CIDR wait,
+that conflict with the selected profile, changing the selected IPAM, custom/chained CNIs,
+changing the selected mode's CIDR-wait flags,
 unsafe transport/MTU choices, and network overrides through `extraConfig`,
 `extraArgs` or `extraEnv`. By default the agent reads only `cilium-config`, so a
 `CiliumNodeConfig` cannot silently change its address-family contract.

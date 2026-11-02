@@ -30,6 +30,8 @@ import { Helm } from "cdk8s";
 import { deepmerge } from "deepmerge-ts";
 import { HelmModule } from "../../../core";
 import { validateCiliumNetwork } from "./network";
+import { ciliumIpamValues, type CiliumIpamConfig } from "./ipam";
+export type { CiliumIpamConfig } from "./ipam";
 import { CiliumNodeIpv6Overrides, type CiliumNodeIpv6OverridesConfig } from "./node-ipv6-overrides";
 export type { CiliumNodeIpv6Override, CiliumNodeIpv6OverridesConfig } from "./node-ipv6-overrides";
 
@@ -54,6 +56,10 @@ export interface CiliumConfig {
   version?: string;
   /** Helm repository URL. */
   repository?: string;
+  /** Address allocation owner, default Kubernetes. Cluster-pool requires explicit
+   * pools and allocates /24 IPv4 and /64 IPv6 ranges through the Cilium operator.
+   * Changing an existing cluster requires a separately planned migration. */
+  ipam?: CiliumIpamConfig;
   /**
    * Enable-only compatibility spelling for dual-stack pods. For a retained
    * private IPv4 cluster, use podAddressFamilies: "ipv4" instead.
@@ -208,7 +214,7 @@ export interface CiliumConfig {
   annotateK8sNode?: boolean;
   /**
    * Additional Helm values, deep-merged before network validation. Disabling
-   * either family, replacing Kubernetes IPAM/CNI or bypassing the network
+   * either family, replacing the selected IPAM/CNI or bypassing the network
    * contract through extraConfig/extraArgs/extraEnv is rejected.
    */
   values?: Record<string, unknown>;
@@ -275,14 +281,10 @@ export class Cilium extends HelmModule<CiliumConfig> {
 
     const values: Record<string, unknown> = deepmerge(
       {
-        // Consume the podCIDRs k0s already allocates per node rather than
-        // letting Cilium carve an independent pool the cluster disagrees with.
-        ipam: { mode: "kubernetes" },
+        ...ciliumIpamValues(this.config.ipam, enableIpv6),
         ipv4: { enabled: true },
         ipv6: { enabled: enableIpv6 },
-        // Wait for every enabled family. Enabling IPv6 cannot itself convert
-        // the control plane or existing pod sandboxes to dual-stack.
-        k8s: { requireIPv4PodCIDR: true, requireIPv6PodCIDR: enableIpv6 },
+        // Enabling IPv6 cannot itself convert existing pod sandboxes.
         cni: { install: true, exclusive: true, customConf: false, chainingMode: "none" },
         // Otherwise a CiliumNodeConfig can silently undo the cluster contract.
         daemon: nodeOverrides
@@ -400,7 +402,7 @@ export class Cilium extends HelmModule<CiliumConfig> {
         "nebula.sh/cilium-node-ipv6-checksum": nodeOverrides.checksum,
       };
     }
-    validateCiliumNetwork(values, nodeConnectivity, nodeOverrides?.configSources, podAddressFamilies);
+    validateCiliumNetwork(values, nodeConnectivity, nodeOverrides?.configSources, podAddressFamilies, this.config.ipam);
     this.helm = this.createHelmRelease({
       namespace,
       chart: "cilium",

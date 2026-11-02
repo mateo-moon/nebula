@@ -275,6 +275,16 @@ receipt, hostname, OS suite, node address families and free VG storage, records
 verification tied to the request hash, then exits successfully. If `installation.uefi`
 is configured, the UEFI phase below completes before that verification is published. Crossplane
 requires both that evidence and the completed Job before composing enrollment.
+When retiring legacy Node admission for operator-managed IPAM, a bound host can
+preserve its immutable request using `installationContext: { workloadProvider,
+podPrefix }`. These are historical receipt strings; they emit no provider
+reference or admission resources. Do not combine this context with active
+`workloadKubeProviderConfigName` / `ipv6PodCidrPrefix`, and omit it for fresh
+operator-managed installations. The exact original installation profile and
+Manual revision still require an explicit reviewed migration; changing the
+current composition does not migrate already-bound hosts. The context does not
+permit changing OS, firmware, storage, SSH or installation intent.
+
 Optional native Cilium admission policies and bindings must first be observed
 ready through the workload ProviderConfig. The Job never receives workload
 credentials. The workload identity needs access to those admission resources;

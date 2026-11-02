@@ -366,6 +366,40 @@ test("Cilium admission uses the workload ProviderConfig and gates first pooled h
   assert.equal(status(lost).workerReady, false);
 });
 
+test("retiring node admission preserves a bound installation receipt and CAPI manifests", () => {
+  const network = setup({ ...options, ipv6PodCidrPrefix: "2001:db8::", workloadKubeProviderConfigName: "workload" });
+  const ready = installed(network.template);
+  const first = render(ready, network.xr, network.template);
+  const observed = { ...observe(first), ...ready };
+  const old = render(observed, network.xr, network.template);
+  const bound = { ...network.xr, status: status(old) };
+  // Both sides must observe the same checkpoint: successful installation
+  // naturally changes its Job from create/observe to observe-only.
+  const checkpointed = render(observed, bound, network.template);
+  const retired = setup({ ...options, installationContext: { workloadProvider: "workload", podPrefix: "2001:db8::" } });
+  const next = render(observed, bound, retired.template);
+  assert.equal(status(next).requestHash, status(old).requestHash);
+  for (const name of ["request", "state", "install", "pool", "remote-template", "bootstrap-template", "worker"])
+    assert.deepEqual(named(next, name).spec, named(checkpointed, name).spec);
+  for (const name of ["cidr-policy", "cidr-binding", "identity-policy", "identity-binding"])
+    assert.equal(named(next, name), undefined);
+  assert.ok(next.filter(r => r.kind === "Object").every(r => r.spec.providerConfigRef.name === "kubernetes-provider-config"));
+  assert.throws(() => render(observed, bound, setup().template), /installation profile changed/);
+  const changed = setup({ ...options, installation: { ...options.installation, suite: "bookworm" },
+    installationContext: { workloadProvider: "workload", podPrefix: "2001:db8::" } });
+  assert.throws(() => render(observed, bound, changed.template), /installation profile changed/);
+});
+
+test("historical receipt context cannot silently replace active admission or create a provider", () => {
+  assert.throws(() => setup({ ...options, ipv6PodCidrPrefix: "2001:db8::", workloadKubeProviderConfigName: "workload",
+    installationContext: { workloadProvider: "another", podPrefix: "2001:db8::" } }), /active admission/);
+  const noAdmission = setup();
+  const result = render(installed(noAdmission.template), noAdmission.xr, noAdmission.template);
+  assert.ok(native(result, "worker"));
+  assert.equal(native(result, "cidr-policy"), undefined);
+  assert.equal(JSON.parse(native(result, "request").data["request.json"]).context.workloadProvider, "");
+});
+
 test("readiness requires current owned intent and ignores unrelated controller defaults", () => {
   const initial = render(installed());
   const observed = { ...observe(initial), ...installed() };
