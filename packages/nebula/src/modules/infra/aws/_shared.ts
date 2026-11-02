@@ -19,9 +19,8 @@ import {
 /**
  * AMI / image-lookup selection shared by the AWS cluster modules.
  *
- * Strongly recommend setting `id` to a region-specific Ubuntu AMI; k0s is
- * installed via cloud-init so a clean Ubuntu image is ideal. If omitted, CAPA's
- * default image lookup is used (may not suit k0s).
+ * Explicit image overrides. The AWS constructors select the official Debian
+ * default when no ID or lookup is supplied.
  */
 export interface AmiSelection {
   id?: string;
