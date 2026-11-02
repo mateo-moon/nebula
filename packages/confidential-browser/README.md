@@ -34,6 +34,8 @@ Configure the workload with `browserOwner: true` and `accessLink.browser.manualT
 
 The preparation VM generates the disposable token in guest memory. The operator stores the frontend endpoint in Secret `url` and the credential separately in Secret `token`. Give them to the user separately. Neither the URL nor its fragment may contain a usable token. After ownership is claimed, owner signatures authenticate subsequent operations. Never publish the invitation port or guest-loopback services.
 
+If preparation restarts before ownership or final-guest creation, the operator refreshes the unused token from that guest. Retrieve the current Secret again. Claimed invitations and existing guest enrollments are never reset this way. A host-only kernel patch does not change the guest's software measurement; a guest restart still changes its memory-held instance keys and requires fresh verification or explicit owner recovery.
+
 Ordinary proxies may carry the preparation/final OHTTP endpoints: their contents remain encrypted to the separately attested VM. Their DNS/HTTPS authority does not authenticate the initial page. The generic [full-stack example](../nebula/example/confidential-workload-stack.ts) includes a TCP route for the frontend; the DevOps testcase uses the existing SNP host and preserves earlier guests and disks.
 
 ## Build and limits

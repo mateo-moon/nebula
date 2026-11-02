@@ -16,15 +16,18 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestBrowserInvitationComesFromGuestAndIsNotRegenerated(t *testing.T) {
+func TestBrowserInvitationComesFromGuestAndRemainsStableUntilGuestRestart(t *testing.T) {
 	token := bytes.Repeat([]byte{0x42}, 32)
 	commitment := sha256.Sum256(token)
 	calls := 0
@@ -59,12 +62,147 @@ func TestBrowserInvitationComesFromGuestAndIsNotRegenerated(t *testing.T) {
 	if _, err := manager.secret(context.Background(), w, a, true); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 1 {
-		t.Fatal("issued invitation was fetched or regenerated again")
+	if calls != 2 {
+		t.Fatal("unclaimed preparation invitation was not rechecked")
 	}
 	w.Spec.Raw = []byte(`{"accessLink":{"url":"https://stack.example/","ownerPort":8443,"secretName":"browser-access","browser":{"invitationEndpoint":"http://metadata.internal/latest/","workloadEndpoint":"https://preparation.example/","loaderUrl":"https://release.example/"}}}`)
 	if _, err := accessLink(w); err == nil {
 		t.Fatal("invitation exporter accepted an arbitrary infrastructure URL")
+	}
+}
+
+func TestBrowserInvitationRefreshPreservesOwnerAndFinalGuestBoundaries(t *testing.T) {
+	for _, boundary := range []string{"unclaimed", "owner", "pod-uid", "pod-name", "spec-hash", "init-data", "existing-pod"} {
+		t.Run(boundary, func(t *testing.T) {
+			ctx := context.Background()
+			var token atomic.Value
+			token.Store(bytes.Repeat([]byte{0x42}, 32))
+			var calls atomic.Int64
+			server := httptest.NewServer(http.HandlerFunc(func(out http.ResponseWriter, in *http.Request) {
+				calls.Add(1)
+				raw := token.Load().([]byte)
+				sum := sha256.Sum256(raw)
+				json.NewEncoder(out).Encode(map[string]string{"token": hex.EncodeToString(raw), "commitment": hex.EncodeToString(sum[:])})
+			}))
+			defer server.Close()
+			w, _, _ := fixture("qualified", "refresh")
+			c := fake.NewClientBuilder().WithScheme(testScheme()).WithObjects(w).Build()
+			manager := AccessManager{Client: c, Reader: c}
+			a := &AccessLink{URL: "https://stack.example/", SecretName: "refresh-access", OwnerPort: 8443,
+				Browser: &BrowserAccess{InvitationEndpoint: server.URL, WorkloadEndpoint: "https://preparation.example/", LoaderURL: "https://192.0.2.1:9443/", ManualTLS: true}}
+			old, err := manager.secret(ctx, w, a, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			w.Status.AccessTokenSHA256 = string(old.Data["commitment"])
+			switch boundary {
+			case "owner":
+				key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+				_, public := discoveryProof(t, key, a.URL, "discovery")
+				old.Data["owner-public-key.pem"] = []byte(public)
+				delete(old.Data, "token")
+				delete(old.Data, "url")
+				if err := c.Update(ctx, old); err != nil {
+					t.Fatal(err)
+				}
+			case "pod-uid":
+				w.Status.PodUID = "previous-instance"
+			case "pod-name":
+				w.Status.PodName = "previous-guest"
+			case "spec-hash":
+				w.Status.SpecSHA256 = strings.Repeat("a", 64)
+			case "init-data":
+				w.Status.InitDataSHA256 = strings.Repeat("b", 64)
+			case "existing-pod":
+				pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "existing", Namespace: w.Namespace,
+					Labels: map[string]string{ownerLabel: string(w.UID)}, OwnerReferences: []metav1.OwnerReference{ownerReference(w)}}}
+				if err := c.Create(ctx, pod); err != nil {
+					t.Fatal(err)
+				}
+			}
+			token.Store(bytes.Repeat([]byte{0x57}, 32))
+			got, err := manager.secret(ctx, w, a, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if boundary != "unclaimed" {
+				if calls.Load() != 1 || !bytes.Equal(got.Data["commitment"], old.Data["commitment"]) ||
+					!bytes.Equal(got.Data["owner-public-key.pem"], old.Data["owner-public-key.pem"]) ||
+					!bytes.Equal(got.Data["token"], old.Data["token"]) {
+					t.Fatal("refresh crossed an enrollment boundary")
+				}
+				return
+			}
+			fresh := token.Load().([]byte)
+			sum := sha256.Sum256(fresh)
+			if calls.Load() != 2 || string(got.Data["token"]) != hex.EncodeToString(fresh) ||
+				string(got.Data["commitment"]) != hex.EncodeToString(sum[:]) || string(got.Data["url"]) != a.Browser.LoaderURL {
+				t.Fatal("unclaimed invitation was not refreshed from the restarted guest")
+			}
+			// Simulate interruption before the workload status could be patched.
+			retry, err := manager.secret(ctx, w, a, true)
+			if err != nil || !bytes.Equal(retry.Data["commitment"], got.Data["commitment"]) {
+				t.Fatal("interrupted refresh could not recover safely")
+			}
+			if _, err := manager.secret(ctx, w, a, false); err == nil {
+				t.Fatal("metadata request changed or bypassed stale status")
+			}
+			w.Status.AccessTokenSHA256 = string(got.Data["commitment"])
+			if _, err := manager.secret(ctx, w, a, false); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestBrowserInvitationRefreshCannotRaceOwnerClaim(t *testing.T) {
+	ctx := context.Background()
+	w, _, _ := fixture("qualified", "claim-race")
+	c := fake.NewClientBuilder().WithScheme(testScheme()).WithObjects(w).Build()
+	manager := AccessManager{Client: c, Reader: c}
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	_, public := discoveryProof(t, key, "https://stack.example/", "discovery")
+	var claim atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(out http.ResponseWriter, in *http.Request) {
+		raw := bytes.Repeat([]byte{0x42}, 32)
+		if claim.Load() {
+			var secret corev1.Secret
+			if err := c.Get(ctx, client.ObjectKey{Namespace: w.Namespace, Name: "race-access"}, &secret); err != nil {
+				t.Error(err)
+				out.WriteHeader(500)
+				return
+			}
+			secret.Data["owner-public-key.pem"] = []byte(public)
+			delete(secret.Data, "token")
+			delete(secret.Data, "url")
+			if err := c.Update(ctx, &secret); err != nil {
+				t.Error(err)
+				out.WriteHeader(500)
+				return
+			}
+			raw = bytes.Repeat([]byte{0x57}, 32)
+		}
+		sum := sha256.Sum256(raw)
+		json.NewEncoder(out).Encode(map[string]string{"token": hex.EncodeToString(raw), "commitment": hex.EncodeToString(sum[:])})
+	}))
+	defer server.Close()
+	a := &AccessLink{URL: "https://stack.example/", SecretName: "race-access", Browser: &BrowserAccess{
+		InvitationEndpoint: server.URL, WorkloadEndpoint: "https://preparation.example/", LoaderURL: "https://192.0.2.1:9443/", ManualTLS: true}}
+	old, err := manager.secret(ctx, w, a, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Status.AccessTokenSHA256 = string(old.Data["commitment"])
+	claim.Store(true)
+	if _, err := manager.secret(ctx, w, a, true); !apierrors.IsConflict(err) {
+		t.Fatalf("concurrent owner claim was not protected: %v", err)
+	}
+	var got corev1.Secret
+	if err := c.Get(ctx, client.ObjectKeyFromObject(old), &got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Data["owner-public-key.pem"]) != public || len(got.Data["token"]) != 0 || len(got.Data["url"]) != 0 {
+		t.Fatal("refresh restored access after the owner consumed the invitation")
 	}
 }
 

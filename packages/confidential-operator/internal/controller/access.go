@@ -143,6 +143,7 @@ func browserInvitation(ctx context.Context, a *AccessLink) ([]byte, error) {
 func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, a *AccessLink, create bool) (*corev1.Secret, error) {
 	key := types.NamespacedName{Namespace: w.Namespace, Name: a.SecretName}
 	var secret corev1.Secret
+	var invitation []byte
 	err := m.Reader.Get(ctx, key, &secret)
 	if apierrors.IsNotFound(err) && create {
 		if w.Status.AccessTokenSHA256 != "" || w.Status.PodUID != "" {
@@ -155,6 +156,7 @@ func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, 
 			if err != nil {
 				return nil, err
 			}
+			invitation = random
 		} else if _, err := rand.Read(random); err != nil {
 			return nil, errors.New("cannot generate access credentials")
 		}
@@ -179,7 +181,7 @@ func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, 
 	commitment := string(secret.Data["commitment"])
 	decoded, err := hex.DecodeString(commitment)
 	if secret.Type != accessSecretType || !ownedBy(&secret, w) || len(decoded) != 32 || err != nil ||
-		string(secret.Data["endpoint"]) != a.URL || (w.Status.AccessTokenSHA256 != "" && w.Status.AccessTokenSHA256 != commitment) {
+		string(secret.Data["endpoint"]) != a.URL {
 		return nil, errors.New("access credentials conflict with the existing workload; owner intervention required")
 	}
 	if len(secret.Data["owner-public-key.pem"]) == 0 {
@@ -191,6 +193,46 @@ func (m AccessManager) secret(ctx context.Context, w *api.ConfidentialWorkload, 
 		}
 	} else if _, err := accessPublicKey(secret.Data["owner-public-key.pem"]); err != nil {
 		return nil, errors.New("invalid access owner")
+	}
+	// A diskless preparation guest generates a new invitation after a restart.
+	// Refresh only before ownership and before any final guest has existed. The
+	// client still checks this token against the independently attested guest.
+	refreshable := create && a.Browser != nil && len(secret.Data["owner-public-key.pem"]) == 0 &&
+		w.Status.PodUID == "" && w.Status.PodName == "" && w.Status.SpecSHA256 == "" && w.Status.InitDataSHA256 == ""
+	if refreshable {
+		var pods corev1.PodList
+		if err := m.Reader.List(ctx, &pods, client.InNamespace(w.Namespace), client.MatchingLabels{ownerLabel: string(w.UID)}); err != nil {
+			return nil, kubeFailure("PodLookupFailed", "workload Pod lookup failed", err)
+		}
+		refreshable = len(pods.Items) == 0
+	}
+	if refreshable {
+		if invitation == nil {
+			invitation, err = browserInvitation(ctx, a)
+			if err != nil {
+				return nil, err
+			}
+		}
+		sum := sha256.Sum256(invitation)
+		fresh := hex.EncodeToString(sum[:])
+		if fresh != commitment {
+			before := secret.DeepCopy()
+			token := hex.EncodeToString(invitation)
+			secret.Data["token"] = []byte(token)
+			secret.Data["commitment"] = []byte(fresh)
+			secret.Data["url"] = []byte(browserAccessURL(a, token))
+			// Do not restore bootstrap access if an owner consumed the token
+			// while the preparation exporter was being contacted.
+			if err := m.Client.Patch(ctx, &secret, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+				return nil, kubeFailure("AccessSecretFailed", "unclaimed preparation invitation could not be refreshed", err)
+			}
+			commitment = fresh
+		}
+	}
+	// A controller interruption between Secret and status updates is safe to
+	// retry only after checking the current unclaimed preparation invitation.
+	if w.Status.AccessTokenSHA256 != "" && w.Status.AccessTokenSHA256 != commitment && !refreshable {
+		return nil, errors.New("access credentials conflict with the existing workload; owner intervention required")
 	}
 	return &secret, nil
 }
