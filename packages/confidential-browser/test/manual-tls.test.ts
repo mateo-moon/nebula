@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
 import { startManualTls } from "../src/manual-tls/main";
-import { manualFragment, appraiseExportedCertificate, certificateDer } from "../src/loader/manual";
+import { manualFragment, appraiseExportedCertificate, certificateDer, replaceUnusedInvitation, verifyUnusedInvitation } from "../src/loader/manual";
 import { newOwner, saveEncryptedOwner, encryptedOwnerVault, restoreBackup, jwt } from "../src/loader/owner";
 import { verifyOwnerJwt } from "@nebula/confidential-runtime";
 
@@ -52,6 +52,32 @@ test("a returning manual origin stores only password-encrypted recovery, never u
   const restored = await restoreBackup(record, "a-good-owner-password");
   assert.equal(restored.finalPin, owner.finalPin);
   assert.equal(verifyOwnerJwt(`Bearer ${await jwt(restored, "nebula-browser")}`, owner.publicKeyPem, "nebula-browser"), true);
+});
+
+test("an explicit replacement invitation preserves the unused owner's keys and preparation pin", async () => {
+  const owner = await newOwner(); owner.preparationPin = "a".repeat(64); owner.token = "b".repeat(64); owner.restored = true;
+  const key = owner.privateKey, pin = owner.preparationPin;
+  replaceUnusedInvitation(owner, "c".repeat(64));
+  assert.equal(owner.privateKey, key); assert.equal(owner.preparationPin, pin);
+  assert.equal(owner.token, "c".repeat(64)); assert.equal(owner.restored, true);
+  await assert.rejects(verifyUnusedInvitation(owner, { claimed: true }), /unclaimed preparation/);
+  assert.equal(owner.restored, true);
+  await assert.rejects(verifyUnusedInvitation(owner, { claimed: false, claimSha256: "0".repeat(64) }), /does not match/);
+  assert.equal(owner.restored, true);
+  await verifyUnusedInvitation(owner, { claimed: false, claimSha256: createHash("sha256").update(Buffer.from(owner.token!, "hex")).digest("hex") });
+  assert.equal(owner.restored, false); assert.equal(owner.invitationReplaced, undefined);
+  assert.throws(() => replaceUnusedInvitation(owner, "invalid"), /valid one-time/);
+});
+
+test("replacement invitations cannot reset release state or recover an unpinned owner", async () => {
+  for (const state of [{}, { connection: {} }, { prepared: {} }, { finalPin: "d".repeat(64) },
+    { imageKey: "e".repeat(64) }, { finalClaimed: true }, { provisioned: true },
+    { volumeKeys: { disk: "f".repeat(64) } }, { resources: { private: "value" } }]) {
+    const owner = Object.assign(await newOwner(), Object.keys(state).length ? { preparationPin: "a".repeat(64) } : {}, state,
+      { token: "b".repeat(64), restored: true });
+    assert.throws(() => replaceUnusedInvitation(owner, "c".repeat(64)), /release state/);
+    assert.equal(owner.token, "b".repeat(64)); assert.equal(owner.restored, true);
+  }
 });
 
 test("the guest serves only measured public assets and certificate metadata, with no enrollment or key API", async () => {

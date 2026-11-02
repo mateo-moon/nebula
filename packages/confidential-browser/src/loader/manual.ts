@@ -30,6 +30,30 @@ export function manualFragment(fragment: string) {
     throw new Error("Use the endpoint without a URL fragment. Enter the access token only after independent verification");
   }
 }
+
+export function replaceUnusedInvitation(owner: OwnerState, token: string) {
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new Error("Enter a valid one-time access token");
+  if (!owner.preparationPin || owner.connection || owner.prepared || owner.finalPin || owner.imageKey ||
+      owner.finalClaimed || owner.provisioned || Object.keys(owner.volumeKeys ?? {}).length || Object.keys(owner.resources ?? {}).length) {
+    throw new Error("This owner already has release state. Restore the latest recovery backup; its invitation and instance pins were preserved");
+  }
+  // Explicitly retry first setup with the same owner and preparation pin. A
+  // backup containing any release state still cannot enroll a replacement.
+  owner.token = token;
+  owner.invitationReplaced = true;
+}
+
+/** Called only after the preparation channel has verified its saved key. */
+export async function verifyUnusedInvitation(owner: OwnerState, bootstrap: { claimed?: boolean; claimSha256?: string }) {
+  if (!owner.invitationReplaced) return;
+  if (bootstrap.claimed !== false || !/^[a-f0-9]{64}$/.test(owner.token ?? "")) {
+    throw new Error("Replacement invitation requires the same unclaimed preparation instance; existing enrollment was preserved");
+  }
+  const raw = Uint8Array.from(owner.token!.match(/../g)!, h => parseInt(h, 16));
+  if (await hash(raw) !== bootstrap.claimSha256) throw new Error("The invitation does not match the attested VM");
+  owner.restored = false;
+  delete owner.invitationReplaced;
+}
 export async function appraiseExportedCertificate(raw: Uint8Array, record: CertificateRecord, identity: SnpIdentity,
   verify: (der: Uint8Array, policy: unknown) => Promise<any>) {
   const der = certificateDer(raw);
@@ -79,7 +103,7 @@ export async function manualSession(target: string, sdk: () => Promise<any>, har
   const form = document.getElementById("manual-owner") as HTMLFormElement; form.hidden = false;
   const stored = encryptedOwnerVault(target);
   const token = document.getElementById("claim-token") as HTMLInputElement;
-  token.required = !stored; token.closest("label")!.hidden = !!stored;
+  token.required = !stored;
   document.getElementById("manual-recovery")!.addEventListener("change", event => {
     token.required = !stored && !(event.target as HTMLInputElement).files?.length;
   });
@@ -96,6 +120,8 @@ export async function manualSession(target: string, sdk: () => Promise<any>, har
       if (!stored && !recovery) {
         if (!/^[a-f0-9]{64}$/.test(token.value)) throw new Error("Enter the one-time access token separately from the URL");
         owner.token = token.value;
+      } else if (token.value) {
+        replaceUnusedInvitation(owner, token.value);
       }
       token.value = ""; (document.getElementById("vault-password") as HTMLInputElement).value = "";
       form.hidden = true;

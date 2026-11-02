@@ -6,6 +6,7 @@ export interface OwnerState {
   privateKey: CryptoKey; wrappingKey: CryptoKey; publicKeyPem: string;
   privateExport: { iv: string; ciphertext: string };
   preparationPin?: string; finalPin?: string; token?: string;
+  invitationReplaced?: boolean;
   finalClaimed?: boolean; provisioned?: boolean; restored?: boolean;
   imageKey?: string; volumeKeys?: Record<string, string>; resources?: Record<string, string>; connection?: any; prepared?: any;
 }

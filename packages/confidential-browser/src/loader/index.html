@@ -16,6 +16,7 @@
 <form id="manual-verification"><label class="check"><input id="independently-verified" type="checkbox" required><span>I independently verified this browser's certificate and approved the VM and workload measurements.</span></label><button type="submit" class="primary">Continue to owner access</button></form>
 <form id="manual-owner" hidden><h2>Access your confidential stack</h2>
 <label>One-time access token<input id="claim-token" type="password" pattern="[a-f0-9]{64}" maxlength="64" autocomplete="off"></label>
+<p class="hint">Returning owners can leave this empty. If an unused invitation expired before deployment, enter its replacement to retry with the same owner and preparation pin. Existing releases cannot be reset here.</p>
 <label>Owner / recovery password<input id="vault-password" type="password" minlength="12" required autocomplete="off"></label><p class="hint">At least 12 characters. Only password-encrypted owner state stays in this browser. Keep your encrypted recovery backup and password.</p>
 <label>Or restore an encrypted recovery file<input id="manual-recovery" type="file" accept=".json"></label>
 <button id="unlock-owner" type="submit" class="primary">Unlock &amp; connect</button><p id="owner-login-status" role="alert"></p></form></section>

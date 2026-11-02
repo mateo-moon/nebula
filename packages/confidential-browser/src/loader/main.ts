@@ -1,7 +1,7 @@
 import { AttestedChannel, endpoint, hash, type AttestedFetch, type SnpIdentity } from "./transport";
 import { newOwner, storedOwner, saveOwner, jwt, encryptedBackup, restoreBackup, discoveryAudience, type OwnerState } from "./owner";
 import profiles from "./profiles.json";
-import { manualFragment, manualSession, type ManualSession } from "./manual";
+import { manualFragment, manualSession, verifyUnusedInvitation, type ManualSession } from "./manual";
 
 declare global { interface Window { nebula: any } }
 // Until this origin's mode is known, errors must not reveal a credential form.
@@ -90,12 +90,13 @@ async function start() {
   const sdk = await loadSdk();
   const fetcher = sdk.fetch as AttestedFetch;
   let channel: AttestedChannel | undefined;
+  let bootstrap: { claimed?: boolean; claimSha256?: string } | undefined;
   let verificationFailure = "No independently approved preparation profile matched";
   for (const profile of profiles.profiles as { identity: SnpIdentity }[]) {
     try {
       const candidate = new AttestedChannel(fetcher, target, profile.identity, saved?.preparationPin);
       const response = await candidate.request("/nebula/v1/browser");
-      if (response.status === 200) { channel = candidate; break; }
+      if (response.status === 200) { bootstrap = await response.json(); channel = candidate; break; }
     } catch (error) {
       // This request is GET-only and precedes every owner credential. Surface
       // its diagnostic without logging any later authenticated request.
@@ -103,6 +104,7 @@ async function start() {
     }
   }
   if (!channel) throw new Error(`SNP, workload policy or enrolled instance verification failed. No owner credential or image was sent. ${verificationFailure}`);
+  if (saved) await verifyUnusedInvitation(saved, bootstrap ?? {});
   status("SNP and measured preparation workload verified. Loading its UI…");
   const assets = await verifiedAssets(channel);
   const owner: OwnerState = saved ?? await newOwner();
