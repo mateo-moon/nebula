@@ -32,6 +32,8 @@ export interface AwsMachineSpec {
   rootVolumeSizeGiB?: number;
   /** Root volume type (default "gp3"). */
   rootVolumeType?: string;
+  /** Explicit root disk encryption; omitted preserves existing templates. */
+  rootVolumeEncrypted?: boolean;
   /** Run as EC2 Spot (worker pools only; ignored for the control plane). */
   spot?: SpotSelection;
   /** Assign a public IP (default false — nodes live in private subnets behind NAT). */
@@ -46,6 +48,8 @@ export interface AwsMachineSpec {
    * node role through IMDS.
    */
   imdsPodAccess?: boolean;
+  /** Explicit metadata response hop limit, including 1 to keep IAM host-only. */
+  imdsHopLimit?: number;
 }
 
 /** Cluster-level AWS configuration for {@link AwsK0sProvider}. */
@@ -54,6 +58,10 @@ export interface AwsK0sProviderConfig {
   ipv6?: boolean;
   /** AWS region. */
   region: string;
+  /** Existing VPC to use without creating networking or NAT gateways. */
+  vpcId?: string;
+  /** Existing security groups by CAPA role (e.g. node). Rules stay externally managed. */
+  securityGroupOverrides?: Record<string, string>;
   /** VPC CIDR CAPA will create (default "10.0.0.0/16"). */
   vpcCidr?: string;
   /**
@@ -160,6 +168,8 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
               AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
           }),
       vpcCidr: this.config.vpcCidr ?? "10.0.0.0/16",
+      vpcId: this.config.vpcId,
+      securityGroupOverrides: this.config.securityGroupOverrides,
       networkProvider: ctx.networkProvider,
       cni: this.config.cni,
       ipv6: this.config.ipv6,
@@ -178,6 +188,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
   ): CapiInfraRef {
     const m = this.resolveImage(ctx.machine, ctx.role);
     validateAwsHostProfile(m.hostProfile);
+    if (m.imdsHopLimit !== undefined && (!Number.isInteger(m.imdsHopLimit) || m.imdsHopLimit < 1 || m.imdsHopLimit > 64)) throw new Error("IMDS hop limit must be an integer from 1 to 64");
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
     const isControlPlane = ctx.role === "control-plane";
@@ -223,6 +234,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
           // Only present when opted in, so existing pools' hashes (and thus
           // their machine templates) stay stable.
           ...(imdsPodAccess ? { imdsPodAccess: true } : {}),
+          ...(m.imdsHopLimit !== undefined ? { metadataHopLimit: m.imdsHopLimit } : {}),
           // MUST be in the hash: AWSMachineTemplate specs are immutable, so a
           // hop-limit change that does not rename the template is silently
           // never applied. Omitted at the default for hash stability.
@@ -230,9 +242,10 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
             ? { imdsHopLimit: this.config.imdsHopLimit }
             : {}),
         };
+    const specWithEncryption = m.rootVolumeEncrypted === undefined ? templateSpec : { ...templateSpec, rootVolumeEncrypted: m.rootVolumeEncrypted };
     const hash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(m.hostProfile ? { ...templateSpec, hostProfile: m.hostProfile } : templateSpec))
+      .update(JSON.stringify(m.hostProfile ? { ...specWithEncryption, hostProfile: m.hostProfile } : specWithEncryption))
       .digest("hex")
       .slice(0, 8);
     const name = `${ctx.baseName}-${hash}`;
@@ -246,9 +259,11 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       sshKeyName: this.config.sshKeyName,
       rootVolumeSizeGiB,
       rootVolumeType,
+      rootVolumeEncrypted: m.rootVolumeEncrypted,
       ami: m.ami,
       ...(imdsPodAccess !== undefined ? { imdsPodAccess } : {}),
-      ...(this.config.imdsHopLimit ? { imdsHopLimit: this.config.imdsHopLimit } : {}),
+      ...(m.imdsHopLimit !== undefined ? { imdsHopLimit: m.imdsHopLimit, forceInstanceMetadataOptions: true }
+        : this.config.imdsHopLimit ? { imdsHopLimit: this.config.imdsHopLimit } : {}),
       ...(spot !== undefined ? { spot } : {}),
     });
 
