@@ -35,7 +35,7 @@ export type {
 // AWS (CAPA) infrastructure adapter for the provider-agnostic K0sCluster base.
 export { AwsK0sProvider } from "./k0s-provider";
 export type { AwsMachineSpec, AwsK0sProviderConfig } from "./k0s-provider";
-export { awsHostPreK0sCommands, validateAwsHostProfile } from "./host-profile";
+export { awsHostBootstrapCommands, awsHostPreK0sCommands, validateAwsHostProfile } from "./host-profile";
 export type { AwsHostProfile } from "./host-profile";
 
 export interface AwsRoute53ZoneConfig {

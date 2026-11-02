@@ -1,3 +1,5 @@
+import { debianHostSetupScript } from "./debian-host/index.mjs";
+
 /** Host settings belong to an explicitly selected AMI, never a fleet default. */
 export interface AwsHostProfile {
   architecture: "amd64" | "arm64";
@@ -9,6 +11,8 @@ export interface AwsHostProfile {
     /** Debian package version, not the uname release or installed metapackage. */
     minimumKernelVersion: string;
     requireSsmAgent?: boolean;
+    /** Install the pinned, verified AWS agent on an official Debian AMI. */
+    installSsmAgent?: boolean;
   };
 }
 
@@ -27,11 +31,20 @@ export function validateAwsHostProfile(profile?: AwsHostProfile): void {
   if (typeof debian.minimumKernelVersion !== "string" || debian.minimumKernelVersion.length > 128
     || !/^(?:[0-9]+:)?[0-9][A-Za-z0-9.+~]*(?:-[A-Za-z0-9.+~]+)?$/.test(debian.minimumKernelVersion)) fail("invalid minimum kernel package version");
   if (debian.requireSsmAgent !== undefined && typeof debian.requireSsmAgent !== "boolean") fail("invalid SSM setting");
+  if (debian.installSsmAgent !== undefined && typeof debian.installSsmAgent !== "boolean") fail("invalid SSM installation setting");
+  if (debian.installSsmAgent && !debian.requireSsmAgent) fail("SSM installation requires the enrollment check");
 }
 
 const quote = (value: string): string => "'" + value.replace(/'/g, "'\\''") + "'";
 
-/** Read-only enrollment gate. Updating a metapackage cannot satisfy a boot check. */
+/** Optional first-boot setup, also run before custom worker disk waits. */
+export function awsHostBootstrapCommands(profile?: AwsHostProfile): string[] {
+  validateAwsHostProfile(profile);
+  if (!profile?.debian?.installSsmAgent) return [];
+  return ["/bin/sh -eu -c " + quote(debianHostSetupScript({ architecture: profile.architecture, ...profile.debian }))];
+}
+
+/** Enrollment gate. Updating a metapackage cannot satisfy a boot check. */
 export function awsHostPreK0sCommands(profile?: AwsHostProfile): string[] {
   validateAwsHostProfile(profile);
   if (!profile?.debian) return [];
@@ -56,7 +69,7 @@ dpkg --compare-versions "$2" ge ${quote(debian.minimumKernelVersion)} || {
 ${debian.requireSsmAgent ? `systemctl is-enabled --quiet amazon-ssm-agent
 systemctl is-active --quiet amazon-ssm-agent
 ` : ""}`;
-  return ["/bin/sh -eu -c " + quote(script)];
+  return [...awsHostBootstrapCommands(profile), "/bin/sh -eu -c " + quote(script)];
 }
 
 /** Use the AMI account's actual home and primary group. Called only on opt-in. */

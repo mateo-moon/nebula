@@ -35,7 +35,7 @@
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
-import { awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
+import { awsHostBootstrapCommands, awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
@@ -764,7 +764,7 @@ chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 `;
     return `#!/bin/bash
-${this.usesObservedIdentity(node) ? "set -ex" : "set -x"}
+${node.hostProfile || this.usesObservedIdentity(node) ? "set -ex" : "set -x"}
 exec >> /var/log/${o.namePrefix}-worker-init.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
 hostnamectl set-hostname ${node.name}
@@ -773,9 +773,10 @@ hostnamectl set-hostname ${node.name}
 # data-volume wait (observed live: auth failures throughout the disk-wait
 # window when this was written last).
 ${login.trimEnd()}
+${awsHostBootstrapCommands(node.hostProfile).join("\n")}${node.hostProfile?.debian?.installSsmAgent ? "\n" : ""}\
 retry() { n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
 retry apt-get update -qq
-retry apt-get install -y -qq lvm2 curl awscli
+retry apt-get install -y -qq lvm2 curl awscli${node.hostProfile?.debian ? " thin-provisioning-tools" : ""}
 ${this.selfAssemblySection(node, region)}${lvmSection}`;
   }
 

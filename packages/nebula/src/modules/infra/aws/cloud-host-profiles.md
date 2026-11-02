@@ -14,6 +14,7 @@ const hostProfile = {
     suite: "trixie",
     minimumKernelVersion: "6.12.113-1",
     requireSsmAgent: true,
+    installSsmAgent: true, // Official Debian EC2 images do not preinstall SSM.
   },
 };
 ```
@@ -25,9 +26,16 @@ selects its root device from AMI metadata; custom worker launch templates use
 the profile's declared root device. AMI ownership, architecture, root mapping
 and launch permission must be checked during image qualification.
 
+With `installSsmAgent: true`, startup installs the pinned AWS Debian package
+after checking its SHA-256, detached signature, public-key fingerprint and
+package architecture/version. The native `nebula-cdk8s/aws/debian-host` module
+bundles the reviewed pins and public key. This prepares the launched official
+image; no derived AMI, Packer build or runtime image is required. Custom workers
+start the agent before data-volume waits, and CAPA runs the same idempotent setup
+before enrollment. The existing node role must grant SSM access.
+
 The optional Debian policy checks the OS, architecture and installed package
-for `linux-image-$(uname -r)` before k0s enrollment. It does not upgrade packages
-or reboot. A newer metapackage with an older running kernel fails this check.
+for `linux-image-$(uname -r)` before k0s enrollment. The kernel gate does not upgrade the kernel or reboot. A newer metapackage with an older running kernel fails this check.
 When requested, SSM Agent must be enabled and running; the image qualification
 must additionally verify that the agent connects with a fresh instance identity.
 
@@ -39,4 +47,5 @@ retains its explicit machine-template revision guard.
 Updating a size-one ASG's launch template does not refresh its running instance.
 Coordinate any SSH-account transition with a separate, reviewed replacement
 operation: old RemoteMachine cleanup must finish before the new host is allowed
-to enroll. Preserve the worker name, EIP and retained data-disk bindings.
+to enroll. Choose the replacement and data-retention policy in the consuming deployment.
+Host-profile selection never requests a live instance replacement.

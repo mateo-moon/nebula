@@ -2,6 +2,11 @@
   "version": 1,
   "entries": [
     {
+      "class": "opaque-blob",
+      "sha256": "1b02469c5fef714bc734bb0fc1a2a857bad24b273ed2fda79db5d89cf91e9bd0",
+      "reason": "AWS's public SSM Agent OpenPGP verification key, fingerprint 1C5B395CBE5E74E2F1CA21592784DBF388D19D46; copied from the official verify-agent-signature documentation and verified against both pinned package signatures. This is public verification material, not a private key."
+    },
+    {
       "class": "hex-64-bytes",
       "sha256": "c2aee2770f457d45e9a0daeacba6bd3b5d04cf91e4da228a7802a71f6f1c369c",
       "reason": "Synthetic Trustee identity fixture: 128 repetitions of the digit 3, not a hardware chip ID."

@@ -310,7 +310,7 @@ const IMAGES = [
   { context: "packages/nebula/src/modules/infra/k0s/baremetal", workflow: "publish-baremetal-provisioner.yml", retired: "build-baremetal-provisioner.yml", file: "Dockerfile" },
 ];
 
-for (const { context, file } of IMAGES) {
+for (const { context, file } of [...IMAGES, { context: "packages/nebula/src/modules/infra/aws/debian-host", file: "synthetic.mjs" }]) {
   test(`the default scope covers the ${context} image build context`, (t) => {
     assert.ok(DEFAULT_SCOPE.includes(context));
     const root = tempDir(t);
@@ -753,4 +753,11 @@ test("EFI artifact upstreams are exact public owners and neighbouring names rema
     assert.deepEqual(classes(scan(`https://github.com/${owner}/upstream/releases`)), []);
     assert.deepEqual(classes(scan(`https://github.com/${owner}-private/private`)), ["repository-owner"]);
   }
+});
+
+test("official Debian publisher and SSM artifacts are public; customer accounts and buckets remain blocked", () => {
+  assert.deepEqual(scan('owner: 136693071363\nurl: https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1/version/agent.deb'), []);
+  assert.deepEqual(classes(scan('owner: 136693071364')), ['aws-account-id']);
+  assert.deepEqual(classes(scan('https://s3.eu-central-1.amazonaws.com/private-customer/file')), ['domain']);
+  assert.deepEqual(classes(scan('https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1-other/file')), ['domain']);
 });

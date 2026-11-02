@@ -11,7 +11,11 @@
     "./trustee/client-plan": "./src/modules/k8s/trustee/client-plan.ts",
     "./imports": "./imports/index.ts",
     "./imports/*": "./imports/*",
-    "./trustee/workload": "./src/modules/k8s/trustee/workload.ts"
+    "./trustee/workload": "./src/modules/k8s/trustee/workload.ts",
+    "./aws/debian-host": {
+      "types": "./src/modules/infra/aws/debian-host/index.d.mts",
+      "default": "./src/modules/infra/aws/debian-host/index.mjs"
+    }
   },
   "imports": {
     "#imports/*": "./imports/*"
@@ -23,6 +27,9 @@
       ],
       "*": [
         "src/*"
+      ],
+      "aws/debian-host": [
+        "src/modules/infra/aws/debian-host/index.d.mts"
       ]
     }
   },

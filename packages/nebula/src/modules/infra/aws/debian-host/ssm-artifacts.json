@@ -1,0 +1,22 @@
+{
+  "amd64": {
+    "version": "3.3.5700.0",
+    "url": "https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1/3.3.5700.0/debian_amd64/amazon-ssm-agent.deb",
+    "signatureUrl": "https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1/3.3.5700.0/debian_amd64/amazon-ssm-agent.deb.sig",
+    "signingFingerprint": "1C5B395CBE5E74E2F1CA21592784DBF388D19D46",
+    "keySha256": "aaa3f054d9c0fb037e3e110e213cf721392429baa4a65c9e5e8b558b64c80fba",
+    "sha256": "31ca578b6c5a732a08b91cb1e912c30ba4f1956af9468fd2911ab1146154ed03",
+    "signatureSha256": "5be0510efeae1fb26f5879336498d940760ba0fbd9799b220af92f1ae62b583a",
+    "packageVersion": "3.3.5700.0-1"
+  },
+  "arm64": {
+    "version": "3.3.5700.0",
+    "url": "https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1/3.3.5700.0/debian_arm64/amazon-ssm-agent.deb",
+    "signatureUrl": "https://s3.eu-central-1.amazonaws.com/amazon-ssm-eu-central-1/3.3.5700.0/debian_arm64/amazon-ssm-agent.deb.sig",
+    "signingFingerprint": "1C5B395CBE5E74E2F1CA21592784DBF388D19D46",
+    "keySha256": "aaa3f054d9c0fb037e3e110e213cf721392429baa4a65c9e5e8b558b64c80fba",
+    "sha256": "d30433270b4473b4ea99b352a321c6d9cddb535fac580c6a6540f70bc4e7e780",
+    "signatureSha256": "cde8507b17a784f9b69c0c2c847ce408556f09b25c3e4f64b03a94450d3391b1",
+    "packageVersion": "3.3.5700.0-1"
+  }
+}

@@ -18,3 +18,13 @@ condition = "AND"
 paths = ['''^packages/nebula/src/modules/k8s/trustee/chart\.ts$''']
 regexTarget = "secret"
 regexes = ['''^72da4e974317fc5f98de3f9085fba56ab5d200d1a2c585423ca0612ad9c2378e$''']
+
+# This is the SHA-256 of AWS's public SSM verification key, not a credential.
+# Match only that exact checksum in the host bootstrap artifact manifest; other
+# values in the same file and the same value in other paths remain scanned.
+[[allowlists]]
+description = "Public AWS SSM Agent OpenPGP verification-key file SHA-256"
+condition = "AND"
+paths = ['''^packages/nebula/src/modules/infra/aws/debian-host/ssm-artifacts\.json$''']
+regexTarget = "secret"
+regexes = ['''^aaa3f054d9c0fb037e3e110e213cf721392429baa4a65c9e5e8b558b64c80fba$''']

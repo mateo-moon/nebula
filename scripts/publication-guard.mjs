@@ -47,11 +47,14 @@ export const DEFAULT_SCOPE = [
   "docker/devops-bridge",
   "docker/nebula-cmp",
   "packages/nebula/src/modules/infra/k0s/baremetal",
+  "packages/nebula/src/modules/infra/aws/debian-host",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);
 
 const DOC_ACCOUNT_IDS = new Set(["123456789012", "111122223333", "444455556666", "777788889999", "000000000000"]);
+// Official Debian EC2 publisher; other customer account IDs remain blocked.
+const PUBLIC_PUBLISHER_ACCOUNT_IDS = new Set(["136693071363"]);
 const GCR_UPSTREAM = new Set([
   "distroless", "google-containers", "google_containers", "kaniko-project", "go-containerregistry",
   "k8s-artifacts-prod", "knative-releases", "tekton-releases", "projectsigstore", "etcd-development",
@@ -92,7 +95,7 @@ const UPSTREAM_DOMAINS = [
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
-  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com",
+  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com", "docs.aws.amazon.com",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
@@ -180,7 +183,7 @@ const DETECTORS = [
     priority: 5,
     class: "aws-account-id",
     re: /(?<![0-9A-Za-z])\d{12}(?![0-9A-Za-z])/g,
-    keep: (m) => !DOC_ACCOUNT_IDS.has(m[0]),
+    keep: (m) => !DOC_ACCOUNT_IDS.has(m[0]) && !PUBLIC_PUBLISHER_ACCOUNT_IDS.has(m[0]),
   },
   {
     priority: 5,
@@ -227,6 +230,8 @@ function* domains(text) {
     for (const m of text.matchAll(re)) {
       const host = m[1];
       const index = m.index + m[0].length - host.length;
+      // Public SSM artifacts only; customer objects at this endpoint stay scanned.
+      if (host.toLowerCase() === "s3.eu-central-1.amazonaws.com" && text.slice(index + host.length).startsWith("/amazon-ssm-eu-central-1/")) continue;
       if (seen.has(index) || domainAllowed(host)) continue;
       seen.add(index);
       const found = [host];
