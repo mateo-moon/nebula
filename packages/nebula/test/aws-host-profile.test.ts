@@ -11,17 +11,17 @@ import { AwsK0sProvider } from "../src/modules/infra/aws/k0s-provider";
 import { AwsK0sCluster } from "../src/modules/infra/aws/k0s-cluster";
 import { K0sCluster } from "../src/modules/infra/k0s/cluster";
 import { K0smotronCluster } from "../src/modules/infra/k0s/k0smotron-cluster";
-import { awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "../src/modules/infra/aws/host-profile";
+import { defaultAwsImage, awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "../src/modules/infra/aws/host-profile";
 
 const profile: AwsHostProfile = { architecture: "amd64", sshUser: "admin", rootDeviceName: "/dev/xvda",
   debian: { suite: "trixie", minimumKernelVersion: "6.12.113-1", requireSsmAgent: true } };
-function fleetResources(hostProfile?: AwsHostProfile) {
+function fleetResources(hostProfile?: AwsHostProfile, useDefaultImage = false, instanceType = "m6i.large") {
   const chart = Testing.chart();
   const fleet = new AwsWorkerFleet(chart, "fleet", { namePrefix: "test", clusterName: "test",
     k0sVersion: "v1.35.7+k0s.0", sshPublicKey: "fixture-public-key", sshSecretName: "worker-ssh",
     dataVgName: "test-vg", tagDomain: "example.test", eipPurpose: "worker" });
   fleet.addNode({ geo: "eu", region: "eu-central-1", az: "eu-central-1a", vpcCidr: "10.12.0.0/16", subnetCidr: "10.12.0.0/20" },
-    { name: "worker", ami: "ami-fixture", allocationId: "eipalloc-fixture", instanceType: "m6i.large", nodeLabels: {}, ...(hostProfile ? { hostProfile } : {}) }, "worker-profile");
+    { name: "worker", ...(!useDefaultImage ? { ami: "ami-fixture" } : {}), allocationId: "eipalloc-fixture", instanceType, nodeLabels: {}, ...(hostProfile ? { hostProfile } : {}) }, "worker-profile");
   return Testing.synth(chart);
 }
 
@@ -117,4 +117,45 @@ test("invalid image profile fields are rejected before shell or resource generat
     assert.throws(() => fleetResources(invalid), /AWS host profile/);
     assert.throws(() => awsHostSshKeySetup(invalid, "fixture-public-key"), /AWS host profile/);
   }
+});
+
+test("omitted AMIs select official Debian for Graviton and x86 custom workers", () => {
+  for (const [instanceType, architecture, ami] of [
+    ["m6g.large", "arm64", "ami-0beea5d80ef49e480"],
+    ["c7g.large", "arm64", "ami-0beea5d80ef49e480"],
+    ["a1.large", "arm64", "ami-0beea5d80ef49e480"],
+    ["m6i.large", "amd64", "ami-0921aaa4dfa99a60a"],
+    ["c6a.large", "amd64", "ami-0921aaa4dfa99a60a"],
+  ]) {
+    const image = defaultAwsImage("eu-central-1", instanceType);
+    assert.equal(image.ami.id, ami); assert.equal(image.hostProfile.architecture, architecture);
+    const resources = fleetResources(undefined, true, instanceType);
+    const template = resources.find(r => r.kind === "LaunchTemplate")!;
+    assert.equal(template.spec.forProvider.imageId, ami);
+    assert.equal(template.spec.forProvider.blockDeviceMappings[0].deviceName, "/dev/xvda");
+    assert.match(Buffer.from(template.spec.forProvider.userData, "base64").toString(), /login_user='admin'/);
+    assert.equal(resources.find(r => r.kind === "XWorker")!.spec.sshUser, "admin");
+    const commands = resources.find(r => r.kind === "K0sWorkerConfigTemplate")!.spec.template.spec.preK0sCommands.join("\n");
+    assert.match(commands, /6\.12\.113-1/); assert.doesNotMatch(commands, /amazon-ssm-agent/);
+  }
+  assert.throws(() => defaultAwsImage("us-east-1", "m6i.large"), /explicit AMI/);
+});
+
+test("standalone, generic and hosted CAPA paths use the same Debian defaults", () => {
+  const standalone = Testing.chart();
+  new AwsK0sCluster(standalone, "aws", { name: "default", region: "eu-central-1" });
+  const direct = Testing.synth(standalone);
+  assert.equal(direct.find(r => r.kind === "AWSMachineTemplate")!.spec.template.spec.ami.id, "ami-0beea5d80ef49e480");
+  assert.match(direct.find(r => r.kind === "K0sControlPlane")!.spec.k0sConfigSpec.preK0sCommands.join("\n"), /arm64/);
+  const generic = Testing.chart();
+  new K0sCluster(generic, "generic", { name: "generic", provider: new AwsK0sProvider({ region: "eu-central-1" }), controlPlane: { machine: {} } });
+  const controlPlane = Testing.synth(generic);
+  assert.equal(controlPlane.find(r => r.kind === "AWSMachineTemplate")!.spec.template.spec.ami.id, "ami-0beea5d80ef49e480");
+  assert.match(controlPlane.find(r => r.kind === "K0sControlPlane")!.spec.k0sConfigSpec.preK0sCommands.join("\n"), /arm64/);
+  const hosted = Testing.chart();
+  new K0smotronCluster(hosted, "hosted", { name: "hosted", provider: new AwsK0sProvider({ region: "eu-central-1" }), workerPools: {
+    arm: { machine: { instanceType: "m6g.large" } }, x86: { machine: {} },
+  } });
+  const resources = Testing.synth(hosted);
+  assert.deepEqual(resources.filter(r => r.kind === "AWSMachineTemplate").map(r => r.spec.template.spec.ami.id).sort(), ["ami-0921aaa4dfa99a60a", "ami-0beea5d80ef49e480"]);
 });

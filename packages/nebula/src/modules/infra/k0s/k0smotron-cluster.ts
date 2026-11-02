@@ -205,7 +205,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
         },
       );
 
-      const hostCommands = provider.hostPreK0sCommands?.(pool.machine) ?? [];
+      const hostCommands = provider.hostPreK0sCommands?.(pool.machine, "worker") ?? [];
       const workerConfigName = hostBootstrapTemplateName(`${name}-${poolName}-config`, hostCommands);
       // Dual-stack workers must state their own --node-ip from k0s 1.35 on —
       // see NODE_IP_DISCOVERY_COMMANDS for why name-based detection cannot
