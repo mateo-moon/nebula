@@ -35,6 +35,7 @@
 import { Construct } from "constructs";
 import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
+import { awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
@@ -208,6 +209,8 @@ export interface AwsWorkerFleetNode {
    * not change the EC2 launch specification or trigger instance replacement. */
   launchTemplateAnnotations?: Record<string, string>;
   ami: string;
+  /** Explicit AMI settings; omission preserves the existing Ubuntu bootstrap. */
+  hostProfile?: AwsHostProfile;
   instanceType: string;
   /** kubelet --node-labels (geo/topology labels are added from the region). */
   nodeLabels: Record<string, string>;
@@ -753,6 +756,13 @@ systemctl daemon-reload
 systemctl enable --now pvresize.timer
 `
       : "";
+    const login = node.hostProfile ? awsHostSshKeySetup(node.hostProfile, o.sshPublicKey) : `install -d -m 700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
+cat >> /home/ubuntu/.ssh/authorized_keys <<'KEYEOF'
+${o.sshPublicKey}
+KEYEOF
+chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+`;
     return `#!/bin/bash
 ${this.usesObservedIdentity(node) ? "set -ex" : "set -x"}
 exec >> /var/log/${o.namePrefix}-worker-init.log 2>&1
@@ -762,12 +772,7 @@ hostnamectl set-hostname ${node.name}
 # Provisioner access FIRST — before apt and before the up-to-15-minute
 # data-volume wait (observed live: auth failures throughout the disk-wait
 # window when this was written last).
-install -d -m 700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
-cat >> /home/ubuntu/.ssh/authorized_keys <<'KEYEOF'
-${o.sshPublicKey}
-KEYEOF
-chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
-chmod 600 /home/ubuntu/.ssh/authorized_keys
+${login.trimEnd()}
 retry() { n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 30 ] && return 1; sleep 10; done; }
 retry apt-get update -qq
 retry apt-get install -y -qq lvm2 curl awscli
@@ -888,6 +893,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
     const o = this.options;
     const p = this.prefix(region);
     const dv = node.dataVolume;
+    validateAwsHostProfile(node.hostProfile);
     if (node.launchTemplateHandoff && !this.usesObservedIdentity(node))
       throw new Error(`${node.name}: launchTemplateHandoff requires observedIdentity`);
     if (dv && [Boolean(dv.volumeId), dv.createFresh === true, dv.existing === true].filter(Boolean).length !== 1)
@@ -945,6 +951,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
     new Worker(this, node.name, {
       eipName: node.eipName ?? node.name,
       sshSecretName: o.sshSecretName,
+      ...(node.hostProfile ? { sshUser: node.hostProfile.sshUser, useSudo: node.hostProfile.useSudo ?? true } : {}),
     });
     this.addCapiAdoption(region, node);
   }
@@ -1041,7 +1048,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
           ],
           blockDeviceMappings: [
             {
-              deviceName: "/dev/sda1",
+              deviceName: node.hostProfile?.rootDeviceName ?? "/dev/sda1",
               ebs: [
                 {
                   volumeSize: node.rootVolumeGi ?? 100,
@@ -1208,7 +1215,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
             // the SSH provisioning entrance and, where named, the P2P
             // endpoint. The GUA is delivered by RA/DHCPv6 — bounded wait,
             // then record it.
-            preK0sCommands: [...(o.preK0sCommands ?? NODE_IP_DISCOVERY_COMMANDS)],
+            preK0sCommands: [...awsHostPreK0sCommands(node.hostProfile), ...(o.preK0sCommands ?? NODE_IP_DISCOVERY_COMMANDS)],
             // Commands are executed through the node's shell (SSH exec), so
             // the $(cat ...) substitutes there — the address never appears
             // in git.
