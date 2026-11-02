@@ -52,6 +52,8 @@ export type AwsProviderFamily =
   | "ec2"
   | "iam"
   | "route53"
+  | "cloudfront"
+  | "acm"
   | "kms"
   | "s3"
   | "ecr"
@@ -73,7 +75,7 @@ export interface AwsProviderConfig {
   credentials: AwsCredentialSource;
   /**
    * Provider families to install (default: ['ec2', 'iam']). Add 'route53' for
-   * DNS and 'kms' for SOPS-KMS.
+   * DNS, 'kms' for SOPS-KMS, and 'cloudfront'/'acm' for CDN and certificates.
    */
   families?: AwsProviderFamily[];
 }
@@ -91,7 +93,7 @@ export interface AwsProviderConfig {
  * @example
  * ```typescript
  * new AwsProvider(chart, 'aws-provider', {
- *   families: ['ec2', 'iam', 'route53'],
+ *   families: ['ec2', 'iam', 'route53', 'cloudfront', 'acm'],
  *   credentials: {
  *     type: 'secret',
  *     secretRef: { name: 'aws-creds', namespace: 'crossplane-system', key: 'creds' },

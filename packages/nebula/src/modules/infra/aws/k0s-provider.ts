@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import { Construct } from "constructs";
 import { DEFAULT_NODE_INSTANCE_PROFILE } from "./iam";
+import { defaultAwsImage, awsHostPreK0sCommands, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import {
   AmiSelection,
   NodeIngressRuleSpec,
@@ -21,9 +22,11 @@ import type {
 
 /** AWS machine spec for a {@link K0sCluster} control plane or worker pool. */
 export interface AwsMachineSpec {
+  /** Explicit host settings for the selected AMI; never inferred from a tag. */
+  hostProfile?: AwsHostProfile;
   /** EC2 instance type. Defaults: "t4g.large" (control plane), "m6i.large" (workers). */
   instanceType?: string;
-  /** AMI / image-lookup selection (recommend a region-specific Ubuntu AMI). */
+  /** Explicit AMI/lookup override; omission selects the official Debian default. */
   ami?: AmiSelection;
   /** Root volume size in GiB (default 80). */
   rootVolumeSizeGiB?: number;
@@ -125,6 +128,16 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
 
   constructor(private readonly config: AwsK0sProviderConfig) {}
 
+  private resolveImage(machine: AwsMachineSpec, role: "control-plane" | "worker"): AwsMachineSpec {
+    if (machine.ami && Object.values(machine.ami).some(Boolean)) return machine;
+    const image = defaultAwsImage(this.config.region, machine.instanceType ?? (role === "control-plane" ? "t4g.large" : "m6i.large"));
+    return { ...machine, ami: image.ami, hostProfile: machine.hostProfile ?? image.hostProfile };
+  }
+
+  hostPreK0sCommands(machine: AwsMachineSpec, role: "control-plane" | "worker" = "worker"): readonly string[] {
+    return awsHostPreK0sCommands(this.resolveImage(machine, role).hostProfile);
+  }
+
   emitInfraCluster(scope: Construct, ctx: EmitInfraClusterCtx): void {
     // Hosted control plane (k0smotron on a management cluster) → k0smotron
     // exposes the API, so CAPA must NOT front it: emit loadBalancerType DISABLED
@@ -163,7 +176,8 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
     id: string,
     ctx: EmitMachineTemplateCtx<AwsMachineSpec>,
   ): CapiInfraRef {
-    const m = ctx.machine;
+    const m = this.resolveImage(ctx.machine, ctx.role);
+    validateAwsHostProfile(m.hostProfile);
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
     const isControlPlane = ctx.role === "control-plane";
@@ -218,7 +232,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
         };
     const hash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(templateSpec))
+      .update(JSON.stringify(m.hostProfile ? { ...templateSpec, hostProfile: m.hostProfile } : templateSpec))
       .digest("hex")
       .slice(0, 8);
     const name = `${ctx.baseName}-${hash}`;

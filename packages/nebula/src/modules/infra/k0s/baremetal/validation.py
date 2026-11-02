@@ -211,7 +211,20 @@ def validate_disk_policy(disk: DiskPolicy) -> None:
             raise ProvisioningError("workloadSerials must be additional erased disks")
 
 
+def validate_minimum_kernel_version(installation: Installation) -> None:
+    if "minimumKernelVersion" not in installation:
+        return
+    version = installation["minimumKernelVersion"]
+    if not (
+        isinstance(version, str)
+        and len(version) <= 128
+        and re.fullmatch(r"(?:[0-9]+:)?[0-9][A-Za-z0-9.+~]*(?:-[A-Za-z0-9.+~]+)?", version)
+    ):
+        raise ProvisioningError("invalid minimum Debian kernel package version")
+
+
 def validate_installation(installation: Installation) -> None:
+    validate_minimum_kernel_version(installation)
     validate_disk_policy(installation["disk"])
     if "uefi" in installation:
         validate_uefi(installation["uefi"])

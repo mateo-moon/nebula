@@ -87,6 +87,7 @@ class InstallationRequirements(TypedDict):
 
 
 class Installation(InstallationRequirements, total=False):
+    minimumKernelVersion: str
     timeoutSeconds: int
     dualStack: bool
     dnsServers: list[str]

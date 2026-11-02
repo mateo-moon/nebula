@@ -93,7 +93,6 @@ new K0sCluster(mgmt, "workload", {
     machine: {
       instanceType: "m6i.large",
       rootVolumeSizeGiB: 100,
-      ami: { id: "ami-0123456789abcdef0" },
     },
   },
   // Worker pools: each renders its own AWSMachineTemplate (hash-rotated name) +
@@ -105,8 +104,7 @@ new K0sCluster(mgmt, "workload", {
       machine: {
         instanceType: "m6i.xlarge",
         rootVolumeSizeGiB: 100,
-        // Recommended: a region-specific Ubuntu 22.04 AMI (k0s via cloud-init).
-        ami: { id: "ami-0123456789abcdef0" },
+        // The official Debian AMI is selected by the provider.
       },
     },
     // Dedicated P2P-node pool: labeled + tainted (only tolerating pods
@@ -116,7 +114,6 @@ new K0sCluster(mgmt, "workload", {
       machine: {
         instanceType: "m6i.2xlarge",
         rootVolumeSizeGiB: 500,
-        ami: { id: "ami-0123456789abcdef0" },
         spot: { maxPrice: "0.30" },
       },
       nodeLabels: { "example.com/pool": "p2p" },
@@ -129,7 +126,6 @@ new K0sCluster(mgmt, "workload", {
       replicas: 1,
       machine: {
         instanceType: "m6i.large",
-        ami: { id: "ami-0123456789abcdef0" },
         spot: true,
       },
       nodeLabels: { "example.com/pool": "burst" },
