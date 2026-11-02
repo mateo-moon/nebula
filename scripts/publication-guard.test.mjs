@@ -348,6 +348,12 @@ test("the Helm and vals download sources are upstream; neighbouring names are no
   assert.deepEqual(classes(scan("ghcr.io/helmfiles/vals:1")), ["registry-namespace"]);
 });
 
+test("the STS audience and k0smotron protocol labels are public; customer AWS hosts are not", () => {
+  assert.deepEqual(scan('audience: "sts.amazonaws.com"\n"k0smotron.io/machine-name": machine'), []);
+  assert.deepEqual(classes(scan('https://private-api.execute-api.eu-central-1.amazonaws.com')), ['domain']);
+  assert.deepEqual(classes(scan('https://other.sts.amazonaws.com')), ['domain']);
+});
+
 const WORKFLOWS = join(dirname(GUARD), "..", ".github", "workflows");
 // Splits a workflow into its jobs by indentation, whatever the indent width,
 // so a job cannot hide from the checks below by formatting alone.

@@ -92,7 +92,7 @@ const UPSTREAM_DOMAINS = [
   "grafana.com", "prometheus.io", "opentelemetry.io", "sigstore.dev", "npmjs.com", "npmjs.org", "nodejs.org",
   "typescriptlang.org", "rust-lang.org", "crates.io", "docs.rs", "golang.org", "go.dev", "python.org", "debian.org",
   "ubuntu.com", "kernel.org", "anthropic.com", "claude.com", "letsencrypt.org", "nebula.io", "matrix.org",
-  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com",
+  "helm.sh", "kyverno.io", "nvidia.com", "microsoft.com", "k0smotron.io",
 ];
 // Bare names are only matched under these TLDs (others collide with code:
 // this.app, tls.ca, provision.sh), and not as a logger call (log.info(...)); hosts
@@ -208,6 +208,8 @@ const DETECTORS = [
 
 function domainAllowed(host) {
   const h = host.toLowerCase().replace(/\.$/, "");
+  // Public STS token audience only. Do not allow arbitrary AWS customer hosts.
+  if (h === "sts.amazonaws.com") return true;
   if (!h.includes(".") || /^[0-9.]+$/.test(h) || !URL_TLDS.has(h.slice(h.lastIndexOf(".") + 1))) return true;
   if (RESERVED_DOMAIN.some((r) => r.test(h))) return true;
   return UPSTREAM_DOMAINS.some((d) => h === d || h.endsWith(`.${d}`));

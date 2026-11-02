@@ -33,7 +33,8 @@
  * on-node pvresize timer picks up the physical growth, then bump the PVC.
  */
 import { Construct } from "constructs";
-import { ApiObject } from "cdk8s";
+import { ApiObject, JsonPatch } from "cdk8s";
+import { AwsWorkerOsRollout, validateAwsWorkerOsRollout, type AwsWorkerOsRolloutOptions } from "./worker-os-rollout";
 import { Worker } from "../k0s/worker";
 import { awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
@@ -211,6 +212,9 @@ export interface AwsWorkerFleetNode {
   ami: string;
   /** Explicit AMI settings; omission preserves the existing Ubuntu bootstrap. */
   hostProfile?: AwsHostProfile;
+  /** Explicit activation, separate from template/image preparation. Requires
+   * observed identity and an already prepared numeric launch-template version. */
+  osRollout?: AwsWorkerOsRolloutOptions;
   instanceType: string;
   /** kubelet --node-labels (geo/topology labels are added from the region). */
   nodeLabels: Record<string, string>;
@@ -894,6 +898,11 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
     const p = this.prefix(region);
     const dv = node.dataVolume;
     validateAwsHostProfile(node.hostProfile);
+    if (node.osRollout) {
+      validateAwsWorkerOsRollout(node.osRollout);
+      if (!node.hostProfile || !this.usesObservedIdentity(node)) throw new Error("OS replacement requires an explicit host profile and observed identity");
+      if (node.dataVolume?.createFresh) throw new Error("OS replacement must retain its data volume");
+    }
     if (node.launchTemplateHandoff && !this.usesObservedIdentity(node))
       throw new Error(`${node.name}: launchTemplateHandoff requires observedIdentity`);
     if (dv && [Boolean(dv.volumeId), dv.createFresh === true, dv.existing === true].filter(Boolean).length !== 1)
@@ -948,12 +957,19 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
     // publishes a PooledRemoteMachine into a POOL OF ONE. Nothing else is
     // derived from the control plane: the node claimed its EIP and data
     // volume itself at boot, from the node role.
-    new Worker(this, node.name, {
+    const worker = new Worker(this, node.name, {
       eipName: node.eipName ?? node.name,
       sshSecretName: o.sshSecretName,
       ...(node.hostProfile ? { sshUser: node.hostProfile.sshUser, useSudo: node.hostProfile.useSudo ?? true } : {}),
     });
+    if (node.osRollout) worker.xr.addJsonPatch(JsonPatch.add("/metadata/annotations", { "crossplane.io/paused": "true" }));
     this.addCapiAdoption(region, node);
+    if (node.osRollout) new AwsWorkerOsRollout(this, `${node.name}-os-rollout`, {
+      ...node.osRollout, nodeName: node.name, namespace: this.ns, region: region.region,
+      availabilityZone: region.az, launchTemplateName: node.spot && node.altInstanceTypes?.length ? `${node.name}-mixed` : node.name,
+      eipName: node.eipName ?? node.name, ...(node.dataVolume ? { dataVolumeName: dataVolumeMrName } : {}),
+      dataVgName: o.dataVgName, providerConfigName: o.providerConfigName ?? "default", targetAmi: node.ami, hostProfile: node.hostProfile!,
+    });
   }
 
   /** name-keyed lifecycle: LaunchTemplate + size-1 AutoscalingGroup. Both are
@@ -1121,7 +1137,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
                     launchTemplate: [
                       {
                         launchTemplateSpecification: [
-                          { launchTemplateName: ltName, version: "$Latest" },
+                          { launchTemplateName: ltName, version: node.osRollout?.launchTemplateVersion ?? "$Latest" },
                         ],
                         override: mixedTypes.map((instanceType) => ({ instanceType })),
                       },
@@ -1141,7 +1157,7 @@ retry aws ec2 modify-instance-attribute --region ${r} --instance-id "$IID" --blo
                   },
                 ],
               }
-            : { launchTemplate: [{ name: ltName, version: "$Latest" }] }),
+            : { launchTemplate: [{ name: ltName, version: node.osRollout?.launchTemplateVersion ?? "$Latest" }] }),
           vpcZoneIdentifierRefs: [
             { name: `${p}-subnet`, policy: { resolve: "Always", resolution: "Required" } },
           ],

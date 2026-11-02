@@ -187,3 +187,5 @@ export type { DualStackSubnetConfig } from "./dualstack-subnet";
 
 export { AwsWorkerLaunchTemplateSetup, AwsWorkerLaunchTemplate } from "./worker-launch-template";
 export type { AwsWorkerLaunchTemplateConfig } from "./worker-launch-template";
+export { AwsWorkerOsRollout, validateAwsWorkerOsRollout } from "./worker-os-rollout";
+export type { AwsWorkerOsRolloutOptions, AwsWorkerOsRolloutConfig } from "./worker-os-rollout";
