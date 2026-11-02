@@ -1,11 +1,7 @@
 name: Publish worker OS rollout runtime
 
 on:
-  workflow_dispatch:
-    inputs:
-      base_image:
-        description: Reviewed Debian multi-architecture base pinned by sha256
-        required: true
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -19,10 +15,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Validate the base image pin
-        env:
-          BASE_IMAGE: ${{ inputs.base_image }}
-        run: node -e 'if (!/^docker.io\/library\/debian@sha256:[a-f0-9]{64}$/.test(process.env.BASE_IMAGE)) process.exit(1)'
       - name: Scan the image build context
         run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs packages/nebula/src/modules/infra/aws/worker-os-rollout
 
@@ -55,5 +47,5 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           build-args: |
-            BASE_IMAGE=${{ inputs.base_image }}
+            BASE_IMAGE=docker.io/library/debian@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
           provenance: false

@@ -47,6 +47,7 @@ export const DEFAULT_SCOPE = [
   "docker/devops-bridge",
   "docker/nebula-cmp",
   "packages/nebula/src/modules/infra/k0s/baremetal",
+  "packages/nebula/src/modules/infra/aws/worker-os-rollout",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);

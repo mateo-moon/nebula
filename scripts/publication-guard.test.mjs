@@ -308,6 +308,7 @@ const IMAGES = [
   { context: "docker/devops-bridge", workflow: "publish-devops-bridge.yml", retired: "build-devops-bridge.yml", file: "synthetic.py" },
   { context: "docker/nebula-cmp", workflow: "publish-nebula-cmp.yml", retired: "build-nebula-cmp.yml", file: "Dockerfile" },
   { context: "packages/nebula/src/modules/infra/k0s/baremetal", workflow: "publish-baremetal-provisioner.yml", retired: "build-baremetal-provisioner.yml", file: "Dockerfile" },
+  { context: "packages/nebula/src/modules/infra/aws/worker-os-rollout", workflow: "publish-worker-os-rollout.yml", retired: "build-worker-os-rollout.yml", file: "Dockerfile" },
 ];
 
 for (const { context, file } of IMAGES) {
@@ -416,17 +417,18 @@ const triggersOf = (workflow) => workflow.match(/\n["']?on["']?:[^\n]*\n((?:[ \t
 const imageWorkflowViolations = (workflow, { context, path }) => {
   const v = [];
   const check = (ok, what) => { if (!ok) v.push(what); };
-  check(workflow.includes(`\n      - .github/workflows/${path}\n`), "edits to the workflow re-run it");
+  const manual = path === "publish-worker-os-rollout.yml";
+  if (!manual) check(workflow.includes(`\n      - .github/workflows/${path}\n`), "edits to the workflow re-run it");
   const triggers = triggersOf(workflow);
   const events = [...triggers.matchAll(/^ {2}["']?([^\s"':#]+)["']?:/gm)].map((m) => m[1]);
   check(events.length > 0 && events.every((e) => e === "push" || e === "workflow_dispatch"),
     "the workflow runs only on push and workflow_dispatch");
-  check(/\n  push:\n    branches: \[main\]\n/.test(`\n${triggers}`) && !/\b(?:tags|branches-ignore|tags-ignore)\s*:/.test(triggers),
-    "a push publishes only from main");
+  if (manual) check(events.length === 1 && events[0] === "workflow_dispatch", "rollout runtime publication is manual only");
+  else check(/\n  push:\n    branches: \[main\]\n/.test(`\n${triggers}`) && !/\b(?:tags|branches-ignore|tags-ignore)\s*:/.test(triggers), "a push publishes only from main");
   const jobs = jobsOf(workflow);
   const guard = jobs.get("guard");
   if (!guard) return [...v, "a guard job exists"];
-  const gate = context === "docker/nebula-cmp" ? MAIN_OR_MANUAL : MAIN_ONLY;
+  const gate = manual ? "\n    if: github.ref == 'refs/heads/main' && vars.WORKER_OS_ROLLOUT_IMAGE_ENABLED == 'true'\n" : context === "docker/nebula-cmp" ? MAIN_OR_MANUAL : MAIN_ONLY;
   check(guard.includes(gate), "publication requires main or an explicit maintainer dispatch for the CMP");
   check(!/continue-on-error|\n\s+if:/.test(guard.replace(gate, "\n")), "the guard cannot be skipped off main or soft-fail");
   check(guard.includes(`\n        run: env -u GITHUB_REPOSITORY_OWNER node scripts/publication-guard.mjs ${context}\n`),
