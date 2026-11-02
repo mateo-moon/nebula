@@ -52,6 +52,11 @@ export interface BaremetalInstallation {
   /** Debian amd64 netboot kernel and initrd, from the same installer release. */
   kernel: BaremetalBootArtifact;
   initrd: BaremetalBootArtifact;
+  /** Minimum Debian package version of the installed and running kernel, for
+   * example "6.12.113-1". Fresh installs upgrade linux-image-amd64 from signed
+   * archives; enrollment verifies linux-image-$(uname -r), not just the metapackage.
+   * Omit to preserve an existing installation profile and receipt. */
+  minimumKernelVersion?: string;
   suite: string;
   /** Debian archive hostname and path. Signed archive verification stays enabled. */
   mirror: { hostname: string; directory: string };
@@ -201,6 +206,10 @@ export class BaremetalFleet extends Construct {
 
 function validateInstallation(p: BaremetalInstallation): void {
   if (p.uefi) validateUefi(p.uefi);
+  requireValue(p.minimumKernelVersion === undefined || (typeof p.minimumKernelVersion === "string"
+    && p.minimumKernelVersion.length <= 128
+    && /^(?:[0-9]+:)?[0-9][A-Za-z0-9.+~]*(?:-[A-Za-z0-9.+~]+)?$/.test(p.minimumKernelVersion)),
+  "invalid minimum Debian kernel package version");
   for (const artifact of [p.kernel, p.initrd]) {
     const url = new URL(artifact.url);
     requireValue(url.protocol === "https:" && !url.username && !url.password && !url.hash,

@@ -5,7 +5,7 @@ import re
 import secrets
 import shlex
 
-from models import DiskPolicy, JsonObject, Receipt, WorkerSpec
+from models import DiskPolicy, Installation, JsonObject, Receipt, WorkerSpec
 from runtime import ProvisioningError, canonical
 from runtime import fingerprint as fingerprint
 from validation import validate_spec
@@ -125,6 +125,21 @@ def workload_volume_script(spec: WorkerSpec, facts: JsonObject) -> str:
     return "\n".join(lines) + "\n"
 
 
+def kernel_setup_script(installation: Installation) -> str:
+    """Upgrade only the target kernel, and refuse stale/unavailable archives."""
+    minimum = installation.get("minimumKernelVersion")
+    if minimum is None:
+        return ""
+    return (
+        "in-target env DEBIAN_FRONTEND=noninteractive apt-get update -o APT::Update::Error-Mode=any\n"
+        "in-target env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install --yes --no-remove --no-install-recommends linux-image-amd64\n"
+        "kernel_version=$(in-target dpkg-query -W '-f=${Version}' linux-image-amd64)\n"
+        + 'in-target dpkg --compare-versions "$kernel_version" ge '
+        + shlex.quote(minimum)
+        + "\n"
+    )
+
+
 def render_files(
     spec: WorkerSpec, facts: JsonObject, worker_public_key: str, receipt: Receipt
 ) -> dict[str, bytes]:
@@ -225,6 +240,8 @@ def render_files(
         "partman/early_command string": "/bin/sh /nebula/disk.sh",
         "preseed/late_command string": "/bin/sh /nebula/late.sh",
     }
+    if installation.get("minimumKernelVersion") is not None:
+        entries["apt-setup/services-select multiselect"] = "security, updates"
     preseed = "\n".join(f"d-i {key} {value}" for key, value in entries.items())
     preseed += "\ntasksel tasksel/first multiselect\npopularity-contest popularity-contest/participate boolean false\n"
     early = f"""set -eu
@@ -251,6 +268,7 @@ debconf-set grub-installer/bootdev "$disk"
 """
     late = (
         "set -eu\n. /nebula/logging.sh\nnebula_logging target-configuration\n"
+        + kernel_setup_script(installation)
         + workload_volume_script(spec, facts)
         + """
 install -d -m 0700 /target/root/.ssh /target/var/lib/nebula-baremetal
