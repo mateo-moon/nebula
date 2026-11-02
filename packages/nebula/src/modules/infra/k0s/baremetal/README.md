@@ -561,3 +561,12 @@ python3 -B test/baremetal-efi-vm.py --artifacts /path/to/efi-artifacts \
 It creates a disposable GPT/FAT disk and private NVRAM copy, runs the production
 script through a real BootNext shell boot, checks exact variable bytes and the
 return boot, and verifies that selecting the shell again cannot repeat writes.
+
+
+For hosts whose OS installation is already complete, the existing
+`baremetalEnrollmentManifests` factory can declare the four active CAPI resources
+directly: pooled machine, remote template, bootstrap template and deployment.
+It creates no installer Job, XR, Composition or historical receipt resources.
+When transferring an installed host to direct GitOps ownership, preserve its
+existing native specs and orphan those four resources from their old provider
+Objects before removing the completed installer.

@@ -110,6 +110,60 @@ test("existing explicit dual-stack configuration and unrelated overrides still r
   });
 });
 
+const clusterPool = { mode: "cluster-pool" as const,
+  ipv4PodCidrs: ["10.244.0.0/16"], ipv6PodCidrs: ["fd42:8::/48"] };
+
+test("explicit operator IPAM allocates both families independently of Kubernetes Node CIDRs", () => {
+  withHelm(render => {
+    const values = render({ ipam: clusterPool, nodeEncryption: true });
+    assert.deepEqual(values.ipam, { mode: "cluster-pool", operator: {
+      clusterPoolIPv4PodCIDRList: ["10.244.0.0/16"], clusterPoolIPv4MaskSize: 24,
+      clusterPoolIPv6PodCIDRList: ["fd42:8::/48"], clusterPoolIPv6MaskSize: 64,
+    } });
+    assert.deepEqual(values.k8s, { requireIPv4PodCIDR: false, requireIPv6PodCIDR: false });
+    assert.equal(values.underlayProtocol, "ipv6");
+    assert.equal(values.MTU, 1400);
+    assert.equal(values.encryption.nodeEncryption, true);
+    assert.equal(values.annotateK8sNode, true);
+    assert.equal(values.operator.rollOutPods, true);
+  });
+});
+
+test("operator IPAM preserves configured pool order and supports private IPv4 clusters", () => {
+  withHelm(render => {
+    const pools = ["fd42:6:0:1::/64", "fd42:7:9db4:3421::/64", "fd42:8::/48"];
+    assert.deepEqual(render({ ipam: { ...clusterPool, ipv6PodCidrs: pools } }).ipam.operator.clusterPoolIPv6PodCIDRList, pools);
+    const ipv4 = render({ nodeConnectivity: "private", podAddressFamilies: "ipv4",
+      ipam: { mode: "cluster-pool", ipv4PodCidrs: clusterPool.ipv4PodCidrs } });
+    assert.equal(ipv4.ipam.operator.clusterPoolIPv6PodCIDRList, undefined);
+    assert.equal(ipv4.ipv6.enabled, false);
+    assert.equal(ipv4.underlayProtocol, "ipv4");
+  });
+});
+
+for (const [name, config, expected] of [
+  ["missing IPv4 pools", { ipam: { mode: "cluster-pool", ipv6PodCidrs: ["fd42:8::/48"] } }, /IPv4 pools/],
+  ["missing IPv6 pools", { ipam: { mode: "cluster-pool", ipv4PodCidrs: ["10.244.0.0/16"] } }, /IPv6 pools/],
+  ["overlapping IPv4 pools", { ipam: { ...clusterPool, ipv4PodCidrs: ["10.244.0.0/16", "10.244.1.0/24"] } }, /overlap/],
+  ["equivalent IPv6 pool spellings", { ipam: { ...clusterPool, ipv6PodCidrs: ["fd42:8::/48", "fd42:0008:0000:0::/48"] } }, /overlap/],
+  ["IPv4 host bits", { ipam: { ...clusterPool, ipv4PodCidrs: ["10.244.1.0/16"] } }, /host bits/],
+  ["IPv6 host bits", { ipam: { ...clusterPool, ipv6PodCidrs: ["fd42:8:1::1/48"] } }, /host bits/],
+  ["IPv6 pool too large for allocator bitmap", { ipam: { ...clusterPool, ipv6PodCidrs: ["fd42::/32"] } }, /prefix/],
+  ["wrong pool family", { ipam: { ...clusterPool, ipv6PodCidrs: ["10.244.0.0/16"] } }, /IPv6 CIDRs/],
+  ["pool raw override", { ipam: clusterPool, values: { ipam: { operator: { clusterPoolIPv6PodCIDRList: ["fd99::/48"] } } } }, /clusterPoolIPv6PodCIDRList/],
+  ["raw IPv6 pool in IPv4 profile", { nodeConnectivity: "private", podAddressFamilies: "ipv4", ipam: { mode: "cluster-pool", ipv4PodCidrs: ["10.244.0.0/16"] }, values: { ipam: { operator: { clusterPoolIPv6PodCIDRList: ["fd99::/48"] } } } }, /clusterPoolIPv6PodCIDRList/],
+  ["mask raw override", { ipam: clusterPool, values: { ipam: { operator: { clusterPoolIPv4MaskSize: 25 } } } }, /clusterPoolIPv4MaskSize/],
+  ["Kubernetes CIDR wait restored", { ipam: clusterPool, values: { k8s: { requireIPv6PodCIDR: true } } }, /requireIPv6PodCIDR/],
+  ["operator argument bypass", { ipam: clusterPool, values: { operator: { extraArgs: ["--cluster-pool-ipv6-cidr=fd99::/48"] } } }, /operator.extraArgs/],
+  ["operator configuration rollout disabled", { ipam: clusterPool, values: { operator: { rollOutPods: false } } }, /operator.rollOutPods/],
+  ["operator environment bypass", { ipam: clusterPool, values: { operator: { extraEnv: [{ name: "CILIUM_CLUSTER_POOL_IPV4_MASK_SIZE", value: "25" }] } } }, /operator.extraEnv/],
+] as [string, unknown, RegExp][]) {
+  test(`operator IPAM rejects ${name} before rendering Helm`, () => withHelm((render, called) => {
+    assert.throws(() => render(config as CiliumConfig), expected);
+    assert.equal(called(), false);
+  }));
+}
+
 const nodeIpv6Overrides = { nodes: [{ name: "retained-worker-1", nodeName: "worker-1", ipv6: "2001:db8:1::2" }] };
 test("declared IPv6 inventory enables only selector-scoped IPv6 overrides and preserves caller annotations", () => {
   withHelm(render => {
@@ -263,6 +317,31 @@ test("pinned Helm chart emits enforced agent settings", { skip: !process.env.CIL
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("pinned Helm chart enables operator pools without waiting for Kubernetes CIDRs", { skip: !process.env.CILIUM_TEST_CHART }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "cilium-pools-chart-"));
+  try {
+    const values = withHelm(render => render({ ipam: clusterPool, nodeEncryption: true }));
+    const path = join(dir, "values.json");
+    writeFileSync(path, JSON.stringify(values));
+    const manifest = execFileSync("helm", ["template", "cilium", process.env.CILIUM_TEST_CHART!, "--namespace", "kube-system", "-f", path], { encoding: "utf8" });
+    const objects = parseAllDocuments(manifest).map(doc => { assert.deepEqual(doc.errors, []); return doc.toJSON(); });
+    const operator = objects.find(o => o.kind === "Deployment" && o.metadata.name === "cilium-operator");
+    assert.match(operator.spec.template.metadata.annotations["cilium.io/cilium-configmap-checksum"], /^[a-f0-9]{64}$/);
+    const data = objects.find(o => o.kind === "ConfigMap" && o.metadata.name === "cilium-config").data;
+    assert.equal(data.ipam, "cluster-pool");
+    assert.notEqual(data["k8s-require-ipv4-pod-cidr"], "true");
+    assert.notEqual(data["k8s-require-ipv6-pod-cidr"], "true");
+    assert.equal(data["cluster-pool-ipv4-cidr"], "10.244.0.0/16");
+    assert.equal(data["cluster-pool-ipv6-cidr"], "fd42:8::/48");
+    assert.equal(data["cluster-pool-ipv4-mask-size"], "24");
+    assert.equal(data["cluster-pool-ipv6-mask-size"], "64");
+    assert.equal(data["underlay-protocol"], "ipv6");
+    assert.equal(data["enable-wireguard"], "true");
+    assert.equal(data["encrypt-node"], "true");
+    assert.equal(data.mtu, "1400");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("pinned Helm chart limits build-config to selector-scoped ipv6-node inventory", { skip: !process.env.CILIUM_TEST_CHART }, () => {

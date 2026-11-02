@@ -13,6 +13,13 @@ Repository Kubernetes names can differ from their AWS repository paths.
 `awsProviderConfigName` selects the AWS account credentials and defaults to
 `default`. The destination provider uses the explicitly named kubeconfig Secret.
 
+`distribution` is optional. Omit it when this registry has no remote delivery
+consumers: no destination ProviderConfig, Namespace or Secret Object is emitted.
+Repositories, IAM, mirroring and credential refresh retain their existing
+identities and settings. A present distribution still requires nonempty unique
+target namespaces. Before removing a shared destination provider, migrate all
+of its consumers, including consumers outside the registry module.
+
 The runtime repository is immutable and restricts writes to its declared CI
 publisher. Its repository policy denies image/repository deletion and new
 lifecycle policies. All repositories use `Orphan` and `forceDelete: false`.

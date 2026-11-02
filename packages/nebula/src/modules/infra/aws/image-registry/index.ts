@@ -31,7 +31,7 @@ export interface AwsImageRegistryConfig {
   };
   images: { awsCli: string; tools: string; crane: string };
   gcr: { saJsonRef: string; imagePrefixes: string[]; mirroredImages: string[] };
-  distribution: {
+  distribution?: {
     providerConfigName: string;
     kubeconfigSecretRef: { namespace: string; name: string; key: string };
     targets: { namespace: string; secretName: string; namespaceLabels?: Record<string, string> }[];
@@ -56,18 +56,18 @@ function validateConfig(config: AwsImageRegistryConfig, names: {
   const dnsLabel = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
   const identities = [config.namespace, ...Object.values(config.roles), names.refreshName,
     names.credentialsSecretName, names.sourceSecretName, names.controllerPolicyName, names.initialJobName,
-    names.mirrorJobPrefix, config.distribution.providerConfigName, config.github.providerName ?? "github-actions",
-    config.distribution.kubeconfigSecretRef.namespace, config.distribution.kubeconfigSecretRef.name,
+    names.mirrorJobPrefix, config.github.providerName ?? "github-actions",
+    ...(config.distribution ? [config.distribution.providerConfigName, config.distribution.kubeconfigSecretRef.namespace, config.distribution.kubeconfigSecretRef.name] : []),
     config.refresh?.appLabel ?? `${config.namespace}-refresh`, config.mirrorJob?.appLabel ?? config.repositories.mirror.name,
-    ...config.distribution.targets.flatMap(target => [target.namespace, target.secretName])];
+    ...(config.distribution?.targets ?? []).flatMap(target => [target.namespace, target.secretName])];
   if (identities.some(name => !dnsLabel.test(name))) throw new Error("Registry resource identities must be DNS labels");
   if (names.mirrorJobPrefix.length > 52) throw new Error("Registry mirror Job prefix exceeds 52 characters");
   if (!/^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\/)?[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?$/.test(names.expiryAnnotation))
     throw new Error("Invalid registry credential expiry annotation");
-  if (!/^[A-Za-z0-9._-]+$/.test(config.distribution.kubeconfigSecretRef.key)) throw new Error("Invalid kubeconfig Secret key");
+  if (config.distribution && !/^[A-Za-z0-9._-]+$/.test(config.distribution.kubeconfigSecretRef.key)) throw new Error("Invalid kubeconfig Secret key");
   if (new Set(Object.values(config.roles)).size !== 4) throw new Error("Registry operations require distinct IAM roles");
-  if (config.distribution.targets.length === 0 ||
-      new Set(config.distribution.targets.map(target => target.namespace)).size !== config.distribution.targets.length)
+  if (config.distribution && (config.distribution.targets.length === 0 ||
+      new Set(config.distribution.targets.map(target => target.namespace)).size !== config.distribution.targets.length))
     throw new Error("Registry distribution requires unique target namespaces");
   if (!config.gcr.imagePrefixes.length || new Set(config.gcr.imagePrefixes).size !== config.gcr.imagePrefixes.length ||
       config.gcr.imagePrefixes.some(prefix => !/^gcr\.io\/[a-z0-9-]+(?:\/[a-z0-9._-]+)+$/.test(prefix)))
@@ -303,35 +303,38 @@ export class AwsImageRegistry extends Construct {
         successfulJobsHistoryLimit: 1, failedJobsHistoryLimit: 2, jobTemplate: { spec: jobSpec } },
     });
 
-    raw("destination-provider", {
-      apiVersion: "kubernetes.crossplane.io/v1alpha1", kind: "ProviderConfig",
-      metadata: { name: config.distribution.providerConfigName },
-      spec: { credentials: { source: "Secret", secretRef: config.distribution.kubeconfigSecretRef } },
-    });
-    // Namespace and pull Secret have ONE owner: this module. The workload app
-    // consumes them and must not render a competing Namespace or Secret.
-    for (const destination of config.distribution.targets) {
-      const target = destination.namespace;
-      raw("destination-namespace-" + target, {
-        apiVersion: "kubernetes.crossplane.io/v1alpha2", kind: "Object", metadata: { name: target + "-namespace" },
-        spec: { deletionPolicy: "Orphan", providerConfigRef: { name: config.distribution.providerConfigName }, forProvider: { manifest: {
-          apiVersion: "v1", kind: "Namespace", metadata: { name: target, ...(destination.namespaceLabels ? { labels: destination.namespaceLabels } : {}) },
-        } } },
+    if (config.distribution) {
+      raw("destination-provider", {
+        apiVersion: "kubernetes.crossplane.io/v1alpha1", kind: "ProviderConfig",
+        metadata: { name: config.distribution.providerConfigName },
+        spec: { credentials: { source: "Secret", secretRef: config.distribution.kubeconfigSecretRef } },
       });
-      raw("destination-pull-secret-" + target, {
-        apiVersion: "kubernetes.crossplane.io/v1alpha2", kind: "Object", metadata: {
-          name: target + "-pull-secret", annotations: { "argocd.argoproj.io/sync-wave": "2" },
-        },
-        spec: {
-          deletionPolicy: "Orphan", providerConfigRef: { name: config.distribution.providerConfigName },
-          references: [
-            { dependsOn: { apiVersion: "kubernetes.crossplane.io/v1alpha2", kind: "Object", name: target + "-namespace" } },
-            { patchesFrom: { apiVersion: "v1", kind: "Secret", namespace: NAMESPACE, name: credentialsSecretName, fieldPath: "data" }, toFieldPath: "data" },
-            { patchesFrom: { apiVersion: "v1", kind: "Secret", namespace: NAMESPACE, name: credentialsSecretName, fieldPath: "metadata.annotations" }, toFieldPath: "metadata.annotations" },
-          ],
-          forProvider: { manifest: { apiVersion: "v1", kind: "Secret", metadata: { namespace: target, name: destination.secretName }, type: "kubernetes.io/dockerconfigjson" } },
-        },
-      });
+      // Namespace and pull Secret have ONE owner: this module. The workload app
+      // consumes them and must not render a competing Namespace or Secret.
+      for (const destination of config.distribution.targets) {
+        const target = destination.namespace;
+        raw("destination-namespace-" + target, {
+          apiVersion: "kubernetes.crossplane.io/v1alpha2", kind: "Object", metadata: { name: target + "-namespace" },
+          spec: { deletionPolicy: "Orphan", providerConfigRef: { name: config.distribution.providerConfigName }, forProvider: { manifest: {
+            apiVersion: "v1", kind: "Namespace", metadata: { name: target, ...(destination.namespaceLabels ? { labels: destination.namespaceLabels } : {}) },
+          } } },
+        });
+        raw("destination-pull-secret-" + target, {
+          apiVersion: "kubernetes.crossplane.io/v1alpha2", kind: "Object", metadata: {
+            name: target + "-pull-secret", annotations: { "argocd.argoproj.io/sync-wave": "2" },
+          },
+          spec: {
+            deletionPolicy: "Orphan", providerConfigRef: { name: config.distribution.providerConfigName },
+            references: [
+              { dependsOn: { apiVersion: "kubernetes.crossplane.io/v1alpha2", kind: "Object", name: target + "-namespace" } },
+              { patchesFrom: { apiVersion: "v1", kind: "Secret", namespace: NAMESPACE, name: credentialsSecretName, fieldPath: "data" }, toFieldPath: "data" },
+              { patchesFrom: { apiVersion: "v1", kind: "Secret", namespace: NAMESPACE, name: credentialsSecretName, fieldPath: "metadata.annotations" }, toFieldPath: "metadata.annotations" },
+            ],
+            forProvider: { manifest: { apiVersion: "v1", kind: "Secret", metadata: { namespace: target, name: destination.secretName }, type: "kubernetes.io/dockerconfigjson" } },
+          },
+        });
+      }
+
     }
 
     // The mirror identity copies each declared GCR image into the mirror repository under its own digest, with the
