@@ -28,6 +28,20 @@ def acknowledged(resource):
                 c.get('observedGeneration') == m['generation'] for c in conditions))
 
 
+def validate_inventory(worker, pool, remote, node, namespace, address, source_user):
+    inventory = pool['spec']['machine']
+    target = remote['spec']
+    key = worker['spec']['sshSecretName']
+    if (worker['spec']['pool'] != node or worker['spec']['namespace'] != namespace or
+        pool['spec']['pool'] != node or target.get('pool') != node or
+        inventory['address'] != address or target.get('address') != address or
+        inventory['user'] != source_user or target.get('user') != source_user or
+        inventory['sshKeyRef']['name'] != key or target.get('sshKeyRef', {}).get('name') != key or
+        inventory.get('port', 22) != target.get('port', 22) or
+        inventory.get('useSudo', True) != target.get('useSudo', True)):
+        raise Unsafe('SSH inventory does not match the worker and retained cloud address')
+
+
 class Replacement:
     def __init__(self, request, journal, operations):
         self.request, self.journal, self.ops = request, journal, operations

@@ -19,7 +19,7 @@ import urllib.request
 import boto3
 from botocore.exceptions import ClientError
 import yaml
-from engine import Hold, Unsafe, Replacement, acknowledged, digest
+from engine import Hold, Unsafe, Replacement, acknowledged, digest, validate_inventory
 
 PAUSE = 'cluster.x-k8s.io/paused'
 SKIP = 'cluster.x-k8s.io/skip-remediation'
@@ -240,6 +240,7 @@ class Operations:
         if pool['spec']['machine']['user'] != self.r['sourceSshUser'] or not pool.get('status', {}).get('reserved'):
             raise Unsafe('Source inventory login or reservation changed')
         remote = self.required(self.infra + '/remotemachines/' + pool['status']['machineRef']['name'])
+        validate_inventory(resources['worker'], pool, remote, self.r['nodeName'], self.r['namespace'], address[0]['PublicIp'], self.r['sourceSshUser'])
         if remote['spec']['user'] != self.r['sourceSshUser'] or remote.get('metadata', {}).get('deletionTimestamp'):
             raise Unsafe('Source RemoteMachine login or lifecycle changed')
         machine_ref = next(x for x in remote['metadata']['ownerReferences'] if x['kind'] == 'Machine' and x.get('controller'))
@@ -257,11 +258,13 @@ class Operations:
         source_node = self.w.call('GET', '/api/v1/nodes/' + self.r['nodeName'])
         if not source_node: raise Hold('Source Node observation is missing')
         baseline.update(sourceMachine={'name': machine['metadata']['name'], 'uid': machine['metadata']['uid']},
-            sourceRemote={'name': remote['metadata']['name'], 'uid': remote['metadata']['uid']},
+            sourceRemote={'name': remote['metadata']['name'], 'uid': remote['metadata']['uid'], 'specHash': digest(remote['spec'])},
             machineSet={'name': machine_set['metadata']['name'], 'uid': machine_set['metadata']['uid'], 'pause': machine_set['metadata'].get('annotations', {}).get(PAUSE)},
             deployment={'uid': deployment['metadata']['uid'], 'pause': deployment['metadata'].get('annotations', {}).get(PAUSE)},
             poolUid=pool['metadata']['uid'], sourceNodeUid=source_node['metadata']['uid'], sourceIdentity=self.host_identity(source['InstanceId']))
         if len(baseline['sourceIdentity']) < 2 or baseline['sourceIdentity'][1] != self.r['nodeName']: raise Unsafe('Source host identity mismatch')
+        if source_node.get('status', {}).get('nodeInfo', {}).get('machineID') != baseline['sourceIdentity'][0]:
+            raise Unsafe('Source Node does not belong to the observed cloud instance')
         return baseline
 
     def hold_assignment(self, b):
@@ -301,6 +304,9 @@ class Operations:
         machine = self.k.call('GET', path)
         if machine:
             if machine['metadata']['uid'] != b['sourceMachine']['uid']: raise Unsafe('Source Machine name reused')
+            remote = self.k.call('GET', self.infra + '/remotemachines/' + b['sourceRemote']['name'])
+            if remote and (remote['metadata']['uid'] != b['sourceRemote']['uid'] or digest(remote['spec']) != b['sourceRemote']['specHash']):
+                raise Unsafe('Source RemoteMachine address, login or identity changed before cleanup')
             self.k.call('DELETE', path, {'apiVersion': 'v1', 'kind': 'DeleteOptions', 'preconditions': {'uid': b['sourceMachine']['uid']}})
             raise Hold('Waiting for source Machine cleanup')
         if self.k.call('GET', self.infra + '/remotemachines/' + b['sourceRemote']['name']): raise Hold('Waiting for old RemoteMachine cleanup')

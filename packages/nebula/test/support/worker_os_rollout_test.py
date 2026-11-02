@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2] / 'src/modules/infra/aws/worker-os-rollout'
 sys.path.insert(0, str(ROOT))
-from engine import Replacement, Hold, Unsafe, acknowledged
+from engine import Replacement, Hold, Unsafe, acknowledged, validate_inventory
 
 
 class Journal:
@@ -129,6 +129,17 @@ class TestReplacement(unittest.TestCase):
         # Construction is inert; the caller must explicitly start the Job.
         self.assertEqual(self.journal.read(), {})
         self.assertEqual(self.cloud.calls, [])
+
+    def test_foreign_inventory_address_login_key_and_pool_cannot_reach_cleanup(self):
+        worker = {'spec': {'sshSecretName': 'worker-key', 'pool': 'node', 'namespace': 'default'}}
+        machine = {'address': '192.0.2.1', 'user': 'ubuntu', 'sshKeyRef': {'name': 'worker-key'}}
+        pool = {'spec': {'pool': 'node', 'machine': machine}}
+        remote = {'spec': {**copy.deepcopy(machine), 'pool': 'node'}}
+        validate_inventory(worker, pool, remote, 'node', 'default', '192.0.2.1', 'ubuntu')
+        for change in ({'address': '192.0.2.2'}, {'user': 'admin'}, {'pool': 'foreign'}, {'sshKeyRef': {'name': 'other-key'}}, {'port': 23}, {'useSudo': False}):
+            with self.subTest(change=change):
+                altered = {'spec': {**remote['spec'], **change}}
+                with self.assertRaises(Unsafe): validate_inventory(worker, pool, altered, 'node', 'default', '192.0.2.1', 'ubuntu')
 
 
 # API transition tests use SDK-free transports; no cloud or credential access.
