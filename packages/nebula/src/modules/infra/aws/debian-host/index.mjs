@@ -3,9 +3,12 @@ import { readFileSync } from 'node:fs';
 export const DEBIAN_KERNEL_MINIMUM = '6.12.113-1';
 // Debian's public EC2 publisher, documented in its official cloud image catalog.
 export const DEBIAN_PUBLISHER = '136693071363';
-export const debianSsmArtifacts = Object.freeze(Object.fromEntries(Object.entries(
-  JSON.parse(readFileSync(new URL('./ssm-artifacts.json', import.meta.url), 'utf8')),
-).map(([arch, artifact]) => [arch, Object.freeze(artifact)])));
+let artifacts;
+export function getDebianSsmArtifacts() {
+  return artifacts ??= Object.freeze(Object.fromEntries(Object.entries(
+    JSON.parse(readFileSync(new URL('./ssm-artifacts.json', import.meta.url), 'utf8')),
+  ).map(([arch, artifact]) => [arch, Object.freeze(artifact)])));
+}
 
 const quote = value => "'" + value.replace(/'/g, "'\\''") + "'";
 /** Prepare a fresh official Debian host. This never creates an AMI. */
@@ -15,7 +18,7 @@ export function debianHostSetupScript({ architecture, suite, minimumKernelVersio
     || !/^(?:[0-9]+:)?[0-9][A-Za-z0-9.+~]*(?:-[A-Za-z0-9.+~]+)?$/.test(minimumKernelVersion)) {
     throw new Error('Invalid Debian host bootstrap policy');
   }
-  const ssm = debianSsmArtifacts[architecture];
+  const ssm = getDebianSsmArtifacts()[architecture];
   const values = { ARCH: architecture, SUITE: suite, KERNEL_MINIMUM: minimumKernelVersion,
     ...Object.fromEntries(Object.entries(ssm).map(([key, value]) => [key.toUpperCase(), value])) };
   return readFileSync(new URL('./setup.sh', import.meta.url), 'utf8')

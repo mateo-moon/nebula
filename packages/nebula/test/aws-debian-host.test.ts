@@ -10,7 +10,7 @@ import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 import { AwsK0sProvider } from "../src/modules/infra/aws/k0s-provider";
 import { K0smotronCluster } from "../src/modules/infra/k0s/k0smotron-cluster";
 import { awsHostPreK0sCommands, validateAwsHostProfile, type AwsHostProfile } from "../src/modules/infra/aws/host-profile";
-import { debianHostSetupScript, debianSsmArtifacts } from "../src/modules/infra/aws/debian-host/index.mjs";
+import { debianHostSetupScript, getDebianSsmArtifacts } from "../src/modules/infra/aws/debian-host/index.mjs";
 
 function bootstrap(arch: "amd64" | "arm64", overrides: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "debian-bootstrap-"));
@@ -35,7 +35,7 @@ function bootstrap(arch: "amd64" | "arm64", overrides: Record<string, string> = 
     assert.equal(spawnSync("sh", ["-n"], { input: script }).status, 0);
     const result = spawnSync("sh", ["-eu"], { input: script, encoding: "utf8", env: { PATH: `${dir}:/usr/bin:/bin`, TRACE: trace,
       HOST_ARCH: arch, OLD_KERNEL: "0", BAD_HASH: "0", BAD_SIGNATURE: "0", PACKAGE_ARCH: arch,
-      PACKAGE_VERSION: debianSsmArtifacts[arch].packageVersion, FINGERPRINT: debianSsmArtifacts[arch].signingFingerprint, ...overrides } });
+      PACKAGE_VERSION: getDebianSsmArtifacts()[arch].packageVersion, FINGERPRINT: getDebianSsmArtifacts()[arch].signingFingerprint, ...overrides } });
     return { ...result, trace: readFileSync(trace, "utf8") };
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
@@ -79,6 +79,6 @@ test("the published package includes the native API and every bootstrap verifica
     for (const asset of ["setup.sh", "ssm-artifacts.json", "amazon-ssm-agent.asc", "index.d.mts"]) assert.ok(existsSync(join(root, asset)), asset);
     const module = await import(pathToFileURL(join(root, "index.mjs")).href);
     assert.match(module.debianHostSetupScript({ architecture: "amd64", suite: "trixie", minimumKernelVersion: "6.12.113-1" }), /BEGIN PGP PUBLIC KEY/);
-    assert.equal(module.debianSsmArtifacts.arm64.packageVersion, "3.3.5700.0-1");
+    assert.equal(module.getDebianSsmArtifacts().arm64.packageVersion, "3.3.5700.0-1");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

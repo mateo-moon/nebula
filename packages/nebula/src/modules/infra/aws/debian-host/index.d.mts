@@ -5,5 +5,5 @@ export interface DebianSsmArtifact {
   readonly signingFingerprint: string; readonly keySha256: string; readonly sha256: string;
   readonly signatureSha256: string; readonly packageVersion: string;
 }
-export const debianSsmArtifacts: Readonly<Record<'amd64' | 'arm64', Readonly<DebianSsmArtifact>>>;
+export function getDebianSsmArtifacts(): Readonly<Record<'amd64' | 'arm64', Readonly<DebianSsmArtifact>>>;
 export function debianHostSetupScript(policy: { architecture: 'amd64' | 'arm64'; suite: string; minimumKernelVersion: string }): string;
