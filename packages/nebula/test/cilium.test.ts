@@ -150,6 +150,7 @@ for (const [name, config, expected] of [
   ["IPv6 pool too large for allocator bitmap", { ipam: { ...clusterPool, ipv6PodCidrs: ["fd42::/32"] } }, /prefix/],
   ["wrong pool family", { ipam: { ...clusterPool, ipv6PodCidrs: ["10.244.0.0/16"] } }, /IPv6 CIDRs/],
   ["pool raw override", { ipam: clusterPool, values: { ipam: { operator: { clusterPoolIPv6PodCIDRList: ["fd99::/48"] } } } }, /clusterPoolIPv6PodCIDRList/],
+  ["raw IPv6 pool in IPv4 profile", { nodeConnectivity: "private", podAddressFamilies: "ipv4", ipam: { mode: "cluster-pool", ipv4PodCidrs: ["10.244.0.0/16"] }, values: { ipam: { operator: { clusterPoolIPv6PodCIDRList: ["fd99::/48"] } } } }, /clusterPoolIPv6PodCIDRList/],
   ["mask raw override", { ipam: clusterPool, values: { ipam: { operator: { clusterPoolIPv4MaskSize: 25 } } } }, /clusterPoolIPv4MaskSize/],
   ["Kubernetes CIDR wait restored", { ipam: clusterPool, values: { k8s: { requireIPv6PodCIDR: true } } }, /requireIPv6PodCIDR/],
   ["operator argument bypass", { ipam: clusterPool, values: { operator: { extraArgs: ["--cluster-pool-ipv6-cidr=fd99::/48"] } } }, /operator.extraArgs/],

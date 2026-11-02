@@ -44,7 +44,8 @@ export function validateCiliumNetwork(
   requireValue("k8s.requireIPv6PodCIDR", expectedK8s.requireIPv6PodCIDR);
   if (ipam?.mode === "cluster-pool") {
     const pools = (allocation.ipam as Record<string, unknown>).operator as Record<string, unknown>;
-    for (const [key, value] of Object.entries(pools)) requireValue(`ipam.operator.${key}`, value);
+    for (const key of ["clusterPoolIPv4PodCIDRList", "clusterPoolIPv4MaskSize", "clusterPoolIPv6PodCIDRList", "clusterPoolIPv6MaskSize"])
+      requireValue(`ipam.operator.${key}`, pools[key]);
   }
   requireValue("routingMode", "tunnel");
   requireValue("cni.install", true);
