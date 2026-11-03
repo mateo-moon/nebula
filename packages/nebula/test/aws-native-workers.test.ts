@@ -102,10 +102,11 @@ test("existing ENIs retain their identities without requesting a second public a
   const chart = Testing.chart();
   const provider = new AwsK0sProvider({ region: "eu-central-1" });
   const ref = provider.emitMachineTemplate(chart, "retained", { baseName: "retained", namespace: "default", role: "worker",
-    machine: { instanceType: "m6i.xlarge", networkInterfaces: ["eni-0123456789abcdef0"] } });
+    machine: { instanceType: "m6i.xlarge", networkInterfaces: ["eni-0123456789abcdef0"], subnetId: "subnet-public" } });
   const resource = Testing.synth(chart).find(r => r.metadata.name === ref.name)!;
   assert.deepEqual(resource.spec.template.spec.networkInterfaces, ["eni-0123456789abcdef0"]);
   assert.equal(resource.spec.template.spec.publicIP, undefined);
+  assert.deepEqual(resource.spec.template.spec.subnet, { id: "subnet-public" });
   const other = provider.emitMachineTemplate(chart, "other", { baseName: "retained", namespace: "default", role: "worker",
     machine: { instanceType: "m6i.xlarge", networkInterfaces: ["eni-0123456789abcdef1"] } });
   assert.notEqual(ref.name, other.name);

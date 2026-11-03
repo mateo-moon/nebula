@@ -40,6 +40,8 @@ export interface AwsMachineSpec {
   publicIp?: boolean;
   /** Existing ENIs, in device order; retains their private/public IPv6 identities. */
   networkInterfaces?: string[];
+  /** Explicit subnet for retained/public interfaces when publicIp is omitted. */
+  subnetId?: string;
   /**
    * Emit IMDSv2 (hop limit 2) on THIS pool's machine template so pod-networked
    * controllers scheduled here (e.g. a keyless EBS CSI controller, external-dns,
@@ -247,9 +249,10 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
         };
     const specWithEncryption = m.rootVolumeEncrypted === undefined ? templateSpec : { ...templateSpec, rootVolumeEncrypted: m.rootVolumeEncrypted };
     const specWithInterfaces = m.networkInterfaces?.length ? { ...specWithEncryption, networkInterfaces: m.networkInterfaces } : specWithEncryption;
+    const specWithSubnet = m.subnetId ? { ...specWithInterfaces, subnetId: m.subnetId } : specWithInterfaces;
     const hash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(m.hostProfile ? { ...specWithInterfaces, hostProfile: m.hostProfile } : specWithInterfaces))
+      .update(JSON.stringify(m.hostProfile ? { ...specWithSubnet, hostProfile: m.hostProfile } : specWithSubnet))
       .digest("hex")
       .slice(0, 8);
     const name = `${ctx.baseName}-${hash}`;
@@ -261,6 +264,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       iamInstanceProfile,
       publicIp,
       networkInterfaces: m.networkInterfaces,
+      subnetId: m.subnetId,
       sshKeyName: this.config.sshKeyName,
       rootVolumeSizeGiB,
       rootVolumeType,
