@@ -43,3 +43,6 @@ export { BaremetalSetup, BaremetalFleet, baremetalWorker } from "./baremetal";
 export { baremetalEnrollmentManifests } from "./baremetal/enrollment";
 export type { BaremetalSetupOptions, BaremetalInstallation, BaremetalBootArtifact, BaremetalFleetOptions, BaremetalNode } from "./baremetal";
 export type { BaremetalUefiConfiguration, BaremetalUefiVariable, BaremetalUefiParameter } from "./baremetal/uefi";
+
+export { K0sWorkerDeployment } from "./worker-deployment";
+export type { K0sWorkerDeploymentConfig } from "./worker-deployment";

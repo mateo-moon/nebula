@@ -20,6 +20,7 @@ const WORKER_WAVES: Record<string, number> = {
   "autoscaling.aws.upbound.io/AutoscalingGroup": -1,
   "bootstrap.cluster.x-k8s.io/K0sWorkerConfigTemplate": 0,
   "infrastructure.cluster.x-k8s.io/RemoteMachineTemplate": 0,
+  "infrastructure.cluster.x-k8s.io/AWSMachineTemplate": 0,
   "cluster.x-k8s.io/MachineDeployment": 1,
 };
 

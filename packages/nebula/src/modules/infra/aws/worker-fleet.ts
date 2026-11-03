@@ -37,12 +37,12 @@ import { ApiObject } from "cdk8s";
 import { Worker } from "../k0s/worker";
 import { defaultAwsImage, awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "./host-profile";
 import { NODE_IP_DISCOVERY_COMMANDS } from "../k0s/cluster";
-import { DualStackSubnet } from "./dualstack-subnet";
+import { AwsWorkerNetwork } from "./worker-network";
+import { AwsWorkerIdentity } from "./worker-identity";
 import { AwsWorkerLaunchTemplate, WORKER_EIP_PLACEHOLDER, WORKER_VOLUME_PLACEHOLDER } from "./worker-launch-template";
-import { workerIngressRules, type AwsWorkerFleetIngressRule } from "./worker-ingress";
+import type { AwsWorkerFleetIngressRule } from "./worker-ingress";
 import { resolveSecrets } from "../../../utils/secrets";
 import { syncWave } from "../../../core";
-import { CILIUM_WIREGUARD_PORT } from "../../k8s/cilium";
 import {
   OWNED_POLICIES,
   MUTABLE_OWNED_POLICIES,
@@ -53,20 +53,7 @@ import {
   Eip,
   EipSpecManagementPolicies,
   EipSpecDeletionPolicy,
-  InternetGateway,
-  Route,
-  RouteTable,
-  RouteTableAssociation,
-  SecurityGroup,
-  SecurityGroupRule,
-  Vpc,
 } from "#imports/ec2.aws.upbound.io";
-import {
-  InstanceProfile,
-  Policy,
-  Role,
-  RolePolicyAttachment,
-} from "#imports/iam.aws.upbound.io";
 
 /** Original AWS worker address discovery: IMDSv2 private IPv4 and on-link IPv6.
  * Select this preset when retaining an existing fleet during ownership adoption;
@@ -255,7 +242,7 @@ export interface AwsWorkerFleetNode {
    *  Eip named after the node (allocate with fleet.addEip()). */
   eipName?: string;
   /** Instance profile override (e.g. the controller-policy profile on system
-   *  nodes; everything else gets the fleet's SSM-only role). */
+   *  nodes; everything else gets the fleet's worker role). */
   iamProfile?: string;
   /**
    * ArgoCD sync-wave for this node's MachineDeployment — the ONLY ordering
@@ -311,57 +298,6 @@ function assertCiliumImdsHopLimit(
       '"no EC2 IMDS role found", which looks like an IAM fault, not a CNI one.',
   );
 }
-
-const DEFAULT_OPEN_PORTS: AwsWorkerFleetPort[] = [
-  { port: 10250, protocol: "tcp", description: "kubelet (TLS, authn/authz)" },
-  { port: 22, protocol: "tcp", description: "sshd (key-only; RemoteMachine provisioning)" },
-];
-
-/**
- * The mesh transport, appended to `openPorts` rather than part of it — a
- * caller overriding the node ports must not be able to close the CNI's own
- * tunnel out from under itself.
- *
- * Getting this wrong is SILENT: the WireGuard interface comes up, peers are
- * configured, and every handshake is dropped with nothing in any log. Cilium
- * listens on one port for both families; Calico runs a separate v6 socket.
- */
-const CNI_MESH_PORTS: Record<AwsWorkerFleetCni, AwsWorkerFleetPort[]> = {
-  calico: [
-    { port: 51820, protocol: "udp", description: "calico WireGuard (Noise-authenticated)" },
-    {
-      port: 51821,
-      protocol: "udp",
-      description: "calico WireGuard v6 (Noise-authenticated)",
-      v6Only: true,
-    },
-  ],
-  cilium: [
-    {
-      port: CILIUM_WIREGUARD_PORT,
-      protocol: "udp",
-      description: "cilium WireGuard (Noise-authenticated)",
-    },
-    // cilium-health's node probe. Unauthenticated, unlike everything else in
-    // the default set — but it serves exactly one path, /hello, with a
-    // zero-byte body (verified live; /v1beta/status and everything else 404).
-    // The one bit it leaks, "this host runs Cilium", is already implied by the
-    // WireGuard port beside it. On a mesh whose peers are cross-region over
-    // the public internet the alternative is no health signal at all, and this
-    // is the fleet where a silently half-dead mesh is the failure that hurts.
-    {
-      port: 4240,
-      protocol: "tcp",
-      description: "cilium-health node probe",
-    },
-    {
-      port: -1,
-      protocol: "icmp",
-      protocolV6: "58",
-      description: "cilium-health ICMP probe",
-    },
-  ],
-};
 
 /**
  * The fleet: shared options + emitters for IAM, EIPs, region networks and
@@ -428,86 +364,9 @@ export class AwsWorkerFleet extends Construct {
     });
   }
 
-  /** IAM for non-system nodes: SSM-only (debug access — no SSH anywhere). */
+  /** IAM role and instance profile for non-system nodes. */
   addIam(): string {
-    const roleName = `${this.options.namePrefix}-worker-node`;
-    new Role(this, "worker-node-role", {
-      metadata: { name: roleName },
-      spec: {
-        forProvider: {
-          assumeRolePolicy: JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Effect: "Allow",
-                Principal: { Service: "ec2.amazonaws.com" },
-                Action: "sts:AssumeRole",
-              },
-            ],
-          }),
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new RolePolicyAttachment(this, "worker-node-ssm", {
-      metadata: { name: `${roleName}-ssm` },
-      spec: {
-        forProvider: {
-          policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-          roleRef: { name: roleName },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    // Boot self-assembly: the node claims its EIP and data volume with its
-    // own role over IMDS. Associate/attach cannot be resource-scoped without
-    // per-call tag conditions the boot script cannot guarantee, so the action
-    // list is the whole grant.
-    const selfAssemblyPolicyName = `${roleName}-self-assembly`;
-    new Policy(this, "worker-node-self-assembly-policy", {
-      metadata: { name: selfAssemblyPolicyName },
-      spec: {
-        forProvider: {
-          policy: JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Sid: "NodeSelfAssembly",
-                Effect: "Allow",
-                Resource: "*",
-                Action: [
-                  "ec2:AssociateAddress",
-                  "ec2:DescribeAddresses",
-                  "ec2:AttachVolume",
-                  "ec2:DescribeVolumes",
-                  "ec2:DescribeInstances",
-                  "ec2:ModifyInstanceAttribute",
-                ],
-              },
-            ],
-          }),
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new RolePolicyAttachment(this, "worker-node-self-assembly", {
-      metadata: { name: `${roleName}-self-assembly` },
-      spec: {
-        forProvider: {
-          policyArnRef: { name: selfAssemblyPolicyName },
-          roleRef: { name: roleName },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new InstanceProfile(this, "worker-node-profile", {
-      metadata: { name: roleName },
-      spec: {
-        forProvider: { roleRef: { name: roleName } },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    return roleName;
+    return new AwsWorkerIdentity(this, "worker-identity", this.options).instanceProfileName;
   }
 
   /** The provisioner's SSH private key as the Secret the Worker composition
@@ -531,180 +390,8 @@ export class AwsWorkerFleet extends Construct {
    * perfect peers); 51821 is Felix's v6-only WireGuard port.
    */
   addRegion(cfg: AwsWorkerFleetRegion): string {
-    const p = this.prefix(cfg);
-    new Vpc(this, `${p}-vpc`, {
-      metadata: { name: `${p}-vpc` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          cidrBlock: cfg.vpcCidr,
-          assignGeneratedIpv6CidrBlock: true,
-          enableDnsSupport: true,
-          enableDnsHostnames: true,
-          tags: { Name: `${p}-vpc` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new DualStackSubnet(this, `${p}-subnet`, {
-      vpcMrName: `${p}-vpc`,
-      region: cfg.region,
-      availabilityZone: cfg.az,
-      cidrBlock: cfg.subnetCidr,
-      mapPublicIpOnLaunch: true,
-      // AWS LB controller subnet discovery: role/elb marks the public subnet
-      // eligible for internet-facing LBs.
-      tags: {
-        Name: `${p}-subnet`,
-        "kubernetes.io/role/elb": "1",
-        [`kubernetes.io/cluster/${this.options.clusterName}`]: "shared",
-      },
-    });
-    new InternetGateway(this, `${p}-igw`, {
-      metadata: { name: `${p}-igw` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          vpcIdRef: { name: `${p}-vpc` },
-          tags: { Name: `${p}-igw` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new RouteTable(this, `${p}-rt`, {
-      metadata: { name: `${p}-rt` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          vpcIdRef: { name: `${p}-vpc` },
-          tags: { Name: `${p}-rt` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new Route(this, `${p}-default-route`, {
-      metadata: { name: `${p}-default-route` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          routeTableIdRef: { name: `${p}-rt` },
-          destinationCidrBlock: "0.0.0.0/0",
-          gatewayIdRef: { name: `${p}-igw` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new Route(this, `${p}-default-route-v6`, {
-      metadata: { name: `${p}-default-route-v6` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          routeTableIdRef: { name: `${p}-rt` },
-          destinationIpv6CidrBlock: "::/0",
-          gatewayIdRef: { name: `${p}-igw` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new RouteTableAssociation(this, `${p}-rta`, {
-      metadata: { name: `${p}-rta` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          routeTableIdRef: { name: `${p}-rt` },
-          subnetIdRef: { name: `${p}-subnet` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    new SecurityGroup(this, `${p}-sg`, {
-      metadata: { name: `${p}-sg` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          vpcIdRef: { name: `${p}-vpc` },
-          name: `${p}-node`,
-          description: `${this.options.namePrefix} worker node (mesh-only ingress)`,
-          tags: { Name: `${p}-node` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    const rules = [
-      ...(this.options.openPorts ?? DEFAULT_OPEN_PORTS),
-      ...(cfg.extraOpenPorts ?? []),
-      ...CNI_MESH_PORTS[this.options.cni ?? "calico"],
-    ];
-    if (cfg.ingressRules !== undefined) {
-      workerIngressRules(this, cfg.ingressRules, cfg.region, `${p}-sg`, this.pcRef.name);
-    } else rules.forEach((r) => {
-      (
-        [
-          ["any", { cidrIpv4: "0.0.0.0/0" }],
-          ["any6", { cidrIpv6: "::/0" }],
-        ] as const
-      ).forEach(([suffix, cidr]) => {
-        if (r.v6Only && suffix === "any") return;
-        const proto = suffix === "any6" ? (r.protocolV6 ?? r.protocol) : r.protocol;
-        const n = `${p}-in-${proto}-${r.port}-${suffix}`;
-        new ApiObject(this, n, {
-          apiVersion: "ec2.aws.upbound.io/v1beta1",
-          kind: "SecurityGroupIngressRule",
-          metadata: { name: n },
-          spec: {
-            forProvider: {
-              region: cfg.region,
-              securityGroupIdRef: { name: `${p}-sg` },
-              ipProtocol: proto,
-              fromPort: r.port,
-              toPort: r.port,
-              ...cidr,
-              description: r.description,
-              tags: { Name: n },
-            },
-            providerConfigRef: this.pcRef,
-          },
-        });
-      });
-    });
-    // Egress stays on the legacy resource: a single fixed CIDR that never
-    // changes, so it never hits the replacement refusal above, and migrating
-    // it would mean revoking all egress before the modern rule authorizes it.
-    new SecurityGroupRule(this, `${p}-egress-all`, {
-      metadata: { name: `${p}-egress-all` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          securityGroupIdRef: { name: `${p}-sg` },
-          type: "egress",
-          protocol: "-1",
-          fromPort: 0,
-          toPort: 0,
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "all egress (P2P dial-out, CP NLB, apt, images)",
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    // v6 egress as its OWN modern rule: the legacy rule cannot gain a family
-    // in place (replacement-refused).
-    new ApiObject(this, `${p}-egress-all-v6`, {
-      apiVersion: "ec2.aws.upbound.io/v1beta1",
-      kind: "SecurityGroupEgressRule",
-      metadata: { name: `${p}-egress-all-v6` },
-      spec: {
-        forProvider: {
-          region: cfg.region,
-          securityGroupIdRef: { name: `${p}-sg` },
-          ipProtocol: "-1",
-          cidrIpv6: "::/0",
-          description: "all v6 egress (WG-v6 handshakes, dual-stack dial-out)",
-          tags: { Name: `${p}-egress-all-v6` },
-        },
-        providerConfigRef: this.pcRef,
-      },
-    });
-    return p;
+    new AwsWorkerNetwork(this, `${this.prefix(cfg)}-network`, { ...cfg, ...this.options });
+    return this.prefix(cfg);
   }
 
   private usesObservedIdentity(node: AwsWorkerFleetNode): boolean {
