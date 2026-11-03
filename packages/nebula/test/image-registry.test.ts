@@ -53,6 +53,20 @@ test("credential delivery retains destination objects and propagates data and ex
     "workload-pull-credentials");
 });
 
+test("registry delivery is optional without changing retained assets, identities or refresh", () => {
+  const before = registryResources();
+  const config = structuredClone(registryConfig);
+  delete config.distribution;
+  const after = registryResources(config);
+  assert.deepEqual(after, before.filter(resource => resource.kind !== "ProviderConfig" && resource.kind !== "Object"));
+  assert.equal(before.length - after.length, 5);
+  assert.ok(after.some(resource => resource.kind === "CronJob"));
+  assert.equal(after.filter(resource => resource.kind === "Repository").length, 3);
+  const invalid = structuredClone(registryConfig);
+  invalid.distribution!.targets = [];
+  assert.throws(() => registryResources(invalid), /unique target namespaces/);
+});
+
 test("registry assets accept configured aliases and names without changing unconfigured scripts", () => {
   const before = registryResources();
   const config = structuredClone(registryConfig);
@@ -75,7 +89,7 @@ test("registry rejects shell injection, mutable identities, duplicate destinatio
     (config: typeof registryConfig) => { config.github.publisher.workflow = "example/runtime/.github/workflows/publish.yml@main"; },
     (config: typeof registryConfig) => { config.github.readerSubjects = ["repo:example/*"]; },
     (config: typeof registryConfig) => { config.images.tools = "example/tools:latest"; },
-    (config: typeof registryConfig) => { config.distribution.targets.push(config.distribution.targets[0]); },
+    (config: typeof registryConfig) => { config.distribution!.targets.push(config.distribution!.targets[0]); },
     (config: typeof registryConfig) => { config.gcr.mirroredImages.push(config.gcr.mirroredImages[0]); },
     (config: typeof registryConfig) => { config.roles.mirror = config.roles.puller; },
   ]) {
