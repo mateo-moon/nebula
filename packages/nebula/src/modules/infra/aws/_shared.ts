@@ -573,6 +573,7 @@ export function emitAwsMachineTemplate(
     instanceType: string;
     iamInstanceProfile: string;
     publicIp: boolean;
+    networkInterfaces?: string[];
     sshKeyName?: string;
     rootVolumeSizeGiB: number;
     rootVolumeType: string;
@@ -616,7 +617,8 @@ export function emitAwsMachineTemplate(
         spec: {
           instanceType: opts.instanceType,
           iamInstanceProfile: opts.iamInstanceProfile,
-          publicIp: opts.publicIp,
+          publicIp: opts.networkInterfaces?.length ? undefined : opts.publicIp,
+          ...(opts.networkInterfaces?.length ? { networkInterfaces: opts.networkInterfaces } : {}),
           // Put bootstrap data directly in EC2 user-data instead of CAPA's default
           // Secrets Manager backend. That backend's boot script fetches the data
           // with the `aws` CLI, which a plain Ubuntu cloud image does NOT ship —

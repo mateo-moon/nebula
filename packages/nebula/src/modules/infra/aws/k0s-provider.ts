@@ -38,6 +38,8 @@ export interface AwsMachineSpec {
   spot?: SpotSelection;
   /** Assign a public IP (default false — nodes live in private subnets behind NAT). */
   publicIp?: boolean;
+  /** Existing ENIs, in device order; retains their private/public IPv6 identities. */
+  networkInterfaces?: string[];
   /**
    * Emit IMDSv2 (hop limit 2) on THIS pool's machine template so pod-networked
    * controllers scheduled here (e.g. a keyless EBS CSI controller, external-dns,
@@ -188,6 +190,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
   ): CapiInfraRef {
     const m = this.resolveImage(ctx.machine, ctx.role);
     validateAwsHostProfile(m.hostProfile);
+    if (m.networkInterfaces?.length && m.publicIp) throw new Error("existing ENIs carry their own public address; omit publicIp");
     if (m.imdsHopLimit !== undefined && (!Number.isInteger(m.imdsHopLimit) || m.imdsHopLimit < 1 || m.imdsHopLimit > 64)) throw new Error("IMDS hop limit must be an integer from 1 to 64");
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
@@ -243,9 +246,10 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
             : {}),
         };
     const specWithEncryption = m.rootVolumeEncrypted === undefined ? templateSpec : { ...templateSpec, rootVolumeEncrypted: m.rootVolumeEncrypted };
+    const specWithInterfaces = m.networkInterfaces?.length ? { ...specWithEncryption, networkInterfaces: m.networkInterfaces } : specWithEncryption;
     const hash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(m.hostProfile ? { ...specWithEncryption, hostProfile: m.hostProfile } : specWithEncryption))
+      .update(JSON.stringify(m.hostProfile ? { ...specWithInterfaces, hostProfile: m.hostProfile } : specWithInterfaces))
       .digest("hex")
       .slice(0, 8);
     const name = `${ctx.baseName}-${hash}`;
@@ -256,6 +260,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       instanceType,
       iamInstanceProfile,
       publicIp,
+      networkInterfaces: m.networkInterfaces,
       sshKeyName: this.config.sshKeyName,
       rootVolumeSizeGiB,
       rootVolumeType,
