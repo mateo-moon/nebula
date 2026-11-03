@@ -16,7 +16,7 @@ const image = str({ pattern: imagePattern });
 const workloadImage = str({ oneOf: [{ pattern: imagePattern }, { pattern: publishedImagePattern }] });
 const resource = list(str({ pattern: "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$", maxLength: 128 }), 3, 3);
 const runtime = obj({
-  memoryMiB: int(2048, 65536), vcpus: int(1, 32),
+  memoryMiB: int(2048, 65536), vcpus: int(1, 32), createContainerTimeoutSeconds: int(1, 3600),
   k8sDistribution: str({ enum: ["k0s", "kubernetes"] }), ociVersion: str({ enum: ["1.1.0", "1.2.0", "1.3.0"] }),
 }, []);
 export const guestIdentitySchema = obj({

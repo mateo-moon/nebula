@@ -195,8 +195,10 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
         typeof mirror.insecure !== "boolean") fail("invalid public registry mirror");
   }
   if (spec.runtime) {
-    fields(spec.runtime, ["memoryMiB", "vcpus", "k8sDistribution", "ociVersion"]);
+    fields(spec.runtime, ["memoryMiB", "vcpus", "createContainerTimeoutSeconds", "k8sDistribution", "ociVersion"]);
     if (!integer(spec.runtime.memoryMiB ?? 4096, 2048, 65536) ||
         !integer(spec.runtime.vcpus ?? 2, 1, 32)) fail("invalid guest sizing");
+    if (spec.runtime.createContainerTimeoutSeconds !== undefined &&
+        !integer(spec.runtime.createContainerTimeoutSeconds, 1, 3600)) fail("invalid container creation timeout");
   }
 }

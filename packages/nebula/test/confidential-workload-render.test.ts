@@ -44,6 +44,12 @@ test("native renderer binds the final Pod and keeps repeated measurements stable
   assert.ok(pod.spec!.initContainers!.some(c => c.name === "nebula-resource-broker") === false);
   assert.deepEqual(pod.spec!.containers![0].command, ["/run/nebula-runtime/nebula-confidential-storage"]);
   assert.ok(!pod.spec!.volumes!.some(v => "secret" in v || "hostPath" in v));
+  const timeoutAnnotation = "io.katacontainers.config.runtime.create_container_timeout";
+  assert.equal(pod.metadata!.annotations![timeoutAnnotation], undefined);
+  declaration.spec.runtime = { createContainerTimeoutSeconds: 600 };
+  const larger = renderConfidentialWorkload(declaration, [], options);
+  assert.equal(larger.pod.metadata!.annotations![timeoutAnnotation], "600");
+  assert.deepEqual(larger.pod.spec, first.pod.spec, "Changing the native timeout must not alter container privileges or layout");
   const reserved = structuredClone(declaration);
   reserved.spec.containers[0].name = "nebula-bypass";
   assert.throws(() => renderConfidentialWorkload(reserved, [], options), /non-reserved/);

@@ -524,6 +524,11 @@
                         "minimum": 1,
                         "maximum": 32
                       },
+                      "createContainerTimeoutSeconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3600
+                      },
                       "k8sDistribution": {
                         "type": "string",
                         "maxLength": 4096,

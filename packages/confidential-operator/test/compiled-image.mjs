@@ -21,13 +21,14 @@ const input = { operation: "render-workload", storages: [], workload: {
     network: { ipv4AddressPattern: "^192[.]0[.]2[.][0-9]+$", ipv6AddressPattern: "^2001:db8::[0-9a-f:]+$" },
     trustee: { chart, kbsImage: kbs, tngImage: tng, gatewayImage: kbs },
     storageImage: kbs,
+    runtime: { createContainerTimeoutSeconds: 600 },
     containers: [{ name: "app", image: kbs, command: ["/bin/true"], uid: 11000, gid: 11000 }],
     resources: [["default", "image", "app"]],
   },
 } };
 
 const result = spawnSync("docker", ["run", "--rm", "-i", "--platform", "linux/amd64",
-  "--entrypoint", "/usr/local/bin/node", "nebula-confidential-operator:ci", "/app/dist/main.mjs"], {
+  "--entrypoint", "/usr/local/bin/node", process.env.OPERATOR_IMAGE ?? "nebula-confidential-operator:ci", "/app/dist/main.mjs"], {
   input: JSON.stringify(input), encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024,
 });
 if (result.error) throw result.error;
@@ -37,6 +38,7 @@ assert.match(output.specSha256, /^[a-f0-9]{64}$/);
 assert.match(output.initDataSha256, /^[a-f0-9]{64}$/);
 assert.deepEqual(output.pod.spec.containers.map(c => c.name), ["app"]);
 assert.ok(output.pod.spec.initContainers.some(c => c.name === "nebula-guard"));
+assert.equal(output.pod.metadata.annotations["io.katacontainers.config.runtime.create_container_timeout"], "600");
 const encoded = output.pod.metadata.annotations["io.katacontainers.config.hypervisor.cc_init_data"];
 const decoded = gunzipSync(Buffer.from(encoded, "base64"));
 assert.equal(createHash("sha256").update(decoded).digest("hex"), output.initDataSha256);

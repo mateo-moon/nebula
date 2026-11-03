@@ -3,6 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { test } from "node:test";
 import { validateWorkload } from "../src/modules/k8s/confidential-workloads/validation";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
+import { workloadSpecSchema } from "../src/modules/k8s/confidential-workloads/schema";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource } from "../src/modules/k8s/confidential-workloads/types";
 
 const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
@@ -57,4 +58,19 @@ test("tenant chart arguments cannot reach the Helm renderer", () => {
   const version: any = workload();
   version.spec.trustee.version = "--post-renderer=sh";
   assert.throws(() => validateWorkload(version, [storage]), /operator-pinned package/);
+});
+
+test("container creation timeout has the same bounded integer contract in the controller and CRD", () => {
+  const schema = (workloadSpecSchema as any).properties.runtime.properties.createContainerTimeoutSeconds;
+  assert.deepEqual(schema, { type: "integer", minimum: 1, maximum: 3600 });
+  for (const value of [undefined, 1, 600, 3600]) {
+    const input = workload();
+    input.spec.runtime = { createContainerTimeoutSeconds: value };
+    assert.doesNotThrow(() => validateWorkload(input, [storage]));
+  }
+  for (const value of [0, -1, 3601, 1.5, "600", null, NaN]) {
+    const input: any = workload();
+    input.spec.runtime = { createContainerTimeoutSeconds: value };
+    assert.throws(() => validateWorkload(input, [storage]), /container creation timeout/);
+  }
 });

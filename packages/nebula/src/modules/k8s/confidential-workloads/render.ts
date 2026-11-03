@@ -168,6 +168,9 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     annotations: { ...base.metadata.annotations,
       "io.katacontainers.config.hypervisor.default_memory": String(runtime.memoryMiB ?? 4096),
       "io.katacontainers.config.hypervisor.default_vcpus": String(runtime.vcpus ?? 2),
+      ...(runtime.createContainerTimeoutSeconds === undefined ? {} : {
+        "io.katacontainers.config.runtime.create_container_timeout": String(runtime.createContainerTimeoutSeconds),
+      }),
       "io.katacontainers.config.hypervisor.kernel_params":
         "agent.guest_components_procs=api-server-rest agent.guest_components_rest_api=all agent.aa_kbc_params=cc_kbc::http://127.0.0.1:8080",
     },

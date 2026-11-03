@@ -97,7 +97,15 @@ export interface ConfidentialWorkloadSpec {
   registryMirrors?: readonly { prefix: string; location: string; insecure: boolean }[];
   /** Kata base resources. With static resource management, workload resource
    * limits are added at launch; approve the resulting total vCPU measurement. */
-  runtime?: { memoryMiB?: number; vcpus?: number; k8sDistribution?: "k0s" | "kubernetes"; ociVersion?: "1.1.0" | "1.2.0" | "1.3.0" };
+  runtime?: {
+    memoryMiB?: number;
+    vcpus?: number;
+    /** Native Kata CreateContainer timeout, including guest-side encrypted
+     * image pull. The node's kubelet runtimeRequestTimeout must be longer. */
+    createContainerTimeoutSeconds?: number;
+    k8sDistribution?: "k0s" | "kubernetes";
+    ociVersion?: "1.1.0" | "1.2.0" | "1.3.0";
+  };
 }
 
 export interface ConfidentialWorkloadResource {
