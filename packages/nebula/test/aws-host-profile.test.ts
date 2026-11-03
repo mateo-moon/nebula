@@ -14,7 +14,7 @@ import { K0smotronCluster } from "../src/modules/infra/k0s/k0smotron-cluster";
 import { defaultAwsImage, awsHostPreK0sCommands, awsHostSshKeySetup, validateAwsHostProfile, type AwsHostProfile } from "../src/modules/infra/aws/host-profile";
 
 const profile: AwsHostProfile = { architecture: "amd64", sshUser: "admin", rootDeviceName: "/dev/xvda",
-  debian: { suite: "trixie", minimumKernelVersion: "6.12.113-1", requireSsmAgent: true } };
+  debian: { suite: "trixie", minimumKernelVersion: "6.12.113-1" } };
 function fleetResources(hostProfile?: AwsHostProfile, useDefaultImage = false, instanceType = "m6i.large") {
   const chart = Testing.chart();
   const fleet = new AwsWorkerFleet(chart, "fleet", { namePrefix: "test", clusterName: "test",
@@ -83,23 +83,23 @@ function gate(overrides: Record<string, string> = {}) {
       uname: '#!/bin/sh\nprintf "fixture-cloud-amd64\\n"\n',
       "dpkg-query": '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TRACE"\nprintf "%s %s" "$PACKAGE_STATUS" "$RUNNING_VERSION"\n',
       dpkg: '#!/bin/sh\ncase "$1" in --print-architecture) printf "%s" "$ARCH";; --compare-versions) printf "%s\\n" "$*" >> "$TRACE"; [ "$BELOW_FLOOR" = 0 ];; *) exit 99;; esac\n',
-      systemctl: '#!/bin/sh\n[ "$SSM_OK" = 1 ]\n',
+      systemctl: '#!/bin/sh\necho "Host enrollment must not require an agent service" >&2\nexit 99\n',
     };
     for (const [name, source] of Object.entries(binaries)) writeFileSync(join(dir, name), source, { mode: 0o755 });
     const trace = join(dir, "trace"); writeFileSync(trace, "");
     const command = awsHostPreK0sCommands(profile)[0].replace("/etc/os-release", os);
     const result = spawnSync("sh", ["-c", command], { encoding: "utf8", env: { PATH: `${dir}:/usr/bin:/bin`, TRACE: trace,
-      ARCH: "amd64", PACKAGE_STATUS: "installed", RUNNING_VERSION: "6.12.113-1", BELOW_FLOOR: "0", SSM_OK: "1", ...overrides } });
+      ARCH: "amd64", PACKAGE_STATUS: "installed", RUNNING_VERSION: "6.12.113-1", BELOW_FLOOR: "0", ...overrides } });
     return { ...result, trace: readFileSync(trace, "utf8") };
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
-test("the emitted enrollment check rejects old booted kernels, wrong OS and broken recovery", () => {
+test("the emitted enrollment check verifies the booted kernel and OS without an agent service", () => {
   const accepted = gate(); assert.equal(accepted.status, 0, accepted.stderr);
   assert.match(accepted.trace, /linux-image-fixture-cloud-amd64/);
   assert.match(accepted.trace, /--compare-versions 6\.12\.113-1 ge 6\.12\.113-1/);
   assert.equal(gate({ RUNNING_VERSION: "6.12.114-1" }).status, 0);
   for (const env of [{ RUNNING_VERSION: "6.12.107-1", BELOW_FLOOR: "1" }, { OS_ID: "ubuntu" },
-    { SUITE: "bookworm" }, { ARCH: "arm64" }, { PACKAGE_STATUS: "config-files" }, { SSM_OK: "0" }]) {
+    { SUITE: "bookworm" }, { ARCH: "arm64" }, { PACKAGE_STATUS: "config-files" }]) {
     assert.notEqual(gate(env).status, 0, JSON.stringify(env));
   }
   assert.deepEqual(awsHostPreK0sCommands(), []);
@@ -110,7 +110,7 @@ test("invalid image profile fields are rejected before shell or resource generat
     (p: any) => p.sshUser = "admin;reboot", (p: any) => p.sshUser = "admin\n",
     (p: any) => p.rootDeviceName = "/dev/../sda1", (p: any) => p.architecture = "x86_64",
     (p: any) => p.debian.suite = "trixie;reboot", (p: any) => p.debian.minimumKernelVersion = "",
-    (p: any) => p.debian.minimumKernelVersion = "6.12.113-1\n", (p: any) => p.debian.requireSsmAgent = "true",
+    (p: any) => p.debian.minimumKernelVersion = "6.12.113-1\n",
   ]) {
     const invalid = structuredClone(profile); mutate(invalid);
     assert.throws(() => validateAwsHostProfile(invalid), /AWS host profile/);

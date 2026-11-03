@@ -4,6 +4,8 @@ import { Testing } from "cdk8s";
 import { AwsK0sProvider } from "../src/modules/infra/aws/k0s-provider";
 import { AwsWorkerNetwork, awsCiliumIngressRules } from "../src/modules/infra/aws/worker-network";
 import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
+import { AwsIam } from "../src/modules/infra/aws/iam";
+import { AwsWorkerIdentity } from "../src/modules/infra/aws/worker-identity";
 import { K0sWorkerDeployment } from "../src/modules/infra/k0s/worker-deployment";
 
 function worker(extra: string[] = []) {
@@ -16,6 +18,19 @@ function worker(extra: string[] = []) {
   });
   return Testing.synth(chart);
 }
+
+test("default controller and worker identities do not grant SSM access", () => {
+  const chart = Testing.chart();
+  new AwsIam(chart, "controllers", { name: "test", controllerPolicies: true });
+  const identity = new AwsWorkerIdentity(chart, "workers", { namePrefix: "workers" });
+  const resources = Testing.synth(chart);
+  assert.doesNotMatch(JSON.stringify(resources), /ssm:|ssmmessages:|ec2messages:|AmazonSSM/);
+  const managedPolicies = resources.filter(r => r.kind === "RolePolicyAttachment" && r.spec.forProvider.policyArn)
+    .map(r => r.spec.forProvider.policyArn);
+  assert.deepEqual(managedPolicies, ["arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"]);
+  assert.equal(identity.instanceProfileName, "workers-worker-node");
+  assert.ok(resources.some(r => r.kind === "InstanceProfile" && r.metadata.name === identity.instanceProfileName));
+});
 
 test("native workers keep their installed hostname and immutable selector without surge capacity", () => {
   const resources = worker();

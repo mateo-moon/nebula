@@ -26,16 +26,6 @@ export class AwsWorkerIdentity extends Construct {
         providerConfigRef: pcRef,
       },
     });
-    new RolePolicyAttachment(this, "worker-node-ssm", {
-      metadata: { name: `${roleName}-ssm` },
-      spec: {
-        forProvider: {
-          policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-          roleRef: { name: roleName },
-        },
-        providerConfigRef: pcRef,
-      },
-    });
     // Boot self-assembly: the node claims its EIP and data volume with its
     // own role over IMDS. Associate/attach cannot be resource-scoped without
     // per-call tag conditions the boot script cannot guarantee, so the action

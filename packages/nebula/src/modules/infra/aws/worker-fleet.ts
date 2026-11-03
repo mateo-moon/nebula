@@ -242,7 +242,7 @@ export interface AwsWorkerFleetNode {
    *  Eip named after the node (allocate with fleet.addEip()). */
   eipName?: string;
   /** Instance profile override (e.g. the controller-policy profile on system
-   *  nodes; everything else gets the fleet's SSM-only role). */
+   *  nodes; everything else gets the fleet's worker role). */
   iamProfile?: string;
   /**
    * ArgoCD sync-wave for this node's MachineDeployment — the ONLY ordering
@@ -364,7 +364,7 @@ export class AwsWorkerFleet extends Construct {
     });
   }
 
-  /** IAM for non-system nodes: SSM-only (debug access — no SSH anywhere). */
+  /** IAM role and instance profile for non-system nodes. */
   addIam(): string {
     return new AwsWorkerIdentity(this, "worker-identity", this.options).instanceProfileName;
   }
