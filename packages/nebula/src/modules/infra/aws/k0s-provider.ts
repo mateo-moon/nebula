@@ -12,6 +12,7 @@ import {
 import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
+  type AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 import type {
   CapiInfraRef,
@@ -34,6 +35,8 @@ export interface AwsMachineSpec {
   rootVolumeType?: string;
   /** Explicit root disk encryption; omitted preserves existing templates. */
   rootVolumeEncrypted?: boolean;
+  /** New data volumes created with each EC2 instance. */
+  nonRootVolumes?: AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes[];
   /** Run as EC2 Spot (worker pools only; ignored for the control plane). */
   spot?: SpotSelection;
   /** Assign a public IP (default false — nodes live in private subnets behind NAT). */
@@ -248,7 +251,8 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
             : {}),
         };
     const specWithEncryption = m.rootVolumeEncrypted === undefined ? templateSpec : { ...templateSpec, rootVolumeEncrypted: m.rootVolumeEncrypted };
-    const specWithInterfaces = m.networkInterfaces?.length ? { ...specWithEncryption, networkInterfaces: m.networkInterfaces } : specWithEncryption;
+    const specWithVolumes = m.nonRootVolumes?.length ? { ...specWithEncryption, nonRootVolumes: m.nonRootVolumes } : specWithEncryption;
+    const specWithInterfaces = m.networkInterfaces?.length ? { ...specWithVolumes, networkInterfaces: m.networkInterfaces } : specWithVolumes;
     const specWithSubnet = m.subnetId ? { ...specWithInterfaces, subnetId: m.subnetId } : specWithInterfaces;
     const hash = crypto
       .createHash("sha256")
@@ -269,6 +273,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       rootVolumeSizeGiB,
       rootVolumeType,
       rootVolumeEncrypted: m.rootVolumeEncrypted,
+      nonRootVolumes: m.nonRootVolumes,
       ami: m.ami,
       ...(imdsPodAccess !== undefined ? { imdsPodAccess } : {}),
       ...(m.imdsHopLimit !== undefined ? { imdsHopLimit: m.imdsHopLimit, forceInstanceMetadataOptions: true }

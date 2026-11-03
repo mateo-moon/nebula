@@ -12,6 +12,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol as LbIngressProtocol,
   AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
   AwsMachineTemplateV1Beta2,
+  type AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes,
   AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpEndpoint as ImdsHttpEndpoint,
   AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpTokens as ImdsHttpTokens,
 } from "#imports/infrastructure.cluster.x-k8s.io";
@@ -579,6 +580,7 @@ export function emitAwsMachineTemplate(
     rootVolumeSizeGiB: number;
     rootVolumeType: string;
     rootVolumeEncrypted?: boolean;
+    nonRootVolumes?: AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes[];
     ami?: AmiSelection;
     /**
      * Run the instances as EC2 Spot. `true` (or `{}`) caps the bid at the
@@ -617,6 +619,7 @@ export function emitAwsMachineTemplate(
       template: {
         spec: {
           instanceType: opts.instanceType,
+          nonRootVolumes: opts.nonRootVolumes,
           iamInstanceProfile: opts.iamInstanceProfile,
           publicIp: opts.networkInterfaces?.length ? undefined : opts.publicIp,
           ...(opts.networkInterfaces?.length ? { networkInterfaces: opts.networkInterfaces } : {}),

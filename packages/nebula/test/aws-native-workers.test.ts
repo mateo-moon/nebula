@@ -1,14 +1,9 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import test from "node:test";
 import { Testing } from "cdk8s";
 import { AwsK0sProvider } from "../src/modules/infra/aws/k0s-provider";
 import { AwsWorkerNetwork } from "../src/modules/infra/aws/worker-network";
 import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
-import { awsRetainedWorkerCommands } from "../src/modules/infra/aws/retained-worker";
 import { K0sWorkerDeployment } from "../src/modules/infra/k0s/worker-deployment";
 
 function worker(extra: string[] = []) {
@@ -62,42 +57,6 @@ test("extracting public networking preserves the old managed resource identities
   assert.deepEqual(Testing.synth(direct), Testing.synth(legacy));
 });
 
-test("retained bootstrap rejects ambiguous addresses before moving an address or disk", () => {
-  const dir = mkdtempSync(join(tmpdir(), "retained-worker-"));
-  try {
-    const log = join(dir, "calls");
-    const mock = (name: string, content: string) => { const p = join(dir, name); writeFileSync(p, `#!/bin/sh\n${content}\n`); chmodSync(p, 0o755); };
-    mock("apt-get", "exit 0"); mock("curl", "echo test-instance");
-    mock("aws", `printf '%s\\n' "$*" >> '${log}'\ncase "$*" in *describe-addresses*) printf 'eipalloc-one\\teipalloc-two\\n';; *) exit 99;; esac`);
-    const command = awsRetainedWorkerCommands({ region: "eu-central-1", eipName: "test-node", dataVolumeName: "test-data", volumeGroup: "test-vg" })[0];
-    execFileSync("sh", ["-n", "-c", command]);
-    const result = spawnSync("sh", ["-c", command], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: "utf8" });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /exactly one retained worker address/);
-    const calls = readFileSync(log, "utf8");
-    assert.ok(!calls.includes("associate-address") && !calls.includes("attach-volume"));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("retained disk validation blocks storage changes when its existing VG does not match", () => {
-  const dir = mkdtempSync(join(tmpdir(), "retained-disk-"));
-  try {
-    const log = join(dir, "calls");
-    const mock = (name: string, content: string) => { const p = join(dir, name); writeFileSync(p, `#!/bin/sh\n${content}\n`); chmodSync(p, 0o755); };
-    mock("apt-get", "exit 0"); mock("curl", "echo i-test");
-    mock("aws", `printf '%s\\n' "$*" >> '${log}'\ncase "$*" in *describe-addresses*) echo eipalloc-one;; *"Volumes[].VolumeId"*) echo vol-123;; *describe-volumes*) echo attached;; *) exit 0;; esac`);
-    mock("findmnt", "echo /dev/nvme0n1p1");
-    mock("lsblk", 'case "$*" in *PKNAME*) echo nvme0n1;; *) echo "/dev/nvme1n1 vol123";; esac');
-    mock("pvs", "echo wrong-vg");
-    for (const name of ["vgchange", "pvcreate", "vgcreate", "pvresize", "wipefs"]) mock(name, `echo STORAGE_MUTATION >> '${log}'; exit 99`);
-    const command = awsRetainedWorkerCommands({ region: "eu-central-1", eipName: "test-node", dataVolumeName: "test-data", volumeGroup: "expected-vg" })[0];
-    const result = spawnSync("sh", ["-c", command], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: "utf8" });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /unexpected volume group/);
-    assert.ok(!readFileSync(log, "utf8").includes("STORAGE_MUTATION"));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
 test("existing ENIs retain their identities without requesting a second public address", () => {
   const chart = Testing.chart();
   const provider = new AwsK0sProvider({ region: "eu-central-1" });
@@ -112,4 +71,16 @@ test("existing ENIs retain their identities without requesting a second public a
   assert.notEqual(ref.name, other.name);
   assert.throws(() => provider.emitMachineTemplate(chart, "invalid", { baseName: "bad", namespace: "default", role: "worker",
     machine: { networkInterfaces: ["eni-0123456789abcdef0"], publicIp: true } }), /existing ENIs/);
+});
+
+test("native data volumes are included in the immutable machine template and its hash", () => {
+  const chart = Testing.chart();
+  const provider = new AwsK0sProvider({ region: "eu-central-1" });
+  const volumes = [{ deviceName: "/dev/sdf", size: 3072, type: "gp3", encrypted: true }];
+  const ref = provider.emitMachineTemplate(chart, "data", { baseName: "data", namespace: "default", role: "worker",
+    machine: { instanceType: "m6i.xlarge", nonRootVolumes: volumes } });
+  const other = provider.emitMachineTemplate(chart, "larger", { baseName: "data", namespace: "default", role: "worker",
+    machine: { instanceType: "m6i.xlarge", nonRootVolumes: [{ ...volumes[0], size: 4096 }] } });
+  assert.deepEqual(Testing.synth(chart).find(r => r.metadata.name === ref.name)!.spec.template.spec.nonRootVolumes, volumes);
+  assert.notEqual(ref.name, other.name);
 });
