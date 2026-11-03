@@ -78,11 +78,15 @@ export interface AwsK0sProviderConfig {
   availabilityZoneUsageLimit?: number;
   /** Secondary IPv4 CIDR block(s) to associate with the managed VPC. */
   secondaryCidrBlocks?: string[];
+  /** Require explicit public subnets and no secondary CIDRs, preventing CAPA NAT gateway creation. */
+  publicOnly?: boolean;
   /** Explicit subnet set (existing + new) to grow a live cluster's AZ coverage. */
   subnets?: Array<{
     availabilityZone: string;
     cidrBlock: string;
     isPublic: boolean;
+    /** Let CAPA allocate the subnet's IPv6 range from the new VPC. */
+    isIpv6?: boolean;
     id: string;
   }>;
   /** Pre-existing EC2 key pair name for SSH access to nodes. */
@@ -141,7 +145,11 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
   readonly infraClusterApiGroup = "infrastructure.cluster.x-k8s.io";
   readonly infraClusterKind = "AWSCluster";
 
-  constructor(private readonly config: AwsK0sProviderConfig) {}
+  constructor(private readonly config: AwsK0sProviderConfig) {
+    if (config.publicOnly && (!config.subnets?.length || config.subnets.some(subnet => !subnet.isPublic) || config.secondaryCidrBlocks?.length)) {
+      throw new Error("Public-only AWS networking requires explicit public subnets and no secondary CIDRs; CAPA creates NAT gateways for private subnets");
+    }
+  }
 
   private resolveImage(machine: AwsMachineSpec, role: "control-plane" | "worker"): AwsMachineSpec {
     if (machine.ami && Object.values(machine.ami).some(Boolean)) return machine;

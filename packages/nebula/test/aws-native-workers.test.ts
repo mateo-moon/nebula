@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Testing } from "cdk8s";
 import { AwsK0sProvider } from "../src/modules/infra/aws/k0s-provider";
-import { AwsWorkerNetwork, awsCiliumIngressRules } from "../src/modules/infra/aws/worker-network";
+import { AwsWorkerNetwork, awsCiliumIngressRules, awsCiliumNodeIngressRules } from "../src/modules/infra/aws/worker-network";
 import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 import { AwsIam } from "../src/modules/infra/aws/iam";
 import { AwsWorkerIdentity } from "../src/modules/infra/aws/worker-identity";
@@ -60,6 +60,33 @@ test("AWS provider can use an externally managed public network", () => {
   assert.deepEqual(aws.spec.network.securityGroupOverrides, { node: "sg-existing" });
   assert.equal(aws.spec.network.subnets[0].id, "subnet-existing");
   assert.deepEqual(aws.spec.controlPlaneLoadBalancer, { loadBalancerType: "disabled" });
+});
+
+test("public-only CAPA networks create dual-stack subnets without existing AWS identifiers", () => {
+  const config = { region: "eu-central-1", vpcCidr: "10.20.0.0/16", publicOnly: true, ipv6: true,
+    subnets: [{ id: "test-public-a", availabilityZone: "eu-central-1a", cidrBlock: "10.20.0.0/20", isPublic: true, isIpv6: true }] };
+  const chart = Testing.chart();
+  new AwsK0sProvider(config).emitInfraCluster(chart, { clusterName: "test", namespace: "default", networkProvider: "custom", hostedControlPlane: true,
+    calico: { mode: "vxlan", wireguard: true, vxlanPort: 4789 } });
+  const network = Testing.synth(chart)[0].spec.network;
+  assert.equal(network.vpc.id, undefined);
+  assert.deepEqual(network.vpc.ipv6, {});
+  assert.deepEqual(network.subnets, config.subnets);
+  assert.equal(network.securityGroupOverrides, undefined);
+  for (const invalid of [{ ...config, subnets: [] }, { ...config, subnets: [{ ...config.subnets[0], isPublic: false }] },
+    { ...config, secondaryCidrBlocks: ["10.21.0.0/16"] }]) {
+    assert.throws(() => new AwsK0sProvider(invalid), /Public-only AWS networking/);
+  }
+});
+
+test("CAPA Cilium peer rules retain protocol families and scoped sources", () => {
+  const peers = [{ ipv4Cidr: "192.0.2.1/32", ipv6Cidr: "2001:db8::1/128" }];
+  const rules = awsCiliumNodeIngressRules(peers);
+  assert.equal(rules.length, 5);
+  assert.deepEqual(rules.filter(r => r.protocol === "icmp").map(r => r.cidrBlocks), [[peers[0].ipv4Cidr]]);
+  assert.deepEqual(rules.filter(r => r.protocol === "58").map(r => r.ipv6CidrBlocks), [[peers[0].ipv6Cidr]]);
+  assert.ok(rules.some(r => r.protocol === "udp" && r.fromPort === 51871 && r.ipv6CidrBlocks?.[0] === peers[0].ipv6Cidr));
+  assert.ok(!rules.some(r => r.fromPort === 22 || r.cidrBlocks.includes("0.0.0.0/0") || r.ipv6CidrBlocks?.includes("::/0")));
 });
 
 test("extracting public networking preserves the old managed resource identities and policy", () => {
