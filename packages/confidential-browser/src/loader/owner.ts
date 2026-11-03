@@ -9,6 +9,7 @@ export interface OwnerState {
   invitationReplaced?: boolean;
   finalClaimed?: boolean; provisioned?: boolean; restored?: boolean;
   imageKey?: string; volumeKeys?: Record<string, string>; resources?: Record<string, string>; connection?: any; prepared?: any;
+  encryptedImage?: { id: string; manifestDigest: string };
 }
 async function seal(key: CryptoKey, value: Uint8Array, context: string) {
   const iv = crypto.getRandomValues(new Uint8Array(12));

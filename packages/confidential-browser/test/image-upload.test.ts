@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkedImageUploadLimits, imageSizeLabel, imageUploadLimits } from "../src/image-limits";
 import { ImageUpload, ImageUploadError } from "../src/service/image-upload";
-import { uploadImage } from "../src/ui/upload";
+import { uploadEncryptedImage } from "../src/ui/upload";
 
 const digest = (raw: Buffer) => createHash("sha256").update(raw).digest("hex");
 function temporary(run: (directory: string) => void) {
@@ -68,8 +68,10 @@ for (const size of [257 * 1024 * 1024 + 13, ...(process.env.LARGE_IMAGE_UPLOAD_T
       // Generate one chunk at a time; exercising the 4 GiB boundary must not
       // allocate a 4 GiB ArrayBuffer in the browser or in this test process.
       const archive = { size, slice: (start: number, end: number) => new Blob([Buffer.alloc(end - start, Math.floor(start / limits.chunkBytes) % 256)]) } as Blob;
-      await uploadImage(archive, limits, async (path, method, body, headers) => {
-        if (method === "POST") upload.begin(JSON.parse(body as string).size);
+      const image = { version: 2 as const, manifest: "e30=", config: "e30=", manifestDigest: "sha256:" + "0".repeat(64),
+        layers: [{ name: "layer-0.enc", size, digest: "sha256:" + "0".repeat(64), file: archive }] };
+      await uploadEncryptedImage(image, limits, async (path, method, body, headers) => {
+        if (method === "POST") { assert.equal(JSON.parse(body as string).version, 2); upload.begin(size); }
         else {
           const raw = Buffer.from(body as ArrayBuffer);
           largestBody = Math.max(largestBody, raw.length); calls++;
@@ -86,7 +88,7 @@ for (const size of [257 * 1024 * 1024 + 13, ...(process.env.LARGE_IMAGE_UPLOAD_T
 }
 
 test("the browser rejects oversize archives before sending any request", async () => {
-  await assert.rejects(uploadImage({ size: 2 ** 32 + 1 } as Blob, imageUploadLimits(4096), async () => {
+  await assert.rejects(uploadEncryptedImage({ version: 2, manifest: "", config: "", manifestDigest: "", layers: [{ name: "layer-0.enc", digest: "sha256:" + "0".repeat(64), size: 2 ** 32 + 1, file: { size: 2 ** 32 + 1 } as Blob }] }, imageUploadLimits(4096), async () => {
     assert.fail("Oversize data reached the transport");
   }, () => {}), /limit/);
 });

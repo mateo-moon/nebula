@@ -1,6 +1,6 @@
 # Confidential client
 
-For an installation-free deployment, open the one-time HTTPS link supplied by your administrator. The independent browser loader verifies the preparation VM with TNG WASM and fetches its UI through the attested encrypted channel. Choose your image, enter registry access, review the stack and select **Encrypt & deploy**. Keep the latest encrypted recovery backup. No settings file, Kubernetes access or administrator follow-up is needed.
+For an installation-free deployment, open the one-time HTTPS link supplied by your administrator. The independent browser loader verifies the preparation VM with TNG WASM and fetches its UI through the attested encrypted channel. Choose your local Docker save archive, enter registry access, review the stack and select **Encrypt & deploy**. The browser encrypts layers locally; only ciphertext and public OCI metadata reach preparation, and the image key goes directly to the verified final Trustee. Keep the latest encrypted recovery backup. No settings file, Kubernetes access or administrator follow-up is needed.
 
 The [browser guide](../confidential-browser/README.md) covers this flow, recovery and administrator setup. The page shows the expected VM/workload measurements, pinned software, transport enrollment, fresh attestation and startup/storage status. A cluster cannot approve itself by supplying its own trust profile. Subsequent access uses your browser's owner signature; the temporary invitation is consumed.
 

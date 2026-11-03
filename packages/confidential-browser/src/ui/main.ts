@@ -1,7 +1,7 @@
 import { bytes, hash, hex, utf8, b64, AttestedChannel } from "../loader/transport";
 import { discoveryAudience } from "../loader/owner";
 import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "../image-limits";
-import { uploadImage } from "./upload";
+import { prepareLocalImage, uploadEncryptedImage, removeCipherCache } from "./upload";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;
 const input = (id: string) => el<HTMLInputElement>(id);
@@ -70,9 +70,10 @@ async function metadata(method = "GET", claim = false, ownerOnly = false) {
 async function connect() {
   evidence();
   const bootstrap = await (await api.channel.request("/nebula/v1/browser")).json();
+  if (bootstrap.imageEncryption?.protocol !== "oci-encrypted-v2" || bootstrap.imageEncryption.location !== "owner-browser" || bootstrap.imageEncryption.preparationReceivesImageKey !== false) throw new Error("This preparation service does not support browser-only image encryption");
   imageLimits = checkedImageUploadLimits(bootstrap.imageUpload);
   evidence();
-  text("archive-hint", `Choose a local linux/amd64 Docker image archive, up to ${imageSizeLabel(imageLimits.maxBytes)}. Encrypted chunks travel only to the verified preparation VM.`);
+  text("archive-hint", `Choose a local linux/amd64 Docker save archive, up to ${imageSizeLabel(imageLimits.maxBytes)}. Your browser encrypts its layers before upload. Only ciphertext leaves your computer; standard OCI configuration metadata remains readable.`);
   if (!owner.connection) {
     if (bootstrap.claimed) {
       await request(api.channel, "/nebula/v1/job"); // proves the persisted owner, or fails closed
@@ -115,7 +116,10 @@ async function connect() {
     el("resource-files").append(label, field);
   }
   const currentJob = await (await request(api.channel, "/nebula/v1/job")).json();
-  if (currentJob.state === "ready" && !owner.prepared) { owner.prepared = currentJob.result; await api.save(); }
+  if (currentJob.state === "ready" && !owner.prepared) {
+    if (!owner.encryptedImage || currentJob.result.digest !== owner.encryptedImage.manifestDigest) throw new Error("The prepared image does not match your saved browser-encrypted release");
+    owner.prepared = currentJob.result; await api.save();
+  }
   input("deploy").disabled = !!owner.prepared; text("job-title", owner.prepared ? "Release prepared" : "Ready when you are");
   text("job-description", "Choose an image and approve the stack. No administrator action is needed.");
   if (owner.prepared) { el("inspect").hidden = false; }
@@ -193,9 +197,9 @@ async function inspect() {
 el("deploy-form").addEventListener("submit", event => {
   event.preventDefault(); if (busy) return; busy = true; input("deploy").disabled = true;
   void (async () => {
-    const archive = input("archive").files?.[0], sourceImage = input("source-image").value.trim();
-    if ((!archive && !sourceImage) || (archive && sourceImage) || (archive && (!archive.size || archive.size > imageLimits.maxBytes))) {
-      throw new Error(`Choose one nonempty image archive up to ${imageSizeLabel(imageLimits.maxBytes)}, or one registry image`);
+    const archive = input("archive").files?.[0];
+    if (!archive || !archive.size || archive.size > imageLimits.maxBytes) {
+      throw new Error(`Choose one nonempty local image archive up to ${imageSizeLabel(imageLimits.maxBytes)}`);
     }
     if (!input("reviewed").checked) throw new Error("Review and approve the stack first");
     owner.imageKey ??= hex(crypto.getRandomValues(new Uint8Array(32))); owner.volumeKeys ??= {};
@@ -220,13 +224,16 @@ el("deploy-form").addEventListener("submit", event => {
     let recoveryPassword = input("recovery-password").value;
     download("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
-    progress("encrypting", "Encrypting and publishing in the verified VM…");
-    if (archive) await uploadImage(archive, imageLimits,
+    progress("encrypting", "Encrypting image locally in your browser…");
+    const local = await prepareLocalImage(archive, owner.imageKey, `kbs:///${connection.workload.spec.containers[0].imageKeyResource.join("/")}`,
+      imageLimits, owner.encryptedImage, (done, total) => progress("encrypting", `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`));
+    owner.encryptedImage = local.cache; await api.save();
+    await uploadEncryptedImage(local.image, imageLimits,
       (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
-      (sent, total) => progress("encrypting", `Uploading image: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
-    progress("encrypting", "Encrypting and publishing in the verified VM…");
-    await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({ imageKey: owner.imageKey,
-      registryUsername: input("registry-username").value, registryPassword: input("registry-password").value, ...(sourceImage ? { sourceImage } : {}) }));
+      (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
+    progress("measuring", "Publishing ciphertext and generating native policy…");
+    await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({
+      registryUsername: input("registry-username").value, registryPassword: input("registry-password").value }));
     input("registry-password").value = "";
     const deadline = Date.now() + imageLimits.jobTimeoutMs;
     while (true) {
@@ -234,7 +241,11 @@ el("deploy-form").addEventListener("submit", event => {
       await sleep(3000);
       const job = await (await request(api.channel, "/nebula/v1/job")).json();
       if (job.state === "failed") throw new Error(`Preparation stopped during ${job.phase ?? "publication"}: ${job.error ?? "native publication or policy generation failed"}`);
-      if (job.state === "ready") { owner.prepared = job.result; await api.save(); break; }
+      if (job.state === "ready") {
+        if (job.result.digest !== local.image.manifestDigest) throw new Error("Published image differs from your browser-encrypted release");
+        owner.prepared = job.result; await api.save();
+        await removeCipherCache(owner.encryptedImage); delete owner.encryptedImage; await api.save(); break;
+      }
     }
     await provision(); busy = false;
     } finally {

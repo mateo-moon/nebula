@@ -5,7 +5,11 @@ import { resolve, join } from "node:path";
 
 const output = resolve("dist");
 mkdirSync(join(output, "ui"), { recursive: true });
-await build({ entryPoints: ["src/ui/main.ts"], bundle: true, platform: "browser", format: "iife", target: "es2022", outfile: join(output, "ui/app.js") });
+const encryptionWorker = await build({ entryPoints: ["src/ui/encryption-worker.ts"], bundle: true, platform: "browser", format: "iife", target: "es2022", write: false });
+// Include the worker in the already attested asset. No CDN or separately
+// fetched executable is introduced.
+await build({ entryPoints: ["src/ui/main.ts"], bundle: true, platform: "browser", format: "iife", target: "es2022", outfile: join(output, "ui/app.js"),
+  define: { NEBULA_IMAGE_WORKER: JSON.stringify(encryptionWorker.outputFiles[0].text) } });
 cpSync("src/ui/index.html", join(output, "ui/index.html"));
 cpSync("../confidential-client/src/ui/style.css", join(output, "ui/style.css"));
 writeFileSync(join(output, "ui/manifest.json"), JSON.stringify({ version: 1, assets: ["index.html", "app.js", "style.css"].map(name => ({

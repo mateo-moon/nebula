@@ -15,10 +15,11 @@ export class ImageUpload {
   private readonly checkpoint: string;
   private readonly partial: string;
   private readonly archive: string;
-  constructor(directory: string, readonly limits: ImageUploadLimits) {
-    this.checkpoint = join(directory, "image-upload.json");
-    this.partial = join(directory, "image.tar.part");
-    this.archive = join(directory, "image.tar");
+  constructor(directory: string, readonly limits: ImageUploadLimits, name = "image.tar") {
+    if (name !== "image.tar" && !/^[a-f0-9]{64}$/.test(name)) throw new Error("Invalid ciphertext blob name");
+    this.checkpoint = join(directory, name === "image.tar" ? "image-upload.json" : name + ".upload.json");
+    this.partial = join(directory, name + ".part");
+    this.archive = join(directory, name);
   }
   private save(value: Checkpoint) {
     writeFileSync(this.checkpoint + ".tmp", JSON.stringify(value), { mode: 0o600 });

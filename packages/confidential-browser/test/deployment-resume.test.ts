@@ -6,7 +6,7 @@ import { build } from "esbuild";
 import { imageUploadLimits } from "../src/image-limits";
 
 const bundle = await build({ entryPoints: [new URL("../src/ui/main.ts", import.meta.url).pathname],
-  bundle: true, write: false, format: "iife", platform: "browser", target: "es2022" });
+  bundle: true, write: false, format: "iife", platform: "browser", target: "es2022", define: { NEBULA_IMAGE_WORKER: JSON.stringify("test-only worker") } });
 
 // Exercise the real UI event handlers. The attested channel is a test double;
 // transport/evidence verification is covered separately by the security tests.
@@ -25,21 +25,24 @@ async function deployment(restored = false) {
     return elements.get(id)!;
   };
   el("inspect").hidden = true; el("reviewed").checked = true;
-  el("source-image").value = "ghcr.io/example/source:release";
+  el("archive").files = [new Blob(["test-only local image"])];
   el("registry-username").value = "test-owner"; el("registry-password").value = "test-token";
   el("recovery-password").value = "test-only-recovery-password";
   const connection = { version: 1, browserEndpoint: "https://final.example", endpoint: { host: "final.example", port: 8443 },
     workload: { spec: { profile: "test", containers: [{ image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"] }], resources: [] } }, storages: [] };
-  const prepared = { identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
+  const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
   const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored };
   let now = 0, available = false, publishes = 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-  const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string) => {
-    if (path === "/nebula/v1/browser") return response({ imageUpload: imageUploadLimits() });
+  const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string, init?: RequestInit) => {
+    if (path === "/nebula/v1/browser") return response({ imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
     if (path === "/nebula/v1/connection") return response(connection);
-    if (path.startsWith("/nebula/v1/image")) { uploadRequests++; throw new Error("A published image must not be uploaded again"); }
-    if (path === "/nebula/v1/publish") { publishes++; return response({}, 202); }
+    if (path.startsWith("/nebula/v1/image")) { uploadRequests++; return response({}); }
+    if (path === "/nebula/v1/publish") {
+      assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["registryPassword", "registryUsername"]);
+      publishes++; return response({}, 202);
+    }
     if (path === "/nebula/v1/job") return response(publishes ? { state: "ready", result: prepared } : { state: "idle" });
     throw new Error("Unexpected preparation request: " + path);
   } };
@@ -49,11 +52,18 @@ async function deployment(restored = false) {
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") keyWrites++;
     return response(path === "/nebula/v1/bootstrap" ? { phase: "ready", resources: { image: { status: 200 } }, storage: {} } : {});
   } };
+  class LocalWorker {
+    onmessage?: (event: any) => void;
+    postMessage() { queueMicrotask(() => this.onmessage?.({ data: { type: "ready", result: { version: 2, manifest: "e30=", config: "e30=",
+      manifestDigest: prepared.digest, layers: [{ digest: "sha256:" + "e".repeat(64), name: "layer-0.enc", size: 1, file: new Blob(["x"]) }] } } })); }
+    terminate() {}
+  }
   class Clock extends Date { static now() { return now; } }
   const document = { getElementById: el, querySelectorAll: () => [], createElement: () => new Element() };
   runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example",
     finalChannel: () => final, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof" } },
-    document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock,
+    document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
+    navigator: { storage: { getDirectory: async () => ({ removeEntry: async () => {} }) } },
     URL: { createObjectURL: () => "blob:test-backup", revokeObjectURL() {} },
     setTimeout: (resolve: () => void, ms: number) => { now += ms; queueMicrotask(resolve); } });
   const wait = async (predicate: () => boolean) => {
@@ -82,7 +92,7 @@ test("a post-publication timeout offers retry and resumes without republishing o
   assert.equal(ui.owner.finalPin, "b".repeat(64));
   assert.equal(ui.owner.provisioned, true);
   assert.equal(ui.counts().publishes, 1);
-  assert.equal(ui.counts().uploadRequests, 0);
+  assert.equal(ui.counts().uploadRequests, 2);
   assert.equal(ui.counts().keyWrites, 1);
 });
 
