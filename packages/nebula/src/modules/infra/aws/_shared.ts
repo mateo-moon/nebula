@@ -49,7 +49,7 @@ export interface NodeIngressRuleSpec {
   /** AWS SG rule description (NB: '>' is rejected by AWS — no "->" arrows). */
   description: string;
   /** Protocol — the values match CAPA's enum ("-1" = all protocols). */
-  protocol: "tcp" | "udp" | "icmp" | "-1";
+  protocol: "tcp" | "udp" | "icmp" | "58" | "-1";
   fromPort: number;
   toPort: number;
   /** Source CIDR blocks (e.g. ["0.0.0.0/0"] for public P2P ports). */
@@ -227,6 +227,7 @@ export function emitAwsClusterCr(
       availabilityZone: string;
       cidrBlock: string;
       isPublic: boolean;
+      isIpv6?: boolean;
       /** Logical id (CAPA convention: `<cluster>-subnet-<public|private>-<az>`). */
       id: string;
     }>;

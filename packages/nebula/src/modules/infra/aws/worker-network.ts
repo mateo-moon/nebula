@@ -3,6 +3,7 @@ import { ApiObject } from "cdk8s";
 import { DualStackSubnet } from "./dualstack-subnet";
 import { CILIUM_WIREGUARD_PORT } from "../../k8s/cilium";
 import { workerIngressRules, type AwsWorkerFleetIngressRule as AwsWorkerIngressRule } from "./worker-ingress";
+import type { NodeIngressRuleSpec } from "./_shared";
 import { Vpc, InternetGateway, RouteTable, Route, RouteTableAssociation, SecurityGroup, SecurityGroupRule } from "#imports/ec2.aws.upbound.io";
 
 export type { AwsWorkerIngressRule };
@@ -20,15 +21,30 @@ export interface AwsCiliumIngressConfig {
   mesh: { namePrefix: string; securityGroupName: string; descriptionPrefix?: string };
 }
 
-/** Dual-stack Cilium transport, health and kubelet access from named peers. */
-export function awsCiliumIngressRules(config: AwsCiliumIngressConfig): AwsWorkerIngressRule[] {
-  const ports = [
+const CILIUM_PEER_PORTS = [
     { protocol: "tcp", ipv6Protocol: "tcp", port: 10250, description: "kubelet (TLS, authn/authz)" },
     { protocol: "udp", ipv6Protocol: "udp", port: CILIUM_WIREGUARD_PORT, description: "cilium WireGuard (Noise-authenticated)" },
     { protocol: "tcp", ipv6Protocol: "tcp", port: 4240, description: "cilium-health node probe" },
     { protocol: "icmp", ipv6Protocol: "58", port: -1, description: "cilium-health ICMP probe" },
-  ];
-  const peerRules = config.peers.flatMap(peer => ports.flatMap(({ protocol, ipv6Protocol, port, description }) => {
+  ] as const;
+
+/** Cilium peer ingress for the node security group managed by CAPA. */
+export function awsCiliumNodeIngressRules(peers: Pick<AwsCiliumIngressPeer, "ipv4Cidr" | "ipv6Cidr">[]): NodeIngressRuleSpec[] {
+  return peers.flatMap(peer => CILIUM_PEER_PORTS.flatMap(({ protocol, ipv6Protocol, port, description }): NodeIngressRuleSpec[] => {
+    if (protocol === ipv6Protocol) {
+      return [{ description, protocol, fromPort: port, toPort: port,
+        cidrBlocks: [peer.ipv4Cidr], ipv6CidrBlocks: [peer.ipv6Cidr] }];
+    }
+    return [
+      { description, protocol, fromPort: port, toPort: port, cidrBlocks: [peer.ipv4Cidr] },
+      { description, protocol: ipv6Protocol, fromPort: port, toPort: port, cidrBlocks: [], ipv6CidrBlocks: [peer.ipv6Cidr] },
+    ];
+  }));
+}
+
+/** Dual-stack Cilium transport, health and kubelet access from named peers. */
+export function awsCiliumIngressRules(config: AwsCiliumIngressConfig): AwsWorkerIngressRule[] {
+  const peerRules = config.peers.flatMap(peer => CILIUM_PEER_PORTS.flatMap(({ protocol, ipv6Protocol, port, description }) => {
     const ipv4Name = `${peer.namePrefix}-${protocol}-${port}${peer.ipv4NameSuffix ?? ""}`;
     const ipv6Name = `${peer.namePrefix}-${ipv6Protocol}-${port}${peer.ipv6NameSuffix ?? "-v6"}`;
     return [
