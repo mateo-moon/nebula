@@ -6,6 +6,51 @@ import { workerIngressRules, type AwsWorkerFleetIngressRule as AwsWorkerIngressR
 import { Vpc, InternetGateway, RouteTable, Route, RouteTableAssociation, SecurityGroup, SecurityGroupRule } from "#imports/ec2.aws.upbound.io";
 
 export type { AwsWorkerIngressRule };
+
+export interface AwsCiliumIngressPeer {
+  namePrefix: string;
+  ipv4Cidr: string;
+  ipv6Cidr: string;
+  ipv4NameSuffix?: string;
+  ipv6NameSuffix?: string;
+}
+
+export interface AwsCiliumIngressConfig {
+  peers: AwsCiliumIngressPeer[];
+  mesh: { namePrefix: string; securityGroupName: string; descriptionPrefix?: string };
+}
+
+/** Dual-stack Cilium transport, health and kubelet access from named peers. */
+export function awsCiliumIngressRules(config: AwsCiliumIngressConfig): AwsWorkerIngressRule[] {
+  const ports = [
+    { protocol: "tcp", ipv6Protocol: "tcp", port: 10250, description: "kubelet (TLS, authn/authz)" },
+    { protocol: "udp", ipv6Protocol: "udp", port: CILIUM_WIREGUARD_PORT, description: "cilium WireGuard (Noise-authenticated)" },
+    { protocol: "tcp", ipv6Protocol: "tcp", port: 4240, description: "cilium-health node probe" },
+    { protocol: "icmp", ipv6Protocol: "58", port: -1, description: "cilium-health ICMP probe" },
+  ];
+  const peerRules = config.peers.flatMap(peer => ports.flatMap(({ protocol, ipv6Protocol, port, description }) => {
+    const ipv4Name = `${peer.namePrefix}-${protocol}-${port}${peer.ipv4NameSuffix ?? ""}`;
+    const ipv6Name = `${peer.namePrefix}-${ipv6Protocol}-${port}${peer.ipv6NameSuffix ?? "-v6"}`;
+    return [
+      { name: ipv4Name, ipProtocol: protocol, fromPort: port, description,
+        source: { ipv4Cidr: peer.ipv4Cidr }, tags: { Name: ipv4Name } },
+      { name: ipv6Name, ipProtocol: ipv6Protocol, fromPort: port, description,
+        source: { ipv6Cidr: peer.ipv6Cidr }, tags: { Name: ipv6Name } },
+    ];
+  }));
+  const meshRules = [
+    { name: "wireguard", protocol: "udp", port: CILIUM_WIREGUARD_PORT },
+    { name: "health", protocol: "tcp", port: 4240 },
+    { name: "icmp", protocol: "icmp", port: -1 },
+    { name: "icmp6", protocol: "58", port: -1 },
+  ].map(({ name, protocol, port }) => ({
+    name: `${config.mesh.namePrefix}-${name}`, ipProtocol: protocol, fromPort: port,
+    description: `${config.mesh.descriptionPrefix ?? config.mesh.namePrefix} ${name}`,
+    source: { securityGroupName: config.mesh.securityGroupName },
+  }));
+  return [...peerRules, ...meshRules];
+}
+
 export type AwsWorkerNetworkCni = "calico" | "cilium";
 export interface AwsWorkerNetworkPort {
   port: number;

@@ -188,6 +188,7 @@ export type { DualStackSubnetConfig } from "./dualstack-subnet";
 export { AwsWorkerLaunchTemplateSetup, AwsWorkerLaunchTemplate } from "./worker-launch-template";
 export type { AwsWorkerLaunchTemplateConfig } from "./worker-launch-template";
 
-export { AwsWorkerNetwork } from "./worker-network";
-export type { AwsWorkerNetworkConfig, AwsWorkerNetworkRegion, AwsWorkerNetworkPort, AwsWorkerIngressRule } from "./worker-network";
+export { AwsWorkerNetwork, awsCiliumIngressRules } from "./worker-network";
+export type { AwsWorkerNetworkConfig, AwsWorkerNetworkRegion, AwsWorkerNetworkPort, AwsWorkerIngressRule,
+  AwsCiliumIngressConfig, AwsCiliumIngressPeer } from "./worker-network";
 export { AwsWorkerIdentity } from "./worker-identity";

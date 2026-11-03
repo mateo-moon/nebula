@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Testing } from "cdk8s";
 import { AwsK0sProvider } from "../src/modules/infra/aws/k0s-provider";
-import { AwsWorkerNetwork } from "../src/modules/infra/aws/worker-network";
+import { AwsWorkerNetwork, awsCiliumIngressRules } from "../src/modules/infra/aws/worker-network";
 import { AwsWorkerFleet } from "../src/modules/infra/aws/worker-fleet";
 import { K0sWorkerDeployment } from "../src/modules/infra/k0s/worker-deployment";
 
@@ -55,6 +55,26 @@ test("extracting public networking preserves the old managed resource identities
   new AwsWorkerFleet(legacy, "legacy", { ...config, k0sVersion: "v1.35.7+k0s.0", sshPublicKey: "unused", sshSecretName: "unused",
     dataVgName: "unused", tagDomain: "example.com", eipPurpose: "unused" }).addRegion(region);
   assert.deepEqual(Testing.synth(direct), Testing.synth(legacy));
+});
+
+test("Cilium peer ingress keeps dual-stack sources and mesh access scoped", () => {
+  const rules = awsCiliumIngressRules({
+    peers: [
+      { namePrefix: "test-peer", ipv4Cidr: "192.0.2.1/32", ipv6Cidr: "2001:db8::1/128",
+        ipv4NameSuffix: "-any", ipv6NameSuffix: "-any6" },
+      { namePrefix: "test-other", ipv4Cidr: "192.0.2.2/32", ipv6Cidr: "2001:db8::2/128" },
+    ],
+    mesh: { namePrefix: "test-mesh", securityGroupName: "test-nodes", descriptionPrefix: "test fleet" },
+  });
+  assert.equal(rules.length, 20);
+  assert.equal(new Set(rules.map(rule => rule.name)).size, rules.length);
+  assert.deepEqual(rules.find(rule => rule.name === "test-peer-tcp-10250-any")!.source, { ipv4Cidr: "192.0.2.1/32" });
+  assert.deepEqual(rules.find(rule => rule.name === "test-peer-58--1-any6")!.source, { ipv6Cidr: "2001:db8::1/128" });
+  assert.deepEqual(rules.find(rule => rule.name === "test-other-udp-51871-v6")!.source, { ipv6Cidr: "2001:db8::2/128" });
+  const mesh = rules.filter(rule => rule.name.startsWith("test-mesh-"));
+  assert.equal(mesh.length, 4);
+  assert.ok(mesh.every(rule => rule.source.securityGroupName === "test-nodes" && rule.fromPort !== 22 && rule.fromPort !== 10250));
+  assert.ok(!JSON.stringify(rules).match(/0\.0\.0\.0\/0|::\/0/));
 });
 
 test("existing ENIs retain their identities without requesting a second public address", () => {
