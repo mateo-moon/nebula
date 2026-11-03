@@ -103,5 +103,9 @@ test("password-encrypted recovery retains instance enrollment and rejects a wron
   assert.equal(restored.restored, true);
   assert.equal(verifyOwnerJwt(`Bearer ${await jwt(restored, "nebula-browser")}`, owner.publicKeyPem, "nebula-browser"), true);
   await assert.rejects(restoreBackup(text, "wrong-recovery-password"));
-  await assert.rejects(restoreBackup(JSON.stringify({ ...backup, ciphertext: "A" + backup.ciphertext.slice(1) }), "test-recovery-password-only"));
+  // Flip a decoded byte: replacing a character with a fixed letter can leave
+  // random ciphertext unchanged and make this rejection test flaky.
+  const changed = Buffer.from(backup.ciphertext, "base64");
+  changed[0] ^= 1;
+  await assert.rejects(restoreBackup(JSON.stringify({ ...backup, ciphertext: changed.toString("base64") }), "test-recovery-password-only"));
 });
