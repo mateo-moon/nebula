@@ -85,7 +85,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     securityContext: { fsGroup: 10001, supplementalGroups: [0, 10001] },
     containers: [
       { name: agent ? "agent" : "preparation", image, imagePullPolicy: "Always",
-        command: privateCommand(["node", agent ? "/app/dist/main.mjs" : config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]),
+        command: privateCommand(["node", ...(agent ? ["--disable-sigusr1"] : []), agent ? "/app/dist/main.mjs" : config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]),
         args: agent ? [JSON.stringify({ version: 1, ...(config.manualTls ? { role: "frontend", entry: {
           preparationEndpoint: config.manualTls.preparationEndpoint, stackEndpoint: config.manualTls.stackEndpoint,
         } } : { role: "preparation", ...(config.maxImageSizeMiB === undefined ? {} : { maxImageSizeMiB: config.maxImageSizeMiB }) }) })] : ["serve"],

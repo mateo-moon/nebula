@@ -84,7 +84,7 @@ function validateContainer(container: WorkloadContainer): void {
   for (const port of container.ports ?? []) {
     fields(port, ["name", "port"]);
     if (!name(port.name) || port.name.length > 15 || !integer(port.port, 1024, 65535) ||
-        [8006, 8007, 8080, 8443, 8444, 8445, 8447].includes(port.port)) fail("invalid or reserved application port");
+        [8006, 8007, 8080, 8443, 8444, 8445, 8447, 9229].includes(port.port)) fail("invalid or reserved application port");
   }
 }
 

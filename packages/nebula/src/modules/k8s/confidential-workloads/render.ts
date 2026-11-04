@@ -144,7 +144,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       ...spec.containers.flatMap(container => container.imageKeyResource ? [container.imageKeyResource.join("/")] : []),
     ])].sort();
     const agent = { name: "nebula-agent", image: spec.agentImage, imagePullPolicy: "Always",
-      command: ["node", "/app/dist/main.mjs"], restartPolicy: "Always",
+      // Native genpolicy currently allows SignalProcessRequest. Disable Node's
+      // SIGUSR1 inspector in the measured command so a signalled helper cannot
+      // expose CDH keys to the application through localhost:9229.
+      command: ["node", "--disable-sigusr1", "/app/dist/main.mjs"], restartPolicy: "Always",
       args: [JSON.stringify({ version: 1, role: "workload", owner: ownerConfig, storage: { version: 1,
         deniedResources,
         volumes: encrypted.map(binding => ({ version: 1, name: binding.name, sizeBytes: binding.spec.sizeBytes,

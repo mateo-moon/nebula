@@ -56,6 +56,12 @@ try {
     assert.throws(()=>process.kill(Number(pid),'SIGTERM'),{code:'EPERM'},'HTTP agent retained native signal privileges');
     console.log('Compiled agent drops HTTP privileges and restricts its private native module.');
   `);
+  docker(["kill", "--signal", "USR1", name]);
+  exec(10001, `
+    import assert from 'node:assert/strict';
+    await assert.rejects(fetch('http://127.0.0.1:9229/json/version', {signal: AbortSignal.timeout(2000)}));
+    console.log('SIGUSR1 cannot start a trusted-agent inspector.');
+  `);
   // Fixed loopback fixtures stand in for native KBS/CDH; no attestation verdict
   // or production identity is invented by this offline process-boundary test.
   docker(["exec", "--detach", "--user", "10001:10001", name, "node", "--input-type=module", "-e", `
@@ -94,7 +100,7 @@ try {
     });
     assert.ok((await read('default/config/app')).subarray(4).equals(Buffer.from('synthetic-approved-resource')));
     for(const path of ['default/image/app','default/volume/data'])assert.equal((await read(path)).length,0);
-    for(const port of [8006,8080])await assert.rejects(fetch('http://127.0.0.1:'+port,{signal:AbortSignal.timeout(2000)}));
+    for(const port of [8006,8080,9229])await assert.rejects(fetch('http://127.0.0.1:'+port,{signal:AbortSignal.timeout(2000)}));
     await assert.rejects(new Promise((resolve,reject)=>{
       const req=request({hostname:'127.0.0.1',port:8444,path:'/nebula/v1/configured',rejectUnauthorized:false},resolve);
       req.setTimeout(2000,()=>req.destroy(new Error('private API unavailable')));req.on('error',reject);req.end();

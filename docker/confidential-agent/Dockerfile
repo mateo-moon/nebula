@@ -40,4 +40,4 @@ WORKDIR /app
 COPY --from=build /workspace/packages/confidential-agent/dist ./dist
 COPY packages/confidential-agent/package.json ./
 USER 10001:10001
-ENTRYPOINT ["node", "/app/dist/main.mjs"]
+ENTRYPOINT ["node", "--disable-sigusr1", "/app/dist/main.mjs"]

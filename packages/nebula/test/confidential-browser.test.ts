@@ -39,7 +39,7 @@ test("frontend and preparation use the same measured agent entrypoint with expli
     const first = confidentialBrowserPlan({ ...base, agentImage, ...(mode ? { manualTls: mode } : { maxImageSizeMiB: 4096 }) });
     const agent = first.pod.spec!.containers![0];
     assert.equal(agent.name, "agent");
-    assert.ok(agent.command!.includes("/app/dist/main.mjs"));
+    assert.deepEqual(agent.command!.slice(-3), ["node", "--disable-sigusr1", "/app/dist/main.mjs"]);
     const options = JSON.parse(agent.args![0]);
     assert.equal(options.role, mode ? "frontend" : "preparation");
     assert.equal(agent.env!.some(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY" || entry.name === "NEBULA_MAX_IMAGE_SIZE_MIB"), false);

@@ -8,7 +8,9 @@ test("guest firewall admits only measured helper UIDs to the local key API", {
   skip: process.env.NEBULA_GUARD_INTEGRATION !== "1",
 }, async () => {
   const server = createServer((_request, response) => response.end("canary-resource"));
+  const inspector = createServer((_request, response) => response.end("inspector-canary"));
   await new Promise(resolve => server.listen(8006, "127.0.0.1", resolve));
+  await new Promise(resolve => inspector.listen(9229, "127.0.0.1", resolve));
   try {
     installGuestGuard("/run/nebula-guard");
     const probe = (uid, gid, port = 8006, options = "{}") => new Promise((resolve, reject) => {
@@ -25,6 +27,8 @@ test("guest firewall admits only measured helper UIDs to the local key API", {
     assert.equal(await probe(0, 0), "200");
     assert.equal(await probe(10001, 10001), "200");
     assert.equal(await probe(11000, 11000), "denied");
+    assert.equal(await probe(10001, 10001, 9229), "200");
+    assert.equal(await probe(11000, 11000, 9229), "denied");
     // A hostile app can bind a vacated KBS port after the host kills KBS.
     // A trusted gateway must not complete a connection that could disclose
     // its owner JWT or a plaintext put-resource body to that listener.
@@ -46,5 +50,5 @@ test("guest firewall admits only measured helper UIDs to the local key API", {
         '{ method: "POST", headers: { authorization: "Bearer canary" }, body: "canary-key" }'), "denied");
       assert.equal(attackerOutput.includes("leaked\n"), false);
     } finally { attacker.kill("SIGKILL"); }
-  } finally { server.close(); }
+  } finally { server.close(); inspector.close(); }
 });

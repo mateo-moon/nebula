@@ -19,4 +19,4 @@ COPY --from=build /workspace/packages/confidential-agent/dist ./dist
 COPY --from=browser-assets / ./loader/
 USER 10001:10001
 ENV HOME=/tmp
-ENTRYPOINT ["node", "/app/dist/main.mjs"]
+ENTRYPOINT ["node", "--disable-sigusr1", "/app/dist/main.mjs"]

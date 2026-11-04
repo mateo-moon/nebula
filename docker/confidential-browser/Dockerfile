@@ -31,7 +31,7 @@ COPY --from=build /workspace/packages/confidential-agent/dist ./dist
 COPY --from=build /workspace/packages/confidential-browser/dist/ui ./ui
 USER 10001:10001
 ENV HOME=/tmp
-ENTRYPOINT ["node", "/app/dist/main.mjs", "{\"version\":1,\"role\":\"preparation\"}"]
+ENTRYPOINT ["node", "--disable-sigusr1", "/app/dist/main.mjs", "{\"version\":1,\"role\":\"preparation\"}"]
 
 FROM runtime AS native-test
 COPY --from=build /tmp/browser-encryption.mjs /app/browser-encryption.mjs
