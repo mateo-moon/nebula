@@ -18,13 +18,26 @@ export async function port() {
   await new Promise<void>((accept, reject) => server.close(error => error ? reject(error) : accept()));
   return address.port;
 }
+async function distinctPorts(): Promise<[number, number]> {
+  // Hold the first reservation while selecting the second. Closing it first
+  // lets the kernel return the same ephemeral port on some CI runners.
+  const first = createServer();
+  await new Promise<void>(accept => first.listen(0, "127.0.0.1", accept));
+  try {
+    const address = first.address();
+    if (!address || typeof address === "string") throw new Error("Expected a listening TCP port");
+    return [address.port, await port()];
+  } finally {
+    await new Promise<void>((accept, reject) => first.close(error => error ? reject(error) : accept()));
+  }
+}
 export async function fixture(t: TestContext, overrides: Partial<Omit<FixtureConfig, "localPort" | "verifierPort">> = {}) {
   const directory = mkdtempSync(join(tmpdir(), "confidential-client-")); chmodSync(directory, 0o700);
   t.after(() => {
     try { process.kill(Number(readFileSync(join(directory, "verifier.pid"))), "SIGTERM"); } catch {}
     rmSync(directory, { recursive: true, force: true });
   });
-  const localPort = await port(), verifierPort = await port();
+  const [localPort, verifierPort] = await distinctPorts();
   const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const stateDirectory = prepareClient({ stateDirectory: join(directory, "state"), identity: identity(),
     target: { host: overrides.targetHost ?? "127.0.0.1", port: overrides.targetPort ?? 18443 }, localPort, verifierPort,
