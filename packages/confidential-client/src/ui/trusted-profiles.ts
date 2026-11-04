@@ -19,7 +19,7 @@ export const TRUSTED_STACKS = [ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-
   tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:104fce8e85559258eb54787d3e837a2b0e858ee9009a886ff58cb43fb91f72dc",
   gatewayImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:d732ff99a900f6100fbd50392aa4cafc4226cd2389d6d3c9d9a4752f374bd410",
 }, { ...ACCESS_PROFILE, id: "nebula-snp-agent-2026-11-04",
-  agentImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:9ebd4adb521d9be9420385b8fce3156837bcd67403bfa60c1bb5c19c8ff92338",
+  agentImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:796df4b0f2994e3e244b9ab564183deb00c02570aab27b0777b3c1dcb530e7ff",
   tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
   gatewayImage: undefined,
   storageImage: undefined,
