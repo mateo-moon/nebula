@@ -10,6 +10,10 @@ const native = "/usr/local/bin/nebula-confidential-storage";
 declare const NEBULA_AGENT_WORKLOAD_MODULE: boolean;
 declare const NEBULA_AGENT_BROWSER_MODULES: boolean;
 
+// A fixed startup stage can be exposed in the Pod termination message without
+// disclosing measured arguments, native errors, resource paths or key material.
+export let agentStartupStage = "config";
+
 /** Privileged setup finishes before any owner-facing listener starts. The
  * native disk module keeps only its required capabilities; the HTTP agent
  * drops permanently to the measured helper UID. */
@@ -17,9 +21,12 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
   if (process.platform !== "linux" || process.arch !== "x64" || process.getuid?.() !== 0) {
     throw new Error("Workload agent requires guest root on Linux SNP");
   }
+  agentStartupStage = "guest-guard";
   installGuestGuard();
+  agentStartupStage = "native-install";
   execFileSync(native, ["install"], { stdio: "ignore", timeout: 15_000 });
   if (config.storage.volumes.length || config.storage.clients.length) {
+    agentStartupStage = "native-start";
     const child = spawn(native, ["agent", JSON.stringify(config.storage)], {
       stdio: ["pipe", "ignore", "ignore", "pipe"], env: { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LC_ALL: "C" },
     });
@@ -42,6 +49,7 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
       child.once("exit", () => { clearTimeout(timeout); reject(new Error("Native module stopped during startup")); });
     });
   }
+  agentStartupStage = "privilege-drop";
   lifecycle.signal.throwIfAborted();
   process.setgroups!([10001]);
   process.setgid!(10001);
@@ -49,6 +57,7 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
   if (process.getuid?.() !== 10001 || process.getgid?.() !== 10001) throw new Error("Agent privilege drop failed");
   const owner = config.owner;
   let ready = false;
+  agentStartupStage = "owner-gateway";
   const gateway = startGateway("/run/instance", owner.storageNames, owner.resources,
     owner.ownerClaimSha256, owner.audience, owner.browser, () => ready);
   lifecycle.server(gateway);
@@ -56,6 +65,7 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
     async () => gatewayConfigured(gateway)).then(() => {
       if (!lifecycle.signal.aborted) { publishOwnerReady(); ready = true; }
     }));
+  agentStartupStage = "running";
 }
 
 export async function startAgent(raw: string, lifecycle = new AgentLifecycle()): Promise<AgentLifecycle> {

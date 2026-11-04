@@ -1,5 +1,6 @@
-import { startAgent } from "./agent.js";
+import { agentStartupStage, startAgent } from "./agent.js";
 import { AgentLifecycle } from "./lifecycle.js";
+import { appendFileSync } from "node:fs";
 
 try {
   if (process.argv.length !== 3) throw new Error("Expected one measured agent configuration");
@@ -20,6 +21,8 @@ try {
   process.exit(0);
 } catch {
   // Never print measured arguments, request bodies or native key diagnostics.
+  try { appendFileSync("/dev/termination-log", `nebula-agent:${agentStartupStage}\n`); }
+  catch { /* A missing Kubernetes termination file cannot change fail-closed behavior. */ }
   process.stderr.write("Confidential agent stopped before completing its modules\n");
   process.exit(1);
 }
