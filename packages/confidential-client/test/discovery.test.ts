@@ -41,6 +41,21 @@ test("the tested gateway and owner runtime are approved as an exact pair; earlie
     "An additional agent image cannot inherit approval from an earlier helper layout");
 });
 
+test("the agent profile pins the complete helper layout without inheriting legacy helpers", () => {
+  const profile = TRUSTED_STACKS.find(candidate => candidate.agentImage)!;
+  const connection = discoveredConnection("45".repeat(32));
+  connection.workload.spec.agentImage = profile.agentImage;
+  const { gatewayImage: _legacyGateway, ...trustee } = connection.workload.spec.trustee;
+  connection.workload.spec.trustee = { ...trustee, tngImage: profile.tngImage };
+  delete connection.workload.spec.storageImage;
+  assert.equal(trustedStack(readConnection(JSON.stringify(connection))), profile.id);
+  const changed = structuredClone(connection);
+  changed.workload.spec.agentImage = `example.invalid/another-agent@sha256:${"f".repeat(64)}`;
+  assert.throws(() => trustedStack(changed), /reviewed profile/);
+  connection.workload.spec.storageImage = TRUSTED_STACKS[0].storageImage;
+  assert.throws(() => trustedStack(connection), /reviewed profile/);
+});
+
 test("discovered declarations cannot approve their own software, CPU policy or owner route", async t => {
   const token = "19".repeat(32), baseline = discoveredConnection(token);
   let connection = structuredClone(baseline), redirect = false, lastPath = "", lastAuthorization = "";
