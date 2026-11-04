@@ -56,6 +56,18 @@ test("the agent profile pins the complete helper layout without inheriting legac
   assert.throws(() => trustedStack(connection), /reviewed profile/);
 });
 
+test("the reviewed KBS-bootstrap agent image is accepted without approving other agent images", () => {
+  const profile = TRUSTED_STACKS.find(candidate => candidate.id === "nebula-snp-agent-bootstrap-2026-11-04")!;
+  const connection = discoveredConnection("45".repeat(32));
+  const { gatewayImage: _legacyGateway, ...trustee } = connection.workload.spec.trustee;
+  connection.workload.spec.trustee = { ...trustee, tngImage: profile.tngImage };
+  connection.workload.spec.agentImage = profile.agentImage;
+  delete connection.workload.spec.storageImage;
+  assert.equal(trustedStack(readConnection(JSON.stringify(connection))), profile.id);
+  connection.workload.spec.agentImage = `example.invalid/another-agent@sha256:${"f".repeat(64)}`;
+  assert.throws(() => trustedStack(connection), /reviewed profile/);
+});
+
 test("discovered declarations cannot approve their own software, CPU policy or owner route", async t => {
   const token = "19".repeat(32), baseline = discoveredConnection(token);
   let connection = structuredClone(baseline), redirect = false, lastPath = "", lastAuthorization = "";

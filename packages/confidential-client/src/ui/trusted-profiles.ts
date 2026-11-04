@@ -23,6 +23,11 @@ export const TRUSTED_STACKS = [ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-
   tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
   gatewayImage: undefined,
   storageImage: undefined,
+}, { ...ACCESS_PROFILE, id: "nebula-snp-agent-bootstrap-2026-11-04",
+  agentImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:34b8c7f5b1dd5d890b1ac6e1b00f4bd6e9dc2027e67641a4fc2735bcb911e1d2",
+  tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+  gatewayImage: undefined,
+  storageImage: undefined,
 }] as const;
 
 export function trustedStack(connection: ConfidentialConnection): string {
