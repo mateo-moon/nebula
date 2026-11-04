@@ -29,22 +29,13 @@ import {
 } from "#imports/apiextensions.crossplane.io";
 
 /**
- * k0smotron version + releases base URL for fetchConfig. PIN THE EXACT TAG (never
- * `releases/latest`): k0smotron ships a PARALLEL v1.10.x **v1beta1** maintenance
- * line on the same dates as the v2.0.x **v1beta2** line, so a floating `latest`
- * can silently install v1beta1 components — the management cluster comes up on the
- * v1beta1 contract and `clusterctl move` (v1beta2) refuses it. v2.0.x is the
- * k0smotron line serving the CAPI v1beta2 contract (verified in the release's
- * own metadata.yaml: major 2 / minor 0 => contract v1beta2). Keep this in
- * lockstep with the CAPI core / CAPA versions below.
- *
- * v2.0.4 (2026-07-22) over v2.0.2: a patch bump inside the same contract, so
- * the provider CRs and CRDs are unchanged. Taken because v2.0.2 predates
- * Kubernetes 1.35 and is the prime suspect for k0s 1.35 workers installing
- * and starting but never registering (observed on cicd — no node appears and
- * no auth attempt reaches the hosted CP).
+ * Pin the v1beta2 provider release and its component URLs together; a floating
+ * latest release can select the parallel v1beta1 maintenance line.
+ * v2.3.1 waits for CAPI drain/detachment before stopping k0s, includes deleting
+ * Machines in the surge budget, and preserves zone spread when removing extras.
+ * https://github.com/k0sproject/k0smotron/releases/tag/v2.3.1
  */
-const K0SMOTRON_VERSION = "v2.0.4";
+const K0SMOTRON_VERSION = "v2.3.1";
 const K0SMOTRON_RELEASES_BASE =
   `https://github.com/k0sproject/k0smotron/releases/download/${K0SMOTRON_VERSION}`;
 
