@@ -25,9 +25,11 @@ test("browser preparation rejects mutable images before running native policy ge
 test("small preparation and frontend budgets preserve default plans and upload floors", { skip: !native, timeout: 600_000 }, () => {
   const small = confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 2048 } });
   assert.equal(small.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "2048");
-  const frontend = confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 1024 }, manualTls: {
+  const frontend = confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 2048 }, manualTls: {
     preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" } });
-  assert.equal(frontend.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "1024");
+  assert.equal(frontend.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "2048");
+  assert.throws(() => confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 1024 }, manualTls: {
+    preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" } }), /guest memory/);
   assert.equal(confidentialBrowserPlan(config).pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "4096");
 });
 

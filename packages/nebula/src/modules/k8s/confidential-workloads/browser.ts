@@ -42,7 +42,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   if (config.maxImageSizeMiB !== undefined && (config.manualTls || !Number.isInteger(config.maxImageSizeMiB) ||
       config.maxImageSizeMiB < 1 || config.maxImageSizeMiB > 4096)) throw new Error("Preparation image limit must be between 1 and 4096 MiB");
   const workspaceMiB = Math.max(2048, (config.maxImageSizeMiB ?? 256) * 5);
-  const minimumMemoryMiB = config.manualTls ? 1024 : Math.max(2048, (config.maxImageSizeMiB ?? 256) * 8);
+  const minimumMemoryMiB = config.manualTls ? 2048 : Math.max(2048, (config.maxImageSizeMiB ?? 256) * 8);
   const memoryMiB = config.runtime?.memoryMiB ?? Math.max(4096, (config.maxImageSizeMiB ?? 256) * 8);
   if ((config.runtime && Object.keys(config.runtime).join() !== "memoryMiB") ||
       !Number.isInteger(memoryMiB) || memoryMiB < minimumMemoryMiB || memoryMiB > 65536) {

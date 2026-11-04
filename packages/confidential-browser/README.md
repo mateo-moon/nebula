@@ -30,7 +30,7 @@ new ConfidentialBrowser(chart, "browser-ui", {
 
 Pin the images and generate native policy during synthesis. The frontend image contains the reviewed browser assets and approved preparation profiles. Forward public TCP directly to its TNG service on port 10443; TLS must terminate inside the guest. This first-page path needs no ACME, DNS-custodian key or administrator-controlled CA. Do not put TLS private keys in Kubernetes.
 
-The frontend serves the first page and verifier; preparation publishes ciphertext and generates the final workload policy. Both use the agent entrypoint. Separate releases let the verifier pin the preparation image and policy without embedding its own image hash. For a small qualification image, `runtime: { memoryMiB: 2048 }` can size preparation and `runtime: { memoryMiB: 1024 }` can size the diskless frontend. Omission keeps the existing 4 GiB default. Larger upload limits retain their required memory floor; check host capacity before creating additional guests.
+The frontend serves the first page and verifier; preparation publishes ciphertext and generates the final workload policy. Both use the agent entrypoint. Separate releases let the verifier pin the preparation image and policy without embedding its own image hash. For a small qualification image, `runtime: { memoryMiB: 2048 }` can size either guest. CoCo needs space to unpack both images inside the guest; a 1 GiB frontend is insufficient. Omission keeps the existing 4 GiB default. Larger upload limits retain their required memory floor; check host capacity before creating additional guests.
 
 For archives up to 4 GiB, configure the preparation VM with a reviewed image containing chunk-upload support:
 
