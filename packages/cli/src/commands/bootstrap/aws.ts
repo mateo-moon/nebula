@@ -394,8 +394,6 @@ const CONTROLLER_POLICY_JSON = JSON.stringify({
         "iam:*",
         "route53:*",
         "kms:*",
-        "ssm:GetParameter",
-        "ssm:GetParameters",
         "secretsmanager:*",
         "tag:GetResources",
       ],

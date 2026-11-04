@@ -8,7 +8,6 @@ export interface AwsHostProfile {
     suite: string;
     /** Debian package version, not the uname release or installed metapackage. */
     minimumKernelVersion: string;
-    requireSsmAgent?: boolean;
   };
 }
 
@@ -41,7 +40,6 @@ export function validateAwsHostProfile(profile?: AwsHostProfile): void {
   if (typeof debian.suite !== "string" || !/^[a-z][a-z0-9-]{0,31}$/.test(debian.suite)) fail("invalid Debian suite");
   if (typeof debian.minimumKernelVersion !== "string" || debian.minimumKernelVersion.length > 128
     || !/^(?:[0-9]+:)?[0-9][A-Za-z0-9.+~]*(?:-[A-Za-z0-9.+~]+)?$/.test(debian.minimumKernelVersion)) fail("invalid minimum kernel package version");
-  if (debian.requireSsmAgent !== undefined && typeof debian.requireSsmAgent !== "boolean") fail("invalid SSM setting");
 }
 
 const quote = (value: string): string => "'" + value.replace(/'/g, "'\\''") + "'";
@@ -68,9 +66,7 @@ set -- $kernel_state
 dpkg --compare-versions "$2" ge ${quote(debian.minimumKernelVersion)} || {
   echo 'Running kernel package is below the required minimum' >&2; exit 1;
 }
-${debian.requireSsmAgent ? `systemctl is-enabled --quiet amazon-ssm-agent
-systemctl is-active --quiet amazon-ssm-agent
-` : ""}`;
+`;
   return ["/bin/sh -eu -c " + quote(script)];
 }
 

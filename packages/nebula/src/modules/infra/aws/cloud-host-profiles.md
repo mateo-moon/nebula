@@ -2,8 +2,8 @@
 
 Omitting the AMI selects the official Debian 13 EC2 release `20261026-2643` in
 `eu-central-1`, with the architecture selected from the instance type. Nebula
-uses `admin`, `/dev/xvda` and the running-kernel floor `6.12.113-1`. No SSM agent
-or custom image is required. Both CAPA and custom worker fleets share this default.
+uses `admin`, `/dev/xvda` and the running-kernel floor `6.12.113-1`. No custom
+image is required. Both CAPA and custom worker fleets share this default.
 Other regions require an explicit region-specific AMI.
 
 An explicit AMI or lookup overrides the default and retains its existing host
@@ -31,8 +31,6 @@ and launch permission must be checked during image qualification.
 The optional Debian policy checks the OS, architecture and installed package
 for `linux-image-$(uname -r)` before k0s enrollment. It does not upgrade packages
 or reboot. A newer metapackage with an older running kernel fails this check.
-When requested, SSM Agent must be enabled and running; the image qualification
-must additionally verify that the agent connects with a fresh instance identity.
 
 Both standalone and hosted CAPA workers get these checks through the provider.
 Their opt-in bootstrap templates receive versioned names. The older

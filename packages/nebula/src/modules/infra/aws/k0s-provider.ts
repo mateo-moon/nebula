@@ -12,6 +12,7 @@ import {
 import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerLoadBalancerType,
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
+  type AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 import type {
   CapiInfraRef,
@@ -32,10 +33,18 @@ export interface AwsMachineSpec {
   rootVolumeSizeGiB?: number;
   /** Root volume type (default "gp3"). */
   rootVolumeType?: string;
+  /** Explicit root disk encryption; omitted preserves existing templates. */
+  rootVolumeEncrypted?: boolean;
+  /** New data volumes created with each EC2 instance. */
+  nonRootVolumes?: AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes[];
   /** Run as EC2 Spot (worker pools only; ignored for the control plane). */
   spot?: SpotSelection;
   /** Assign a public IP (default false — nodes live in private subnets behind NAT). */
   publicIp?: boolean;
+  /** Existing ENIs, in device order; retains their private/public IPv6 identities. */
+  networkInterfaces?: string[];
+  /** Explicit subnet for retained/public interfaces when publicIp is omitted. */
+  subnetId?: string;
   /**
    * Emit IMDSv2 (hop limit 2) on THIS pool's machine template so pod-networked
    * controllers scheduled here (e.g. a keyless EBS CSI controller, external-dns,
@@ -46,6 +55,8 @@ export interface AwsMachineSpec {
    * node role through IMDS.
    */
   imdsPodAccess?: boolean;
+  /** Explicit metadata response hop limit, including 1 to keep IAM host-only. */
+  imdsHopLimit?: number;
 }
 
 /** Cluster-level AWS configuration for {@link AwsK0sProvider}. */
@@ -54,6 +65,10 @@ export interface AwsK0sProviderConfig {
   ipv6?: boolean;
   /** AWS region. */
   region: string;
+  /** Existing VPC to use without creating networking or NAT gateways. */
+  vpcId?: string;
+  /** Existing security groups by CAPA role (e.g. node). Rules stay externally managed. */
+  securityGroupOverrides?: Record<string, string>;
   /** VPC CIDR CAPA will create (default "10.0.0.0/16"). */
   vpcCidr?: string;
   /**
@@ -63,11 +78,15 @@ export interface AwsK0sProviderConfig {
   availabilityZoneUsageLimit?: number;
   /** Secondary IPv4 CIDR block(s) to associate with the managed VPC. */
   secondaryCidrBlocks?: string[];
+  /** Require explicit public subnets and no secondary CIDRs, preventing CAPA NAT gateway creation. */
+  publicOnly?: boolean;
   /** Explicit subnet set (existing + new) to grow a live cluster's AZ coverage. */
   subnets?: Array<{
     availabilityZone: string;
     cidrBlock: string;
     isPublic: boolean;
+    /** Let CAPA allocate the subnet's IPv6 range from the new VPC. */
+    isIpv6?: boolean;
     id: string;
   }>;
   /** Pre-existing EC2 key pair name for SSH access to nodes. */
@@ -126,7 +145,11 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
   readonly infraClusterApiGroup = "infrastructure.cluster.x-k8s.io";
   readonly infraClusterKind = "AWSCluster";
 
-  constructor(private readonly config: AwsK0sProviderConfig) {}
+  constructor(private readonly config: AwsK0sProviderConfig) {
+    if (config.publicOnly && (!config.subnets?.length || config.subnets.some(subnet => !subnet.isPublic) || config.secondaryCidrBlocks?.length)) {
+      throw new Error("Public-only AWS networking requires explicit public subnets and no secondary CIDRs; CAPA creates NAT gateways for private subnets");
+    }
+  }
 
   private resolveImage(machine: AwsMachineSpec, role: "control-plane" | "worker"): AwsMachineSpec {
     if (machine.ami && Object.values(machine.ami).some(Boolean)) return machine;
@@ -160,6 +183,8 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
               AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme.INTERNAL,
           }),
       vpcCidr: this.config.vpcCidr ?? "10.0.0.0/16",
+      vpcId: this.config.vpcId,
+      securityGroupOverrides: this.config.securityGroupOverrides,
       networkProvider: ctx.networkProvider,
       cni: this.config.cni,
       ipv6: this.config.ipv6,
@@ -178,6 +203,8 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
   ): CapiInfraRef {
     const m = this.resolveImage(ctx.machine, ctx.role);
     validateAwsHostProfile(m.hostProfile);
+    if (m.networkInterfaces?.length && m.publicIp) throw new Error("existing ENIs carry their own public address; omit publicIp");
+    if (m.imdsHopLimit !== undefined && (!Number.isInteger(m.imdsHopLimit) || m.imdsHopLimit < 1 || m.imdsHopLimit > 64)) throw new Error("IMDS hop limit must be an integer from 1 to 64");
     const iamInstanceProfile =
       this.config.iamInstanceProfile ?? DEFAULT_NODE_INSTANCE_PROFILE;
     const isControlPlane = ctx.role === "control-plane";
@@ -223,6 +250,7 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
           // Only present when opted in, so existing pools' hashes (and thus
           // their machine templates) stay stable.
           ...(imdsPodAccess ? { imdsPodAccess: true } : {}),
+          ...(m.imdsHopLimit !== undefined ? { metadataHopLimit: m.imdsHopLimit } : {}),
           // MUST be in the hash: AWSMachineTemplate specs are immutable, so a
           // hop-limit change that does not rename the template is silently
           // never applied. Omitted at the default for hash stability.
@@ -230,9 +258,13 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
             ? { imdsHopLimit: this.config.imdsHopLimit }
             : {}),
         };
+    const specWithEncryption = m.rootVolumeEncrypted === undefined ? templateSpec : { ...templateSpec, rootVolumeEncrypted: m.rootVolumeEncrypted };
+    const specWithVolumes = m.nonRootVolumes?.length ? { ...specWithEncryption, nonRootVolumes: m.nonRootVolumes } : specWithEncryption;
+    const specWithInterfaces = m.networkInterfaces?.length ? { ...specWithVolumes, networkInterfaces: m.networkInterfaces } : specWithVolumes;
+    const specWithSubnet = m.subnetId ? { ...specWithInterfaces, subnetId: m.subnetId } : specWithInterfaces;
     const hash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(m.hostProfile ? { ...templateSpec, hostProfile: m.hostProfile } : templateSpec))
+      .update(JSON.stringify(m.hostProfile ? { ...specWithSubnet, hostProfile: m.hostProfile } : specWithSubnet))
       .digest("hex")
       .slice(0, 8);
     const name = `${ctx.baseName}-${hash}`;
@@ -243,12 +275,17 @@ export class AwsK0sProvider implements K0sInfraProvider<AwsMachineSpec> {
       instanceType,
       iamInstanceProfile,
       publicIp,
+      networkInterfaces: m.networkInterfaces,
+      subnetId: m.subnetId,
       sshKeyName: this.config.sshKeyName,
       rootVolumeSizeGiB,
       rootVolumeType,
+      rootVolumeEncrypted: m.rootVolumeEncrypted,
+      nonRootVolumes: m.nonRootVolumes,
       ami: m.ami,
       ...(imdsPodAccess !== undefined ? { imdsPodAccess } : {}),
-      ...(this.config.imdsHopLimit ? { imdsHopLimit: this.config.imdsHopLimit } : {}),
+      ...(m.imdsHopLimit !== undefined ? { imdsHopLimit: m.imdsHopLimit, forceInstanceMetadataOptions: true }
+        : this.config.imdsHopLimit ? { imdsHopLimit: this.config.imdsHopLimit } : {}),
       ...(spot !== undefined ? { spot } : {}),
     });
 

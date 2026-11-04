@@ -12,6 +12,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerIngressRulesProtocol as LbIngressProtocol,
   AwsClusterV1Beta2SpecNetworkVpcAvailabilityZoneSelection as AzSelection,
   AwsMachineTemplateV1Beta2,
+  type AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes,
   AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpEndpoint as ImdsHttpEndpoint,
   AwsMachineTemplateV1Beta2SpecTemplateSpecInstanceMetadataOptionsHttpTokens as ImdsHttpTokens,
 } from "#imports/infrastructure.cluster.x-k8s.io";
@@ -48,7 +49,7 @@ export interface NodeIngressRuleSpec {
   /** AWS SG rule description (NB: '>' is rejected by AWS — no "->" arrows). */
   description: string;
   /** Protocol — the values match CAPA's enum ("-1" = all protocols). */
-  protocol: "tcp" | "udp" | "icmp" | "-1";
+  protocol: "tcp" | "udp" | "icmp" | "58" | "-1";
   fromPort: number;
   toPort: number;
   /** Source CIDR blocks (e.g. ["0.0.0.0/0"] for public P2P ports). */
@@ -188,6 +189,8 @@ export function emitAwsClusterCr(
      */
     loadBalancerScheme?: AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme;
     vpcCidr: string;
+    vpcId?: string;
+    securityGroupOverrides?: Record<string, string>;
     /** Request an Amazon-provided IPv6 GUA block on the VPC (dual-stack subnets). */
     ipv6?: boolean;
     /** CNI selected in the k0s ClusterConfig. Used to emit matching AWS SG rules. */
@@ -224,6 +227,7 @@ export function emitAwsClusterCr(
       availabilityZone: string;
       cidrBlock: string;
       isPublic: boolean;
+      isIpv6?: boolean;
       /** Logical id (CAPA convention: `<cluster>-subnet-<public|private>-<az>`). */
       id: string;
     }>;
@@ -330,7 +334,9 @@ export function emitAwsClusterCr(
         ],
       },
       network: {
+        ...(opts.securityGroupOverrides ? { securityGroupOverrides: opts.securityGroupOverrides } : {}),
         vpc: {
+          ...(opts.vpcId ? { id: opts.vpcId } : {}),
           cidrBlock: opts.vpcCidr,
           // Amazon-provided IPv6 GUA block for the VPC. Unlike public IPv4
           // (1:1 NAT at the IGW - the instance never carries the address),
@@ -569,9 +575,13 @@ export function emitAwsMachineTemplate(
     instanceType: string;
     iamInstanceProfile: string;
     publicIp: boolean;
+    networkInterfaces?: string[];
+    subnetId?: string;
     sshKeyName?: string;
     rootVolumeSizeGiB: number;
     rootVolumeType: string;
+    rootVolumeEncrypted?: boolean;
+    nonRootVolumes?: AwsMachineTemplateV1Beta2SpecTemplateSpecNonRootVolumes[];
     ami?: AmiSelection;
     /**
      * Run the instances as EC2 Spot. `true` (or `{}`) caps the bid at the
@@ -600,6 +610,8 @@ export function emitAwsMachineTemplate(
      * switch, with volume attach/detach dead cluster-wide.
      */
     imdsHopLimit?: number;
+    /** Emit an explicit metadata limit even when pod access is off. */
+    forceInstanceMetadataOptions?: boolean;
   },
 ): AwsMachineTemplateV1Beta2 {
   return new AwsMachineTemplateV1Beta2(scope, id, {
@@ -608,8 +620,11 @@ export function emitAwsMachineTemplate(
       template: {
         spec: {
           instanceType: opts.instanceType,
+          nonRootVolumes: opts.nonRootVolumes,
           iamInstanceProfile: opts.iamInstanceProfile,
-          publicIp: opts.publicIp,
+          publicIp: opts.networkInterfaces?.length ? undefined : opts.publicIp,
+          ...(opts.networkInterfaces?.length ? { networkInterfaces: opts.networkInterfaces } : {}),
+          ...(opts.subnetId ? { subnet: { id: opts.subnetId } } : {}),
           // Put bootstrap data directly in EC2 user-data instead of CAPA's default
           // Secrets Manager backend. That backend's boot script fetches the data
           // with the `aws` CLI, which a plain Ubuntu cloud image does NOT ship —
@@ -630,7 +645,7 @@ export function emitAwsMachineTemplate(
           // GET-only SSRF then cannot read the near-admin instance-profile creds.
           // Omitted entirely for non-keyless nodes (workers), which keep the EC2
           // default (hop limit 1) and do NOT expose their role to pods.
-          ...(opts.imdsPodAccess
+          ...(opts.imdsPodAccess || opts.forceInstanceMetadataOptions
             ? {
                 instanceMetadataOptions: {
                   httpEndpoint: ImdsHttpEndpoint.ENABLED,
@@ -640,6 +655,7 @@ export function emitAwsMachineTemplate(
               }
             : {}),
           rootVolume: {
+            ...(opts.rootVolumeEncrypted !== undefined ? { encrypted: opts.rootVolumeEncrypted } : {}),
             size: opts.rootVolumeSizeGiB,
             type: opts.rootVolumeType,
           },

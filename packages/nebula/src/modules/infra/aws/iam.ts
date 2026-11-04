@@ -52,19 +52,6 @@ const CONTROLLER_POLICY_DOCUMENT = JSON.stringify({
         "route53:*",
         "kms:*",
         "s3:*",
-        "ssm:GetParameter",
-        "ssm:GetParameters",
-        // Run-command access so an in-cluster pod on this role can read a
-        // node's journal (the nodes already carry
-        // AmazonSSMManagedInstanceCore). Without it, diagnosing a host that
-        // boots but never joins the cluster requires local AWS credentials —
-        // and the whole point of the keyless model is that the estate can
-        // debug and repair itself. No escalation in practice: this role
-        // already holds ec2:*/iam:*/elasticloadbalancing:*.
-        "ssm:DescribeInstanceInformation",
-        "ssm:SendCommand",
-        "ssm:GetCommandInvocation",
-        "ssm:ListCommandInvocations",
         "tag:GetResources",
         // servicequotas family (quota raises as code) and dlm family (EBS
         // snapshot lifecycle) 403 without these.
@@ -87,8 +74,8 @@ export interface AwsIamConfig {
   /**
    * AWS-managed policy ARNs to attach to the node role. Self-managed k0s nodes
    * need very little IAM (Calico CNI + Piraeus storage are in-cluster), so the
-   * defaults cover ECR image pulls and SSM access only.
-   * @default ['AmazonEC2ContainerRegistryReadOnly', 'AmazonSSMManagedInstanceCore']
+   * defaults cover ECR image pulls only.
+   * @default ['AmazonEC2ContainerRegistryReadOnly']
    */
   managedPolicyArns?: string[];
   /** Extra tags */
@@ -128,7 +115,6 @@ export class AwsIam extends Construct {
     const managedPolicyArns = (
       config.managedPolicyArns ?? [
         "AmazonEC2ContainerRegistryReadOnly",
-        "AmazonSSMManagedInstanceCore",
       ]
     ).map((p) => (p.startsWith("arn:") ? p : `arn:aws:iam::aws:policy/${p}`));
     const tags = { ...config.tags, "nebula.sh/role": "node" };
