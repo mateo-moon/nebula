@@ -11,7 +11,9 @@ export interface ConfidentialStorageDevicesConfig {
   image: string;
   pluginIndex: string;
   /** Exact measured profiles and storage binding names served on this node. */
-  bindings: readonly { profile: string; storage: string }[];
+  agentProfiles?: readonly string[];
+  /** Original per-volume containers, retained for enrolled deployments. */
+  bindings?: readonly { profile: string; storage: string }[];
   nriDirectory?: string;
 }
 
@@ -24,11 +26,13 @@ export class ConfidentialStorageDevices extends BaseConstruct<ConfidentialStorag
     super(scope, id, publicConfig("ConfidentialStorageDevices", config));
     const name = /^[a-z][a-z0-9-]{0,39}$/, node = /^[a-z0-9][a-z0-9.-]{0,252}$/;
     const directory = config.nriDirectory ?? "/var/run/nri";
+    const bindings = config.bindings ?? [], profiles = config.agentProfiles ?? [];
     if (![config.name, config.namespace].every(v => name.test(v)) || !node.test(config.nodeName) ||
         !isDigestImage(config.image) || !/^[0-9]{2}$/.test(config.pluginIndex) ||
-        !/^\/[A-Za-z0-9/_-]+$/.test(directory) || !config.bindings.length ||
-        config.bindings.some(b => !name.test(b.profile) || !name.test(b.storage)) ||
-        new Set(config.bindings.map(b => `${b.profile}/${b.storage}`)).size !== config.bindings.length) {
+        !/^\/[A-Za-z0-9/_-]+$/.test(directory) || !(bindings.length + profiles.length) ||
+        bindings.some(b => !name.test(b.profile) || !name.test(b.storage)) || profiles.some(profile => !name.test(profile)) ||
+        new Set(bindings.map(b => `${b.profile}/${b.storage}`)).size !== bindings.length ||
+        new Set(profiles).size !== profiles.length || profiles.some(profile => bindings.some(binding => binding.profile === profile))) {
       throw new TypeError("Invalid confidential storage device configuration");
     }
     this.deployment = new ApiObject(this, "deployment", {
@@ -41,7 +45,8 @@ export class ConfidentialStorageDevices extends BaseConstruct<ConfidentialStorag
             args: ["--idx", config.pluginIndex, "--socket-path", `${directory}/nri.sock`,
               "--namespace", config.namespace, "--own-namespace", config.namespace,
               "--runtime-handler", "kata-qemu-snp", "--device-major", "10", "--device-minor", "258",
-              ...config.bindings.flatMap(b => ["--storage-generated-binding", `${b.profile}-=nebula-storage-${b.storage}`])],
+              ...bindings.flatMap(b => ["--storage-generated-binding", `${b.profile}-=nebula-storage-${b.storage}`]),
+              ...profiles.flatMap(profile => ["--storage-generated-binding", `${profile}-=nebula-agent`])],
             securityContext: { runAsUser: 0, runAsGroup: 0, allowPrivilegeEscalation: false,
               readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
             volumeMounts: [{ name: "nri", mountPath: directory, readOnly: true }],

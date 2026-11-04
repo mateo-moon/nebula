@@ -65,7 +65,7 @@ export interface ConnectionSummary {
   volumes: { name: string; type: "Memory" | "EncryptedBlock"; keyRequired: boolean }[];
   resourceFiles: string[];
   identity: ConfidentialWorkloadResource["spec"]["guest"];
-  helperImages: ConfidentialWorkloadResource["spec"]["trustee"] & { storageImage: string };
+  helperImages: ConfidentialWorkloadResource["spec"]["trustee"] & { storageImage?: string; agentImage?: string };
   cachedEndorsement: boolean;
 }
 export function connectionSummary(connection: ConfidentialConnection): ConnectionSummary {
@@ -81,6 +81,7 @@ export function connectionSummary(connection: ConfidentialConnection): Connectio
     images: workload.spec.containers.map(c => ({ name: c.name, command: c.commandFromImage ? "Image entrypoint" : [...c.command!, ...(c.args ?? [])].join(" "),
       uid: c.uid, mounts: c.mounts ?? [], ports: c.ports ?? [] })), volumes,
     resourceFiles: workload.spec.resources.map(p => p.join("/")).filter(p => !keyPaths.has(p)),
-    identity: workload.spec.guest, helperImages: { ...workload.spec.trustee, storageImage: workload.spec.storageImage },
+    identity: workload.spec.guest, helperImages: { ...workload.spec.trustee, storageImage: workload.spec.storageImage,
+      ...(workload.spec.agentImage ? { agentImage: workload.spec.agentImage } : {}) },
     cachedEndorsement: Boolean(connection.vcekCertificate) };
 }

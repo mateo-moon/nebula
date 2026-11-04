@@ -1,6 +1,10 @@
 # Confidential workloads
 
-`ConfidentialOperator` installs the `ConfidentialWorkload` and `ConfidentialStorage` CRDs and a namespace-scoped controller. Each workload gets its own SEV-SNP PodVM with the pinned official Trustee Helm chart, TNG, owner gateway, storage helper and application. Native CoCo `genpolicy` measures the complete Pod. The operator never receives decryption keys or owner private keys.
+`ConfidentialOperator` installs the `ConfidentialWorkload` and `ConfidentialStorage` CRDs and a namespace-scoped controller. Each workload gets its own SEV-SNP PodVM with the pinned official Trustee Helm chart, TNG, one Nebula agent and the application. Set `agentImage` to the reviewed agent digest. Native CoCo `genpolicy` measures the complete Pod. The operator never receives decryption keys or owner private keys.
+
+The [agent](../../../../../confidential-agent/README.md) has one main entrypoint and shared lifecycle. Owner access, readiness, attestation collateral, browser frontend and preparation are internal modules. Inside a workload guest, it replaces the separate owner, readiness, firewall, launcher-installation, resource-broker and per-volume containers. Its HTTP process drops to UID 10001 before listening. One private native child owns all declared encrypted volumes and approved application-resource sockets with only CHOWN, SYS_ADMIN and MKNOD capabilities.
+
+TNG and the unmodified official Trustee remain upstream components. The Kubernetes controller remains outside the guest. Enrolled declarations using `storageImage` and `trustee.gatewayImage` retain their measured layout; use `agentImage` for new deployments rather than replacing an enrolled guest.
 
 For the browser flow, add a `ConfidentialBrowser` preparation VM and a diskless frontend using `manualTls`. TNG serves the first page with TLS terminating inside the measured guest. The user independently checks the browser's actual certificate and approved workload measurements before entering their token. TNG WASM then verifies the preparation and final workload, with keys released only to their enrolled instances. See the [browser guide](../../../../../confidential-browser/README.md).
 

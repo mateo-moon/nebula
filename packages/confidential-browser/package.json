@@ -11,13 +11,12 @@
   },
   "dependencies": {
     "@nebula/confidential-client": "file:../confidential-client",
-    "@nebula/confidential-runtime": "file:../confidential-runtime",
     "esbuild": "0.27.7",
     "hash-wasm": "4.12.0",
-    "nebula-cdk8s": "file:../nebula",
     "tsx": "4.21.0"
   },
   "devDependencies": {
+    "@nebula/confidential-agent": "file:../confidential-agent",
     "@types/node": "22.19.8",
     "typescript": "5.9.3"
   }

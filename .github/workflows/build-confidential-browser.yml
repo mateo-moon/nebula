@@ -1,11 +1,11 @@
-name: Build confidential browser loader
+name: Build attested confidential browser
 
 on:
   pull_request:
     paths:
       - packages/confidential-browser/**
       - packages/confidential-client/**
-      - packages/confidential-runtime/**
+      - packages/confidential-agent/**
       - packages/nebula/**
       - tools/tng-browser/**
       - docker/confidential-browser/Dockerfile.tls
@@ -31,7 +31,16 @@ jobs:
         with:
           node-version: "24"
       - name: Scan release sources before building
-        run: node scripts/publication-guard.mjs tools/tng-browser packages/confidential-browser
+        run: >-
+          node scripts/publication-guard.mjs tools/tng-browser
+          packages/confidential-browser packages/confidential-agent
+          packages/confidential-client packages/nebula/package.json
+          packages/nebula/src/core/base-construct.ts packages/nebula/src/utils/secrets.ts
+          packages/nebula/src/modules/k8s/confidential-guests
+          packages/nebula/src/modules/k8s/confidential-workloads
+          packages/nebula/src/modules/k8s/trustee
+          packages/nebula/src/modules/k8s/envoy/measured-fragments.ts
+          docker/confidential-browser/Dockerfile.tls
       - name: Install native WASM build prerequisites
         run: |
           sudo apt-get update
@@ -41,7 +50,7 @@ jobs:
       - run: npm install -g pnpm@11.9.0
       - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
       - run: pnpm --dir packages/confidential-browser typecheck
-      - name: Build the independent loader and reject unresolved crypto imports
+      - name: Build browser assets and reject unresolved crypto imports
         env:
           TNG_WASM_PATH: ${{ runner.temp }}/tng-browser-sdk
         run: pnpm --dir packages/confidential-browser build

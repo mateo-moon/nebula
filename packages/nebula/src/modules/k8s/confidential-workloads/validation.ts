@@ -91,7 +91,7 @@ function validateContainer(container: WorkloadContainer): void {
 export function validateWorkload(resource: ConfidentialWorkloadResource, storages: readonly ConfidentialStorageResource[]): void {
   const spec = resource.spec;
   publicConfig("ConfidentialWorkload", spec);
-  fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "accessLink", "guest", "nodeSelector", "network", "trustee", "storageImage",
+  fields(spec, ["profile", "ownerPublicKeyPem", "ownerClaimSha256", "accessLink", "guest", "nodeSelector", "network", "trustee", "storageImage", "agentImage",
     "containers", "storage", "resources", "registryMirrors", "runtime", "browserOwner"]);
   if (resource.apiVersion !== CONFIDENTIAL_API || resource.kind !== "ConfidentialWorkload" ||
       !name(resource.metadata.name) || !name(resource.metadata.namespace) || !name(spec.profile)) fail("invalid workload resource");
@@ -139,7 +139,8 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
       (spec.trustee.version !== undefined && spec.trustee.version !== TRUSTEE_CHART_VERSION)) {
     fail("Trustee chart source and version must match the operator-pinned package");
   }
-  for (const image of [spec.trustee.kbsImage, spec.trustee.tngImage, spec.trustee.gatewayImage]) {
+  for (const image of [spec.trustee.kbsImage, spec.trustee.tngImage,
+    ...(!spec.agentImage || spec.trustee.gatewayImage !== undefined ? [spec.trustee.gatewayImage] : [])]) {
     if (!isDigestImage(image)) fail("bootstrap images must be digest-pinned");
   }
   if (!spec.nodeSelector || !Object.keys(spec.nodeSelector).length ||
@@ -180,7 +181,10 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   for (const container of spec.containers) {
     for (const mount of container.mounts ?? []) if (!bindings.some(binding => binding.name === mount.storage)) fail("unknown mounted storage");
   }
-  if (!isDigestImage(spec.storageImage ?? "")) fail("workloads require a pinned runtime for guarded application launch");
+  if (spec.agentImage !== undefined ? !isDigestImage(spec.agentImage) : !isDigestImage(spec.storageImage ?? "")) {
+    fail("workloads require a pinned agent for guarded application launch");
+  }
+  if (spec.storageImage !== undefined && !isDigestImage(spec.storageImage)) fail("invalid storage helper image");
   if (!Array.isArray(spec.resources) || !spec.resources.length || spec.resources.length > 64 ||
       new Set(spec.resources.map(resourcePath)).size !== spec.resources.length) fail("invalid resource admission list");
   for (const binding of bindings) {

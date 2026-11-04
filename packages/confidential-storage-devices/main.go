@@ -67,8 +67,9 @@ var accessNames = map[string]deviceAccess{"attest": peerDevices, "storage": stor
 var compiledScopes map[string]map[string]deviceAccess
 
 var (
-	dnsLabel     = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	dnsSubdomain = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
+	dnsLabel           = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	dnsSubdomain       = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
+	generatedPodSuffix = regexp.MustCompile(`^[bcdfghjklmnpqrstvwxz2456789]{5}$`)
 )
 
 func validNamespace(name string) bool { return len(name) <= 63 && dnsLabel.MatchString(name) }
@@ -301,8 +302,8 @@ func (c *config) scopeTable(set map[string]bool) (map[string]map[string]deviceAc
 			prefix, container, ok := strings.Cut(binding, "=")
 			if !ok || !strings.HasSuffix(prefix, "-") || len(prefix) > 48 ||
 				!dnsLabel.MatchString(strings.TrimSuffix(prefix, "-")) ||
-				!strings.HasPrefix(container, "nebula-storage-") || len(container) > 63 || !dnsLabel.MatchString(container) {
-				return nil, errors.New("generated binding requires profile-=nebula-storage-name")
+				(container != "nebula-agent" && !strings.HasPrefix(container, "nebula-storage-")) || len(container) > 63 || !dnsLabel.MatchString(container) {
+				return nil, errors.New("generated binding requires profile-=nebula-agent or profile-=nebula-storage-name")
 			}
 		}
 		c.source = "generated"
@@ -352,7 +353,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	f.Int64Var(&c.major, "device-major", -1, "guest /dev/sev-guest major, verified by every guest init (required)")
 	f.Int64Var(&c.minor, "device-minor", -1, "guest /dev/sev-guest minor, verified by every guest init (required)")
 	f.Var(&c.bindings, "binding", "exact reviewed pod=container recipient; repeat for each selected role")
-	f.Var(&c.storagePrefixes, "storage-generated-binding", "profile-=nebula-storage-name for generated Pods in this namespace (requires --own-namespace)")
+	f.Var(&c.storagePrefixes, "storage-generated-binding", "profile-=nebula-agent or profile-=nebula-storage-name for generated Pods in this namespace (requires --own-namespace)")
 	f.StringVar(&c.scopesFile, "scopes-file", "", "reviewed scope table replacing the compiled one (absolute path; requires --own-namespace)")
 	f.Var(&grantFlag{storageDevices, &c.grants}, "storage-binding", "pod=container granted /dev/sev-guest and /dev/mapper/control, without a scope table (requires --own-namespace)")
 	f.Var(&grantFlag{peerDevices, &c.grants}, "attest-binding", "pod=container granted /dev/sev-guest, without a scope table (requires --own-namespace)")
@@ -460,7 +461,7 @@ func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, ctr *ap
 	for binding := range c.storagePrefixes {
 		prefix, container, _ := strings.Cut(binding, "=")
 		if ctr.Name == container && strings.HasPrefix(pod.Name, prefix) &&
-			regexp.MustCompile(`^[bcdfghjklmnpqrstvwxz2456789]{5}$`).MatchString(strings.TrimPrefix(pod.Name, prefix)) {
+			generatedPodSuffix.MatchString(strings.TrimPrefix(pod.Name, prefix)) {
 			access, allowed = storageDevices, true
 		}
 	}

@@ -6,7 +6,7 @@ const image = process.env.CONFIDENTIAL_BROWSER_TLS_TEST_IMAGE ?? "nebula-browser
 const docker = args => execFileSync("docker", args, { encoding: "utf8", timeout: 30_000 });
 docker(["create", "--name", name, "--platform", "linux/amd64", "--network", "none", "--read-only", "--cap-drop", "ALL",
   "--security-opt", "no-new-privileges", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=16m",
-  "--env", 'NEBULA_MANUAL_TLS_ENTRY={"preparationEndpoint":"https://preparation.example/","stackEndpoint":"https://stack.example/"}', image]);
+  image, '{"version":1,"role":"frontend","entry":{"preparationEndpoint":"https://preparation.example/","stackEndpoint":"https://stack.example/"}}']);
 try {
   docker(["start", name]);
   const result = docker(["exec", name, "node", "--input-type=module", "-e", `

@@ -18,6 +18,22 @@ test("browser preparation rejects mutable images before running native policy ge
     assert.throws(() => confidentialBrowserPlan({ ...config, maxImageSizeMiB: maxImageSizeMiB as number }), /image limit/);
 });
 
+test("frontend and preparation use the same measured agent entrypoint with explicit modules", { skip: !native, timeout: 600_000 }, () => {
+  const { image: agentImage, ...base } = config;
+  for (const mode of [undefined, { preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" }]) {
+    const first = confidentialBrowserPlan({ ...base, agentImage, ...(mode ? { manualTls: mode } : { maxImageSizeMiB: 4096 }) });
+    const agent = first.pod.spec!.containers![0];
+    assert.equal(agent.name, "agent");
+    assert.ok(agent.command!.includes("/app/dist/main.mjs"));
+    const options = JSON.parse(agent.args![0]);
+    assert.equal(options.role, mode ? "frontend" : "preparation");
+    assert.equal(agent.env!.some(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY" || entry.name === "NEBULA_MAX_IMAGE_SIZE_MIB"), false);
+    assert.equal(agent.securityContext!.runAsUser, 10001);
+    assert.deepEqual(agent.securityContext!.capabilities, { drop: ["ALL"] });
+  }
+  assert.throws(() => confidentialBrowserPlan({ ...config, agentImage }), /pinned images/);
+});
+
 test("a 4 GiB preparation has measured guest-only workspace and RAM while legacy plans remain unchanged", {
   skip: !native, timeout: 600_000,
 }, () => {

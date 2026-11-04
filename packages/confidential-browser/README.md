@@ -19,7 +19,7 @@ Use `ConfidentialOperator`, `ConfidentialStorage` and `ConfidentialWorkload` for
 
 ```ts
 new ConfidentialBrowser(chart, "browser-ui", {
-  name: "browser-ui", namespace, image: frontendImage, tngImage: http1TngImage,
+  name: "browser-ui", namespace, agentImage: frontendImage, tngImage: http1TngImage,
   nodeSelector, network,
   manualTls: {
     preparationEndpoint: "https://preparation.example.org/",
@@ -34,7 +34,7 @@ For archives up to 4 GiB, configure the preparation VM with a reviewed image con
 
 ```ts
 new ConfidentialBrowser(chart, "preparation", {
-  name: "preparation", namespace, image: preparationImage, tngImage,
+  name: "preparation", namespace, agentImage: preparationImage, tngImage,
   nodeSelector, network, maxImageSizeMiB: 4096,
 });
 ```
@@ -58,6 +58,8 @@ If preparation restarts before ownership or final-guest creation, the operator r
 Ordinary proxies may carry the preparation/final OHTTP endpoints: their contents remain encrypted to the separately attested VM. Their DNS/HTTPS authority does not authenticate the initial page. The generic [full-stack example](../nebula/example/confidential-workload-stack.ts) includes a TCP route for the frontend; the DevOps testcase uses the existing SNP host and preserves earlier guests and disks.
 
 ## Build and limits
+
+This package contains browser assets and encryption code. The backend modules and single service entrypoint live in [confidential-agent](../confidential-agent/README.md). Frontend and preparation images build that same agent and enable only their measured module; neither can activate workload storage modules through an HTTP request.
 
 Build the pinned SNP SDK with `sh tools/tng-browser/build.sh NEW_SOURCE OUTPUT`, then run `TNG_WASM_PATH=OUTPUT pnpm --dir packages/confidential-browser build`. Build `docker/confidential-browser/Dockerfile.tls` with the resulting public `dist/loader` directory as its `browser-assets` build context. The frontend has no owner credentials, persistent disk, Kubernetes credential or certificate-enrollment API. Its private TLS key stays in TNG memory. Recheck renewed certificates and changed guest keys.
 

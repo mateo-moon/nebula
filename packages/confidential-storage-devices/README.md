@@ -8,7 +8,8 @@ enforces the approved device access.
 
 The production binary has no built-in deployment names. The construct supplies
 explicit namespace, runtime handler, generated Pod prefix and container bindings.
-Requests outside that scope receive no device adjustment. Pod annotations
+Use `agentProfiles: [profile]` for the single agent container. `bindings` retains
+the earlier per-volume layout. Requests outside that scope receive no device adjustment. Pod annotations
 cannot change these grants.
 
 Build from the repository root:

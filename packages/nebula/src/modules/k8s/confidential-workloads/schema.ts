@@ -49,8 +49,8 @@ export const workloadSpecSchema = obj({
   network: obj({ ipv4AddressPattern: str({ maxLength: 256 }), ipv6AddressPattern: str({ maxLength: 256 }) }),
   trustee: obj({ chart: str({ enum: [TRUSTEE_CHART] }), version: str({ enum: [TRUSTEE_CHART_VERSION] }),
     kbsImage: image, tngImage: image, gatewayImage: image },
-    ["chart", "kbsImage", "tngImage", "gatewayImage"]),
-  storageImage: image,
+    ["chart", "kbsImage", "tngImage"]),
+  agentImage: image, storageImage: image,
   containers: list({ ...obj({
     name, image: workloadImage, imageKeyResource: resource,
     command: list(str(), 64, 1), commandFromImage: { type: "boolean", enum: [true] }, args: list(str(), 128), env: labels,
@@ -68,8 +68,9 @@ export const workloadSpecSchema = obj({
   resources: list(resource, 64, 1),
   registryMirrors: list(obj({ prefix: str(), location: str(), insecure: { type: "boolean" } }), 16),
   runtime,
-}, ["profile", "guest", "nodeSelector", "network", "trustee", "storageImage", "containers", "resources"]);
+}, ["profile", "guest", "nodeSelector", "network", "trustee", "containers", "resources"]);
 (workloadSpecSchema as Schema)["x-kubernetes-validations"] = [
+  { rule: "has(self.agentImage) || (has(self.storageImage) && has(self.trustee.gatewayImage))", message: "Specify the measured agent image" },
   { rule: "(has(self.ownerPublicKeyPem) ? 1 : 0) + (has(self.ownerClaimSha256) ? 1 : 0) + (has(self.accessLink) ? 1 : 0) == 1",
     message: "Choose an owner public key, one-use claim hash or generated access link" },
 ];

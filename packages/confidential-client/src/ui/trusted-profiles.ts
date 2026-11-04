@@ -3,6 +3,7 @@ import type { ConfidentialConnection } from "./connection";
 /** Release trust is installed with this client, never learned from the stack
  * that is asking for keys. A new measured runtime needs a reviewed release. */
 const ACCESS_PROFILE = {
+  agentImage: undefined as string | undefined,
   id: "nebula-snp-access-2026-10",
   measurement: "e6bfc24840176237937ab32b8a9425fae4856b03a7864efea46e92b9c5b4a76eef48e889f498fceb73c90e03dcb8bcd9",
   minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 },
@@ -27,7 +28,7 @@ export function trustedStack(connection: ConfidentialConnection): string {
   const match = TRUSTED_STACKS.find(profile => profile.measurement === spec.guest.measurement &&
     profile.chart === spec.trustee.chart && profile.kbsImage === spec.trustee.kbsImage &&
     profile.tngImage === spec.trustee.tngImage && profile.gatewayImage === spec.trustee.gatewayImage &&
-    profile.storageImage === spec.storageImage &&
+    profile.storageImage === spec.storageImage && profile.agentImage === spec.agentImage &&
     Object.entries(profile.minimumReportedTcb).every(([field, value]) =>
       spec.guest.minimumReportedTcb[field as keyof typeof profile.minimumReportedTcb] >= value));
   if (!match) throw new Error("This stack does not match a reviewed profile installed with this client. No keys were released; install the matching reviewed client release");

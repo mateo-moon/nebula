@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { INIT_DATA_ANNOTATION, initDataSha256 } from "../src/modules/k8s/confidential-guests/measured";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 import { renderConfidentialWorkload } from "../src/modules/k8s/confidential-workloads/render";
-import type { ConfidentialWorkloadResource } from "../src/modules/k8s/confidential-workloads/types";
+import type { ConfidentialStorageResource, ConfidentialWorkloadResource } from "../src/modules/k8s/confidential-workloads/types";
 
 const kbs = "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68";
 const tng = "ghcr.io/inclavare-containers/tng@sha256:233528659b406ffc67e6b2bd542f58825a3e85c7a25559a5adc74a16e582d416";
@@ -72,4 +72,40 @@ test("native policy binds a claimed guest to the published image digest", {
   const gateway = result.pod.spec!.initContainers!.find(container => container.name === "nebula-owner")!;
   assert.match(gateway.args!.join(" "), /aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
   assert.match(result.identity.initDataSha256, /^[a-f0-9]{64}$/);
+});
+
+test("one measured agent replaces the guest daemons and owns isolated multi-volume modules", {
+  skip: !native, timeout: 600_000,
+}, () => {
+  const declaration = fixture();
+  declaration.spec.agentImage = kbs;
+  delete declaration.spec.storageImage;
+  delete declaration.spec.trustee.gatewayImage;
+  declaration.spec.containers[0].imageKeyResource = ["default", "image", "app"];
+  declaration.spec.containers[0].applicationResources = [["default", "config", "app"]];
+  declaration.spec.containers[0].mounts = [{ storage: "data", path: "/data" }, { storage: "scratch", path: "/scratch" }];
+  declaration.spec.storage = [{ name: "data", resource: "data" }, { name: "scratch", resource: "scratch" }];
+  declaration.spec.resources = [["default", "image", "app"], ["default", "volume", "data"],
+    ["default", "volume", "scratch"], ["default", "config", "app"]];
+  const storages: ConfidentialStorageResource[] = ["data", "scratch"].map(name => ({
+    apiVersion: "confidential.nebula.dev/v1alpha1", kind: "ConfidentialStorage",
+    metadata: { name, namespace: declaration.metadata.namespace }, spec: { type: "EncryptedBlock", claimName: `${name}-v1`,
+      sizeBytes: 67108864, keyResource: ["default", "volume", name], initialization: "Never", retention: "Retain" },
+  }));
+  const options = { genpolicy: { executable: native, cacheDirectory: process.env.TRUSTEE_GENPOLICY_CACHE } };
+  const first = renderConfidentialWorkload(declaration, storages, options);
+  assert.deepEqual(renderConfidentialWorkload(declaration, storages, options), first);
+  const components = first.pod.spec!.initContainers!;
+  assert.deepEqual(components.map(container => container.name), ["nebula-agent", "kbs", "nebula-tng"]);
+  const agent = components[0], config = JSON.parse(agent.args![0]);
+  assert.equal(config.role, "workload");
+  assert.deepEqual(config.storage.volumes.map((volume: any) => volume.name), ["data", "scratch"]);
+  assert.deepEqual(agent.volumeDevices!.map(device => device.devicePath), ["/dev/nebula-volumes/data", "/dev/nebula-volumes/scratch"]);
+  assert.deepEqual(config.storage.clients[0].resources, ["default/config/app"]);
+  assert.deepEqual(config.storage.deniedResources, ["default/image/app", "default/volume/data", "default/volume/scratch"]);
+  assert.ok(agent.command!.includes("/app/dist/main.mjs"));
+  assert.equal(agent.securityContext!.allowPrivilegeEscalation, false);
+  assert.equal(agent.securityContext!.readOnlyRootFilesystem, true);
+  assert.ok(!first.pod.spec!.volumes!.some(volume => "secret" in volume || "hostPath" in volume));
+  assert.deepEqual(first.pod.spec!.containers![0].command, ["/run/nebula-runtime/nebula-confidential-storage"]);
 });

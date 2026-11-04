@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { request } from "node:https";
 import { join } from "node:path";
 import { test } from "node:test";
-import { gateway, ownerRoute } from "../../confidential-runtime/src/gateway";
+import { gateway, ownerRoute } from "../../confidential-agent/src/gateway";
 import { enrollInstance, TrusteeClient, renewClient } from "../src/index";
 import { readEnrollment } from "../src/enrollment";
 import { readPreparedClient } from "../src/prepare";

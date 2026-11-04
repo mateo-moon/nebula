@@ -1,5 +1,5 @@
 import { hash } from "../loader/transport";
-import type { ImageUploadLimits } from "../image-limits";
+import type { ImageUploadLimits } from "@nebula/confidential-client/image-protocol";
 import type { LocalEncryptionResult } from "./image-encryption";
 
 declare const NEBULA_IMAGE_WORKER: string;

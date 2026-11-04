@@ -86,9 +86,13 @@ export interface ConfidentialWorkloadSpec {
   nodeSelector: Readonly<Record<string, string>>;
   network: TrusteeNetworkConfig;
   trustee: Pick<TrusteeConfig, "chart" | "repository" | "version" | "kbsImage" | "tngImage"> & {
-    gatewayImage: string;
+    gatewayImage?: string;
   };
-  storageImage: string;
+  /** One measured guest agent owns owner access, readiness and native storage.
+   * Existing enrolled guests without this field keep their original layout. */
+  agentImage?: string;
+  /** Required only by the original, separately packaged storage helpers. */
+  storageImage?: string;
   containers: readonly WorkloadContainer[];
   storage?: readonly { name: string; resource: string }[];
   /** Image keys and other resources this VM may consume locally. */

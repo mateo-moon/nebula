@@ -38,11 +38,18 @@ fn tmpfs(path: &str) -> Result<()> {
 pub(crate) fn install() -> Result<()> {
     tmpfs("/run/nebula-runtime")?;
     let bytes = fs::read(std::env::current_exe()?)?;
-    write_new(
-        Path::new("/run/nebula-runtime/nebula-confidential-storage"),
-        &bytes,
-        0o555,
-    )
+    let target = Path::new("/run/nebula-runtime/nebula-confidential-storage");
+    if let Ok(info) = fs::symlink_metadata(target) {
+        ensure!(
+            info.is_file()
+                && info.uid() == 0
+                && info.mode() & 0o7777 == 0o555
+                && fs::read(target)? == bytes,
+            "installed launcher changed"
+        );
+        return Ok(());
+    }
+    write_new(target, &bytes, 0o555)
 }
 
 // HTTP/1.0 requires a length or connection-close response, never chunked
@@ -119,6 +126,10 @@ fn local_key(resource: &str) -> Result<Option<Zeroizing<[u8; 32]>>> {
 /// request; a matching path string alone is never authorization.
 pub(crate) fn serve_resources(json: &str) -> Result<()> {
     let config = ResourceBroker::parse(json)?;
+    serve_resource_module(config)
+}
+
+pub(crate) fn serve_resource_module(config: ResourceBroker) -> Result<()> {
     // The socket must be private from its first instant, before the
     // application UID is assigned and before any client can connect.
     unsafe { libc::umask(0o077) };
@@ -149,7 +160,7 @@ pub(crate) fn serve_resources(json: &str) -> Result<()> {
     let busy: Vec<_> = (0..config.clients.len())
         .map(|_| Arc::new(AtomicBool::new(false)))
         .collect();
-    loop {
+    while handoff::SIGNAL.load(Ordering::SeqCst) == 0 {
         for (index, (client, listener)) in config.clients.iter().zip(&listeners).enumerate() {
             if busy[index].load(Ordering::Acquire) {
                 continue;
@@ -170,6 +181,7 @@ pub(crate) fn serve_resources(json: &str) -> Result<()> {
         }
         thread::sleep(Duration::from_millis(50));
     }
+    Ok(())
 }
 
 fn serve_resource_client(client: &ResourceClient, mut stream: UnixStream) -> Result<()> {
@@ -198,7 +210,7 @@ fn serve_resource_client(client: &ResourceClient, mut stream: UnixStream) -> Res
     Ok(())
 }
 
-fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {
+fn retrieve(resource: &str, profile: &volume::Profile) -> Result<Zeroizing<[u8; 32]>> {
     let mut last_error = String::new();
     loop {
         ensure!(
@@ -211,7 +223,7 @@ fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {
             Err(error) => {
                 let description = format!("{error:#}");
                 if description != last_error {
-                    publish_status("awaiting-owner", Some(&error), None)?;
+                    publish_status(profile, "awaiting-owner", Some(&error), None)?;
                     last_error = description;
                 }
             }
@@ -220,16 +232,17 @@ fn retrieve(resource: &str) -> Result<Zeroizing<[u8; 32]>> {
     }
 }
 
-fn publish(phase: &str) -> Result<()> {
-    publish_status(phase, None, None)
+fn publish(profile: &volume::Profile, phase: &str) -> Result<()> {
+    publish_status(profile, phase, None, None)
 }
 
 fn publish_status(
+    profile: &volume::Profile,
     phase: &str,
     error: Option<&anyhow::Error>,
     report: Option<&serde_json::Value>,
 ) -> Result<()> {
-    let target = Path::new("/run/volume/status.json");
+    let target = Path::new(profile.state).join("status.json");
     let temporary = target.with_extension("tmp");
     let _ = fs::remove_file(&temporary);
     let mut status = serde_json::json!({
@@ -248,8 +261,8 @@ fn publish_status(
     Ok(())
 }
 
-fn hold_refusal(phase: &str, error: anyhow::Error) -> Result<()> {
-    publish_status(phase, Some(&error), None)?;
+fn hold_refusal(profile: &volume::Profile, phase: &str, error: anyhow::Error) -> Result<()> {
+    publish_status(profile, phase, Some(&error), None)?;
     // Keep the measured helper and its diagnosis alive. A Kubernetes restart
     // is not an owner-authorized retry, and must not reset the refusal state.
     while handoff::SIGNAL.load(Ordering::SeqCst) == 0 {
@@ -284,27 +297,38 @@ fn directories(config: &Volume, created: bool, root: &Path) -> Result<()> {
 
 pub(crate) fn serve(json: &str) -> Result<()> {
     let config = Volume::parse(json)?;
-    tmpfs("/run/volume")?;
-    volume::discover()?;
     handoff::signals()?;
-    publish("awaiting-owner")?;
-    let key = retrieve(&config.key_resource)?;
     let profile = volume::Profile::generic(&config.name, config.size_bytes);
+    serve_volume(config, profile, false)
+}
+
+pub(crate) fn serve_volume(
+    config: Volume,
+    profile: &'static volume::Profile,
+    owner_gate: bool,
+) -> Result<()> {
+    tmpfs(profile.state)?;
+    volume::discover()?;
+    publish(profile, "awaiting-owner")?;
+    if owner_gate {
+        wait_owner()?;
+    }
+    let key = retrieve(&config.key_resource, profile)?;
     let format = match config.initialization {
         Initialization::Never => Format::Deny,
         Initialization::IfEmpty => Format::Allow,
     };
     let (active, report) = match volume::open_lifecycle(key, profile, format) {
         Ok(opened) => opened,
-        Err(error) => return hold_refusal("failed", error),
+        Err(error) => return hold_refusal(profile, "failed", error),
     };
     let Some(mut active) = active else {
-        return hold_refusal("unlock-denied", Exit::UnlockDenied.into());
+        return hold_refusal(profile, "unlock-denied", Exit::UnlockDenied.into());
     };
     // Keep the mapping alive and the failure visible if a lease or listener
     // fails. Restarting this sidecar is never an owner-authorized disk retry.
     if let Err(error) = serve_mounted(&config, profile, &mut active, &report) {
-        return hold_refusal("failed", error);
+        return hold_refusal(profile, "failed", error);
     }
     Ok(())
 }
@@ -322,19 +346,19 @@ fn serve_mounted(
     ) {
         return Err(error);
     }
-    fs::set_permissions("/run/volume", Permissions::from_mode(0o755))?;
-    let socket = "/run/volume/mount.sock";
-    if let Ok(stale) = fs::symlink_metadata(socket) {
+    fs::set_permissions(profile.state, Permissions::from_mode(0o755))?;
+    let socket = Path::new(profile.state).join("mount.sock");
+    if let Ok(stale) = fs::symlink_metadata(&socket) {
         ensure!(
             stale.file_type().is_socket() && stale.uid() == 0,
             "unexpected mount socket at restart"
         );
-        fs::remove_file(socket)?;
+        fs::remove_file(&socket)?;
     }
-    let listener = UnixListener::bind(socket)?;
-    fs::set_permissions(socket, Permissions::from_mode(0o666))?;
+    let listener = UnixListener::bind(&socket)?;
+    fs::set_permissions(&socket, Permissions::from_mode(0o666))?;
     listener.set_nonblocking(true)?;
-    publish_status("ready", None, Some(report))?;
+    publish_status(profile, "ready", None, Some(report))?;
     let count = config.clients.len();
     let mut leases: Vec<Option<UnixStream>> = (0..count).map(|_| None).collect();
     let mut pending: Vec<Option<handoff::PendingMount>> = (0..count).map(|_| None).collect();
@@ -409,7 +433,33 @@ fn serve_mounted(
     drop(listener);
     fs::remove_file(socket)?;
     active.close()?;
-    publish("closed")
+    publish(profile, "closed")
+}
+
+fn wait_owner() -> Result<()> {
+    let marker = "/run/nebula-owner-ready/ready";
+    tmpfs("/run/nebula-owner-ready")?;
+    loop {
+        ensure!(
+            handoff::SIGNAL.load(Ordering::SeqCst) == 0,
+            "owner provisioning interrupted"
+        );
+        match fs::symlink_metadata(marker) {
+            Ok(info) => {
+                ensure!(
+                    info.is_file()
+                        && info.uid() == 10001
+                        && info.mode() & 0o7777 == 0o640
+                        && fs::read(marker)? == b"nebula-owner-ready-v1\n",
+                    "invalid owner gate"
+                );
+                return Ok(());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 fn write_new(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {

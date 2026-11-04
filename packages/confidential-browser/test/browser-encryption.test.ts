@@ -6,10 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { encryptDockerArchive, dockerArchiveEntries } from "../src/ui/image-encryption";
 import { uploadEncryptedImage } from "../src/ui/upload";
-import { EncryptedImageUpload } from "../src/service/encrypted-upload";
-import { imageUploadLimits } from "../src/image-limits";
-import { KEY_ANNOTATION, PUBLIC_ANNOTATION } from "../src/image-format";
-import { publish } from "../src/service/publish";
+import { EncryptedImageUpload } from "@nebula/confidential-agent/preparation/encrypted-upload";
+import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
+import { KEY_ANNOTATION, PUBLIC_ANNOTATION } from "@nebula/confidential-client/image-protocol";
+import { publish } from "@nebula/confidential-agent/preparation/publish";
 
 const sha = (data: Uint8Array) => "sha256:" + createHash("sha256").update(data).digest("hex");
 const keyId = "kbs:///default/image/test-only";

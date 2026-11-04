@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - packages/confidential-operator/**
-      - packages/confidential-runtime/**
+      - packages/confidential-agent/**
       - packages/confidential-storage/**
       - packages/confidential-storage-devices/**
       - packages/confidential-client/**
@@ -21,7 +21,7 @@ on:
       - packages/nebula/pnpm-lock.yaml
       - packages/nebula/pnpm-workspace.yaml
       - docker/confidential-operator/**
-      - docker/confidential-runtime/**
+      - docker/confidential-agent/**
       - docker/confidential-storage/**
       - docker/confidential-storage-devices/**
       - docker/confidential-browser/**
@@ -48,7 +48,7 @@ jobs:
       - name: Scan source and build contexts before publication
         run: >-
           node scripts/publication-guard.mjs
-          packages/confidential-operator packages/confidential-runtime
+          packages/confidential-operator packages/confidential-agent
           packages/confidential-storage packages/confidential-storage-devices
           packages/confidential-client packages/confidential-browser
           packages/nebula/package.json packages/nebula/src/core/base-construct.ts
@@ -57,7 +57,7 @@ jobs:
           packages/nebula/src/modules/k8s/confidential-workloads
           packages/nebula/src/modules/k8s/trustee
           packages/nebula/src/modules/k8s/envoy/measured-fragments.ts
-          docker/confidential-operator docker/confidential-runtime
+          docker/confidential-operator docker/confidential-agent
           docker/confidential-storage docker/confidential-storage-devices
           docker/confidential-browser
           .dockerignore
@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [operator, runtime, storage, storage-devices, browser]
+        role: [operator, agent, storage, storage-devices, browser]
     permissions:
       contents: read
       packages: write

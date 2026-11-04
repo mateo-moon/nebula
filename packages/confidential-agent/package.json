@@ -1,0 +1,34 @@
+{
+  "name": "@nebula/confidential-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node --import tsx src/build.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@nebula/confidential-client": "file:../confidential-client",
+    "nebula-cdk8s": "file:../nebula"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7",
+    "@types/node": "22.19.8",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./frontend": "./src/frontend/server.ts",
+    "./preparation/encrypted-upload": "./src/preparation/encrypted-upload.ts",
+    "./preparation/image-upload": "./src/preparation/image-upload.ts",
+    "./preparation/publish": "./src/preparation/publish.ts"
+  }
+}

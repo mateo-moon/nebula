@@ -32,8 +32,7 @@ const network = { ipv4AddressPattern: "^10[.]244[.][0-9]{1,3}[.][0-9]{1,3}$", ip
 const images = {
   operator: "ghcr.io/example/confidential-operator@sha256:" + "1".repeat(64),
   injector: "ghcr.io/example/confidential-storage-devices@sha256:" + "2".repeat(64),
-  storage: "ghcr.io/example/confidential-storage@sha256:" + "3".repeat(64),
-  gateway: "ghcr.io/example/confidential-runtime@sha256:" + "4".repeat(64),
+  agent: "ghcr.io/example/confidential-agent@sha256:" + "3".repeat(64),
   kbs: "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",
   tng: "ghcr.io/inclavare-containers/tng@sha256:233528659b406ffc67e6b2bd542f58825a3e85c7a25559a5adc74a16e582d416",
   disks: "ghcr.io/example/disktools@sha256:" + "5".repeat(64),
@@ -46,9 +45,9 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
 new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
 if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example-preparation", namespace,
-  image: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
+  agentImage: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
 if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,
-  image: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
+  agentImage: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
   manualTls: { preparationEndpoint: "https://preparation.example.test/", stackEndpoint: "https://owner.example.test/" } });
 new SealedDisks(chart, "ciphertext-disk", {
   namespace, nodeName: node, image: images.disks,
@@ -58,7 +57,7 @@ new SealedDisks(chart, "ciphertext-disk", {
     reservedLoops: [], protectedLoops: [], firstPinnedLoop: 240 },
 });
 new ConfidentialStorageDevices(chart, "devices", { name: "example-devices", namespace,
-  nodeName: node, image: images.injector, pluginIndex: "64", bindings: [{ profile, storage: "data" }] });
+  nodeName: node, image: images.injector, pluginIndex: "64", agentProfiles: [profile] });
 const storages: ConfidentialStorageResource[] = [{ apiVersion: "confidential.nebula.dev/v1alpha1",
   kind: "ConfidentialStorage", metadata: { name: "data", namespace }, spec: {
     type: "EncryptedBlock", claimName: "example-data-v1", sizeBytes: 1073741824,
@@ -80,8 +79,8 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
     minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
   nodeSelector, network,
   trustee: { chart: TRUSTEE_CHART, version: "0.21.0", kbsImage: images.kbs,
-    tngImage: images.tng, gatewayImage: images.gateway },
-  storageImage: images.storage,
+    tngImage: images.tng },
+  agentImage: images.agent,
   containers: [{ name: "app", image: "ghcr.io/example/workload:owner-release-1",
     imageKeyResource: ["default", "image", "app"], commandFromImage: true, uid: 11000, gid: 11000,
     mounts: [{ storage: "data", path: "/data" }, { storage: "scratch", path: "/scratch" }],

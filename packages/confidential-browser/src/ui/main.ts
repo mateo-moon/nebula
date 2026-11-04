@@ -1,6 +1,6 @@
 import { bytes, hash, hex, utf8, b64, AttestedChannel } from "../loader/transport";
 import { discoveryAudience } from "../loader/owner";
-import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "../image-limits";
+import { checkedImageUploadLimits, imageUploadLimits, imageSizeLabel } from "@nebula/confidential-client/image-protocol";
 import { prepareLocalImage, uploadEncryptedImage, removeCipherCache } from "./upload";
 const api = window.nebula, owner = api.owner;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id)! as T;

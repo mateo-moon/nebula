@@ -1,6 +1,6 @@
 import { createHMAC, createSHA256 } from "hash-wasm";
 import { b64, hex, utf8 } from "../loader/transport";
-import { KEY_ANNOTATION, PUBLIC_ANNOTATION, LAYER_MEDIA_TYPE, MAX_METADATA_BYTES, type EncryptedManifest } from "../image-format";
+import { KEY_ANNOTATION, PUBLIC_ANNOTATION, LAYER_MEDIA_TYPE, MAX_METADATA_BYTES, type EncryptedManifest } from "@nebula/confidential-client/image-protocol";
 
 const BLOCK = 512, CHUNK = 1024 * 1024;
 const decode = (data: Uint8Array) => new TextDecoder("utf-8", { fatal: true }).decode(data);

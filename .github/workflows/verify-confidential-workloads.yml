@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - packages/confidential-operator/**
-      - packages/confidential-runtime/**
+      - packages/confidential-agent/**
       - packages/confidential-storage/**
       - packages/confidential-storage-devices/**
       - packages/nebula/**
@@ -12,7 +12,7 @@ on:
       - packages/confidential-browser/**
       - tools/tng-browser/**
       - docker/confidential-operator/**
-      - docker/confidential-runtime/**
+      - docker/confidential-agent/**
       - docker/confidential-storage/**
       - docker/confidential-storage-devices/**
       - docker/confidential-browser/**
@@ -23,7 +23,7 @@ on:
     branches: [main]
     paths:
       - packages/confidential-operator/**
-      - packages/confidential-runtime/**
+      - packages/confidential-agent/**
       - packages/confidential-storage/**
       - packages/confidential-storage-devices/**
       - packages/nebula/**
@@ -31,7 +31,7 @@ on:
       - packages/confidential-browser/**
       - tools/tng-browser/**
       - docker/confidential-operator/**
-      - docker/confidential-runtime/**
+      - docker/confidential-agent/**
       - docker/confidential-storage/**
       - docker/confidential-storage-devices/**
       - docker/confidential-browser/**
@@ -80,9 +80,9 @@ jobs:
           KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3-0.20261012174806-32759fab3119 use -p path 1.35.0)
           export KUBEBUILDER_ASSETS
           make envtest
-      - run: pnpm --dir packages/confidential-runtime install --frozen-lockfile
-      - run: pnpm --dir packages/confidential-runtime build
-      - run: pnpm --dir packages/confidential-runtime test
+      - run: pnpm --dir packages/confidential-agent install --frozen-lockfile
+      - run: pnpm --dir packages/confidential-agent build
+      - run: pnpm --dir packages/confidential-agent test
       - run: pnpm --dir packages/confidential-browser install --frozen-lockfile
       - run: pnpm --dir packages/confidential-browser typecheck
       - name: Build the actual Rego and EAR test evaluator
@@ -90,7 +90,7 @@ jobs:
       - run: pnpm --dir packages/confidential-browser test
       - run: pnpm --dir packages/confidential-browser build
       - name: Check public runtime sources
-        run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-runtime packages/confidential-storage packages/confidential-storage-devices packages/confidential-browser/src packages/confidential-browser/test packages/confidential-browser/package.json packages/confidential-browser/pnpm-lock.yaml tools/tng-browser packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-runtime docker/confidential-storage docker/confidential-storage-devices docker/confidential-browser
+        run: node scripts/publication-guard.mjs packages/confidential-operator packages/confidential-agent packages/confidential-storage packages/confidential-storage-devices packages/confidential-browser/src packages/confidential-browser/test packages/confidential-browser/package.json packages/confidential-browser/pnpm-lock.yaml tools/tng-browser packages/nebula/src/modules/k8s/confidential-workloads docker/confidential-operator docker/confidential-agent docker/confidential-storage docker/confidential-storage-devices docker/confidential-browser
 
   images:
     needs: operator
@@ -99,7 +99,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [operator, runtime, storage, storage-devices, browser]
+        role: [operator, agent, storage, storage-devices, browser]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -111,13 +111,20 @@ jobs:
           file: docker/confidential-${{ matrix.role }}/Dockerfile
           platforms: linux/amd64
           push: false
-          load: ${{ matrix.role == 'operator' }}
+          load: ${{ matrix.role == 'operator' || matrix.role == 'agent' }}
           tags: nebula-confidential-${{ matrix.role }}:ci
           cache-from: type=gha,scope=confidential-${{ matrix.role }}
           cache-to: type=gha,mode=max,scope=confidential-${{ matrix.role }}
       - name: Exercise the compiled operator image
         if: matrix.role == 'operator'
         run: node packages/confidential-operator/test/compiled-image.mjs
+      - name: Exercise the compiled agent and native privilege boundaries
+        if: matrix.role == 'agent'
+        run: |
+          # This job has its own disposable GitHub runner. Match the guest's
+          # mandatory swap-free prerequisite without weakening runtime checks.
+          sudo swapoff --all
+          node packages/confidential-agent/test/compiled-image.mjs
 
   native-render:
     name: Native confidential Pod synthesis

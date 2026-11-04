@@ -28,6 +28,8 @@ const MAX_OUTPUT: usize = 64 * 1024;
 #[derive(Debug)]
 pub(crate) struct Profile {
     pub bytes: u64,
+    pub disk: &'static str,
+    pub state: &'static str,
     map: &'static str,
     mapped: &'static str,
     pub mount: &'static str,
@@ -38,14 +40,29 @@ impl Profile {
     /// A generic volume has fixed device/mount locations. The measured name
     /// makes device-mapper names unique across helpers in the same guest.
     pub(crate) fn generic(name: &str, bytes: u64) -> &'static Self {
+        Self::at(name, bytes, DISK.to_owned(), "/run/volume".to_owned())
+    }
+
+    pub(crate) fn agent(name: &str, bytes: u64) -> &'static Self {
+        Self::at(
+            name,
+            bytes,
+            format!("/dev/nebula-volumes/{name}"),
+            format!("/run/nebula-storage/{name}"),
+        )
+    }
+
+    fn at(name: &str, bytes: u64, disk: String, state: String) -> &'static Self {
         let keep = |value: String| -> &'static str { Box::leak(value.into_boxed_str()) };
         let map = keep(format!("nebula-{name}"));
         Box::leak(Box::new(Self {
             bytes,
+            disk: keep(disk),
+            state: keep(state.clone()),
             map,
             mapped: keep(format!("/dev/mapper/{map}")),
-            mount: "/run/volume/data",
-            marker: "/run/volume/data/coco-volume-marker",
+            mount: keep(format!("{state}/data")),
+            marker: keep(format!("{state}/data/coco-volume-marker")),
             marker_prefix: "coco-encrypted-volume-v1:",
         }))
     }
@@ -447,7 +464,7 @@ fn open_with(
         .read(true)
         .write(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(DISK)
+        .open(profile.disk)
         .context("open explicit block device")?;
     ensure!(
         disk.metadata()?.file_type().is_block_device(),

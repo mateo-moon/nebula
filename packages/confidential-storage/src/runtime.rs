@@ -6,6 +6,7 @@ pub fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("install") if args.len() == 1 => crate::generic_storage::install(),
+        Some("agent") if args.len() == 2 => crate::agent::run(&args[1]),
         Some("serve") if args.len() == 2 => crate::generic_storage::serve(&args[1]),
         Some("resource-broker") if args.len() == 2 => {
             crate::generic_storage::serve_resources(&args[1])

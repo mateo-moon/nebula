@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { awaitOwner } from "../../confidential-runtime/src/await-owner";
-import { bootstrapStatus } from "../../confidential-runtime/src/bootstrap";
+import { awaitOwner } from "../../confidential-agent/src/await-owner";
+import { bootstrapStatus } from "../../confidential-agent/src/bootstrap";
 import { createServer } from "node:http";
 
 test("encrypted application stays behind the owner gate until every declared resource is available", async () => {
@@ -25,7 +25,7 @@ test("encrypted application stays behind the owner gate until every declared res
 test("owner wait rejects remote paths and stops cleanly without provisioning", async () => {
   let requests = 0;
   const check = async () => { requests++; return false; };
-  await assert.rejects(awaitOwner(["http://host/key"], new AbortController().signal, check), /Invalid measured/);
+  await assert.rejects(awaitOwner(["http://host/key"], new AbortController().signal, check, async () => true), /Invalid measured/);
   assert.equal(requests, 0);
   const stop = new AbortController();
   const waiting = awaitOwner(["default/image/app"], stop.signal, check, async () => true);

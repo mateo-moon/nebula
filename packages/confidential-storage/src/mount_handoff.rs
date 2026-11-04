@@ -256,6 +256,27 @@ fn set_caps(bits: u64) -> std::io::Result<()> {
     Ok(())
 }
 
+pub(crate) fn storage_credentials() -> Result<()> {
+    // CHOWN, SYS_ADMIN and MKNOD only. In particular the native module cannot
+    // change the firewall, impersonate an app UID or regain other capabilities.
+    let keep = (1_u64 << 0) | (1_u64 << 21) | (1_u64 << 27);
+    let last: u32 = fs::read_to_string("/proc/sys/kernel/cap_last_cap")?
+        .trim()
+        .parse()?;
+    ensure!(
+        last < 64 && unsafe { libc::getuid() } == 0,
+        "invalid storage credentials"
+    );
+    for cap in 0..=last {
+        if keep & (1_u64 << cap) == 0 {
+            check(unsafe { libc::prctl(libc::PR_CAPBSET_DROP, cap, 0, 0, 0) } as _)?;
+        }
+    }
+    set_caps(keep)?;
+    check(unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } as _)?;
+    Ok(())
+}
+
 fn startup_credentials(uid: u32, gid: u32, groups: &[u32]) -> Result<()> {
     ensure!(
         unsafe { libc::getuid() } == 0,

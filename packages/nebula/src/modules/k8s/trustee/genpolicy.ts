@@ -154,7 +154,10 @@ function generatePolicy(workload: any, containers: readonly any[], guestConfig: 
         }
         nativeRules = nativeRules.replace(original, hardened);
       }
-      profile += `\n${asset("confidential-block.rego")}`;
+      // Retained guests keep the exact original policy bytes. Only the new
+      // agent layout uses the bounded multi-volume device profile.
+      profile += `\n${asset(containers.some(container => container.name === "nebula-agent")
+        ? "confidential-agent-block.rego" : "confidential-block.rego")}`;
     }
     const rules = `${nativeRules}\n${profile}\ntrustee_network := ${JSON.stringify(config.network)}\n`;
     const rulesPath = join(directory, "rules.rego");

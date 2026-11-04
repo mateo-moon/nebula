@@ -310,9 +310,9 @@ const IMAGES = [
   { context: "packages/nebula/src/modules/infra/k0s/baremetal", workflow: "publish-baremetal-provisioner.yml", retired: "build-baremetal-provisioner.yml", file: "Dockerfile" },
 ];
 
-const CONFIDENTIAL_ROLES = ["operator", "runtime", "storage", "storage-devices", "browser"];
+const CONFIDENTIAL_ROLES = ["operator", "agent", "storage", "storage-devices", "browser"];
 const CONFIDENTIAL_SOURCES = [
-  "packages/confidential-operator", "packages/confidential-runtime",
+  "packages/confidential-operator", "packages/confidential-agent",
   "packages/confidential-storage", "packages/confidential-storage-devices",
   "packages/confidential-client", "packages/confidential-browser",
   "packages/nebula/package.json", "packages/nebula/src/core/base-construct.ts",
@@ -588,7 +588,7 @@ function confidentialPublisherViolations(workflow) {
   check(publishingJobs(jobs).join() === "publish" && /\n\s+needs: guard\n/.test(publish) &&
     !/continue-on-error|\n\s+if:|\n\s+(?:ref|repository):/.test(publish),
   "publication depends on the unskippable guard and the same tree");
-  check(publish.includes("role: [operator, runtime, storage, storage-devices, browser]") &&
+  check(publish.includes("role: [operator, agent, storage, storage-devices, browser]") &&
     (publish.match(/uses: docker\/build-push-action@/g) ?? []).length === 1 &&
     publish.includes("context: .") &&
     publish.includes("file: docker/confidential-${{ matrix.role }}/Dockerfile") &&
@@ -624,7 +624,7 @@ test("confidential image publication scans every Docker input before publishing"
     ["skip guard", workflow.replace("    needs: guard\n", "")],
     ["publish another Dockerfile", workflow.replace("file: docker/confidential-${{ matrix.role }}/Dockerfile", "file: Dockerfile")],
     ["omit scanned source", workflow.replace("          packages/nebula/src/utils/secrets.ts\n", "")],
-    ["publish an unreviewed role", workflow.replace("role: [operator, runtime, storage, storage-devices, browser]", "role: [operator, runtime, storage, storage-devices, browser, extra]")],
+    ["publish an unreviewed role", workflow.replace("role: [operator, agent, storage, storage-devices, browser]", "role: [operator, agent, storage, storage-devices, browser, extra]")],
     ["omit the browser source scan", workflow.replace("packages/confidential-client packages/confidential-browser", "packages/confidential-client")],
     ["build from another ref", workflow.replace("          persist-credentials: false\n", "          persist-credentials: false\n          ref: main\n")],
     ["add an unscanned shell command", workflow.replace('          test -n "$DIGEST"\n', '          test -n "$DIGEST"\n          echo changed\n')],

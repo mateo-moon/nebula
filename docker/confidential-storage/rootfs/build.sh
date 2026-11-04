@@ -20,10 +20,10 @@ test "$(ls /etc/apt/sources.list.d)" = debian.sources
 # snapshot's ca-certificates package. These packages also serve provision.sh.
 runtime_packages='ca-certificates dmsetup e2fsprogs util-linux mount libargon2-1 libblkid1 libdevmapper1.02.1 libjson-c5 libpopt0 libssl3 libudev1 libuuid1'
 build_packages='build-essential curl pkg-config xz-utils libargon2-dev libblkid-dev libdevmapper-dev libjson-c-dev libpopt-dev libssl-dev libudev-dev uuid-dev'
-apt-get update
+apt-get -o Acquire::Retries=5 update
 # Intentional word splitting of the fixed package lists, not external input.
 # shellcheck disable=SC2086
-apt-get install -y --no-install-recommends $runtime_packages $build_packages
+apt-get -o Acquire::Retries=5 install -y --no-install-recommends $runtime_packages $build_packages
 
 mkdir "$build_dir"
 cd "$build_dir"

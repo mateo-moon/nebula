@@ -11,10 +11,11 @@ COPY packages/nebula/src/modules/k8s/confidential-workloads ./nebula/src/modules
 COPY packages/nebula/src/modules/k8s/trustee ./nebula/src/modules/k8s/trustee
 COPY packages/nebula/src/modules/k8s/envoy/measured-fragments.ts ./nebula/src/modules/k8s/envoy/
 COPY packages/confidential-client ./confidential-client
-COPY packages/confidential-runtime ./confidential-runtime
+COPY packages/confidential-agent ./confidential-agent
 COPY packages/confidential-browser ./confidential-browser
 RUN npm install -g pnpm@11.9.0 \
-    && cd confidential-browser && pnpm install --frozen-lockfile \
+    && cd confidential-agent && pnpm install --frozen-lockfile && pnpm typecheck && NEBULA_AGENT_MODULES=browser pnpm build \
+    && cd ../confidential-browser && pnpm install --frozen-lockfile \
     && pnpm typecheck && pnpm build \
     && pnpm exec esbuild src/ui/image-encryption.ts --bundle --platform=node --format=esm --target=node24 --outfile=/tmp/browser-encryption.mjs
 
@@ -26,10 +27,11 @@ COPY --from=tools /usr/local/bin/genpolicy /usr/local/bin/genpolicy
 COPY --from=tools /usr/local/bin/helm /usr/local/bin/helm
 COPY --from=skopeo /skopeo /usr/local/bin/skopeo
 WORKDIR /app
-COPY --from=build /workspace/packages/confidential-browser/dist ./dist
+COPY --from=build /workspace/packages/confidential-agent/dist ./dist
+COPY --from=build /workspace/packages/confidential-browser/dist/ui ./ui
 USER 10001:10001
 ENV HOME=/tmp
-ENTRYPOINT ["node", "/app/dist/service/main.mjs", "serve"]
+ENTRYPOINT ["node", "/app/dist/main.mjs", "{\"version\":1,\"role\":\"preparation\"}"]
 
 FROM runtime AS native-test
 COPY --from=build /tmp/browser-encryption.mjs /app/browser-encryption.mjs

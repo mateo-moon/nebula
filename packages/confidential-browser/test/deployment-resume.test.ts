@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { runInNewContext } from "node:vm";
 import { build } from "esbuild";
-import { imageUploadLimits } from "../src/image-limits";
+import { imageUploadLimits } from "@nebula/confidential-client/image-protocol";
 
 const bundle = await build({ entryPoints: [new URL("../src/ui/main.ts", import.meta.url).pathname],
   bundle: true, write: false, format: "iife", platform: "browser", target: "es2022", define: { NEBULA_IMAGE_WORKER: JSON.stringify("test-only worker") } });

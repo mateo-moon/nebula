@@ -11,22 +11,19 @@ importers:
       '@nebula/confidential-client':
         specifier: file:../confidential-client
         version: file:../confidential-client
-      '@nebula/confidential-runtime':
-        specifier: file:../confidential-runtime
-        version: file:../confidential-runtime
       esbuild:
         specifier: 0.27.7
         version: 0.27.7
       hash-wasm:
         specifier: 4.12.0
         version: 4.12.0
-      nebula-cdk8s:
-        specifier: file:../nebula
-        version: file:../nebula
       tsx:
         specifier: 4.21.0
         version: 4.21.0
     devDependencies:
+      '@nebula/confidential-agent':
+        specifier: file:../confidential-agent
+        version: file:../confidential-agent
       '@types/node':
         specifier: 22.19.8
         version: 22.19.8
@@ -192,14 +189,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@nebula/confidential-agent@file:../confidential-agent':
+    resolution: {directory: ../confidential-agent, type: directory}
+    engines: {node: '>=24'}
+
   '@nebula/confidential-client@file:../confidential-client':
     resolution: {directory: ../confidential-client, type: directory}
     engines: {node: '>=20.19'}
     hasBin: true
-
-  '@nebula/confidential-runtime@file:../confidential-runtime':
-    resolution: {directory: ../confidential-runtime, type: directory}
-    engines: {node: '>=24'}
 
   '@types/node@22.19.8':
     resolution: {integrity: sha512-ebO/Yl+EAvVe8DnMfi+iaAyIqYdK0q/q0y0rw82INWEKJOBe6b/P3YWE8NW7oOlF/nXFNrHwhARrN/hdgDkraA==}
@@ -217,8 +214,8 @@ packages:
     bundledDependencies:
       - minimatch
 
-  cdk8s@2.70.115:
-    resolution: {integrity: sha512-KOdt69U9S+u5Kft9Djbr7E4lFBl1zWaFwW4mpbuV8zIMimaFcCYe90/dQQGGQflp5oszHd1PuFPUtmr3AWsQRw==}
+  cdk8s@2.70.119:
+    resolution: {integrity: sha512-weF/1GrCMk44xBffCOMpFAuLe7pF6b8BDgupzkC9nbjro0MxYzzb+U9Uebsbcoau4eGx2JIlAIvRWurPScP6lA==}
     engines: {node: '>= 16.20.0'}
     peerDependencies:
       constructs: ^10
@@ -366,6 +363,11 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
+  '@nebula/confidential-agent@file:../confidential-agent':
+    dependencies:
+      '@nebula/confidential-client': file:../confidential-client
+      nebula-cdk8s: file:../nebula
+
   '@nebula/confidential-client@file:../confidential-client':
     dependencies:
       commander: 13.1.0
@@ -374,20 +376,18 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.9.1
 
-  '@nebula/confidential-runtime@file:../confidential-runtime': {}
-
   '@types/node@22.19.8':
     dependencies:
       undici-types: 6.21.0
 
   bcryptjs@3.0.3: {}
 
-  cdk8s-plus-33@2.5.63(cdk8s@2.70.115(constructs@10.8.1))(constructs@10.8.1):
+  cdk8s-plus-33@2.5.63(cdk8s@2.70.119(constructs@10.8.1))(constructs@10.8.1):
     dependencies:
-      cdk8s: 2.70.115(constructs@10.8.1)
+      cdk8s: 2.70.119(constructs@10.8.1)
       constructs: 10.8.1
 
-  cdk8s@2.70.115(constructs@10.8.1):
+  cdk8s@2.70.119(constructs@10.8.1):
     dependencies:
       constructs: 10.8.1
 
@@ -440,8 +440,8 @@ snapshots:
   nebula-cdk8s@file:../nebula:
     dependencies:
       bcryptjs: 3.0.3
-      cdk8s: 2.70.115(constructs@10.8.1)
-      cdk8s-plus-33: 2.5.63(cdk8s@2.70.115(constructs@10.8.1))(constructs@10.8.1)
+      cdk8s: 2.70.119(constructs@10.8.1)
+      cdk8s-plus-33: 2.5.63(cdk8s@2.70.119(constructs@10.8.1))(constructs@10.8.1)
       constructs: 10.8.1
       deepmerge-ts: 8.0.2
       fflate: 0.8.3

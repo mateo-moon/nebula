@@ -6,10 +6,10 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
-import { startManualTls } from "../src/manual-tls/main";
+import { startManualTls } from "@nebula/confidential-agent/frontend";
 import { manualFragment, appraiseExportedCertificate, certificateDer, replaceUnusedInvitation, verifyUnusedInvitation } from "../src/loader/manual";
 import { newOwner, saveEncryptedOwner, encryptedOwnerVault, restoreBackup, jwt } from "../src/loader/owner";
-import { verifyOwnerJwt } from "@nebula/confidential-runtime";
+import { verifyOwnerJwt } from "@nebula/confidential-agent";
 
 test("manual origins reject fragments before accepting any owner credential", () => {
   manualFragment(""); manualFragment("#");

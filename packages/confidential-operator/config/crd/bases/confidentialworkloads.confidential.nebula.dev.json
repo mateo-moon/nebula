@@ -251,9 +251,13 @@
                     "required": [
                       "chart",
                       "kbsImage",
-                      "tngImage",
-                      "gatewayImage"
+                      "tngImage"
                     ]
+                  },
+                  "agentImage": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^.+@sha256:[a-f0-9]{64}$"
                   },
                   "storageImage": {
                     "type": "string",
@@ -555,11 +559,14 @@
                   "nodeSelector",
                   "network",
                   "trustee",
-                  "storageImage",
                   "containers",
                   "resources"
                 ],
                 "x-kubernetes-validations": [
+                  {
+                    "rule": "has(self.agentImage) || (has(self.storageImage) && has(self.trustee.gatewayImage))",
+                    "message": "Specify the measured agent image"
+                  },
                   {
                     "rule": "(has(self.ownerPublicKeyPem) ? 1 : 0) + (has(self.ownerClaimSha256) ? 1 : 0) + (has(self.accessLink) ? 1 : 0) == 1",
                     "message": "Choose an owner public key, one-use claim hash or generated access link"

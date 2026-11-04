@@ -1,5 +1,7 @@
 //! Encrypted block storage and mount leases for measured Nebula PodVMs.
 #[cfg(target_os = "linux")]
+mod agent;
+#[cfg(target_os = "linux")]
 mod device;
 mod generic_config;
 #[cfg(target_os = "linux")]

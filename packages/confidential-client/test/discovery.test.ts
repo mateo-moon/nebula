@@ -35,6 +35,10 @@ test("the tested gateway and owner runtime are approved as an exact pair; earlie
   assert.throws(() => trustedStack(connection), /reviewed profile/);
   connection.workload.spec.trustee = { ...approved.workload.spec.trustee, gatewayImage: TRUSTED_STACKS[0].gatewayImage };
   assert.throws(() => trustedStack(connection), /reviewed profile/);
+  const unreviewedAgent = structuredClone(approved);
+  unreviewedAgent.workload.spec.agentImage = `example.invalid/unreviewed-agent@sha256:${"a".repeat(64)}`;
+  assert.throws(() => trustedStack(unreviewedAgent), /reviewed profile/,
+    "An additional agent image cannot inherit approval from an earlier helper layout");
 });
 
 test("discovered declarations cannot approve their own software, CPU policy or owner route", async t => {

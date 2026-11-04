@@ -21,6 +21,24 @@ import (
 // without the compiled table (grant flags and a scope file).
 const ownNamespace = "tenant-a"
 
+func TestGeneratedAgentScope(t *testing.T) {
+	c, err := parseConfig(ownArgs("--storage-generated-binding", "profile-=nebula-agent"), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRecipients(t, c, []recipient{
+		{ownNamespace, "profile-bc245", "nebula-agent", runtimeHandler, grantFor(true)},
+		{ownNamespace, "profile-bc245", "app", runtimeHandler, nil},
+		{ownNamespace, "profile-bc245", "nebula-agent-extra", runtimeHandler, nil},
+		{ownNamespace, "profile-extra-bc245", "nebula-agent", runtimeHandler, nil},
+		{"tenant-b", "profile-bc245", "nebula-agent", runtimeHandler, nil},
+		{ownNamespace, "profile-bc245", "nebula-agent", "runc", nil},
+	})
+	if _, err := parseConfig(ownArgs("--storage-generated-binding", "profile-=nebula-agent-extra"), io.Discard); err == nil {
+		t.Fatal("accepted an agent container wildcard")
+	}
+}
+
 func TestGeneratedStorageScope(t *testing.T) {
 	args := ownArgs("--storage-generated-binding", "profile-=nebula-storage-data")
 	c, err := parseConfig(args, io.Discard)

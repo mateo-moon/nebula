@@ -11,7 +11,7 @@ import { isDigestImage } from "../confidential-guests/types";
 import type { WorkloadRenderOptions, ConfidentialWorkloadSpec } from "./types";
 
 export interface ConfidentialBrowserConfig {
-  name: string; namespace: string; image: string; tngImage: string;
+  name: string; namespace: string; agentImage?: string; image?: string; tngImage: string;
   nodeSelector: Readonly<Record<string, string>>;
   network: ConfidentialWorkloadSpec["network"];
   genpolicy?: WorkloadRenderOptions["genpolicy"];
@@ -33,7 +33,8 @@ export interface ConfidentialBrowserConfig {
  * owner image/credential is sent. The final combined workload retains its own
  * unmodified Trustee, native genpolicy and owner enrollment. */
 export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
-  if (![config.image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
+  const agent = config.agentImage !== undefined, image = config.agentImage ?? config.image ?? "";
+  if ((agent && config.image !== undefined) || ![image, config.tngImage].every(isDigestImage) || !/^[a-z][a-z0-9-]{0,39}$/.test(config.name) ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(config.namespace)) throw new Error("Browser preparation requires pinned images and valid names");
   if (config.maxImageSizeMiB !== undefined && (config.manualTls || !Number.isInteger(config.maxImageSizeMiB) ||
       config.maxImageSizeMiB < 1 || config.maxImageSizeMiB > 4096)) throw new Error("Preparation image limit must be between 1 and 4096 MiB");
@@ -75,8 +76,12 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     automountServiceAccountToken: false, enableServiceLinks: false, restartPolicy: "Always", terminationGracePeriodSeconds: 30,
     securityContext: { fsGroup: 10001, supplementalGroups: [0, 10001] },
     containers: [
-      { name: "preparation", image: config.image, imagePullPolicy: "Always", command: privateCommand(["node", config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]), args: ["serve"],
-        env: [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" },
+      { name: agent ? "agent" : "preparation", image, imagePullPolicy: "Always",
+        command: privateCommand(["node", agent ? "/app/dist/main.mjs" : config.manualTls ? "/app/dist/manual-tls/main.mjs" : "/app/dist/service/main.mjs"]),
+        args: agent ? [JSON.stringify({ version: 1, ...(config.manualTls ? { role: "frontend", entry: {
+          preparationEndpoint: config.manualTls.preparationEndpoint, stackEndpoint: config.manualTls.stackEndpoint,
+        } } : { role: "preparation", ...(config.maxImageSizeMiB === undefined ? {} : { maxImageSizeMiB: config.maxImageSizeMiB }) }) })] : ["serve"],
+        env: agent ? [{ name: "HOME", value: "/tmp" }] : [{ name: "HOME", value: "/tmp" }, { name: "OCICRYPT_KEYPROVIDER_CONFIG", value: "/etc/ocicrypt.conf" },
           ...(config.maxImageSizeMiB === undefined ? [] : [{ name: "NEBULA_MAX_IMAGE_SIZE_MIB", value: String(config.maxImageSizeMiB) }]),
           ...(config.manualTls ? [{ name: "NEBULA_MANUAL_TLS_ENTRY", value: JSON.stringify({
             preparationEndpoint: config.manualTls.preparationEndpoint, stackEndpoint: config.manualTls.stackEndpoint }) }] : [])],

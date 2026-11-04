@@ -4,10 +4,11 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkedImageUploadLimits, imageSizeLabel, imageUploadLimits } from "../src/image-limits";
-import { ImageUpload, ImageUploadError } from "../src/service/image-upload";
+import { checkedImageUploadLimits, imageSizeLabel, imageUploadLimits } from "@nebula/confidential-client/image-protocol";
+import { CiphertextBlobUpload, ImageUploadError } from "@nebula/confidential-agent/preparation/image-upload";
 import { uploadEncryptedImage } from "../src/ui/upload";
 
+const blobName = "c".repeat(64);
 const digest = (raw: Buffer) => createHash("sha256").update(raw).digest("hex");
 function temporary(run: (directory: string) => void) {
   const directory = mkdtempSync(join(tmpdir(), "nebula-image-upload-"));
@@ -25,9 +26,9 @@ test("attested limits support exactly 4 GiB and reject unbounded or incompatible
   for (const value of [undefined, { ...limits, maxBytes: limits.maxBytes + 1 }, { ...limits, chunkBytes: 2 ** 32 },
     { ...limits, jobTimeoutMs: Infinity }, { ...limits, extra: true }]) assert.throws(() => checkedImageUploadLimits(value));
   temporary(directory => {
-    const upload = new ImageUpload(directory, limits);
+    const upload = new CiphertextBlobUpload(directory, limits, blobName);
     assert.equal(upload.begin(2 ** 32).size, 2 ** 32);
-    assert.equal(statSync(join(directory, "image.tar.part")).size, 0, "The declared size does not allocate a whole archive");
+    assert.equal(statSync(join(directory, blobName + ".part")).size, 0, "The declared size does not allocate a whole archive");
     assert.throws(() => upload.begin(2 ** 32 + 1), status(413));
     for (const size of [undefined, "4294967296", -1, 0, NaN, 1.5]) assert.throws(() => upload.begin(size), status(400));
   });
@@ -35,7 +36,7 @@ test("attested limits support exactly 4 GiB and reject unbounded or incompatible
 
 test("chunks are bounded, ordered and checked; retries cannot substitute another same-sized archive", () => temporary(directory => {
   const limits = imageUploadLimits(4096), first = Buffer.alloc(limits.chunkBytes, 0x51), tail = Buffer.alloc(17, 0x19);
-  let upload = new ImageUpload(directory, limits);
+  let upload = new CiphertextBlobUpload(directory, limits, blobName);
   upload.begin(first.length + tail.length);
   assert.equal(upload.complete(), false);
   assert.throws(() => upload.chunk(first.length, tail, digest(tail)), status(409));
@@ -46,15 +47,15 @@ test("chunks are bounded, ordered and checked; retries cannot substitute another
   const changed = Buffer.alloc(first.length, 0x52);
   assert.throws(() => upload.chunk(0, changed, digest(changed)), status(409));
   assert.throws(() => upload.begin(first.length + tail.length + 1), status(409));
-  appendFileSync(join(directory, "image.tar.part"), "uncommitted interrupted write");
-  upload = new ImageUpload(directory, limits);
+  appendFileSync(join(directory, blobName + ".part"), "uncommitted interrupted write");
+  upload = new CiphertextBlobUpload(directory, limits, blobName);
   upload.begin(first.length + tail.length);
-  assert.equal(statSync(join(directory, "image.tar.part")).size, first.length);
+  assert.equal(statSync(join(directory, blobName + ".part")).size, first.length);
   assert.equal(upload.chunk(first.length, tail, digest(tail)).complete, true);
   assert.equal(upload.complete(), true);
-  assert.equal(existsSync(join(directory, "image.tar.part")), false);
-  assert.deepEqual(readFileSync(join(directory, "image.tar")), Buffer.concat([first, tail]));
-  assert.equal(statSync(join(directory, "image.tar")).mode & 0o777, 0o600);
+  assert.equal(existsSync(join(directory, blobName + ".part")), false);
+  assert.deepEqual(readFileSync(join(directory, blobName)), Buffer.concat([first, tail]));
+  assert.equal(statSync(join(directory, blobName)).mode & 0o777, 0o600);
   assert.equal(upload.chunk(0, first, digest(first)).complete, true, "A completed upload also permits a byte-identical retry");
   assert.throws(() => upload.chunk(first.length + tail.length, tail, digest(tail)), status(409));
 }));
@@ -63,7 +64,7 @@ for (const size of [257 * 1024 * 1024 + 13, ...(process.env.LARGE_IMAGE_UPLOAD_T
   test(`the browser upload loop transfers ${size} bytes with bounded bodies and 64-bit offsets`, { timeout: 180_000 }, async () => {
     const directory = mkdtempSync(join(tmpdir(), "nebula-large-upload-"));
     try {
-      const limits = imageUploadLimits(4096), upload = new ImageUpload(directory, limits);
+      const limits = imageUploadLimits(4096), upload = new CiphertextBlobUpload(directory, limits, blobName);
       let largestBody = 0, progress = 0, calls = 0;
       // Generate one chunk at a time; exercising the 4 GiB boundary must not
       // allocate a 4 GiB ArrayBuffer in the browser or in this test process.
@@ -80,7 +81,7 @@ for (const size of [257 * 1024 * 1024 + 13, ...(process.env.LARGE_IMAGE_UPLOAD_T
         return new Response("{}");
       }, sent => { assert.ok(sent >= progress); progress = sent; });
       assert.equal(progress, size);
-      assert.equal(statSync(join(directory, "image.tar")).size, size);
+      assert.equal(statSync(join(directory, blobName)).size, size);
       assert.equal(largestBody, limits.chunkBytes);
       assert.equal(calls, Math.ceil(size / limits.chunkBytes));
     } finally { rmSync(directory, { recursive: true, force: true }); }

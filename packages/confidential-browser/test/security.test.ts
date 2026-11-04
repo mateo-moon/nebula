@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { verifiedAssets } from "../src/loader/main";
 import { jwt, newOwner, encryptedBackup, restoreBackup } from "../src/loader/owner";
-import { verifyOwnerJwt } from "@nebula/confidential-runtime";
+import { verifyOwnerJwt } from "@nebula/confidential-agent";
 
 const identity = { measurement: "a".repeat(96), initDataSha256: "b".repeat(64),
   minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } };
