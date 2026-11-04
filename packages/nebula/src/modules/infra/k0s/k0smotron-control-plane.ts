@@ -142,12 +142,6 @@ export interface K0smotronControlPlaneConfig {
     limits?: Record<string, string>;
   };
   /**
-   * Timeout for the hosted controller's existing liveness/readiness probes.
-   * Omit to keep k0smotron's defaults. Uses a native StatefulSet patch so
-   * reconciliation preserves the setting; does not change etcd probes.
-   */
-  probeTimeoutSeconds?: number;
-  /**
    * topologySpreadConstraints for the CP pods — e.g. spread all
    * `app.kubernetes.io/component: control-plane` pods across hostnames so two
    * workload clusters' CPs never share a hosting node.
@@ -172,10 +166,6 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
     super(scope, id, config);
 
     const namespace = this.config.namespace ?? "default";
-    const probeTimeout = this.config.probeTimeoutSeconds;
-    if (probeTimeout !== undefined && (!Number.isInteger(probeTimeout) || probeTimeout < 1)) {
-      throw new Error("probeTimeoutSeconds must be a positive integer");
-    }
     const k8sVersion = this.config.k8sVersion ?? "v1.31.8";
     // k0smotron expects a SemVer; the canonical k0s suffix is "+k0s.0" (build
     // metadata), NOT "-k0s.0" (a pre-release, k0smotron issue #1027).
@@ -227,23 +217,6 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
           },
         ]
       : [];
-
-    const probePatches: K0SmotronControlPlaneV1Beta2SpecPatches[] = probeTimeout === undefined
-      ? []
-      : [{
-          target: { kind: "StatefulSet", component: "control-plane" },
-          patch: {
-            type: K0SmotronControlPlaneV1Beta2SpecPatchesPatchType.STRATEGIC,
-            content: JSON.stringify({
-              spec: { template: { spec: { containers: [{
-                name: "controller",
-                livenessProbe: { timeoutSeconds: probeTimeout },
-                readinessProbe: { timeoutSeconds: probeTimeout },
-              }] } } },
-            }),
-          },
-        }];
-    const patches = [...servicePatches, ...probePatches];
 
     new K0smotronControlPlaneV1Beta2(this, "control-plane", {
       metadata: { name: this.config.name, namespace },
@@ -298,7 +271,7 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             this.config.serviceType ??
             K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
         },
-        ...(patches.length ? { patches } : {}),
+        ...(servicePatches.length ? { patches: servicePatches } : {}),
         ...(this.config.resources ? { resources: toQuantities(this.config.resources) } : {}),
         ...(this.config.topologySpreadConstraints
           ? { topologySpreadConstraints: this.config.topologySpreadConstraints }

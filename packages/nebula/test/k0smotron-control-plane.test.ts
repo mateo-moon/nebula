@@ -64,39 +64,3 @@ test("raw arguments work without a map and leave omitted or empty configurations
   const [cp] = Testing.synth(chart);
   assert.deepEqual(cp.spec.k0sConfig.spec.api, { rawArgs });
 });
-
-test("probe timeout reaches the controller through a strategic patch beside Service annotations", () => {
-  const chart = Testing.chart();
-  new K0smotronCluster(chart, "dev", {
-    name: "dev", provider,
-    controlPlane: {
-      probeTimeoutSeconds: 5,
-      serviceAnnotations: { "example.test/scheme": "public" },
-    },
-  });
-  const cp = Testing.synth(chart).find(r => r.kind === "K0smotronControlPlane")!;
-  const patch = cp.spec.patches.find((p: any) => p.target.kind === "StatefulSet");
-  assert.deepEqual(patch.target, { kind: "StatefulSet", component: "control-plane" });
-  assert.equal(patch.patch.type, "strategic", "merge by controller name without replacing the container list");
-  const [controller] = JSON.parse(patch.patch.content).spec.template.spec.containers;
-  assert.equal(controller.name, "controller");
-  assert.equal(controller.livenessProbe.timeoutSeconds, 5);
-  assert.equal(controller.readinessProbe.timeoutSeconds, 5);
-  const service = cp.spec.patches.find((p: any) => p.target.kind === "Service");
-  assert.deepEqual(JSON.parse(service.patch.content).metadata.annotations, { "example.test/scheme": "public" });
-});
-
-test("omitted probe timeout keeps k0smotron probe defaults", () => {
-  const chart = Testing.chart();
-  new K0smotronControlPlane(chart, "cp", { name: "cp" });
-  const [cp] = Testing.synth(chart);
-  assert.equal(cp.spec.patches, undefined);
-});
-
-test("invalid probe timeouts fail before emitting an unusable controller patch", () => {
-  for (const timeout of [0, -1, 1.5, NaN, Infinity]) {
-    assert.throws(() => new K0smotronControlPlane(Testing.chart(), "cp", {
-      name: "cp", probeTimeoutSeconds: timeout,
-    }), /probeTimeoutSeconds must be a positive integer/);
-  }
-});
