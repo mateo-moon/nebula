@@ -1,4 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { parseAgentConfig, type AgentConfig } from "./config.js";
 import { installGuestGuard } from "./guard.js";
 import { awaitOwner, publishOwnerReady } from "./await-owner.js";
@@ -13,6 +16,20 @@ declare const NEBULA_AGENT_BROWSER_MODULES: boolean;
 // A fixed startup stage can be exposed in the Pod termination message without
 // disclosing measured arguments, native errors, resource paths or key material.
 export let agentStartupStage = "config";
+
+/** KBS creates this directory atomically inside the same measured PodVM.
+ * Restartable init containers start in order, but "started" does not mean
+ * KBS has finished its guest-local bootstrap. The gateway validates the key
+ * and its public half after this directory appears. */
+export async function awaitInternalOwnerBootstrap(directory: string, signal: AbortSignal): Promise<void> {
+  const keyDirectory = join(directory, "internal-owner");
+  for (let attempt = 0; attempt < 120; attempt++) {
+    signal.throwIfAborted();
+    if (existsSync(keyDirectory)) return;
+    await delay(500, undefined, { signal });
+  }
+  throw new Error("Guest-internal owner bootstrap unavailable");
+}
 
 /** Privileged setup finishes before any owner-facing listener starts. The
  * native disk module keeps only its required capabilities; the HTTP agent
@@ -57,6 +74,10 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
   if (process.getuid?.() !== 10001 || process.getgid?.() !== 10001) throw new Error("Agent privilege drop failed");
   const owner = config.owner;
   let ready = false;
+  if (owner.ownerClaimSha256) {
+    agentStartupStage = "internal-owner-bootstrap";
+    await awaitInternalOwnerBootstrap("/run/instance", lifecycle.signal);
+  }
   agentStartupStage = "owner-gateway";
   const gateway = startGateway("/run/instance", owner.storageNames, owner.resources,
     owner.ownerClaimSha256, owner.audience, owner.browser, () => ready);
