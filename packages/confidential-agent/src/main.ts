@@ -23,6 +23,6 @@ try {
   // Never print measured arguments, request bodies or native key diagnostics.
   try { appendFileSync("/dev/termination-log", `nebula-agent:${agentStartupStage}\n`); }
   catch { /* A missing Kubernetes termination file cannot change fail-closed behavior. */ }
-  process.stderr.write("Confidential agent stopped before completing its modules\n");
+  process.stderr.write(`nebula-agent:${agentStartupStage}\n`);
   process.exit(1);
 }

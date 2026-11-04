@@ -106,7 +106,10 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   assert.deepEqual(agent.volumeDevices!.map(device => device.devicePath), ["/dev/nebula-volumes/data", "/dev/nebula-volumes/scratch"]);
   assert.deepEqual(config.storage.clients[0].resources, ["default/config/app"]);
   assert.deepEqual(config.storage.deniedResources, ["default/image/app", "default/volume/data", "default/volume/scratch"]);
-  assert.deepEqual(agent.command!.slice(-3), ["node", "--disable-sigusr1", "/app/dist/main.mjs"]);
+  assert.deepEqual(agent.command, ["node", "--disable-sigusr1", "/app/dist/main.mjs"]);
+  assert.equal(agent.terminationMessagePolicy, "FallbackToLogsOnError");
+  assert.deepEqual(components.slice(1).map(container => container.command![0]), ["/bin/sh", "/bin/sh"],
+    "KBS and TNG output must remain private");
   assert.equal(agent.securityContext!.allowPrivilegeEscalation, false);
   assert.equal(agent.securityContext!.readOnlyRootFilesystem, true);
   assert.ok(!first.pod.spec!.volumes!.some(volume => "secret" in volume || "hostPath" in volume));

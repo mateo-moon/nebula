@@ -148,6 +148,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       // SIGUSR1 inspector in the measured command so a signalled helper cannot
       // expose CDH keys to the application through localhost:9229.
       command: ["node", "--disable-sigusr1", "/app/dist/main.mjs"], restartPolicy: "Always",
+      // The measured agent emits only a fixed startup stage. Kata does not
+      // reliably return the guest's termination file to kubelet, so preserve
+      // that bounded marker in the container log for first-start diagnosis.
+      terminationMessagePolicy: "FallbackToLogsOnError",
       args: [JSON.stringify({ version: 1, role: "workload", owner: ownerConfig, storage: { version: 1,
         deniedResources,
         volumes: encrypted.map(binding => ({ version: 1, name: binding.name, sizeBytes: binding.spec.sizeBytes,
@@ -218,7 +222,9 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   // Only trusted helper images may execute their own shell. The application
   // image's first instruction must be the measured static launcher, which
   // drops root/capabilities before running any bytes from that image.
-  for (const container of initContainers) container.command = privateStdio(container.command);
+  for (const container of initContainers) if (container.name !== "nebula-agent") {
+    container.command = privateStdio(container.command);
+  }
   const aa = stringify({ token_configs: { kbs: { url: "http://127.0.0.1:8080" } }, log: { level: "off" } });
   const cdh = stringify({ kbc: { name: "cc_kbc", url: "http://127.0.0.1:8080" }, log: { level: "off" },
     image: { kbc: "cc_kbc", kbs_uri: "http://127.0.0.1:8080", max_concurrent_layer_downloads_per_image: 1,
