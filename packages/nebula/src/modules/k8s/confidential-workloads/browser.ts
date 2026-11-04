@@ -19,6 +19,9 @@ export interface ConfidentialBrowserConfig {
    * workspace and RAM for native encryption and policy generation. Omission
    * preserves the existing 256 MiB / 4 GiB VM deployment exactly. */
   maxImageSizeMiB?: number;
+  /** Optional budget for a small preparation or diskless frontend. Defaults
+   * preserve enrolled guests; larger upload limits retain their RAM floor. */
+  runtime?: { memoryMiB: number };
   /** Serve the first page through guest-terminated TNG HTTPS. The user must
    * independently verify the browser's certificate before supplying secrets.
    * Both routing origins are public and bound by native genpolicy. */
@@ -39,7 +42,12 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
   if (config.maxImageSizeMiB !== undefined && (config.manualTls || !Number.isInteger(config.maxImageSizeMiB) ||
       config.maxImageSizeMiB < 1 || config.maxImageSizeMiB > 4096)) throw new Error("Preparation image limit must be between 1 and 4096 MiB");
   const workspaceMiB = Math.max(2048, (config.maxImageSizeMiB ?? 256) * 5);
-  const memoryMiB = Math.max(4096, (config.maxImageSizeMiB ?? 256) * 8);
+  const minimumMemoryMiB = config.manualTls ? 1024 : Math.max(2048, (config.maxImageSizeMiB ?? 256) * 8);
+  const memoryMiB = config.runtime?.memoryMiB ?? Math.max(4096, (config.maxImageSizeMiB ?? 256) * 8);
+  if ((config.runtime && Object.keys(config.runtime).join() !== "memoryMiB") ||
+      !Number.isInteger(memoryMiB) || memoryMiB < minimumMemoryMiB || memoryMiB > 65536) {
+    throw new Error("Browser guest memory is below its frontend or upload workspace requirement");
+  }
   if (config.manualTls && !["preparationEndpoint,stackEndpoint", "certificateRefreshSeconds,preparationEndpoint,stackEndpoint"].includes(Object.keys(config.manualTls).sort().join())) {
     throw new Error("Manual TLS requires public preparation and stack origins");
   }

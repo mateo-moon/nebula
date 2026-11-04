@@ -44,6 +44,8 @@ new ApiObject(chart, "namespace", { apiVersion: "v1", kind: "Namespace", metadat
 } });
 new ConfidentialOperator(chart, "operator", { namespace, image: images.operator, watchNamespaces: [namespace],
   accessLinkSecrets: [{ namespace, name: "workload-access" }] });
+// Preparation receives ciphertext and runs native policy generation. The
+// separately released first-page verifier pins this preparation's measurements.
 if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example-preparation", namespace,
   agentImage: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
 if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,

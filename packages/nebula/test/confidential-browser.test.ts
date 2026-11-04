@@ -16,6 +16,19 @@ test("browser preparation rejects mutable images before running native policy ge
   assert.throws(() => confidentialBrowserPlan({ ...config, image: "registry.example/browser:latest" }), /pinned images/);
   for (const maxImageSizeMiB of [0, -1, 4097, Infinity, 256.5, "4096"])
     assert.throws(() => confidentialBrowserPlan({ ...config, maxImageSizeMiB: maxImageSizeMiB as number }), /image limit/);
+  for (const memoryMiB of [0, 1024, 2047, 65537, Infinity, 2048.5])
+    assert.throws(() => confidentialBrowserPlan({ ...config, runtime: { memoryMiB } }), /guest memory/);
+  assert.throws(() => confidentialBrowserPlan({ ...config, maxImageSizeMiB: 4096, runtime: { memoryMiB: 4096 } }), /guest memory/);
+  assert.throws(() => confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 4096, vcpus: 2 } as any }), /guest memory/);
+});
+
+test("small preparation and frontend budgets preserve default plans and upload floors", { skip: !native, timeout: 600_000 }, () => {
+  const small = confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 2048 } });
+  assert.equal(small.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "2048");
+  const frontend = confidentialBrowserPlan({ ...config, runtime: { memoryMiB: 1024 }, manualTls: {
+    preparationEndpoint: "https://preparation.example/", stackEndpoint: "https://stack.example/" } });
+  assert.equal(frontend.pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "1024");
+  assert.equal(confidentialBrowserPlan(config).pod.metadata!.annotations!["io.katacontainers.config.hypervisor.default_memory"], "4096");
 });
 
 test("frontend and preparation use the same measured agent entrypoint with explicit modules", { skip: !native, timeout: 600_000 }, () => {
