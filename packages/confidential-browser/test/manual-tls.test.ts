@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
 import { startManualTls } from "@nebula/confidential-agent/frontend";
 import { manualFragment, appraiseExportedCertificate, certificateDer, replaceUnusedInvitation, verifyUnusedInvitation } from "../src/loader/manual";
-import { newOwner, saveEncryptedOwner, encryptedOwnerVault, restoreBackup, jwt } from "../src/loader/owner";
+import { newOwner, saveEncryptedOwner, encryptedOwnerVault, encryptedBackup, restoreBackup, jwt } from "../src/loader/owner";
 import { verifyOwnerJwt } from "@nebula/confidential-agent";
 
 test("manual origins reject fragments before accepting any owner credential", () => {
@@ -52,6 +52,31 @@ test("a returning manual origin stores only password-encrypted recovery, never u
   const restored = await restoreBackup(record, "a-good-owner-password");
   assert.equal(restored.finalPin, owner.finalPin);
   assert.equal(verifyOwnerJwt(`Bearer ${await jwt(restored, "nebula-browser")}`, owner.publicKeyPem, "nebula-browser"), true);
+});
+
+test("an owner saved before generating release secrets can resume the same preparation instance", async () => {
+  const owner = await newOwner();
+  owner.preparationPin = "a".repeat(64); owner.token = "b".repeat(64);
+  owner.connection = { version: 1, workload: { spec: { profile: "pending-test" } } };
+  const restored = await restoreBackup(JSON.stringify(await encryptedBackup(owner, "a-good-owner-password")), "a-good-owner-password");
+  assert.equal(restored.restored, false);
+  assert.equal(restored.preparationPin, owner.preparationPin);
+  assert.equal(restored.token, owner.token);
+  assert.deepEqual(restored.connection, owner.connection);
+  assert.equal(restored.imageKey, undefined);
+  assert.equal(verifyOwnerJwt(`Bearer ${await jwt(restored, "nebula-browser")}`, owner.publicKeyPem, "nebula-browser"), true);
+});
+
+test("restoring any release state retains the prohibition on first final-instance enrollment", async () => {
+  for (const state of [
+    { imageKey: "c".repeat(64) }, { encryptedImage: { id: "test-cache", manifestDigest: "sha256:" + "d".repeat(64) } },
+    { prepared: {} }, { finalPin: "e".repeat(64) }, { finalClaimed: true }, { provisioned: true },
+    { volumeKeys: { disk: "f".repeat(64) } }, { resources: { private: "test-only-resource" } },
+  ]) {
+    const owner = Object.assign(await newOwner(), state);
+    const restored = await restoreBackup(JSON.stringify(await encryptedBackup(owner, "a-good-owner-password")), "a-good-owner-password");
+    assert.equal(restored.restored, true, JSON.stringify(Object.keys(state)));
+  }
 });
 
 test("an explicit replacement invitation preserves the unused owner's keys and preparation pin", async () => {

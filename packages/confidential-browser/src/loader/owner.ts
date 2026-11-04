@@ -123,6 +123,13 @@ export async function restoreBackup(text: string, password: string): Promise<Own
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, challenge);
     if (!await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, signature, challenge)) throw new Error("Recovery owner keys disagree");
-    return { ...data, privateKey, wrappingKey, privateExport, restored: true };
+    // An owner saved before release secrets exist may resume initial setup.
+    // Its preparation pin and the preparation job still prevent substitution.
+    // Once any release state exists, an old unpinned backup must never adopt
+    // a final instance and send those saved secrets to a replacement.
+    const releaseStarted = data.imageKey !== undefined || data.encryptedImage !== undefined ||
+      data.prepared !== undefined || data.finalPin !== undefined || data.finalClaimed || data.provisioned ||
+      Object.keys(data.volumeKeys ?? {}).length > 0 || Object.keys(data.resources ?? {}).length > 0;
+    return { ...data, privateKey, wrappingKey, privateExport, restored: !!releaseStarted };
   } finally { plaintext.fill(0); }
 }
