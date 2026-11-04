@@ -38,6 +38,10 @@ try {
     let ready;
     for(let attempt=0;attempt<100;attempt++){try{ready=await get();break;}catch{await setTimeout(100);}}
     assert.equal(ready?.configured,false,'compiled agent did not start or bypassed its owner gate');
+    const startup=await new Promise((resolve,reject)=>{
+      const req=request({hostname:'127.0.0.1',port:8444,path:'/nebula/v1/ready',rejectUnauthorized:false},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.end();
+    });
+    assert.equal(startup,503,'kubelet could pull the encrypted application before owner provisioning');
     const status=readFileSync('/proc/1/status','utf8');
     assert.match(status,/Uid:\\s+10001\\s+10001\\s+10001\\s+10001/);
     for(const capability of ['CapEff','CapPrm','CapInh','CapAmb'])assert.match(status,new RegExp(capability+':\\\\s+0+'));
@@ -55,10 +59,10 @@ try {
   // Fixed loopback fixtures stand in for native KBS/CDH; no attestation verdict
   // or production identity is invented by this offline process-boundary test.
   docker(["exec", "--detach", "--user", "10001:10001", name, "node", "--input-type=module", "-e", `
-    import {createServer} from 'node:http';let reads=0;
+    import {createServer} from 'node:http';let reads=0,available=false;
     createServer((req,res)=>{req.resume();res.end('[]');}).listen(8080,'127.0.0.1');
-    createServer((req,res)=>{req.resume();reads++;res.end('synthetic-approved-resource');}).listen(8006,'127.0.0.1');
-    createServer((req,res)=>res.end(String(reads))).listen(8082,'127.0.0.1');
+    createServer((req,res)=>{req.resume();reads++;res.writeHead(available?200:404).end(available?'synthetic-approved-resource':'');}).listen(8006,'127.0.0.1');
+    createServer((req,res)=>{if(req.url==='/publish')available=true;res.end(String(reads));}).listen(8082,'127.0.0.1');
   `]);
   exec(10001, `
     import assert from 'node:assert/strict';import {request} from 'node:https';import {existsSync} from 'node:fs';import {setTimeout} from 'node:timers/promises';
@@ -73,8 +77,12 @@ try {
     assert.equal(await call('/kbs/v0/resource/default/image/app'),403);
     assert.equal(await call('/kbs/v0/resource-policy','POST'),200);
     assert.equal(await call('/kbs/v0/attestation-policy','POST'),200);
+    assert.equal(await call('/nebula/v1/ready'),503,'policies alone opened the encrypted image pull gate');
+    assert.equal(existsSync('/run/nebula-owner-ready/ready'),false,'missing resource keys were ignored');
+    await fetch('http://127.0.0.1:8082/publish');
     for(let attempt=0;attempt<100&&!existsSync('/run/nebula-owner-ready/ready');attempt++)await setTimeout(100);
     assert.ok(existsSync('/run/nebula-owner-ready/ready'),'in-process owner gate did not publish readiness');
+    assert.equal(await call('/nebula/v1/ready'),200,'kubelet startup gate did not open after resource availability');
     console.log('Native resource reads stay behind owner policy; remote image/disk-key reads are denied.');
   `);
   exec(11000, `

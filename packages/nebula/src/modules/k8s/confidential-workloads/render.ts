@@ -134,6 +134,11 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       volumeMounts: [mount(`state-${binding.name}`, "/run/volume")] });
   }
   if (spec.agentImage) {
+    // The launcher runs after image pull. Gate the last restartable sidecar
+    // so kubelet cannot ask CDH to decrypt the application before provisioning.
+    // TNG and KBS remain available while the in-process owner gate is pending.
+    tng.startupProbe = { httpGet: { scheme: "HTTPS", path: "/nebula/v1/ready", port: 8443 },
+      periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 1800 };
     const deniedResources = [...new Set([
       ...encrypted.map(binding => binding.spec.keyResource.join("/")),
       ...spec.containers.flatMap(container => container.imageKeyResource ? [container.imageKeyResource.join("/")] : []),

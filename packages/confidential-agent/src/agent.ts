@@ -48,11 +48,14 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
   process.setuid!(10001);
   if (process.getuid?.() !== 10001 || process.getgid?.() !== 10001) throw new Error("Agent privilege drop failed");
   const owner = config.owner;
+  let ready = false;
   const gateway = startGateway("/run/instance", owner.storageNames, owner.resources,
-    owner.ownerClaimSha256, owner.audience, owner.browser);
+    owner.ownerClaimSha256, owner.audience, owner.browser, () => ready);
   lifecycle.server(gateway);
   lifecycle.task(awaitOwner(owner.resources, lifecycle.signal, undefined,
-    async () => gatewayConfigured(gateway)).then(() => { if (!lifecycle.signal.aborted) publishOwnerReady(); }));
+    async () => gatewayConfigured(gateway)).then(() => {
+      if (!lifecycle.signal.aborted) { publishOwnerReady(); ready = true; }
+    }));
 }
 
 export async function startAgent(raw: string, lifecycle = new AgentLifecycle()): Promise<AgentLifecycle> {

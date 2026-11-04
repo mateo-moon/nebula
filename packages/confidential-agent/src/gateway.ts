@@ -30,6 +30,7 @@ export interface GatewayOptions {
   readonly resources?: readonly string[];
   readonly claim?: ClaimConfig;
   readonly browser?: boolean;
+  readonly ready?: () => boolean;
 }
 
 export function gateway(options: GatewayOptions) {
@@ -55,6 +56,11 @@ export function gateway(options: GatewayOptions) {
   const handler: RequestListener = (incoming, outgoing) => {
     const path = incoming.url ?? "", method = incoming.method ?? "";
     outgoing.setHeader("Cache-Control", "no-store");
+    if (method === "GET" && path === "/nebula/v1/ready") {
+      incoming.resume();
+      outgoing.writeHead(options.ready?.() === true ? 200 : 503).end();
+      return;
+    }
     if (method === "GET" && path === "/nebula/v1/bootstrap") {
       incoming.resume();
       const authorization = ownerAuthorization(incoming.headers.authorization);
@@ -239,7 +245,7 @@ export function loadOrCreateIdentity(directory: string): { key: Buffer; cert: Bu
 }
 
 export function startGateway(directory = "/run/instance", storageNames: readonly string[] = [], resources: readonly string[] = [],
-  ownerClaimSha256?: string, audience?: string, browser = false) {
+  ownerClaimSha256?: string, audience?: string, browser = false, ready?: () => boolean) {
   const credential = loadOrCreateIdentity(directory);
   if ((ownerClaimSha256 === undefined) !== (audience === undefined)) throw new Error("Incomplete owner claim configuration");
   if (browser) {
@@ -253,5 +259,5 @@ export function startGateway(directory = "/run/instance", storageNames: readonly
   }
   const claim = ownerClaimSha256 && audience ? { sha256: ownerClaimSha256, audience, directory,
     internalOwnerKey: loadInternalOwnerKey(directory) } : undefined;
-  return gateway({ ...credential, storageNames, resources, claim, browser }).listen(8444, "127.0.0.1");
+  return gateway({ ...credential, storageNames, resources, claim, browser, ready }).listen(8444, "127.0.0.1");
 }

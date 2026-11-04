@@ -97,6 +97,9 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   assert.deepEqual(renderConfidentialWorkload(declaration, storages, options), first);
   const components = first.pod.spec!.initContainers!;
   assert.deepEqual(components.map(container => container.name), ["nebula-agent", "kbs", "nebula-tng"]);
+  assert.deepEqual(components[2].startupProbe, { httpGet: { scheme: "HTTPS", path: "/nebula/v1/ready", port: 8443 },
+    periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 1800 });
+  assert.equal(components[0].startupProbe, undefined, "The agent must not block KBS and TNG from starting");
   const agent = components[0], config = JSON.parse(agent.args![0]);
   assert.equal(config.role, "workload");
   assert.deepEqual(config.storage.volumes.map((volume: any) => volume.name), ["data", "scratch"]);

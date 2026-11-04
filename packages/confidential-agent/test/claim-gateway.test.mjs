@@ -39,7 +39,7 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
   const internal = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const ownerPem = owner.publicKey.export({ type: "spki", format: "pem" }).toString();
   const internalPem = internal.publicKey.export({ type: "spki", format: "pem" }).toString();
-  let kbsCalls = 0, sawInternal = false;
+  let kbsCalls = 0, sawInternal = false, ready = false;
   const kbs = httpServer((request, response) => {
     kbsCalls++;
     sawInternal = verifyOwnerJwt(request.headers.authorization, internalPem, audience);
@@ -53,12 +53,13 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     writeFileSync(`${directory}/internal-owner/public.pem`, internalPem, { mode: 0o600 });
     const credential = loadOrCreateIdentity(directory);
     const port = await listen(kbs);
-    publicGateway = gateway({ ...credential, upstreamPort: port, browser: true, claim: {
+    publicGateway = gateway({ ...credential, upstreamPort: port, browser: true, ready: () => ready, claim: {
       sha256: createHash("sha256").update(token).digest("hex"), audience, directory, internalOwnerKey: internalKey,
     } });
     const gatewayPort = await listen(publicGateway);
     const ownerJwt = ownerToken(owner.privateKey, audience);
     const adversaryJwt = ownerToken(adversary.privateKey, audience);
+    assert.equal(await call(gatewayPort, "/nebula/v1/ready"), 503);
     assert.equal(await call(gatewayPort, "/nebula/v1/storage"), 403);
     assert.equal(await call(gatewayPort, "/nebula/v1/instance"), 200);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", ownerJwt), 403);
@@ -77,6 +78,10 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     assert.equal(kbsCalls, 0);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", ownerJwt), 200);
     assert.equal(kbsCalls, 1);
+    assert.equal(await call(gatewayPort, "/nebula/v1/ready"), 503, "A policy write must not open the application pull gate");
+    assert.equal(await call(gatewayPort, "/nebula/v1/ready", ownerJwt, { ready: true }), 403);
+    ready = true;
+    assert.equal(await call(gatewayPort, "/nebula/v1/ready"), 200);
     const httpCall = (path, authorization) => fetch(`http://127.0.0.1:8447${path}`, {
       headers: authorization ? { Authorization: authorization } : {}, redirect: "error",
     }).then(response => response.status);
