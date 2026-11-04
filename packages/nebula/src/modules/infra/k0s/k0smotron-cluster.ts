@@ -41,6 +41,8 @@ export interface K0smotronClusterControlPlane {
     requests?: Record<string, string>;
     limits?: Record<string, string>;
   };
+  /** Timeout for the hosted controller's liveness/readiness probes; omitted preserves defaults. */
+  probeTimeoutSeconds?: number;
   /** topologySpreadConstraints for the CP pods (e.g. one hosted CP per hosting node). */
   topologySpreadConstraints?: K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints[];
 }
@@ -186,6 +188,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       serviceType: this.config.controlPlane?.serviceType,
       serviceAnnotations: this.config.controlPlane?.serviceAnnotations,
       resources: this.config.controlPlane?.resources,
+      probeTimeoutSeconds: this.config.controlPlane?.probeTimeoutSeconds,
       topologySpreadConstraints: this.config.controlPlane?.topologySpreadConstraints,
     });
 
