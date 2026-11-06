@@ -96,10 +96,16 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   const first = renderConfidentialWorkload(declaration, storages, options);
   assert.deepEqual(renderConfidentialWorkload(declaration, storages, options), first);
   const components = first.pod.spec!.initContainers!;
-  assert.deepEqual(components.map(container => container.name), ["nebula-agent", "kbs", "nebula-tng"]);
-  assert.deepEqual(components[2].startupProbe, { httpGet: { scheme: "HTTPS", path: "/nebula/v1/ready", port: 8443 },
-    periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 1800 });
+  assert.deepEqual(components.map(container => container.name), ["nebula-agent", "kbs", "nebula-tng", "nebula-await-owner"]);
+  assert.equal(components[2].startupProbe, undefined, "Waiting for an owner must not kill the attestation sidecar");
   assert.equal(components[0].startupProbe, undefined, "The agent must not block KBS and TNG from starting");
+  const gate = components[3];
+  assert.equal(gate.restartPolicy, undefined, "The owner gate is a finite init stage, not another daemon");
+  assert.deepEqual(gate.command, ["node", "--disable-sigusr1", "/app/dist/main.mjs"]);
+  assert.deepEqual(JSON.parse(gate.args![0]), { version: 1, role: "owner-gate" });
+  assert.equal(gate.securityContext!.runAsUser, 10001);
+  assert.deepEqual(gate.securityContext!.capabilities, { drop: ["ALL"] });
+  assert.deepEqual(gate.volumeMounts, [{ name: "owner-ready", mountPath: "/run/nebula-owner-ready", readOnly: true }]);
   const agent = components[0], config = JSON.parse(agent.args![0]);
   assert.equal(config.role, "workload");
   assert.deepEqual(config.storage.volumes.map((volume: any) => volume.name), ["data", "scratch"]);
@@ -108,7 +114,7 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   assert.deepEqual(config.storage.deniedResources, ["default/image/app", "default/volume/data", "default/volume/scratch"]);
   assert.deepEqual(agent.command, ["node", "--disable-sigusr1", "/app/dist/main.mjs"]);
   assert.equal(agent.terminationMessagePolicy, "FallbackToLogsOnError");
-  assert.deepEqual(components.slice(1).map(container => container.command![0]), ["/bin/sh", "/bin/sh"],
+  assert.deepEqual(components.slice(1, 3).map(container => container.command![0]), ["/bin/sh", "/bin/sh"],
     "KBS and TNG output must remain private");
   assert.equal(agent.securityContext!.allowPrivilegeEscalation, false);
   assert.equal(agent.securityContext!.readOnlyRootFilesystem, true);

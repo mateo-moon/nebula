@@ -10,7 +10,7 @@ const bundle = await build({ entryPoints: [new URL("../src/ui/main.ts", import.m
 
 // Exercise the real UI event handlers. The attested channel is a test double;
 // transport/evidence verification is covered separately by the security tests.
-async function deployment(restored = false) {
+async function deployment(restored = false, rejectedConnection = false) {
   class Element {
     id = ""; value = ""; textContent = ""; hidden = false; disabled = false;
     checked = false; files: unknown[] = []; classList = { toggle() {} };
@@ -37,7 +37,7 @@ async function deployment(restored = false) {
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string, init?: RequestInit) => {
     if (path === "/nebula/v1/browser") return response({ imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
-    if (path === "/nebula/v1/connection") return response(connection);
+    if (path === "/nebula/v1/connection") return response(connection, rejectedConnection ? 400 : 200);
     if (path.startsWith("/nebula/v1/image")) { uploadRequests++; return response({}); }
     if (path === "/nebula/v1/publish") {
       assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["registryPassword", "registryUsername"]);
@@ -70,12 +70,21 @@ async function deployment(restored = false) {
     for (let i = 0; i < 200; i++) { if (predicate()) return; await new Promise(resolve => setImmediate(resolve)); }
     assert.fail("The UI did not settle");
   };
-  await wait(() => el("job-title").textContent === "Ready when you are");
+  await wait(() => rejectedConnection ? el("notice").textContent.length > 0 : el("job-title").textContent === "Ready when you are");
   el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
   await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
   return { owner, el, wait, counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
     restoreConnectivity() { available = true; } };
 }
+
+test("rejected stack settings keep image encryption and publication disabled", async () => {
+  const ui = await deployment(false, true);
+  assert.match(ui.el("notice").textContent, /connection.*400/);
+  assert.equal(ui.el("deploy").disabled, true);
+  assert.equal(ui.counts().publishes, 0);
+  assert.equal(ui.counts().uploadRequests, 0);
+  assert.equal(ui.counts().keyWrites, 0);
+});
 
 test("a post-publication timeout offers retry and resumes without republishing or changing the owner", async () => {
   const ui = await deployment();

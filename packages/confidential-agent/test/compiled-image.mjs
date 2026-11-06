@@ -113,3 +113,25 @@ try {
   assert.ok(Date.now() - stopping < 10_000, "idle native module did not stop promptly over its private channel");
   console.log("Single-agent startup, privilege separation, readiness and clean shutdown passed offline.");
 } finally { docker(["rm", "--force", name]); }
+
+for (const valid of [true, false]) {
+  const gateName = `${name}-gate-${valid}`;
+  docker(["create", "--name", gateName, "--platform", "linux/amd64", "--network", "none", "--read-only",
+    "--user", "10001:10001", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+    "--tmpfs", "/run/nebula-owner-ready:rw,nosuid,nodev,size=1m,uid=10001,gid=10001,mode=0700",
+    image, JSON.stringify({ version: 1, role: "owner-gate" })]);
+  try {
+    docker(["start", gateName]);
+    docker(["exec", gateName, "node", "--input-type=module", "-e", `
+      import assert from 'node:assert/strict'; import {writeFileSync,readFileSync} from 'node:fs';
+      import {setTimeout} from 'node:timers/promises';
+      await setTimeout(250);
+      const status=readFileSync('/proc/1/status','utf8');
+      for(const field of ['CapEff','CapPrm','CapBnd'])assert.match(status,new RegExp(field+':\\\\s+0+'));
+      for(const table of ['tcp','tcp6'])assert.ok(readFileSync('/proc/1/net/'+table,'utf8').trim().split('\\n').slice(1).every(line=>line.trim().split(/\\s+/)[3]!=='0A'));
+      writeFileSync('/run/nebula-owner-ready/ready',${JSON.stringify(valid ? "nebula-owner-ready-v1\n" : "invalid-owner-marker\n")},{mode:0o640,flag:'wx'});
+    `]);
+    assert.equal(docker(["wait", gateName]).trim(), valid ? "0" : "1");
+  } finally { docker(["rm", "--force", gateName]); }
+}
+console.log("Compiled read-only owner init gate waits without listeners, accepts only the measured marker and exits.");

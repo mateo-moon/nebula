@@ -17,6 +17,7 @@ export interface OwnerConfig {
 }
 export type AgentConfig = { version: 1 } & (
   { role: "workload"; owner: OwnerConfig; storage: StorageConfig } |
+  { role: "owner-gate" } |
   { role: "preparation"; maxImageSizeMiB?: number } |
   { role: "frontend"; entry: { preparationEndpoint: string; stackEndpoint: string } }
 );
@@ -44,6 +45,8 @@ export function parseAgentConfig(raw: string): AgentConfig {
   } else if (config.role === "preparation") {
     fields(config, ["version", "role", "maxImageSizeMiB"], ["version", "role"]);
     imageUploadLimits(config.maxImageSizeMiB);
+  } else if (config.role === "owner-gate") {
+    fields(config, ["version", "role"]);
   } else if (config.role === "workload") {
     fields(config, ["version", "role", "owner", "storage"]);
     const owner = config.owner;

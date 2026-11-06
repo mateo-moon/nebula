@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseAgentConfig, type AgentConfig } from "./config.js";
 import { installGuestGuard } from "./guard.js";
-import { awaitOwner, publishOwnerReady } from "./await-owner.js";
+import { awaitOwner, awaitOwnerReady, publishOwnerReady } from "./await-owner.js";
 import { gatewayConfigured, startGateway } from "./gateway.js";
 import { collateralProxy } from "./snp-collateral.js";
 import { AgentLifecycle } from "./lifecycle.js";
@@ -93,6 +93,14 @@ export async function startAgent(raw: string, lifecycle = new AgentLifecycle()):
   const config = parseAgentConfig(raw);
   process.umask(0o077);
   try {
+    if (config.role === "owner-gate") {
+      if (!NEBULA_AGENT_WORKLOAD_MODULE || process.platform !== "linux" || process.getuid?.() !== 10001) {
+        throw new Error("Owner gate requires the unprivileged workload runtime");
+      }
+      agentStartupStage = "owner-gate";
+      lifecycle.task(awaitOwnerReady(lifecycle.signal).then(() => { void lifecycle.close(); }));
+      return lifecycle;
+    }
     if (config.role === "workload") {
       if (!NEBULA_AGENT_WORKLOAD_MODULE) throw new Error("This agent release does not contain workload modules");
       if (NEBULA_AGENT_WORKLOAD_MODULE) await initializeWorkload(config, lifecycle);

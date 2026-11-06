@@ -9,6 +9,7 @@ const text = (id: string, value: string) => { el(id).textContent = value; };
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let connection: any = owner.connection, final: AttestedChannel | undefined;
 let busy = false;
+let connected = false;
 let recoveryUrl: string | undefined;
 let imageLimits = imageUploadLimits();
 const jwtPayload = (jwt: string) => JSON.parse(new TextDecoder().decode(bytes(jwt.split(".")[1].replaceAll("-", "+").replaceAll("_", "/"))));
@@ -47,7 +48,7 @@ function download(name: string, value: unknown) {
 function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
   notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
-  busy = false; input("deploy").disabled = !connection || !!owner.prepared;
+  busy = false; input("deploy").disabled = !connected || !!owner.prepared;
   if (owner.prepared) el("inspect").hidden = false;
 }
 async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
@@ -120,6 +121,7 @@ async function connect() {
     if (!owner.encryptedImage || currentJob.result.digest !== owner.encryptedImage.manifestDigest) throw new Error("The prepared image does not match your saved browser-encrypted release");
     owner.prepared = currentJob.result; await api.save();
   }
+  connected = true;
   input("deploy").disabled = !!owner.prepared; text("job-title", owner.prepared ? "Release prepared" : "Ready when you are");
   text("job-description", "Choose an image and approve the stack. No administrator action is needed.");
   if (owner.prepared) { el("inspect").hidden = false; }
@@ -195,7 +197,7 @@ async function inspect() {
   text("final-status", "Final workload verified"); el("inspect").hidden = false;
 }
 el("deploy-form").addEventListener("submit", event => {
-  event.preventDefault(); if (busy) return; busy = true; input("deploy").disabled = true;
+  event.preventDefault(); if (busy || !connected) return; busy = true; input("deploy").disabled = true;
   void (async () => {
     const archive = input("archive").files?.[0];
     if (!archive || !archive.size || archive.size > imageLimits.maxBytes) {
@@ -254,6 +256,6 @@ el("deploy-form").addEventListener("submit", event => {
     }
   })().catch(failure);
 });
-el("inspect").addEventListener("click", () => { if (!busy) { busy = true; el("notice").hidden = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
+el("inspect").addEventListener("click", () => { if (!busy && connected) { busy = true; el("notice").hidden = true; void (owner.provisioned ? inspect() : provision()).then(() => { busy = false; }).catch(failure); } });
 el("download-verification").addEventListener("click", () => download("nebula-verification.json", evidence()));
 void connect().catch(failure);

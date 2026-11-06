@@ -134,11 +134,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       volumeMounts: [mount(`state-${binding.name}`, "/run/volume")] });
   }
   if (spec.agentImage) {
-    // The launcher runs after image pull. Gate the last restartable sidecar
-    // so kubelet cannot ask CDH to decrypt the application before provisioning.
-    // TNG and KBS remain available while the in-process owner gate is pending.
-    tng.startupProbe = { httpGet: { scheme: "HTTPS", path: "/nebula/v1/ready", port: 8443 },
-      periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 1800 };
+    // A startup probe eventually kills a healthy unclaimed TNG sidecar. Use
+    // a regular init stage instead: KBS/TNG stay available for enrollment,
+    // and kubelet cannot pull the encrypted app until the agent publishes ready.
+    delete tng.startupProbe;
     const deniedResources = [...new Set([
       ...encrypted.map(binding => binding.spec.keyResource.join("/")),
       ...spec.containers.flatMap(container => container.imageKeyResource ? [container.imageKeyResource.join("/")] : []),
@@ -169,7 +168,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
         ...resourceClients.map(client => mount(`resource-${client.name}`, `/run/nebula-resources/${client.name}`))],
       ...(encrypted.length ? { volumeDevices: encrypted.map(binding => ({ name: `app-${binding.name}`, devicePath: `/dev/nebula-volumes/${binding.name}` })) } : {}),
     };
-    initContainers.push(agent, kbs, tng);
+    initContainers.push(agent, kbs, tng, { name: "nebula-await-owner", image: spec.agentImage, imagePullPolicy: "Always",
+      command: ["node", "--disable-sigusr1", "/app/dist/main.mjs"], args: [JSON.stringify({ version: 1, role: "owner-gate" })],
+      securityContext: security(10001), resources: limits,
+      volumeMounts: [mount("owner-ready", "/run/nebula-owner-ready", true)] });
   }
   const containers = spec.containers.map(container => {
     const image = container.imageKeyResource && !container.image.includes("@sha256:")
@@ -222,7 +224,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   // Only trusted helper images may execute their own shell. The application
   // image's first instruction must be the measured static launcher, which
   // drops root/capabilities before running any bytes from that image.
-  for (const container of initContainers) if (container.name !== "nebula-agent") {
+  for (const container of initContainers) if (container.name !== "nebula-agent" && !(spec.agentImage && container.name === "nebula-await-owner")) {
     container.command = privateStdio(container.command);
   }
   const aa = stringify({ token_configs: { kbs: { url: "http://127.0.0.1:8080" } }, log: { level: "off" } });

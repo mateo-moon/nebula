@@ -1,7 +1,7 @@
 import { request } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, fchmodSync, fsyncSync, openSync, renameSync, statfsSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, openSync, readFileSync, renameSync, statfsSync, unlinkSync, writeSync } from "node:fs";
 
 const resourceName = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/;
 
@@ -63,4 +63,29 @@ export function publishOwnerReady(directory = "/run/nebula-owner-ready"): void {
     fsyncSync(file);
     renameSync(temporary, `${directory}/ready`);
   } finally { closeSync(file); try { unlinkSync(temporary); } catch { /* Renamed. */ } }
+}
+
+/** A regular Kubernetes init stage waits without a startup-probe deadline.
+ * It has only a read-only readiness mount; the agent remains the sole writer. */
+export function ownerReady(directory = "/run/nebula-owner-ready"): boolean {
+  if (Number(statfsSync(directory).type) !== 0x01021994) throw new Error("Owner gate requires guest tmpfs");
+  let file: number;
+  try { file = openSync(`${directory}/ready`, constants.O_RDONLY | constants.O_NOFOLLOW); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+  try {
+    const info = fstatSync(file);
+    if (!info.isFile() || info.uid !== 10001 || info.gid !== 10001 || info.nlink !== 1 ||
+        (info.mode & 0o7777) !== 0o640 || info.size !== 22 || readFileSync(file, "utf8") !== "nebula-owner-ready-v1\n") {
+      throw new Error("Invalid guest owner readiness marker");
+    }
+    return true;
+  } finally { closeSync(file); }
+}
+
+export async function awaitOwnerReady(signal: AbortSignal, ready: () => boolean = ownerReady): Promise<void> {
+  while (!signal.aborted) {
+    if (ready()) return;
+    await delay(100, undefined, { signal });
+  }
+  signal.throwIfAborted();
 }

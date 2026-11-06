@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseAgentConfig } from "../src/config.ts";
 
+test("the read-only init owner gate has no configurable modules or endpoints", () => {
+  assert.deepEqual(parseAgentConfig('{"version":1,"role":"owner-gate"}'), { version: 1, role: "owner-gate" });
+  assert.throws(() => parseAgentConfig('{"version":1,"role":"owner-gate","entry":{}}'), /Invalid measured/);
+});
+
 const workload = () => ({ version: 1, role: "workload",
   owner: { storageNames: ["data"], resources: ["default/volume/data", "default/image/app"] },
   storage: { version: 1, volumes: [{ version: 1, name: "data", sizeBytes: 67108864,
