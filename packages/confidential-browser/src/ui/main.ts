@@ -157,7 +157,7 @@ async function finalConnection() {
     await request(final!, "/kbs/v0/resource-policy", "GET", undefined, prepared.audience);
     owner.finalClaimed = true; delete owner.token; await api.save();
   }
-  evidence(); return final!;
+  evidence(); text("final-status", "Final workload verified"); return final!;
 }
 async function provision() {
   progress("waiting", "Waiting for your confidential workload…");
@@ -194,7 +194,7 @@ async function inspect() {
     await sleep(4000);
   }
   text("job-title", "Keys delivered; encrypted storage unlocked"); text("job-description", "The final VM passed fresh attestation and accepted your owner keys. Workload startup is now authorized.");
-  text("final-status", "Final workload verified"); el("inspect").hidden = false;
+  el("inspect").hidden = false;
 }
 el("deploy-form").addEventListener("submit", event => {
   event.preventDefault(); if (busy || !connected) return; busy = true; input("deploy").disabled = true;

@@ -25,6 +25,7 @@ async function deployment(restored = false, rejectedConnection = false) {
     return elements.get(id)!;
   };
   el("inspect").hidden = true; el("reviewed").checked = true;
+  el("final-status").textContent = "Final workload pending";
   el("archive").files = [new Blob(["test-only local image"])];
   el("registry-username").value = "test-owner"; el("registry-password").value = "test-token";
   el("recovery-password").value = "test-only-recovery-password";
@@ -33,7 +34,7 @@ async function deployment(restored = false, rejectedConnection = false) {
   const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
   const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored };
-  let now = 0, available = false, publishes = 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
+  let now = 0, available = false, storageReady = true, publishes = 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string, init?: RequestInit) => {
     if (path === "/nebula/v1/browser") return response({ imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
@@ -50,7 +51,8 @@ async function deployment(restored = false, rejectedConnection = false) {
     finalAttempts++;
     if (!available) { now += 900_001; throw new Error("Test control plane is offline"); }
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") keyWrites++;
-    return response(path === "/nebula/v1/bootstrap" ? { phase: "ready", resources: { image: { status: 200 } }, storage: {} } : {});
+    return response(path === "/nebula/v1/bootstrap" ? { phase: "ready", resources: { image: { status: 200 } },
+      storage: storageReady ? {} : { data: { phase: "awaiting-owner" } } } : {});
   } };
   class LocalWorker {
     onmessage?: (event: any) => void;
@@ -74,7 +76,7 @@ async function deployment(restored = false, rejectedConnection = false) {
   el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
   await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
   return { owner, el, wait, counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
-    restoreConnectivity() { available = true; } };
+    restoreConnectivity(ready = true) { available = true; storageReady = ready; } };
 }
 
 test("rejected stack settings keep image encryption and publication disabled", async () => {
@@ -93,9 +95,11 @@ test("a post-publication timeout offers retry and resumes without republishing o
   assert.equal(ui.el("deploy").disabled, true);
   assert.equal(ui.counts().keyWrites, 0);
   assert.equal(ui.owner.finalPin, undefined);
+  assert.equal(ui.el("final-status").textContent, "Final workload pending");
   const imageKey = ui.owner.imageKey;
   ui.restoreConnectivity(); ui.el("inspect").click();
-  await ui.wait(() => ui.el("final-status").textContent === "Final workload verified");
+  await ui.wait(() => ui.owner.provisioned === true && ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
+  assert.equal(ui.el("final-status").textContent, "Final workload verified");
   assert.equal(ui.el("notice").hidden, true);
   assert.equal(ui.owner.imageKey, imageKey);
   assert.equal(ui.owner.finalPin, "b".repeat(64));
@@ -103,6 +107,18 @@ test("a post-publication timeout offers retry and resumes without republishing o
   assert.equal(ui.counts().publishes, 1);
   assert.equal(ui.counts().uploadRequests, 2);
   assert.equal(ui.counts().keyWrites, 1);
+});
+
+test("verified final attestation stays distinct from pending encrypted storage startup", async () => {
+  const ui = await deployment();
+  assert.equal(ui.el("final-status").textContent, "Final workload pending");
+  ui.restoreConnectivity(false); ui.el("inspect").click();
+  await ui.wait(() => ui.el("notice").textContent.includes("Startup is still pending"));
+  assert.equal(ui.el("final-status").textContent, "Final workload verified");
+  assert.equal(ui.owner.finalPin, "b".repeat(64));
+  assert.equal(ui.owner.provisioned, true);
+  assert.equal(ui.counts().keyWrites, 1);
+  assert.match(ui.el("result").textContent, /awaiting-owner/);
 });
 
 test("retry still refuses first enrollment from a restored pre-enrollment backup", async () => {

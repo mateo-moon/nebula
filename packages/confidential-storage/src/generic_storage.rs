@@ -49,7 +49,7 @@ pub(crate) fn install() -> Result<()> {
         );
         return Ok(());
     }
-    write_new(target, &bytes, 0o555)
+    write_new(target, &bytes, 0o555).map(|_| ())
 }
 
 // HTTP/1.0 requires a length or connection-close response, never chunked
@@ -243,8 +243,6 @@ fn publish_status(
     report: Option<&serde_json::Value>,
 ) -> Result<()> {
     let target = Path::new(profile.state).join("status.json");
-    let temporary = target.with_extension("tmp");
-    let _ = fs::remove_file(&temporary);
     let mut status = serde_json::json!({
         "version":1,"phase":phase,
         "error":error.map(|e| format!("{e:#}").chars().take(1024).collect::<String>())
@@ -256,7 +254,18 @@ fn publish_status(
             }
         }
     }
-    write_new(&temporary, &serde_json::to_vec(&status)?, 0o444)?;
+    write_status(&target, &serde_json::to_vec(&status)?)
+}
+
+fn write_status(target: &Path, bytes: &[u8]) -> Result<()> {
+    let temporary = target.with_extension("tmp");
+    let _ = fs::remove_file(&temporary);
+    let file = write_new(&temporary, bytes, 0o444)?;
+    // Native storage keeps umask 077 for keys and sockets. Only this public,
+    // root-owned status inode is readable by the unprivileged HTTP agent.
+    // Set the mode through the newly created descriptor before publication.
+    file.set_permissions(Permissions::from_mode(0o444))?;
+    file.sync_all()?;
     fs::rename(temporary, target)?;
     Ok(())
 }
@@ -462,7 +471,7 @@ fn wait_owner() -> Result<()> {
     }
 }
 
-fn write_new(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
+fn write_new(path: &Path, bytes: &[u8], mode: u32) -> Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -472,13 +481,99 @@ fn write_new(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
         .open(path)?;
     file.write_all(bytes)?;
     file.sync_all()?;
-    Ok(())
+    Ok(file)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::net::TcpListener;
+    use std::os::unix::process::CommandExt;
+    use std::process::Command;
+
+    #[test]
+    fn status_publication_permissions_under_private_umask() {
+        const CHILD: &str = "NEBULA_STATUS_PERMISSION_CHILD";
+        const ROOT: &str = "NEBULA_STATUS_PERMISSION_ROOT";
+        const TEST: &str =
+            "generic_storage::tests::status_publication_permissions_under_private_umask";
+        if let Ok(stage) = std::env::var(CHILD) {
+            let root = std::path::PathBuf::from(std::env::var_os(ROOT).unwrap());
+            let status = root.join("status.json");
+            let key = root.join("volume.key");
+            if stage == "reader" {
+                assert_eq!(unsafe { libc::geteuid() }, 10001);
+                assert_eq!(unsafe { libc::getegid() }, 10001);
+                assert_eq!(unsafe { libc::getgroups(0, std::ptr::null_mut()) }, 0);
+                assert_eq!(fs::read(&status).unwrap(), b"{\"phase\":\"ready\"}");
+                assert_eq!(
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .open(&status)
+                        .unwrap_err()
+                        .kind(),
+                    std::io::ErrorKind::PermissionDenied
+                );
+                assert_eq!(
+                    fs::remove_file(&status).unwrap_err().kind(),
+                    std::io::ErrorKind::PermissionDenied
+                );
+                assert_eq!(
+                    fs::read(&key).unwrap_err().kind(),
+                    std::io::ErrorKind::PermissionDenied
+                );
+                return;
+            }
+            assert_eq!(stage, "writer");
+            assert_eq!(unsafe { libc::geteuid() }, 0);
+            // This is a dedicated subprocess: no parallel Rust test observes
+            // a changed process-wide mask or UID.
+            unsafe { libc::umask(0o077) };
+            write_new(&key, b"private-test-key", 0o600).unwrap();
+            write_status(&status, b"{\"phase\":\"ready\"}").unwrap();
+            let public = fs::metadata(&status).unwrap();
+            assert_eq!(public.uid(), 0);
+            assert_eq!(public.mode() & 0o7777, 0o444);
+            assert_eq!(fs::metadata(&key).unwrap().mode() & 0o7777, 0o600);
+            let mut reader = Command::new(std::env::current_exe().unwrap());
+            reader
+                .args(["--exact", TEST, "--nocapture"])
+                .env(CHILD, "reader");
+            unsafe {
+                reader.pre_exec(|| {
+                    if libc::setgroups(0, std::ptr::null()) != 0
+                        || libc::setgid(10001) != 0
+                        || libc::setuid(10001) != 0
+                    {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+            assert!(reader.status().unwrap().success());
+            return;
+        }
+        if unsafe { libc::geteuid() } != 0 {
+            return;
+        }
+        let root = std::env::temp_dir().join(format!(
+            "nebula-status-permissions-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, Permissions::from_mode(0o755)).unwrap();
+        let result = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", TEST, "--nocapture"])
+            .env(CHILD, "writer")
+            .env(ROOT, &root)
+            .status();
+        fs::remove_dir_all(root).unwrap();
+        assert!(result.unwrap().success());
+    }
 
     #[test]
     fn local_cdh_reports_only_status_not_error_body() {
