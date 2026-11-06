@@ -10,7 +10,7 @@ Production builds include only workload or browser modules (`NEBULA_AGENT_MODULE
 
 The main service owns startup, shutdown and failure handling. A failed native module closes the public agent. An inherited private channel requests native shutdown after the HTTP process drops root; parent failure closes the same channel. Shutdown cancels preparation work and releases mount leases. Readiness uses the owner module's state directly; there is no separate polling daemon. Storage waits for owner readiness before starting CDH attestation.
 
-The last TNG sidecar has a Kubernetes startup probe. The main agent returns success only after owner policies and all declared resources are available. This keeps kubelet from pulling the encrypted application before its key exists while TNG and Trustee accept owner enrollment. The probe permits one hour for provisioning; after that, recovery requires verifying a replacement guest. The application launcher also checks the private readiness marker before executing application code.
+A regular Kubernetes init stage runs the same agent's `owner-gate` module after TNG and Trustee start. It has no capabilities or listeners and reads only the guest-memory readiness marker. It can wait indefinitely for owner policies and all declared resources without killing a healthy attestation sidecar. Kubelet pulls the encrypted application after this stage exits. The application launcher independently checks the private readiness marker before executing application code.
 
 Upstream TNG and the unmodified Trustee remain separate components in the measured Pod. The Kubernetes operator stays outside the guest. Application launchers retain their UID, capability and mount boundaries.
 
