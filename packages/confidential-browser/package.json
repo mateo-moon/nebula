@@ -1,0 +1,23 @@
+{
+  "name": "@nebula/confidential-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "build": "tsx src/build.ts"
+  },
+  "dependencies": {
+    "@nebula/confidential-client": "file:../confidential-client",
+    "esbuild": "0.27.7",
+    "hash-wasm": "4.12.0",
+    "tsx": "4.21.0"
+  },
+  "devDependencies": {
+    "@nebula/confidential-agent": "file:../confidential-agent",
+    "@types/node": "22.19.8",
+    "typescript": "5.9.3"
+  }
+}

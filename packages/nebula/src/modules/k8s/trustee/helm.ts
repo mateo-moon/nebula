@@ -1,7 +1,7 @@
 import { Helm, JsonPatch, type ApiObject, type HelmProps } from "cdk8s";
 import { canonicalJson } from "../confidential-guests/canonical";
 import { INIT_DATA_ANNOTATION } from "../confidential-guests/measured";
-import { measuredFragments } from "../envoy";
+import { measuredFragments } from "../envoy/measured-fragments";
 import type { TrusteeContainer, TrusteeDeploymentManifest, TrusteePodManifest } from "./manifests";
 import type { TrusteeConfig } from "./types";
 

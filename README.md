@@ -90,11 +90,10 @@ pnpm exec tsx src/cli.ts --help
 
 Use `pnpm exec tsx src/cli.ts <command> --help` to inspect a command's options.
 
-The separate [`@nebula/trustee-client`](packages/trustee-client/README.md) package
-provides the `nebula-trustee` command and a TypeScript API for attesting and
-provisioning a self-sufficient Trustee deployment. It manages local TNG and
-Trustee verification, with native owner JWT administration. It follows the CLI's
-source TypeScript packaging and runs through `tsx`.
+The separate [`@nebula/confidential-client`](packages/confidential-client/README.md) package
+provides the `confidential-client` command and TypeScript API for encrypted image
+publication, SEV-SNP attestation, first-connection ownership, Trustee administration
+and confidential storage status. It follows the CLI's source TypeScript packaging.
 
 | Command | Purpose |
 | --- | --- |

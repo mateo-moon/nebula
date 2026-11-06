@@ -1,0 +1,44 @@
+diff --git a/rats-cert/src/tee/coco/converter/restful.rs b/rats-cert/src/tee/coco/converter/restful.rs
+index 02d9a03..1eed75b 100644
+--- a/rats-cert/src/tee/coco/converter/restful.rs
++++ b/rats-cert/src/tee/coco/converter/restful.rs
+@@ -174,14 +174,6 @@ impl GenericConverter for CocoRestfulConverter {
+         let body_text = match status {
+             reqwest::StatusCode::OK => text,
+             _ => {
+-                // Add compatibility with older trustee versions which does not support /challenge api
+-                if text.contains("Failed to get inner tee") {
+-                    tracing::warn!(
+-                        "Connected to an older version of restful-as that does not support challenge token retrieval; falling back to dummy nonce. This may compromise freshness guarantees of evidence."
+-                    );
+-                    return Ok(CoCoNonce::Jwt("dummy nonce".to_string()));
+-                }
+-
+                 return Err(Error::AttestationServiceChallengeHttpResponseError {
+                     api_version: RestfulAsApiVersion::V1_6_0,
+                     status_code: status.as_u16(),
+@@ -197,6 +189,24 @@ impl GenericConverter for CocoRestfulConverter {
+     }
+ }
+ 
++#[cfg(test)]
++mod fail_closed_challenge_tests {
++    use super::*;
++    use wiremock::{matchers::{method, path}, Mock, MockServer, ResponseTemplate};
++
++    #[tokio::test]
++    async fn fail_closed_challenge() {
++        let server = MockServer::start().await;
++        Mock::given(method("POST"))
++            .and(path("/challenge"))
++            .respond_with(ResponseTemplate::new(400).set_body_string("Failed to get inner tee"))
++            .mount(&server)
++            .await;
++        let converter = CocoRestfulConverter::new(&server.uri(), &vec!["default".into()], &HashMap::new()).unwrap();
++        assert!(converter.get_nonce().await.is_err());
++    }
++}
++
+ impl CocoRestfulConverter {
+     async fn convert_v1_6_0_or_fallback(&self, in_evidence: &CocoEvidence) -> Result<CocoAsToken> {
+         tracing::debug!("Connect to restful-as with protobuf version 1.6.0");

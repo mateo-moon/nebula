@@ -3,7 +3,7 @@
 `Trustee` is a `BaseConstruct<TrusteeConfig>` that renders the official Trustee
 Helm chart, runs native Kata `genpolicy` on that exact Deployment, and attaches
 the generated CoCo Init-Data annotation. It exposes the generated `identity`
-directly to `@nebula/trustee-client`. There is no separate workload artifact,
+directly to `@nebula/confidential-client`. There is no separate workload artifact,
 manual policy binding, bootstrap KBS, or Trustee fork. `TngTrustee` is an alias.
 
 The [official Trustee chart](https://github.com/confidential-containers/trustee/tree/3e160008ef3e5d8ce82e59c729d56e2d0175dba0/deployment/helm-chart)
@@ -101,7 +101,7 @@ image downloads. Importing Nebula remains free of file reads or subprocesses.
 ```ts
 import { App, Chart } from "cdk8s";
 import { Trustee } from "nebula-cdk8s";
-import { prepareClient } from "@nebula/trustee-client";
+import { prepareClient } from "@nebula/confidential-client";
 
 const app = new App();
 const chart = new Chart(app, "keys");
@@ -148,7 +148,7 @@ unexpected chart topology or incompatible native output abort construction.
 There is no caller-supplied policy or generic Helm-values escape hatch.
 
 See [the example](../../../../example/trustee.ts) for JSON configuration usage
-and [the Node client](../../../../../trustee-client/README.md) for owner JWT
+and [the Node client](../../../../../confidential-client/README.md) for owner JWT
 administration, attestation policy, resource policy and provisioning APIs.
 Workload retrieval continues to use the native CoCo KBS protocol. Owner JWTs
 authorize administration; recipient attestation authorizes secret release.

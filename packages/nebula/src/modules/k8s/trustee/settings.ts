@@ -1,7 +1,7 @@
 import { createPublicKey } from "node:crypto";
 import { stringify } from "smol-toml";
 import { isDigestImage } from "../confidential-guests/types";
-import { measuredFragments } from "../envoy";
+import { measuredFragments } from "../envoy/measured-fragments";
 import { TRUSTEE_STATE as STATE } from "./tng-bootstrap";
 import { confidentialTrusteeHelmSettings } from "./helm";
 import { tngBootstrapScript, tngTrusteeBootstrapScript } from "./tng-bootstrap";
@@ -48,7 +48,12 @@ export function trusteeSettings(config: TrusteeConfig) {
   selector(config.nodeSelector);
   if (!Array.isArray(config.clients) || !config.clients.length) fail("declare network client selectors");
   for (const client of config.clients) { label(client.namespace); selector(client.podLabels); }
-  const owner = publicKey(config.ownerPublicKeyPem);
+  const claim = config.ownerClaimSha256;
+  if ((claim === undefined) === (config.ownerPublicKeyPem === undefined)) {
+    fail("supply either an owner public key or a one-time owner claim hash");
+  }
+  if (claim !== undefined && !/^[a-f0-9]{64}$/.test(claim)) fail("invalid owner claim hash");
+  const owner = claim === undefined ? publicKey(config.ownerPublicKeyPem!) : undefined;
   const root = `${STATE}/current`;
   const kbsConfig = stringify({
     session_storage_type: "Memory",

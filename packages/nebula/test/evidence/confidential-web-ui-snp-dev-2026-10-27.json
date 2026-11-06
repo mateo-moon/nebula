@@ -1,0 +1,119 @@
+{
+  "testedAt": "2026-10-27T13:49:00.203254+00:00",
+  "scope": "Owner-local web deployment of a generic encrypted image, encrypted retained disk and guest-memory storage on an additive disposable dev SEV-SNP workload; existing guests and disks preserved.",
+  "sourceRevisions": {
+    "nebulaModuleAndOperator": "4173cdcc9e8394674f0cce08085528ba19d207b7",
+    "nebulaClient": "73c979a320d32e1f562245ae846a32f666bb78ee",
+    "devopsDeployment": "f417f75d2d5838c0b6f8ae8165ea01c2b914ac28"
+  },
+  "deployment": {
+    "argoSyncedHealthy": true,
+    "officialTrusteeChart": true,
+    "nativeGenpolicy": true,
+    "externalBootstrapTrustee": false,
+    "ciphertextImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:7894a7ffc163a97ede886c460efeef668a4d2260386f22692c2efcff3ddee271",
+    "encryptedLayers": 7,
+    "ownerAndOperatorMeasurementsAgree": true,
+    "digestBoundImageEntrypoint": true,
+    "deploymentParameterEmitsOnlyTokenCommitment": true,
+    "awaitingPublicationObservedBeforeUpload": true,
+    "guestCreatedAutomaticallyAfterPublication": true
+  },
+  "browserFlow": {
+    "actualEncryptDeployPassed": true,
+    "localRegistryUsernameAndTokenInputPassed": true,
+    "attestationBeforeOwnershipAndKeyProvisioning": true,
+    "firstOwnerClaimPassed": true,
+    "imageAndDiskKeysProvisioned": true,
+    "verifiedAndReadyShown": true,
+    "verifyAgainPassed": true,
+    "resumeWithoutTemporaryTokenPassed": true,
+    "resumeReusesSavedRegistryCredential": true,
+    "resumePreservesOwnerImageDiskKeysReceiptAndEnrollment": true,
+    "verifierRenewalPreservesGuestPin": true,
+    "ownerPrivateKeyNeverReturnedToBrowser": true,
+    "manualKubernetesOperationsRequiredFromUser": false,
+    "administratorActionRequiredAfterHandoff": false
+  },
+  "storage": {
+    "encryptedBlockPhase": "ready",
+    "retainedDiskBytes": 268435456,
+    "luksVersion": 2,
+    "plaintextApplicationMarkerAbsentFromRawDisk": true,
+    "applicationMarkerVerified": true,
+    "applicationScratchVerifiedAsTmpfs": true
+  },
+  "negativeChecks": {
+    "measurementMismatchRejected": true,
+    "initDataMismatchRejected": true,
+    "invalidEndorsementCertificateRejected": true,
+    "secondOwnerClaimStatus": 409,
+    "impostorOwnerStatus": 403,
+    "impostorPolicyMutationStatus": 403,
+    "remoteOwnerImageKeyRead": {
+      "status": 403,
+      "bytes": 0
+    },
+    "remoteOwnerVolumeKeyRead": {
+      "status": 403,
+      "bytes": 0
+    },
+    "remoteRcarStatus": 403,
+    "ownerRemainsAuthorized": true
+  },
+  "isolation": {
+    "applicationProbe": {
+      "isolated": true,
+      "kbs": "unreachable",
+      "cdh": "unreachable",
+      "keyFilesReadable": false
+    },
+    "administratorExecBlockedByNativePolicy": [
+      "app",
+      "kbs",
+      "nebula-owner",
+      "nebula-storage-data"
+    ],
+    "hostCannotReachGuestInternalPorts": {
+      "8080": "unreachable",
+      "8006": "unreachable",
+      "8444": "unreachable"
+    },
+    "operatorSecretReadExecPodDeleteAndPvcPatchDenied": true,
+    "namespaceSecretCount": 0,
+    "testKeysAndTokenAbsentFromKubernetesConfiguration": true
+  },
+  "preservation": {
+    "existingConfidentialGuestUidsPreserved": 6,
+    "existingTestcasePodUidsPreserved": 3,
+    "existingPvUidsAndSpecsPreserved": 9,
+    "existingPvcUidsAndSpecsPreserved": 9,
+    "existingDiskInodesSizesAndHeaderHashesPreserved": 3,
+    "existingApplicationStillReady": true
+  },
+  "softwareValidation": {
+    "clientTypecheckPassed": true,
+    "clientTestsPassed": 19,
+    "clientOptionalTestsSkipped": 3,
+    "packedClientOutsideCheckoutPassed": true,
+    "webBoundaryHostOriginCapabilityRejectionPassed": true,
+    "privateCredentialReusePassed": true,
+    "nebulaModuleTestsPassed": 516,
+    "nebulaOptionalTestsSkipped": 20,
+    "nativeGenpolicyIntegrationTestsPassed": 2,
+    "operatorTypecheckAndSchemaTestsPassed": true,
+    "devopsTypecheckPassed": true,
+    "devopsLifecycleTestsPassed": 14,
+    "deterministicSynthesisPassed": true,
+    "rawTokenParameterAndCommittedHashSynthesizeIdentically": true
+  },
+  "limits": [
+    "Administrator first-claim races can deny service; the client then refuses key release unless its own owner key is authorized.",
+    "An enrolled guest is pinned locally; this is not a global singleton guarantee.",
+    "Replacement ownership and Trustee key reprovisioning remain explicit owner operations.",
+    "Disk rollback resistance and general ciphertext integrity are outside this qualification.",
+    "Local computer, Docker runtime and independently reviewed connection settings remain in the owner trust boundary.",
+    "These are targeted qualification checks, not an exhaustive security audit."
+  ],
+  "privacy": "Tokens, keys, credentials, chip identity, instance pin, guest addresses and raw attestation are omitted. Private receipts remain on the owner computer."
+}

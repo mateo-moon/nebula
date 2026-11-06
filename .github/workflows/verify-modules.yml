@@ -79,8 +79,8 @@ jobs:
       - name: Evaluate SNP admission with the broker's pinned policy and EAR engines
         run: pnpm verify:broker-admission
 
-  trustee-client:
-    name: Trustee Node client (Node ${{ matrix.node }})
+  confidential-client:
+    name: Confidential client (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -92,7 +92,7 @@ jobs:
             pnpm: 11.9.0
     defaults:
       run:
-        working-directory: packages/trustee-client
+        working-directory: packages/confidential-client
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

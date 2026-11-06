@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-21",
+  "scope": "Nebula-owned encrypted-storage runtime and NRI helper, deployed through the isolated dev Argo application on the existing SEV-SNP host.",
+  "sourceRevisions": {
+    "nebulaRuntime": "72fb75a3534fd82843bcadc7670270973494db6e",
+    "devops": "d978b27f64d2a9da7e5eb1dd694743f5b4e5c499"
+  },
+  "migration": {
+    "storagePackage": "packages/confidential-storage",
+    "devicePackage": "packages/confidential-storage-devices",
+    "toolNodeRuntimeDependency": false,
+    "legacyHardwareDerivedKeysAndLaunchModesExcluded": true,
+    "existingDiskFormatPreserved": true,
+    "officialTrusteeAndNativeGenpolicyPreserved": true,
+    "externalBootstrapTrustee": false
+  },
+  "images": {
+    "storage": "sha256:a2599b3467326a924b2a56c0f30e8f123f370a7f901c718f994eb28784fdd331",
+    "devices": "sha256:eead4c0fe303fa2775b99296a62ba78e1c2977577d3ec9b3913b7ab92e1a495d",
+    "operator": "sha256:e1855e0900bfcb43f3c295d44d6a8b5398a903c9dece6a1826d13b981129f19c"
+  },
+  "ownerVerification": {
+    "sameNativeApprovalForBothGuests": true,
+    "ownerAndOperatorMeasurementAgree": true,
+    "distinctGuestTlsIdentities": true,
+    "actualCliAcceptedEachOwnEnrollment": true,
+    "actualCliRejectedFirstEnrollmentRoutedToSecond": true,
+    "staleLocalRendererApprovalRefusedBeforeProvisioning": true,
+    "substitutionTestScope": "The actual CLI accepted both own enrollments and rejected the substituted endpoint. Request ordering is covered by software tests; this live test did not capture packets."
+  },
+  "positiveGuest": {
+    "encryptedImageBooted": true,
+    "existingEncryptedDataRecovered": true,
+    "freshNonceHmacProofBeforeAndAfterControllerRestart": true,
+    "dataFilesystem": "ext4",
+    "memoryFilesystem": "tmpfs",
+    "applicationUid": 11000,
+    "applicationGid": 11000,
+    "applicationCapabilities": "none",
+    "attestedStoragePhase": "ready",
+    "finalFreshNonceHmacProofVerified": true,
+    "nativeCdhResources": [
+      200,
+      200,
+      200
+    ]
+  },
+  "copiedDisk": {
+    "bytes": 1073741824,
+    "sourceQuiescentBeforeCopy": true,
+    "replacementsUnprovisionedDuringCopy": true,
+    "luksHeaderConfirmed": true,
+    "originalVolumeKeyNeverProvisionedToSecondGuest": true,
+    "differentVolumeKeyProvisionedThroughExistingAttestedEnrollment": true,
+    "nativeCdhResources": [
+      200,
+      200,
+      200
+    ],
+    "attestedStoragePhase": "unlock-denied",
+    "refusalExitCode": 5,
+    "ciphertextHashBeforeAndAfterMatches": true,
+    "applicationEndpointClosed": true,
+    "helperRestartsAfterRefusal": 0
+  },
+  "isolation": {
+    "adminExecDenied": [
+      "Trustee",
+      "storage helper",
+      "application"
+    ],
+    "kubernetesSecretCount": 0,
+    "testKeysAbsentFromKubernetesConfiguration": true,
+    "operatorSecretExecPodDeleteAndPvcPatchPermissionsDenied": true,
+    "kbsCdhInnerTlsPortsUnavailableFromHost": true,
+    "remoteResourceGetHttpStatus": 403,
+    "remoteRcarHttpStatus": 403,
+    "invalidOwnerPolicyMutationHttpStatus": 401
+  },
+  "controller": {
+    "restartAndArgoRefreshPreservedGuestIdentities": true,
+    "guestContainerRestarts": 0
+  },
+  "softwareValidation": {
+    "nebulaTestsPassed": 509,
+    "nebulaOptionalTestsSkipped": 18,
+    "linuxStorageUnitTestsPassed": 23,
+    "realCryptsetupTestsPassed": 2,
+    "nativePolicyDecisionsPassed": 14,
+    "deviceScopeAndCallbackTestsPassed": true,
+    "cliTestsPassed": 15,
+    "cliOptionalTestsSkipped": 2,
+    "rendererTestsPassed": 2,
+    "deterministicDevopsSynthesis": true,
+    "runtimeImplementationCiPassed": true,
+    "defaultCargoTestHarnessAndStaticLauncherBuildPassed": true,
+    "finalTestRecipeChangesRuntimeCode": false
+  },
+  "limits": [
+    "First enrollment selects an approved instance; it does not establish intent before selection.",
+    "An owner can deliberately provision the same volume key to another VM.",
+    "Trustee and instance credentials are ephemeral; replacement requires fresh enrollment and provisioning.",
+    "LUKS-XTS provides neither general disk integrity nor rollback protection or a global singleton guarantee.",
+    "A refused mount is observable while its guest lives; the bounded launcher wait can eventually stop that Pod.",
+    "Targeted qualification is not an exhaustive security audit."
+  ],
+  "privacy": "Raw reports, chip identity, node addresses, instance pins and keys are omitted. Detailed receipts remain with the owner.",
+  "started": "2026-10-20",
+  "argocd": {
+    "syncedHealthy": true,
+    "retainedClaims": 2,
+    "bytesPerClaim": 1073741824,
+    "newCloudDisks": 0
+  }
+}

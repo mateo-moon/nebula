@@ -1,0 +1,22 @@
+# Static browser assets are a public, reviewed release build, without secrets.
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS build
+WORKDIR /workspace/packages/confidential-agent
+COPY packages/confidential-agent ./
+COPY packages/confidential-client /workspace/packages/confidential-client
+COPY packages/nebula/package.json /workspace/packages/nebula/
+COPY packages/nebula/src/core/base-construct.ts /workspace/packages/nebula/src/core/
+COPY packages/nebula/src/utils/secrets.ts /workspace/packages/nebula/src/utils/
+COPY packages/nebula/src/modules/k8s/confidential-guests /workspace/packages/nebula/src/modules/k8s/confidential-guests
+COPY packages/nebula/src/modules/k8s/confidential-workloads /workspace/packages/nebula/src/modules/k8s/confidential-workloads
+COPY packages/nebula/src/modules/k8s/trustee /workspace/packages/nebula/src/modules/k8s/trustee
+COPY packages/nebula/src/modules/k8s/envoy/measured-fragments.ts /workspace/packages/nebula/src/modules/k8s/envoy/
+RUN npm install -g pnpm@11.9.0 && pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm typecheck && NEBULA_AGENT_MODULES=browser pnpm build
+
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+WORKDIR /app
+COPY --from=build /workspace/packages/confidential-agent/dist ./dist
+COPY --from=browser-assets / ./loader/
+USER 10001:10001
+ENV HOME=/tmp
+ENTRYPOINT ["node", "--disable-sigusr1", "/app/dist/main.mjs"]
