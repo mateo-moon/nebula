@@ -28,7 +28,8 @@ export class Ollama extends Construct {
     });
     new ApiObject(this, "deployment", {
       apiVersion: "apps/v1", kind: "Deployment", metadata: { name, namespace, labels },
-      spec: { replicas: 1, selector: { matchLabels: labels }, template: { metadata: { labels }, spec: {
+      // The existing ReadWriteOnce disk must be released before a replacement can use it on another node.
+      spec: { replicas: 1, strategy: { type: "Recreate" }, selector: { matchLabels: labels }, template: { metadata: { labels }, spec: {
         containers: [{ name, image: config.image, ports: [{ containerPort: port }], resources: config.resources,
           volumeMounts: [{ name: "models", mountPath: "/root/.ollama" }] }],
         volumes: [{ name: "models", persistentVolumeClaim: { claimName } }],

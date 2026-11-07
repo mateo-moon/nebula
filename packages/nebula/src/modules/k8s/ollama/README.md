@@ -4,4 +4,6 @@
 
 The server mounts the claim at `/root/.ollama`. It does not pull a model, add a GPU request, add a backup policy or expose an external endpoint. Model loading remains caller-managed.
 
+Updates use the `Recreate` strategy: the old server stops before its replacement starts, so a model-cache disk can move between nodes without a rollout deadlock. Updates briefly interrupt inference and reuse the existing claim and model files.
+
 `declareOllamaModelConfig(scope, id, { namespace, name, model, host, annotations? })` references an existing endpoint from a Kagent `ModelConfig`, without API-key fields. Its default Argo sync wave is `KAGENT_WAVE.DEPENDENCY`; callers may supply explicit annotations. The helper does not install Kagent or start a model-loading job.

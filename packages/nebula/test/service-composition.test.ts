@@ -59,6 +59,7 @@ test("Ollama shares explicit service and claim identities without adding a model
   assert.equal(endpoint.serviceUrl, "http://inference.models.svc.cluster.local:12434");
   assert.deepEqual(claim.spec, { accessModes: ["ReadWriteOnce"], storageClassName: inference.storageClassName, resources: { requests: { storage: inference.storageSize } } });
   assert.equal(deployment.spec.replicas, 1);
+  assert.deepEqual(deployment.spec.strategy, { type: "Recreate" }, "A replacement must not wait for a ReadWriteOnce disk still held by the old replica");
   assert.deepEqual(deployment.spec.template.spec, {
     containers: [{ name: inference.name, image: inference.image, ports: [{ containerPort: inference.port }], resources: inference.resources,
       volumeMounts: [{ name: "models", mountPath: "/root/.ollama" }] }],
