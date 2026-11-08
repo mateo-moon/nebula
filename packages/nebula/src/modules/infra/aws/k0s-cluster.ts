@@ -329,7 +329,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       ...(cp.extraArgs ?? []),
     ];
     K0sOidcAuthentication.validateControlPlane(cp.authentication, { namespace, k8sVersion });
-    const authentication = cp.authentication ? new K0sOidcAuthentication(this, "oidc", cp.authentication) : undefined;
+    const authentication = cp.authentication ? new K0sOidcAuthentication(this, "oidc", { ...cp.authentication, namespace }) : undefined;
     const bootstrap = authentication?.standalone();
     const apiArgs = {
       ...(this.config.oidcIssuer ? {
@@ -393,7 +393,6 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
             ...hostCommands,
             ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
-            ...(bootstrap?.preK0SCommands ?? []),
           ],
         },
         machineTemplate: {

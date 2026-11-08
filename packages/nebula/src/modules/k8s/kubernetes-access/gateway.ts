@@ -10,8 +10,14 @@ export const KUBERNETES_OIDC_ENVOY_IMAGE = "docker.io/envoyproxy/envoy:v1.40.1@s
 /** Uses the existing ingress and public TLS issuer; creates no load balancer,
  * cloud role, certificate credential or identity-provider client secret. */
 export interface KubernetesOidcGatewayConfig extends KubernetesOidcIdentityConfig {
-  /** Override labels when migrating an existing gateway with immutable selectors. */
+  namespace: string;
+  ingressClassName: string;
+  clusterIssuer: string;
+  backend: { host: string; port: number; serverName: string; caSecret: { name: string; key: string } };
+  /** Labels shared by the Deployment, Service and disruption budget selectors. */
   podLabels?: Record<string, string>;
+  /** Maximum duration of a proxied API stream; defaults to 600 seconds. */
+  maxStreamDurationSeconds?: number;
   image?: string;
 }
 export class KubernetesOidcGateway extends BaseConstruct<KubernetesOidcGatewayConfig> {
@@ -21,6 +27,9 @@ export class KubernetesOidcGateway extends BaseConstruct<KubernetesOidcGatewayCo
     super(scope, id, config);
     const c = this.config;
     this.identity = new KubernetesOidcIdentity(c);
+    if (!/^[a-z0-9][a-z0-9.-]+$/.test(c.backend.host) || !/^[a-z0-9][a-z0-9.-]+$/.test(c.backend.serverName) ||
+      !Number.isInteger(c.backend.port) || c.backend.port < 1 || c.backend.port > 65535)
+      throw new Error("The gateway requires a TLS backend with an exact DNS name and port");
     const name = `kubernetes-oidc-${c.cluster}`;
     const labels = c.podLabels ?? { "app.kubernetes.io/name": "kubernetes-oidc-access", "nebula.io/target-cluster": c.cluster };
     const metadata = (n = name) => ({ name: n, namespace: c.namespace, labels });
@@ -28,6 +37,7 @@ export class KubernetesOidcGateway extends BaseConstruct<KubernetesOidcGatewayCo
       issuers: { workforce: c.workforce, ...(c.workload ? { workload: c.workload } : {}) },
       backend: { ...c.backend, caFile: "/etc/kubernetes-ca/ca.crt" },
       maxTokenLifetimeSeconds: KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS,
+      maxStreamDurationSeconds: c.maxStreamDurationSeconds,
     }).bootstrap;
     const envoyConfig = stringify(bootstrap);
     this.resources.push(new ApiObject(this, `${name}-config`, { apiVersion: "v1", kind: "ConfigMap", metadata: metadata(), data: { "envoy.yaml": envoyConfig } }));
@@ -63,7 +73,8 @@ export class KubernetesOidcGateway extends BaseConstruct<KubernetesOidcGatewayCo
         ...metadata(), annotations: {
           "cert-manager.io/cluster-issuer": c.clusterIssuer,
           "external-dns.alpha.kubernetes.io/hostname": c.hostname,
-          "nginx.ingress.kubernetes.io/proxy-read-timeout": "600", "nginx.ingress.kubernetes.io/proxy-send-timeout": "600",
+          "nginx.ingress.kubernetes.io/proxy-read-timeout": String(c.maxStreamDurationSeconds ?? KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS),
+          "nginx.ingress.kubernetes.io/proxy-send-timeout": String(c.maxStreamDurationSeconds ?? KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS),
           "nginx.ingress.kubernetes.io/proxy-buffering": "off", "nginx.ingress.kubernetes.io/ssl-redirect": "true"
         },
       }, spec: {

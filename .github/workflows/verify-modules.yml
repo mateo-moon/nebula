@@ -103,7 +103,7 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Check OIDC test types
         run: pnpm exec tsc -p tsconfig.oidc-tests.json
-      - name: Verify real API, gateway, token lifetimes and raw API isolation
+      - name: Verify real API, gateway, identity mappings and token lifetimes
         env:
           RUN_KUBERNETES_OIDC_INTEGRATION: "1"
         run: pnpm exec tsx --test test/kubernetes-access.integration.test.ts

@@ -19,7 +19,6 @@ type credentialFile struct {
 	Issuer       string          `json:"issuer"`
 	ClientID     string          `json:"client_id"`
 	ClientSecret string          `json:"client_secret"`
-	Epoch        string          `json:"epoch,omitempty"`
 	ExpiresUnix  json.RawMessage `json:"expires_unix,omitempty"`
 	expiry       time.Time
 }

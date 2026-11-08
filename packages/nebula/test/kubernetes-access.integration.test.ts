@@ -9,15 +9,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { parse, stringify } from "yaml";
-import { Testing } from "cdk8s";
 import { KubernetesOidcIdentity, type KubernetesOidcIdentityConfig as KubernetesAccessConfig } from "../src/modules/k8s/kubernetes-access/identity";
 import { EnvoyJwtProxy } from "../src/modules/k8s/envoy/jwt-proxy";
-import { KUBERNETES_OIDC_ENVOY_IMAGE as envoyImage } from "../src/modules/k8s/kubernetes-access/gateway";
-import { K0sOidcAuthentication } from "../src/modules/infra/k0s/oidc-authentication";
+import { KUBERNETES_OIDC_ENVOY_IMAGE as envoyImage, type KubernetesOidcGatewayConfig } from "../src/modules/k8s/kubernetes-access/gateway";
 import { ServiceAccountTokenLifetimePolicy } from "../src/modules/k8s/kubernetes-access/token-lifetime-policy";
-const queryRefresherSubject = "system:serviceaccount:default:query-refresher";
+const rotatorSubject = "system:serviceaccount:tools:token-rotator";
 const authenticationConfiguration = (c: KubernetesAccessConfig) => new KubernetesOidcIdentity(c).authenticationConfiguration();
-const envoyConfiguration = (c: KubernetesAccessConfig) => new EnvoyJwtProxy({ issuers: { workforce: c.workforce, ...(c.workload ? { workload: c.workload } : {}) }, backend: { ...c.backend, caFile: "/etc/kubernetes-ca/ca.crt" }, maxTokenLifetimeSeconds: 600 }).bootstrap;
+const envoyConfiguration = (c: KubernetesOidcGatewayConfig) => new EnvoyJwtProxy({ issuers: { workforce: c.workforce, ...(c.workload ? { workload: c.workload } : {}) }, backend: { ...c.backend, caFile: "/etc/kubernetes-ca/ca.crt" }, maxTokenLifetimeSeconds: 600 }).bootstrap;
 
 const exec = promisify(execFile);
 const run = async (cmd: string, args: string[], timeout = 180_000) => (await exec(cmd, args, { timeout, maxBuffer: 4 * 1024 * 1024 })).stdout.trim();
@@ -26,20 +24,19 @@ const image = process.env.OIDC_TEST_KIND_IMAGE ?? "kindest/node:v1.35.0@sha256:4
 
 test("public OIDC profiles merge without sharing another cluster's login audience", { skip: !enabled }, async () => {
   const work = mkdtempSync(join(tmpdir(), "kubernetes-oidc-profiles-"));
-  const clusters = ["mgmt", "intra", "cicd", "dev", "stage"];
+  const clusters = ["alpha", "beta", "gamma"];
   try {
     const files = clusters.map(cluster => {
       const file = join(work, `${cluster}.yaml`);
       const profile = new KubernetesOidcIdentity({
-        cluster, hostname: `api-${cluster}.example.test`, namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture", systemSourceCidrs: [],
+        cluster, hostname: `api-${cluster}.example.test`,
         workforce: { url: "https://accounts.google.com", jwksUrl: "https://www.googleapis.com/oauth2/v3/certs", audience: `${cluster}-desktop-client-id`, emailDomain: "example.test", maxTokenLifetimeSeconds: 3600,
           requiredClaims: { hd: "example.test", azp: `${cluster}-desktop-client-id` }, login: { grantType: "authcode", clientAuthentication: "client-secret", extraScopes: ["email"] } },
-        backend: { host: "api.internal.example.test", port: 6443, serverName: "kubernetes", caSecret: { name: "fixture-ca", key: "tls.crt" } },
       }).userKubeconfig();
       writeFileSync(file, stringify(profile), { mode: 0o600 });
       return file;
     });
-    // This reads only the five explicit public fixture files. config view does
+    // This reads only the explicit public fixture files. config view does
     // not invoke the exec plugin or contact any Kubernetes API.
     const merged = JSON.parse((await exec("kubectl", ["config", "view", "--merge", "-o", "json"], {
       env: { ...process.env, KUBECONFIG: files.join(delimiter) }, timeout: 10_000,
@@ -89,11 +86,11 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
   });
   await new Promise<void>(resolve => issuer.listen(0, "0.0.0.0", resolve));
   issuerBase = `https://${issuerHost}:${(issuer.address() as any).port}`;
-  const c: KubernetesAccessConfig = {
+  const c: KubernetesOidcGatewayConfig = {
     cluster: "fixture", hostname: "api.fixture.example.test", namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture",
     workforce: {
       url: `${issuerBase}/google`, jwksUrl: `${issuerBase}/google/keys`, audience: "fixture-desktop-client-id",
-      emailDomain: "example.test", certificateAuthority: readFileSync(cert, "utf8"), maxTokenLifetimeSeconds: 3600,
+      emailDomain: "example.test", groups: ["access:developers"], certificateAuthority: readFileSync(cert, "utf8"), maxTokenLifetimeSeconds: 3600,
       requiredClaims: { hd: "example.test", azp: "fixture-desktop-client-id" },
     },
     workload: {
@@ -101,7 +98,6 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
       subjects: ["system:serviceaccount:argocd:controller"], certificateAuthority: readFileSync(cert, "utf8")
     },
     backend: { host: `${name}-control-plane`, port: 6443, serverName: "kubernetes", caSecret: { name: "fixture-ca", key: "tls.crt" } },
-    systemSourceCidrs: ["192.0.2.5/32"],
   };
   const issue = (claims: Record<string, unknown> = {}, privateKey = issuerKeys.privateKey) => {
     const now = Math.floor(Date.now() / 1000);
@@ -181,9 +177,9 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     const who = JSON.parse(good.body).status.userInfo;
     assert.equal(who.username, "oidc:employee@example.test");
     assert.equal(who.uid, "immutable-person-id");
-    assert.ok(who.groups.includes("oidc:employees")); assert.ok(!who.groups.includes("system:masters"));
-    const stolen = await throughGateway(undefined, { cert: admin.cert, key: admin.key });
-    assert.equal(stolen.status, 401, "a stolen admin certificate must not authenticate through the gateway");
+    assert.ok(who.groups.includes("access:developers")); assert.ok(!who.groups.includes("system:masters"));
+    const certificateOnly = await throughGateway(undefined, { cert: admin.cert, key: admin.key });
+    assert.equal(certificateOnly.status, 401, "a client certificate cannot substitute for a gateway JWT");
     assert.equal((await throughGateway(undefined, { headers: { Authorization: "Basic Zm9vOmJhcg==" } })).status, 401);
     const now = Math.floor(Date.now() / 1000);
     for (const claims of [
@@ -192,9 +188,6 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
       { hd: "elsewhere.test" }, { hd: undefined }, { azp: "other-desktop-client-id" }, { azp: undefined },
       { iat: now - 3601, exp: now + 100 },
     ]) assert.ok([401, 403].includes((await throughGateway(issue(claims))).status), `rejected claims ${JSON.stringify(claims)}`);
-    const formerIssuer = issue({ iss: `${issuerBase}/people`, aud: "kubernetes:fixture", exp: now + 600 });
-    assert.equal((await throughGateway(formerIssuer)).status, 401, "a still-valid token from the former workforce issuer is rejected");
-    assert.equal((await request(`${api}${reviewPath}`, { ca: backendCa, headers: { Authorization: `Bearer ${formerIssuer}` } })).status, 401, "the API also rejects the former workforce issuer");
     const foreign = generateKeyPairSync("rsa", { modulusLength: 2048 });
     assert.equal((await throughGateway(issue({}, foreign.privateKey))).status, 401, "wrong signature");
     const workloadClaims = { iss: c.workload!.url, aud: c.workload!.audience, sub: c.workload!.subjects[0], exp: now + 600, "kubernetes.io": { pod: { uid: "fixture-pod" } } };
@@ -214,56 +207,41 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     assert.equal((await throughGateway(issue({ ...workloadClaims, "kubernetes.io": {} }))).status, 401, "unbound workload token");
     assert.equal((await throughGateway(issue({ ...workloadClaims, exp: now + 3600 }))).status, 401, "one-hour human lifetimes must never extend workload trust");
     assert.equal((await throughGateway(issue({ ...workloadClaims, iat: now - 601, exp: now + 100 }))).status, 401, "the API rejects a long-issued workload token even when little lifetime remains");
-    // The internal monitoring bridge cannot turn a stolen short-lived identity
-    // into a permanent reader token. Verify admission with the real API.
+    // A selected TokenRequest caller is bounded by admission even outside the
+    // rotation job. Verify this against the real Kubernetes API.
     const create = async (path: string, object: object) => {
       const response = await request(`${api}${path}`, { ...admin, body: JSON.stringify(object) });
       assert.equal(response.status, 201, `creating ${path}: ${response.body}`);
     };
-    await create("/api/v1/namespaces", { apiVersion: "v1", kind: "Namespace", metadata: { name: "monitoring" } });
-    await create("/api/v1/namespaces/monitoring/serviceaccounts", { apiVersion: "v1", kind: "ServiceAccount", metadata: { name: "public-metrics-query-reader" } });
+    await create("/api/v1/namespaces", { apiVersion: "v1", kind: "Namespace", metadata: { name: "apps" } });
+    await create("/api/v1/namespaces/apps/serviceaccounts", { apiVersion: "v1", kind: "ServiceAccount", metadata: { name: "consumer" } });
     for (const resource of [
-      ...ServiceAccountTokenLifetimePolicy.manifests({ name: "reader-token-lifetime", requesterUsername: `workload:${queryRefresherSubject}` }),
-      { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role", metadata: { name: "oidc-query-token-refresher", namespace: "monitoring" }, rules: [{ apiGroups: [""], resources: ["serviceaccounts/token"], resourceNames: ["public-metrics-query-reader"], verbs: ["create"] }] },
-      { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding", metadata: { name: "oidc-query-token-refresher", namespace: "monitoring" }, roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: "oidc-query-token-refresher" }, subjects: [{ kind: "User", apiGroup: "rbac.authorization.k8s.io", name: `workload:${queryRefresherSubject}` }] },
+      ...ServiceAccountTokenLifetimePolicy.manifests({ name: "token-lifetime", requesterUsername: `workload:${rotatorSubject}` }),
+      { apiVersion: "rbac.authorization.k8s.io/v1", kind: "Role", metadata: { name: "token-rotator", namespace: "apps" }, rules: [{ apiGroups: [""], resources: ["serviceaccounts/token"], resourceNames: ["consumer"], verbs: ["create"] }] },
+      { apiVersion: "rbac.authorization.k8s.io/v1", kind: "RoleBinding", metadata: { name: "token-rotator", namespace: "apps" }, roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: "token-rotator" }, subjects: [{ kind: "User", apiGroup: "rbac.authorization.k8s.io", name: `workload:${rotatorSubject}` }] },
     ] as any[]) {
-      if (resource.metadata.name === "oidc-query-token-refresher") {
+      if (resource.metadata.name === "token-rotator") {
         const kind = resource.kind === "Role" ? "roles" : "rolebindings";
-        await create(`/apis/rbac.authorization.k8s.io/v1/namespaces/monitoring/${kind}`, resource);
+        await create(`/apis/rbac.authorization.k8s.io/v1/namespaces/apps/${kind}`, resource);
       } else if (resource.kind === "ValidatingAdmissionPolicy" || resource.kind === "ValidatingAdmissionPolicyBinding") {
         const kind = resource.kind === "ValidatingAdmissionPolicy" ? "validatingadmissionpolicies" : "validatingadmissionpolicybindings";
         await create(`/apis/admissionregistration.k8s.io/v1/${kind}`, resource);
       }
     }
-    const readerToken = (expirationSeconds: number) => request(`${api}/api/v1/namespaces/monitoring/serviceaccounts/public-metrics-query-reader/token`, {
-      ...admin, headers: { "Impersonate-User": `workload:${queryRefresherSubject}` }, body: JSON.stringify({
+    const consumerToken = (expirationSeconds: number) => request(`${api}/api/v1/namespaces/apps/serviceaccounts/consumer/token`, {
+      ...admin, headers: { "Impersonate-User": `workload:${rotatorSubject}` }, body: JSON.stringify({
         apiVersion: "authentication.k8s.io/v1", kind: "TokenRequest", spec: { audiences: ["fixture-internal"], expirationSeconds },
       }),
     });
     let longToken = { status: 0, body: "" };
     for (let attempt = 0; attempt < 30; attempt++) {
-      longToken = await readerToken(3600);
+      longToken = await consumerToken(3600);
       if ([403, 422].includes(longToken.status)) break;
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    assert.ok([403, 422].includes(longToken.status), "admission must reject a one-hour reader token");
-    assert.ok(longToken.body.includes("Monitoring reader tokens must expire within ten minutes"), "the configured lifetime policy must cause the denial");
-    assert.equal((await readerToken(600)).status, 201, "ten-minute reader rotation remains authorized");
-    // Execute the production standalone firewall against the disposable node.
-    // Envoy is allowed; a workstation reaching the raw host port is not.
-    const gatewayIp = await run("docker", ["inspect", "-f", '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', gatewayName]);
-    const nodeIp = await run("docker", ["inspect", "-f", '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', `${name}-control-plane`]);
-    const gatewayIp6 = await run("docker", ["inspect", "-f", '{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}', gatewayName]);
-    const nodeIp6 = await run("docker", ["inspect", "-f", '{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}', `${name}-control-plane`]);
-    const nodes = await request(`${api}/api/v1/nodes`, { ...admin, method: "GET", body: "" });
-    assert.equal(nodes.status, 200);
-    const podCidrs = JSON.parse(nodes.body).items.flatMap((node: any) => node.spec.podCIDRs ?? [node.spec.podCIDR]).filter(Boolean);
-    writeFileSync(join(work, "firewall.sh"), new K0sOidcAuthentication(Testing.chart(), "firewall", { identity: { ...c, systemSourceCidrs: [`${gatewayIp}/32`, `${nodeIp}/32`, ...podCidrs, ...[gatewayIp6, nodeIp6].filter(Boolean).map(ip => `${ip}/128`)] } }).systemApiFirewall());
-    await run("docker", ["exec", `${name}-control-plane`, "sh", "/etc/kubernetes/oidc/firewall.sh"]);
-    const isolated = await throughGateway(issue()).catch(error => { throw new Error(`OIDC endpoint failed after raw API isolation: ${error.message}`); });
-    assert.equal(isolated.status, 201, "OIDC endpoint survives raw API isolation");
-    await assert.rejects(request(`${api}${reviewPath}`, { ...admin, timeout: 2000 }), /timed out|ECONNRESET|socket hang up/,
-      "the former raw certificate endpoint must be unreachable from an ordinary client");
+    assert.ok([403, 422].includes(longToken.status), "admission must reject requests exceeding the configured limit");
+    assert.ok(longToken.body.includes("ServiceAccount tokens must expire within 600 seconds"), "the configured lifetime policy must cause the denial");
+    assert.equal((await consumerToken(600)).status, 201, "requests within the configured limit remain authorized");
   } finally {
     await run("docker", ["rm", "-f", gatewayName], 30_000).catch(() => { });
     await run("kind", ["delete", "cluster", "--name", name], 30_000).catch(() => { });

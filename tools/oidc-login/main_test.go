@@ -43,7 +43,7 @@ func saveCredential(t *testing.T, values map[string]any) string {
 
 func TestProtectedCredential(t *testing.T) {
 	good := func() map[string]any {
-		return map[string]any{"issuer": "https://issuer.example.test", "client_id": "fixture-client", "client_secret": "fixture-value", "epoch": "fixture", "expires_unix": time.Now().Add(time.Hour).Unix()}
+		return map[string]any{"issuer": "https://issuer.example.test", "client_id": "fixture-client", "client_secret": "fixture-value", "expires_unix": time.Now().Add(time.Hour).Unix()}
 	}
 	for _, name := range []string{"good", "read-only", "no-expiry", "expired", "null-expiry", "foreign-issuer", "foreign-client", "missing-secret", "group-readable", "symlink", "directory", "oversized", "malformed", "trailing-json"} {
 		t.Run(name, func(t *testing.T) {

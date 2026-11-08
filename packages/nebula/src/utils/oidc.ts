@@ -9,7 +9,7 @@ export interface OidcIssuer {
   maxTokenLifetimeSeconds?: number;
 }
 
-export function oidcTokenLifetimeSeconds(issuer: OidcIssuer, defaultSeconds: number): number {
+export function oidcTokenLifetimeSeconds(issuer: Pick<OidcIssuer, "maxTokenLifetimeSeconds">, defaultSeconds: number): number {
   const seconds = issuer.maxTokenLifetimeSeconds ?? defaultSeconds;
   if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 3600)
     throw new Error("OIDC token lifetime must be a positive integer of at most 3600 seconds");

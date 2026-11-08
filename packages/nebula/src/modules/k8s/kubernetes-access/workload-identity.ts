@@ -2,17 +2,26 @@ import { ApiObject } from "cdk8s";
 import { Construct } from "constructs";
 import { stringify } from "yaml";
 import { BaseConstruct } from "../../../core";
-import { validateOidcHttpsUrl } from "../../../utils/oidc";
+import { validateOidcHttpsUrl, oidcTokenLifetimeSeconds } from "../../../utils/oidc";
 
 export const KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS = 600;
 export const kubernetesAccessAudience = (cluster: string) => `kubernetes:${cluster}`;
 export const kubernetesAccessTokenPath = (cluster: string) => `/var/run/kubernetes-oidc/${cluster}/token`;
 export const kubernetesWorkloadUsername = (subject: string) => `workload:${subject}`;
 
+/** Kubernetes TokenRequest projections require at least 600 seconds. */
+export function kubernetesServiceAccountTokenLifetimeSeconds(seconds = KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS): number {
+  const lifetime = oidcTokenLifetimeSeconds({ maxTokenLifetimeSeconds: seconds }, KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS);
+  if (lifetime < 600) throw new Error("Kubernetes ServiceAccount token lifetime must be at least 600 seconds");
+  return lifetime;
+}
+
 export interface KubernetesWorkloadIdentityConfig {
   cluster: string;
   /** Defaults to the target cluster's separate Kubernetes audience. */
   audience?: string;
+  /** Projected TokenRequest lifetime, between 600 and 3600 seconds; defaults to 600. */
+  expirationSeconds?: number;
 }
 
 /** Projected identity used by client-go, Argo CD and provider runtimes. The
@@ -21,13 +30,15 @@ export class KubernetesWorkloadIdentity {
   public readonly cluster: string;
   public readonly audience: string;
   public readonly tokenPath: string;
+  public readonly expirationSeconds: number;
 
   constructor(config: KubernetesWorkloadIdentityConfig) {
     if (!/^[a-z][a-z0-9-]*$/.test(config.cluster)) throw new Error("A DNS-label cluster name is required");
     this.cluster = config.cluster;
     this.audience = config.audience ?? kubernetesAccessAudience(config.cluster);
-    if (!this.audience || /[\s*]/.test(this.audience)) throw new Error("An exact workload audience is required");
+    if (!this.audience || /[\s*\u0000-\u001f\u007f]/.test(this.audience)) throw new Error("An exact workload audience is required");
     this.tokenPath = kubernetesAccessTokenPath(config.cluster);
+    this.expirationSeconds = kubernetesServiceAccountTokenLifetimeSeconds(config.expirationSeconds);
   }
 
   public get projection() {
@@ -35,7 +46,7 @@ export class KubernetesWorkloadIdentity {
       volume: {
         name: `oidc-${this.cluster}`, projected: {
           defaultMode: 0o440, sources: [
-            { serviceAccountToken: { audience: this.audience, expirationSeconds: KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS, path: "token" } },
+            { serviceAccountToken: { audience: this.audience, expirationSeconds: this.expirationSeconds, path: "token" } },
           ]
         }
       },

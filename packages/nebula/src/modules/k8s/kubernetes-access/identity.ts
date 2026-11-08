@@ -1,8 +1,11 @@
-import { isIP } from "node:net";
 import { type OidcIssuer, validateOidcIssuer, oidcTokenLifetimeSeconds } from "../../../utils/oidc";
-import { KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS, KubernetesWorkloadIdentity, kubernetesAccessAudience } from "./workload-identity";
+import { KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS, KubernetesWorkloadIdentity } from "./workload-identity";
 export type { OidcIssuer } from "../../../utils/oidc";
-export const KUBERNETES_OIDC_WORKFORCE_GROUP = "oidc:employees";
+export interface KubernetesOidcClaimMapping {
+  claim: string;
+  /** Defaults to oidc: to keep external identities distinct from system identities. */
+  prefix?: string;
+}
 export interface KubernetesOidcProviderLoginOptions {
   grantType?: "auto" | "authcode" | "device-code";
   /** Additional scopes beyond the plugin's openid scope. */
@@ -29,39 +32,47 @@ export interface KubernetesOidcIdentityConfig {
   cluster: string;
   hostname: string;
   workforce: OidcIssuer & {
-    emailDomain: string;
+    /** Optional restriction to verified email addresses in this exact domain. */
+    emailDomain?: string;
+    /** Defaults to verified email with the oidc: prefix. */
+    username?: KubernetesOidcClaimMapping;
+    /** Explicit fixed groups or an issuer claim; no groups are assigned by default. */
+    groups?: readonly string[] | KubernetesOidcClaimMapping;
     /** Exact signed claims, for example a managed domain and authorized party. */
     requiredClaims?: Readonly<Record<string, string>>;
     login?: KubernetesOidcProviderLoginOptions;
   };
   workload?: OidcIssuer & { subjects: readonly string[] };
-  backend: { host: string; port: number; serverName: string; caSecret: { name: string; key: string } };
-  /** Actual worker/controller source addresses, including IPv6 when used.
-   * An empty list cannot activate the cutover. Never include employee/VPN ranges. */
-  systemSourceCidrs: readonly string[];
-  namespace: string;
-  ingressClassName: string;
-  clusterIssuer: string;
 }
 
 /** Shared identity policy for the API server, gateway and certificate-free clients. */
 export class KubernetesOidcIdentity {
-  constructor(public readonly config: KubernetesOidcIdentityConfig) { this.validate(); }
-  public get workloadIdentity(): KubernetesWorkloadIdentity {
-    return new KubernetesWorkloadIdentity({ cluster: this.config.cluster, audience: this.config.workload?.audience });
+  public readonly workloadIdentity: KubernetesWorkloadIdentity;
+  constructor(public readonly config: KubernetesOidcIdentityConfig) {
+    this.workloadIdentity = new KubernetesWorkloadIdentity({ cluster: this.config.cluster, audience: this.config.workload?.audience,
+      expirationSeconds: this.config.workload ? oidcTokenLifetimeSeconds(this.config.workload, KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS) : undefined });
+    this.validate();
   }
   public workloadKubeconfig(): object { return this.workloadIdentity.kubeconfig(`https://${this.config.hostname}`); }
-  public validate(requireIsolation = false): void {
+  private validate(): void {
     const c = this.config;
     if (!/^[a-z][a-z0-9-]*$/.test(c.cluster) || !/^[a-z0-9][a-z0-9.-]+$/.test(c.hostname))
       throw new Error("Access requires an exact cluster name and DNS hostname");
-    if (!/^[a-z0-9][a-z0-9.-]+$/.test(c.backend.host) || !/^[a-z0-9][a-z0-9.-]+$/.test(c.backend.serverName) ||
-      !Number.isInteger(c.backend.port) || c.backend.port < 1 || c.backend.port > 65535)
-      throw new Error("Access requires a TLS backend with an exact DNS name and port");
     for (const issuer of [c.workforce, ...(c.workload ? [c.workload] : [])]) {
       validateOidcIssuer(issuer); oidcTokenLifetimeSeconds(issuer, KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS);
     }
-    if (!/^[a-z0-9][a-z0-9.-]+$/.test(c.workforce.emailDomain)) throw new Error("An exact workforce email domain is required");
+    if (c.workforce.emailDomain !== undefined && !/^[a-z0-9][a-z0-9.-]+$/.test(c.workforce.emailDomain)) throw new Error("An exact workforce email domain is required");
+    const validateMapping = (mapping: KubernetesOidcClaimMapping) => {
+      if (!mapping.claim || /[\s*\u0000-\u001f\u007f]/.test(mapping.claim) || /[\u0000-\u001f\u007f]/.test(mapping.prefix ?? "") || mapping.prefix?.startsWith("system:"))
+        throw new Error("OIDC claim mappings require an exact claim and a non-system prefix");
+    };
+    if (c.workforce.username) validateMapping(c.workforce.username);
+    if (c.workforce.groups) {
+      if (Array.isArray(c.workforce.groups)) {
+        if (c.workforce.groups.some(group => !group || /[\u0000-\u001f\u007f]/.test(group) || group.startsWith("system:")))
+          throw new Error("OIDC groups must be non-empty, non-system group names");
+      } else validateMapping(c.workforce.groups as KubernetesOidcClaimMapping);
+    }
     for (const [claim, value] of Object.entries(c.workforce.requiredClaims ?? {})) {
       if (!claim || /[\s*\u0000-\u001f\u007f]/.test(claim) || typeof value !== "string" || !value)
         throw new Error("Required workforce claims need an exact claim name and a non-empty string value");
@@ -78,24 +89,17 @@ export class KubernetesOidcIdentity {
         throw new Error("OIDC extra auth parameters must not override protocol security or contain CSV delimiters");
     }
     if (c.workload) {
-      if (c.workload.audience !== kubernetesAccessAudience(c.cluster)) throw new Error("Workload OIDC audiences must be specific to the target cluster");
-      if (oidcTokenLifetimeSeconds(c.workload, KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS) !== KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS)
-        throw new Error("Workload OIDC tokens must retain the 600-second lifetime");
       if (c.workload.url === c.workforce.url) throw new Error("Workforce and workload issuers must differ");
       if (!c.workload.subjects.length || c.workload.subjects.some(s => !/^system:serviceaccount:[a-z0-9-]+:[a-z0-9-]+$/.test(s)))
         throw new Error("Workload trust requires exact ServiceAccount subjects");
-    }
-    if (requireIsolation && !c.systemSourceCidrs.length) throw new Error(`${c.cluster}: populate systemSourceCidrs before enabling OIDC cutover`);
-    for (const cidr of c.systemSourceCidrs) {
-      const [address, prefix, extra] = cidr.split("/");
-      const family = isIP(address!);
-      if (extra || !family || !/^\d+$/.test(prefix ?? "") || Number(prefix) < (family === 4 ? 16 : 48) || Number(prefix) > (family === 4 ? 32 : 128))
-        throw new Error(`Unsafe or invalid system API source range: ${cidr}`);
     }
   }
 
   public authenticationConfiguration(): Record<string, unknown> {
     const c = this.config;
+    const username = c.workforce.username ?? { claim: "email" };
+    const groups = c.workforce.groups;
+    const mapping = (m: KubernetesOidcClaimMapping) => ({ claim: m.claim, prefix: m.prefix ?? "oidc:" });
     const issuer = (i: OidcIssuer) => ({
       url: i.url, audiences: [i.audience], audienceMatchPolicy: "MatchAny",
       ...(i.certificateAuthority ? { certificateAuthority: i.certificateAuthority } : {})
@@ -106,21 +110,22 @@ export class KubernetesOidcIdentity {
     });
     return {
       apiVersion: "apiserver.config.k8s.io/v1", kind: "AuthenticationConfiguration",
-      // k0s sets --anonymous-auth=false itself. Keep that configuration outside
-      // this file: specifying both would prevent kube-apiserver from starting.
+      // Anonymous authentication is configured by the containing control plane.
       jwt: [
         {
           issuer: issuer(c.workforce), claimValidationRules: [lifetime(c.workforce),
-            {
-              expression: `claims.email_verified == true && claims.email.endsWith(${JSON.stringify(`@${c.workforce.emailDomain}`)})`,
-              message: "A verified company identity is required"
-            }, ...Object.entries(c.workforce.requiredClaims ?? {}).map(([claim, requiredValue]) => ({ claim, requiredValue }))],
+            ...(username.claim === "email" || c.workforce.emailDomain ? [{
+              expression: `claims.email_verified == true${c.workforce.emailDomain ? ` && claims.email.endsWith(${JSON.stringify(`@${c.workforce.emailDomain}`)})` : ""}`,
+              message: "A verified email matching the configured identity policy is required"
+            }] : []), ...Object.entries(c.workforce.requiredClaims ?? {}).map(([claim, requiredValue]) => ({ claim, requiredValue }))],
           claimMappings: {
-            username: { claim: "email", prefix: "oidc:" }, uid: { claim: "sub" },
-            // Company membership is explicitly verified above; aud is never a group.
-            groups: { expression: `[${JSON.stringify(KUBERNETES_OIDC_WORKFORCE_GROUP)}]` }
+            username: mapping(username), uid: { claim: "sub" },
+            ...(groups ? { groups: Array.isArray(groups) ? { expression: JSON.stringify(groups) } : mapping(groups as KubernetesOidcClaimMapping) } : {})
           },
-          userValidationRules: [{ expression: "!user.username.startsWith('system:')", message: "System identities are reserved" }]
+          userValidationRules: [
+            { expression: "!user.username.startsWith('system:')", message: "System identities are reserved" },
+            { expression: "user.groups.all(group, !group.startsWith('system:'))", message: "System groups are reserved" }
+          ]
         },
         ...(c.workload ? [{
           issuer: issuer(c.workload), claimValidationRules: [lifetime(c.workload),

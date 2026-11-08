@@ -64,7 +64,7 @@ export type K0smotronControlPlanePersistence =
     };
 
 export interface K0smotronControlPlaneConfig extends K0sApiOptions {
-  /** Explicit datastore settings; callers can retain the installed image during an auth-only rollout. */
+  /** Datastore configuration passed through to k0smotron. */
   storage?: K0SmotronControlPlaneV1Beta2SpecStorage;
   /** CR name (the CAPI `Cluster.spec.controlPlaneRef.name`). */
   name: string;
@@ -210,7 +210,7 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
       : [];
 
     K0sOidcAuthentication.validateControlPlane(this.config.authentication, { namespace, k8sVersion });
-    const authentication = this.config.authentication ? new K0sOidcAuthentication(this, "oidc", this.config.authentication) : undefined;
+    const authentication = this.config.authentication ? new K0sOidcAuthentication(this, "oidc", { ...this.config.authentication, namespace }) : undefined;
     const auth = authentication?.hosted();
     const api = authentication?.api(this.config.apiExtraArgs, this.config.apiRawArgs) ?? {
       ...(this.config.apiExtraArgs ? { extraArgs: this.config.apiExtraArgs } : {}),
@@ -264,8 +264,8 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             this.config.serviceType ??
             K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
         },
-        ...((servicePatches.length || auth?.patches.length) ? { patches: [...servicePatches, ...(auth?.patches.map(p => ({ ...p, patch: { ...p.patch, type: K0SmotronControlPlaneV1Beta2SpecPatchesPatchType.MERGE } })) ?? [])] } : {}),
-        ...(auth ? { mounts: auth.mounts, manifests: auth.manifests } : {}),
+        ...(servicePatches.length ? { patches: servicePatches } : {}),
+        ...auth,
         ...(this.config.storage ? { storage: this.config.storage } : {}),
         ...(this.config.resources ? { resources: toQuantities(this.config.resources) } : {}),
         ...(this.config.topologySpreadConstraints

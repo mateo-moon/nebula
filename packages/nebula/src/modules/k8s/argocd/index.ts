@@ -1136,4 +1136,4 @@ export type {
 } from "./app-tier";
 
 export { ArgoCdOidcCluster } from "./oidc-cluster";
-export type { ArgoCdOidcClusterConfig, ArgoCdLegacyClusterRetirement } from "./oidc-cluster";
+export type { ArgoCdOidcClusterConfig } from "./oidc-cluster";

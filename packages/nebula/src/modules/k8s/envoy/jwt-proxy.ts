@@ -25,6 +25,8 @@ export interface EnvoyJwtProxyConfig {
   issuers: Readonly<Record<string, OidcIssuer>>;
   backend: { host: string; port: number; serverName: string; caFile: string };
   maxTokenLifetimeSeconds: number;
+  /** Defaults to the maximum token lifetime. */
+  maxStreamDurationSeconds?: number;
 }
 
 /** TLS-verifying HTTP JWT proxy. It forwards the original bearer identity and
@@ -34,6 +36,8 @@ export class EnvoyJwtProxy {
   constructor(config: EnvoyJwtProxyConfig) {
     const c = config;
     if (!Number.isInteger(c.maxTokenLifetimeSeconds) || c.maxTokenLifetimeSeconds < 1) throw new Error("A positive JWT lifetime is required");
+    const streamDuration = c.maxStreamDurationSeconds ?? c.maxTokenLifetimeSeconds;
+    if (!Number.isSafeInteger(streamDuration) || streamDuration < 1) throw new Error("A positive maximum stream duration is required");
     for (const issuer of Object.values(c.issuers)) { validateOidcIssuer(issuer); oidcTokenLifetimeSeconds(issuer, c.maxTokenLifetimeSeconds); }
     if (!Object.keys(c.issuers).length) throw new Error("At least one JWT issuer is required");
     const issuers = Object.entries(c.issuers);
@@ -66,7 +70,7 @@ export class EnvoyJwtProxy {
                       {
                         match: { prefix: "/" }, route: {
                           cluster: "kubernetes", timeout: "0s",
-                          max_stream_duration: { max_stream_duration: `${c.maxTokenLifetimeSeconds}s` }
+                          max_stream_duration: { max_stream_duration: `${streamDuration}s` }
                         }
                       },
                     ]

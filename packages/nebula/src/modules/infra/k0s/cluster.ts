@@ -413,7 +413,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
       ...(cp.extraArgs ?? []),
     ];
     K0sOidcAuthentication.validateControlPlane(cp.authentication, { namespace, k8sVersion });
-    const authentication = cp.authentication ? new K0sOidcAuthentication(this, "oidc", cp.authentication) : undefined;
+    const authentication = cp.authentication ? new K0sOidcAuthentication(this, "oidc", { ...cp.authentication, namespace }) : undefined;
     const bootstrap = authentication?.standalone();
     const apiArgs = {
       ...(this.config.oidcIssuer ? {
@@ -455,7 +455,6 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
             ...(provider.hostPreK0sCommands?.(cp.machine, "control-plane") ?? []),
             ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
-            ...(bootstrap?.preK0SCommands ?? []),
           ],
         },
         machineTemplate: {

@@ -33,7 +33,7 @@ import * as kplus from "cdk8s-plus-33";
 import { HelmModule, type Toleration } from "../../../core";
 
 export interface ClusterAutoscalerConfig {
-  /** Certificate-free target kubeconfig Secret (key value); defaults to CAPI recovery config when omitted. */
+  /** Target kubeconfig Secret (key value); defaults to the Cluster API kubeconfig Secret. */
   workloadKubeconfigSecret?: string;
   workloadIdentity?: KubernetesWorkloadIdentityConfig;
   /** Name of the Cluster API Cluster whose pools are autoscaled. */

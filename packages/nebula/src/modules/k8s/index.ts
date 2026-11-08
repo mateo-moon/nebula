@@ -537,4 +537,4 @@ export { EnvoyJwtProxy } from "./envoy/jwt-proxy";
 export type { EnvoyJwtProxyConfig } from "./envoy/jwt-proxy";
 
 export { ArgoCdOidcCluster } from "./argocd/oidc-cluster";
-export type { ArgoCdOidcClusterConfig, ArgoCdLegacyClusterRetirement } from "./argocd/oidc-cluster";
+export type { ArgoCdOidcClusterConfig } from "./argocd/oidc-cluster";
