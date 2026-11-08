@@ -118,7 +118,7 @@ test("additional IPv4 aliases reach the installer on the existing uplink and bin
 import json, sys
 from baremetal_fixtures import FACTS, installer
 request = json.load(sys.stdin)
-files = installer.render_files(request["spec"], FACTS, "ssh-ed25519 AAAA", {"uid": request["uid"]})
+files = installer.render_files(request["spec"], FACTS, "ssh-ed25519 AAAA", {"uid": request["uid"], "sourceBootEntries": FACTS["sourceBootEntries"], "systemDisk": FACTS["disk"]["byId"]})
 sys.stdout.buffer.write(files["nebula/uplink.network"])
 `], { cwd: fileURLToPath(new URL(".", import.meta.url)), input: requestJSON, encoding: "utf8" });
   assert.deepEqual(network.split("\n").filter(line => line.startsWith("Address=")), [
@@ -806,6 +806,10 @@ test("firmware attempt and revision selection are explicit and bounded in the pu
 
 test("actual Python installer and finite Job restart qualification", () => {
   execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-runtime.py", import.meta.url))], { stdio: "pipe" });
+});
+
+test("Debian installation selects and verifies its own EFI loader", () => {
+  execFileSync("python3", ["-B", fileURLToPath(new URL("./baremetal-boot-order.py", import.meta.url))], { stdio: "pipe" });
 });
 
 test("UEFI variable transactions, firmware reboot and Job recovery qualification", () => {

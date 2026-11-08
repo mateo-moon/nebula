@@ -118,11 +118,17 @@ class WorkerSpec(WorkerRequirements, total=False):
     additionalIpv4Addresses: list[str]
 
 
-class Receipt(TypedDict):
+class ReceiptIdentity(TypedDict):
     uid: str
     fingerprint: str
     hostname: str
     sourceBootId: str
+
+
+class Receipt(ReceiptIdentity, total=False):
+    sourceBootEntries: list[dict[str, str]]
+    systemDisk: str
+    bootLoader: dict[str, str]
 
 
 class VariableBackup(TypedDict):
