@@ -54,7 +54,7 @@ test("public workforce clients support provider claims and one-hour humans witho
     url: "https://accounts.google.com", jwksUrl: "https://www.googleapis.com/oauth2/v3/certs", audience,
     emailDomain: "example.test", maxTokenLifetimeSeconds: 3600,
     requiredClaims: { hd: "example.test", azp: audience },
-    login: { grantType: "authcode", extraScopes: ["email"], authRequestExtraParams: { access_type: "offline", prompt: "consent", hd: "example.test" } },
+    login: { grantType: "authcode", clientAuthentication: "client-secret", extraScopes: ["email"], authRequestExtraParams: { access_type: "offline", prompt: "consent", hd: "example.test" } },
   } };
   const i = new KubernetesOidcIdentity(config);
   const auth: any = i.authenticationConfiguration();
@@ -67,9 +67,12 @@ test("public workforce clients support provider claims and one-hour humans witho
   for (const expected of ["--grant-type=authcode", "--oidc-extra-scope=email", "--oidc-pkce-method=S256", "--token-cache-storage=keyring", "--oidc-auth-request-extra-params=access_type=offline", "--oidc-auth-request-extra-params=hd=example.test"])
     assert.ok(args.includes(expected));
   assert.ok(!args.includes("--oidc-extra-scope=offline_access"));
-  assert.ok(!JSON.stringify(profile).includes("client-secret"));
-  const headless: any = i.userKubeconfig({ command: "/usr/local/bin/oidc-login", skipOpenBrowser: true, redirectUrl: "http://127.0.0.1:8000/", listenAddress: "127.0.0.1:8000" });
+  assert.equal(profile.users[0].user.exec.command, "nebula-oidc-login");
+  assert.ok(args.includes("--oidc-client-secret-file=~/.config/nebula/oidc/example.json"));
+  assert.ok(!args.some((arg: string) => arg.startsWith("--oidc-client-secret=")));
+  const headless: any = i.userKubeconfig({ command: "/usr/local/bin/nebula-oidc-login", clientCredentialFile: "/run/oidc/example.json", skipOpenBrowser: true, redirectUrl: "http://127.0.0.1:8000/", listenAddress: "127.0.0.1:8000" });
   assert.ok(headless.users[0].user.exec.args.includes("--skip-open-browser"));
+  assert.ok(headless.users[0].user.exec.args.includes("--oidc-client-secret-file=/run/oidc/example.json"));
   assert.throws(() => i.userKubeconfig({ redirectUrl: "http://public.example.test/" }), /loopback/);
   assert.throws(() => i.userKubeconfig({ listenAddress: "0.0.0.0:8000" }), /loopback/);
   assert.throws(() => new KubernetesOidcIdentity({ ...config, workload: { ...config.workload!, maxTokenLifetimeSeconds: 3600 } }), /600-second/);

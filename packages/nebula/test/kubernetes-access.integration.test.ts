@@ -33,7 +33,7 @@ test("public OIDC profiles merge without sharing another cluster's login audienc
       const profile = new KubernetesOidcIdentity({
         cluster, hostname: `api-${cluster}.example.test`, namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture", systemSourceCidrs: [],
         workforce: { url: "https://accounts.google.com", jwksUrl: "https://www.googleapis.com/oauth2/v3/certs", audience: `${cluster}-desktop-client-id`, emailDomain: "example.test", maxTokenLifetimeSeconds: 3600,
-          requiredClaims: { hd: "example.test", azp: `${cluster}-desktop-client-id` }, login: { grantType: "authcode", extraScopes: ["email"] } },
+          requiredClaims: { hd: "example.test", azp: `${cluster}-desktop-client-id` }, login: { grantType: "authcode", clientAuthentication: "client-secret", extraScopes: ["email"] } },
         backend: { host: "api.internal.example.test", port: 6443, serverName: "kubernetes", caSecret: { name: "fixture-ca", key: "tls.crt" } },
       }).userKubeconfig();
       writeFileSync(file, stringify(profile), { mode: 0o600 });
@@ -51,6 +51,8 @@ test("public OIDC profiles merge without sharing another cluster's login audienc
       assert.equal(context.cluster, cluster);
       assert.ok(user.exec.args.includes(`--oidc-client-id=${cluster}-desktop-client-id`));
       assert.ok(user.exec.args.includes("--token-cache-storage=keyring"));
+      assert.equal(user.exec.command, "nebula-oidc-login");
+      assert.ok(user.exec.args.includes(`--oidc-client-secret-file=~/.config/nebula/oidc/${cluster}.json`));
     }
   } finally { rmSync(work, { recursive: true, force: true }); }
 });

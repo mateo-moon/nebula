@@ -89,6 +89,7 @@ const workforce: KubernetesOidcIdentityConfig["workforce"] = {
   requiredClaims: { hd: emailDomain, azp: clientId },
   login: {
     grantType: "authcode",
+    clientAuthentication: "client-secret",
     extraScopes: ["email"],
     authRequestExtraParams: { access_type: "offline", prompt: "consent", hd: emailDomain },
   },
@@ -99,22 +100,33 @@ Kubernetes validates `hd` and `azp` as exact signed claims as well as the issuer
 audience, lifetime and verified email. The `hd` request parameter is only a login
 hint. The claim is required to establish managed Workspace membership. Binding
 `azp` to the same client also excludes other clients in the same Google project.
-The exec plugin always uses S256 PKCE and defaults to OS keyring storage; it
-receives no client secret. Google uses `access_type=offline` rather than an
+The exec plugin always uses S256 PKCE and defaults to OS keyring storage.
+The observed Google Desktop token endpoint requires the registered app credential,
+despite optional wording in the provider guide. `clientAuthentication` selects
+the shared `nebula-oidc-login` adapter, which reads a protected per-client JSON
+file into memory and calls pinned int128/kubelogin in process. The kubeconfig
+contains only its file reference; neither OS argv nor environment carries the
+credential. The default path is `~/.config/nebula/oidc/<cluster>.json` and
+`userKubeconfig({ clientCredentialFile })` can select a trusted-host path.
+Missing or invalid input fails before browser consent. See the
+[client tooling and file schema](../../../../../../tools/oidc-login/README.md).
+Google uses `access_type=offline` rather than an
 `offline_access` scope. Its user ID tokens last one hour and cannot be revoked
 individually; enforce MFA and session policy in Google and remove Kubernetes
 permissions when immediate authorization withdrawal is needed.
 
 Use a browser on the trusted client for the loopback authorization-code flow.
 For a trusted headless host, forward a local loopback port over SSH and generate
-its profile with `userKubeconfig({ command: "/usr/local/bin/oidc-login",
+its profile with `userKubeconfig({ command: "/usr/local/bin/nebula-oidc-login",
 skipOpenBrowser: true, redirectUrl: "http://127.0.0.1:8000/",
 listenAddress: "127.0.0.1:8000" })`. Open its printed Google URL on the device
 holding the matching forwarded port. A phone browser alone does not deliver a
 loopback callback to the host. Select private cache storage appropriate to that
 host; keep refresh tokens on the trusted client. Qualify initial login, cached
 use and forced refresh against the actual Desktop registration before removing
-the previous issuer. Desktop device-code support and deprecated out-of-band
+the previous issuer. Provider-side app-credential input must also be accepted
+before activation. Desktop device-code
+support and deprecated out-of-band
 redirects must not be assumed.
 
 Provider references: [Google Desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app),

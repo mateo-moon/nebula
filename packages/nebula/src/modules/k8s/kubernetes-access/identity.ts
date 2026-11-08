@@ -9,9 +9,11 @@ export interface KubernetesOidcProviderLoginOptions {
   extraScopes?: readonly string[];
   /** Provider-specific hints; required identity claims are enforced separately. */
   authRequestExtraParams?: Readonly<Record<string, string>>;
+  /** Client app credential required by the token endpoint; read locally in memory. */
+  clientAuthentication?: "none" | "client-secret";
 }
 export interface KubernetesOidcLoginOptions {
-  /** Absolute plugin path for a trusted server, or kubectl + oidc-login by default. */
+  /** Absolute plugin path, or kubectl/nebula-oidc-login according to client authentication. */
   command?: string;
   grantType?: KubernetesOidcProviderLoginOptions["grantType"];
   tokenCacheStorage?: "keyring" | "disk" | "none";
@@ -20,6 +22,8 @@ export interface KubernetesOidcLoginOptions {
   skipOpenBrowser?: boolean;
   redirectUrl?: string;
   listenAddress?: string;
+  /** Protected local JSON input; its contents never enter this kubeconfig. */
+  clientCredentialFile?: string;
 }
 export interface KubernetesOidcIdentityConfig {
   cluster: string;
@@ -63,6 +67,8 @@ export class KubernetesOidcIdentity {
         throw new Error("Required workforce claims need an exact claim name and a non-empty string value");
     }
     const login = c.workforce.login;
+    if (login?.clientAuthentication && !["none", "client-secret"].includes(login.clientAuthentication))
+      throw new Error("Unsupported OIDC client authentication mode");
     for (const scope of login?.extraScopes ?? []) {
       if (!scope || /[\s,\u0000-\u001f\u007f]/.test(scope)) throw new Error("OIDC extra scopes must be individual non-empty scopes");
     }
@@ -132,6 +138,7 @@ export class KubernetesOidcIdentity {
     const userName = `oidc-${c.cluster}`;
     const login = c.workforce.login;
     const grantType = options.grantType ?? login?.grantType;
+    const credentialFile = login?.clientAuthentication === "client-secret" || options.clientCredentialFile !== undefined;
     if (options.redirectUrl) {
       const redirect = new URL(options.redirectUrl);
       if (redirect.protocol !== "http:" || !["127.0.0.1", "[::1]", "localhost"].includes(redirect.hostname) || redirect.username || redirect.password || redirect.search || redirect.hash)
@@ -144,9 +151,10 @@ export class KubernetesOidcIdentity {
       users: [{
         name: userName, user: {
           exec: {
-            apiVersion: "client.authentication.k8s.io/v1", command: options.command ?? "kubectl",
+            apiVersion: "client.authentication.k8s.io/v1", command: options.command ?? (credentialFile ? "nebula-oidc-login" : "kubectl"),
             interactiveMode: "IfAvailable", provideClusterInfo: false,
-            args: [...(options.command ? [] : ["oidc-login"]), "get-token", `--oidc-issuer-url=${c.workforce.url}`, `--oidc-client-id=${c.workforce.audience}`,
+            args: [...(options.command || credentialFile ? [] : ["oidc-login"]), "get-token", `--oidc-issuer-url=${c.workforce.url}`, `--oidc-client-id=${c.workforce.audience}`,
+              ...(credentialFile ? [`--oidc-client-secret-file=${options.clientCredentialFile ?? `~/.config/nebula/oidc/${c.cluster}.json`}`] : []),
               ...[...new Set(login?.extraScopes ?? ["email", "offline_access"])].map(scope => `--oidc-extra-scope=${scope}`),
               ...Object.entries(login?.authRequestExtraParams ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `--oidc-auth-request-extra-params=${key}=${value}`),
               "--oidc-pkce-method=S256", `--token-cache-storage=${options.tokenCacheStorage ?? "keyring"}`,

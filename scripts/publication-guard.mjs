@@ -36,6 +36,8 @@ import { gunzipSync } from "node:zlib";
 export const DEFAULT_SCOPE = [
   "packages/trustee-client",
   "tools/tng-client",
+  ":(glob)tools/oidc-login/*.go",
+  "tools/oidc-login/README.md",
   "packages/nebula/src/modules/k8s/trustee",
   ":(glob)packages/nebula/test/*trustee*.ts",
   "tools/genpolicy",
@@ -84,6 +86,7 @@ const UPSTREAM_OWNERS = new Set([
   "kedacore", "kyverno", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
   "datasone", "pbatard", // Public setup_var.efi and EDK2 UEFI-Shell release sources.
   "int128", // Public kubelogin OIDC exec plugin and its documentation.
+  "spf13", // Public pflag argument parser used by kubelogin.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
@@ -95,6 +98,7 @@ const UPSTREAM_DOMAINS = [
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
   "googleapis.com", // Standard Envoy protobuf types and Google's public JWKS endpoint.
   "accounts.google.com", "developers.google.com", "docs.cloud.google.com", // Public Google issuer and OAuth documentation; OAuth client IDs remain deployment bindings.
+  "support.google.com", // Public OAuth client-management guidance.
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",
