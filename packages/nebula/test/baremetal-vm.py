@@ -168,6 +168,10 @@ def run_test(options):
         "-o",
         "ConnectTimeout=5",
         "-o",
+        "ServerAliveInterval=5",
+        "-o",
+        "ServerAliveCountMax=2",
+        "-o",
         "StrictHostKeyChecking=yes",
         "-o",
         "HostKeyAlias=" + spec["hostname"],
@@ -191,13 +195,18 @@ def run_test(options):
 
     def call(action, uid, **extra):
         # Read the current runtime at each call, including when debugging a VM.
-        result = subprocess.run(
-            ssh + [shlex.join(["python3", "-I", "-B", "-c", build_agent(here), action])],
-            text=True,
-            capture_output=True,
-            timeout=900,
-            input=installer.canonical({"uid": uid, "spec": spec, **extra}),
-        )
+        try:
+            result = subprocess.run(
+                ssh + [shlex.join(["python3", "-I", "-B", "-c", build_agent(here), action])],
+                text=True,
+                capture_output=True,
+                timeout=900 if action in ("probe", "stage") else 45,
+                input=installer.canonical({"uid": uid, "spec": spec, **extra}),
+            )
+        except subprocess.TimeoutExpired:
+            # A source SSH connection can disappear mid-command during kexec.
+            # Retry verification without printing the embedded agent or payload.
+            raise RuntimeError("VM SSH transport timed out during " + action) from None
         if result.returncode:
             raise RuntimeError("VM agent failed: " + (result.stdout + result.stderr)[-1500:])
         return json.loads(result.stdout)
