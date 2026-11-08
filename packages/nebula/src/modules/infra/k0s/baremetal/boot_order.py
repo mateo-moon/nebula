@@ -129,14 +129,14 @@ def source_entries(data: object) -> list[dict[str, str]]:
     return result
 
 
-def partition_ids(devices: list[dict[str, object]]) -> set[str]:
-    result: set[str] = set()
+def partition_ids(devices: list[dict[str, object]]) -> list[str]:
+    result: list[str] = []
     for device in devices:
         if str(device.get("parttype", "")).lower() == ESP_TYPE and device.get("partuuid"):
-            result.add(str(uuid.UUID(str(device["partuuid"]))))
+            result.append(str(uuid.UUID(str(device["partuuid"]))))
         children = device.get("children", [])
         if isinstance(children, list):
-            result.update(partition_ids(children))
+            result.extend(partition_ids(children))
     return result
 
 
@@ -149,6 +149,11 @@ def capture(disk: str) -> list[dict[str, str]]:
         raise ValueError("Resolve pending EFI BootNext before OS installation")
     devices = json.loads(command(["lsblk", "-p", "-J", "-o", "PARTTYPE,PARTUUID", disk]))
     partitions = partition_ids(devices["blockdevices"])
+    if partitions:
+        visible = json.loads(command(["lsblk", "-p", "-J", "-o", "PARTTYPE,PARTUUID"]))
+        all_ids = partition_ids(visible["blockdevices"])
+        if any(all_ids.count(partition) != 1 for partition in partitions):
+            raise ValueError("Selected ESP UUID is not unique; EFI entry ownership is ambiguous")
     return [
         {"number": n, "sha256": hashlib.sha256(raw).hexdigest()}
         for n, raw in sorted(entries().items())

@@ -253,6 +253,17 @@ class BootOrderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unavailable"):
             self.configure()
 
+    def test_cloned_esp_uuid_cannot_authorize_deleting_another_disks_entry(self):
+        partition = {"parttype": boot_order.ESP_TYPE, "partuuid": OLD_ESP}
+        selected = {"blockdevices": [partition]}
+        cloned = {"blockdevices": [partition, partition]}
+        with patch.object(
+            boot_order, "command", side_effect=[json.dumps(selected), json.dumps(cloned)]
+        ):
+            with self.assertRaisesRegex(ValueError, "ownership is ambiguous"):
+                boot_order.capture("/dev/disk/by-id/os")
+        self.assertIsNotNone(boot_order.value("Boot0007"))
+
     def test_receipt_validation_rejects_invalid_source_ownership(self):
         for data in ("0007", [{"number": "../../BootNext", "sha256": "a" * 64}], self.source * 2):
             with self.assertRaises(ValueError):
