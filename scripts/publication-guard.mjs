@@ -47,6 +47,12 @@ export const DEFAULT_SCOPE = [
   "docker/devops-bridge",
   "docker/nebula-cmp",
   "packages/nebula/src/modules/infra/k0s/baremetal",
+  "packages/nebula/src/modules/infra/k0s/oidc-authentication.ts",
+  "packages/nebula/src/modules/k8s/kubernetes-access",
+  "packages/nebula/src/modules/k8s/envoy/jwt-proxy.ts",
+  "packages/nebula/src/modules/k8s/argocd/oidc-cluster.ts",
+  ":(glob)packages/nebula/test/kubernetes-access*.ts",
+  "packages/nebula/example/kubernetes-oidc.ts",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);
@@ -85,6 +91,7 @@ const CODE_HOST_PATHS = new Set([
 // Domains (and their subdomains) of upstream projects and standards bodies.
 const UPSTREAM_DOMAINS = [
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
+  "googleapis.com", // Standard Envoy protobuf type URLs, not deployment endpoints.
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",

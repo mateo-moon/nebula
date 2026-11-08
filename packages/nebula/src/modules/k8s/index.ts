@@ -531,3 +531,10 @@ export {
 export type {
   KyvernoConfig, KyvernoPolicyConfig, KyvernoRbacRule, KyvernoController,
 } from "./kyverno";
+
+export * from "./kubernetes-access";
+export { EnvoyJwtProxy } from "./envoy/jwt-proxy";
+export type { EnvoyJwtProxyConfig } from "./envoy/jwt-proxy";
+
+export { ArgoCdOidcCluster } from "./argocd/oidc-cluster";
+export type { ArgoCdOidcClusterConfig, ArgoCdLegacyClusterRetirement } from "./argocd/oidc-cluster";

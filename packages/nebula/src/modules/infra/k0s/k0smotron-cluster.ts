@@ -4,10 +4,6 @@ import { ClusterV1Beta2, MachineDeploymentV1Beta1 } from "#imports/cluster.x-k8s
 import { K0sWorkerConfigTemplateV1Beta2 } from "#imports/bootstrap.cluster.x-k8s.io";
 import { K0sCalicoConfig, resolveK0sCalico } from "./calico";
 import {
-  K0SmotronControlPlaneV1Beta2SpecServiceType,
-  type K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints,
-} from "#imports/controlplane.cluster.x-k8s.io";
-import {
   DEFAULT_PRESTART_COMMANDS,
   NODE_IP_DISCOVERY_COMMANDS,
   renderK0sWorkerArgs,
@@ -19,31 +15,13 @@ import {
 } from "./cluster";
 import {
   K0smotronControlPlane,
-  type K0smotronControlPlanePersistence,
+  type K0smotronControlPlaneConfig,
 } from "./k0smotron-control-plane";
 
 /** Hosted control-plane options (provider-independent — see {@link K0smotronControlPlane}). */
-export interface K0smotronClusterControlPlane {
-  /** kube-apiserver extra args (e.g. OIDC flags). Changing restarts the kmc-* CP pod. */
-  apiExtraArgs?: Record<string, string>;
-  /** Ordered kube-apiserver args appended after extraArgs, including repeated flags. Changing restarts the CP pod. */
-  apiRawArgs?: string[];
-  /** kube-controller-manager extra args (e.g. terminated-pod-gc-threshold). Changing restarts the kmc-* CP pod. */
-  controllerManagerExtraArgs?: Record<string, string>;
-  /** Hosted-etcd persistence (default emptyDir; prefer PVC on a persistent mgmt cluster). */
-  persistence?: K0smotronControlPlanePersistence;
-  /** API Service type on the hosting cluster (default LoadBalancer). */
-  serviceType?: K0SmotronControlPlaneV1Beta2SpecServiceType;
-  /** API Service annotations (hosting-cluster LB specifics, e.g. AWS NLB scheme). */
-  serviceAnnotations?: Record<string, string>;
-  /** Requests/limits for the CP pods (scheduler-honest sizing on the hosting cluster). */
-  resources?: {
-    requests?: Record<string, string>;
-    limits?: Record<string, string>;
-  };
-  /** topologySpreadConstraints for the CP pods (e.g. one hosted CP per hosting node). */
-  topologySpreadConstraints?: K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints[];
-}
+export type K0smotronClusterControlPlane = Pick<K0smotronControlPlaneConfig,
+  "apiExtraArgs" | "apiRawArgs" | "controllerManagerExtraArgs" | "persistence" |
+  "serviceType" | "serviceAnnotations" | "resources" | "topologySpreadConstraints" | "authentication" | "storage">;
 
 export interface K0smotronClusterConfig<M> {
   /** Cluster name (also the CAPI Cluster / infra-cluster name). */
@@ -179,14 +157,7 @@ export class K0smotronCluster<M> extends BaseConstruct<K0smotronClusterConfig<M>
       networkProvider,
       calico: this.config.calico,
       dualStack: this.config.dualStack,
-      apiExtraArgs: this.config.controlPlane?.apiExtraArgs,
-      apiRawArgs: this.config.controlPlane?.apiRawArgs,
-      controllerManagerExtraArgs: this.config.controlPlane?.controllerManagerExtraArgs,
-      persistence: this.config.controlPlane?.persistence,
-      serviceType: this.config.controlPlane?.serviceType,
-      serviceAnnotations: this.config.controlPlane?.serviceAnnotations,
-      resources: this.config.controlPlane?.resources,
-      topologySpreadConstraints: this.config.controlPlane?.topologySpreadConstraints,
+      ...this.config.controlPlane,
     });
 
     // 4. Worker pools — per pool: infra machine template (provider) +

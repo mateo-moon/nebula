@@ -79,6 +79,35 @@ jobs:
       - name: Evaluate SNP admission with the broker's pinned policy and EAR engines
         run: pnpm verify:broker-admission
 
+  kubernetes-oidc:
+    name: Kubernetes OIDC security boundary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/nebula
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - run: npm install -g pnpm@11.9.0
+      - run: pnpm install --frozen-lockfile
+      - name: Install verified kind
+        run: |
+          curl --fail --location --retry 3 https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64 --output "$RUNNER_TEMP/kind"
+          printf 'aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d  %s\n' "$RUNNER_TEMP/kind" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/kind"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Check OIDC test types
+        run: pnpm exec tsc -p tsconfig.oidc-tests.json
+      - name: Verify real API, gateway, token lifetimes and raw API isolation
+        env:
+          RUN_KUBERNETES_OIDC_INTEGRATION: "1"
+        run: pnpm exec tsx --test test/kubernetes-access.integration.test.ts
+
   trustee-client:
     name: Trustee Node client (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04

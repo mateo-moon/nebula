@@ -46,3 +46,6 @@ export type { BaremetalUefiConfiguration, BaremetalUefiVariable, BaremetalUefiPa
 
 export { K0sWorkerDeployment } from "./worker-deployment";
 export type { K0sWorkerDeploymentConfig } from "./worker-deployment";
+
+export { K0sOidcAuthentication } from "./oidc-authentication";
+export type { K0sOidcAuthenticationConfig, K0sOidcIsolation, K0sApiOptions } from "./oidc-authentication";

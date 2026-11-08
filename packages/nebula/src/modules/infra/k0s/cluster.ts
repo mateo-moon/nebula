@@ -1,3 +1,4 @@
+import { K0sOidcAuthentication, type K0sApiOptions } from "./oidc-authentication";
 import { Construct } from "constructs";
 import { createHash } from "node:crypto";
 import { BaseConstruct } from "../../../core";
@@ -115,7 +116,7 @@ export interface K0sWorkerPool<M> {
 }
 
 /** Control-plane configuration for a standalone (in-cluster) k0s control plane. */
-export interface K0sControlPlaneOptions<M> {
+export interface K0sControlPlaneOptions<M> extends K0sApiOptions {
   /** Number of control-plane nodes (default 3 for HA). */
   replicas?: number;
   /**
@@ -411,6 +412,19 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
       ...(enableWorker ? ["--enable-worker", "--no-taints"] : []),
       ...(cp.extraArgs ?? []),
     ];
+    K0sOidcAuthentication.validateControlPlane(cp.authentication, { namespace, k8sVersion });
+    const authentication = cp.authentication ? new K0sOidcAuthentication(this, "oidc", cp.authentication) : undefined;
+    const bootstrap = authentication?.standalone();
+    const apiArgs = {
+      ...(this.config.oidcIssuer ? {
+        "service-account-issuer": this.config.oidcIssuer.issuerUrl,
+        "service-account-jwks-uri": `${this.config.oidcIssuer.issuerUrl}/keys.json`,
+      } : {}), ...cp.apiExtraArgs,
+    };
+    const api = authentication?.api(apiArgs, cp.apiRawArgs) ?? {
+      ...(Object.keys(apiArgs).length ? { extraArgs: apiArgs } : {}),
+      ...(cp.apiRawArgs?.length ? { rawArgs: cp.apiRawArgs } : {}),
+    };
     new K0sControlPlaneV1Beta2(this, "control-plane", {
       metadata: { name: controlPlaneName, namespace },
       spec: {
@@ -418,6 +432,7 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
         version: k0sVersion,
         k0SConfigSpec: {
           ...(args.length ? { args } : {}),
+          ...(bootstrap ? { files: bootstrap.files } : {}),
           k0S: {
             apiVersion: "k0s.k0sproject.io/v1beta1",
             kind: "ClusterConfig",
@@ -433,22 +448,14 @@ export class K0sCluster<M> extends BaseConstruct<K0sClusterConfig<M>> {
               ...(networkProvider === "calico"
                 ? renderK0sCalicoImages(calico)
                 : {}),
-              ...(this.config.oidcIssuer
-                ? {
-                    api: {
-                      extraArgs: {
-                        "service-account-issuer": this.config.oidcIssuer.issuerUrl,
-                        "service-account-jwks-uri": `${this.config.oidcIssuer.issuerUrl}/keys.json`,
-                      },
-                    },
-                  }
-                : {}),
+              ...(Object.keys(api).length ? { api } : {}),
             },
           },
           preK0SCommands: [
             ...(provider.hostPreK0sCommands?.(cp.machine, "control-plane") ?? []),
             ...DEFAULT_PRESTART_COMMANDS,
             ...(cp.extraPreStartCommands ?? []),
+            ...(bootstrap?.preK0SCommands ?? []),
           ],
         },
         machineTemplate: {

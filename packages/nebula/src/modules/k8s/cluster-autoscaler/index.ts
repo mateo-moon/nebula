@@ -1,3 +1,4 @@
+import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } from "../kubernetes-access/workload-identity";
 /**
  * ClusterAutoscaler — the Kubernetes cluster-autoscaler with its Cluster API
  * provider, sizing a workload cluster's autoscaled worker pools from the
@@ -32,6 +33,9 @@ import * as kplus from "cdk8s-plus-33";
 import { HelmModule, type Toleration } from "../../../core";
 
 export interface ClusterAutoscalerConfig {
+  /** Certificate-free target kubeconfig Secret (key value); defaults to CAPI recovery config when omitted. */
+  workloadKubeconfigSecret?: string;
+  workloadIdentity?: KubernetesWorkloadIdentityConfig;
   /** Name of the Cluster API Cluster whose pools are autoscaled. */
   clusterName: string;
   /** Namespace of that Cluster and of its `<cluster>-kubeconfig` Secret; the release installs there (default "default"). */
@@ -63,12 +67,14 @@ const WORKLOAD_KUBECONFIG_PATH = "/etc/kubernetes/value";
 /** Chart values for one workload cluster's autoscaler. */
 export function clusterAutoscalerValues(config: ClusterAutoscalerConfig): Record<string, unknown> {
   const namespace = config.clusterNamespace ?? "default";
+  const token = config.workloadIdentity ? new KubernetesWorkloadIdentity(config.workloadIdentity).projection : undefined;
   return {
+    ...(token ? { extraVolumes: [token.volume], extraVolumeMounts: [token.mount] } : {}),
     cloudProvider: "clusterapi",
     // The autoscaler pod runs beside Cluster API (in-cluster) and reaches the
     // workload cluster through its kubeconfig Secret.
     clusterAPIMode: "kubeconfig-incluster",
-    clusterAPIKubeconfigSecret: `${config.clusterName}-kubeconfig`,
+    clusterAPIKubeconfigSecret: config.workloadKubeconfigSecret ?? `${config.clusterName}-kubeconfig`,
     clusterAPIWorkloadKubeconfigPath: WORKLOAD_KUBECONFIG_PATH,
     // Leader election and status live on the workload cluster.
     clusterAPIConfigMapsNamespace: "kube-system",

@@ -1,3 +1,4 @@
+import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } from "../kubernetes-access/workload-identity";
 /**
  * Crossplane - Universal control plane for cloud infrastructure.
  *
@@ -67,6 +68,8 @@ export interface KubernetesProviderRbacOptions {
 }
 
 export interface KubernetesProviderOptions {
+  /** Target audiences projected into package-runtime; kubelet rotates the tokens. */
+  workloadIdentities?: readonly KubernetesWorkloadIdentityConfig[];
   /** provider-kubernetes package version (defaults to v0.17.0) */
   version?: string;
   /** ProviderConfig name (defaults to kubernetes-provider-config) */
@@ -262,11 +265,12 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
       // to every existing consumer (SA rename → provider pod rotation). Pass
       // rbac: {} (read-only) or { secrets: 'read-write' } to enable.
       const rbac = kubeOpts.rbac ?? false;
+      const workloadTokens = KubernetesWorkloadIdentity.podSpec(kubeOpts.workloadIdentities ?? []);
 
       // The DRC carries the SA pin (rbac) and/or the --poll override; emit it
       // when either is requested. Containers merge by name with the default
       // package-runtime container; `selector: {}` is schema-required filler.
-      if (rbac !== false || kubeOpts.pollInterval) {
+      if (rbac !== false || kubeOpts.pollInterval || kubeOpts.workloadIdentities?.length) {
         this.kubernetesProviderRuntimeConfig = new ApiObject(
           this,
           "provider-kubernetes-runtime-config",
@@ -282,17 +286,19 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
                     },
                   }
                 : {}),
-              ...(kubeOpts.pollInterval
+              ...(kubeOpts.pollInterval || kubeOpts.workloadIdentities?.length
                 ? {
                     deploymentTemplate: {
                       spec: {
                         selector: {},
                         template: {
                           spec: {
+                            ...(workloadTokens.volumes ? { volumes: workloadTokens.volumes } : {}),
                             containers: [
                               {
                                 name: "package-runtime",
-                                args: [`--poll=${kubeOpts.pollInterval}`],
+                                ...(kubeOpts.pollInterval ? { args: [`--poll=${kubeOpts.pollInterval}`] } : {}),
+                                ...(workloadTokens.volumeMounts ? { volumeMounts: workloadTokens.volumeMounts } : {}),
                               },
                             ],
                           },
@@ -374,7 +380,7 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
         metadata: { name: "provider-kubernetes" },
         spec: {
           package: `xpkg.upbound.io/crossplane-contrib/provider-kubernetes:${kubeOpts.version ?? "v0.17.0"}`,
-          ...(rbac !== false
+          ...(rbac !== false || kubeOpts.pollInterval || kubeOpts.workloadIdentities?.length
             ? { runtimeConfigRef: { name: "provider-kubernetes" } }
             : {}),
         },
