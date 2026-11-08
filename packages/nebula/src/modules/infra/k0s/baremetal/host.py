@@ -22,6 +22,7 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+import boot_order
 import storage
 import uefi
 from installer import cpio, render_files, select_disk, validate_volume_groups
@@ -60,7 +61,7 @@ def probe(spec: WorkerSpec, skip_uefi: bool = False) -> JsonObject:
         raise ProvisioningError("at least 1 GiB available RAM is required for installer staging")
     disk = discover_disk(spec)
     network = discover_network(spec)
-    return {
+    facts: JsonObject = {
         "disk": disk,
         "workloadDisks": storage.workload_disks(
             spec["installation"]["disk"].get("workloadSerials", [])
@@ -72,6 +73,9 @@ def probe(spec: WorkerSpec, skip_uefi: bool = False) -> JsonObject:
         "rootFs": command(["findmnt", "-n", "-o", "FSTYPE", "/"]),
         "machineId": Path("/etc/machine-id").read_text().strip(),
     }
+    if facts["uefi"]:
+        facts["bootOrder"] = boot_order.capture()
+    return facts
 
 
 def discover_disk(spec: WorkerSpec) -> JsonObject:
@@ -217,6 +221,8 @@ def stage(payload: JsonObject) -> Receipt:
         "hostname": spec["hostname"],
         "sourceBootId": current["bootId"],
     }
+    if current["uefi"]:
+        receipt["sourceBootOrder"] = current["bootOrder"]
     # Fence aliases of the same host, including requests in other namespaces.
     claim = Path("/var/lib/nebula-baremetal/claim.json")
     claim.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -369,6 +375,15 @@ def verify(payload: JsonObject) -> JsonObject:
         or os_release.get("VERSION_CODENAME", "").strip('"') != spec["installation"]["suite"]
     ):
         raise ProvisioningError("installed OS does not match the requested suite")
+    if "sourceBootOrder" in receipt:
+        if "bootOrder" not in receipt:
+            raise ProvisioningError("installed firmware boot priority was not recorded")
+        try:
+            boot_order.verify(receipt["bootOrder"])
+        except ValueError as error:
+            raise ProvisioningError(
+                "installed firmware boot priority verification failed"
+            ) from error
     verify_kernel(spec)
     vg = spec["installation"]["volumeGroup"]
     workload_serials = spec["installation"]["disk"].get("workloadSerials")

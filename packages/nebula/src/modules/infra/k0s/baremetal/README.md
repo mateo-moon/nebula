@@ -270,6 +270,18 @@ first boot and later reboots, using Debian's default time servers. Bounded `/boo
 and root LV sizes leave free VG extents for a separate local-volume provisioner.
 That provisioner must preserve the OS root LV in the shared VG.
 
+On UEFI hosts, discovery records the existing firmware boot order before any
+disk changes. GRUB still registers the installed Debian loader. The late command
+then restores the original priority of surviving entries and appends newly
+registered entries, with a checked readback recorded in the installed receipt.
+After registration, GRUB package upgrades are configured to update loader files
+without changing NVRAM again. This step neither deletes boot entries nor changes
+`BootNext`. It preserves an existing network-recovery preference without assuming
+that every provider or machine should boot from the network first. An already
+incorrect boot order must be corrected separately; this is preservation, not a
+provider-specific boot policy.
+BIOS installs do not run this step.
+
 The Job reconnects with the pinned host key and worker key, checks the request
 receipt, hostname, OS suite, node address families and free VG storage, records
 verification tied to the request hash, then exits successfully. If `installation.uefi`
@@ -279,6 +291,14 @@ Optional native Cilium admission policies and bindings must first be observed
 ready through the workload ProviderConfig. The Job never receives workload
 credentials. The workload identity needs access to those admission resources;
 this setup does not grant remote-cluster permissions.
+
+For new UEFI installations, post-reboot verification also requires the recorded
+boot choices to retain their priority before publishing `OSReady`. Newly
+discovered firmware entries may follow them, but may not preempt or reorder them.
+Receipts from earlier module versions remain valid without this new evidence;
+the change does not retrofit firmware settings or reinstall existing workers.
+`skipUefi` continues to control the optional hardware setup-variable phase,
+independently of bootloader setup.
 
 Crossplane then manages `PooledRemoteMachine`, `RemoteMachineTemplate`,
 `K0sWorkerConfigTemplate` and `MachineDeployment` through retained Kubernetes

@@ -35,7 +35,12 @@ The packed-package test also needs package-registry access or a warm pnpm store.
   checkpoints and capability checks using temporary files and injected faults.
   Transport qualification runs the real zipapp in an isolated Python subprocess
   and covers malformed responses, private-output suppression, token rotation,
-  cleanup and explicit retryable/terminal errors. Runtime modules pass strict
+  cleanup and explicit retryable/terminal errors. Boot-priority qualification
+  exercises the seeded standalone helper against disposable EFI-variable files:
+  GRUB registration, network-first and local-first preferences, removed entries,
+  write/readback failures, preserved BootNext, idempotency, BIOS installs,
+  legacy receipts and drift blocking OSReady. It never writes host firmware.
+  Runtime modules pass strict
   mypy and Ruff checks; CI installs the pinned `requirements-python.txt` tools.
   With `BAREMETAL_CROSSPLANE_CLI=/path/to/crossplane`, the same test file also runs
   the full pipeline in Docker using Crossplane CLI 2.1.3 and the installed function

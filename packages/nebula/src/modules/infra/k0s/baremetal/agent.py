@@ -10,6 +10,7 @@ import zipfile
 from pathlib import Path
 
 HOST_MODULES = (
+    "boot_order.py",
     "models.py",
     "runtime.py",
     "validation.py",
