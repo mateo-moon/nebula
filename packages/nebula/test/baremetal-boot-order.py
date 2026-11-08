@@ -2,6 +2,7 @@
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -164,10 +165,6 @@ class BootOrderTests(unittest.TestCase):
             b"python3 -I /var/lib/nebula-baremetal/boot_order.py", files["nebula/late.sh"]
         )
         self.assertIn(b"efibootmgr", files["nebula/boot_order.py"])
-        late = files["nebula/late.sh"]
-        self.assertGreater(
-            late.index(b"grub2/update_nvram boolean false"), late.index(b"python3 -I")
-        )
         self.assertEqual(
             json.loads(files["nebula/receipt.json"])["sourceBootOrder"], FACTS["bootOrder"]
         )
@@ -179,6 +176,45 @@ class BootOrderTests(unittest.TestCase):
         )
         self.assertNotIn("nebula/boot_order.py", bios)
         self.assertNotIn(b"efivar", bios["nebula/late.sh"])
+
+    def test_failed_upgrade_policy_blocks_receipt_finalization(self):
+        files = installer.render_files(
+            SPEC, FACTS, "ssh-ed25519 AAAA", {"sourceBootOrder": FACTS["bootOrder"]}
+        )
+        late = files["nebula/late.sh"].decode()
+        command = shlex.split(late[late.index("in-target /bin/sh -ec '") :])
+        self.assertEqual(command[:3], ["in-target", "/bin/sh", "-ec"])
+        executables = self.root / "bin"
+        executables.mkdir()
+        scripts = {
+            "mountpoint": "exit 0\n",
+            "debconf-set-selections": 'cat > "$NEBULA_DEBCONF_INPUT"\nexit "$NEBULA_DEBCONF_STATUS"\n',
+            "python3": 'printf completed > "$NEBULA_HELPER_RECEIPT"\n',
+        }
+        for name, script in scripts.items():
+            executable = executables / name
+            executable.write_text("#!/bin/sh\n" + script)
+            executable.chmod(0o755)
+        completed = self.root / "completed-receipt"
+        selections = self.root / "debconf-input"
+        for status in (17, 0):
+            with self.subTest(status=status):
+                result = subprocess.run(
+                    command[1:],
+                    capture_output=True,
+                    cwd=self.root,
+                    env={
+                        "PATH": str(executables) + ":/usr/bin:/bin",
+                        "NEBULA_DEBCONF_STATUS": str(status),
+                        "NEBULA_DEBCONF_INPUT": str(selections),
+                        "NEBULA_HELPER_RECEIPT": str(completed),
+                    },
+                )
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertEqual(completed.exists(), status == 0)
+                self.assertEqual(
+                    selections.read_text(), "grub-efi-amd64 grub2/update_nvram boolean false\n"
+                )
 
     def test_post_reboot_drift_or_missing_late_receipt_blocks_osready(self):
         receipt = {

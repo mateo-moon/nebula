@@ -323,9 +323,9 @@ in-target /bin/sh -ec '
     mount -t efivarfs efivarfs /sys/firmware/efi/efivars
     trap "umount /sys/firmware/efi/efivars" EXIT
   fi
-  python3 -I /var/lib/nebula-baremetal/boot_order.py /var/lib/nebula-baremetal/installed.json
   # The loader is registered now. Later package upgrades must not reorder it.
   printf "%s\\n" "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
+  python3 -I /var/lib/nebula-baremetal/boot_order.py /var/lib/nebula-baremetal/installed.json
 '
 """
     return files
