@@ -32,7 +32,8 @@ test("public OIDC profiles merge without sharing another cluster's login audienc
       const file = join(work, `${cluster}.yaml`);
       const profile = new KubernetesOidcIdentity({
         cluster, hostname: `api-${cluster}.example.test`, namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture", systemSourceCidrs: [],
-        workforce: { url: "https://login.example.test", jwksUrl: "https://login.example.test/keys", audience: `kubernetes:${cluster}`, emailDomain: "example.test" },
+        workforce: { url: "https://accounts.google.com", jwksUrl: "https://www.googleapis.com/oauth2/v3/certs", audience: `${cluster}-desktop-client-id`, emailDomain: "example.test", maxTokenLifetimeSeconds: 3600,
+          requiredClaims: { hd: "example.test", azp: `${cluster}-desktop-client-id` }, login: { grantType: "authcode", extraScopes: ["email"] } },
         backend: { host: "api.internal.example.test", port: 6443, serverName: "kubernetes", caSecret: { name: "fixture-ca", key: "tls.crt" } },
       }).userKubeconfig();
       writeFileSync(file, stringify(profile), { mode: 0o600 });
@@ -48,7 +49,7 @@ test("public OIDC profiles merge without sharing another cluster's login audienc
       const context = merged.contexts.find((c: any) => c.name === cluster).context;
       const user = merged.users.find((u: any) => u.name === context.user).user;
       assert.equal(context.cluster, cluster);
-      assert.ok(user.exec.args.includes(`--oidc-client-id=kubernetes:${cluster}`));
+      assert.ok(user.exec.args.includes(`--oidc-client-id=${cluster}-desktop-client-id`));
       assert.ok(user.exec.args.includes("--token-cache-storage=keyring"));
     }
   } finally { rmSync(work, { recursive: true, force: true }); }
@@ -88,7 +89,11 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
   issuerBase = `https://${issuerHost}:${(issuer.address() as any).port}`;
   const c: KubernetesAccessConfig = {
     cluster: "fixture", hostname: "api.fixture.example.test", namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture",
-    workforce: { url: `${issuerBase}/people`, jwksUrl: `${issuerBase}/people/keys`, audience: "kubernetes:fixture", emailDomain: "example.test", certificateAuthority: readFileSync(cert, "utf8") },
+    workforce: {
+      url: `${issuerBase}/google`, jwksUrl: `${issuerBase}/google/keys`, audience: "fixture-desktop-client-id",
+      emailDomain: "example.test", certificateAuthority: readFileSync(cert, "utf8"), maxTokenLifetimeSeconds: 3600,
+      requiredClaims: { hd: "example.test", azp: "fixture-desktop-client-id" },
+    },
     workload: {
       url: `${issuerBase}/workloads`, jwksUrl: `${issuerBase}/workloads/keys`, audience: "kubernetes:fixture",
       subjects: ["system:serviceaccount:argocd:controller"], certificateAuthority: readFileSync(cert, "utf8")
@@ -99,8 +104,8 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
   const issue = (claims: Record<string, unknown> = {}, privateKey = issuerKeys.privateKey) => {
     const now = Math.floor(Date.now() / 1000);
     const payload = {
-      iss: c.workforce.url, aud: "kubernetes:fixture", sub: "immutable-person-id", email: "employee@example.test",
-      email_verified: true, iat: now, exp: now + 600, ...claims
+      iss: c.workforce.url, aud: c.workforce.audience, azp: c.workforce.audience, hd: "example.test", sub: "immutable-person-id", email: "employee@example.test",
+      email_verified: true, iat: now, exp: now + 3600, ...claims
     };
     const body = [Buffer.from(JSON.stringify({ alg: "RS256", kid: "fixture" })).toString("base64url"), Buffer.from(JSON.stringify(payload)).toString("base64url")].join(".");
     return `${body}.${sign("RSA-SHA256", Buffer.from(body), privateKey).toString("base64url")}`;
@@ -182,10 +187,15 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     for (const claims of [
       { aud: "kubernetes:another-cluster" }, { iss: `${issuerBase}/untrusted` }, { exp: now - 1 },
       { email: "outsider@elsewhere.test" }, { email_verified: false }, { exp: now + 7200 },
+      { hd: "elsewhere.test" }, { hd: undefined }, { azp: "other-desktop-client-id" }, { azp: undefined },
+      { iat: now - 3601, exp: now + 100 },
     ]) assert.ok([401, 403].includes((await throughGateway(issue(claims))).status), `rejected claims ${JSON.stringify(claims)}`);
+    const formerIssuer = issue({ iss: `${issuerBase}/people`, aud: "kubernetes:fixture", exp: now + 600 });
+    assert.equal((await throughGateway(formerIssuer)).status, 401, "a still-valid token from the former workforce issuer is rejected");
+    assert.equal((await request(`${api}${reviewPath}`, { ca: backendCa, headers: { Authorization: `Bearer ${formerIssuer}` } })).status, 401, "the API also rejects the former workforce issuer");
     const foreign = generateKeyPairSync("rsa", { modulusLength: 2048 });
     assert.equal((await throughGateway(issue({}, foreign.privateKey))).status, 401, "wrong signature");
-    const workloadClaims = { iss: c.workload!.url, sub: c.workload!.subjects[0], "kubernetes.io": { pod: { uid: "fixture-pod" } } };
+    const workloadClaims = { iss: c.workload!.url, aud: c.workload!.audience, sub: c.workload!.subjects[0], exp: now + 600, "kubernetes.io": { pod: { uid: "fixture-pod" } } };
     const workload = await throughGateway(issue(workloadClaims));
     if (workload.status !== 201) {
       const id = await run("docker", ["exec", `${name}-control-plane`, "crictl", "ps", "--name", "kube-apiserver", "-q"]);
@@ -200,6 +210,8 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     assert.equal(JSON.parse(workload.body).status.userInfo.username, `workload:${c.workload!.subjects[0]}`);
     assert.equal((await throughGateway(issue({ ...workloadClaims, sub: "system:serviceaccount:argocd:untrusted" }))).status, 401);
     assert.equal((await throughGateway(issue({ ...workloadClaims, "kubernetes.io": {} }))).status, 401, "unbound workload token");
+    assert.equal((await throughGateway(issue({ ...workloadClaims, exp: now + 3600 }))).status, 401, "one-hour human lifetimes must never extend workload trust");
+    assert.equal((await throughGateway(issue({ ...workloadClaims, iat: now - 601, exp: now + 100 }))).status, 401, "the API rejects a long-issued workload token even when little lifetime remains");
     // The internal monitoring bridge cannot turn a stolen short-lived identity
     // into a permanent reader token. Verify admission with the real API.
     const create = async (path: string, object: object) => {

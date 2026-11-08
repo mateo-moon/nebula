@@ -13,5 +13,5 @@ export {
 export { mergeKsmValues } from './ksm';
 export { isMainModule } from "./module-entry";
 
-export { validateOidcHttpsUrl } from "./oidc";
+export { validateOidcHttpsUrl, validateOidcIssuer, oidcTokenLifetimeSeconds } from "./oidc";
 export type { OidcIssuer } from "./oidc";

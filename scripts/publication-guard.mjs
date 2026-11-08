@@ -50,6 +50,7 @@ export const DEFAULT_SCOPE = [
   "packages/nebula/src/modules/infra/k0s/oidc-authentication.ts",
   "packages/nebula/src/modules/k8s/kubernetes-access",
   "packages/nebula/src/modules/k8s/envoy/jwt-proxy.ts",
+  "packages/nebula/src/utils/oidc.ts",
   "packages/nebula/src/modules/k8s/argocd/oidc-cluster.ts",
   ":(glob)packages/nebula/test/kubernetes-access*.ts",
   "packages/nebula/example/kubernetes-oidc.ts",
@@ -82,6 +83,7 @@ const UPSTREAM_OWNERS = new Set([
   "tokio-rs", "serde-rs", "coreos", "podman", "containers", "cloudnative-pg", "external-secrets", "keycloak", "dexidp",
   "kedacore", "kyverno", "kubevirt", "operator-framework", "hashicorp", "bitnami", "library", "anthropics", "helmfile",
   "datasone", "pbatard", // Public setup_var.efi and EDK2 UEFI-Shell release sources.
+  "int128", // Public kubelogin OIDC exec plugin and its documentation.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
@@ -91,7 +93,8 @@ const CODE_HOST_PATHS = new Set([
 // Domains (and their subdomains) of upstream projects and standards bodies.
 const UPSTREAM_DOMAINS = [
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
-  "googleapis.com", // Standard Envoy protobuf type URLs, not deployment endpoints.
+  "googleapis.com", // Standard Envoy protobuf types and Google's public JWKS endpoint.
+  "accounts.google.com", "developers.google.com", "docs.cloud.google.com", // Public Google issuer and OAuth documentation; OAuth client IDs remain deployment bindings.
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",

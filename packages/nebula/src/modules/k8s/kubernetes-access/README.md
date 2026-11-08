@@ -58,7 +58,10 @@ CA key selected by `backend.caSecret.key` and verifies an exact backend DNS SAN.
 It forwards the bearer token and strips impersonation/proxy identity headers.
 Every route requires JWT authentication, and streams are limited to ten minutes.
 
-Token lifetimes are limited to 600 seconds. Argo's exec helper rereads its
+Token lifetimes default to 600 seconds. A workforce issuer can explicitly set
+`maxTokenLifetimeSeconds` up to 3600; the API limits issued lifetime and the
+gateway limits remaining lifetime for that issuer. Workload tokens always retain
+the 600-second limit, and streams retain the ten-minute limit. Argo's exec helper rereads its
 projected token every thirty seconds and requires GNU `date` and `cat` in the
 selected image. Human kubeconfigs default to `kubectl oidc-login` with keyring
 storage. Each cluster has its own kubeconfig user name so merged profiles retain
@@ -66,6 +69,57 @@ the correct login audience. `userKubeconfig({ command, grantType: "device-code",
 tokenCacheDirectory })` supports trusted server clients too. Provider session
 limits, MFA and public client/redirect configuration belong to the identity
 provider's deployment.
+
+## Direct Google workforce login
+
+Google can authenticate humans directly while Kubernetes continues to issue
+rotating workload tokens. No Google Cloud IAM authenticator or in-cluster
+workforce issuer is needed. Supply a different Google OAuth **Desktop** client
+ID for each cluster through the deployment binding:
+
+```ts
+const clientId = "example-desktop-client-id";
+const emailDomain = "example.test";
+const workforce: KubernetesOidcIdentityConfig["workforce"] = {
+  url: "https://accounts.google.com",
+  jwksUrl: "https://www.googleapis.com/oauth2/v3/certs",
+  audience: clientId,
+  emailDomain,
+  maxTokenLifetimeSeconds: 3600,
+  requiredClaims: { hd: emailDomain, azp: clientId },
+  login: {
+    grantType: "authcode",
+    extraScopes: ["email"],
+    authRequestExtraParams: { access_type: "offline", prompt: "consent", hd: emailDomain },
+  },
+};
+```
+
+Kubernetes validates `hd` and `azp` as exact signed claims as well as the issuer,
+audience, lifetime and verified email. The `hd` request parameter is only a login
+hint. The claim is required to establish managed Workspace membership. Binding
+`azp` to the same client also excludes other clients in the same Google project.
+The exec plugin always uses S256 PKCE and defaults to OS keyring storage; it
+receives no client secret. Google uses `access_type=offline` rather than an
+`offline_access` scope. Its user ID tokens last one hour and cannot be revoked
+individually; enforce MFA and session policy in Google and remove Kubernetes
+permissions when immediate authorization withdrawal is needed.
+
+Use a browser on the trusted client for the loopback authorization-code flow.
+For a trusted headless host, forward a local loopback port over SSH and generate
+its profile with `userKubeconfig({ command: "/usr/local/bin/oidc-login",
+skipOpenBrowser: true, redirectUrl: "http://127.0.0.1:8000/",
+listenAddress: "127.0.0.1:8000" })`. Open its printed Google URL on the device
+holding the matching forwarded port. A phone browser alone does not deliver a
+loopback callback to the host. Select private cache storage appropriate to that
+host; keep refresh tokens on the trusted client. Qualify initial login, cached
+use and forced refresh against the actual Desktop registration before removing
+the previous issuer. Desktop device-code support and deprecated out-of-band
+redirects must not be assumed.
+
+Provider references: [Google Desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app),
+[Google user ID tokens](https://docs.cloud.google.com/docs/authentication/token-types#user-id-tokens),
+and [kubelogin authorization-code options](https://github.com/int128/kubelogin/blob/master/docs/usage.md#authorization-code-flow).
 
 Legacy Argo certificate sync retirement requires an explicit
 `retireLegacyCertificateSync` option. Its PreSync hook can delete only the named

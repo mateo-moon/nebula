@@ -35,7 +35,9 @@ test("identity requires exact audiences, verified workforce and bounded system s
   for (const cidr of ["0.0.0.0/0", "::/0", "192.0.2.0/8", "192.0.2.1/999", "not-an-ip/32"])
     assert.throws(() => new KubernetesOidcIdentity({ ...identity, systemSourceCidrs: [cidr] }), /Unsafe or invalid/);
   assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...identity.workforce, url: "http://login.example.test" } }), /HTTPS/);
-  assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...identity.workforce, audience: "shared" } }), /target cluster/);
+  for (const audience of ["", "*", "two audiences"])
+    assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...identity.workforce, audience } }), /exact.*audience/);
+  assert.throws(() => new KubernetesOidcIdentity({ ...identity, workload: { ...identity.workload!, audience: "shared" } }), /target cluster/);
   assert.throws(() => new KubernetesOidcIdentity({ ...identity, workload: { ...identity.workload!, subjects: ["system:serviceaccount:*:*"] } }), /exact ServiceAccount/);
   const auth: any = i.authenticationConfiguration();
   assert.equal(auth.anonymous, undefined); assert.deepEqual(auth.jwt[0].issuer.audiences, ["kubernetes:example"]);
@@ -44,6 +46,45 @@ test("identity requires exact audiences, verified workforce and bounded system s
   for (const config of [i.userKubeconfig(), i.workloadKubeconfig()]) assert.ok(!/client-certificate|client-key|insecure-skip-tls-verify|client-secret/.test(JSON.stringify(config)));
   const server: any = i.userKubeconfig({ command: "/usr/local/bin/oidc-login", grantType: "device-code", tokenCacheStorage: "disk", tokenCacheDirectory: "/run/login" });
   assert.equal(server.users[0].user.exec.command, "/usr/local/bin/oidc-login"); assert.ok(server.users[0].user.exec.args.includes("--grant-type=device-code"));
+});
+
+test("public workforce clients support provider claims and one-hour humans without extending workload trust", () => {
+  const audience = "example-desktop-client-id";
+  const config: KubernetesOidcIdentityConfig = { ...identity, workforce: {
+    url: "https://accounts.google.com", jwksUrl: "https://www.googleapis.com/oauth2/v3/certs", audience,
+    emailDomain: "example.test", maxTokenLifetimeSeconds: 3600,
+    requiredClaims: { hd: "example.test", azp: audience },
+    login: { grantType: "authcode", extraScopes: ["email"], authRequestExtraParams: { access_type: "offline", prompt: "consent", hd: "example.test" } },
+  } };
+  const i = new KubernetesOidcIdentity(config);
+  const auth: any = i.authenticationConfiguration();
+  assert.deepEqual(auth.jwt[0].issuer.audiences, [audience]);
+  assert.ok(auth.jwt[0].claimValidationRules.some((r: any) => r.expression?.includes("<= 3600")));
+  assert.ok(auth.jwt[0].claimValidationRules.some((r: any) => r.claim === "hd" && r.requiredValue === "example.test"));
+  assert.ok(auth.jwt[0].claimValidationRules.some((r: any) => r.claim === "azp" && r.requiredValue === audience));
+  assert.ok(auth.jwt[1].claimValidationRules.some((r: any) => r.expression.includes("<= 600")));
+  const profile: any = i.userKubeconfig(), args = profile.users[0].user.exec.args;
+  for (const expected of ["--grant-type=authcode", "--oidc-extra-scope=email", "--oidc-pkce-method=S256", "--token-cache-storage=keyring", "--oidc-auth-request-extra-params=access_type=offline", "--oidc-auth-request-extra-params=hd=example.test"])
+    assert.ok(args.includes(expected));
+  assert.ok(!args.includes("--oidc-extra-scope=offline_access"));
+  assert.ok(!JSON.stringify(profile).includes("client-secret"));
+  const headless: any = i.userKubeconfig({ command: "/usr/local/bin/oidc-login", skipOpenBrowser: true, redirectUrl: "http://127.0.0.1:8000/", listenAddress: "127.0.0.1:8000" });
+  assert.ok(headless.users[0].user.exec.args.includes("--skip-open-browser"));
+  assert.throws(() => i.userKubeconfig({ redirectUrl: "http://public.example.test/" }), /loopback/);
+  assert.throws(() => i.userKubeconfig({ listenAddress: "0.0.0.0:8000" }), /loopback/);
+  assert.throws(() => new KubernetesOidcIdentity({ ...config, workload: { ...config.workload!, maxTokenLifetimeSeconds: 3600 } }), /600-second/);
+  for (const maxTokenLifetimeSeconds of [0, -1, 3601, 1.5, Infinity])
+    assert.throws(() => new KubernetesOidcIdentity({ ...config, workforce: { ...config.workforce, maxTokenLifetimeSeconds } }), /lifetime/);
+  const invalidParams: Record<string, string>[] = [{ code_challenge_method: "plain" }, { client_secret: "forbidden" }, { prompt: "consent,scope=anything" }];
+  for (const authRequestExtraParams of invalidParams)
+    assert.throws(() => new KubernetesOidcIdentity({ ...config, workforce: { ...config.workforce, login: { authRequestExtraParams } } }), /protocol security/);
+  assert.throws(() => new KubernetesOidcIdentity({ ...config, workforce: { ...config.workforce, requiredClaims: { "hd) || true": "example.test" } } }), /exact claim/);
+  const chart = Testing.chart(); new KubernetesOidcGateway(chart, "google", config);
+  const envoy = parse(Testing.synth(chart).find(o => o.kind === "ConfigMap")!.data["envoy.yaml"]);
+  const hcm = envoy.static_resources.listeners[0].filter_chains[0].filters[0].typed_config;
+  assert.equal(hcm.http_filters[0].typed_config.providers.workforce.max_lifetime, "3600s");
+  assert.equal(hcm.http_filters[0].typed_config.providers.workload.max_lifetime, "600s");
+  assert.equal(hcm.route_config.virtual_hosts[0].routes[0].route.max_stream_duration.max_stream_duration, "600s");
 });
 
 test("gateway verifies every bearer and backend TLS and mounts public CA only", () => {

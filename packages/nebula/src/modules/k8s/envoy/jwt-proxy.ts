@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { type OidcIssuer, validateOidcHttpsUrl } from "../../../utils/oidc";
+import { type OidcIssuer, validateOidcIssuer, oidcTokenLifetimeSeconds } from "../../../utils/oidc";
 
 const typed = (name: string) => `type.googleapis.com/envoy.extensions.${name}`;
 const endpoint = (host: string, port: number) => ({ address: { socket_address: { address: host, port_value: port } } });
@@ -34,12 +34,12 @@ export class EnvoyJwtProxy {
   constructor(config: EnvoyJwtProxyConfig) {
     const c = config;
     if (!Number.isInteger(c.maxTokenLifetimeSeconds) || c.maxTokenLifetimeSeconds < 1) throw new Error("A positive JWT lifetime is required");
-    for (const issuer of Object.values(c.issuers)) { validateOidcHttpsUrl(issuer.url); validateOidcHttpsUrl(issuer.jwksUrl); }
+    for (const issuer of Object.values(c.issuers)) { validateOidcIssuer(issuer); oidcTokenLifetimeSeconds(issuer, c.maxTokenLifetimeSeconds); }
     if (!Object.keys(c.issuers).length) throw new Error("At least one JWT issuer is required");
     const issuers = Object.entries(c.issuers);
     const providers = Object.fromEntries(issuers.map(([name, i]) => [name, {
       issuer: i.url, audiences: [i.audience], forward: true, require_expiration: true,
-      max_lifetime: `${c.maxTokenLifetimeSeconds}s`,
+      max_lifetime: `${oidcTokenLifetimeSeconds(i, c.maxTokenLifetimeSeconds)}s`,
       from_headers: [{ name: "Authorization", value_prefix: "Bearer " }],
       remote_jwks: { http_uri: { uri: i.jwksUrl, cluster: `jwks-${name}`, timeout: "5s" }, cache_duration: "60s" },
     }]));
