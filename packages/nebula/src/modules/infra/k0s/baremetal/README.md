@@ -300,8 +300,9 @@ this setup does not grant remote-cluster permissions.
 
 For new UEFI installations, post-reboot verification also checks that the recorded
 Debian EFI entry still matches the mounted ESP and selected system disk, remains
-first in `BootOrder`, and equals `BootCurrent`. A receipt produced inside the
-kexec installer alone cannot satisfy this check: the host must return through
+first in `BootOrder`, and equals `BootCurrent`. The kernel boot ID must differ
+from the one recorded inside the installer, including when a boot number was
+reused. A receipt produced inside the kexec installer alone cannot satisfy this check: the host must return through
 its installed firmware loader before `OSReady` and CAPI enrollment. Legacy
 receipts remain valid without this new evidence; existing workers retain manual
 composition revisions and are never reinstalled to obtain it. `skipUefi` still

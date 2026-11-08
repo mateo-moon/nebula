@@ -38,6 +38,8 @@ class BootOrderTests(unittest.TestCase):
         self.mounts.write_text(f"efivarfs {self.variables} efivarfs rw 0 0\n")
         self.disk = self.root / "disk"
         self.disk.touch()
+        self.boot_id = self.root / "boot-id"
+        self.boot_id.write_text(str(uuid.uuid4()))
         self.esp = self.root / "esp"
         (self.esp / "efi/debian").mkdir(parents=True)
         (self.esp / "efi/debian/grubx64.efi").write_bytes(b"new-loader")
@@ -45,6 +47,7 @@ class BootOrderTests(unittest.TestCase):
             ("VARIABLES", self.variables),
             ("MOUNTS", self.mounts),
             ("ESP", self.esp),
+            ("BOOT_ID", self.boot_id),
         ):
             patched = patch.object(boot_order, key, value)
             patched.start()
@@ -75,6 +78,10 @@ class BootOrderTests(unittest.TestCase):
 
     def digest(self, n):
         return hashlib.sha256(boot_order.value("Boot" + n)).hexdigest()
+
+    def boot(self, n="0000"):
+        self.variable("BootCurrent", int(n, 16).to_bytes(2, "little"))
+        self.boot_id.write_text(str(uuid.uuid4()))
 
     def order(self, numbers):
         self.variable("BootOrder", b"".join(int(n, 16).to_bytes(2, "little") for n in numbers))
@@ -109,7 +116,7 @@ class BootOrderTests(unittest.TestCase):
         self.assertEqual(self.receipt.stat().st_mode & 0o777, 0o600)
         with self.assertRaisesRegex(ValueError, "did not boot"):
             boot_order.verify(identity)
-        self.variable("BootCurrent", b"\0\0")
+        self.boot()
         boot_order.verify(identity)
 
     def test_already_local_first_and_network_first_sources_select_new_os(self):
@@ -122,7 +129,7 @@ class BootOrderTests(unittest.TestCase):
                 self.order(previous)
                 identity = self.configure()
                 self.assertEqual(boot_order.order()[0], "0000")
-                self.variable("BootCurrent", b"\0\0")
+                self.boot()
                 boot_order.verify(identity)
 
     def test_reused_boot_number_is_not_deleted(self):
@@ -133,6 +140,10 @@ class BootOrderTests(unittest.TestCase):
         self.assertEqual(identity["number"], "0007")
         self.assertIsNotNone(boot_order.value("Boot0007"))
         self.assertEqual(boot_order.order(), ["0007", "0002", "0003"])
+        with self.assertRaisesRegex(ValueError, "still running in the installer boot"):
+            boot_order.verify(identity)
+        self.boot("0007")
+        boot_order.verify(identity)
 
     def test_changed_source_number_belongs_to_new_owner_and_is_retained(self):
         self.variable("Boot0007", load_option(OTHER_ESP, "\\EFI\\other\\different.efi"))
@@ -227,7 +238,7 @@ class BootOrderTests(unittest.TestCase):
 
     def test_post_reboot_requires_correct_entry_current_boot_and_esp(self):
         identity = self.configure()
-        self.variable("BootCurrent", b"\0\0")
+        self.boot()
         boot_order.verify(identity)
         with patch.object(boot_order, "esp_identity", return_value=("/dev/vdb", "1", OTHER_ESP)):
             with self.assertRaisesRegex(ValueError, "OS ESP"):
@@ -313,7 +324,7 @@ class BootOrderTests(unittest.TestCase):
             read_receipt()
             with self.assertRaisesRegex(ValueError, "loader verification failed"):
                 host_agent.verify({"uid": "test", "spec": SPEC})
-            self.variable("BootCurrent", b"\0\0")
+            self.boot()
             read_receipt()
             self.assertTrue(host_agent.verify({"uid": "test", "spec": SPEC})["verified"])
             receipt.pop("bootLoader")

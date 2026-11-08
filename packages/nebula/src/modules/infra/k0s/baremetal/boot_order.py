@@ -19,6 +19,7 @@ from pathlib import Path
 VARIABLES = Path("/sys/firmware/efi/efivars")
 MOUNTS = Path("/proc/mounts")
 ESP = Path("/boot/efi")
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 GLOBAL_GUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
 ESP_TYPE = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 LOADERS = ("\\efi\\debian\\shimx64.efi", "\\efi\\debian\\grubx64.efi")
@@ -224,7 +225,7 @@ def installed_loader(disk: str, partition: str, part_uuid: str) -> str:
 
 
 def loader_identity(data: object) -> dict[str, str]:
-    fields = {"number", "sha256", "partUuid", "loader", "disk"}
+    fields = {"number", "sha256", "partUuid", "loader", "disk", "installerBootId"}
     if not isinstance(data, dict) or set(data) != fields:
         raise ValueError("Invalid installed EFI loader identity")
     identity: dict[str, str] = {}
@@ -235,6 +236,8 @@ def loader_identity(data: object) -> dict[str, str]:
     source_entries([{"number": identity["number"], "sha256": identity["sha256"]}])
     if str(uuid.UUID(identity["partUuid"])) != identity["partUuid"]:
         raise ValueError("Invalid installed ESP identity")
+    if str(uuid.UUID(identity["installerBootId"])) != identity["installerBootId"]:
+        raise ValueError("Invalid installer boot identity")
     if not Path(identity["disk"]).is_absolute():
         raise ValueError("Invalid installed system disk identity")
     loader_file(identity["loader"])
@@ -266,6 +269,8 @@ def verify(identity: object, *, booted: bool = True) -> None:
         raise ValueError("Installed Debian EFI loader is not first in boot priority")
     if booted and value("BootCurrent") != int(n, 16).to_bytes(2, "little"):
         raise ValueError("Installed OS did not boot through its recorded EFI loader")
+    if booted and BOOT_ID.read_text().strip() == identity["installerBootId"]:
+        raise ValueError("Installed OS is still running in the installer boot")
 
 
 def configure(receipt_path: Path) -> None:
@@ -320,6 +325,7 @@ def configure(receipt_path: Path) -> None:
         "partUuid": part_uuid,
         "loader": option[1],
         "disk": receipt["systemDisk"],
+        "installerBootId": str(uuid.UUID(BOOT_ID.read_text().strip())),
     }
     verify(identity, booted=False)
     receipt["bootLoader"] = identity
