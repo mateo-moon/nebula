@@ -1,4 +1,5 @@
 import { Construct } from "constructs";
+import { K0sOidcAuthentication, type K0sApiOptions } from "./oidc-authentication";
 import { BaseConstruct } from "../../../core";
 import {
   K0sCalicoConfig,
@@ -17,6 +18,7 @@ import {
   K0SmotronControlPlaneV1Beta2SpecResourcesLimits,
   K0SmotronControlPlaneV1Beta2SpecResourcesRequests,
   type K0SmotronControlPlaneV1Beta2SpecTopologySpreadConstraints,
+  type K0SmotronControlPlaneV1Beta2SpecStorage,
 } from "#imports/controlplane.cluster.x-k8s.io";
 
 /** The generated Quantity wrappers serialize via `.value` — bare strings render null. */
@@ -61,7 +63,9 @@ export type K0smotronControlPlanePersistence =
       accessModes?: string[];
     };
 
-export interface K0smotronControlPlaneConfig {
+export interface K0smotronControlPlaneConfig extends K0sApiOptions {
+  /** Datastore configuration passed through to k0smotron. */
+  storage?: K0SmotronControlPlaneV1Beta2SpecStorage;
   /** CR name (the CAPI `Cluster.spec.controlPlaneRef.name`). */
   name: string;
   /** Namespace on the hosting cluster (default "default"). */
@@ -94,20 +98,6 @@ export interface K0smotronControlPlaneConfig {
    * Per k0s docs, bundled Calico dual-stack requires mode "bird".
    */
   dualStack?: { ipv6PodCidr: string; ipv6ServiceCidr: string };
-  /**
-   * kube-apiserver extra args (`k0sConfig.spec.api.extraArgs`), e.g. the OIDC
-   * flags. k0smotron owns externalAddress/port/sans on the same `api` block but
-   * passes extraArgs through untouched. Changing these restarts the kmc-* CP
-   * pod — a brief child-API outage, workloads unaffected.
-   */
-  apiExtraArgs?: Record<string, string>;
-  /**
-   * Ordered kube-apiserver arguments appended after extraArgs. Use for flags
-   * that must repeat (e.g. accepting a previous service-account issuer while
-   * issuing new tokens with the first issuer). Maps to k0sConfig.spec.api.rawArgs;
-   * the caller owns flag compatibility. Changing restarts the hosted CP pod.
-   */
-  apiRawArgs?: string[];
   /**
    * kube-controller-manager extra args
    * (`k0sConfig.spec.controllerManager.extraArgs`), e.g.
@@ -162,6 +152,7 @@ export interface K0smotronControlPlaneConfig {
  * {@link K0sInfraProvider}.
  */
 export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneConfig> {
+  public readonly resource: K0smotronControlPlaneV1Beta2;
   constructor(scope: Construct, id: string, config: K0smotronControlPlaneConfig) {
     super(scope, id, config);
 
@@ -218,7 +209,14 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
         ]
       : [];
 
-    new K0smotronControlPlaneV1Beta2(this, "control-plane", {
+    K0sOidcAuthentication.validateControlPlane(this.config.authentication, { namespace, k8sVersion });
+    const authentication = this.config.authentication ? new K0sOidcAuthentication(this, "oidc", { ...this.config.authentication, namespace }) : undefined;
+    const auth = authentication?.hosted();
+    const api = authentication?.api(this.config.apiExtraArgs, this.config.apiRawArgs) ?? {
+      ...(this.config.apiExtraArgs ? { extraArgs: this.config.apiExtraArgs } : {}),
+      ...(this.config.apiRawArgs?.length ? { rawArgs: this.config.apiRawArgs } : {}),
+    };
+    this.resource = new K0smotronControlPlaneV1Beta2(this, "control-plane", {
       metadata: { name: this.config.name, namespace },
       spec: {
         version,
@@ -254,12 +252,7 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             // minutes on 2026-08-11. k0smotron deep-merges its own
             // externalAddress/sans into this same block and leaves extraArgs
             // alone.
-            ...(this.config.apiExtraArgs || this.config.apiRawArgs?.length
-              ? { api: {
-                  ...(this.config.apiExtraArgs ? { extraArgs: this.config.apiExtraArgs } : {}),
-                  ...(this.config.apiRawArgs?.length ? { rawArgs: this.config.apiRawArgs } : {}),
-                } }
-              : {}),
+            ...(Object.keys(api).length ? { api } : {}),
             ...(this.config.controllerManagerExtraArgs
               ? { controllerManager: { extraArgs: this.config.controllerManagerExtraArgs } }
               : {}),
@@ -272,6 +265,8 @@ export class K0smotronControlPlane extends BaseConstruct<K0smotronControlPlaneCo
             K0SmotronControlPlaneV1Beta2SpecServiceType.LOAD_BALANCER,
         },
         ...(servicePatches.length ? { patches: servicePatches } : {}),
+        ...auth,
+        ...(this.config.storage ? { storage: this.config.storage } : {}),
         ...(this.config.resources ? { resources: toQuantities(this.config.resources) } : {}),
         ...(this.config.topologySpreadConstraints
           ? { topologySpreadConstraints: this.config.topologySpreadConstraints }

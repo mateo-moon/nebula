@@ -1,3 +1,4 @@
+import { K0sOidcAuthentication, type K0sApiOptions } from "../k0s/oidc-authentication";
 import * as crypto from "crypto";
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
@@ -21,7 +22,7 @@ import {
   AwsClusterV1Beta2SpecControlPlaneLoadBalancerScheme,
 } from "#imports/infrastructure.cluster.x-k8s.io";
 
-export interface AwsK0sControlPlaneOptions {
+export interface AwsK0sControlPlaneOptions extends K0sApiOptions {
   /** Optional settings for the selected AMI. Existing profiles remain unchanged. */
   hostProfile?: AwsHostProfile;
   /** Number of control-plane nodes (default 3 for HA) */
@@ -327,6 +328,19 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
       ...(enableWorker ? ["--enable-worker", "--no-taints"] : []),
       ...(cp.extraArgs ?? []),
     ];
+    K0sOidcAuthentication.validateControlPlane(cp.authentication, { namespace, k8sVersion });
+    const authentication = cp.authentication ? new K0sOidcAuthentication(this, "oidc", { ...cp.authentication, namespace }) : undefined;
+    const bootstrap = authentication?.standalone();
+    const apiArgs = {
+      ...(this.config.oidcIssuer ? {
+        "service-account-issuer": this.config.oidcIssuer.issuerUrl,
+        "service-account-jwks-uri": `${this.config.oidcIssuer.issuerUrl}/keys.json`,
+      } : {}), ...cp.apiExtraArgs,
+    };
+    const api = authentication?.api(apiArgs, cp.apiRawArgs) ?? {
+      ...(Object.keys(apiArgs).length ? { extraArgs: apiArgs } : {}),
+      ...(cp.apiRawArgs?.length ? { rawArgs: cp.apiRawArgs } : {}),
+    };
     new K0sControlPlaneV1Beta2(this, "control-plane", {
       metadata: { name: controlPlaneName, namespace },
       spec: {
@@ -334,6 +348,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
         version: k0sVersion,
         k0SConfigSpec: {
           ...(args.length ? { args } : {}),
+          ...(bootstrap ? { files: bootstrap.files } : {}),
           // Propagate the pod/service CIDRs into the embedded k0s ClusterConfig
           // so the real control plane matches the CAPI clusterNetwork above.
           // Without this, k0s falls back to its own defaults whenever a caller
@@ -369,16 +384,7 @@ export class AwsK0sCluster extends BaseConstruct<AwsK0sClusterConfig> {
               // OIDC issuer for IRSA: point the apiserver's service-account issuer
               // at the public S3-hosted discovery so AWS STS can validate this
               // cluster's projected SA tokens. extraArgs is a map (single issuer).
-              ...(this.config.oidcIssuer
-                ? {
-                    api: {
-                      extraArgs: {
-                        "service-account-issuer": this.config.oidcIssuer.issuerUrl,
-                        "service-account-jwks-uri": `${this.config.oidcIssuer.issuerUrl}/keys.json`,
-                      },
-                    },
-                  }
-                : {}),
+              ...(Object.keys(api).length ? { api } : {}),
             },
           },
           // k0smotron v1beta2 renamed bootstrap `preStartCommands` → `preK0sCommands`

@@ -1,3 +1,4 @@
+import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } from "../kubernetes-access/workload-identity";
 /**
  * ArgoCd - GitOps continuous delivery tool for Kubernetes.
  *
@@ -151,6 +152,8 @@ export interface NebulaPluginConfig {
 }
 
 export interface ArgoCdConfig {
+  /** Short-lived target-cluster identities mounted into both controller and server. */
+  workloadIdentities?: readonly KubernetesWorkloadIdentityConfig[];
   /** Namespace for ArgoCD (defaults to argocd) */
   namespace?: string;
   /** Helm chart version (defaults to 9.4.0) */
@@ -427,6 +430,8 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
     // (e.g. GKE: components.gke.io/gke-managed-components).
     const defaultTolerations = this.config.tolerations ?? [];
 
+    const workloadTokens = KubernetesWorkloadIdentity.podSpec(this.config.workloadIdentities ?? []);
+
     // Build default values
     const defaultValues: Record<string, unknown> = {
       crds: { install: true },
@@ -440,9 +445,10 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
         },
       },
       repoServer: { tolerations: defaultTolerations },
-      controller: { tolerations: defaultTolerations },
+      controller: { tolerations: defaultTolerations, ...workloadTokens },
       server: {
         tolerations: defaultTolerations,
+        ...workloadTokens,
         ...(this.config.server?.ingress?.enabled
           ? {
               ingress: {
@@ -1128,3 +1134,6 @@ export type {
   ArgoCdAppTierSyncPolicyOverrides,
   ArgoCdSyncPolicyPreset,
 } from "./app-tier";
+
+export { ArgoCdOidcCluster } from "./oidc-cluster";
+export type { ArgoCdOidcClusterConfig } from "./oidc-cluster";
