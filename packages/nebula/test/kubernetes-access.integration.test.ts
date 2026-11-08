@@ -7,7 +7,7 @@ import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { parse, stringify } from "yaml";
 import { Testing } from "cdk8s";
 import { KubernetesOidcIdentity, type KubernetesOidcIdentityConfig as KubernetesAccessConfig } from "../src/modules/k8s/kubernetes-access/identity";
@@ -23,6 +23,36 @@ const exec = promisify(execFile);
 const run = async (cmd: string, args: string[], timeout = 180_000) => (await exec(cmd, args, { timeout, maxBuffer: 4 * 1024 * 1024 })).stdout.trim();
 const enabled = process.env.RUN_KUBERNETES_OIDC_INTEGRATION === "1";
 const image = process.env.OIDC_TEST_KIND_IMAGE ?? "kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f";
+
+test("public OIDC profiles merge without sharing another cluster's login audience", { skip: !enabled }, async () => {
+  const work = mkdtempSync(join(tmpdir(), "kubernetes-oidc-profiles-"));
+  const clusters = ["mgmt", "intra", "cicd", "dev", "stage"];
+  try {
+    const files = clusters.map(cluster => {
+      const file = join(work, `${cluster}.yaml`);
+      const profile = new KubernetesOidcIdentity({
+        cluster, hostname: `api-${cluster}.example.test`, namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture", systemSourceCidrs: [],
+        workforce: { url: "https://login.example.test", jwksUrl: "https://login.example.test/keys", audience: `kubernetes:${cluster}`, emailDomain: "example.test" },
+        backend: { host: "api.internal.example.test", port: 6443, serverName: "kubernetes", caSecret: { name: "fixture-ca", key: "tls.crt" } },
+      }).userKubeconfig();
+      writeFileSync(file, stringify(profile), { mode: 0o600 });
+      return file;
+    });
+    // This reads only the five explicit public fixture files. config view does
+    // not invoke the exec plugin or contact any Kubernetes API.
+    const merged = JSON.parse((await exec("kubectl", ["config", "view", "--merge", "-o", "json"], {
+      env: { ...process.env, KUBECONFIG: files.join(delimiter) }, timeout: 10_000,
+    })).stdout);
+    assert.equal(merged.users.length, clusters.length, "each context must retain its own login configuration");
+    for (const cluster of clusters) {
+      const context = merged.contexts.find((c: any) => c.name === cluster).context;
+      const user = merged.users.find((u: any) => u.name === context.user).user;
+      assert.equal(context.cluster, cluster);
+      assert.ok(user.exec.args.includes(`--oidc-client-id=kubernetes:${cluster}`));
+      assert.ok(user.exec.args.includes("--token-cache-storage=keyring"));
+    }
+  } finally { rmSync(work, { recursive: true, force: true }); }
+});
 
 test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate rejection", { skip: !enabled, timeout: 420_000 }, async () => {
   const work = mkdtempSync(join(tmpdir(), "kubernetes-oidc-integration-"));

@@ -98,10 +98,11 @@ export class KubernetesOidcIdentity {
 
   public userKubeconfig(options: KubernetesOidcLoginOptions = {}): object {
     const c = this.config;
+    const userName = `oidc-${c.cluster}`;
     return {
       apiVersion: "v1", kind: "Config", clusters: [{ name: c.cluster, cluster: { server: `https://${c.hostname}` } }],
       users: [{
-        name: "oidc", user: {
+        name: userName, user: {
           exec: {
             apiVersion: "client.authentication.k8s.io/v1", command: options.command ?? "kubectl",
             interactiveMode: "IfAvailable", provideClusterInfo: false,
@@ -112,7 +113,7 @@ export class KubernetesOidcIdentity {
           }
         }
       }],
-      contexts: [{ name: c.cluster, context: { cluster: c.cluster, user: "oidc" } }], "current-context": c.cluster
+      contexts: [{ name: c.cluster, context: { cluster: c.cluster, user: userName } }], "current-context": c.cluster
     };
   }
 }

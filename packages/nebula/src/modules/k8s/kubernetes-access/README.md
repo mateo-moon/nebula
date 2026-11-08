@@ -61,7 +61,8 @@ Every route requires JWT authentication, and streams are limited to ten minutes.
 Token lifetimes are limited to 600 seconds. Argo's exec helper rereads its
 projected token every thirty seconds and requires GNU `date` and `cat` in the
 selected image. Human kubeconfigs default to `kubectl oidc-login` with keyring
-storage; `userKubeconfig({ command, grantType: "device-code", tokenCacheStorage,
+storage. Each cluster has its own kubeconfig user name so merged profiles retain
+the correct login audience. `userKubeconfig({ command, grantType: "device-code", tokenCacheStorage,
 tokenCacheDirectory })` supports trusted server clients too. Provider session
 limits, MFA and public client/redirect configuration belong to the identity
 provider's deployment.
