@@ -69,7 +69,12 @@ provider's deployment.
 Legacy Argo certificate sync retirement requires an explicit
 `retireLegacyCertificateSync` option. Its PreSync hook can delete only the named
 sync object and cluster Secret. Do not enable it before the new workload access
-has been independently verified. Kubernetes internal client certificates and
+has been independently verified. Treat retirement as a one-shot source transition:
+remove the option after success and explicitly delete/verify absence of the named
+hook ServiceAccount and RBAC resources with an already accepted operator identity.
+Their `BeforeHookCreation` policy intentionally preserves prerequisites until the
+Job runs; removing source alone does not prove that Argo pruned hook resources.
+Kubernetes internal client certificates and
 bootstrap identities remain necessary behind the restricted system API. Deleting
 kubeconfigs or blocking a public route does not revoke stolen certificates;
 client-CA trust retirement is a separate operation.

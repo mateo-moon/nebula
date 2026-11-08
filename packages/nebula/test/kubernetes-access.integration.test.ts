@@ -28,6 +28,9 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
   const work = mkdtempSync(join(tmpdir(), "kubernetes-oidc-integration-"));
   const name = `oidc-${process.pid}-${Date.now().toString(36)}`;
   const gatewayName = `${name}-gateway`;
+  // Match the fixture owner so Linux bind mounts remain private (0700/0600)
+  // while Envoy runs without root. Desktop Docker masks this permission issue.
+  const fixtureUser = `${process.getuid?.() ?? 65532}:${process.getgid?.() ?? 65532}`;
   const issuerKeys = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const jwk = { ...issuerKeys.publicKey.export({ format: "jwk" }), kid: "fixture", use: "sig", alg: "RS256" };
   // Linux containers reach the host through its bridge address. Desktop Docker
@@ -119,8 +122,8 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     };
     config.static_resources.clusters[0].transport_socket.typed_config.common_tls_context.validation_context.trusted_ca.filename = "/fixture/backend-ca.crt";
     writeFileSync(join(work, "envoy.yaml"), stringify(config));
-    await run("docker", ["run", "--rm", "-v", `${work}:/fixture:ro`, envoyImage, "--mode", "validate", "-c", "/fixture/envoy.yaml"]);
-    await run("docker", ["run", "-d", "--name", gatewayName, "--network", "kind", "-p", "127.0.0.1::8443", "-v", `${work}:/fixture:ro`, envoyImage,
+    await run("docker", ["run", "--rm", "--user", fixtureUser, "-v", `${work}:/fixture:ro`, envoyImage, "--mode", "validate", "-c", "/fixture/envoy.yaml"]);
+    await run("docker", ["run", "-d", "--user", fixtureUser, "--name", gatewayName, "--network", "kind", "-p", "127.0.0.1::8443", "-v", `${work}:/fixture:ro`, envoyImage,
       "-c", "/fixture/envoy.yaml", "--disable-hot-restart", "--log-level", "warn"]);
     const port = (await run("docker", ["port", gatewayName, "8443/tcp"])).split(":").at(-1);
     const publicUrl = `https://127.0.0.1:${port}${reviewPath}`;
