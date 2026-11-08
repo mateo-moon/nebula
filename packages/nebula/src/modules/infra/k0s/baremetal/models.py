@@ -126,8 +126,9 @@ class ReceiptIdentity(TypedDict):
 
 
 class Receipt(ReceiptIdentity, total=False):
-    sourceBootOrder: list[str]
-    bootOrder: list[str]
+    sourceBootEntries: list[dict[str, str]]
+    systemDisk: str
+    bootLoader: dict[str, str]
 
 
 class VariableBackup(TypedDict):

@@ -1,18 +1,30 @@
-"""Firmware-priority regression tests using disposable EFI-variable files only."""
+"""Installed-loader regression tests using disposable EFI files and fake tools."""
 
+import hashlib
 import json
-import os
-import shlex
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
 from baremetal_fixtures import FACTS, SPEC, build_agent, host_agent, installer
 
 boot_order = host_agent.boot_order
+OLD_ESP = "10000000-0000-0000-0000-000000000001"
+NEW_ESP = "20000000-0000-0000-0000-000000000002"
+OTHER_ESP = "30000000-0000-0000-0000-000000000003"
+
+
+def load_option(partition, loader, *, active=True, label="test"):
+    drive = struct.pack("<BBHIQQ", 4, 1, 42, 1, 2048, 1048576)
+    drive += uuid.UUID(partition).bytes_le + b"\x02\x02"
+    filename = (loader + "\0").encode("utf-16-le")
+    path = drive + struct.pack("<BBH", 4, 4, len(filename) + 4) + filename + b"\x7f\xff\x04\x00"
+    return struct.pack("<IH", int(active), len(path)) + (label + "\0").encode("utf-16-le") + path
 
 
 class BootOrderTests(unittest.TestCase):
@@ -24,205 +36,240 @@ class BootOrderTests(unittest.TestCase):
         self.variables.mkdir()
         self.mounts = self.root / "mounts"
         self.mounts.write_text(f"efivarfs {self.variables} efivarfs rw 0 0\n")
-        patched = patch.object(boot_order, "VARIABLES", self.variables)
-        patched.start()
-        self.addCleanup(patched.stop)
-        mounted = patch.object(boot_order, "MOUNTS", self.mounts)
+        self.disk = self.root / "disk"
+        self.disk.touch()
+        self.esp = self.root / "esp"
+        (self.esp / "efi/debian").mkdir(parents=True)
+        (self.esp / "efi/debian/grubx64.efi").write_bytes(b"new-loader")
+        for key, value in (
+            ("VARIABLES", self.variables),
+            ("MOUNTS", self.mounts),
+            ("ESP", self.esp),
+        ):
+            patched = patch.object(boot_order, key, value)
+            patched.start()
+            self.addCleanup(patched.stop)
+        mounted = patch.object(
+            boot_order, "esp_identity", return_value=(str(self.disk), "1", NEW_ESP)
+        )
         mounted.start()
         self.addCleanup(mounted.stop)
+        self.variable("Boot0007", load_option(OLD_ESP, "\\EFI\\ubuntu\\shimx64.efi"))
+        self.variable("Boot0002", b"network-recovery-entry")
+        self.variable("Boot0003", load_option(OTHER_ESP, "\\EFI\\other\\bootx64.efi"))
+        self.variable("Boot0000", load_option(NEW_ESP, "\\EFI\\debian\\grubx64.efi"))
+        self.variable("BootCurrent", b"\x07\0")
+        self.order(["0007", "0002", "0003", "0000"])
         self.receipt = self.root / "installed.json"
-        self.receipt.write_text(json.dumps({"uid": "test", "sourceBootOrder": ["0002", "0003"]}))
-        for number in ("0000", "0002", "0003"):
-            self.variable("Boot" + number, ("loader-" + number).encode())
-        self.variable("BootNext", b"\x03\0")
+        self.source = [{"number": "0007", "sha256": self.digest("0007")}]
+        self.receipt.write_text(
+            json.dumps(
+                {"uid": "test", "sourceBootEntries": self.source, "systemDisk": str(self.disk)}
+            )
+        )
 
-    def variable(self, name, value):
+    def variable(self, name, data):
         path = self.variables / (name + "-" + boot_order.GLOBAL_GUID)
-        path.write_bytes(b"\x07\0\0\0" + value)
+        path.write_bytes(b"\x07\0\0\0" + data)
         return path
+
+    def digest(self, n):
+        return hashlib.sha256(boot_order.value("Boot" + n)).hexdigest()
 
     def order(self, numbers):
         self.variable("BootOrder", b"".join(int(n, 16).to_bytes(2, "little") for n in numbers))
 
-    def apply(self, args, **kwargs):
-        self.assertEqual(args[:2], ["efibootmgr", "--bootorder"])
-        self.order(args[2].split(","))
-        return subprocess.CompletedProcess(args, 0)
+    def manager(self, args):
+        self.assertEqual(args[0], "efibootmgr")
+        if args[1] == "--bootorder":
+            self.order(args[2].split(","))
+        elif args[1] == "--bootnum":
+            self.assertEqual(args[3], "--delete-bootnum")
+            (self.variables / ("Boot" + args[2] + "-" + boot_order.GLOBAL_GUID)).unlink()
+        elif args[1] == "--create-only":
+            self.variable("Boot0000", load_option(NEW_ESP, args[-1], label="debian"))
+        else:
+            self.fail("Unexpected firmware mutation")
+        return ""
 
-    def test_grub_cannot_preempt_existing_network_recovery_priority(self):
-        self.order(["0000", "0002", "0003"])
-        original_entries = {n: boot_order.value("Boot" + n) for n in ("0000", "0002", "0003")}
-        with patch.object(boot_order.subprocess, "run", side_effect=self.apply) as command:
-            boot_order.restore(self.receipt)
-            command.assert_called_once()
-        self.assertEqual(boot_order.capture(), ["0002", "0003", "0000"])
-        self.assertEqual(boot_order.value("BootNext"), b"\x03\0")
-        self.assertEqual(
-            {n: boot_order.value("Boot" + n) for n in original_entries}, original_entries
-        )
-        saved = json.loads(self.receipt.read_text())
-        self.assertEqual(saved["bootOrder"], ["0002", "0003", "0000"])
-        self.assertEqual(saved["sourceBootOrder"], ["0002", "0003"])
+    def configure(self):
+        with patch.object(boot_order, "command", side_effect=self.manager):
+            boot_order.configure(self.receipt)
+        return json.loads(self.receipt.read_text())["bootLoader"]
+
+    def test_new_debian_precedes_stale_source_and_network_after_kexec(self):
+        network = boot_order.value("Boot0002")
+        other = boot_order.value("Boot0003")
+        identity = self.configure()
+        self.assertEqual(boot_order.order(), ["0000", "0002", "0003"])
+        self.assertIsNone(boot_order.value("Boot0007"))
+        self.assertEqual(boot_order.value("Boot0002"), network)
+        self.assertEqual(boot_order.value("Boot0003"), other)
+        self.assertEqual(identity["partUuid"], NEW_ESP)
         self.assertEqual(self.receipt.stat().st_mode & 0o777, 0o600)
+        with self.assertRaisesRegex(ValueError, "did not boot"):
+            boot_order.verify(identity)
+        self.variable("BootCurrent", b"\0\0")
+        boot_order.verify(identity)
 
-    def test_local_first_policy_is_preserved_without_guessing_a_provider_order(self):
-        self.receipt.write_text(json.dumps({"sourceBootOrder": ["0000", "0003", "0002"]}))
-        self.order(["0000", "0003", "0002"])
-        with patch.object(boot_order.subprocess, "run") as command:
-            boot_order.restore(self.receipt)
-            command.assert_not_called()
-        self.assertEqual(boot_order.capture(), ["0000", "0003", "0002"])
+    def test_already_local_first_and_network_first_sources_select_new_os(self):
+        for previous in (["0000", "0007", "0002"], ["0002", "0007", "0000"]):
+            with self.subTest(previous=previous):
+                self.receipt.write_text(
+                    json.dumps({"sourceBootEntries": self.source, "systemDisk": str(self.disk)})
+                )
+                self.variable("Boot0007", load_option(OLD_ESP, "\\EFI\\ubuntu\\shimx64.efi"))
+                self.order(previous)
+                identity = self.configure()
+                self.assertEqual(boot_order.order()[0], "0000")
+                self.variable("BootCurrent", b"\0\0")
+                boot_order.verify(identity)
 
-    def test_removed_old_loader_is_not_resurrected_and_new_loader_is_retained(self):
-        self.receipt.write_text(json.dumps({"sourceBootOrder": ["0002", "0001", "0003"]}))
-        self.order(["0000", "0002", "0003"])
-        with patch.object(boot_order.subprocess, "run", side_effect=self.apply):
-            boot_order.restore(self.receipt)
-        self.assertEqual(boot_order.capture(), ["0002", "0003", "0000"])
-        self.assertIsNone(boot_order.value("Boot0001"))
+    def test_reused_boot_number_is_not_deleted(self):
+        self.variable("Boot0007", load_option(NEW_ESP, "\\EFI\\debian\\grubx64.efi"))
+        (self.variables / ("Boot0000-" + boot_order.GLOBAL_GUID)).unlink()
+        self.order(["0007", "0002", "0003"])
+        identity = self.configure()
+        self.assertEqual(identity["number"], "0007")
+        self.assertIsNotNone(boot_order.value("Boot0007"))
+        self.assertEqual(boot_order.order(), ["0007", "0002", "0003"])
 
-    def test_surviving_entry_is_preserved_even_if_grub_removed_it_from_boot_order(self):
-        self.order(["0000", "0002"])
-        with patch.object(boot_order.subprocess, "run", side_effect=self.apply):
-            boot_order.restore(self.receipt)
-        self.assertEqual(boot_order.capture(), ["0002", "0003", "0000"])
+    def test_changed_source_number_belongs_to_new_owner_and_is_retained(self):
+        self.variable("Boot0007", load_option(OTHER_ESP, "\\EFI\\other\\different.efi"))
+        self.configure()
+        self.assertIsNotNone(boot_order.value("Boot0007"))
+        self.assertEqual(boot_order.order(), ["0000", "0007", "0002", "0003"])
 
-    def test_fresh_firmware_keeps_new_installed_loader_without_an_original_order(self):
-        self.receipt.write_text(json.dumps({"sourceBootOrder": []}))
-        self.order(["0000"])
-        with patch.object(boot_order.subprocess, "run") as command:
-            boot_order.restore(self.receipt)
-            command.assert_not_called()
-        self.assertEqual(boot_order.capture(), ["0000"])
+    def test_esp_on_another_disk_blocks_setup_before_firmware_writes(self):
+        other = self.root / "other-disk"
+        other.touch()
+        with (
+            patch.object(boot_order, "esp_identity", return_value=(str(other), "1", NEW_ESP)),
+            patch.object(boot_order, "command") as commands,
+            self.assertRaisesRegex(ValueError, "selected system disk"),
+        ):
+            boot_order.configure(self.receipt)
+        commands.assert_not_called()
 
-    def test_failed_write_readback_or_bootnext_change_never_records_success(self):
-        for failure in ("write", "readback", "bootnext"):
+    def test_ownership_change_during_priority_write_prevents_entry_deletion(self):
+        def manager(args):
+            result = self.manager(args)
+            if args[1] == "--bootorder":
+                self.variable("Boot0007", load_option(OTHER_ESP, "\\EFI\\other\\new.efi"))
+            return result
+
+        with patch.object(boot_order, "command", side_effect=manager):
+            with self.assertRaisesRegex(ValueError, "ownership changed"):
+                boot_order.configure(self.receipt)
+        self.assertIsNotNone(boot_order.value("Boot0007"))
+        self.assertNotIn("bootLoader", json.loads(self.receipt.read_text()))
+
+    def test_missing_grub_registration_is_created_for_the_actual_esp(self):
+        (self.variables / ("Boot0000-" + boot_order.GLOBAL_GUID)).unlink()
+        self.order(["0007", "0002", "0003"])
+        identity = self.configure()
+        self.assertEqual(identity["number"], "0000")
+        self.assertEqual(boot_order.order()[0], "0000")
+
+    def test_wrong_esp_inactive_entry_and_deceptive_label_are_not_accepted(self):
+        for raw in (
+            load_option(OTHER_ESP, "\\EFI\\debian\\grubx64.efi", label="debian"),
+            load_option(NEW_ESP, "\\EFI\\debian\\grubx64.efi", active=False),
+            load_option(NEW_ESP, "\\EFI\\ubuntu\\shimx64.efi", label="debian"),
+        ):
+            self.variable("Boot0000", raw)
+            self.assertIsNone(boot_order.select_loader(NEW_ESP))
+        (self.esp / "efi/debian/grubx64.efi").unlink()
+        with self.assertRaisesRegex(ValueError, "file is missing"):
+            self.configure()
+
+    def test_failed_priority_or_cleanup_does_not_complete_receipt(self):
+        for failure in ("write", "readback", "delete"):
             with self.subTest(failure=failure):
-                self.order(["0000", "0002", "0003"])
-                before = self.receipt.read_text()
 
-                def apply(args, failure=failure, **kwargs):
+                def manager(args, failure=failure):
                     if failure == "write":
                         raise subprocess.CalledProcessError(1, args)
-                    if failure == "bootnext":
-                        self.apply(args)
-                        self.variable("BootNext", b"\x02\0")
+                    if failure == "delete" and args[1] == "--bootnum":
+                        return ""
+                    if failure != "readback":
+                        return self.manager(args)
+                    return ""
 
-                with (
-                    patch.object(boot_order.subprocess, "run", side_effect=apply),
-                    self.assertRaises((ValueError, subprocess.CalledProcessError)),
-                ):
-                    boot_order.restore(self.receipt)
-                self.assertEqual(self.receipt.read_text(), before)
+                self.order(["0007", "0002", "0003", "0000"])
+                with patch.object(boot_order, "command", side_effect=manager):
+                    with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                        boot_order.configure(self.receipt)
+                self.assertNotIn("bootLoader", json.loads(self.receipt.read_text()))
 
-    def test_retry_is_idempotent_and_cannot_overwrite_later_operator_changes(self):
-        self.order(["0000", "0002", "0003"])
-        with patch.object(boot_order.subprocess, "run", side_effect=self.apply) as command:
-            boot_order.restore(self.receipt)
-            boot_order.restore(self.receipt)
-            self.assertEqual(command.call_count, 1)
-            self.order(["0000", "0003", "0002"])
-            with self.assertRaisesRegex(ValueError, "priority differs"):
-                boot_order.restore(self.receipt)
-            self.assertEqual(command.call_count, 1)
+    def test_conflicting_bootnext_is_preserved_and_blocks_configuration(self):
+        self.variable("BootNext", b"\x02\0")
+        with patch.object(boot_order, "command") as commands:
+            with self.assertRaisesRegex(ValueError, "BootNext conflicts"):
+                boot_order.configure(self.receipt)
+        commands.assert_not_called()
+        self.assertEqual(boot_order.value("BootNext"), b"\x02\0")
+        self.assertNotIn("bootLoader", json.loads(self.receipt.read_text()))
 
-    def test_firmware_can_append_a_new_device_without_changing_recorded_priority(self):
-        with self.assertRaisesRegex(ValueError, "priority is empty"):
-            boot_order.verify([])
-        self.variable("Boot0004", b"new-device")
-        self.order(["0002", "0003", "0000", "0004"])
-        boot_order.verify(["0002", "0003", "0000"])
-        self.order(["0004", "0002", "0003", "0000"])
-        with self.assertRaisesRegex(ValueError, "priority differs"):
-            boot_order.verify(["0002", "0003", "0000"])
+    def test_loader_bootnext_is_left_unchanged(self):
+        self.variable("BootNext", b"\0\0")
+        self.configure()
+        self.assertEqual(boot_order.value("BootNext"), b"\0\0")
 
-    def test_malformed_firmware_and_invalid_receipts_are_rejected_without_writes(self):
-        self.order(["0000", "0002", "0003"])
-        with patch.object(boot_order.subprocess, "run") as command:
-            for source in (["0002", "0002"], ["../../BootNext"], "0002", [False]):
-                self.receipt.write_text(json.dumps({"sourceBootOrder": source}))
-                with self.assertRaises(ValueError):
-                    boot_order.restore(self.receipt)
-            for raw in (b"\x02", b"\x02\0\x02\0", b"\xff\xff"):
-                self.variable("BootOrder", raw)
-                with self.assertRaises(ValueError):
-                    boot_order.capture()
-            self.variable("BootOrder", b"").write_bytes(b"\x07\0")
-            with self.assertRaisesRegex(ValueError, "truncated"):
-                boot_order.capture()
-            command.assert_not_called()
+    def test_retry_cannot_overwrite_later_operator_priority_change(self):
+        self.configure()
+        with patch.object(boot_order, "command") as commands:
+            boot_order.configure(self.receipt)
+            self.order(["0002", "0000", "0003"])
+            with self.assertRaisesRegex(ValueError, "not first"):
+                boot_order.configure(self.receipt)
+        commands.assert_not_called()
 
-    def test_an_unmounted_efivars_directory_is_not_an_empty_firmware_order(self):
-        self.mounts.write_text(f"sysfs {self.variables} sysfs rw 0 0\n")
-        with self.assertRaisesRegex(ValueError, "unavailable"):
-            boot_order.capture()
+    def test_post_reboot_requires_correct_entry_current_boot_and_esp(self):
+        identity = self.configure()
+        self.variable("BootCurrent", b"\0\0")
+        boot_order.verify(identity)
+        with patch.object(boot_order, "esp_identity", return_value=("/dev/vdb", "1", OTHER_ESP)):
+            with self.assertRaisesRegex(ValueError, "OS ESP"):
+                boot_order.verify(identity)
+        self.variable("Boot0000", load_option(OTHER_ESP, "\\EFI\\debian\\grubx64.efi"))
+        with self.assertRaisesRegex(ValueError, "identity changed"):
+            boot_order.verify(identity)
 
-    def test_seed_only_restores_captured_uefi_order_and_bios_install_is_unchanged(self):
-        receipt = {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
-        files = installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", receipt)
-        self.assertIn(b"mountpoint -q /sys/firmware/efi/efivars", files["nebula/late.sh"])
-        self.assertIn(
-            b"python3 -I /var/lib/nebula-baremetal/boot_order.py", files["nebula/late.sh"]
-        )
-        self.assertIn(b"efibootmgr", files["nebula/boot_order.py"])
-        self.assertEqual(
-            json.loads(files["nebula/receipt.json"])["sourceBootOrder"], FACTS["bootOrder"]
-        )
-        for invalid in ({"uid": "test"}, {"uid": "test", "sourceBootOrder": []}):
-            with self.assertRaisesRegex(ValueError, "not captured"):
-                installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", invalid)
-        bios = installer.render_files(
-            SPEC, {**FACTS, "uefi": False}, "ssh-ed25519 AAAA", {"uid": "test"}
-        )
-        self.assertNotIn("nebula/boot_order.py", bios)
-        self.assertNotIn(b"efivar", bios["nebula/late.sh"])
-
-    def test_failed_upgrade_policy_blocks_receipt_finalization(self):
-        files = installer.render_files(
-            SPEC, FACTS, "ssh-ed25519 AAAA", {"sourceBootOrder": FACTS["bootOrder"]}
-        )
-        late = files["nebula/late.sh"].decode()
-        command = shlex.split(late[late.index("in-target /bin/sh -ec '") :])
-        self.assertEqual(command[:3], ["in-target", "/bin/sh", "-ec"])
-        executables = self.root / "bin"
-        executables.mkdir()
-        scripts = {
-            "mountpoint": "exit 0\n",
-            "debconf-set-selections": 'cat > "$NEBULA_DEBCONF_INPUT"\nexit "$NEBULA_DEBCONF_STATUS"\n',
-            "python3": 'printf completed > "$NEBULA_HELPER_RECEIPT"\n',
+    def test_capture_owns_only_gpt_entries_on_selected_disk_and_fences_bootnext(self):
+        devices = {
+            "blockdevices": [{"children": [{"parttype": boot_order.ESP_TYPE, "partuuid": OLD_ESP}]}]
         }
-        for name, script in scripts.items():
-            executable = executables / name
-            executable.write_text("#!/bin/sh\n" + script)
-            executable.chmod(0o755)
-        completed = self.root / "completed-receipt"
-        selections = self.root / "debconf-input"
-        for status in (17, 0):
-            with self.subTest(status=status):
-                result = subprocess.run(
-                    command[1:],
-                    capture_output=True,
-                    cwd=self.root,
-                    env={
-                        "PATH": str(executables) + ":/usr/bin:/bin",
-                        "NEBULA_DEBCONF_STATUS": str(status),
-                        "NEBULA_DEBCONF_INPUT": str(selections),
-                        "NEBULA_HELPER_RECEIPT": str(completed),
-                    },
-                )
-                self.assertEqual(result.returncode, status, result.stderr)
-                self.assertEqual(completed.exists(), status == 0)
-                self.assertEqual(
-                    selections.read_text(), "grub-efi-amd64 grub2/update_nvram boolean false\n"
-                )
+        with patch.object(boot_order, "command", return_value=json.dumps(devices)):
+            self.assertEqual(boot_order.capture("/dev/disk/by-id/os"), self.source)
+            self.variable("BootNext", b"\x02\0")
+            with self.assertRaisesRegex(ValueError, "Resolve pending"):
+                boot_order.capture("/dev/disk/by-id/os")
 
-    def test_post_reboot_drift_or_missing_late_receipt_blocks_osready(self):
+    def test_malformed_load_options_and_unmounted_variables_are_rejected(self):
+        for raw in (b"", b"\0" * 7, load_option(NEW_ESP, "\\EFI\\debian\\grubx64.efi")[:-1]):
+            self.assertIsNone(boot_order.load_option(raw))
+        self.mounts.write_text("")
+        with self.assertRaisesRegex(ValueError, "unavailable"):
+            self.configure()
+
+    def test_receipt_validation_rejects_invalid_source_ownership(self):
+        for data in ("0007", [{"number": "../../BootNext", "sha256": "a" * 64}], self.source * 2):
+            with self.assertRaises(ValueError):
+                boot_order.source_entries(data)
+        for identity in (None, {}, {"number": "0000"}):
+            with self.assertRaisesRegex(ValueError, "loader identity"):
+                boot_order.verify(identity)
+
+    def test_missing_or_unbooted_loader_receipt_blocks_host_verification(self):
+        identity = self.configure()
         receipt = {
             "uid": "test",
             "fingerprint": installer.fingerprint(SPEC),
             "sourceBootId": "old",
-            "sourceBootOrder": ["0002", "0003"],
-            "bootOrder": ["0002", "0003", "0000"],
+            "sourceBootEntries": self.source,
+            "systemDisk": str(self.disk),
+            "bootLoader": identity,
         }
         with (
             patch.object(host_agent, "Path") as path,
@@ -245,31 +292,52 @@ class BootOrderTests(unittest.TestCase):
                 ],
             ),
         ):
-            path.return_value.read_text.side_effect = [
-                json.dumps(receipt),
-                "ID=debian\nVERSION_CODENAME=trixie\n",
-            ]
-            self.order(["0002", "0003", "0000"])
-            self.assertTrue(host_agent.verify({"uid": "test", "spec": SPEC})["verified"])
-            path.return_value.read_text.side_effect = [
-                json.dumps(receipt),
-                "ID=debian\nVERSION_CODENAME=trixie\n",
-            ]
-            self.order(["0000", "0002", "0003"])
-            with self.assertRaisesRegex(ValueError, "boot priority verification failed"):
+
+            def read_receipt():
+                path.return_value.read_text.side_effect = [
+                    json.dumps(receipt),
+                    "ID=debian\nVERSION_CODENAME=trixie\n",
+                ]
+
+            read_receipt()
+            with self.assertRaisesRegex(ValueError, "loader verification failed"):
                 host_agent.verify({"uid": "test", "spec": SPEC})
-            receipt.pop("bootOrder")
-            path.return_value.read_text.side_effect = [
-                json.dumps(receipt),
-                "ID=debian\nVERSION_CODENAME=trixie\n",
-            ]
-            with self.assertRaisesRegex(ValueError, "boot priority was not recorded"):
+            self.variable("BootCurrent", b"\0\0")
+            read_receipt()
+            self.assertTrue(host_agent.verify({"uid": "test", "spec": SPEC})["verified"])
+            receipt.pop("bootLoader")
+            read_receipt()
+            with self.assertRaisesRegex(ValueError, "loader was not recorded"):
                 host_agent.verify({"uid": "test", "spec": SPEC})
 
-    def test_boot_order_drift_after_discovery_cannot_stage_or_commit_an_install(self):
+    def test_seed_records_ownership_and_bios_has_no_firmware_setup(self):
+        receipt = {
+            "uid": "test",
+            "sourceBootEntries": FACTS["sourceBootEntries"],
+            "systemDisk": FACTS["disk"]["byId"],
+        }
+        files = installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", receipt)
+        self.assertIn(
+            b"python3 -I /var/lib/nebula-baremetal/boot_order.py", files["nebula/late.sh"]
+        )
+        self.assertNotIn(b"grub2/update_nvram boolean false", files["nebula/late.sh"])
+        with self.assertRaisesRegex(ValueError, "not captured"):
+            installer.render_files(SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test"})
+        bios = installer.render_files(
+            SPEC, {**FACTS, "uefi": False}, "ssh-ed25519 AAAA", {"uid": "test"}
+        )
+        self.assertNotIn("nebula/boot_order.py", bios)
+
+    def test_boot_entry_drift_between_discovery_and_staging_blocks_writes(self):
         with (
             patch.object(
-                host_agent, "probe", return_value={**FACTS, "bootOrder": ["0003", "0002"]}
+                host_agent,
+                "probe",
+                return_value={
+                    **FACTS,
+                    "sourceBootEntries": self.source,
+                    "systemDisk": str(self.disk),
+                },
             ),
             patch.object(host_agent, "command") as command,
             self.assertRaisesRegex(ValueError, "changed after discovery"),
@@ -277,69 +345,32 @@ class BootOrderTests(unittest.TestCase):
             host_agent.stage({"uid": "test", "spec": SPEC, "facts": FACTS})
         command.assert_not_called()
 
-    def test_actual_seeded_helper_executes_in_isolation_with_disposable_firmware(self):
-        files = installer.render_files(
-            SPEC, FACTS, "ssh-ed25519 AAAA", {"sourceBootOrder": FACTS["bootOrder"]}
-        )
-        helper = self.root / "boot_order.py"
-        helper.write_text(
-            files["nebula/boot_order.py"]
-            .decode()
-            .replace(
-                'Path("/sys/firmware/efi/efivars")',
-                f"Path({str(self.variables)!r})",
-            )
-            .replace('Path("/proc/mounts")', f"Path({str(self.mounts)!r})")
-        )
-        executables = self.root / "bin"
-        executables.mkdir()
-        manager = executables / "efibootmgr"
-        manager.write_text(
-            f"#!{sys.executable}\nimport sys\nfrom pathlib import Path\n"
-            "assert sys.argv[1] == '--bootorder'\n"
-            f"p = Path({str(self.variables / ('BootOrder-' + boot_order.GLOBAL_GUID))!r})\n"
-            "p.write_bytes(bytes([7,0,0,0]) + b''.join(int(n,16).to_bytes(2,'little') for n in sys.argv[2].split(',')))\n"
-        )
-        manager.chmod(0o755)
-        self.order(["0000", "0002", "0003"])
-        result = subprocess.run(
-            [sys.executable, "-I", "-B", str(helper), str(self.receipt)],
-            capture_output=True,
-            text=True,
-            cwd=self.root,
-            env={**os.environ, "PATH": str(executables) + os.pathsep + os.environ["PATH"]},
-            check=True,
-        )
-        self.assertEqual(result.stdout + result.stderr, "")
-        self.assertEqual(boot_order.capture(), ["0002", "0003", "0000"])
-        self.assertEqual(
-            json.loads(self.receipt.read_text())["bootOrder"], ["0002", "0003", "0000"]
-        )
-        self.assertEqual(boot_order.value("BootNext"), b"\x03\0")
-
-    def test_seed_helper_source_is_available_inside_the_isolated_agent_zipapp(self):
-        # Use only temporary code paths; importing the packaged agent never probes a host.
+    def test_source_is_available_inside_actual_isolated_agent_zipapp(self):
         program = build_agent().replace(
             "runpy.run_path(str(archive), run_name='__main__')",
             "sys.path.insert(0, str(archive)); import installer; "
-            "files = installer.render_files(**json.loads(sys.stdin.read())); "
+            "files=installer.render_files(**json.loads(sys.stdin.read())); "
             "print(files['nebula/boot_order.py'].decode())",
         )
-        payload = {
-            "spec": SPEC,
-            "facts": FACTS,
-            "worker_public_key": "ssh-ed25519 AAAA",
-            "receipt": {"sourceBootOrder": FACTS["bootOrder"]},
-        }
         result = subprocess.run(
             [sys.executable, "-I", "-B", "-c", "import sys,json\n" + program],
-            input=json.dumps(payload),
+            input=json.dumps(
+                {
+                    "spec": SPEC,
+                    "facts": FACTS,
+                    "worker_public_key": "ssh-ed25519 AAAA",
+                    "receipt": {
+                        "sourceBootEntries": FACTS["sourceBootEntries"],
+                        "systemDisk": FACTS["disk"]["byId"],
+                    },
+                }
+            ),
             text=True,
             capture_output=True,
             cwd=self.root,
             check=True,
         )
-        self.assertIn("def restore(receipt_path: Path)", result.stdout)
+        self.assertIn("def configure(receipt_path: Path)", result.stdout)
         self.assertEqual(result.stderr, "")
 
 

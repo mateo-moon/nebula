@@ -400,7 +400,14 @@ class Qualification(unittest.TestCase):
         spec = copy.deepcopy(SPEC)
         spec["installation"]["minimumKernelVersion"] = "6.12.113-1"
         files = installer.render_files(
-            spec, FACTS, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            spec,
+            FACTS,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         self.assertIn(
             b"apt-setup/services-select multiselect security, updates", files["preseed.cfg"]
@@ -479,7 +486,14 @@ class Qualification(unittest.TestCase):
 
     def test_installer_network_seed_and_private_cpio(self):
         files = installer.render_files(
-            SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            SPEC,
+            FACTS,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         self.assertIn(b"preseed/late_command", files["preseed.cfg"])
         self.assertIn(b"2001:db8::10/64", files["nebula/uplink.network"])
@@ -532,7 +546,14 @@ class Qualification(unittest.TestCase):
         aliases = ["192.0.2.11", "192.0.2.12", "198.51.100.20"]
         spec["additionalIpv4Addresses"] = aliases
         baseline = installer.render_files(
-            SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            SPEC,
+            FACTS,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         # Already configured aliases can appear before the primary on the source.
         facts["network"]["addresses"] = ["192.0.2.11/24", "192.0.2.12/32"] + facts["network"][
@@ -540,7 +561,14 @@ class Qualification(unittest.TestCase):
         ]
         original_facts = copy.deepcopy(facts)
         files = installer.render_files(
-            spec, facts, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            spec,
+            facts,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         self.assertEqual(facts, original_facts)
         network = files["nebula/uplink.network"].decode()
@@ -561,16 +589,34 @@ class Qualification(unittest.TestCase):
                 spec,
                 facts,
                 "ssh-ed25519 AAAA",
-                {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]},
+                {
+                    "uid": "test",
+                    "sourceBootEntries": FACTS["sourceBootEntries"],
+                    "systemDisk": FACTS["disk"]["byId"],
+                },
             )
 
     def test_empty_aliases_preserve_network_and_legacy_receipts(self):
         spec = {**SPEC, "additionalIpv4Addresses": []}
         original = installer.render_files(
-            SPEC, FACTS, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            SPEC,
+            FACTS,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         empty = installer.render_files(
-            spec, FACTS, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            spec,
+            FACTS,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         self.assertEqual(original["nebula/uplink.network"], empty["nebula/uplink.network"])
         legacy_fingerprint = "3f9c338edcb25b59ada6a4ae225a2feba35fa8d3d45deab9f5fad41716e98f94"
@@ -617,7 +663,11 @@ class Qualification(unittest.TestCase):
                         spec,
                         FACTS,
                         "ssh-ed25519 AAAA",
-                        {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]},
+                        {
+                            "uid": "test",
+                            "sourceBootEntries": FACTS["sourceBootEntries"],
+                            "systemDisk": FACTS["disk"]["byId"],
+                        },
                     )
         for addresses in [
             [],
@@ -660,7 +710,14 @@ class Qualification(unittest.TestCase):
             for serial in ("data-one", "data-two")
         ]
         files = installer.render_files(
-            spec, facts, "ssh-ed25519 AAAA", {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]}
+            spec,
+            facts,
+            "ssh-ed25519 AAAA",
+            {
+                "uid": "test",
+                "sourceBootEntries": FACTS["sourceBootEntries"],
+                "systemDisk": FACTS["disk"]["byId"],
+            },
         )
         script = files["nebula/late.sh"].decode()
         self.assertEqual(script.count('in-target vgextend worker-vg "$disk"'), 2)
@@ -674,7 +731,11 @@ class Qualification(unittest.TestCase):
                     spec,
                     facts,
                     "ssh-ed25519 AAAA",
-                    {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]},
+                    {
+                        "uid": "test",
+                        "sourceBootEntries": FACTS["sourceBootEntries"],
+                        "systemDisk": FACTS["disk"]["byId"],
+                    },
                 )
         spec["installation"]["disk"]["workloadSerials"] = ["data-one", "data-two"]
         facts["workloadDisks"].pop()
@@ -683,7 +744,11 @@ class Qualification(unittest.TestCase):
                 spec,
                 facts,
                 "ssh-ed25519 AAAA",
-                {"uid": "test", "sourceBootOrder": FACTS["bootOrder"]},
+                {
+                    "uid": "test",
+                    "sourceBootEntries": FACTS["sourceBootEntries"],
+                    "systemDisk": FACTS["disk"]["byId"],
+                },
             )
 
     def test_worker_handoff_requires_every_declared_disk_in_the_workload_group(self):

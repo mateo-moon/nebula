@@ -74,7 +74,7 @@ def probe(spec: WorkerSpec, skip_uefi: bool = False) -> JsonObject:
         "machineId": Path("/etc/machine-id").read_text().strip(),
     }
     if facts["uefi"]:
-        facts["bootOrder"] = boot_order.capture()
+        facts["sourceBootEntries"] = boot_order.capture(disk["byId"])
     return facts
 
 
@@ -222,7 +222,8 @@ def stage(payload: JsonObject) -> Receipt:
         "sourceBootId": current["bootId"],
     }
     if current["uefi"]:
-        receipt["sourceBootOrder"] = current["bootOrder"]
+        receipt["sourceBootEntries"] = current["sourceBootEntries"]
+        receipt["systemDisk"] = current["disk"]["byId"]
     # Fence aliases of the same host, including requests in other namespaces.
     claim = Path("/var/lib/nebula-baremetal/claim.json")
     claim.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -375,15 +376,13 @@ def verify(payload: JsonObject) -> JsonObject:
         or os_release.get("VERSION_CODENAME", "").strip('"') != spec["installation"]["suite"]
     ):
         raise ProvisioningError("installed OS does not match the requested suite")
-    if "sourceBootOrder" in receipt:
-        if "bootOrder" not in receipt:
-            raise ProvisioningError("installed firmware boot priority was not recorded")
+    if "sourceBootEntries" in receipt:
+        if "bootLoader" not in receipt:
+            raise ProvisioningError("installed Debian EFI loader was not recorded")
         try:
-            boot_order.verify(receipt["bootOrder"])
+            boot_order.verify(receipt["bootLoader"])
         except ValueError as error:
-            raise ProvisioningError(
-                "installed firmware boot priority verification failed"
-            ) from error
+            raise ProvisioningError("installed Debian EFI loader verification failed") from error
     verify_kernel(spec)
     vg = spec["installation"]["volumeGroup"]
     workload_serials = spec["installation"]["disk"].get("workloadSerials")

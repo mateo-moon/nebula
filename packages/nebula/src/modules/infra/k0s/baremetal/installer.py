@@ -311,10 +311,13 @@ chmod 0600 /target/var/lib/nebula-baremetal/installed.json
         "nebula/receipt.json": canonical(receipt).encode(),
     }
     if facts["uefi"]:
-        if "bootOrder" not in facts or receipt.get("sourceBootOrder") != boot_order.numbers(
-            facts["bootOrder"]
+        if (
+            "sourceBootEntries" not in facts
+            or receipt.get("sourceBootEntries")
+            != boot_order.source_entries(facts["sourceBootEntries"])
+            or receipt.get("systemDisk") != facts["disk"]["byId"]
         ):
-            raise ProvisioningError("source firmware boot order was not captured in the receipt")
+            raise ProvisioningError("source EFI loader entries were not captured in the receipt")
         files["nebula/boot_order.py"] = inspect.getsource(boot_order).encode()
         files["nebula/late.sh"] += b"""
 cp /nebula/boot_order.py /target/var/lib/nebula-baremetal/boot_order.py
@@ -323,8 +326,6 @@ in-target /bin/sh -ec '
     mount -t efivarfs efivarfs /sys/firmware/efi/efivars
     trap "umount /sys/firmware/efi/efivars" EXIT
   fi
-  # The loader is registered now. Later package upgrades must not reorder it.
-  printf "%s\\n" "grub-efi-amd64 grub2/update_nvram boolean false" | debconf-set-selections
   python3 -I /var/lib/nebula-baremetal/boot_order.py /var/lib/nebula-baremetal/installed.json
 '
 """

@@ -55,7 +55,7 @@ SPEC = {
 FACTS = {
     "bootId": "source-boot",
     "uefi": True,
-    "bootOrder": ["0002", "0003"],
+    "sourceBootEntries": [],
     "disk": {"byId": "/dev/disk/by-id/virtio-test"},
     "network": {
         "mac": "02:00:00:00:00:10",
