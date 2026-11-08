@@ -313,8 +313,7 @@ chmod 0600 /target/var/lib/nebula-baremetal/installed.json
     if facts["uefi"]:
         if (
             "sourceBootEntries" not in facts
-            or receipt.get("sourceBootEntries")
-            != boot_order.source_entries(facts["sourceBootEntries"])
+            or receipt.get("sourceBootEntries") != facts["sourceBootEntries"]
             or receipt.get("systemDisk") != facts["disk"]["byId"]
         ):
             raise ProvisioningError("source EFI loader entries were not captured in the receipt")

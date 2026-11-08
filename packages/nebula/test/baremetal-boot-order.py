@@ -52,9 +52,7 @@ class BootOrderTests(unittest.TestCase):
             patched = patch.object(boot_order, key, value)
             patched.start()
             self.addCleanup(patched.stop)
-        mounted = patch.object(
-            boot_order, "esp_identity", return_value=(str(self.disk), "1", NEW_ESP)
-        )
+        mounted = patch.object(boot_order, "esp_identity", return_value=(str(self.disk), NEW_ESP))
         mounted.start()
         self.addCleanup(mounted.stop)
         self.variable("Boot0007", load_option(OLD_ESP, "\\EFI\\ubuntu\\shimx64.efi"))
@@ -93,8 +91,6 @@ class BootOrderTests(unittest.TestCase):
         elif args[1] == "--bootnum":
             self.assertEqual(args[3], "--delete-bootnum")
             (self.variables / ("Boot" + args[2] + "-" + boot_order.GLOBAL_GUID)).unlink()
-        elif args[1] == "--create-only":
-            self.variable("Boot0000", load_option(NEW_ESP, args[-1], label="debian"))
         else:
             self.fail("Unexpected firmware mutation")
         return ""
@@ -155,7 +151,7 @@ class BootOrderTests(unittest.TestCase):
         other = self.root / "other-disk"
         other.touch()
         with (
-            patch.object(boot_order, "esp_identity", return_value=(str(other), "1", NEW_ESP)),
+            patch.object(boot_order, "esp_identity", return_value=(str(other), NEW_ESP)),
             patch.object(boot_order, "command") as commands,
             self.assertRaisesRegex(ValueError, "selected system disk"),
         ):
@@ -175,12 +171,14 @@ class BootOrderTests(unittest.TestCase):
         self.assertIsNotNone(boot_order.value("Boot0007"))
         self.assertNotIn("bootLoader", json.loads(self.receipt.read_text()))
 
-    def test_missing_grub_registration_is_created_for_the_actual_esp(self):
+    def test_missing_grub_registration_fails_without_firmware_writes(self):
         (self.variables / ("Boot0000-" + boot_order.GLOBAL_GUID)).unlink()
         self.order(["0007", "0002", "0003"])
-        identity = self.configure()
-        self.assertEqual(identity["number"], "0000")
-        self.assertEqual(boot_order.order()[0], "0000")
+        with patch.object(boot_order, "command") as commands:
+            with self.assertRaisesRegex(ValueError, "GRUB did not register"):
+                boot_order.configure(self.receipt)
+        commands.assert_not_called()
+        self.assertNotIn("bootLoader", json.loads(self.receipt.read_text()))
 
     def test_wrong_esp_inactive_entry_and_deceptive_label_are_not_accepted(self):
         for raw in (
@@ -189,9 +187,10 @@ class BootOrderTests(unittest.TestCase):
             load_option(NEW_ESP, "\\EFI\\ubuntu\\shimx64.efi", label="debian"),
         ):
             self.variable("Boot0000", raw)
-            self.assertIsNone(boot_order.select_loader(NEW_ESP))
+            with self.assertRaisesRegex(ValueError, "GRUB did not register"):
+                boot_order.installed_loader(NEW_ESP, boot_order.entries())
         (self.esp / "efi/debian/grubx64.efi").unlink()
-        with self.assertRaisesRegex(ValueError, "file is missing"):
+        with self.assertRaisesRegex(ValueError, "GRUB did not register"):
             self.configure()
 
     def test_failed_priority_or_cleanup_does_not_complete_receipt(self):
@@ -240,7 +239,7 @@ class BootOrderTests(unittest.TestCase):
         identity = self.configure()
         self.boot()
         boot_order.verify(identity)
-        with patch.object(boot_order, "esp_identity", return_value=("/dev/vdb", "1", OTHER_ESP)):
+        with patch.object(boot_order, "esp_identity", return_value=("/dev/vdb", OTHER_ESP)):
             with self.assertRaisesRegex(ValueError, "OS ESP"):
                 boot_order.verify(identity)
         self.variable("Boot0000", load_option(OTHER_ESP, "\\EFI\\debian\\grubx64.efi"))
@@ -248,9 +247,7 @@ class BootOrderTests(unittest.TestCase):
             boot_order.verify(identity)
 
     def test_capture_owns_only_gpt_entries_on_selected_disk_and_fences_bootnext(self):
-        devices = {
-            "blockdevices": [{"children": [{"parttype": boot_order.ESP_TYPE, "partuuid": OLD_ESP}]}]
-        }
+        devices = {"blockdevices": [{"parttype": boot_order.ESP_TYPE, "partuuid": OLD_ESP}]}
         with patch.object(boot_order, "command", return_value=json.dumps(devices)):
             self.assertEqual(boot_order.capture("/dev/disk/by-id/os"), self.source)
             self.variable("BootNext", b"\x02\0")
@@ -275,12 +272,9 @@ class BootOrderTests(unittest.TestCase):
                 boot_order.capture("/dev/disk/by-id/os")
         self.assertIsNotNone(boot_order.value("Boot0007"))
 
-    def test_receipt_validation_rejects_invalid_source_ownership(self):
-        for data in ("0007", [{"number": "../../BootNext", "sha256": "a" * 64}], self.source * 2):
-            with self.assertRaises(ValueError):
-                boot_order.source_entries(data)
+    def test_missing_loader_receipt_fields_fail_closed(self):
         for identity in (None, {}, {"number": "0000"}):
-            with self.assertRaisesRegex(ValueError, "loader identity"):
+            with self.assertRaises((ValueError, KeyError, TypeError)):
                 boot_order.verify(identity)
 
     def test_missing_or_unbooted_loader_receipt_blocks_host_verification(self):

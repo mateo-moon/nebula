@@ -279,9 +279,10 @@ installed Debian OS.
 
 After GRUB installation, the late command identifies an active Debian loader by
 its GPT ESP identity, exact Debian EFI file path and existing loader file, rather
-than by a display label or fixed boot number. It registers the loader if needed
-and places it first in firmware boot priority. The ESP must be on the selected
-system disk. Entries captured from that disk's old ESPs are retired only while
+than by a display label or fixed boot number. GRUB owns loader registration;
+missing or invalid registration fails the installation. The late command places
+the verified loader first in firmware boot priority. The ESP must be on the
+selected system disk. Entries captured from that disk's old ESPs are retired only while
 their complete EFI payload still matches; an ID reused by GRUB or another owner
 is retained. Network entries and entries for other disks are preserved behind
 the installed OS. GRUB package upgrades retain their normal registration behavior.

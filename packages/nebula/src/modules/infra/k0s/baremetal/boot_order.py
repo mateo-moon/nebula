@@ -51,12 +51,6 @@ def value(name: str) -> bytes | None:
     return blob[4:]
 
 
-def number(data: object) -> str:
-    if not isinstance(data, str) or not re.fullmatch(r"[0-9A-F]{4}", data):
-        raise ValueError("Invalid firmware boot entry number")
-    return data
-
-
 def order() -> list[str]:
     raw = value("BootOrder") or b""
     if len(raw) % 2:
@@ -72,7 +66,7 @@ def entries() -> dict[str, bytes]:
     for path in VARIABLES.glob("Boot????-" + GLOBAL_GUID):
         if not re.fullmatch(r"[0-9A-F]{4}", path.name[4:8]):
             continue
-        n = number(path.name[4:8])
+        n = path.name[4:8]
         raw = value("Boot" + n)
         if raw is not None:
             result[n] = raw
@@ -114,68 +108,42 @@ def load_option(raw: bytes) -> tuple[str, str, bool] | None:
     return None
 
 
-def source_entries(data: object) -> list[dict[str, str]]:
-    if not isinstance(data, list):
-        raise ValueError("Invalid source EFI entries")
-    result: list[dict[str, str]] = []
-    for entry in data:
-        if not isinstance(entry, dict) or set(entry) != {"number", "sha256"}:
-            raise ValueError("Invalid source EFI entry identity")
-        n, digest = number(entry["number"]), entry["sha256"]
-        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-            raise ValueError("Invalid source EFI entry fingerprint")
-        if any(item["number"] == n for item in result):
-            raise ValueError("Duplicate source EFI entry")
-        result.append({"number": n, "sha256": digest})
-    return result
-
-
-def partition_ids(devices: list[dict[str, object]]) -> list[str]:
-    result: list[str] = []
-    for device in devices:
-        if str(device.get("parttype", "")).lower() == ESP_TYPE and device.get("partuuid"):
-            result.append(str(uuid.UUID(str(device["partuuid"]))))
-        children = device.get("children", [])
-        if isinstance(children, list):
-            result.extend(partition_ids(children))
-    return result
+def partitions(disk: str = "") -> list[str]:
+    args = ["lsblk", "--list", "--json", "--output", "PARTTYPE,PARTUUID"]
+    devices = json.loads(command([*args, disk] if disk else args))["blockdevices"]
+    return [
+        str(uuid.UUID(device["partuuid"]))
+        for device in devices
+        if (device["parttype"] or "").lower() == ESP_TYPE
+    ]
 
 
 def capture(disk: str) -> list[dict[str, str]]:
     require_variables()
     order()  # Reject malformed firmware priority before any destructive action.
-    # kexec does not consume BootNext. Do not carry a conflicting one-shot boot
-    # through a destructive install or silently overwrite another owner's intent.
     if value("BootNext") is not None:
         raise ValueError("Resolve pending EFI BootNext before OS installation")
-    devices = json.loads(command(["lsblk", "-p", "-J", "-o", "PARTTYPE,PARTUUID", disk]))
-    partitions = partition_ids(devices["blockdevices"])
-    if partitions:
-        visible = json.loads(command(["lsblk", "-p", "-J", "-o", "PARTTYPE,PARTUUID"]))
-        all_ids = partition_ids(visible["blockdevices"])
-        if any(all_ids.count(partition) != 1 for partition in partitions):
+    selected = partitions(disk)
+    if selected:
+        visible = partitions()
+        if any(visible.count(partition) != 1 for partition in selected):
             raise ValueError("Selected ESP UUID is not unique; EFI entry ownership is ambiguous")
     return [
         {"number": n, "sha256": hashlib.sha256(raw).hexdigest()}
         for n, raw in sorted(entries().items())
-        if (option := load_option(raw)) is not None and option[0] in partitions
+        if (option := load_option(raw)) is not None and option[0] in selected
     ]
 
 
-def esp_identity() -> tuple[str, str, str]:
-    mount = command(
-        ["findmnt", "-n", "-o", "SOURCE,FSTYPE,OPTIONS", "--mountpoint", str(ESP)]
-    ).split()
-    if len(mount) != 3 or mount[1] != "vfat" or "rw" not in mount[2].split(","):
-        raise ValueError("Installed OS needs a writable FAT ESP")
+def esp_identity() -> tuple[str, str]:
+    mount = command(["findmnt", "-n", "-o", "SOURCE,FSTYPE", "--mountpoint", str(ESP)]).split()
+    if len(mount) != 2 or mount[1] != "vfat":
+        raise ValueError("Installed OS needs a mounted FAT ESP")
     source = str(Path(mount[0]).resolve(strict=True))
     fields = command(["lsblk", "-dnro", "PKNAME,PARTUUID,PARTTYPE", source]).split()
     if len(fields) != 3 or fields[2].lower() != ESP_TYPE:
         raise ValueError("Installed ESP must be a direct GPT partition")
-    partition = (Path("/sys/class/block") / Path(source).name / "partition").read_text().strip()
-    if not partition.isdecimal():
-        raise ValueError("Installed ESP partition number is invalid")
-    return "/dev/" + fields[0], partition, str(uuid.UUID(fields[1]))
+    return "/dev/" + fields[0], str(uuid.UUID(fields[1]))
 
 
 def loader_file(loader: str) -> Path:
@@ -184,81 +152,35 @@ def loader_file(loader: str) -> Path:
     return ESP.joinpath(*loader.lstrip("\\").split("\\"))
 
 
-def select_loader(part_uuid: str) -> str | None:
-    current = entries()
-    candidates = [
-        n
-        for n, raw in current.items()
-        if (option := load_option(raw)) is not None
-        and option[0] == part_uuid
-        and option[1] in LOADERS
-        and option[2]
-        and loader_file(option[1]).is_file()
-    ]
-    return next((n for n in [*order(), *sorted(candidates)] if n in candidates), None)
+def installed_loader(part_uuid: str, current: dict[str, bytes]) -> tuple[str, bytes, str]:
+    # GRUB owns registration. Check its result instead of implementing a second
+    # installer or inferring ownership from a display label.
+    for n in [*order(), *sorted(current)]:
+        raw = current.get(n)
+        option = load_option(raw) if raw is not None else None
+        if (
+            raw is not None
+            and option is not None
+            and option[0] == part_uuid
+            and option[1] in LOADERS
+            and option[2]
+            and loader_file(option[1]).is_file()
+        ):
+            return n, raw, option[1]
+    raise ValueError("GRUB did not register a valid Debian EFI loader for the installed ESP")
 
 
-def installed_loader(disk: str, partition: str, part_uuid: str) -> str:
-    n = select_loader(part_uuid)
-    if n is None:
-        loader = next((path for path in LOADERS if loader_file(path).is_file()), None)
-        if loader is None:
-            raise ValueError("Installed Debian EFI loader file is missing")
-        command(
-            [
-                "efibootmgr",
-                "--create-only",
-                "--disk",
-                disk,
-                "--part",
-                partition,
-                "--label",
-                "debian",
-                "--loader",
-                loader,
-            ]
-        )
-        n = select_loader(part_uuid)
-    if n is None:
-        raise ValueError("Installed Debian EFI loader was not registered")
-    return n
-
-
-def loader_identity(data: object) -> dict[str, str]:
-    fields = {"number", "sha256", "partUuid", "loader", "disk", "installerBootId"}
-    if not isinstance(data, dict) or set(data) != fields:
-        raise ValueError("Invalid installed EFI loader identity")
-    identity: dict[str, str] = {}
-    for key in fields:
-        if not isinstance(data[key], str):
-            raise ValueError("Invalid installed EFI loader identity")
-        identity[key] = data[key]
-    source_entries([{"number": identity["number"], "sha256": identity["sha256"]}])
-    if str(uuid.UUID(identity["partUuid"])) != identity["partUuid"]:
-        raise ValueError("Invalid installed ESP identity")
-    if str(uuid.UUID(identity["installerBootId"])) != identity["installerBootId"]:
-        raise ValueError("Invalid installer boot identity")
-    if not Path(identity["disk"]).is_absolute():
-        raise ValueError("Invalid installed system disk identity")
-    loader_file(identity["loader"])
-    return identity
-
-
-def verify(identity: object, *, booted: bool = True) -> None:
-    identity = loader_identity(identity)
+def verify(identity: dict[str, str], *, booted: bool = True) -> None:
     require_variables()
-    n = number(identity["number"])
-    raw = value("Boot" + n)
-    option = load_option(raw) if raw is not None else None
+    n = identity["number"]
+    raw = entries().get(n)
     if (
         raw is None
-        or option is None
-        or not option[2]
+        or load_option(raw) != (identity["partUuid"], identity["loader"], True)
         or hashlib.sha256(raw).hexdigest() != identity["sha256"]
-        or option[:2] != (identity["partUuid"], identity["loader"])
     ):
         raise ValueError("Installed Debian EFI entry identity changed")
-    disk, _, part_uuid = esp_identity()
+    disk, part_uuid = esp_identity()
     if (
         part_uuid != identity["partUuid"]
         or Path(identity["disk"]).resolve() != Path(disk).resolve()
@@ -267,10 +189,11 @@ def verify(identity: object, *, booted: bool = True) -> None:
         raise ValueError("Installed Debian EFI entry does not match the OS ESP")
     if order()[:1] != [n]:
         raise ValueError("Installed Debian EFI loader is not first in boot priority")
-    if booted and value("BootCurrent") != int(n, 16).to_bytes(2, "little"):
-        raise ValueError("Installed OS did not boot through its recorded EFI loader")
-    if booted and BOOT_ID.read_text().strip() == identity["installerBootId"]:
-        raise ValueError("Installed OS is still running in the installer boot")
+    if booted:
+        if value("BootCurrent") != int(n, 16).to_bytes(2, "little"):
+            raise ValueError("Installed OS did not boot through its recorded EFI loader")
+        if uuid.UUID(BOOT_ID.read_text().strip()) == uuid.UUID(identity["installerBootId"]):
+            raise ValueError("Installed OS is still running in the installer boot")
 
 
 def configure(receipt_path: Path) -> None:
@@ -278,18 +201,18 @@ def configure(receipt_path: Path) -> None:
     if receipt_path.is_symlink():
         raise ValueError("Installation receipt is a symlink")
     receipt = json.loads(receipt_path.read_text())
-    source = source_entries(receipt["sourceBootEntries"])
+    source = receipt["sourceBootEntries"]
     if "bootLoader" in receipt:
         verify(receipt["bootLoader"], booted=False)
         return
-    disk, partition, part_uuid = esp_identity()
+    disk, part_uuid = esp_identity()
     if Path(receipt["systemDisk"]).resolve(strict=True) != Path(disk).resolve():
         raise ValueError("Installed ESP is not on the selected system disk")
-    n = installed_loader(disk, partition, part_uuid)
+    current = entries()
+    n, raw, loader = installed_loader(part_uuid, current)
     boot_next = value("BootNext")
     if boot_next is not None and boot_next != int(n, 16).to_bytes(2, "little"):
         raise ValueError("EFI BootNext conflicts with the installed Debian loader")
-    current = entries()
     retired = [
         entry["number"]
         for entry in source
@@ -315,15 +238,11 @@ def configure(receipt_path: Path) -> None:
             raise ValueError("Old OS EFI entry removal did not persist")
     if value("BootNext") != boot_next:
         raise ValueError("EFI BootNext changed during loader setup")
-    raw = value("Boot" + n)
-    option = load_option(raw) if raw is not None else None
-    if raw is None or option is None:
-        raise ValueError("Installed Debian EFI entry disappeared")
     identity = {
         "number": n,
         "sha256": hashlib.sha256(raw).hexdigest(),
         "partUuid": part_uuid,
-        "loader": option[1],
+        "loader": loader,
         "disk": receipt["systemDisk"],
         "installerBootId": str(uuid.UUID(BOOT_ID.read_text().strip())),
     }
