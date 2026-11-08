@@ -233,8 +233,9 @@ def run_test(options):
         print("Initial OS, pinned SSH, static networking and LVM verified", flush=True)
         shell("rm /var/lib/nebula-baremetal/installed.json")
         if uefi:
-            # A different loader survives in NVRAM while reinstall erases its
-            # files. Its forced ID also prevents accidental same-ID coverage.
+            # A different loader survives in NVRAM while its OS is replaced.
+            # The ESP may be reused, so loader files alone cannot prove which
+            # entry firmware selected. A forced ID avoids same-ID-only coverage.
             shell(
                 r"""set -eu
 cp -r /boot/efi/EFI/debian /boot/efi/EFI/nebula-source

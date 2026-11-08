@@ -546,8 +546,8 @@ QEMU disk. It creates a legacy source OS and exercises production SSH discovery,
 staging, kexec, reinstall and verification using pinned netboot artifacts. Supply
 `--firmware-code <OVMF_CODE.fd> --firmware-vars <OVMF_VARS.fd>` to qualify UEFI.
 The UEFI case boots a differently named source loader before reinstall, retains
-the same private NVRAM across the transition, checks retirement of the erased
-loader and verifies Debian through two ordinary firmware disk boots. Evidence
+the same private NVRAM across the transition, checks retirement of the source
+loader entry and verifies Debian through two ordinary firmware disk boots. Evidence
 remains in the printed private temporary directory. The dedicated UEFI workflow
 runs this tier on relevant changes. BIOS mode remains available without those
 firmware arguments. The VM uses IPv4; physical-server firmware and deployment
