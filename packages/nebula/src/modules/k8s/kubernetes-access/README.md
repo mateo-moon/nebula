@@ -87,6 +87,10 @@ For applications consuming Secret data, `ServiceAccountTokenRotation` refreshes
 only the specified ServiceAccount/Secret pairs. Callers provide target Secrets,
 the file-based kubeconfig, CA and RBAC. Missing targets fail the Job.
 `expirationSeconds` defaults to 600; the default schedule is every two minutes.
+Set `audiences` to restrict the recipients of the issued target tokens when the
+API server's defaults include additional services. This is separate from the
+refresher's own `identity.audience`, which authenticates its TokenRequest calls.
+Omitting `audiences` preserves the API server's defaults.
 `ServiceAccountTokenLifetimePolicy.maxTokenLifetimeSeconds` applies an
 independent server-side request limit to the selected requester.
 

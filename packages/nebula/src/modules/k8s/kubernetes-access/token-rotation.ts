@@ -1,6 +1,7 @@
 import { ApiObject } from "cdk8s";
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
+import { validateOidcAudience } from "../../../utils/oidc";
 import { KubernetesWorkloadIdentity, kubernetesServiceAccountTokenLifetimeSeconds, type KubernetesWorkloadIdentityConfig } from "./workload-identity";
 export interface ServiceAccountTokenRotationConfig {
   name: string;
@@ -14,6 +15,8 @@ export interface ServiceAccountTokenRotationConfig {
   schedule?: string;
   /** Requested token lifetime; defaults to 600 seconds. */
   expirationSeconds?: number;
+  /** Recipients of the issued target tokens; omit to use API-server defaults. */
+  audiences?: readonly string[];
   image?: string;
 }
 /** Refreshes explicitly named ServiceAccount token Secrets using OIDC. Only
@@ -27,6 +30,12 @@ export class ServiceAccountTokenRotation extends BaseConstruct<ServiceAccountTok
       if (!/^[a-z0-9][a-z0-9.-]*$/.test(value)) throw new Error("Exact resource names are required for token rotation");
     if (!c.targets.length) throw new Error("At least one token rotation target is required");
     const expirationSeconds = kubernetesServiceAccountTokenLifetimeSeconds(c.expirationSeconds);
+    if (c.audiences !== undefined && (!Array.isArray(c.audiences) || !c.audiences.length || new Set(c.audiences).size !== c.audiences.length))
+      throw new Error("Token audiences must be a non-empty list of unique exact audiences");
+    const audienceArgs = (c.audiences ?? []).map(audience => {
+      validateOidcAudience(audience);
+      return ` --audience='${audience.replace(/'/g, "'\\''")}'`;
+    }).join("");
     const token = new KubernetesWorkloadIdentity(c.identity).projection;
     new ApiObject(this, `${name}-sa`, { apiVersion: "v1", kind: "ServiceAccount", metadata: { name, namespace: c.namespace }, automountServiceAccountToken: false });
     new ApiObject(this, name, {
@@ -46,7 +55,7 @@ for pair in ${c.targets.map(target => `${target.serviceAccount}:${target.secret}
   service_account="\${pair%%:*}"
   target="\${pair#*:}"
   kubectl --cache-dir=/work/cache -n ${c.targetNamespace} get secret "$target" -o name > /dev/null
-  kubectl --cache-dir=/work/cache -n ${c.targetNamespace} create token "$service_account" --duration=${expirationSeconds}s > /work/token
+  kubectl --cache-dir=/work/cache -n ${c.targetNamespace} create token "$service_account" --duration=${expirationSeconds}s${audienceArgs} > /work/token
   jq -n --rawfile token /work/token --rawfile ca /ca/ca.crt '{data:{token:($token|rtrimstr("\\n")|@base64),"ca.crt":($ca|@base64)}}' > /work/patch.json
   kubectl --cache-dir=/work/cache -n ${c.targetNamespace} patch secret "$target" --type=merge --patch-file=/work/patch.json > /dev/null
   rm -f /work/token /work/patch.json

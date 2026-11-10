@@ -18,9 +18,13 @@ export function oidcTokenLifetimeSeconds(issuer: Pick<OidcIssuer, "maxTokenLifet
 
 export function validateOidcIssuer(issuer: OidcIssuer): void {
   validateOidcHttpsUrl(issuer.url); validateOidcHttpsUrl(issuer.jwksUrl);
-  if (!issuer.audience || /[\s*\u0000-\u001f\u007f]/.test(issuer.audience))
-    throw new Error("OIDC requires one exact, non-empty audience");
+  validateOidcAudience(issuer.audience);
   if (issuer.maxTokenLifetimeSeconds !== undefined) oidcTokenLifetimeSeconds(issuer, 600);
+}
+
+export function validateOidcAudience(audience: string): void {
+  if (typeof audience !== "string" || !audience || /[\s*\u0000-\u001f\u007f]/.test(audience))
+    throw new Error("OIDC requires one exact, non-empty audience");
 }
 
 export function validateOidcHttpsUrl(value: string): URL {

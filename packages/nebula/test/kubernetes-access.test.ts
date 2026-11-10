@@ -208,6 +208,29 @@ test("token rotation names exact targets and holds credentials on tmpfs", () => 
   assert.throws(() => ServiceAccountTokenLifetimePolicy.manifests({ name: "token-lifetime", requesterUsername: "", maxTokenLifetimeSeconds: 1200 }), /requester username/);
 });
 
+test("token rotation requests only configured audiences without shell expansion", () => {
+  const config = {
+    name: "token-rotation", namespace: "default", targetNamespace: "apps",
+    targets: [{ serviceAccount: "consumer", secret: "consumer-token" }],
+    identity: { cluster: "example" }, kubeconfigSecret: "example-oidc",
+    caSecret: { name: "example-ca", key: "tls.crt" },
+  };
+  const audiences = ["https://api.example.test", "urn:example:'$(printf${IFS}expanded)"];
+  const chart = Testing.chart(); new ServiceAccountTokenRotation(chart, "rotation", { ...config, audiences });
+  const script = Testing.synth(chart).find(o => o.kind === "CronJob")!.spec.jobTemplate.spec.template.spec.containers[0].args[0];
+  const create = script.split("\n").find((line: string) => line.includes(" create token "))!.split(" > /work/token")[0];
+  const work = mkdtempSync(join(tmpdir(), "nebula-token-audiences-"));
+  try {
+    writeFileSync(join(work, "kubectl"), `#!${process.execPath}\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n`, { mode: 0o755 });
+    const args = JSON.parse(execFileSync("sh", ["-ec", `service_account=consumer; ${create}`], { encoding: "utf8", env: { ...process.env, PATH: `${work}:${process.env.PATH}` } }));
+    assert.deepEqual(args, ["--cache-dir=/work/cache", "-n", "apps", "create", "token", "consumer", "--duration=600s", ...audiences.map(audience => `--audience=${audience}`)]);
+  } finally { rmSync(work, { recursive: true, force: true }); }
+  for (const audiences of [[], ["same", "same"], [""], ["*"], ["two audiences"], ["line\nbreak"]])
+    assert.throws(() => new ServiceAccountTokenRotation(Testing.chart(), "invalid", { ...config, audiences }), /audience/);
+  const defaults = Testing.chart(); new ServiceAccountTokenRotation(defaults, "rotation", config);
+  assert.ok(!Testing.synth(defaults).find(o => o.kind === "CronJob")!.spec.jobTemplate.spec.template.spec.containers[0].args[0].includes("--audience="));
+});
+
 test("Argo and Crossplane consume shared projections through their own configuration", async () => {
   const { ArgoCd } = await import("../src/modules/k8s/argocd");
   const { Crossplane } = await import("../src/modules/k8s/crossplane");
