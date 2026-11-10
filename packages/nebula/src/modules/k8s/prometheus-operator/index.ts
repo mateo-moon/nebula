@@ -209,6 +209,64 @@ export interface LokiPushIngressConfig {
   ingressAnnotations?: Record<string, string>;
 }
 
+/** Accept one Grafana operator's projected Kubernetes token for API writes. */
+export interface GrafanaOperatorKubeAuthConfig {
+  /** Exact `iss` claim from the cluster's ServiceAccount tokens. */
+  issuer: string;
+  /** Audience of the operator's projected token, distinct from the API audience. */
+  audience: string;
+  serviceAccountNamespace: string;
+  serviceAccountName: string;
+  /** In-cluster Kubernetes JWKS URL reachable from the Grafana pod. */
+  jwksUrl: string;
+}
+
+/** Grafana JWT settings limited to one operator identity and one audience. */
+export function grafanaOperatorKubeAuthValues(
+  config: GrafanaOperatorKubeAuthConfig,
+): Record<string, unknown> {
+  const namespace = config.serviceAccountNamespace;
+  const name = config.serviceAccountName;
+  const dnsLabel = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
+  const dnsSubdomain = /^[a-z0-9](?:[-.a-z0-9]*[a-z0-9])?$/;
+  if (
+    !dnsLabel.test(namespace) || namespace.length > 63 ||
+    !dnsSubdomain.test(name) || name.length > 253 ||
+    !config.issuer || !config.audience ||
+    !config.jwksUrl.startsWith("https://")
+  ) {
+    throw new Error("grafanaOperatorKubeAuth requires a valid Kubernetes identity, issuer, audience and HTTPS JWKS URL");
+  }
+  const subject = `system:serviceaccount:${namespace}:${name}`;
+  return {
+    grafana: {
+      "grafana.ini": {
+        "auth.jwt": {
+          enabled: true,
+          header_name: "Authorization",
+          username_claim: "sub",
+          email_claim: "sub",
+          auto_sign_up: true,
+          expect_claims: JSON.stringify({
+            iss: config.issuer,
+            aud: [config.audience],
+            sub: subject,
+          }),
+          role_attribute_path: `sub == '${subject}' && 'Admin'`,
+          role_attribute_strict: true,
+          allow_assign_grafana_admin: false,
+          url_login: false,
+          jwk_set_url: config.jwksUrl,
+          jwk_set_bearer_token_file:
+            "/var/run/secrets/kubernetes.io/serviceaccount/token",
+          tls_client_ca: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+          cache_ttl: "5m",
+        },
+      },
+    },
+  };
+}
+
 export interface PrometheusOperatorConfig {
   /** Namespace for monitoring stack (defaults to monitoring) */
   namespace?: string;
@@ -274,6 +332,8 @@ export interface PrometheusOperatorConfig {
   thanos?: ThanosConfig;
   /** Grafana admin password */
   grafanaAdminPassword?: string;
+  /** Authenticate one Grafana operator with its projected Kubernetes token. */
+  grafanaOperatorKubeAuth?: GrafanaOperatorKubeAuthConfig;
   /** Tolerations */
   tolerations?: Toleration[];
 }
@@ -574,6 +634,21 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       kubeletServiceMonitor: { enabled: true },
     };
 
+    // This option owns the whole auth.jwt section. A second copy in raw Helm
+    // values could leave an unintended authentication setting after deep merge.
+    const grafanaValues = this.config.values?.grafana;
+    const grafanaIni =
+      grafanaValues && typeof grafanaValues === "object"
+        ? (grafanaValues as Record<string, unknown>)["grafana.ini"]
+        : undefined;
+    if (
+      this.config.grafanaOperatorKubeAuth &&
+      grafanaIni && typeof grafanaIni === "object" &&
+      "auth.jwt" in grafanaIni
+    ) {
+      throw new Error("Set Grafana JWT auth through grafanaOperatorKubeAuth, not values.grafana.grafana.ini");
+    }
+
     this.helm = this.createHelmRelease({
       namespace: namespaceName,
       chart: "kube-prometheus-stack",
@@ -583,7 +658,12 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         "https://prometheus-community.github.io/helm-charts",
       version: this.config.version ?? "81.4.3",
       defaultValues,
-      values: this.config.values,
+      values: this.config.grafanaOperatorKubeAuth
+        ? mergeHelmValues(
+            this.config.values ?? {},
+            grafanaOperatorKubeAuthValues(this.config.grafanaOperatorKubeAuth),
+          )
+        : this.config.values,
       // kube-prometheus-stack CRDs exceed the 262144-byte annotation limit
       // for kubectl client-side apply. They must be pre-installed via
       // `kubectl apply --server-side` or by ArgoCD with ServerSideApply=true.
