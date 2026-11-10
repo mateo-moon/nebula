@@ -1,10 +1,12 @@
 """Render a private Debian Installer initramfs for SSH-only OS replacement."""
 
+import inspect
 import ipaddress
 import re
 import secrets
 import shlex
 
+import boot_order
 from models import DiskPolicy, Installation, JsonObject, Receipt, WorkerSpec
 from runtime import ProvisioningError, canonical
 from runtime import fingerprint as fingerprint
@@ -293,7 +295,7 @@ cp /nebula/receipt.json /target/var/lib/nebula-baremetal/installed.json
 chmod 0600 /target/var/lib/nebula-baremetal/installed.json
 """
     )
-    return {
+    files = {
         "preseed.cfg": preseed.encode(),
         "nebula/logging.sh": INSTALLER_LOGGING.encode(),
         "nebula/early.sh": early.encode(),
@@ -308,6 +310,25 @@ chmod 0600 /target/var/lib/nebula-baremetal/installed.json
         ).encode(),
         "nebula/receipt.json": canonical(receipt).encode(),
     }
+    if facts["uefi"]:
+        if (
+            "sourceBootEntries" not in facts
+            or receipt.get("sourceBootEntries") != facts["sourceBootEntries"]
+            or receipt.get("systemDisk") != facts["disk"]["byId"]
+        ):
+            raise ProvisioningError("source EFI loader entries were not captured in the receipt")
+        files["nebula/boot_order.py"] = inspect.getsource(boot_order).encode()
+        files["nebula/late.sh"] += b"""
+cp /nebula/boot_order.py /target/var/lib/nebula-baremetal/boot_order.py
+in-target /bin/sh -ec '
+  if ! mountpoint -q /sys/firmware/efi/efivars; then
+    mount -t efivarfs efivarfs /sys/firmware/efi/efivars
+    trap "umount /sys/firmware/efi/efivars" EXIT
+  fi
+  python3 -I /var/lib/nebula-baremetal/boot_order.py /var/lib/nebula-baremetal/installed.json
+'
+"""
+    return files
 
 
 def cpio(files: dict[str, bytes]) -> bytes:
