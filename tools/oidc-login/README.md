@@ -59,6 +59,21 @@ a loopback browser link or a bounded error category. Verbose HTTP/token dumps
 are disabled; standard output carries ExecCredential JSON. These controls do
 not erase credentials from process memory.
 
+Native application registration may be stored durably by the
+`KubernetesOidcClientConfiguration` ConfigMap construct. Export only its three
+validated registration fields into the owner-only local input format. The local
+file restrictions still provide integrity and issuer/client binding. User
+ID/access/refresh tokens never belong in that ConfigMap; upstream token
+cache/keyring behavior remains unchanged.
+
+For a headless trusted host, use the existing loopback/SSH callback approach and
+`--skip-open-browser`. Root-only tmpfs and an expiring input record are suitable
+for temporary qualification. Keep application values out of command lines and
+shell history. Confidential web-client secrets must not use the native
+ConfigMap path. App-credential rotation follows the
+provider and operator's accepted policy. Actual provider login and refresh remain
+acceptance checks.
+
 ## Build and verify
 
 Use the Go version declared in `go.mod` or later. Dependencies are pinned in

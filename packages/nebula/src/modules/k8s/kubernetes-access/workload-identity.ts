@@ -2,7 +2,7 @@ import { ApiObject } from "cdk8s";
 import { Construct } from "constructs";
 import { stringify } from "yaml";
 import { BaseConstruct } from "../../../core";
-import { validateOidcHttpsUrl, oidcTokenLifetimeSeconds } from "../../../utils/oidc";
+import { validateOidcAudience, validateOidcHttpsUrl, oidcTokenLifetimeSeconds } from "../../../utils/oidc";
 
 export const KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS = 600;
 export const kubernetesAccessAudience = (cluster: string) => `kubernetes:${cluster}`;
@@ -36,7 +36,7 @@ export class KubernetesWorkloadIdentity {
     if (!/^[a-z][a-z0-9-]*$/.test(config.cluster)) throw new Error("A DNS-label cluster name is required");
     this.cluster = config.cluster;
     this.audience = config.audience ?? kubernetesAccessAudience(config.cluster);
-    if (!this.audience || /[\s*\u0000-\u001f\u007f]/.test(this.audience)) throw new Error("An exact workload audience is required");
+    validateOidcAudience(this.audience);
     this.tokenPath = kubernetesAccessTokenPath(config.cluster);
     this.expirationSeconds = kubernetesServiceAccountTokenLifetimeSeconds(config.expirationSeconds);
   }

@@ -87,6 +87,10 @@ For applications consuming Secret data, `ServiceAccountTokenRotation` refreshes
 only the specified ServiceAccount/Secret pairs. Callers provide target Secrets,
 the file-based kubeconfig, CA and RBAC. Missing targets fail the Job.
 `expirationSeconds` defaults to 600; the default schedule is every two minutes.
+Set `audiences` to restrict the recipients of the issued target tokens when the
+API server's defaults include additional services. This is separate from the
+refresher's own `identity.audience`, which authenticates its TokenRequest calls.
+Omitting `audiences` preserves the API server's defaults.
 `ServiceAccountTokenLifetimePolicy.maxTokenLifetimeSeconds` applies an
 independent server-side request limit to the selected requester.
 
@@ -107,6 +111,49 @@ For providers requiring an OAuth app credential, set
 `nebula-oidc-login` and references `~/.config/nebula/oidc/<cluster>.json`.
 `userKubeconfig({ clientCredentialFile })` selects another protected file.
 See [the adapter and input schema](../../../../../../tools/oidc-login/README.md).
+
+## Native OAuth application configuration
+
+`KubernetesOidcClientConfiguration` manages a public native/desktop application's
+registration settings as a ConfigMap. It creates no Pod, ServiceAccount, RBAC
+grant or public endpoint. Confidential web applications must use secret storage.
+
+```ts
+new KubernetesOidcClientConfiguration(chart, "desktop-client", {
+  name: "kubectl-example-client", namespace: "oidc",
+  applicationType: "native",
+  issuer: identity.config.workforce.url,
+  clientId: identity.config.workforce.audience,
+  // Optional: clientSecret: registrationValue,
+});
+```
+
+Google Desktop apps are public clients and cannot keep an embedded client secret
+confidential. The registration value does not authenticate a user or authorize
+Kubernetes access. Retain authcode/S256 PKCE, issuer/audience/authorized-party
+validation, company identity checks and RBAC.
+See [Google Desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app)
+and [RFC 8252 §8.5](https://www.rfc-editor.org/rfc/rfc8252.html#section-8.5).
+
+The ConfigMap has `issuer`, `client_id` and optional `client_secret` data keys.
+Omitting `clientSecret` lets an operator populate only `data.client_secret`
+through a separate server-side-apply field manager, without storing its value in
+Git. The resource opts into Argo server-side apply so subsequent source applies
+own only the supplied binding keys and retain the externally owned key. Verify
+this with the actual GitOps controller, including a second sync after population.
+Do not add an empty `clientSecret` or switch to client-side replacement. Changing
+the client ID also requires updating its registration value. Include this map in
+normal cluster backup/recovery; Kubernetes must not be the only way to recover
+the initial login configuration.
+
+`kubernetesOidcNativeClientInput(binding, configMap.data)` validates the exact
+issuer/client binding and the three allowed keys, and produces the existing
+`nebula-oidc-login --oidc-client-secret-file` JSON schema. Export that record to
+an owner-only input file on a trusted client. ConfigMap volume mounts are not
+directly accepted by the strict local-file loader. Registration settings need no
+artificial login-token expiry. Never put ID/access/refresh tokens, passwords,
+private keys or login-cache contents in this resource. User token caching stays
+in the OS keyring or another approved private cache.
 
 ## Verification
 

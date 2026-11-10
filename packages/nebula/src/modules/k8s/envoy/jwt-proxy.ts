@@ -118,7 +118,8 @@ end
           ...issuers.map(([name, i]) => {
             const u = new URL(i.jwksUrl);
             return {
-              name: `jwks-${name}`, type: "STRICT_DNS", connect_timeout: "5s",
+              name: `jwks-${name}`, type: "LOGICAL_DNS", connect_timeout: "5s",
+              dns_lookup_family: "ALL",
               load_assignment: { cluster_name: `jwks-${name}`, endpoints: [{ lb_endpoints: [{ endpoint: endpoint(u.hostname, Number(u.port || 443)) }] }] },
               transport_socket: tls(u.hostname, i.certificateAuthority ? { inline_string: i.certificateAuthority } : { filename: caPath }),
             };

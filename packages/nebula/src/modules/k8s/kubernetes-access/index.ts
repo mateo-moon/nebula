@@ -1,4 +1,5 @@
 export * from "./identity";
+export * from "./client-configuration";
 export * from "./workload-identity";
 export * from "./gateway";
 export * from "./token-rotation";

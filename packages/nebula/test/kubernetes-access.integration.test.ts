@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isIP } from "node:net";
+import { createSocket } from "node:dgram";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { createServer, request as httpsRequest } from "node:https";
 import { execFile, execFileSync } from "node:child_process";
@@ -245,6 +246,116 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
   } finally {
     await run("docker", ["rm", "-f", gatewayName], 30_000).catch(() => { });
     await run("kind", ["delete", "cluster", "--name", name], 30_000).catch(() => { });
+    await new Promise<void>(resolve => issuer.close(() => resolve()));
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test("JWKS fetch falls back from unreachable IPv6 to IPv4 with verified TLS", { skip: !enabled, timeout: 90_000 }, async () => {
+  const work = mkdtempSync(join(tmpdir(), "kubernetes-jwks-dns-"));
+  const name = `jwks-dns-${process.pid}-${Date.now().toString(36)}`;
+  const fixtureUser = `${process.getuid?.() ?? 65532}:${process.getgid?.() ?? 65532}`;
+  const dockerHost = process.platform === "linux"
+    ? await run("docker", ["network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}"])
+    : (await run("docker", ["run", "--rm", "--entrypoint", "getent", envoyImage, "ahostsv4", "host.docker.internal"])).split(/\s/)[0]!;
+  assert.equal(isIP(dockerHost), 4);
+  const cert = join(work, "issuer.crt"), key = join(work, "issuer.key");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=fixture",
+    "-addext", "subjectAltName=DNS:*.example.test", "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", key, "-out", cert], { stdio: "ignore" });
+  const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const jwk = { ...keys.publicKey.export({ format: "jwk" }), kid: "fixture", use: "sig", alg: "RS256" };
+  const now = Math.floor(Date.now() / 1000);
+  const body = [{ alg: "RS256", kid: "fixture" }, { iss: "https://issuer.example.test", aud: "fixture-client", sub: "fixture", iat: now, exp: now + 600 }]
+    .map(value => Buffer.from(JSON.stringify(value)).toString("base64url")).join(".");
+  const token = `${body}.${sign("RSA-SHA256", Buffer.from(body), keys.privateKey).toString("base64url")}`;
+  const jwksSni: string[] = [], backendSni: string[] = [];
+  let forwardedIdentity = false;
+  const issuer = createServer({ cert: readFileSync(cert), key: readFileSync(key) }, (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    if (req.url === "/keys") {
+      jwksSni.push((req.socket as import("node:tls").TLSSocket).servername || "");
+      res.end(JSON.stringify({ keys: [jwk] }));
+    } else {
+      backendSni.push((req.socket as import("node:tls").TLSSocket).servername || "");
+      forwardedIdentity = req.headers.authorization === `Bearer ${token}`;
+      res.end(JSON.stringify({ accepted: true }));
+    }
+  });
+  const dns = createSocket("udp4");
+  const queries = { A: 0, AAAA: 0 };
+  // Answer both families, with a documentation-only IPv6 address that cannot
+  // reach this IPv4 fixture. No public DNS or identity provider is contacted.
+  dns.on("message", (query, peer) => {
+    let end = 12;
+    const labels: string[] = [];
+    while (end < query.length && query[end]) {
+      const size = query[end++]!;
+      if (size > 63 || end + size > query.length) return;
+      labels.push(query.subarray(end, end + size).toString()); end += size;
+    }
+    end++;
+    if (end + 4 > query.length) return;
+    const type = query.readUInt16BE(end), questionEnd = end + 4;
+    const matches = labels.join(".").toLowerCase() === "jwks.example.test";
+    if (matches && type === 1) queries.A++;
+    if (matches && type === 28) queries.AAAA++;
+    const address = matches ? (type === 1 ? Buffer.from(dockerHost.split(".").map(Number)) :
+      type === 28 ? Buffer.from("20010db800000000000000000000000001", "hex") : undefined) : undefined;
+    const header = Buffer.alloc(12); query.copy(header, 0, 0, 2);
+    header.writeUInt16BE(matches ? 0x8180 : 0x8183, 2); header.writeUInt16BE(1, 4); header.writeUInt16BE(address ? 1 : 0, 6);
+    const record = Buffer.alloc(12);
+    record.writeUInt16BE(0xc00c, 0); record.writeUInt16BE(type, 2); record.writeUInt16BE(1, 4);
+    record.writeUInt32BE(1, 6); record.writeUInt16BE(address?.length ?? 0, 10);
+    dns.send(Buffer.concat([header, query.subarray(12, questionEnd), ...(address ? [record, address] : [])]), peer.port, peer.address);
+  });
+  await new Promise<void>(resolve => issuer.listen(0, "0.0.0.0", resolve));
+  await new Promise<void>(resolve => dns.bind(0, "0.0.0.0", resolve));
+  try {
+    const config = new EnvoyJwtProxy({
+      issuers: { workforce: { url: "https://issuer.example.test", jwksUrl: `https://jwks.example.test:${(issuer.address() as any).port}/keys`,
+        audience: "fixture-client", certificateAuthority: readFileSync(cert, "utf8") } },
+      backend: { host: dockerHost, port: (issuer.address() as any).port, serverName: "api.example.test", caFile: "/fixture/issuer.crt" },
+      maxTokenLifetimeSeconds: 600,
+    }).bootstrap;
+    const jwks = config.static_resources.clusters[1];
+    jwks.dns_resolvers = [{ socket_address: { address: dockerHost, port_value: dns.address().port } }];
+    assert.equal(config.static_resources.clusters[0].type, "STRICT_DNS", "Kubernetes backend discovery stays unchanged");
+    for (const mode of ["ipv6-preferred", "dual-stack"]) {
+      const variant = structuredClone(config);
+      if (mode === "ipv6-preferred") {
+        variant.static_resources.clusters[1].type = "STRICT_DNS";
+        delete variant.static_resources.clusters[1].dns_lookup_family;
+      }
+      writeFileSync(join(work, `${mode}.yaml`), stringify(variant));
+      const container = `${name}-${mode}`;
+      try {
+        await run("docker", ["run", "-d", "--name", container, "--user", fixtureUser, "--entrypoint", "/usr/local/bin/envoy",
+          "-p", "127.0.0.1::8080", "-v", `${work}:/fixture:ro`, envoyImage, "-c", `/fixture/${mode}.yaml`, "--disable-hot-restart", "--concurrency", "1", "--log-level", "warn"]);
+        const port = (await run("docker", ["port", container, "8080/tcp"])).split(":").at(-1);
+        let response: { status: number; body: string } | undefined;
+        for (let attempt = 0; attempt < 30; attempt++) {
+          try {
+            const result = await fetch(`http://127.0.0.1:${port}/probe`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(7000) });
+            response = { status: result.status, body: await result.text() };
+            if (mode === "ipv6-preferred" ? queries.AAAA > 0 : response.status === 200) break;
+          } catch { /* Wait for the disposable Envoy listener. */ }
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (mode === "ipv6-preferred") {
+          assert.equal(response?.status, 401);
+          assert.equal(response?.body, "Jwks remote fetch is failed");
+          assert.equal(jwksSni.length, 0);
+        } else {
+          assert.equal(response?.status, 200, `dual-stack JWKS lookup: ${response?.body}`);
+          assert.ok(queries.A > 0 && queries.AAAA > 0, "both address families were resolved");
+          assert.ok(jwksSni.includes("jwks.example.test"), "JWKS TLS verifies its own hostname, separately from the issuer");
+          assert.ok(backendSni.includes("api.example.test"));
+          assert.ok(forwardedIdentity, "the backend receives the original signed identity");
+        }
+      } finally { await run("docker", ["rm", "-f", container], 30_000).catch(() => { }); }
+    }
+  } finally {
+    await new Promise<void>(resolve => dns.close(() => resolve()));
     await new Promise<void>(resolve => issuer.close(() => resolve()));
     rmSync(work, { recursive: true, force: true });
   }
