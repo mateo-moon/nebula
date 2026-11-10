@@ -163,9 +163,10 @@ export type {
   CalicoWgFamily,
 } from "./calico-wg-repair";
 
-export { PrometheusOperator, MemberMonitoring, promtailValues } from "./prometheus-operator";
+export { PrometheusOperator, MemberMonitoring, promtailValues, grafanaOperatorKubeAuthValues } from "./prometheus-operator";
 export type {
   PrometheusOperatorConfig,
+  GrafanaOperatorKubeAuthConfig,
   ThanosConfig,
   PromtailClientConfig,
   PromtailValues,
