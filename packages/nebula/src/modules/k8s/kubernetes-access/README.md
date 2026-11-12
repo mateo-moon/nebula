@@ -100,11 +100,12 @@ seconds and requires GNU `date` and `cat` in its image.
 
 Token files are readable by their owner and group only. Whenever identities are
 configured, each module therefore sets the Pod `fsGroup` to its image's own
-group: 999 on `argocd-server` and `argocd-application-controller`, 2000 on the
-provider-kubernetes runtime and 65532 on the cluster autoscaler. An `fsGroup`
-already set through chart values (`global.securityContext` for Argo CD,
-`securityContext` for the autoscaler) is kept. Without identities no security
-context is rendered.
+group: 999 on the Argo CD server and application controller, 2000 on the
+provider-kubernetes runtime and 65532 on the cluster autoscaler. The Argo CD
+workloads are recognised by the token volumes they mount, so chart name
+overrides are honoured. An `fsGroup` already set through chart values
+(`global.securityContext` for Argo CD, `securityContext` for the autoscaler)
+is kept. Without identities no security context is rendered.
 
 For applications consuming Secret data, `ServiceAccountTokenRotation` refreshes
 only the specified ServiceAccount/Secret pairs. Callers provide target Secrets,

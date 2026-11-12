@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Testing } from "cdk8s";
+import { Testing, type Chart } from "cdk8s";
 import { evaluate } from "@marcbachmann/cel-js";
 import { K0SmotronControlPlaneV1Beta2SpecStorageType } from "../imports/controlplane.cluster.x-k8s.io";
 import { parse, stringify } from "yaml";
@@ -273,10 +273,16 @@ test("Argo and Crossplane consume shared projections through their own configura
   const { readFileSync } = await import("node:fs");
   const work = mkdtempSync(join(tmpdir(), "nebula-oidc-helm-")), values = join(work, "values.yaml"), rendered = join(work, "argo-cd.yaml"), previous = process.env.PATH;
   writeFileSync(join(work, "helm"), `#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);if(args.includes('-f'))fs.copyFileSync(args[args.indexOf('-f')+1],${JSON.stringify(values)});if(args.at(-1)==='argo-cd')process.stdout.write(fs.readFileSync(${JSON.stringify(rendered)}));\n`, { mode: 0o755 });
-  // The chart's Pod workloads, each with the Pod security context its global value renders.
-  const renderArgo = (config: ConstructorParameters<typeof ArgoCd>[2], securityContext?: object) => {
-    writeFileSync(rendered, [["Deployment", "argocd-server"], ["StatefulSet", "argocd-application-controller"], ["Deployment", "argocd-repo-server"]].map(([kind, name]) =>
-      stringify({ apiVersion: "apps/v1", kind, metadata: { name }, spec: { template: { spec: { ...(securityContext ? { securityContext } : {}), containers: [] } } } })).join("---\n"));
+  // Stands in for the chart: its server, controller and repo server under their configured names, the
+  // token volumes rendered on the first `mounting` of them, and the one Pod security context they share.
+  const token = new KubernetesWorkloadIdentity({ cluster: "example" }).projection.volume;
+  const renderArgo = (config: ConstructorParameters<typeof ArgoCd>[2], chart: { names?: string[]; mounting?: number; securityContext?: object } = {}) => {
+    const [server = "argocd-server", controller = "argocd-application-controller"] = chart.names ?? [];
+    const mounting = chart.mounting ?? (config?.workloadIdentities?.length ? 2 : 0);
+    writeFileSync(rendered, [["Deployment", server], ["StatefulSet", controller], ["Deployment", "argocd-repo-server"]].map(([kind, name], index) => stringify({
+      apiVersion: "apps/v1", kind, metadata: { name },
+      spec: { template: { spec: { ...(chart.securityContext ? { securityContext: chart.securityContext } : {}), volumes: [{ name: "tmp", emptyDir: {} }, ...(index < mounting ? [token] : [])], containers: [] } } },
+    })).join("---\n"));
     const argo = new ArgoCd(Testing.chart(), "argo", config);
     return Object.fromEntries(argo.helm.apiObjects.map(o => [o.name, o.toJson().spec.template.spec.securityContext]));
   };
@@ -288,11 +294,12 @@ test("Argo and Crossplane consume shared projections through their own configura
     for (const component of ["controller", "server"]) assert.ok(argoValues[component].volumes.some((v: any) => v.name === "oidc-example"));
     assert.ok(argoValues.controller.volumes.some((v: any) => v.name === "existing"));
     assert.deepEqual(fileGroups, { "argocd-server": { fsGroup: 999 }, "argocd-application-controller": { fsGroup: 999 }, "argocd-repo-server": undefined });
+    assert.deepEqual(renderArgo(identities, { names: ["argocd-api", "gitops-controller"] }), { "argocd-api": { fsGroup: 999 }, "gitops-controller": { fsGroup: 999 }, "argocd-repo-server": undefined });
     assert.deepEqual(renderArgo({}), { "argocd-server": undefined, "argocd-application-controller": undefined, "argocd-repo-server": undefined });
-    assert.deepEqual(renderArgo(identities, { runAsNonRoot: true })["argocd-server"], { runAsNonRoot: true, fsGroup: 999 });
-    assert.deepEqual(renderArgo(identities, { runAsNonRoot: true, fsGroup: 1000 })["argocd-application-controller"], { runAsNonRoot: true, fsGroup: 1000 });
-    writeFileSync(rendered, "");
-    assert.throws(() => new ArgoCd(Testing.chart(), "argo", identities), /require the argocd-server workload/);
+    const nonRoot = { runAsNonRoot: true }, chosen = { runAsNonRoot: true, fsGroup: 1000 };
+    assert.deepEqual(renderArgo(identities, { securityContext: nonRoot }), { "argocd-server": { ...nonRoot, fsGroup: 999 }, "argocd-application-controller": { ...nonRoot, fsGroup: 999 }, "argocd-repo-server": nonRoot });
+    assert.deepEqual(renderArgo(identities, { securityContext: chosen }), { "argocd-server": chosen, "argocd-application-controller": chosen, "argocd-repo-server": chosen });
+    for (const mounting of [0, 1]) assert.throws(() => renderArgo(identities, { mounting }), /must mount the projected identities/);
     const crossplane = (options: object) => new Crossplane(Testing.chart(), "xp", { argoCdProvider: false, kubernetesProvider: { rbac: false, pollInterval: "1m", installArgoCdClusterSyncSetup: false, installKarmadaCredentialSyncSetup: false, ...options } });
     const xp = crossplane(identities);
     const pod = xp.kubernetesProviderRuntimeConfig!.toJson().spec.deploymentTemplate.spec.template.spec, container = pod.containers[0];
@@ -306,18 +313,29 @@ test("Argo and Crossplane consume shared projections through their own configura
 // Rendering the charts needs helm and the chart repositories: opt in with NEBULA_HELM_TESTS=1.
 test("the Argo CD and autoscaler charts set the file group on token-mounting Pods only", { skip: process.env.NEBULA_HELM_TESTS !== "1" }, async () => {
   const { ArgoCd } = await import("../src/modules/k8s/argocd");
-  const pods = (workloadIdentity?: { cluster: string }) => {
-    const chart = Testing.chart();
-    new ArgoCd(chart, "argo", workloadIdentity ? { workloadIdentities: [workloadIdentity] } : {});
-    new ClusterAutoscaler(chart, "autoscaler", { clusterName: "example", workloadIdentity });
+  const workloadIdentity = { cluster: "example" };
+  const pods = (construct: (chart: Chart) => unknown) => {
+    const chart = Testing.chart(); construct(chart);
     return Testing.synth(chart).filter(o => ["Deployment", "StatefulSet"].includes(o.kind)).map(o => ({ name: o.metadata.name, ...o.spec.template.spec }));
   };
-  const fileGroups: Record<string, number> = { "argocd-server": 999, "argocd-application-controller": 999, "cluster-autoscaler-example": 65532 };
-  for (const pod of pods({ cluster: "example" })) {
-    assert.equal(pod.volumes?.some((v: any) => v.name === "oidc-example") ?? false, pod.name in fileGroups, pod.name);
-    assert.equal(pod.securityContext?.fsGroup, fileGroups[pod.name], pod.name);
-  }
-  assert.ok(pods().every(pod => pod.securityContext?.fsGroup === undefined));
+  const argo = (values: Record<string, unknown> = {}, workloadIdentities = [workloadIdentity]) => pods(chart => new ArgoCd(chart, "argo", { workloadIdentities, values }));
+  const autoscaler = (identity?: typeof workloadIdentity) => pods(chart => new ClusterAutoscaler(chart, "autoscaler", { clusterName: "example", workloadIdentity: identity }));
+  // Exactly the named Pods mount the token, and only they carry a file group.
+  const fileGroups = (rendered: ReturnType<typeof pods>, expected: Record<string, number>) => {
+    for (const pod of rendered) {
+      assert.equal(pod.volumes?.some((v: any) => v.name === "oidc-example") ?? false, pod.name in expected, pod.name);
+      assert.equal(pod.securityContext?.fsGroup, expected[pod.name], pod.name);
+    }
+  };
+  const renamed = { server: { name: "api" }, controller: { name: "controller" } };
+  fileGroups(argo(), { "argocd-server": 999, "argocd-application-controller": 999 });
+  fileGroups(argo(renamed), { "argocd-api": 999, "argocd-controller": 999 });
+  fileGroups(argo({ fullnameOverride: "gitops" }), { "gitops-server": 999, "gitops-application-controller": 999 });
+  fileGroups(autoscaler(workloadIdentity), { "cluster-autoscaler-example": 65532 });
+  // A group chosen through the chart's own Pod security context stays in place.
+  const chosen = argo({ ...renamed, global: { securityContext: { fsGroup: 1234 } } });
+  for (const name of ["argocd-api", "argocd-controller"]) assert.equal(chosen.find(pod => pod.name === name)!.securityContext.fsGroup, 1234);
+  assert.ok([...argo({}, []), ...autoscaler()].every(pod => pod.securityContext?.fsGroup === undefined));
 });
 
 test("control-plane composition rejects unsupported versions and mismatched hosting namespaces", () => {

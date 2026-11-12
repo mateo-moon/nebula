@@ -579,16 +579,22 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
     });
 
     // The chart has one Pod security context for every component, so the
-    // image's group (999) is set on the two workloads that mount the tokens.
+    // image's group (999) is set on the workloads that mount the tokens.
     if (workloadTokens.volumes) {
-      for (const name of ["argocd-server", "argocd-application-controller"]) {
-        const workload = this.helm.apiObjects.find(
-          (o) =>
-            ["Deployment", "StatefulSet"].includes(o.kind) && o.name === name,
+      const tokens = new Set(workloadTokens.volumes.map((v) => v.name));
+      const workloads = this.helm.apiObjects.filter(
+        (o) =>
+          ["Deployment", "StatefulSet"].includes(o.kind) &&
+          (o.toJson().spec.template.spec.volumes ?? []).some(
+            (v: { name: string }) => tokens.has(v.name),
+          ),
+      );
+      if (workloads.length < 2) {
+        throw new Error(
+          "The server and application controller must mount the projected identities",
         );
-        if (!workload) {
-          throw new Error(`Projected identities require the ${name} workload`);
-        }
+      }
+      for (const workload of workloads) {
         workload.addJsonPatch(
           JsonPatch.add("/spec/template/spec/securityContext", {
             fsGroup: 999,
