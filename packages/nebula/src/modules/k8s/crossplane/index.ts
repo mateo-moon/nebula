@@ -301,6 +301,8 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
                                 ...(workloadTokens.volumeMounts ? { volumeMounts: workloadTokens.volumeMounts } : {}),
                               },
                             ],
+                            // Provider runtimes run as 2000:2000.
+                            ...(workloadTokens.volumes ? { securityContext: { fsGroup: 2000 } } : {}),
                           },
                         },
                       },

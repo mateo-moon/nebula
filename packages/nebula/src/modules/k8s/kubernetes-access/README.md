@@ -83,6 +83,14 @@ and `ClusterAutoscaler.workloadIdentity` share the same projected-token helper.
 The kubelet renews token files. Argo's exec helper rereads the file every thirty
 seconds and requires GNU `date` and `cat` in its image.
 
+Token files are readable by their owner and group only. Whenever identities are
+configured, each module therefore sets the Pod `fsGroup` to its image's own
+group: 999 on `argocd-server` and `argocd-application-controller`, 2000 on the
+provider-kubernetes runtime and 65532 on the cluster autoscaler. An `fsGroup`
+already set through chart values (`global.securityContext` for Argo CD,
+`securityContext` for the autoscaler) is kept. Without identities no security
+context is rendered.
+
 For applications consuming Secret data, `ServiceAccountTokenRotation` refreshes
 only the specified ServiceAccount/Secret pairs. Callers provide target Secrets,
 the file-based kubeconfig, CA and RBAC. Missing targets fail the Job.
@@ -169,3 +177,5 @@ The integration test creates disposable keys, a kind cluster and an Envoy
 container, then cleans them up. It verifies profile merging, identity mappings,
 issuer/client/domain denials, JWT signature and lifetime checks, gateway
 certificate rejection and TokenRequest admission. It uses only its own fixtures.
+With `NEBULA_HELM_TESTS=1` the unit tests also render the Argo CD and
+autoscaler charts to check which Pods receive the file group.
