@@ -38,7 +38,7 @@ test("a caller keeps its rollout strategy unless it declares a single writer", (
 
 test("bcrypt parsing preserves hashes and refuses ambiguous or unauthenticated maps", () => {
   const hash = "$2y$10$abcdefghijklmnopqrstuu" + "a".repeat(31);
-  assert.deepEqual({ ...bcryptUsers(`# existing\nreader:${hash}:comment\n`) }, { reader: hash });
+  assert.deepEqual(bcryptUsers(`# existing\nreader:${hash}:comment\n`), { reader: hash });
   for (const value of ["", "reader:plaintext", `reader:${hash}\nreader:${hash}`, `reader:${hash.slice(0, -1)}`])
     assert.throws(() => bcryptUsers(value), /bcrypt|nonempty/);
 });

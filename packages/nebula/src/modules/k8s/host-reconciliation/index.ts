@@ -2,7 +2,7 @@ export { LoopbackVolumeGroup, type LoopbackVolumeGroupConfig } from "./loopback-
 export { HostPackageFreeze, type HostPackageFreezeConfig } from "./package-freeze";
 export { HostKernelPin, type HostKernelPinConfig } from "./kernel-pin";
 export { DebianHostPolicy, type DebianHostPolicyConfig } from "./configuration-policy";
-export type { HostReconcilerConfig } from "./shared";
+export type { HostReconcilerConfig, HostResourceConfig } from "./shared";
 export { NodeMaintenanceJob } from "./node-maintenance-job";
 export type { NodeMaintenanceJobConfig, NodeMaintenanceHostMount } from "./node-maintenance-job";
 export {
