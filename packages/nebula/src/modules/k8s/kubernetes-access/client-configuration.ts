@@ -1,7 +1,7 @@
-import { ApiObject } from "cdk8s";
+import { KubeConfigMap } from "cdk8s-plus-33/lib/imports/k8s";
 import { Construct } from "constructs";
 import { BaseConstruct } from "../../../core";
-import { validateOidcHttpsUrl } from "../../../utils/oidc";
+import { hasControlCharacter, isExact, validateOidcHttpsUrl } from "../../../utils/oidc";
 
 export interface KubernetesOidcNativeClientBinding {
   issuer: string;
@@ -19,12 +19,11 @@ export interface KubernetesOidcClientConfigurationConfig extends KubernetesOidcN
 
 function validateBinding(binding: KubernetesOidcNativeClientBinding): void {
   validateOidcHttpsUrl(binding.issuer);
-  if (!binding.clientId || /[\s*\u0000-\u001f\u007f]/.test(binding.clientId))
-    throw new Error("Native OIDC configuration requires one exact client ID");
+  if (!isExact(binding.clientId)) throw new Error("Native OIDC configuration requires one exact client ID");
 }
 
 function validateClientSecret(value: string): void {
-  if (!value || value.length > 4096 || /[\u0000-\u001f\u007f]/.test(value))
+  if (!value || value.length > 4096 || hasControlCharacter(value))
     throw new Error("Native OIDC application configuration requires a non-empty client secret");
 }
 
@@ -44,7 +43,7 @@ export function kubernetesOidcNativeClientInput(
 
 /** Durable public-client registration configuration; confers no user or workload identity. */
 export class KubernetesOidcClientConfiguration extends BaseConstruct<KubernetesOidcClientConfigurationConfig> {
-  public readonly configMap: ApiObject;
+  public readonly configMap: KubeConfigMap;
 
   constructor(scope: Construct, id: string, config: KubernetesOidcClientConfigurationConfig) {
     super(scope, id, config);
@@ -60,8 +59,7 @@ export class KubernetesOidcClientConfiguration extends BaseConstruct<KubernetesO
     }
     validateBinding(c);
     if (c.clientSecret !== undefined) validateClientSecret(c.clientSecret);
-    this.configMap = new ApiObject(this, "configuration", {
-      apiVersion: "v1", kind: "ConfigMap",
+    this.configMap = new KubeConfigMap(this, "configuration", {
       metadata: { name: c.name, namespace: c.namespace, annotations: {
         "nebula.io/oauth-application-type": "native",
         // Own only supplied map keys. An externally populated client_secret key

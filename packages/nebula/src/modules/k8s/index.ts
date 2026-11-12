@@ -9,7 +9,7 @@ export { Trustee, TngTrustee, trusteePolicies, tngTrusteeClientPlan } from "./tr
 export type { TrusteeConfig, TngTrusteeConfig, TrusteeNetworkConfig, TrusteeSnpIdentity,
   TrusteeResourceAdmission, TrusteePolicies } from "./trustee";
 
-export { Crossplane } from "./crossplane";
+export { Crossplane, crossplaneKubernetesProviderSubject } from "./crossplane";
 export type {
   CrossplaneConfig,
   ArgoCdProviderOptions,
@@ -25,7 +25,9 @@ export type { KedaConfig } from "./keda";
 export { GiteaEphemeralRunners, scaledJobSpec, queuedJobsUrl } from "./keda/gitea-runners";
 export type { GiteaEphemeralRunnersConfig, GiteaRunnerPool } from "./keda/gitea-runners";
 
-export { ClusterAutoscaler, clusterAutoscalerValues } from "./cluster-autoscaler";
+export {
+  ClusterAutoscaler, clusterAutoscalerValues, clusterAutoscalerSubject, clusterAutoscalerWorkloadRbac,
+} from "./cluster-autoscaler";
 export type { ClusterAutoscalerConfig } from "./cluster-autoscaler";
 
 export { ActionsRunnerController } from "./actions-runner-controller";
@@ -539,5 +541,5 @@ export * from "./kubernetes-access";
 export { EnvoyJwtProxy } from "./envoy/jwt-proxy";
 export type { EnvoyJwtProxyConfig } from "./envoy/jwt-proxy";
 
-export { ArgoCdOidcCluster } from "./argocd/oidc-cluster";
+export { ArgoCdOidcCluster, argoCdWorkloadSubjects } from "./argocd/oidc-cluster";
 export type { ArgoCdOidcClusterConfig } from "./argocd/oidc-cluster";
