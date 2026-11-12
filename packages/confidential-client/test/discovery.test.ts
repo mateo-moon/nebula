@@ -67,10 +67,12 @@ test("reviewed agent releases are accepted without approving other agent images"
     delete connection.workload.spec.storageImage;
     assert.equal(trustedStack(readConnection(JSON.stringify(connection))), profile.id);
     const belowFloor = structuredClone(connection);
-    belowFloor.workload.spec.guest.minimumReportedTcb.microcode -= 1;
+    belowFloor.workload.spec.guest = { ...belowFloor.workload.spec.guest, minimumReportedTcb: {
+      ...belowFloor.workload.spec.guest.minimumReportedTcb,
+      microcode: belowFloor.workload.spec.guest.minimumReportedTcb.microcode - 1 } };
     assert.throws(() => trustedStack(belowFloor), /reviewed profile/, "The approved microcode minimum remains enforced");
     const wrongGuest = structuredClone(connection);
-    wrongGuest.workload.spec.guest.measurement = "f".repeat(96);
+    wrongGuest.workload.spec.guest = { ...wrongGuest.workload.spec.guest, measurement: "f".repeat(96) };
     assert.throws(() => trustedStack(wrongGuest), /reviewed profile/, "A runtime approval cannot authorize a different guest");
     connection.workload.spec.agentImage = `example.invalid/another-agent@sha256:${"f".repeat(64)}`;
     assert.throws(() => trustedStack(connection), /reviewed profile/);
