@@ -34,3 +34,20 @@ Compare complete rendered objects before applying an extraction. Keep backing
 paths, sizes, reserved minors, growth acknowledgements and package settings at
 their existing values. These modules introduce no backup policy, additional
 storage, provider requests or cloud resources by themselves.
+
+## Node maintenance jobs
+
+`NodeMaintenanceJob` packages a bounded operation on one named node. Supply a
+pinned image, command, public configuration files, explicit user and resource
+requests. Files are mounted read-only at `/packet`; the projected API token and
+cluster CA are at `/identity/token` and `/identity/ca.crt`.
+
+The identity can only GET that Node. Host mounts, host PID access and host
+networking require explicit configuration. The container drops all capabilities
+and keeps a read-only root filesystem. The deadline cannot exceed the projected
+token lifetime, and the Job has no retry. Names must be globally unique because
+the Node-reader Role and binding are cluster-scoped.
+
+The caller supplies operation-specific validation, node-UID verification,
+acceptance checks and rollback. The construct includes no cloud, cluster
+lifecycle or identity-provider policy and creates no persistent controller.
