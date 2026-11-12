@@ -47,6 +47,21 @@ Set `workforce.username: { claim, prefix }` for another username claim.
 by default no groups are assigned. External identities cannot become Kubernetes
 `system:` users or groups. RBAC grants are supplied by the caller.
 
+`workforce.emailGroups` gives named people further groups on top of the fixed
+ones, keyed by group:
+
+```ts
+groups: ["access:developers"],
+emailGroups: { "access:maintainers": ["maintainer@example.test"] },
+```
+
+The API server then maps groups with
+`["access:developers"] + (claims.email in ["maintainer@example.test"] ? ["access:maintainers"] : [])`,
+one such term per group. Addresses must equal the signed `email` claim exactly,
+including case, and a verified email is required whichever claim names the
+user. Email groups extend fixed groups only: a `{ claim, prefix }` group
+mapping, `system:` group names and malformed addresses are refused.
+
 `requiredClaims` binds exact signed claim values. Provider-specific login hints
 belong in `login.authRequestExtraParams`, scopes in `login.extraScopes` and the
 flow in `login.grantType`. This supports standards-based providers including
@@ -174,8 +189,8 @@ pnpm exec tsc --noEmit
 ```
 
 The integration test creates disposable keys, a kind cluster and an Envoy
-container, then cleans them up. It verifies profile merging, identity mappings,
-issuer/client/domain denials, JWT signature and lifetime checks, gateway
-certificate rejection and TokenRequest admission. It uses only its own fixtures.
-With `NEBULA_HELM_TESTS=1` the unit tests also render the Argo CD and
-autoscaler charts to check which Pods receive the file group.
+container, then cleans them up. It verifies profile merging, identity and
+email-group mappings, issuer/client/domain denials, JWT signature and lifetime
+checks, gateway certificate rejection and TokenRequest admission. It uses only
+its own fixtures. With `NEBULA_HELM_TESTS=1` the unit tests also render the
+Argo CD and autoscaler charts to check which Pods receive the file group.

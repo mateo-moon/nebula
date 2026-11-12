@@ -5,6 +5,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Testing } from "cdk8s";
+import { evaluate } from "@marcbachmann/cel-js";
 import { K0SmotronControlPlaneV1Beta2SpecStorageType } from "../imports/controlplane.cluster.x-k8s.io";
 import { parse, stringify } from "yaml";
 import { KubernetesOidcIdentity, type KubernetesOidcIdentityConfig } from "../src/modules/k8s/kubernetes-access/identity";
@@ -61,6 +62,38 @@ test("identity mappings belong to the caller and reserve Kubernetes system ident
   assert.equal(fixed.jwt[0].claimMappings.groups.expression, '["access:developers"]');
   assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...workforce, groups: ["system:masters"] } }), /non-system/);
   assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...workforce, username: { claim: "sub", prefix: "system:" } } }), /non-system/);
+});
+
+test("email groups extend fixed groups for exact verified emails only", () => {
+  const emailGroups = { "access:maintainers": ["maintainer@example.test", "lead@example.test"], "access:auditors": ["auditor@example.test"] };
+  const config = (workforce: Partial<KubernetesOidcIdentityConfig["workforce"]>) => ({ ...identity, workforce: { ...identity.workforce, ...workforce } });
+  const workforce = (overrides: Partial<KubernetesOidcIdentityConfig["workforce"]>) => (new KubernetesOidcIdentity(config(overrides)).authenticationConfiguration() as any).jwt[0];
+  const expression = workforce({ groups: ["access:developers"], emailGroups }).claimMappings.groups.expression;
+  assert.equal(expression, '["access:developers"] + (claims.email in ["maintainer@example.test","lead@example.test"] ? ["access:maintainers"] : [])'
+    + ' + (claims.email in ["auditor@example.test"] ? ["access:auditors"] : [])');
+  const groups = (email: string, source = expression) => evaluate(source, { claims: { email } });
+  assert.deepEqual(groups("lead@example.test"), ["access:developers", "access:maintainers"]);
+  assert.deepEqual(groups("auditor@example.test"), ["access:developers", "access:auditors"]);
+  for (const email of ["employee@example.test", "Lead@example.test", "lead@example.test.elsewhere.test", "other+lead@example.test"])
+    assert.deepEqual(groups(email), ["access:developers"]);
+  assert.throws(() => evaluate(expression, { claims: {} }), /email/);
+  const alone = workforce({ emailGroups: { "access:auditors": ["auditor@example.test"] } }).claimMappings.groups.expression;
+  assert.equal(alone, '[] + (claims.email in ["auditor@example.test"] ? ["access:auditors"] : [])');
+  assert.deepEqual(groups("auditor@example.test", alone), ["access:auditors"]); assert.deepEqual(groups("employee@example.test", alone), []);
+  assert.equal(workforce({ emailGroups: {} }).claimMappings.groups, undefined);
+  // Membership never follows an unverified address, whichever claim names the user.
+  const bySubject = workforce({ emailDomain: undefined, username: { claim: "sub" }, emailGroups });
+  assert.ok(bySubject.claimValidationRules.some((r: any) => r.expression === "claims.email_verified == true"));
+  const chart = Testing.chart();
+  new K0smotronCluster(chart, "cluster", { name: "example", k8sVersion: "v1.35.0", provider, controlPlane: { authentication: { identity: config({ groups: ["access:developers"], emailGroups }) } } });
+  const hosted = Testing.synth(chart).find(o => o.kind === "ConfigMap" && o.metadata.name === "oidc-example-authentication")!;
+  assert.equal(parse(hosted.data["authentication.yaml"]).jwt[0].claimMappings.groups.expression, expression);
+  assert.throws(() => new KubernetesOidcIdentity(config({ groups: { claim: "roles" }, emailGroups })), /not a claim mapping/);
+  const refused: Record<string, readonly string[]>[] = [
+    { "system:masters": ["lead@example.test"] }, { "": ["lead@example.test"] }, { "access:auditors": [] }, { "access:auditors": ["lead"] },
+    { "access:auditors": ["lead@example.test "] }, { "access:auditors": ["lead@example.test,auditor@example.test"] }, { "access:auditors": ['lead"@example.test'] },
+  ];
+  for (const groups of refused) assert.throws(() => new KubernetesOidcIdentity(config({ emailGroups: groups })), /non-system group name and exact email/);
 });
 
 test("public workforce clients support provider claims and one-hour humans without extending workload trust", () => {

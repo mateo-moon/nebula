@@ -91,7 +91,8 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     cluster: "fixture", hostname: "api.fixture.example.test", namespace: "default", ingressClassName: "nginx", clusterIssuer: "fixture",
     workforce: {
       url: `${issuerBase}/google`, jwksUrl: `${issuerBase}/google/keys`, audience: "fixture-desktop-client-id",
-      emailDomain: "example.test", groups: ["access:developers"], certificateAuthority: readFileSync(cert, "utf8"), maxTokenLifetimeSeconds: 3600,
+      emailDomain: "example.test", groups: ["access:developers"], emailGroups: { "access:maintainers": ["maintainer@example.test"] },
+      certificateAuthority: readFileSync(cert, "utf8"), maxTokenLifetimeSeconds: 3600,
       requiredClaims: { hd: "example.test", azp: "fixture-desktop-client-id" },
     },
     workload: {
@@ -179,6 +180,10 @@ test("real Kubernetes and Envoy enforce OIDC identity, audience and certificate 
     assert.equal(who.username, "oidc:employee@example.test");
     assert.equal(who.uid, "immutable-person-id");
     assert.ok(who.groups.includes("access:developers")); assert.ok(!who.groups.includes("system:masters"));
+    assert.ok(!who.groups.includes("access:maintainers"));
+    const maintainer = await throughGateway(issue({ email: "maintainer@example.test" }));
+    assert.equal(maintainer.status, 201);
+    assert.deepEqual(JSON.parse(maintainer.body).status.userInfo.groups.filter((group: string) => group.startsWith("access:")), ["access:developers", "access:maintainers"]);
     const certificateOnly = await throughGateway(undefined, { cert: admin.cert, key: admin.key });
     assert.equal(certificateOnly.status, 401, "a client certificate cannot substitute for a gateway JWT");
     assert.equal((await throughGateway(undefined, { headers: { Authorization: "Basic Zm9vOmJhcg==" } })).status, 401);
