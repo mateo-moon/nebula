@@ -1,3 +1,4 @@
+import { rbac, type RbacSubject } from "../kubernetes-access/rbac";
 import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } from "../kubernetes-access/workload-identity";
 /**
  * ClusterAutoscaler — the Kubernetes cluster-autoscaler with its Cluster API
@@ -63,6 +64,42 @@ export const CLUSTER_AUTOSCALER_REPO = "https://kubernetes.github.io/autoscaler"
 export const CLUSTER_AUTOSCALER_CHART_VERSION = "9.59.0";
 /** Key of the kubeconfig in the Secret Cluster API writes; the chart mounts the Secret at this path's directory. */
 const WORKLOAD_KUBECONFIG_PATH = "/etc/kubernetes/value";
+/** Leader election and status live in this namespace of the workload cluster. */
+const STATUS_NAMESPACE = "kube-system";
+
+const releaseName = (clusterName: string) => `cluster-autoscaler-${clusterName}`;
+
+/** ServiceAccount of one cluster's autoscaler, to list among that cluster's trusted workload subjects. */
+export const clusterAutoscalerSubject = (config: Pick<ClusterAutoscalerConfig, "clusterName" | "clusterNamespace">): string =>
+  `system:serviceaccount:${config.clusterNamespace ?? "default"}:${releaseName(config.clusterName)}`;
+
+/** What the autoscaler needs inside the workload cluster it sizes, for a scoped
+ * identity in place of the Cluster API admin kubeconfig: `name` cluster-wide and
+ * `${name}-status` beside its status ConfigMap and lease. A least-privilege
+ * subset of the chart's own ClusterRole, qualified with cluster-autoscaler 1.35. */
+export function clusterAutoscalerWorkloadRbac(name: string, subjects: RbacSubject[]): object[] {
+  const read = () => ["get", "list", "watch"];
+  return [
+    ...rbac.grant(name, subjects, [
+      { apiGroups: [""], resources: ["nodes", "pods", "namespaces", "persistentvolumes", "persistentvolumeclaims", "services", "replicationcontrollers"], verbs: read() },
+      { apiGroups: [""], resources: ["nodes"], verbs: ["update", "patch"] },
+      { apiGroups: [""], resources: ["pods/eviction"], verbs: ["create"] },
+      { apiGroups: [""], resources: ["events"], verbs: ["create", "patch", "update"] },
+      { apiGroups: ["apps"], resources: ["daemonsets", "replicasets", "statefulsets"], verbs: read() },
+      { apiGroups: ["policy"], resources: ["poddisruptionbudgets"], verbs: read() },
+      { apiGroups: ["storage.k8s.io"], resources: ["storageclasses", "csinodes", "csidrivers", "csistoragecapacities", "volumeattachments"], verbs: read() },
+      // The autoscaler waits for these DRA informers before its first scan.
+      { apiGroups: ["resource.k8s.io"], resources: ["deviceclasses", "resourceclaims", "resourceslices"], verbs: read() },
+      { apiGroups: ["batch"], resources: ["jobs"], verbs: read() },
+    ]),
+    ...rbac.grant(`${name}-status`, subjects, [
+      { apiGroups: [""], resources: ["configmaps"], verbs: ["create"] },
+      { apiGroups: [""], resources: ["configmaps"], resourceNames: ["cluster-autoscaler-status", "cluster-autoscaler-priority-expander"], verbs: ["get", "update", "patch", "delete"] },
+      { apiGroups: ["coordination.k8s.io"], resources: ["leases"], verbs: ["create"] },
+      { apiGroups: ["coordination.k8s.io"], resources: ["leases"], resourceNames: ["cluster-autoscaler"], verbs: ["get", "update", "patch"] },
+    ], STATUS_NAMESPACE),
+  ];
+}
 
 /** Chart values for one workload cluster's autoscaler. */
 export function clusterAutoscalerValues(config: ClusterAutoscalerConfig): Record<string, unknown> {
@@ -83,11 +120,10 @@ export function clusterAutoscalerValues(config: ClusterAutoscalerConfig): Record
     clusterAPIMode: "kubeconfig-incluster",
     clusterAPIKubeconfigSecret: config.workloadKubeconfigSecret ?? `${config.clusterName}-kubeconfig`,
     clusterAPIWorkloadKubeconfigPath: WORKLOAD_KUBECONFIG_PATH,
-    // Leader election and status live on the workload cluster.
-    clusterAPIConfigMapsNamespace: "kube-system",
+    clusterAPIConfigMapsNamespace: STATUS_NAMESPACE,
     autoDiscovery: { clusterName: config.clusterName, namespace },
     rbac: { clusterScoped: true },
-    fullnameOverride: `cluster-autoscaler-${config.clusterName}`,
+    fullnameOverride: releaseName(config.clusterName),
     extraArgs: {
       "scale-down-unneeded-time": config.scaleDownUnneededTime ?? "10m",
       "scale-down-delay-after-add": config.scaleDownDelayAfterAdd ?? "5m",
@@ -119,7 +155,7 @@ export class ClusterAutoscaler extends HelmModule<ClusterAutoscalerConfig> {
   constructor(scope: Construct, id: string, config: ClusterAutoscalerConfig) {
     super(scope, id, config);
     const namespace = this.config.clusterNamespace ?? "default";
-    const name = `cluster-autoscaler-${this.config.clusterName}`;
+    const name = releaseName(this.config.clusterName);
     this.helm = this.createHelmRelease({
       namespace,
       chart: "cluster-autoscaler",

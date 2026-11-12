@@ -306,6 +306,9 @@ test("Argo and Crossplane consume shared projections through their own configura
     assert.deepEqual(container.args, ["--poll=1m"]); assert.equal(container.volumeMounts[0].mountPath, "/var/run/kubernetes-oidc/example");
     assert.deepEqual(pod.securityContext, { fsGroup: 2000 });
     assert.equal(xp.kubernetesProvider!.toJson().spec.runtimeConfigRef.name, "provider-kubernetes");
+    // A projected identity is trusted by exact subject, so its ServiceAccount name is pinned.
+    assert.deepEqual(xp.kubernetesProviderRuntimeConfig!.toJson().spec.serviceAccountTemplate, { metadata: { name: "provider-kubernetes" } });
+    assert.equal(crossplane({}).kubernetesProviderRuntimeConfig!.toJson().spec.serviceAccountTemplate, undefined);
     assert.deepEqual(crossplane({}).kubernetesProviderRuntimeConfig!.toJson().spec.deploymentTemplate.spec.template.spec, { containers: [{ name: "package-runtime", args: ["--poll=1m"] }] });
   } finally { process.env.PATH = previous; rmSync(work, { recursive: true, force: true }); }
 });

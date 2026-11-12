@@ -25,6 +25,11 @@ import { HelmModule } from "../../../core";
 import { ArgoCdClusterSyncSetup } from "../argocd/argocd-cluster-sync";
 import { KarmadaCredentialSyncSetup } from "../karmada/credential-sync";
 
+/** The Kubernetes provider's ServiceAccount, to list among a target cluster's
+ * trusted workload subjects. Its name is pinned whenever identities are mounted. */
+export const crossplaneKubernetesProviderSubject = (namespace = "crossplane-system"): string =>
+  `system:serviceaccount:${namespace}:provider-kubernetes`;
+
 export interface ArgoCdProviderOptions {
   /** ArgoCD provider package version (defaults to v0.13.0) */
   version?: string;
@@ -279,7 +284,7 @@ export class Crossplane extends HelmModule<CrossplaneConfig> {
             kind: "DeploymentRuntimeConfig",
             metadata: { name: "provider-kubernetes" },
             spec: {
-              ...(rbac !== false
+              ...(rbac !== false || kubeOpts.workloadIdentities?.length
                 ? {
                     serviceAccountTemplate: {
                       metadata: { name: "provider-kubernetes" },
