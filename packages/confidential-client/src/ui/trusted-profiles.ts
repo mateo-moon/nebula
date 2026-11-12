@@ -34,6 +34,8 @@ export const TRUSTED_STACKS = [ACCESS_PROFILE, { ...ACCESS_PROFILE, id: "nebula-
   gatewayImage: undefined,
   storageImage: undefined,
 }, { ...ACCESS_PROFILE, id: "nebula-snp-agent-reporting-2026-11-12",
+  measurement: "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
+  minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
   agentImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:0a3537ec5872def11f694b7d9f467cd91fcea27fc36533cfe1f1f1304407ce89",
   tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
   gatewayImage: undefined,
