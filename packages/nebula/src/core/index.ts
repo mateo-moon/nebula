@@ -9,6 +9,7 @@ export type {
   HelmValuesMergeStrategy,
   Toleration,
 } from './helm-module';
+export { confinedContainer, unprivilegedPod } from './security';
 export {
   ARGOCD_SYNC_OPTIONS_ANNOTATION,
   ARGOCD_SYNC_WAVE_ANNOTATION,

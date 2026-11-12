@@ -23,9 +23,19 @@ export function validateOidcIssuer(issuer: OidcIssuer): void {
 }
 
 export function validateOidcAudience(audience: string): void {
-  if (typeof audience !== "string" || !audience || /[\s*\u0000-\u001f\u007f]/.test(audience))
-    throw new Error("OIDC requires one exact, non-empty audience");
+  if (!isExact(audience)) throw new Error("OIDC requires one exact, non-empty audience");
 }
+
+/** One exact value: non-empty, without whitespace, wildcard or control character. */
+export const isExact = (value: unknown): value is string =>
+  typeof value === "string" && value !== "" && !/[\s*\u0000-\u001f\u007f]/.test(value);
+export const hasControlCharacter = (value: string): boolean => /[\u0000-\u001f\u007f]/.test(value);
+/** A lower-case DNS name of at least two characters: a host, domain or backend. */
+export const isDnsName = (value: string): boolean => /^[a-z0-9][a-z0-9.-]+$/.test(value);
+/** A Kubernetes object name as these modules accept it. */
+export const isResourceName = (value: string): boolean => /^[a-z0-9][a-z0-9.-]*$/.test(value);
+/** A cluster name, also used in resource names, token paths and audiences. */
+export const isClusterName = (value: string): boolean => /^[a-z][a-z0-9-]*$/.test(value);
 
 export function validateOidcHttpsUrl(value: string): URL {
   const url = new URL(value);

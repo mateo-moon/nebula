@@ -1,4 +1,4 @@
-import { ApiObject } from "cdk8s";
+import { KubeConfigMap } from "cdk8s-plus-33/lib/imports/k8s";
 import { Construct } from "constructs";
 import { stringify } from "yaml";
 import { BaseConstruct } from "../../../core";
@@ -59,18 +59,15 @@ export class K0sOidcAuthentication extends BaseConstruct<K0sOidcAuthenticationCo
   private renderHosted() {
     const c = this.config;
     const name = `oidc-${c.identity.cluster}-authentication`;
-    const metadata = (name: string) => ({ name, namespace: c.namespace ?? "default" });
-    new ApiObject(this, "authentication", {
-      apiVersion: "v1", kind: "ConfigMap", metadata: metadata(name),
-      data: { "authentication.yaml": stringify(this.identity.authenticationConfiguration()) }
+    const namespace = c.namespace ?? "default";
+    new KubeConfigMap(this, "authentication", {
+      metadata: { name, namespace },
+      data: { "authentication.yaml": stringify(this.identity.authenticationConfiguration()) },
     });
-    if (c.bootstrapManifests?.length) new ApiObject(this, "rbac", {
-      apiVersion: "v1", kind: "ConfigMap", metadata: metadata(`${name}-rbac`), data: { "access.yaml": this.manifests }
-    });
-    return {
-      mounts: [{ path: authDirectory, readOnly: true, configMap: { name } }],
-      ...(c.bootstrapManifests?.length ? { manifests: [{ name: "oidc-access", configMap: { name: `${name}-rbac` } }] } : {}),
-    };
+    const mounts = [{ path: authDirectory, readOnly: true, configMap: { name } }];
+    if (!c.bootstrapManifests?.length) return { mounts };
+    new KubeConfigMap(this, "rbac", { metadata: { name: `${name}-rbac`, namespace }, data: { "access.yaml": this.manifests } });
+    return { mounts, manifests: [{ name: "oidc-access", configMap: { name: `${name}-rbac` } }] };
   }
 
   public standalone() {
