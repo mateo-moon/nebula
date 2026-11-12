@@ -145,6 +145,9 @@ test("upstream, documentation and near-miss values pass", () => {
     "not addresses: 12:34:56, aa:bb:cc:dd:ee:ff, std::string, Foo::Bar",
     "image: quay.io/cilium/cilium:v1.18.0 and public.ecr.aws/eks/aws-load-balancer-controller:v2",
     "source: https://github.com/kubernetes/kubernetes and https://github.com/confidential-containers/guest-components",
+    "issuer: https://accounts.google.com, keys: https://www.googleapis.com/oauth2/v3/certs",
+    "docs: https://developers.google.com/identity/protocols/oauth2/native-app and https://docs.cloud.google.com/docs/authentication/token-types",
+    "plugin: https://github.com/int128/kubelogin/blob/master/docs/usage.md",
     "docs: https://json-schema.org/draft/2020-12/schema, https://kubernetes.io/docs/ and https://www.example.org/x",
     "cluster: http://kbs.guests.svc:8080, https://api.guests.svc.cluster.local, postgres://db.guests:5432, host: localhost",
     "apiVersion: networking.k8s.io/v1, cert-manager.io/cluster-issuer, confidentialcontainers.org/v1beta1",
@@ -164,6 +167,11 @@ test("upstream, documentation and near-miss values pass", () => {
     "pkg@1.2.3 and repo@sha256:" + "01".repeat(32),
   ];
   for (const text of clean) assert.deepEqual(scan(text), [], text);
+});
+
+test("Google client IDs remain deployment bindings outside the upstream domain list", () => {
+  const client = ["000000000000-example", "apps", "googleusercontent", "com"].join(".");
+  assert.deepEqual(classes(scan(`audience: ${client}`)), ["domain"]);
 });
 
 test("key blocks are allowlisted only by the exact content hash", () => {

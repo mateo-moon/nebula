@@ -1,0 +1,76 @@
+name: Verify baremetal UEFI installation
+
+on:
+  pull_request:
+    paths:
+      - packages/nebula/src/modules/infra/k0s/baremetal/**
+      - packages/nebula/test/baremetal*
+      - .github/workflows/verify-baremetal-install.yml
+  push:
+    branches: [main]
+    paths:
+      - packages/nebula/src/modules/infra/k0s/baremetal/**
+      - packages/nebula/test/baremetal*
+      - .github/workflows/verify-baremetal-install.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baremetal-uefi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  uefi-install:
+    name: UEFI SSH, kexec, installation and disk reboots
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: packages/nebula
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install disposable VM tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends qemu-system-x86 qemu-utils ovmf
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
+      - name: Download checksum-pinned installer artifacts
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, os, runpy, sys, urllib.request
+          from pathlib import Path
+          sys.path.insert(0, "test")
+          fixture = runpy.run_path("test/baremetal-vm.py")
+          destination = Path(os.environ["RUNNER_TEMP"]) / "debian-netboot"
+          destination.mkdir()
+          for name, digest in fixture["PINS"].items():
+              with urllib.request.urlopen(fixture["BASE"] + name, timeout=120) as response:
+                  content = response.read(128 * 1024**2)
+              if hashlib.sha256(content).hexdigest() != digest:
+                  raise ValueError("Installer checksum mismatch: " + name)
+              (destination / name).write_bytes(content)
+          PY
+      - name: Qualify the complete UEFI reinstall and ordinary reboot
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: >-
+          python3 -B test/baremetal-vm.py
+          --artifacts "$RUNNER_TEMP/debian-netboot"
+          --firmware-code /usr/share/OVMF/OVMF_CODE_4M.fd
+          --firmware-vars /usr/share/OVMF/OVMF_VARS_4M.fd
+      - name: Retain public verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: baremetal-uefi-install
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/nebula-kexec-uefi-*/result.json
+            ${{ runner.temp }}/nebula-kexec-uefi-*/source-facts.json
+            ${{ runner.temp }}/nebula-kexec-uefi-*/installed-receipt.json
+            ${{ runner.temp }}/nebula-kexec-uefi-*/firmware-after-install.txt
+            ${{ runner.temp }}/nebula-kexec-uefi-*/qemu-*.log

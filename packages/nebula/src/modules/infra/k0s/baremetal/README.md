@@ -270,6 +270,25 @@ first boot and later reboots, using Debian's default time servers. Bounded `/boo
 and root LV sizes leave free VG extents for a separate local-volume provisioner.
 That provisioner must preserve the OS root LV in the shared VG.
 
+On UEFI hosts, discovery records the identities of existing GPT/file boot entries
+whose ESP belongs to the selected system disk. A pending `BootNext` must be
+resolved before staging: kexec does not consume firmware one-shot boot intent.
+The installer is entered directly through kexec, independently of firmware boot
+priority. Its final reboot is an ordinary firmware boot and must load the newly
+installed Debian OS.
+
+After GRUB installation, the late command identifies an active Debian loader by
+its GPT ESP identity, exact Debian EFI file path and existing loader file, rather
+than by a display label or fixed boot number. GRUB owns loader registration;
+missing or invalid registration fails the installation. The late command places
+the verified loader first in firmware boot priority. The ESP must be on the
+selected system disk. Entries captured from that disk's old ESPs are retired only while
+their complete EFI payload still matches; an ID reused by GRUB or another owner
+is retained. Network entries and entries for other disks are preserved behind
+the installed OS. GRUB package upgrades retain their normal registration behavior.
+BIOS installations do not run this step. Provider recovery boot preferences
+remain deployment/operator policy; provisioning establishes Debian disk boot.
+
 The Job reconnects with the pinned host key and worker key, checks the request
 receipt, hostname, OS suite, node address families and free VG storage, records
 verification tied to the request hash, then exits successfully. If `installation.uefi`
@@ -279,6 +298,16 @@ Optional native Cilium admission policies and bindings must first be observed
 ready through the workload ProviderConfig. The Job never receives workload
 credentials. The workload identity needs access to those admission resources;
 this setup does not grant remote-cluster permissions.
+
+For new UEFI installations, post-reboot verification also checks that the recorded
+Debian EFI entry still matches the mounted ESP and selected system disk, remains
+first in `BootOrder`, and equals `BootCurrent`. The kernel boot ID must differ
+from the one recorded inside the installer, including when a boot number was
+reused. A receipt produced inside the kexec installer alone cannot satisfy this check: the host must return through
+its installed firmware loader before `OSReady` and CAPI enrollment. Legacy
+receipts remain valid without this new evidence; existing workers retain manual
+composition revisions and are never reinstalled to obtain it. `skipUefi` still
+controls the separate optional hardware setup-variable phase.
 
 Crossplane then manages `PooledRemoteMachine`, `RemoteMachineTemplate`,
 `K0sWorkerConfigTemplate` and `MachineDeployment` through retained Kubernetes
@@ -514,13 +543,18 @@ enrollment, ready workers, changed bootstrap intent and lost observations.
 CI enables it using a checksum-verified CLI. It requires Docker and function
 registry access on the first run and never contacts a Kubernetes API or host.
 
-`test/baremetal-vm.py` is an opt-in integration test restricted to its own
-new disposable QEMU disk. It creates a source OS and exercises SSH discovery,
-staging, kexec, reinstall and verification using pinned netboot artifacts. Failed
-disks/logs remain in a printed private temporary directory; successful runs
-remove them. The exercised BIOS/IPv4 fixture does not qualify UEFI, dual-stack
-routing or physical-server firmware. Qualify those on the deployment profile
-before using it on physical servers. No live fleet is changed by these tests.
+`test/baremetal-vm.py` is an integration test restricted to its own new disposable
+QEMU disk. It creates a legacy source OS and exercises production SSH discovery,
+staging, kexec, reinstall and verification using pinned netboot artifacts. Supply
+`--firmware-code <OVMF_CODE.fd> --firmware-vars <OVMF_VARS.fd>` to qualify UEFI.
+The UEFI case boots a differently named source loader before reinstall, retains
+the same private NVRAM across the transition, checks retirement of the source
+loader entry and verifies Debian through two ordinary firmware disk boots. Evidence
+remains in the printed private temporary directory. The dedicated UEFI workflow
+runs this tier on relevant changes. BIOS mode remains available without those
+firmware arguments. The VM uses IPv4; physical-server firmware and deployment
+networking still need qualification on their deployment profile. No live fleet
+is changed by these tests.
 
 References: [provider-kubernetes v0.17.0](https://github.com/crossplane-contrib/provider-kubernetes/tree/v0.17.0),
 [Debian initrd preseeding](https://www.debian.org/releases/trixie/amd64/apbs02.en.html),

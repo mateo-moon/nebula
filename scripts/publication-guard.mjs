@@ -48,6 +48,8 @@ export const DEFAULT_SCOPE = [
   "docker/confidential-storage-devices",
   "tools/tng-client",
   "tools/tng-browser",
+  ":(glob)tools/oidc-login/*.go",
+  "tools/oidc-login/README.md",
   "packages/nebula/src/modules/k8s/trustee",
   ":(glob)packages/nebula/test/*trustee*.ts",
   "tools/genpolicy",
@@ -59,6 +61,13 @@ export const DEFAULT_SCOPE = [
   "docker/devops-bridge",
   "docker/nebula-cmp",
   "packages/nebula/src/modules/infra/k0s/baremetal",
+  "packages/nebula/src/modules/infra/k0s/oidc-authentication.ts",
+  "packages/nebula/src/modules/k8s/kubernetes-access",
+  "packages/nebula/src/modules/k8s/envoy/jwt-proxy.ts",
+  "packages/nebula/src/utils/oidc.ts",
+  "packages/nebula/src/modules/k8s/argocd/oidc-cluster.ts",
+  ":(glob)packages/nebula/test/kubernetes-access*.ts",
+  "packages/nebula/example/kubernetes-oidc.ts",
 ];
 
 export const ALLOWLISTABLE = new Set(["private-key", "public-key", "hex-64-bytes", "opaque-blob", "binary-file"]);
@@ -91,7 +100,9 @@ const UPSTREAM_OWNERS = new Set([
   // Public containerd NRI dependencies.
   "brianvoe", "golang", "knqyf263", "sirupsen", "tetratelabs",
   // Public controller-runtime dependency graph (Go module checksums).
-  "masterminds", "beorn7", "cespare", "davecgh", "emicklei", "evanphx", "fsnotify", "fxamacker", "go-logr", "go-openapi", "go-task", "google", "json-iterator", "klauspost", "kr", "kylelemons", "modern-go", "munnerz", "onsi", "pkg", "pmezard", "prometheus", "rogpeppe", "spf13", "stretchr", "x448",
+  "masterminds", "beorn7", "cespare", "davecgh", "emicklei", "evanphx", "fsnotify", "fxamacker", "go-logr", "go-openapi", "go-task", "google", "json-iterator", "klauspost", "kr", "kylelemons", "modern-go", "munnerz", "onsi", "pkg", "pmezard", "prometheus", "rogpeppe", "stretchr", "x448",
+  "int128", // Public kubelogin OIDC exec plugin and its documentation.
+  "spf13", // Public pflag argument parser used by kubelogin.
 ]);
 if (process.env.GITHUB_REPOSITORY_OWNER) UPSTREAM_OWNERS.add(process.env.GITHUB_REPOSITORY_OWNER.toLowerCase());
 const CODE_HOST_PATHS = new Set([
@@ -101,6 +112,9 @@ const CODE_HOST_PATHS = new Set([
 // Domains (and their subdomains) of upstream projects and standards bodies.
 const UPSTREAM_DOMAINS = [
   "github.com", "githubusercontent.com", "github.io", "gitlab.com", "codeberg.org", "bitbucket.org", "ghcr.io", "docker.io", "docker.com", "quay.io",
+  "googleapis.com", // Standard Envoy protobuf types and Google's public JWKS endpoint.
+  "accounts.google.com", "developers.google.com", "docs.cloud.google.com", // Public Google issuer and OAuth documentation; OAuth client IDs remain deployment bindings.
+  "support.google.com", // Public OAuth client-management guidance.
   "gcr.io", "pkg.dev", "k8s.io", "kubernetes.io", "x-k8s.io", "json-schema.org", "w3.org", "ietf.org",
   "rfc-editor.org", "iana.org", "spdx.org", "apache.org", "opencontainers.org", "confidentialcontainers.org",
   "katacontainers.io", "amd.com", "intel.com", "asus.com", "trustedcomputinggroup.org", "crossplane.io", "upbound.io",

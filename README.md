@@ -32,6 +32,7 @@ discovery, resource ownership, and staged adoption of existing infrastructure.
 | Infrastructure | AWS and GCP resources, k0s clusters and workers, DNS, image registries, IAM, and backups. |
 | GitOps and cluster management | Argo CD, application tiers, image updates, Crossplane, Cluster API, and Karmada. |
 | Networking | Cilium, Calico, WireGuard, Envoy, ingress-nginx, cert-manager, and external-dns. |
+| Kubernetes access | [Portable OIDC](packages/nebula/src/modules/k8s/kubernetes-access/README.md), JWT gateways, structured k0s authentication, and rotating workload identities. |
 | Storage | Longhorn, Piraeus, OpenEBS LVM, EBS CSI, snapshots, and PVC resizing. |
 | Monitoring | Prometheus Operator, member-cluster monitoring, mesh metrics, and Crossplane observability. |
 | Confidential workloads | Measured guest definitions, signed releases, attested image pulls, admission policies, sealed disks, and Trustee in a CoCo SNP guest. |
