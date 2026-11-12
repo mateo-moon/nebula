@@ -38,6 +38,8 @@ export interface KubernetesOidcIdentityConfig {
     username?: KubernetesOidcClaimMapping;
     /** Explicit fixed groups or an issuer claim; no groups are assigned by default. */
     groups?: readonly string[] | KubernetesOidcClaimMapping;
+    /** Additional groups by exact verified email, keyed by group; extends fixed `groups`. */
+    emailGroups?: Readonly<Record<string, readonly string[]>>;
     /** Exact signed claims, for example a managed domain and authorized party. */
     requiredClaims?: Readonly<Record<string, string>>;
     login?: KubernetesOidcProviderLoginOptions;
@@ -66,12 +68,21 @@ export class KubernetesOidcIdentity {
       if (!mapping.claim || /[\s*\u0000-\u001f\u007f]/.test(mapping.claim) || /[\u0000-\u001f\u007f]/.test(mapping.prefix ?? "") || mapping.prefix?.startsWith("system:"))
         throw new Error("OIDC claim mappings require an exact claim and a non-system prefix");
     };
+    const invalidGroup = (group: string) => !group || /[\u0000-\u001f\u007f]/.test(group) || group.startsWith("system:");
     if (c.workforce.username) validateMapping(c.workforce.username);
     if (c.workforce.groups) {
       if (Array.isArray(c.workforce.groups)) {
-        if (c.workforce.groups.some(group => !group || /[\u0000-\u001f\u007f]/.test(group) || group.startsWith("system:")))
+        if (c.workforce.groups.some(invalidGroup))
           throw new Error("OIDC groups must be non-empty, non-system group names");
       } else validateMapping(c.workforce.groups as KubernetesOidcClaimMapping);
+    }
+    if (c.workforce.emailGroups) {
+      if (c.workforce.groups && !Array.isArray(c.workforce.groups))
+        throw new Error("Email groups extend fixed groups, not a claim mapping");
+      for (const [group, emails] of Object.entries(c.workforce.emailGroups)) {
+        if (invalidGroup(group) || !Array.isArray(emails) || !emails.length || emails.some(email => !/^[^\s@"']+@[^\s@"']+$/.test(email)))
+          throw new Error("Email groups require a non-system group name and exact email addresses");
+      }
     }
     for (const [claim, value] of Object.entries(c.workforce.requiredClaims ?? {})) {
       if (!claim || /[\s*\u0000-\u001f\u007f]/.test(claim) || typeof value !== "string" || !value)
@@ -99,6 +110,8 @@ export class KubernetesOidcIdentity {
     const c = this.config;
     const username = c.workforce.username ?? { claim: "email" };
     const groups = c.workforce.groups;
+    const emailGroupTerms = Object.entries(c.workforce.emailGroups ?? {}).map(([group, emails]) =>
+      ` + (claims.email in ${JSON.stringify(emails)} ? [${JSON.stringify(group)}] : [])`).join("");
     const mapping = (m: KubernetesOidcClaimMapping) => ({ claim: m.claim, prefix: m.prefix ?? "oidc:" });
     const issuer = (i: OidcIssuer) => ({
       url: i.url, audiences: [i.audience], audienceMatchPolicy: "MatchAny",
@@ -114,13 +127,14 @@ export class KubernetesOidcIdentity {
       jwt: [
         {
           issuer: issuer(c.workforce), claimValidationRules: [lifetime(c.workforce),
-            ...(username.claim === "email" || c.workforce.emailDomain ? [{
+            ...(username.claim === "email" || c.workforce.emailDomain || emailGroupTerms ? [{
               expression: `claims.email_verified == true${c.workforce.emailDomain ? ` && claims.email.endsWith(${JSON.stringify(`@${c.workforce.emailDomain}`)})` : ""}`,
               message: "A verified email matching the configured identity policy is required"
             }] : []), ...Object.entries(c.workforce.requiredClaims ?? {}).map(([claim, requiredValue]) => ({ claim, requiredValue }))],
           claimMappings: {
             username: mapping(username), uid: { claim: "sub" },
-            ...(groups ? { groups: Array.isArray(groups) ? { expression: JSON.stringify(groups) } : mapping(groups as KubernetesOidcClaimMapping) } : {})
+            ...(groups && !Array.isArray(groups) ? { groups: mapping(groups as KubernetesOidcClaimMapping) }
+              : groups || emailGroupTerms ? { groups: { expression: JSON.stringify(groups ?? []) + emailGroupTerms } } : {})
           },
           userValidationRules: [
             { expression: "!user.username.startsWith('system:')", message: "System identities are reserved" },

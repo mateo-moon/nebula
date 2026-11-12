@@ -37,7 +37,7 @@ import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } fro
  * ```
  */
 import { Construct } from "constructs";
-import { Helm, ApiObject } from "cdk8s";
+import { Helm, ApiObject, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
 import { deepmerge } from "deepmerge-ts";
 import * as crypto from "crypto";
@@ -577,6 +577,32 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
       // the values leave them disabled; the CRDs must exist at apply time).
       helmFlags: ["--api-versions", "monitoring.coreos.com/v1"],
     });
+
+    // The chart has one Pod security context for every component, so the
+    // image's group (999) is set on the workloads that mount the tokens.
+    if (workloadTokens.volumes) {
+      const tokens = new Set(workloadTokens.volumes.map((v) => v.name));
+      const workloads = this.helm.apiObjects.filter(
+        (o) =>
+          ["Deployment", "StatefulSet"].includes(o.kind) &&
+          (o.toJson().spec.template.spec.volumes ?? []).some(
+            (v: { name: string }) => tokens.has(v.name),
+          ),
+      );
+      if (workloads.length < 2) {
+        throw new Error(
+          "The server and application controller must mount the projected identities",
+        );
+      }
+      for (const workload of workloads) {
+        workload.addJsonPatch(
+          JsonPatch.add("/spec/template/spec/securityContext", {
+            fsGroup: 999,
+            ...workload.toJson().spec.template.spec.securityContext,
+          }),
+        );
+      }
+    }
 
     // Create AppProject if configured using imported CRD
     if (this.config.project?.name) {

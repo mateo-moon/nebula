@@ -69,7 +69,14 @@ export function clusterAutoscalerValues(config: ClusterAutoscalerConfig): Record
   const namespace = config.clusterNamespace ?? "default";
   const token = config.workloadIdentity ? new KubernetesWorkloadIdentity(config.workloadIdentity).projection : undefined;
   return {
-    ...(token ? { extraVolumes: [token.volume], extraVolumeMounts: [token.mount] } : {}),
+    ...(token
+      ? {
+          extraVolumes: [token.volume],
+          extraVolumeMounts: [token.mount],
+          // The autoscaler image runs as 65532:65532.
+          securityContext: { fsGroup: 65532 },
+        }
+      : {}),
     cloudProvider: "clusterapi",
     // The autoscaler pod runs beside Cluster API (in-cluster) and reaches the
     // workload cluster through its kubeconfig Secret.

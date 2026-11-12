@@ -4,9 +4,10 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Testing } from "cdk8s";
+import { Testing, type Chart } from "cdk8s";
+import { evaluate } from "@marcbachmann/cel-js";
 import { K0SmotronControlPlaneV1Beta2SpecStorageType } from "../imports/controlplane.cluster.x-k8s.io";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 import { KubernetesOidcIdentity, type KubernetesOidcIdentityConfig } from "../src/modules/k8s/kubernetes-access/identity";
 import { KubernetesWorkloadIdentity, KubernetesWorkloadKubeconfig, PROJECTED_TOKEN_EXEC_CREDENTIAL_COMMAND } from "../src/modules/k8s/kubernetes-access/workload-identity";
 import { KubernetesOidcGateway } from "../src/modules/k8s/kubernetes-access/gateway";
@@ -14,7 +15,7 @@ import { K0smotronCluster } from "../src/modules/infra/k0s/k0smotron-cluster";
 import { K0sCluster, type K0sInfraProvider } from "../src/modules/infra/k0s/cluster";
 import { AwsK0sCluster } from "../src/modules/infra/aws/k0s-cluster";
 import { ArgoCdOidcCluster } from "../src/modules/k8s/argocd/oidc-cluster";
-import { clusterAutoscalerValues } from "../src/modules/k8s/cluster-autoscaler";
+import { ClusterAutoscaler, clusterAutoscalerValues } from "../src/modules/k8s/cluster-autoscaler";
 import { ServiceAccountTokenRotation } from "../src/modules/k8s/kubernetes-access/token-rotation";
 import { ServiceAccountTokenLifetimePolicy } from "../src/modules/k8s/kubernetes-access/token-lifetime-policy";
 import { K0sOidcAuthentication } from "../src/modules/infra/k0s/oidc-authentication";
@@ -61,6 +62,38 @@ test("identity mappings belong to the caller and reserve Kubernetes system ident
   assert.equal(fixed.jwt[0].claimMappings.groups.expression, '["access:developers"]');
   assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...workforce, groups: ["system:masters"] } }), /non-system/);
   assert.throws(() => new KubernetesOidcIdentity({ ...identity, workforce: { ...workforce, username: { claim: "sub", prefix: "system:" } } }), /non-system/);
+});
+
+test("email groups extend fixed groups for exact verified emails only", () => {
+  const emailGroups = { "access:maintainers": ["maintainer@example.test", "lead@example.test"], "access:auditors": ["auditor@example.test"] };
+  const config = (workforce: Partial<KubernetesOidcIdentityConfig["workforce"]>) => ({ ...identity, workforce: { ...identity.workforce, ...workforce } });
+  const workforce = (overrides: Partial<KubernetesOidcIdentityConfig["workforce"]>) => (new KubernetesOidcIdentity(config(overrides)).authenticationConfiguration() as any).jwt[0];
+  const expression = workforce({ groups: ["access:developers"], emailGroups }).claimMappings.groups.expression;
+  assert.equal(expression, '["access:developers"] + (claims.email in ["maintainer@example.test","lead@example.test"] ? ["access:maintainers"] : [])'
+    + ' + (claims.email in ["auditor@example.test"] ? ["access:auditors"] : [])');
+  const groups = (email: string, source = expression) => evaluate(source, { claims: { email } });
+  assert.deepEqual(groups("lead@example.test"), ["access:developers", "access:maintainers"]);
+  assert.deepEqual(groups("auditor@example.test"), ["access:developers", "access:auditors"]);
+  for (const email of ["employee@example.test", "Lead@example.test", "lead@example.test.elsewhere.test", "other+lead@example.test"])
+    assert.deepEqual(groups(email), ["access:developers"]);
+  assert.throws(() => evaluate(expression, { claims: {} }), /email/);
+  const alone = workforce({ emailGroups: { "access:auditors": ["auditor@example.test"] } }).claimMappings.groups.expression;
+  assert.equal(alone, '[] + (claims.email in ["auditor@example.test"] ? ["access:auditors"] : [])');
+  assert.deepEqual(groups("auditor@example.test", alone), ["access:auditors"]); assert.deepEqual(groups("employee@example.test", alone), []);
+  assert.equal(workforce({ emailGroups: {} }).claimMappings.groups, undefined);
+  // Membership never follows an unverified address, whichever claim names the user.
+  const bySubject = workforce({ emailDomain: undefined, username: { claim: "sub" }, emailGroups });
+  assert.ok(bySubject.claimValidationRules.some((r: any) => r.expression === "claims.email_verified == true"));
+  const chart = Testing.chart();
+  new K0smotronCluster(chart, "cluster", { name: "example", k8sVersion: "v1.35.0", provider, controlPlane: { authentication: { identity: config({ groups: ["access:developers"], emailGroups }) } } });
+  const hosted = Testing.synth(chart).find(o => o.kind === "ConfigMap" && o.metadata.name === "oidc-example-authentication")!;
+  assert.equal(parse(hosted.data["authentication.yaml"]).jwt[0].claimMappings.groups.expression, expression);
+  assert.throws(() => new KubernetesOidcIdentity(config({ groups: { claim: "roles" }, emailGroups })), /not a claim mapping/);
+  const refused: Record<string, readonly string[]>[] = [
+    { "system:masters": ["lead@example.test"] }, { "": ["lead@example.test"] }, { "access:auditors": [] }, { "access:auditors": ["lead"] },
+    { "access:auditors": ["lead@example.test "] }, { "access:auditors": ["lead@example.test,auditor@example.test"] }, { "access:auditors": ['lead"@example.test'] },
+  ];
+  for (const groups of refused) assert.throws(() => new KubernetesOidcIdentity(config({ emailGroups: groups })), /non-system group name and exact email/);
 });
 
 test("public workforce clients support provider claims and one-hour humans without extending workload trust", () => {
@@ -178,6 +211,9 @@ test("Argo and autoscaler share rotating file identity and only declare their ow
   assert.equal(parse(objects.find(o => o.metadata.name === "example-oidc")!.stringData.value).users[0].user.tokenFile, token.tokenPath);
   const values: any = clusterAutoscalerValues({ clusterName: "example", workloadIdentity: { cluster: "example" }, workloadKubeconfigSecret: "example-oidc" });
   assert.equal(values.clusterAPIKubeconfigSecret, "example-oidc"); assert.deepEqual(values.extraVolumes, [token.projection.volume]);
+  assert.deepEqual(values.securityContext, { fsGroup: 65532 });
+  const plain: any = clusterAutoscalerValues({ clusterName: "example" });
+  assert.equal(plain.extraVolumes, undefined); assert.equal(plain.securityContext, undefined);
   assert.throws(() => KubernetesWorkloadIdentity.podSpec([{ cluster: "example" }, { cluster: "example" }]), /Duplicate/);
 });
 
@@ -235,20 +271,71 @@ test("Argo and Crossplane consume shared projections through their own configura
   const { ArgoCd } = await import("../src/modules/k8s/argocd");
   const { Crossplane } = await import("../src/modules/k8s/crossplane");
   const { readFileSync } = await import("node:fs");
-  const work = mkdtempSync(join(tmpdir(), "nebula-oidc-helm-")), values = join(work, "values.yaml"), previous = process.env.PATH;
-  writeFileSync(join(work, "helm"), `#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);if(args.includes('-f'))fs.copyFileSync(args[args.indexOf('-f')+1],${JSON.stringify(values)});\n`, { mode: 0o755 });
+  const work = mkdtempSync(join(tmpdir(), "nebula-oidc-helm-")), values = join(work, "values.yaml"), rendered = join(work, "argo-cd.yaml"), previous = process.env.PATH;
+  writeFileSync(join(work, "helm"), `#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);if(args.includes('-f'))fs.copyFileSync(args[args.indexOf('-f')+1],${JSON.stringify(values)});if(args.at(-1)==='argo-cd')process.stdout.write(fs.readFileSync(${JSON.stringify(rendered)}));\n`, { mode: 0o755 });
+  // Stands in for the chart: its server, controller and repo server under their configured names, the
+  // token volumes rendered on the first `mounting` of them, and the one Pod security context they share.
+  const token = new KubernetesWorkloadIdentity({ cluster: "example" }).projection.volume;
+  const renderArgo = (config: ConstructorParameters<typeof ArgoCd>[2], chart: { names?: string[]; mounting?: number; securityContext?: object } = {}) => {
+    const [server = "argocd-server", controller = "argocd-application-controller"] = chart.names ?? [];
+    const mounting = chart.mounting ?? (config?.workloadIdentities?.length ? 2 : 0);
+    writeFileSync(rendered, [["Deployment", server], ["StatefulSet", controller], ["Deployment", "argocd-repo-server"]].map(([kind, name], index) => stringify({
+      apiVersion: "apps/v1", kind, metadata: { name },
+      spec: { template: { spec: { ...(chart.securityContext ? { securityContext: chart.securityContext } : {}), volumes: [{ name: "tmp", emptyDir: {} }, ...(index < mounting ? [token] : [])], containers: [] } } },
+    })).join("---\n"));
+    const argo = new ArgoCd(Testing.chart(), "argo", config);
+    return Object.fromEntries(argo.helm.apiObjects.map(o => [o.name, o.toJson().spec.template.spec.securityContext]));
+  };
+  const identities = { workloadIdentities: [{ cluster: "example" }] };
   process.env.PATH = `${work}:${previous}`;
   try {
-    const chart = Testing.chart();
-    new ArgoCd(chart, "argo", { workloadIdentities: [{ cluster: "example" }], values: { controller: { volumes: [{ name: "existing", emptyDir: {} }] } } });
+    const fileGroups = renderArgo({ ...identities, values: { controller: { volumes: [{ name: "existing", emptyDir: {} }] } } });
     const argoValues = parse(readFileSync(values, "utf8"));
     for (const component of ["controller", "server"]) assert.ok(argoValues[component].volumes.some((v: any) => v.name === "oidc-example"));
     assert.ok(argoValues.controller.volumes.some((v: any) => v.name === "existing"));
-    const xp = new Crossplane(chart, "xp", { argoCdProvider: false, kubernetesProvider: { rbac: false, pollInterval: "1m", workloadIdentities: [{ cluster: "example" }], installArgoCdClusterSyncSetup: false, installKarmadaCredentialSyncSetup: false } });
-    const runtime = xp.kubernetesProviderRuntimeConfig!.toJson(), container = runtime.spec.deploymentTemplate.spec.template.spec.containers[0];
+    assert.deepEqual(fileGroups, { "argocd-server": { fsGroup: 999 }, "argocd-application-controller": { fsGroup: 999 }, "argocd-repo-server": undefined });
+    assert.deepEqual(renderArgo(identities, { names: ["argocd-api", "gitops-controller"] }), { "argocd-api": { fsGroup: 999 }, "gitops-controller": { fsGroup: 999 }, "argocd-repo-server": undefined });
+    assert.deepEqual(renderArgo({}), { "argocd-server": undefined, "argocd-application-controller": undefined, "argocd-repo-server": undefined });
+    const nonRoot = { runAsNonRoot: true }, chosen = { runAsNonRoot: true, fsGroup: 1000 };
+    assert.deepEqual(renderArgo(identities, { securityContext: nonRoot }), { "argocd-server": { ...nonRoot, fsGroup: 999 }, "argocd-application-controller": { ...nonRoot, fsGroup: 999 }, "argocd-repo-server": nonRoot });
+    assert.deepEqual(renderArgo(identities, { securityContext: chosen }), { "argocd-server": chosen, "argocd-application-controller": chosen, "argocd-repo-server": chosen });
+    for (const mounting of [0, 1]) assert.throws(() => renderArgo(identities, { mounting }), /must mount the projected identities/);
+    const crossplane = (options: object) => new Crossplane(Testing.chart(), "xp", { argoCdProvider: false, kubernetesProvider: { rbac: false, pollInterval: "1m", installArgoCdClusterSyncSetup: false, installKarmadaCredentialSyncSetup: false, ...options } });
+    const xp = crossplane(identities);
+    const pod = xp.kubernetesProviderRuntimeConfig!.toJson().spec.deploymentTemplate.spec.template.spec, container = pod.containers[0];
     assert.deepEqual(container.args, ["--poll=1m"]); assert.equal(container.volumeMounts[0].mountPath, "/var/run/kubernetes-oidc/example");
+    assert.deepEqual(pod.securityContext, { fsGroup: 2000 });
     assert.equal(xp.kubernetesProvider!.toJson().spec.runtimeConfigRef.name, "provider-kubernetes");
+    assert.deepEqual(crossplane({}).kubernetesProviderRuntimeConfig!.toJson().spec.deploymentTemplate.spec.template.spec, { containers: [{ name: "package-runtime", args: ["--poll=1m"] }] });
   } finally { process.env.PATH = previous; rmSync(work, { recursive: true, force: true }); }
+});
+
+// Rendering the charts needs helm and the chart repositories: opt in with NEBULA_HELM_TESTS=1.
+test("the Argo CD and autoscaler charts set the file group on token-mounting Pods only", { skip: process.env.NEBULA_HELM_TESTS !== "1" }, async () => {
+  const { ArgoCd } = await import("../src/modules/k8s/argocd");
+  const workloadIdentity = { cluster: "example" };
+  const pods = (construct: (chart: Chart) => unknown) => {
+    const chart = Testing.chart(); construct(chart);
+    return Testing.synth(chart).filter(o => ["Deployment", "StatefulSet"].includes(o.kind)).map(o => ({ name: o.metadata.name, ...o.spec.template.spec }));
+  };
+  const argo = (values: Record<string, unknown> = {}, workloadIdentities = [workloadIdentity]) => pods(chart => new ArgoCd(chart, "argo", { workloadIdentities, values }));
+  const autoscaler = (identity?: typeof workloadIdentity) => pods(chart => new ClusterAutoscaler(chart, "autoscaler", { clusterName: "example", workloadIdentity: identity }));
+  // Exactly the named Pods mount the token, and only they carry a file group.
+  const fileGroups = (rendered: ReturnType<typeof pods>, expected: Record<string, number>) => {
+    for (const pod of rendered) {
+      assert.equal(pod.volumes?.some((v: any) => v.name === "oidc-example") ?? false, pod.name in expected, pod.name);
+      assert.equal(pod.securityContext?.fsGroup, expected[pod.name], pod.name);
+    }
+  };
+  const renamed = { server: { name: "api" }, controller: { name: "controller" } };
+  fileGroups(argo(), { "argocd-server": 999, "argocd-application-controller": 999 });
+  fileGroups(argo(renamed), { "argocd-api": 999, "argocd-controller": 999 });
+  fileGroups(argo({ fullnameOverride: "gitops" }), { "gitops-server": 999, "gitops-application-controller": 999 });
+  fileGroups(autoscaler(workloadIdentity), { "cluster-autoscaler-example": 65532 });
+  // A group chosen through the chart's own Pod security context stays in place.
+  const chosen = argo({ ...renamed, global: { securityContext: { fsGroup: 1234 } } });
+  for (const name of ["argocd-api", "argocd-controller"]) assert.equal(chosen.find(pod => pod.name === name)!.securityContext.fsGroup, 1234);
+  assert.ok([...argo({}, []), ...autoscaler()].every(pod => pod.securityContext?.fsGroup === undefined));
 });
 
 test("control-plane composition rejects unsupported versions and mismatched hosting namespaces", () => {
