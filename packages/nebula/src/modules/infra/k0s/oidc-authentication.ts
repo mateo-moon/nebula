@@ -34,9 +34,12 @@ export class K0sOidcAuthentication extends BaseConstruct<K0sOidcAuthenticationCo
     this.identity = new KubernetesOidcIdentity(this.config.identity);
   }
 
-  public static validateControlPlane(config: K0sOidcAuthenticationConfig | undefined, context: { namespace: string; k8sVersion: string }): void {
+  public static validateControlPlane(
+    config: K0sOidcAuthenticationConfig | undefined, context: { namespace: string; k8sVersion: string },
+  ): void {
     if (!config) return;
-    if (config.namespace && config.namespace !== context.namespace) throw new Error("OIDC configuration must use the control plane's hosting namespace");
+    if (config.namespace && config.namespace !== context.namespace)
+      throw new Error("OIDC configuration must use the control plane's hosting namespace");
     const version = /^v?(\d+)\.(\d+)\./.exec(context.k8sVersion);
     if (!version || Number(version[1]) < 1 || (Number(version[1]) === 1 && Number(version[2]) < 34))
       throw new Error("Structured OIDC authentication requires Kubernetes 1.34 or later");
@@ -71,11 +74,9 @@ export class K0sOidcAuthentication extends BaseConstruct<K0sOidcAuthenticationCo
   }
 
   public standalone() {
-    return {
-      files: [
-        { path: authFile, content: stringify(this.identity.authenticationConfiguration()), permissions: "0644" },
-        ...(this.config.bootstrapManifests?.length ? [{ path: "/var/lib/k0s/manifests/oidc-access/access.yaml", content: this.manifests, permissions: "0644" }] : []),
-      ],
-    };
+    const file = (path: string, content: string) => ({ path, content, permissions: "0644" });
+    const authentication = file(authFile, stringify(this.identity.authenticationConfiguration()));
+    if (!this.config.bootstrapManifests?.length) return { files: [authentication] };
+    return { files: [authentication, file("/var/lib/k0s/manifests/oidc-access/access.yaml", this.manifests)] };
   }
 }

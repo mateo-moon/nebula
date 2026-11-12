@@ -8,7 +8,9 @@ export const KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS = 600;
 export const kubernetesAccessAudience = (cluster: string) => `kubernetes:${cluster}`;
 const tokenDirectory = (cluster: string) => `/var/run/kubernetes-oidc/${cluster}`;
 export const kubernetesAccessTokenPath = (cluster: string) => `${tokenDirectory(cluster)}/token`;
-export const kubernetesWorkloadUsername = (subject: string) => `workload:${subject}`;
+/** Prefix of every management workload's username in a target cluster. */
+export const WORKLOAD_USERNAME_PREFIX = "workload:";
+export const kubernetesWorkloadUsername = (subject: string) => `${WORKLOAD_USERNAME_PREFIX}${subject}`;
 
 /** Kubernetes TokenRequest projections require at least 600 seconds. */
 export function kubernetesServiceAccountTokenLifetimeSeconds(seconds = KUBERNETES_OIDC_TOKEN_LIFETIME_SECONDS): number {
