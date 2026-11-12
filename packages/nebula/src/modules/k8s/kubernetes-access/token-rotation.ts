@@ -2,7 +2,10 @@ import { KubeCronJob, KubeServiceAccount, Quantity } from "cdk8s-plus-33/lib/imp
 import { Construct } from "constructs";
 import { BaseConstruct, confinedContainer, unprivilegedPod } from "../../../core";
 import { isResourceName, validateOidcAudience } from "../../../utils/oidc";
-import { KubernetesWorkloadIdentity, kubernetesServiceAccountTokenLifetimeSeconds, type KubernetesWorkloadIdentityConfig } from "./workload-identity";
+import { rbac } from "./rbac";
+import {
+  KubernetesWorkloadIdentity, kubernetesServiceAccountTokenLifetimeSeconds, type KubernetesWorkloadIdentityConfig,
+} from "./workload-identity";
 
 export interface ServiceAccountTokenRotationConfig {
   name: string;
@@ -53,6 +56,23 @@ done
 /** Refreshes explicitly named ServiceAccount token Secrets using OIDC. Only
  * tmpfs holds token material; no long-lived token or private key is generated. */
 export class ServiceAccountTokenRotation extends BaseConstruct<ServiceAccountTokenRotationConfig> {
+  /** The refresher's ServiceAccount, to list among the target cluster's trusted workload subjects. */
+  public static subject({ name, namespace }: Pick<ServiceAccountTokenRotationConfig, "name" | "namespace">): string {
+    return `system:serviceaccount:${namespace}:${name}`;
+  }
+
+  /** What the refresher needs in the target cluster: to mint tokens for the
+   * named ServiceAccounts and to patch the named Secrets, nothing else. */
+  public static targetRbac(
+    config: Pick<ServiceAccountTokenRotationConfig, "name" | "namespace" | "targetNamespace" | "targets">,
+  ): object[] {
+    const refresher = [rbac.workload(ServiceAccountTokenRotation.subject(config))];
+    return rbac.grant(config.name, refresher, [
+      { apiGroups: [""], resources: ["serviceaccounts/token"], resourceNames: config.targets.map(t => t.serviceAccount), verbs: ["create"] },
+      { apiGroups: [""], resources: ["secrets"], resourceNames: config.targets.map(t => t.secret), verbs: ["get", "patch"] },
+    ], config.targetNamespace);
+  }
+
   constructor(scope: Construct, id: string, config: ServiceAccountTokenRotationConfig) {
     super(scope, id, config);
     const c = this.config;

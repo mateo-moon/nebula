@@ -15,6 +15,7 @@ identity mappings, public endpoints, TLS trust and Kubernetes RBAC.
 | `ArgoCdOidcCluster` | Argo cluster registration using that projected identity |
 | `ServiceAccountTokenRotation` | Scheduled TokenRequests into explicitly named Secrets |
 | `ServiceAccountTokenLifetimePolicy` | Admission limit for a selected TokenRequest caller |
+| `rbac` | Bootstrap RBAC manifests: subjects, bindings and grants |
 
 See [the complete composition example](../../../../example/kubernetes-oidc.ts).
 
@@ -86,6 +87,35 @@ uses controller bootstrap files. Kubernetes 1.34 or later is required.
 k0s manifest applier. The authentication module owns `authentication-config` and
 `anonymous-auth`; conflicting API flags fail validation. Other API arguments,
 including repeated service-account issuers, pass through unchanged.
+
+## Bootstrap RBAC
+
+`bootstrapManifests` takes plain manifests. `rbac` builds them: `rbac.user`,
+`rbac.group` and `rbac.workload` name subjects, `rbac.bind` binds an existing
+ClusterRole, and `rbac.grant` returns a Role and its binding. Both are
+cluster-wide without a namespace and namespaced with one.
+
+Each component names its own ServiceAccount, to list in `workload.subjects`:
+`argoCdWorkloadSubjects()`, `crossplaneKubernetesProviderSubject()`,
+`clusterAutoscalerSubject(config)` and `ServiceAccountTokenRotation.subject(config)`.
+The two that know what they need in the target cluster also say so:
+`clusterAutoscalerWorkloadRbac(name, subjects)` and
+`ServiceAccountTokenRotation.targetRbac(config)`.
+
+```ts
+const gitops = argoCdWorkloadSubjects().controller;
+const autoscaler = clusterAutoscalerSubject({ clusterName: "example" });
+const bootstrapManifests = [
+  rbac.bind("operators", "cluster-admin", [rbac.user("oidc:operator@example.test")]),
+  rbac.bind("gitops", "cluster-admin", [rbac.workload(gitops)]),
+  ...clusterAutoscalerWorkloadRbac("autoscaler", [rbac.workload(autoscaler)]),
+  ...ServiceAccountTokenRotation.targetRbac(rotation),
+];
+```
+
+What Argo CD and the Kubernetes provider may do in a cluster is the caller's
+decision. These manifests are written into provisioning files, so their key
+order is fixed.
 
 The gateway verifies backend TLS against the supplied CA and server name,
 forwards the original bearer identity, and strips caller-supplied proxy and

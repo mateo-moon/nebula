@@ -4,6 +4,13 @@ import { BaseConstruct } from "../../../core";
 import { isResourceName, validateOidcHttpsUrl } from "../../../utils/oidc";
 import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } from "../kubernetes-access/workload-identity";
 
+/** The chart's default ServiceAccounts of the two Argo CD workloads that reach
+ * target clusters, to list among a target cluster's trusted workload subjects. */
+export const argoCdWorkloadSubjects = (namespace = "argocd") => ({
+  controller: `system:serviceaccount:${namespace}:argocd-application-controller`,
+  server: `system:serviceaccount:${namespace}:argocd-server`,
+});
+
 export interface ArgoCdOidcClusterConfig {
   name: string;
   namespace?: string;
