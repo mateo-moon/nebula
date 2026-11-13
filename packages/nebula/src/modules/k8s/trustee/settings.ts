@@ -36,7 +36,7 @@ function publicKey(pem: string): string {
   return createPublicKey({ key: key.export({ format: "jwk" }), format: "jwk" })
     .export({ format: "pem", type: "spki" }).toString();
 }
-export function trusteeSettings(config: TrusteeConfig) {
+export function trusteeSettings(config: TrusteeConfig, options: { privateDiagnostics?: boolean } = {}) {
   publicConfig("Trustee", config);
   // Validate the owner-supplied guest fields before invoking external tools.
   // The real Init-Data hash is produced by native genpolicy below.
@@ -77,7 +77,7 @@ export function trusteeSettings(config: TrusteeConfig) {
     in: { host: "0.0.0.0", port: 8443 }, out: { host: "127.0.0.1", port: 8080 } },
     attest: { aa_provider: "coco_asr", asr_addr: "http://127.0.0.1:8006", refresh_interval: 0 },
     rats_tls: { multiplex: false } }] };
-  const kbsScript = tngTrusteeBootstrapScript(owner, kbsConfig);
+  const kbsScript = tngTrusteeBootstrapScript(owner, kbsConfig, options.privateDiagnostics);
   const tngScript = tngBootstrapScript(tngConfig);
   const { values, extensions } = confidentialTrusteeHelmSettings(config, { image: config.kbsImage, script: kbsScript,
     restApi: "attestation", port: 8443, memory: 2048, vcpus: 2 });

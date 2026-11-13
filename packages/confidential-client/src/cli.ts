@@ -13,7 +13,7 @@ import { readPreparedClient } from "./prepare";
 import { readEnrollment } from "./enrollment";
 import { withClient, pathTuple } from "./commands/shared";
 import { renewClient } from "./prepare";
-import { prepareWorkloadCommand, configureWorkload, storageStatus, bootstrapStatus } from "./commands/workload";
+import { prepareWorkloadCommand, configureWorkload, storageStatus, bootstrapStatus, diagnostics } from "./commands/workload";
 import {
   prepare, ownerHeader, verify, listResourcePolicies, putResource, deleteResource,
   setResourcePolicy, setAttestationPolicy,
@@ -200,6 +200,8 @@ connected(program.command("storage-status").description("Read non-secret storage
   .action(storageStatus);
 connected(program.command("bootstrap-status").description("Read owner-authorized guest-local retrieval diagnostics; never returns resource bytes"))
   .action(bootstrapStatus);
+connected(program.command("diagnostics").description("Read owner-authorized fixed diagnostic counters from the enrolled guest; never returns raw logs"))
+  .action(diagnostics);
 connected(program.command("list-resource-policies").description("List installed resource policy IDs"))
   .action(listResourcePolicies);
 connected(program.command("put-resource <path> <file>").description("Provision bytes at repository/type/tag"))

@@ -3,11 +3,12 @@ import { execFileSync } from "node:child_process";
 import { X509Certificate, verify, generateKeyPairSync } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { createServer as createTlsServer } from "node:https";
 import { join } from "node:path";
 import { test } from "node:test";
-import { TrusteeClient, TrusteeHttpError, prepareClient, createOwnerToken, tngTrusteeClientPlan, trusteePolicies } from "../src/index";
+import { TrusteeClient, TrusteeHttpError, prepareClient, createOwnerToken, tngTrusteeClientPlan, trusteePolicies, enrollInstance } from "../src/index";
 import { readPreparedClient } from "../src/prepare";
-import { fixture, identity } from "./support";
+import { fixture, identity, port } from "./support";
 import type { RecordedRequest } from "./fixtures";
 
 test("offline preparation preserves exact workload approval and private signing custody", async t => {
@@ -63,6 +64,7 @@ test("managed client uses native admin encoding, validates paths, isolates keys 
   const f = await fixture(t, { targetHost: "localhost" }), client = await TrusteeClient.connect(f.options); t.after(() => client.close());
   await assert.rejects(TrusteeClient.connect(f.options), /EEXIST/);
   assert.deepEqual(await client.listResourcePolicies(), ["resource-policy"]);
+  await assert.rejects(client.diagnostics(), /instance enrollment/);
   const policies = trusteePolicies([{ path: ["owner", "key", "release-1"], recipients: [identity()] }]);
   await client.setAttestationPolicy(policies.attestationPolicy);
   await client.setResourcePolicy(policies.resourcePolicy);
@@ -88,6 +90,67 @@ test("managed client uses native admin encoding, validates paths, isolates keys 
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
   assert.equal(existsSync(join(f.directory, "verifier.pid")), false);
   await assert.rejects(client.listResourcePolicies(), /closed|exited/);
+});
+
+test("diagnostics uses enrolled owner TLS and accepts only bounded fixed counters", async t => {
+  const targetPort = await port(), f = await fixture(t, { instanceBound: true, tcpForwardPort: targetPort });
+  const key = join(f.directory, "diagnostic-tls.key"), certificate = join(f.directory, "diagnostic-tls.pem");
+  execFileSync("openssl", ["req", "-new", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+    "-nodes", "-sha256", "-days", "1", "-subj", "/CN=nebula-instance", "-addext", "subjectAltName=DNS:nebula-instance",
+    "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0", "-keyout", key, "-out", certificate], { stdio: "ignore" });
+  const categories = { startup: 1, ownerAuthorization: 0, attestationHandshake: 0, evidenceVerification: 0,
+    collateral: 2, attestationPolicy: 0, attestationToken: 0, resourcePolicy: 0, resourceStorage: 0, responseEncryption: 0, unclassified: 0 };
+  const snapshot = { version: 1, kbs: { available: true, truncated: false, bytesScanned: 240, linesScanned: 4, categories } };
+  let returned: unknown = snapshot, raw: string | undefined;
+  const seen: { method: string | undefined; path: string | undefined; ownerVerified: boolean }[] = [];
+  const server = createTlsServer({ key: readFileSync(key), cert: readFileSync(certificate), minVersion: "TLSv1.3" }, (req, res) => {
+    req.resume();
+    if (req.url === "/nebula/v1/instance") { res.end("{}"); return; }
+    let ownerVerified = false;
+    try {
+      const [header, claims, signature] = req.headers.authorization!.slice(7).split(".");
+      ownerVerified = req.headers.authorization!.startsWith("Bearer ") && verify("sha256", Buffer.from(`${header}.${claims}`),
+        { key: f.pair.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url")) &&
+        JSON.parse(Buffer.from(claims, "base64url").toString()).aud === f.options.audience;
+    } catch { /* Missing or malformed test authorization is refused. */ }
+    seen.push({ method: req.method, path: req.url, ownerVerified });
+    if (!ownerVerified) { res.writeHead(403).end(); return; }
+    res.setHeader("Content-Type", "application/json");
+    if (req.url === "/kbs/v0/resource-policy") res.end('["resource-policy"]');
+    else if (req.url === "/nebula/v1/diagnostics") res.end(raw ?? JSON.stringify(returned));
+    else res.writeHead(404).end();
+  });
+  await new Promise<void>(accept => server.listen(targetPort, "127.0.0.1", accept));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  await enrollInstance(f.options);
+  const client = await TrusteeClient.connect(f.options);
+  try {
+    assert.deepEqual(await client.diagnostics(), snapshot);
+    returned = { version: 1, kbs: { available: false, truncated: false, bytesScanned: 0, linesScanned: 0,
+      categories: Object.fromEntries(Object.keys(categories).map(name => [name, 0])) } };
+    assert.deepEqual(await client.diagnostics(), returned);
+    for (const invalid of [null, [], { ...snapshot, raw: "sensitive-response" }, { ...snapshot, version: 2 },
+      { ...snapshot, kbs: { ...snapshot.kbs, raw: "sensitive-response" } },
+      ...[65537, -1, 1.5, "240"].map(bytesScanned => ({ ...snapshot, kbs: { ...snapshot.kbs, bytesScanned } })),
+      ...[513, -1, 1.5].map(linesScanned => ({ ...snapshot, kbs: { ...snapshot.kbs, linesScanned } })),
+      { ...snapshot, kbs: { ...snapshot.kbs, available: "true" } },
+      { ...snapshot, kbs: { ...snapshot.kbs, truncated: 1 } },
+      { ...snapshot, kbs: { ...snapshot.kbs, categories: {} } },
+      { ...snapshot, kbs: { ...snapshot.kbs, categories: { ...categories, sensitiveResponse: 1 } } },
+      ...[-1, 5, 0.5, "1"].map(collateral => ({ ...snapshot, kbs: { ...snapshot.kbs, categories: { ...categories, collateral } } })),
+    ]) {
+      returned = invalid;
+      await assert.rejects(client.diagnostics(), error => error instanceof Error && error.message === "Invalid attested diagnostics");
+    }
+    raw = "not-json-sensitive-response";
+    await assert.rejects(client.diagnostics(), error => error instanceof Error && error.message === "Invalid attested diagnostics");
+    assert.ok(seen.every(request => request.ownerVerified && request.method === "GET"));
+    assert.ok(seen.some(request => request.path === "/nebula/v1/diagnostics"));
+  } finally { await client.close(); }
+  const help = execFileSync("bin/confidential-client", ["diagnostics", "--help"], { encoding: "utf8" });
+  assert.match(help, /owner-authorized fixed diagnostic counters/);
+  for (const option of ["--state", "--tng", "--owner-key", "--audience"]) assert.ok(help.includes(option));
+  assert.doesNotMatch(help, /--(?:tail|raw|log|path|file)\b/);
 });
 
 test("TNG waits for verifier HTTP readiness behind an early-accepting published port", async t => {

@@ -40,7 +40,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     nodeSelector: spec.nodeSelector, clients: [{ namespace: metadata.namespace, podLabels: { app: spec.profile } }],
     genpolicy: options.genpolicy, k8sDistribution: runtime.k8sDistribution, ociVersion: runtime.ociVersion,
   };
-  const settings = trusteeSettings(config);
+  const settings = trusteeSettings(config, { privateDiagnostics: Boolean(spec.agentImage) });
   const app = new App(), chart = new Chart(app, "confidential-components");
   const helm = new Helm(chart, "trustee", trusteeHelmProps(config, settings));
   extendTrusteeHelm(helm, settings);
@@ -53,6 +53,10 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   const kbs: any = structuredClone(kbsSource);
   kbs.securityContext = security(10001);
   kbs.restartPolicy = "Always";
+  if (spec.agentImage) {
+    kbs.env = [...(kbs.env ?? []).filter((entry: { name: string }) => entry.name !== "RUST_LOG"),
+      { name: "RUST_LOG", value: "warn" }];
+  }
   if (spec.ownerClaimSha256) kbs.volumeMounts.push(mount("instance", "/run/instance"));
   // Kubelet TCP probes target the Pod IP; KBS is intentionally guest-loopback.
   // Start ordering requires a guest-local probe and would need ExecProcess,
@@ -163,6 +167,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       securityContext: security(0, 0, ["NET_ADMIN", "SYS_ADMIN", "MKNOD", "CHOWN", "SETUID", "SETGID", "SETPCAP"]),
       resources: { requests: { cpu: "50m", memory: "256Mi" }, limits: { memory: "1Gi" } },
       volumeMounts: [mount("instance", "/run/instance"), mount("owner-tmp", "/tmp"),
+        mount("kbs-tmp", "/run/kbs-diagnostics", true),
         mount("guest-guard", "/run/nebula-guard"), mount("owner-ready", "/run/nebula-owner-ready"), mount("storage-runtime", "/run/nebula-runtime"),
         ...encrypted.map(binding => mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`)),
         ...resourceClients.map(client => mount(`resource-${client.name}`, `/run/nebula-resources/${client.name}`))],

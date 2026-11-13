@@ -5,6 +5,7 @@ import { createServer } from "node:https";
 import { request, createServer as createHttpServer, type RequestListener } from "node:http";
 import { join } from "node:path";
 import { bootstrapStatus, storageDiagnostics, validResource } from "./bootstrap.js";
+import { kbsDiagnostics, kbsOwnerAuthorized } from "./diagnostics.js";
 import { claimOwner, internalOwnerToken, loadInternalOwnerKey, readClaimedOwner, verifyOwnerJwt,
   type ClaimConfig } from "./claim.js";
 
@@ -70,6 +71,18 @@ export function gateway(options: GatewayOptions) {
         outgoing.writeHead(result.status, { "Content-Type": "application/json" });
         outgoing.end(result.body ? JSON.stringify(result.body) : "");
       }).catch(() => { if (!outgoing.headersSent) outgoing.writeHead(502); outgoing.end(); });
+      return;
+    }
+    if (method === "GET" && path === "/nebula/v1/diagnostics") {
+      incoming.resume();
+      const authorization = ownerAuthorization(incoming.headers.authorization);
+      if (!authorization) { outgoing.writeHead(403).end(); return; }
+      const authorized = claim ? Promise.resolve(true) : kbsOwnerAuthorized(authorization, options.upstreamPort ?? 8080);
+      authorized.then(allowed => {
+        if (!allowed) { outgoing.writeHead(403).end(); return; }
+        outgoing.writeHead(200, { "Content-Type": "application/json" });
+        outgoing.end(JSON.stringify(kbsDiagnostics()));
+      }).catch(() => { if (!outgoing.headersSent) outgoing.writeHead(403); outgoing.end(); });
       return;
     }
     if (method === "GET" && path === "/nebula/v1/configured") {

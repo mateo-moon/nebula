@@ -61,6 +61,7 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     const adversaryJwt = ownerToken(adversary.privateKey, audience);
     assert.equal(await call(gatewayPort, "/nebula/v1/ready"), 503);
     assert.equal(await call(gatewayPort, "/nebula/v1/storage"), 403);
+    assert.equal(await call(gatewayPort, "/nebula/v1/diagnostics"), 403);
     assert.equal(await call(gatewayPort, "/nebula/v1/instance"), 200);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", ownerJwt), 403);
     assert.equal(kbsCalls, 0);
@@ -72,6 +73,9 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     assert.equal(await call(gatewayPort, "/nebula/v1/instance", ownerJwt), 200);
     assert.equal(await call(gatewayPort, "/nebula/v1/storage", adversaryJwt), 403);
     assert.equal(await call(gatewayPort, "/nebula/v1/storage", ownerJwt), 200);
+    assert.equal(await call(gatewayPort, "/nebula/v1/diagnostics", adversaryJwt), 403);
+    assert.equal(await call(gatewayPort, "/nebula/v1/diagnostics", ownerJwt), 200);
+    assert.equal(await call(gatewayPort, "/nebula/v1/diagnostics?path=/run/instance/internal-owner/key.pem", ownerJwt), 403);
     assert.equal(await call(gatewayPort, "/nebula/v1/claim", adversaryJwt,
       { token: token.toString("hex"), ownerPublicKeyPem: adversary.publicKey.export({ type: "spki", format: "pem" }).toString() }), 409);
     assert.equal(await call(gatewayPort, "/kbs/v0/resource-policy", adversaryJwt), 403);
@@ -86,6 +90,9 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
       headers: authorization ? { Authorization: authorization } : {}, redirect: "error",
     }).then(response => response.status);
     assert.equal(await httpCall("/nebula/v1/storage"), 403);
+    assert.equal(await httpCall("/nebula/v1/diagnostics"), 403);
+    assert.equal(await httpCall("/nebula/v1/diagnostics", adversaryJwt), 403);
+    assert.equal(await httpCall("/nebula/v1/diagnostics", ownerJwt), 200);
     assert.equal(await httpCall("/kbs/v0/resource-policy", adversaryJwt), 403);
     assert.equal(await httpCall("/kbs/v0/resource-policy", ownerJwt), 200);
     assert.equal(await httpCall("/kbs/v0/resource/guest/storage/key", ownerJwt), 403);
@@ -95,5 +102,33 @@ test("claim translates only the selected owner JWT to a guest-internal Trustee J
     if (publicGateway) await close(publicGateway);
     await close(kbs);
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("preset-owner diagnostics require KBS to verify the JWT before reading the private log", { skip: !guestMemory }, async () => {
+  const directory = mkdtempSync("/dev/shm/nebula-diagnostics-owner-");
+  const owner = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const adversary = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const pem = owner.publicKey.export({ type: "spki", format: "pem" }).toString();
+  let checks = 0;
+  const kbs = httpServer((request, response) => {
+    checks++;
+    assert.equal(request.method, "GET"); assert.equal(request.url, "/kbs/v0/resource-policy");
+    const allowed = verifyOwnerJwt(request.headers.authorization, pem, "workload");
+    response.writeHead(allowed ? 200 : 401).end("private-response-never-returned");
+  });
+  let publicGateway;
+  try {
+    publicGateway = gateway({ ...loadOrCreateIdentity(directory), upstreamPort: await listen(kbs) });
+    const port = await listen(publicGateway);
+    assert.equal(await call(port, "/nebula/v1/diagnostics"), 403);
+    assert.equal(checks, 0);
+    assert.equal(await call(port, "/nebula/v1/diagnostics", ownerToken(adversary.privateKey, "workload")), 403);
+    assert.equal(await call(port, "/nebula/v1/diagnostics", "Bearer forged.invalid.token"), 403);
+    assert.equal(await call(port, "/nebula/v1/diagnostics", ownerToken(owner.privateKey, "workload")), 200);
+    assert.equal(checks, 3);
+  } finally {
+    if (publicGateway) await close(publicGateway);
+    await close(kbs); rmSync(directory, { recursive: true, force: true });
   }
 });

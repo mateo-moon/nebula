@@ -46,6 +46,9 @@ test("native renderer binds the final Pod and keeps repeated measurements stable
   for (const name of ["kbs", "nebula-owner", "nebula-tng"]) {
     assert.equal(pod.spec!.initContainers!.find(container => container.name === name)!.restartPolicy, "Always");
   }
+  const legacyKbs = pod.spec!.initContainers!.find(container => container.name === "kbs")!;
+  assert.match(Buffer.from(legacyKbs.args!.join(""), "base64").toString(), /kbs\.toml >\/dev\/null 2>&1/);
+  assert.ok(!pod.spec!.initContainers!.some(container => container.volumeMounts?.some(mount => mount.mountPath === "/run/kbs-diagnostics")));
   for (const name of ["nebula-guard", "nebula-await-owner", "nebula-install-storage"]) {
     assert.equal(pod.spec!.initContainers!.find(container => container.name === name)!.restartPolicy, undefined,
       `${name} must remain a finite init stage`);
@@ -118,6 +121,13 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   assert.deepEqual(gate.securityContext!.capabilities, { drop: ["ALL"] });
   assert.deepEqual(gate.volumeMounts, [{ name: "owner-ready", mountPath: "/run/nebula-owner-ready", readOnly: true }]);
   const agent = components[0], config = JSON.parse(agent.args![0]);
+  const trustee = components[1];
+  assert.match(Buffer.from(trustee.args!.join(""), "base64").toString(), /kbs\.toml >\/tmp\/kbs\.log 2>&1/);
+  assert.equal(trustee.env!.find(entry => entry.name === "RUST_LOG")!.value, "warn");
+  assert.deepEqual(agent.volumeMounts!.find(mount => mount.mountPath === "/run/kbs-diagnostics"),
+    { name: "kbs-tmp", mountPath: "/run/kbs-diagnostics", readOnly: true });
+  assert.ok(!first.pod.spec!.containers!.some(container => container.volumeMounts?.some(mount => mount.name === "kbs-tmp")),
+    "Application containers must never receive the private KBS log volume");
   assert.equal(config.role, "workload");
   assert.deepEqual(config.storage.volumes.map((volume: any) => volume.name), ["data", "scratch"]);
   assert.deepEqual(agent.volumeDevices!.map(device => device.devicePath), ["/dev/nebula-volumes/data", "/dev/nebula-volumes/scratch"]);

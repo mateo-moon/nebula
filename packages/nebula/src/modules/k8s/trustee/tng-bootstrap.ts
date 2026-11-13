@@ -9,7 +9,7 @@ const denyResource = "package policy\ndefault allow := false\n";
 const denyAttestation = 'package policy\ndefault trust_claims := {"hardware": 97, "executables": 33, "configuration": 36}\nextensions := []\n';
 
 /** Public startup instructions; the signer is created only inside guest tmpfs. */
-export function tngTrusteeBootstrapScript(owner: string | undefined, kbsConfig: string): string {
+export function tngTrusteeBootstrapScript(owner: string | undefined, kbsConfig: string, privateDiagnostics = false): string {
   const root = `${STATE}/current`;
   const ownerSetup = owner === undefined ? `
 test "$(stat -f -c %T /run/instance)" = tmpfs
@@ -38,7 +38,7 @@ ${write(`${root}/kbs.toml`, kbsConfig)}
 ${write(`${root}/storage/kbs/resource-policy.rego`, denyResource)}
 ${write(`${root}/storage/attestation_service_policy/default_cpu.rego`, denyAttestation)}
 ${write(`${root}/storage/attestation_service_policy/default_gpu.rego`, denyAttestation)}
-exec /usr/local/bin/kbs --config-file ${root}/kbs.toml >/dev/null 2>&1
+exec /usr/local/bin/kbs --config-file ${root}/kbs.toml >${privateDiagnostics ? "/tmp/kbs.log" : "/dev/null"} 2>&1
 `;
 }
 

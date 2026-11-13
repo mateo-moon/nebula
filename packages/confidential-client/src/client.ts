@@ -23,6 +23,36 @@ export class TrusteeHttpError extends Error {
 
 type Runtime = Awaited<ReturnType<typeof startRuntime>>;
 const MAX_BODY = 2 * 1024 * 1024; // deployed KBS payload_request_size = 2 MiB
+const DIAGNOSTIC_CATEGORIES = ["startup", "ownerAuthorization", "attestationHandshake", "evidenceVerification",
+  "collateral", "attestationPolicy", "attestationToken", "resourcePolicy", "resourceStorage", "responseEncryption", "unclassified"] as const;
+export interface ConfidentialDiagnostics {
+  version: 1;
+  kbs: {
+    available: boolean;
+    truncated: boolean;
+    bytesScanned: number;
+    linesScanned: number;
+    categories: Record<typeof DIAGNOSTIC_CATEGORIES[number], number>;
+  };
+}
+
+function diagnosticsSnapshot(value: unknown): ConfidentialDiagnostics {
+  const invalid = () => new Error("Invalid attested diagnostics");
+  const object = (value: unknown, fields: readonly string[]): value is Record<string, any> =>
+    !!value && typeof value === "object" && !Array.isArray(value) &&
+    Object.keys(value).length === fields.length && fields.every(field => Object.hasOwn(value, field));
+  if (!object(value, ["version", "kbs"]) || value.version !== 1 ||
+      !object(value.kbs, ["available", "truncated", "bytesScanned", "linesScanned", "categories"])) throw invalid();
+  const kbs = value.kbs;
+  if (typeof kbs.available !== "boolean" || typeof kbs.truncated !== "boolean" ||
+      !Number.isInteger(kbs.bytesScanned) || kbs.bytesScanned < 0 || kbs.bytesScanned > 64 * 1024 ||
+      !Number.isInteger(kbs.linesScanned) || kbs.linesScanned < 0 || kbs.linesScanned > 512 ||
+      !object(kbs.categories, DIAGNOSTIC_CATEGORIES) || DIAGNOSTIC_CATEGORIES.some(category =>
+        !Number.isInteger(kbs.categories[category]) || kbs.categories[category] < 0 || kbs.categories[category] > kbs.linesScanned)) throw invalid();
+  return { version: 1, kbs: { available: kbs.available, truncated: kbs.truncated,
+    bytesScanned: kbs.bytesScanned, linesScanned: kbs.linesScanned,
+    categories: Object.fromEntries(DIAGNOSTIC_CATEGORIES.map(category => [category, kbs.categories[category]])) as ConfidentialDiagnostics["kbs"]["categories"] } };
+}
 
 /** Owner administration over a managed, attested TNG connection. */
 export class TrusteeClient {
@@ -63,6 +93,15 @@ export class TrusteeClient {
   async bootstrapStatus(): Promise<unknown> {
     if (!this.#enrollment) throw new Error("Bootstrap status requires instance enrollment");
     return JSON.parse((await this.#request("GET", "/nebula/v1/bootstrap", Buffer.alloc(0), "application/json", 70_000)).toString("utf8"));
+  }
+
+  async diagnostics(): Promise<ConfidentialDiagnostics> {
+    if (!this.#enrollment) throw new Error("Diagnostics require instance enrollment");
+    const bytes = await this.#request("GET", "/nebula/v1/diagnostics");
+    let value: unknown;
+    try { value = JSON.parse(bytes.toString("utf8")); }
+    catch { throw new Error("Invalid attested diagnostics"); }
+    return diagnosticsSnapshot(value);
   }
 
   async storageStatus(): Promise<{ version: 1; storage: Record<string, { phase: string }> }> {

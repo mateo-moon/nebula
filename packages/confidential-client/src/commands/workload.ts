@@ -40,3 +40,7 @@ export async function storageStatus(options: ConnectionOptions): Promise<void> {
 export async function bootstrapStatus(options: ConnectionOptions): Promise<void> {
   await withClient(options, async client => { console.log(JSON.stringify(await client.bootstrapStatus())); });
 }
+
+export async function diagnostics(options: ConnectionOptions): Promise<void> {
+  await withClient(options, async client => { console.log(JSON.stringify(await client.diagnostics())); });
+}

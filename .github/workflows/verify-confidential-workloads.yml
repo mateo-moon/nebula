@@ -125,6 +125,18 @@ jobs:
           # mandatory swap-free prerequisite without weakening runtime checks.
           sudo swapoff --all
           node packages/confidential-agent/test/compiled-image.mjs
+      - name: Exercise private diagnostic file bounds without guest privileges
+        if: matrix.role == 'agent'
+        run: |
+          # Reuse the just-built agent's pinned Node24 runtime. The explicit
+          # fixture flag fails rather than skipping if tmpfs/UID wiring breaks.
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+            --tmpfs /run/kbs-diagnostics:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=16m \
+            --mount "type=bind,src=$PWD/packages/confidential-agent,dst=/fixture,readonly" \
+            --env CONFIDENTIAL_DIAGNOSTICS_TEST_TMPFS=1 \
+            --entrypoint node nebula-confidential-agent:ci \
+            --disable-sigusr1 --test /fixture/test/diagnostics.test.mjs
 
   native-render:
     name: Native confidential Pod synthesis
