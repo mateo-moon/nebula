@@ -3,3 +3,4 @@ export { synth, SynthOptions } from './synth';
 export { apply, ApplyOptions } from './apply';
 export { destroy, DestroyOptions } from './destroy';
 export { initSops, InitSopsOptions } from './init-sops';
+export { oidcKubeconfig, OidcKubeconfigOptions } from './oidc-kubeconfig';
