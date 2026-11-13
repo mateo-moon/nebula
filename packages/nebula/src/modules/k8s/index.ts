@@ -206,6 +206,7 @@ export type {
   ArgoCdProjectDestination,
   ArgoCdClusterSyncConfig,
   ArgoCdAppTierConfig,
+  ArgoCdAppOverride,
   ArgoCdAppTierDiscovery,
   ArgoCdAppTierRegistryDiscovery,
   ArgoCdAppTierAutoDiscovery,

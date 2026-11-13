@@ -61,6 +61,7 @@
  * ```
  */
 import { Construct } from "constructs";
+import { JsonPatch } from "cdk8s";
 import { readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
@@ -401,6 +402,38 @@ export interface ArgoCdAppTierConfig {
   sharedGeneratePaths?: string[];
   /** How the tier's Applications are derived */
   discovery: ArgoCdAppTierDiscovery;
+  /**
+   * Changes to individual discovered Applications, keyed by Application name.
+   * Naming an Application the tier did not discover is an error, so a rename
+   * or removal cannot silently drop a setting.
+   */
+  applications?: Record<string, ArgoCdAppOverride>;
+  /** Changes computed for every discovered Application; applied before `applications`. */
+  everyApplication?: (name: string) => ArgoCdAppOverride | undefined;
+}
+
+/** What a tier lets its owner change on one discovered Application. */
+export interface ArgoCdAppOverride {
+  /** Replace the Application's name. */
+  name?: string;
+  /** Argo CD project, when it differs from the tier's. */
+  project?: string;
+  /** Fields merged over the sync retry policy. */
+  retry?: Partial<ApplicationSpecSyncPolicyRetry>;
+  /** Replaces the destination. */
+  destination?: ApplicationSpecDestination;
+  /** Destination namespace, keeping the rest of the destination. */
+  namespace?: string;
+  /** Sync options appended to the sync policy. */
+  syncOptions?: string[];
+  /** Sync wave among its siblings. */
+  wave?: number;
+  /** Plugin environment variables appended to the source. */
+  env?: { name: string; value: string }[];
+  /** Appended to the Application's ignoreDifferences. */
+  ignoreDifferences?: ApplicationSpecIgnoreDifferences[];
+  /** Appended to the manifest-generate-paths annotation. */
+  generatePaths?: string[];
 }
 
 /** List subdirectories the same way the hand-rolled tiers do (sorted; dot-dirs and node_modules skipped). */
@@ -483,6 +516,42 @@ export class ArgoCdAppTier extends BaseConstruct<ArgoCdAppTierConfig> {
         this.createSingleClusterApps(discovery);
         break;
     }
+    this.applyOverrides();
+  }
+
+  private applyOverrides(): void {
+    const { applications = {}, everyApplication } = this.config;
+    const discovered = new Map(this.applications.map(application => [application.name, application]));
+    for (const [name, application] of discovered) {
+      const general = everyApplication?.(name);
+      if (general) this.override(application, general);
+    }
+    for (const [name, override] of Object.entries(applications)) {
+      const application = discovered.get(name);
+      if (!application) throw new Error(`Application ${name} is not part of this tier`);
+      this.override(application, override);
+    }
+  }
+
+  private override(application: Application, change: ArgoCdAppOverride): void {
+    const current = application.toJson();
+    if (change.destination) application.addJsonPatch(JsonPatch.replace("/spec/destination", change.destination));
+    if (change.namespace) application.addJsonPatch(JsonPatch.add("/spec/destination/namespace", change.namespace));
+    if (change.project) application.addJsonPatch(JsonPatch.replace("/spec/project", change.project));
+    if (change.retry)
+      application.addJsonPatch(JsonPatch.replace("/spec/syncPolicy/retry", { ...current.spec.syncPolicy.retry, ...change.retry }));
+    for (const option of change.syncOptions ?? [])
+      application.addJsonPatch(JsonPatch.add("/spec/syncPolicy/syncOptions/-", option));
+    if (change.wave !== undefined) application.metadata.addAnnotation("argocd.argoproj.io/sync-wave", String(change.wave));
+    for (const variable of change.env ?? [])
+      application.addJsonPatch(JsonPatch.add("/spec/source/plugin/env/-", variable));
+    if (change.ignoreDifferences?.length)
+      application.addJsonPatch(JsonPatch.add("/spec/ignoreDifferences", [...(current.spec.ignoreDifferences ?? []), ...change.ignoreDifferences]));
+    if (change.generatePaths?.length) {
+      const key = "argocd.argoproj.io/manifest-generate-paths";
+      application.metadata.addAnnotation(key, [current.metadata.annotations?.[key], ...change.generatePaths].filter(Boolean).join(";"));
+    }
+    if (change.name) application.addJsonPatch(JsonPatch.replace("/metadata/name", change.name));
   }
 
   private createRegistryApps(discovery: ArgoCdAppTierRegistryDiscovery): void {

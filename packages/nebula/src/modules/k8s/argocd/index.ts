@@ -1149,6 +1149,7 @@ export {
 } from "./app-tier";
 export type {
   ArgoCdAppTierConfig,
+  ArgoCdAppOverride,
   ArgoCdAppTierDiscovery,
   ArgoCdAppTierRegistryDiscovery,
   ArgoCdAppTierAutoDiscovery,
