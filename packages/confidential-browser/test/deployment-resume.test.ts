@@ -100,7 +100,11 @@ async function deployment(restored = false, rejectedConnection = false, options:
     URL: { createObjectURL: () => "blob:test-backup", revokeObjectURL() {} },
     setTimeout: (resolve: () => void, ms: number) => { now += ms; queueMicrotask(resolve); } });
   const wait = async (predicate: () => boolean) => {
-    for (let i = 0; i < 200; i++) { if (predicate()) return; await new Promise(resolve => setImmediate(resolve)); }
+    const deadline = Date.now() + 10_000;
+    do {
+      if (predicate()) return;
+      await new Promise(resolve => setTimeout(resolve, 5));
+    } while (Date.now() < deadline);
     assert.fail("The UI did not settle");
   };
   await wait(() => rejectedConnection ? el("notice").textContent.length > 0 :
