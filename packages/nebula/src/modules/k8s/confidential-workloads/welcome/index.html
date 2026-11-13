@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Nebula Confidential · Connection guide</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/welcome.js"></script>
+</head>
+<body>
+  <header><div class="brand">nebula<span> / confidential</span></div><span class="guide-label">CONNECTION GUIDE</span></header>
+  <main>
+    <div class="intro">
+      <p class="eyebrow">BEFORE YOU CONNECT</p>
+      <h1>Meet your confidential portal.</h1>
+      <p>Review its identity, choose your browser’s certificate settings, then continue to the portal.</p>
+    </div>
+    <div class="scope-note"><strong>A guide to your next step.</strong> This page uses ordinary HTTPS. Its reported certificate and reference values help your review; this page does not independently verify attestation or establish trust in the portal.</div>
+    <div class="columns">
+      <div class="steps">
+        <section class="card">
+          <div class="section-title"><span class="number">1</span><h2>Review the portal’s identity</h2></div>
+          <p>Compare the reported fingerprint with the certificate actually presented by the portal in your browser. Independently verify the AMD SEV-SNP evidence in that certificate, its key binding, and the workload measurements you have approved.</p>
+          <p class="hint">Use your own trusted verification tools. The values on this page are supplied for convenience and need independent approval.</p>
+          <details id="reference-details" hidden>
+            <summary>Reference measurements and release</summary>
+            <p class="hint">Deployment-supplied reference values. Approve them independently before using them to evaluate attestation.</p>
+            <dl class="reference-values">
+              <dt>VM measurement</dt><dd id="reference-measurement" class="mono"></dd>
+              <dt>Native init-data SHA-256</dt><dd id="reference-init-data" class="mono"></dd>
+              <dt>Minimum reported TCB</dt><dd id="reference-tcb"></dd>
+            </dl>
+            <a id="release-link" class="text-link" target="_blank" rel="noopener noreferrer" hidden>View reference release ↗</a>
+          </details>
+          <p id="no-reference" class="hint" hidden>No reference measurements were supplied. Obtain an independently approved release policy before deciding whether to trust the portal.</p>
+        </section>
+        <section class="card">
+          <div class="section-title"><span class="number">2</span><h2>Choose browser trust settings <span class="optional">Optional</span></h2></div>
+          <p>The portal creates its RA-TLS certificate inside the confidential VM. Standard browsers do not check its attestation automatically, so a certificate warning is expected. The ordinary HTTPS connection to this guide is separate.</p>
+          <p>After independently checking the portal, you can review the certificate trust options for your browser and operating system. Where your browser offers a site-specific exception, inspect the actual certificate before choosing it.</p>
+          <details>
+            <summary>Official browser and operating-system guidance</summary>
+            <ul class="guidance-links">
+              <li><a href="https://support.apple.com/guide/keychain-access/kyca11871/mac" target="_blank" rel="noopener noreferrer">macOS · Certificate trust in Keychain Access ↗</a></li>
+              <li><a href="https://support.google.com/chrome/answer/10468685" target="_blank" rel="noopener noreferrer">Chrome · Manage device certificates ↗</a></li>
+              <li><a href="https://support.mozilla.org/en-US/kb/error-codes-secure-websites" target="_blank" rel="noopener noreferrer">Firefox · Certificate errors and available exceptions ↗</a></li>
+            </ul>
+          </details>
+          <p class="hint">Trust settings can affect more than a single address and may not remove every browser warning. Review the scope of any change. Compare the portal’s actual certificate again whenever it changes.</p>
+        </section>
+        <section class="card continue-card">
+          <div class="section-title"><span class="number">3</span><h2>Continue to your portal</h2></div>
+          <p>Open the portal in a new tab and confirm its certificate there. Enter your access token only in the confidential portal.</p>
+          <a id="portal-link" class="primary disabled" target="_blank" rel="noopener noreferrer" aria-disabled="true" tabindex="-1"><span>Open confidential portal</span><span aria-hidden="true">↗</span></a>
+          <p id="portal-address" class="portal-address mono">Loading portal address…</p>
+          <p class="privacy">Keep access tokens, recovery passwords, images and registry credentials in the confidential portal. This guide has no credential or upload fields.</p>
+        </section>
+      </div>
+      <aside>
+        <section class="card certificate-card" aria-labelledby="certificate-title">
+          <p class="eyebrow">FOR YOUR INDEPENDENT REVIEW</p>
+          <h2 id="certificate-title">Reported certificate</h2>
+          <p class="hint">A snapshot retrieved from the portal. It is not an independent verification of its evidence or of your browser’s connection.</p>
+          <p id="certificate-status" class="status" role="status" aria-live="polite">Loading reported certificate…</p>
+          <dl class="certificate-values">
+            <dt>Certificate SHA-256</dt><dd id="certificate-fingerprint" class="fingerprint">—</dd>
+            <dt>Public key SHA-256 (SPKI)</dt><dd id="public-key-fingerprint" class="fingerprint">—</dd>
+            <dt>Reported valid from</dt><dd><time id="certificate-not-before">—</time></dd>
+            <dt>Reported valid until</dt><dd><time id="certificate-not-after">—</time></dd>
+            <dt>Snapshot retrieved</dt><dd><time id="certificate-retrieved-at">—</time></dd>
+          </dl>
+          <details>
+            <summary>Where these details came from</summary>
+            <p id="certificate-provenance" class="hint">Waiting for a current snapshot.</p>
+            <p class="hint">The downloaded DER contains the reported RA evidence. A matching download hash checks the snapshot’s bytes; independent tools must verify the evidence and its binding to the portal certificate.</p>
+          </details>
+          <button id="refresh" class="secondary" type="button" disabled>Refresh details</button>
+          <div class="downloads">
+            <button id="download-certificate" class="secondary" type="button" disabled>Download certificate DER</button>
+            <button id="download-evidence" class="secondary" type="button" disabled>Download evidence JSON</button>
+          </div>
+          <p class="hint download-note">Both downloads use this displayed snapshot. Refresh after a certificate change, then compare the actual certificate in your browser again.</p>
+        </section>
+      </aside>
+    </div>
+    <noscript><p class="scope-note">Enable JavaScript to load the portal address and its reported certificate details. Independent certificate and attestation verification is still required.</p></noscript>
+  </main>
+  <footer>Nebula Confidential · Connection guidance</footer>
+</body>
+</html>

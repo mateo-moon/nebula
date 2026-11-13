@@ -9,3 +9,4 @@ export { ConfidentialStorageDevices, type ConfidentialStorageDevicesConfig } fro
 export { confidentialAccessTokenHash } from "./access-token";
 
 export { ConfidentialBrowser, confidentialBrowserPlan, type ConfidentialBrowserConfig } from "./browser";
+export { ConfidentialWelcome, type ConfidentialWelcomeConfig, type ConfidentialWelcomeReference } from "./welcome";
