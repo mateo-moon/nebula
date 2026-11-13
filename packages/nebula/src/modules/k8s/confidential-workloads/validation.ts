@@ -164,11 +164,15 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
     validateStorage(matches[0]);
     if (!spec.containers.some(c => c.mounts?.some(m => m.storage === binding.name))) fail("storage binding has no application recipient");
   }
-  const volumeKeys = new Set(bindings.map(binding => storages.find(storage =>
-    storage.metadata.name === binding.resource)!.spec).filter(storage => storage.type === "EncryptedBlock")
-    .map(storage => resourcePath(storage.keyResource)));
+  const boundStorages = bindings.map(binding => storages.find(storage =>
+    storage.metadata.name === binding.resource && storage.metadata.namespace === resource.metadata.namespace)!.spec);
+  const volumeKeyPaths = boundStorages.filter(storage => storage.type === "EncryptedBlock")
+    .map(storage => resourcePath(storage.keyResource));
+  const volumeKeys = new Set(volumeKeyPaths);
+  if (volumeKeys.size !== volumeKeyPaths.length) fail("encrypted storage key resources must be distinct");
   const imageKeys = new Set(spec.containers.filter(container => container.imageKeyResource)
     .map(container => resourcePath(container.imageKeyResource!)));
+  if ([...imageKeys].some(key => volumeKeys.has(key))) fail("image and encrypted storage key resources must be distinct");
   for (const imageKey of imageKeys) if (!spec.resources.some(path => resourcePath(path) === imageKey)) {
     fail("image key must be included in local resource admission");
   }
@@ -187,8 +191,7 @@ export function validateWorkload(resource: ConfidentialWorkloadResource, storage
   if (spec.storageImage !== undefined && !isDigestImage(spec.storageImage)) fail("invalid storage helper image");
   if (!Array.isArray(spec.resources) || !spec.resources.length || spec.resources.length > 64 ||
       new Set(spec.resources.map(resourcePath)).size !== spec.resources.length) fail("invalid resource admission list");
-  for (const binding of bindings) {
-    const storage = storages.find(storage => storage.metadata.name === binding.resource)!.spec;
+  for (const storage of boundStorages) {
     if (storage.type === "EncryptedBlock" && !spec.resources.some(p => resourcePath(p) === resourcePath(storage.keyResource))) {
       fail("volume key must be included in local resource admission");
     }

@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { request } from "node:http";
 import { confidentialAccessTokenHash } from "nebula-cdk8s/confidential-workloads";
 import { startUi, type UiRunner } from "../src/ui/server";
-import { readConnection, type ConfidentialConnection } from "../src/ui/connection";
+import { connectionFromManifest, readConnection, type ConfidentialConnection } from "../src/ui/connection";
 import { accessTokenBytes } from "../src/claim";
 import { identity } from "./support";
 import { releaseStateDirectory } from "../src/prepare";
@@ -23,6 +23,31 @@ function connection(token: string): ConfidentialConnection {
       storageImage: image, containers: [{ name: "app", image: "example.invalid/app:release", imageKeyResource: ["default", "image", "app"],
         commandFromImage: true, uid: 11000, gid: 11000 }], resources: [["default", "image", "app"]] } } };
 }
+
+function disk(name = "data", namespace = "test") {
+  return { apiVersion: "confidential.nebula.dev/v1alpha1" as const, kind: "ConfidentialStorage" as const,
+    metadata: { name, namespace }, spec: { type: "EncryptedBlock" as const, claimName: `${name}-v1`, sizeBytes: 67108864,
+      keyResource: ["default", "volume", name] as const, initialization: "Never" as const, retention: "Retain" as const } };
+}
+
+test("owner handoffs include only bound storage, including when applications share a disk", () => {
+  const value = connection("31".repeat(32)), storage = disk();
+  value.storages = [storage];
+  value.workload.spec.storage = [{ name: "data", resource: storage.metadata.name }];
+  value.workload.spec.containers[0].mounts = [{ storage: "data", path: "/data" }];
+  value.workload.spec.resources = [...value.workload.spec.resources, storage.spec.keyResource];
+  value.workload.spec.containers = [...value.workload.spec.containers,
+    { name: "worker", image: `example.invalid/worker@sha256:${"b".repeat(64)}`,
+      command: ["/app/worker"], uid: 11001, gid: 11001, mounts: [{ storage: "data", path: "/data" }] }];
+  assert.equal(readConnection(JSON.stringify(value)).storages.length, 1);
+  for (const extra of [disk("unbound"), disk("data", "another-tenant")]) {
+    const collision = { ...extra, spec: { ...extra.spec, keyResource: ["default", "image", "app"] as const } };
+    assert.throws(() => readConnection(JSON.stringify({ ...value, storages: [collision, storage] })), /only storage bound to this workload/);
+    const fullManifest = [value.workload, collision, storage].map(resource => JSON.stringify(resource)).join("\n---\n");
+    assert.deepEqual(connectionFromManifest(fullManifest, value.workload.metadata.name, value.endpoint).storages, [storage],
+      "The CLI manifest selector must include only the selected workload's storage in its handoff");
+  }
+});
 
 test("local web boundary rejects foreign sites, wrong capabilities and unreviewed or mismatched claims", { timeout: 15000 }, async t => {
   const directory = mkdtempSync(join(tmpdir(), "confidential-ui-"));
@@ -59,6 +84,10 @@ test("local web boundary rejects foreign sites, wrong capabilities and unreviewe
   const page = await fetch(ui.origin + "/"); assert.match(page.headers.get("content-security-policy")!, /frame-ancestors 'none'/);
   assert.ok(!(await page.text()).includes(token));
   const original = connection(token);
+  const unexpectedStorage = { ...disk(), spec: { ...disk().spec, keyResource: ["default", "image", "app"] as const } };
+  assert.equal((await call("/api/connection", { text: JSON.stringify({ ...original, storages: [unexpectedStorage] }) })).status, 400);
+  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: true })).status, 400);
+  assert.equal(started, 0, "Rejected storage must not reach key provisioning");
   const settings = { ...original, workload: { ...original.workload, spec: { ...original.workload.spec,
     resources: [...original.workload.spec.resources, ["default", "application", "config"] as const] } } };
   assert.equal((await call("/api/connection", { text: JSON.stringify(settings) })).status, 200);

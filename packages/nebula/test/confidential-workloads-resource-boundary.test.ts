@@ -46,6 +46,50 @@ test("application resources are explicit and never include a declared volume key
   assert.throws(() => validateWorkload(unguarded, [storage]), /guarded application launch/);
 });
 
+test("an image key cannot share the Trustee resource used by a disk key", () => {
+  const input = workload();
+  input.spec.containers[0].imageKeyResource = ["default", "image", "app"];
+  input.spec.resources = [...input.spec.resources, ["default", "image", "app"]];
+  assert.doesNotThrow(() => validateWorkload(input, [storage]));
+  input.spec.containers[0].imageKeyResource = ["default", "volume", "data"];
+  assert.throws(() => validateWorkload(input, [storage]), /image and encrypted storage key resources must be distinct/);
+});
+
+test("separate encrypted disks need distinct Trustee key resources", () => {
+  const input = workload(), second = structuredClone(storage);
+  second.metadata.name = "audit-disk";
+  if (second.spec.type !== "EncryptedBlock") throw new Error("Expected encrypted fixture");
+  second.spec.claimName = "audit-v1";
+  second.spec.keyResource = ["default", "volume", "audit"];
+  input.spec.storage = [...input.spec.storage!, { name: "audit", resource: second.metadata.name }];
+  input.spec.containers[0].mounts = [...input.spec.containers[0].mounts!, { storage: "audit", path: "/audit" }];
+  input.spec.resources = [...input.spec.resources, ["default", "volume", "audit"]];
+  assert.doesNotThrow(() => validateWorkload(input, [storage, second]));
+  second.spec.keyResource = ["default", "volume", "data"];
+  assert.throws(() => validateWorkload(input, [storage, second]), /encrypted storage key resources must be distinct/);
+});
+
+test("key boundaries resolve the storage from the workload namespace", () => {
+  const input = workload(), foreign = structuredClone(storage);
+  foreign.metadata.namespace = "another-tenant";
+  input.spec.containers[0].imageKeyResource = ["default", "image", "app"];
+  input.spec.resources = [...input.spec.resources, ["default", "image", "app"]];
+  if (foreign.spec.type !== "EncryptedBlock") throw new Error("Expected encrypted fixture");
+  foreign.spec.keyResource = ["default", "image", "app"];
+  assert.doesNotThrow(() => validateWorkload(input, [foreign, storage]));
+  input.spec.containers[0].imageKeyResource = ["default", "volume", "data"];
+  assert.throws(() => validateWorkload(input, [foreign, storage]), /image and encrypted storage key resources must be distinct/);
+});
+
+test("sharing an admitted image key across containers does not alias a disk key", () => {
+  const input = workload();
+  input.spec.containers[0].imageKeyResource = ["default", "image", "app"];
+  input.spec.resources = [...input.spec.resources, ["default", "image", "app"]];
+  input.spec.containers = [...input.spec.containers,
+    { ...structuredClone(input.spec.containers[0]), name: "worker", uid: 11001, gid: 11001 }];
+  assert.doesNotThrow(() => validateWorkload(input, [storage]));
+});
+
 test("tenant chart arguments cannot reach the Helm renderer", () => {
   for (const chart of ["--post-renderer=sh", "oci://attacker.invalid/trustee", "./unreviewed-chart.tgz"]) {
     const input: any = workload();

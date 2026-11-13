@@ -31,6 +31,13 @@ export function readConnection(text: string): ConfidentialConnection {
         !(u.protocol === "https:" || u.protocol === "http:" && u.hostname === "127.0.0.1")) throw new Error("Invalid browser owner endpoint");
   }
   validateWorkload(value.workload, value.storages);
+  // Owner provisioning iterates this handoff, so unrelated storage must not
+  // introduce extra key writes beyond the measured workload's bindings.
+  const bound = new Set((value.workload.spec.storage ?? []).map(binding => binding.resource));
+  if (value.storages.some(storage => storage?.metadata?.namespace !== value.workload.metadata.namespace ||
+      !bound.has(storage?.metadata?.name))) {
+    throw new Error("Owner connection settings may contain only storage bound to this workload");
+  }
   if (!value.workload.spec.ownerClaimSha256) throw new Error("This stack does not support temporary access tokens");
   const published = value.workload.spec.containers.filter(container => container.imageKeyResource);
   if (published.length !== 1 || published[0].image.includes("@sha256:")) {
@@ -53,8 +60,10 @@ export function connectionFromManifest(text: string, name: string, endpoint: Con
   const values = documents.map(document => document.toJS({ maxAliasCount: 0 }));
   const workloads = values.filter(value => value?.kind === "ConfidentialWorkload" && value.metadata?.name === name);
   if (workloads.length !== 1) throw new Error("Choose exactly one ConfidentialWorkload");
+  const workload = workloads[0], bound = new Set((workload.spec.storage ?? []).map((binding: { resource: string }) => binding.resource));
   return readConnection(JSON.stringify({ version: 1, endpoint, workload: workloads[0],
-    storages: values.filter(value => value?.kind === "ConfidentialStorage"),
+    storages: values.filter(value => value?.kind === "ConfidentialStorage" &&
+      value.metadata?.namespace === workload.metadata.namespace && bound.has(value.metadata?.name)),
     ...(vcek ? { vcekCertificate: new X509Certificate(vcek).toString() } : {}) }));
 }
 
