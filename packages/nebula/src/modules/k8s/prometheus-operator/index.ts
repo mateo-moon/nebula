@@ -296,6 +296,8 @@ export interface PrometheusOperatorConfig {
     version?: string;
     /** Loki basic auth htpasswd content */
     authHtpasswd?: string;
+    /** Loki chart values merged over the module's; arrays replace. */
+    values?: Record<string, unknown>;
   };
   /** Promtail configuration */
   promtail?: {
@@ -761,7 +763,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         repo: "https://grafana.github.io/helm-charts",
         version: this.config.loki?.version ?? "6.51.0",
         namespace: namespaceName,
-        values: lokiValues,
+        values: mergeHelmValues(lokiValues, this.config.loki?.values ?? {}) as Record<string, unknown>,
       });
 
       // Loki Grafana datasource
