@@ -21,8 +21,7 @@ import { apply } from './commands/apply';
 import { destroy } from './commands/destroy';
 import { initSops, InitSopsOptions } from './commands/init-sops';
 import { oidcKubeconfig, OidcKubeconfigOptions } from './commands/oidc-kubeconfig';
-import { renderTree, RenderTreeOptions } from './commands/render-tree';
-import { renderDiff, RenderDiffOptions } from './commands/render-diff';
+import { renderDiff, renderTree, type RenderDiffOptions, type RenderTreeOptions } from 'nebula-cdk8s/tools/render';
 
 const program = new Command();
 
