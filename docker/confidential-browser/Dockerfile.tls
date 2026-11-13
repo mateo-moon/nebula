@@ -16,7 +16,7 @@ RUN pnpm typecheck && NEBULA_AGENT_MODULES=browser pnpm build
 FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
 WORKDIR /app
 COPY --from=build /workspace/packages/confidential-agent/dist ./dist
-COPY --from=browser-assets / ./loader/
+COPY --from=browser-assets --chown=10001:10001 / ./loader/
 USER 10001:10001
 ENV HOME=/tmp
 ENTRYPOINT ["node", "--disable-sigusr1", "/app/dist/main.mjs"]

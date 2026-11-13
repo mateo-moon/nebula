@@ -12,6 +12,8 @@ try {
   const result = docker(["exec", name, "node", "--input-type=module", "-e", `
     import assert from 'node:assert/strict';
     import { setTimeout } from 'node:timers/promises';
+    import { readFile } from 'node:fs/promises';
+    import { pathToFileURL } from 'node:url';
     const base = 'http://127.0.0.1:8446';
     let response;
     for (let attempt = 0; attempt < 100; attempt++) {
@@ -25,11 +27,21 @@ try {
     const entry = await (await fetch(base + '/entry.json')).json();
     assert.equal(entry.verification, 'manual');
     assert.equal(JSON.stringify(entry).includes('token'), false);
+    const assets = new Map();
     for (const path of ['/loader.js', '/bootstrap.css', '/sdk/tng_wasm.js', '/sdk/tng_wasm_bg.wasm']) {
       const asset = await fetch(base + path);
       assert.equal(asset.status, 200, path);
-      assert.ok((await asset.arrayBuffer()).byteLength > 0, path);
+      const bytes = Buffer.from(await asset.arrayBuffer());
+      assert.ok(bytes.byteLength > 0, path);
+      assets.set(path, bytes);
     }
+    const sdkPath = '/app/loader/sdk/tng_wasm.js';
+    assert.deepEqual(assets.get('/sdk/tng_wasm.js'), await readFile(sdkPath), 'served SDK differs from its release module');
+    const sdk = await import(pathToFileURL(sdkPath).href);
+    for (const name of ['default', 'fetch', 'verify_certificate', 'task_worker_entry_point']) {
+      assert.equal(typeof sdk[name], 'function', 'actual served SDK module is missing ' + name);
+    }
+    new WebAssembly.Module(assets.get('/sdk/tng_wasm_bg.wasm'));
     // An ordinary CI container has no guest attester or TNG listener. It must
     // refuse verification material rather than inventing a successful proof.
     assert.equal((await fetch(base + '/nebula/v1/tls')).status, 503);

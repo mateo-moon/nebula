@@ -2,6 +2,7 @@ import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, cpSync, existsSync, rmSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const output = resolve("dist");
 mkdirSync(join(output, "ui"), { recursive: true });
@@ -32,6 +33,12 @@ if (process.env.TNG_WASM_PATH) {
   for (const name of ["tng_wasm.js", "tng_wasm_bg.wasm"]) cpSync(join(sdk, name), join(output, "loader/sdk", name));
   const license = existsSync(join(sdk, "LICENSE")) ? join(sdk, "LICENSE") : resolve(sdk, "../../LICENSE");
   cpSync(license, join(output, "loader/sdk/LICENSE"));
+  // Import the copied release so its actual JS dependency graph and public
+  // entry points are checked before an image can ship an unusable SDK.
+  const bindings = await import(pathToFileURL(join(output, "loader/sdk/tng_wasm.js")).href);
+  for (const name of ["default", "fetch", "verify_certificate", "task_worker_entry_point"]) {
+    if (typeof bindings[name] !== "function") throw new Error(`TNG SDK release is missing its ${name} function`);
+  }
   // Retained static-loader distributions need these headers. The guest-served
   // frontend sets its own headers and requires an independent certificate check.
   writeFileSync(join(output, "loader/_headers"), `/*

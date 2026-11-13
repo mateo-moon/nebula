@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
@@ -124,4 +124,29 @@ test("the guest serves only measured public assets and certificate metadata, wit
     for (const path of ["/invitation", "/tls.key", "/nebula/v1/https/configure", "/%2e%2e/test.key", "/entry.json?token=x"]) assert.equal((await fetch(base + path)).status, 404);
     assert.equal((await fetch(base, { method: "POST", body: "owner secret" })).status, 405);
   } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test("missing or empty public SDK assets fail before a successful JavaScript response", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "nebula-manual-sdk-"));
+  const server = startManualTls({ assets: directory, preparationEndpoint: "https://preparation.example",
+    stackEndpoint: "https://stack.example", port: 0 });
+  await new Promise<void>(resolve => server.once("listening", resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/sdk/tng_wasm.js`;
+  try {
+    const missing = await fetch(url);
+    assert.equal(missing.status, 503, "A failed SDK read must not become an empty successful module");
+    assert.match(await missing.text(), /unavailable/);
+    mkdirSync(join(directory, "sdk"));
+    writeFileSync(join(directory, "sdk/tng_wasm.js"), "");
+    assert.equal((await fetch(url)).status, 503, "An empty SDK must not be served as a valid module");
+    const source = "export default async function init() {}\n";
+    writeFileSync(join(directory, "sdk/tng_wasm.js"), source, { mode: 0o600 });
+    const complete = await fetch(url);
+    assert.equal(complete.status, 200);
+    assert.equal(await complete.text(), source);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

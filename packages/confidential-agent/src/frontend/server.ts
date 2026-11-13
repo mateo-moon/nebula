@@ -58,7 +58,11 @@ export function startManualTls(options: { assets: string; preparationEndpoint: s
       }
       const asset = request.url === "/" ? "index.html" : request.url?.slice(1);
       if (!asset || !Object.hasOwn(types, asset)) { response.writeHead(404).end(); return; }
-      response.writeHead(200, { "Content-Type": types[asset] }).end(readFileSync(join(options.assets, asset)));
+      // Read before committing success: an unreadable release asset must not
+      // become an empty successful JavaScript module in the browser cache.
+      const contents = readFileSync(join(options.assets, asset));
+      if (contents.length === 0) throw new Error("Empty public release asset");
+      response.writeHead(200, { "Content-Type": types[asset] }).end(contents);
     } catch { if (!response.headersSent) response.writeHead(503).end("The guest's public verification material is unavailable"); else response.end(); }
   });
   server.maxConnections = 32; server.headersTimeout = 10_000; server.requestTimeout = 30_000;
