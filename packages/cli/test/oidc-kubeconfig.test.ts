@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { Testing } from "cdk8s";
 import { parse, stringify } from "yaml";
 import { AwsK0sCluster, type KubernetesOidcIdentityConfig } from "nebula-cdk8s";
-import { assertManagementOidc, prepareOidcHandoff, writeOidcHandoff } from "../src/commands/bootstrap/oidc";
+import { assertRenderedAuthenticator, buildOidcProfile, writeOidcProfile, type OidcKubeconfigOptions } from "../src/commands/oidc-kubeconfig";
 
 const identity = (): KubernetesOidcIdentityConfig => ({
   cluster: "mgmt", hostname: "api.management.example.test",
@@ -19,23 +19,24 @@ const identity = (): KubernetesOidcIdentityConfig => ({
 });
 
 function fixture(run: (f: ReturnType<typeof create>) => void): void {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-bootstrap-oidc-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-oidc-kubeconfig-"));
   try { run(create(directory)); } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 }
 
 function create(directory: string) {
-  const state = path.join(directory, "state"); fs.mkdirSync(state, { mode: 0o700 });
+  const state = path.join(directory, "state"); fs.mkdirSync(path.join(state, "mgmt"), { recursive: true, mode: 0o700 });
   const config = path.join(directory, "identity.json");
   fs.writeFileSync(config, JSON.stringify(identity()));
-  const admin = path.join(state, "kubeconfig"), adminBytes = "existing-bootstrap-credential-must-survive\n";
+  const admin = path.join(state, "mgmt", "kubeconfig"), adminBytes = "existing-bootstrap-credential-must-survive\n";
   fs.writeFileSync(admin, adminBytes, { mode: 0o600 });
-  const options = { oidcConfig: config };
-  return { directory, state, config, admin, adminBytes, options };
+  const options: OidcKubeconfigOptions = { config };
+  const build = (extra: Partial<OidcKubeconfigOptions> = {}) => buildOidcProfile({ ...options, ...extra }, state);
+  return { directory, state, config, admin, adminBytes, options, build };
 }
 
-test("the local operator profile uses OIDC and never changes existing bootstrap credentials", () => fixture(f => {
-  const handoff = prepareOidcHandoff("mgmt", f.state, f.options)!;
-  assert.equal(handoff.output, path.join(f.state, "kubeconfig-oidc"));
+test("the profile uses OIDC sign-in and never changes an existing administrator kubeconfig", () => fixture(f => {
+  const handoff = f.build()!;
+  assert.equal(handoff.output, path.join(f.state, "mgmt", "kubeconfig-oidc"));
   const profile = parse(handoff.kubeconfig);
   assert.equal(profile.clusters[0].cluster.server, "https://api.management.example.test");
   assert.deepEqual(Object.keys(profile.users[0].user), ["exec"]);
@@ -43,8 +44,8 @@ test("the local operator profile uses OIDC and never changes existing bootstrap 
   assert.deepEqual(profile.users[0].user.exec.args.slice(0, 2), ["oidc-login", "get-token"]);
   assert.ok(profile.users[0].user.exec.args.includes("--token-cache-storage=keyring"));
   assert.ok(!/client-certificate|client-key|bearerToken|existing-bootstrap/.test(handoff.kubeconfig));
-  assert.equal(writeOidcHandoff(handoff), handoff.output);
-  assert.equal(writeOidcHandoff(handoff), handoff.output);
+  assert.equal(writeOidcProfile(handoff), handoff.output);
+  assert.equal(writeOidcProfile(handoff), handoff.output);
   assert.equal(fs.statSync(handoff.output).mode & 0o777, 0o600);
   assert.equal(fs.readFileSync(f.admin, "utf8"), f.adminBytes);
 }));
@@ -55,7 +56,7 @@ test("native registration is validated locally and referenced without copying it
   const registration = path.join(f.directory, "desktop.json");
   const data = { issuer: config.workforce.url, client_id: config.workforce.audience, client_secret: "synthetic-desktop-app-value" };
   fs.writeFileSync(registration, JSON.stringify(data), { mode: 0o600 });
-  const handoff = prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcClientConfig: registration })!;
+  const handoff = f.build({ clientConfig: registration })!;
   const exec = parse(handoff.kubeconfig).users[0].user.exec;
   assert.equal(exec.command, "nebula-oidc-login");
   assert.ok(exec.args.includes(`--oidc-client-secret-file=${registration}`));
@@ -63,38 +64,35 @@ test("native registration is validated locally and referenced without copying it
   for (const invalid of [{ ...data, client_id: "another-client" }, { ...data, issuer: "https://other.example.test" },
     { ...data, refresh_token: "synthetic-user-token" }, { ...data, client_secret: "" }]) {
     fs.writeFileSync(registration, JSON.stringify(invalid));
-    assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcClientConfig: registration }), /Native OIDC/);
+    assert.throws(() => f.build({ clientConfig: registration }), /Native OIDC/);
   }
   fs.writeFileSync(registration, JSON.stringify(data));
   for (const mode of [0o644, 0o700]) {
     fs.chmodSync(registration, mode);
-    assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcClientConfig: registration }), /owner-only/);
+    assert.throws(() => f.build({ clientConfig: registration }), /owner-only/);
   }
   fs.chmodSync(registration, 0o400);
-  assert.doesNotThrow(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcClientConfig: registration }));
+  assert.doesNotThrow(() => f.build({ clientConfig: registration }));
   fs.chmodSync(registration, 0o600); const alias = path.join(f.directory, "alias.json"); fs.symlinkSync(registration, alias);
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcClientConfig: alias }), /owner-only/);
+  assert.throws(() => f.build({ clientConfig: alias }), /owner-only/);
   fs.writeFileSync(registration, JSON.stringify({ ...data, client_secret: "a".repeat(16 * 1024) }));
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcClientConfig: registration }), /at most 16 KiB/);
+  assert.throws(() => f.build({ clientConfig: registration }), /at most 16 KiB/);
 }));
 
 test("invalid or mismatched input cannot create or overwrite profiles", () => fixture(f => {
-  assert.equal(prepareOidcHandoff("mgmt", f.state, {}), undefined);
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { oidcKubeconfig: f.admin }), /require --oidc-config/);
-  assert.throws(() => prepareOidcHandoff("different", f.state, f.options), /name the management cluster/);
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcKubeconfig: f.admin }), /must not replace/);
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcKubeconfig: f.config }), /must not replace/);
+  assert.throws(() => f.build({ output: f.admin }), /Refusing to replace/);
+  assert.throws(() => f.build({ output: f.config }), /must not replace/);
   const output = path.join(f.directory, "existing.yaml"); fs.writeFileSync(output, "another profile", { mode: 0o600 });
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcKubeconfig: output }), /Refusing to replace/);
+  assert.throws(() => f.build({ output }), /Refusing to replace/);
   const alias = path.join(f.directory, "alias.yaml"); fs.symlinkSync(f.admin, alias);
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcKubeconfig: alias }), /Refusing to replace/);
+  assert.throws(() => f.build({ output: alias }), /Refusing to replace/);
   fs.writeFileSync(f.config, "malformed JSON");
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, f.options), /Cannot read valid local OIDC JSON/);
-  assert.equal(fs.existsSync(path.join(f.state, "kubeconfig-oidc")), false);
+  assert.throws(() => f.build(), /Cannot read valid local OIDC JSON/);
+  assert.equal(fs.existsSync(path.join(f.state, "mgmt", "kubeconfig-oidc")), false);
   assert.equal(fs.readFileSync(f.admin, "utf8"), f.adminBytes);
 }));
 
-test("the handoff matches the native rendered authenticator and preserves CAPI pause metadata", () => fixture(f => {
+test("the identity is checked against the rendered control-plane authenticator without touching the render", () => fixture(f => {
   const chart = Testing.chart();
   new AwsK0sCluster(chart, "management", { name: "mgmt", region: "eu-central-1", k8sVersion: "v1.35.7",
     controlPlane: { replicas: 3, authentication: { identity: identity() } } });
@@ -106,27 +104,40 @@ test("the handoff matches the native rendered authenticator and preserves CAPI p
   const manifests = path.join(f.directory, "manifests"); fs.mkdirSync(manifests);
   const file = path.join(manifests, "management.k8s.yaml"), bytes = objects.map(object => stringify(object)).join("---\n");
   fs.writeFileSync(file, bytes);
-  const handoff = prepareOidcHandoff("mgmt", f.state, f.options)!;
-  assert.doesNotThrow(() => assertManagementOidc(manifests, "mgmt", handoff));
-  assert.throws(() => assertManagementOidc(manifests, "mgmt"), /requires --oidc-config/);
+  const handoff = f.build()!;
+  assert.doesNotThrow(() => assertRenderedAuthenticator(manifests, handoff));
   const other = identity(); other.workforce.audience = "other-client"; fs.writeFileSync(f.config, JSON.stringify(other));
-  assert.throws(() => assertManagementOidc(manifests, "mgmt", prepareOidcHandoff("mgmt", f.state, f.options)), /does not match/);
+  assert.throws(() => assertRenderedAuthenticator(manifests, f.build()), /does not match/);
   assert.equal(fs.readFileSync(file, "utf8"), bytes);
   assert.equal(fs.readFileSync(f.admin, "utf8"), f.adminBytes);
   const cp = objects.find(object => object.kind === "K0sControlPlane")!;
   delete cp.spec.k0sConfigSpec.k0s.spec.api.extraArgs["authentication-config"];
   fs.writeFileSync(file, objects.map(object => stringify(object)).join("---\n"));
-  assert.throws(() => assertManagementOidc(manifests, "mgmt", handoff), /does not match/);
-  assert.doesNotThrow(() => assertManagementOidc(manifests, "mgmt"));
+  assert.throws(() => assertRenderedAuthenticator(manifests, handoff), /does not match/);
 }));
 
 test("a private API endpoint can use a local public CA without enabling insecure TLS", () => fixture(f => {
   const ca = path.join(f.directory, "ca.pem"), key = path.join(f.directory, "fixture.key");
   execFileSync("openssl", ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1",
-    "-subj", "/CN=bootstrap-fixture", "-keyout", key, "-out", ca], { stdio: "ignore" });
-  const handoff = prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcCaFile: ca })!;
+    "-subj", "/CN=profile-fixture", "-keyout", key, "-out", ca], { stdio: "ignore" });
+  const handoff = f.build({ caFile: ca })!;
   const cluster = parse(handoff.kubeconfig).clusters[0].cluster;
   assert.equal(Buffer.from(cluster["certificate-authority-data"], "base64").toString(), fs.readFileSync(ca, "utf8"));
   assert.equal(cluster["insecure-skip-tls-verify"], undefined);
-  assert.throws(() => prepareOidcHandoff("mgmt", f.state, { ...f.options, oidcCaFile: key }), /only PEM certificates/);
+  assert.throws(() => f.build({ caFile: key }), /only PEM certificates/);
+}));
+
+test("the command reads the identity from standard input and writes only the profile", () => fixture(f => {
+  const output = path.join(f.directory, "profile.yaml");
+  const cli = path.join(__dirname, "..", "src", "cli.ts");
+  const run = (input: string) => execFileSync(process.execPath, ["--import", "tsx", cli, "oidc-kubeconfig", "--config", "-", "--output", output],
+    { input, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  const stdout = run(JSON.stringify(identity()));
+  assert.match(stdout, /kubectl oidc-login plugin/);
+  assert.equal(parse(fs.readFileSync(output, "utf8")).clusters[0].cluster.server, "https://api.management.example.test");
+  assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+  assert.doesNotThrow(() => run(JSON.stringify(identity())));
+  const other = identity(); other.hostname = "api.other.example.test";
+  assert.throws(() => run(JSON.stringify(other)), /Refusing to replace/);
+  assert.throws(() => run("not json"), /standard input/);
 }));

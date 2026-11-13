@@ -1,14 +1,17 @@
-# Bootstrap with OIDC
+# Sign-in kubeconfig for an OIDC cluster
 
-The self-managed AWS bootstrap uses `KubernetesOidcIdentity` to generate the
-operator's sign-in kubeconfig from local inputs. It checks the identity against
-the rendered management authenticator before creating cloud or cluster resources.
-It never needs a registration ConfigMap from the new cluster.
+`nebula oidc-kubeconfig` writes an operator's sign-in kubeconfig from local
+inputs, using the same `KubernetesOidcIdentity` module that renders the
+control-plane authenticator. It contacts no cluster, so it works before the
+first login, on a new machine, and when no administrator kubeconfig is at hand.
 
-## Shared identity
+Bootstrap is unchanged: it still writes `~/.nebula/<cluster>/kubeconfig` for
+administration. Create the sign-in profile at any time; signing in works once
+the cluster's API endpoint for OIDC users is reachable.
 
-Use the same `KubernetesOidcIdentityConfig` for the control plane and the CLI.
-For example, keep the policy in `management-oidc.json`:
+## Identity
+
+The command takes the cluster's `KubernetesOidcIdentityConfig` as JSON:
 
 ```json
 {
@@ -29,52 +32,59 @@ For example, keep the policy in `management-oidc.json`:
 }
 ```
 
-Load this JSON in the deployment module and pass it as
-`controlPlane.authentication.identity`. The cluster name must match
-`config.aws.clusterName`. Keep any workload issuer and identity restrictions in
-this shared policy too; the CLI checks the complete authenticator. Supply RBAC
-through the module's `bootstrapManifests`; generating a profile grants no access.
-See [OIDC module composition and RBAC](../nebula/src/modules/k8s/kubernetes-access/README.md).
+Keep one definition of the identity. If the deployment defines it in TypeScript,
+print it and pipe it in; no second copy is needed:
 
-Install `kubectl` and the `oidc-login` plugin for a public client. If the provider
-requires a native/Desktop app credential, set
-`workforce.login.clientAuthentication` to `"client-secret"` and install the
-existing [`nebula-oidc-login` adapter](../../tools/oidc-login/README.md) instead.
-Provide a local JSON file with exactly `issuer`, `client_id` and `client_secret`,
-owned by the current user, mode 0400 or 0600, and at most 16 KiB. Its issuer and
-client ID must match the identity policy. Keep
-this registration outside source control; user tokens belong in the login cache.
+```sh
+npx tsx -e 'import { identity } from "./access"; console.log(JSON.stringify(identity))' \
+  | nebula oidc-kubeconfig --config -
+```
+
+If the deployment loads it from a JSON file, pass that file with `--config`.
 
 ## Run and sign in
 
 ```sh
-nebula bootstrap --provider aws --gitops-dir ./aws \
-  --oidc-config ./management-oidc.json
+nebula oidc-kubeconfig --config ./management-oidc.json
 
 export KUBECONFIG="$HOME/.nebula/mgmt/kubeconfig-oidc"
 kubectl auth whoami
-kubectl get nodes
 ```
 
-For native/Desktop credentials, add
-`--oidc-client-config ~/.config/nebula/oidc/mgmt.json`, or use that default path.
-`kubectl auth whoami` opens the provider sign-in flow when needed; subsequent
-requests use the existing plugin's keyring cache and renewal. Bootstrap generates
-the profile without signing in as the operator.
+`kubectl auth whoami` opens the provider sign-in flow when needed; later requests
+use the login plugin's keyring cache and renewal. The command itself never signs in.
+
+A public client needs `kubectl` and its `oidc-login` plugin. If the provider
+requires a native/Desktop app credential, set
+`workforce.login.clientAuthentication` to `"client-secret"` and install the
+[`nebula-oidc-login` adapter](../../tools/oidc-login/README.md) instead. Provide
+a local JSON file with exactly `issuer`, `client_id` and `client_secret`, owned
+by the current user, mode 0400 or 0600, and at most 16 KiB. Its issuer and client
+ID must match the identity. Keep this registration outside source control.
 
 | Option | Input or default |
 | --- | --- |
-| `--oidc-config` | Local JSON `KubernetesOidcIdentityConfig`; required when the management render enables OIDC. |
-| `--oidc-client-config` | Protected native registration JSON; defaults to `~/.config/nebula/oidc/<cluster>.json` in client-secret mode. |
-| `--oidc-kubeconfig` | Output path; defaults to `~/.nebula/<cluster>/kubeconfig-oidc`. |
-| `--oidc-ca-file` | Optional local PEM certificate bundle for the API endpoint; otherwise system trust. |
+| `--config` | Local JSON `KubernetesOidcIdentityConfig`, or `-` for standard input. Required. |
+| `--client-config` | Protected native registration JSON; defaults to `~/.config/nebula/oidc/<cluster>.json` in client-secret mode. |
+| `--output` | Output path; defaults to `~/.nebula/<cluster>/kubeconfig-oidc`. |
+| `--ca-file` | Optional local PEM certificate bundle for the API endpoint; otherwise system trust. |
+| `--rendered` | Directory of synthesized manifests. The command fails unless the identity produces exactly the authentication configuration of that cluster's rendered control plane. |
 
-The sign-in profile contains an exec configuration, with no user token, client
+## Checking against a render
+
+`--rendered` guards against handing out a profile for an identity the control
+plane does not enforce. Point it at the synthesized output of the module that
+declares the cluster:
+
+```sh
+nebula oidc-kubeconfig --config ./management-oidc.json --rendered ./dist
+```
+
+## What is written
+
+The profile contains an exec configuration, with no user token, client
 certificate or private key. A native registration is referenced by absolute local
-path; its app credential is not copied into the profile. Outputs use mode 0600.
-An identical protected output can be reused; other existing files are refused.
-
-Bootstrap continues to use and retain `~/.nebula/<cluster>/kubeconfig` for its
-internal administration and handoff. These options do not revoke credentials
-or change pause policy. This handoff integration applies to the self-managed AWS
-provider; the GCP/GKE bootstrap does not accept these options.
+path; its app credential is not copied into the profile. The output uses mode
+0600. An identical protected output is reused; any other existing file is
+refused, so an administrator kubeconfig or another profile is never replaced.
+Generating a profile grants no access: RBAC comes from the cluster.

@@ -17,8 +17,6 @@ const PROVIDERS: Record<string, BootstrapProvider> = {
 
 export async function bootstrap(options: BootstrapOptions): Promise<void> {
   const name = (options.provider || "gcp").toLowerCase();
-  if (name !== "aws" && [options.oidcConfig, options.oidcClientConfig, options.oidcKubeconfig, options.oidcCaFile].some(Boolean))
-    throw new Error("OIDC bootstrap handoff is supported by the self-managed AWS provider");
   const provider = PROVIDERS[name];
   if (!provider) {
     throw new Error(

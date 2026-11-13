@@ -108,8 +108,8 @@ jobs:
           RUN_KUBERNETES_OIDC_INTEGRATION: "1"
         run: pnpm exec tsx --test test/kubernetes-access.integration.test.ts
 
-  bootstrap-oidc:
-    name: Bootstrap OIDC handoff
+  cli:
+    name: CLI
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:

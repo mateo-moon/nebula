@@ -35,14 +35,6 @@ export interface BootstrapOptions {
    * this tree. Scaffold one with `nebula init --provider aws`.
    */
   gitopsDir?: string;
-  /** Local JSON KubernetesOidcIdentityConfig, shared with the control-plane authentication module. */
-  oidcConfig?: string;
-  /** Protected local native/Desktop registration JSON; never fetched from Kubernetes. */
-  oidcClientConfig?: string;
-  /** Sign-in kubeconfig output; defaults to ~/.nebula/<cluster>/kubeconfig-oidc. */
-  oidcKubeconfig?: string;
-  /** Optional local PEM CA for the sign-in API endpoint; system trust is the default. */
-  oidcCaFile?: string;
 }
 
 /** A cloud provider's bootstrap implementation. */

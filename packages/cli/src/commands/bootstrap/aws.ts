@@ -30,7 +30,6 @@ import {
 import type { BootstrapOptions, BootstrapProvider } from "./types";
 import { buildCapaCredentialsIni, toCapaB64 } from "nebula-cdk8s";
 import { apply } from "../apply";
-import { assertManagementOidc, prepareOidcHandoff, writeOidcHandoff } from "./oidc";
 
 const MGMT_NAMESPACE = "default";
 
@@ -703,9 +702,10 @@ async function deployPlatform(
 
 /** Apply the management cluster CRs (after the operator installs the CAPA/k0s CRDs). */
 async function deployCluster(
-  directory: string,
+  gitopsDir: string,
+  clusterName: string,
 ): Promise<void> {
-  await apply({ file: `${directory}/*.k8s.yaml` });
+  await applyRepoModule(gitopsDir, `${platformDir(gitopsDir)}/cluster-api`, clusterName);
 }
 
 /** Wait until the CAPI cluster's control plane is ready and its kubeconfig secret exists. */
@@ -1276,12 +1276,6 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
 
   ensureRepoDeps(gitopsDir);
   const { region, clusterName, keyless, oidc, git } = readAwsRepoConfig(gitopsDir);
-  const oidcHandoff = prepareOidcHandoff(clusterName, path.join(os.homedir(), ".nebula", clusterName), options);
-  if (oidcHandoff && !commandExists(oidcHandoff.command))
-    throw new Error(`Install ${oidcHandoff.command} before bootstrapping an OIDC operator profile`);
-  // Render and bind the declared authenticator before any Kind or AWS mutation.
-  const managementDirectory = synthRepoModule(gitopsDir, `${platformDir(gitopsDir)}/cluster-api`, clusterName);
-  assertManagementOidc(managementDirectory, clusterName, oidcHandoff);
 
   log("");
   log("🚀 Nebula AWS Bootstrap (thin — ArgoCD reconciles the platform from git)");
@@ -1325,7 +1319,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("");
   log("📦 Step 4: Creating the management cluster (CAPA + k0s)");
   log("─".repeat(50));
-  await deployCluster(managementDirectory);
+  await deployCluster(gitopsDir, clusterName);
   await waitForClusterReady(1800, clusterName);
 
   // Step 5: Fetch the management cluster kubeconfig.
@@ -1363,7 +1357,6 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
     await setupAwsCredentials(region, options.awsProfile, mgmtKubeconfig);
   }
   await deployGitopsHandoff(gitopsDir, kindName, mgmtKubeconfig, clusterName, keyless);
-  const operatorKubeconfig = oidcHandoff ? writeOidcHandoff(oidcHandoff) : mgmtKubeconfig;
 
   // Step 7: dispose of the Kind scaffold now that the pivot has handed the CAPI graph to
   // the management cluster. Default behavior (the CLI description already promises "Kind
@@ -1380,8 +1373,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
   log("✨ AWS bootstrap complete!");
   log("");
   log(`   Kind (bootstrap):  ${kindDeleted ? "deleted ✅" : `kind-${kindName} (still present)`}`);
-  log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${operatorKubeconfig}"`);
-  if (oidcHandoff) log(`   Bootstrap credentials retained: ${mgmtKubeconfig}`);
+  log(`   k0s (management):  ${clusterName}  →  KUBECONFIG="${mgmtKubeconfig}"`);
   log("");
   log("   ArgoCD now reconciles the whole platform and all apps from git — including");
   log("   the cluster-api module, so the management cluster owns its own CAPI lifecycle.");
@@ -1390,8 +1382,7 @@ async function bootstrapAws(options: BootstrapOptions): Promise<void> {
     log(`     kind delete cluster --name ${kindName}`);
   }
   log("");
-  log(`   export KUBECONFIG="${operatorKubeconfig}"`);
-  if (oidcHandoff) log("   kubectl auth whoami  # complete your OIDC sign-in");
+  log(`   export KUBECONFIG="${mgmtKubeconfig}"`);
   log("   kubectl get nodes");
   log("");
 }

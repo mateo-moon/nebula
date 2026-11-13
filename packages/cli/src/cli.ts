@@ -9,6 +9,7 @@
  *   apply       - Apply synthesized manifests to cluster
  *   destroy     - Delete Kind cluster
  *   init-sops   - Initialize SOPS configuration for secret management
+ *   oidc-kubeconfig - Write a sign-in kubeconfig from local OIDC inputs
  */
 import { Command } from 'commander';
 import { init, InitOptions } from './commands/init';
@@ -17,6 +18,7 @@ import { synth } from './commands/synth';
 import { apply } from './commands/apply';
 import { destroy } from './commands/destroy';
 import { initSops, InitSopsOptions } from './commands/init-sops';
+import { oidcKubeconfig, OidcKubeconfigOptions } from './commands/oidc-kubeconfig';
 
 const program = new Command();
 
@@ -69,10 +71,6 @@ program
   .option('-c, --credentials <path>', 'Path to GCP credentials JSON file (gcp)')
   .option('--aws-profile <profile>', 'AWS named profile for credentials (aws)')
   .option('--gitops-dir <path>', 'Path to the aws/ repo subtree — the single source of truth (config.ts + cdk8s modules) ArgoCD reconciles; region/cluster/AMI/replicas all live there, NOT in flags (aws; default: current dir). Scaffold with: nebula init --provider aws')
-  .option('--oidc-config <path>', 'Local management OIDC identity JSON, matching the control-plane authentication configuration (aws)')
-  .option('--oidc-client-config <path>', 'Protected local Desktop registration JSON for the sign-in profile (aws)')
-  .option('--oidc-kubeconfig <path>', 'Sign-in kubeconfig output (aws; default ~/.nebula/<cluster>/kubeconfig-oidc)')
-  .option('--oidc-ca-file <path>', 'Optional PEM CA for the sign-in API endpoint (aws; default system trust)')
   .option('--skip-kind', 'Skip Kind cluster creation')
   .option('--keep-kind', 'Keep the Kind bootstrap cluster after handoff instead of deleting it (aws; default: delete once the pivot has moved CAPI onto the mgmt cluster). Use only to inspect a failed bootstrap.')
   .option('--skip-credentials', 'Skip credentials setup')
@@ -80,6 +78,25 @@ program
   .action(async (opts: BootstrapOptions) => {
     try {
       await bootstrap(opts);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('oidc-kubeconfig')
+  .description(
+    'Write a sign-in kubeconfig for an OIDC-enabled cluster from local inputs only. Needs no cluster access, so it works before first login and on any machine.',
+  )
+  .requiredOption('--config <path>', "Local JSON KubernetesOidcIdentityConfig; '-' reads standard input")
+  .option('--client-config <path>', 'Protected local native/Desktop registration JSON (default ~/.config/nebula/oidc/<cluster>.json in client-secret mode)')
+  .option('--output <path>', 'Output path (default ~/.nebula/<cluster>/kubeconfig-oidc)')
+  .option('--ca-file <path>', 'Optional PEM CA for the API endpoint (default system trust)')
+  .option('--rendered <dir>', 'Directory of synthesized manifests; fail unless the identity matches the control-plane authenticator')
+  .action(async (opts: OidcKubeconfigOptions) => {
+    try {
+      await oidcKubeconfig(opts);
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
       process.exit(1);
