@@ -64,6 +64,7 @@ jobs:
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"
+          WELCOME_CADDY_INTEGRATION: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
           KYVERNO_CHART_ARCHIVE: ${{ runner.temp }}/kyverno-3.9.1.tgz
           KYVERNO_CLI: ${{ runner.temp }}/kyverno
