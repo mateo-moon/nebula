@@ -176,7 +176,17 @@ export type {
   LokiPushIngressConfig,
   MemberMonitoringConfig,
   MemberRemoteWriteConfig,
+  MonitoringDatasource,
+  OperatorDatasourcesConfig,
 } from "./prometheus-operator";
+
+export { GrafanaOperator, grafanaDatasource } from "./grafana-operator";
+export type {
+  GrafanaOperatorConfig,
+  GrafanaOperatorInstance,
+  GrafanaDatasourceConfig,
+  GrafanaDatasourceSecret,
+} from "./grafana-operator";
 
 export {
   ArgoCd,
