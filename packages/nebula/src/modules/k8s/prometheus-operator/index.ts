@@ -13,7 +13,8 @@
  * ```
  */
 import { Construct } from "constructs";
-import { ApiObject, Helm } from "cdk8s";
+import { ApiObject, Helm, JsonPatch } from "cdk8s";
+import { createHash } from "node:crypto";
 import * as kplus from "cdk8s-plus-33";
 import {
   toJson_Toleration,
@@ -22,6 +23,7 @@ import {
   type Toleration as PodToleration,
   type Volume,
   type VolumeMount,
+  type Container,
 } from "cdk8s-plus-33/lib/imports/k8s";
 import { deepmerge, deepmergeCustom } from "deepmerge-ts";
 import { ServiceAccount as CpServiceAccount } from "#imports/cloudplatform.gcp.upbound.io";
@@ -1159,6 +1161,40 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         },
       });
     }
+  }
+
+  /** Finalize datasource files after caller customizations. Configure Grafana's
+   * chart values with initDatasources, skipReload, watchMethod: LIST and
+   * datasources.env.UNIQUE_FILENAMES: "true" first. The chart owns rollout policy. */
+  public provisionGrafanaDatasources(): void {
+    const deployments = this.helm.apiObjects.filter(object => object.kind === "Deployment" &&
+      object.toJson().spec.template.spec.volumes?.some((volume: { name: string }) => volume.name === "sc-datasources-volume"));
+    if (deployments.length !== 1) throw new Error("Datasource provisioning requires one enabled Grafana Deployment");
+    const deployment = deployments[0]!, pod = deployment.toJson().spec.template.spec;
+    const init: Container[] = pod.initContainers ?? [];
+    const index = init.findIndex(container => container.volumeMounts?.some(mount => mount.name === "sc-datasources-volume"));
+    const environment = init[index]?.env ?? [];
+    if (environment.find(entry => entry.name === "METHOD")?.value !== "LIST" ||
+      environment.find(entry => entry.name === "UNIQUE_FILENAMES")?.value !== "true" ||
+      environment.some(entry => entry.name === "REQ_URL") || init[index]?.restartPolicy === "Always")
+      throw new Error("Configure Grafana datasource initDatasources, skipReload, watchMethod: LIST and UNIQUE_FILENAMES before provisioning");
+    const label = environment.find(entry => entry.name === "LABEL")?.value;
+    const labelValue = environment.find(entry => entry.name === "LABEL_VALUE")?.value;
+    if (!label) throw new Error("Grafana datasource init container requires a ConfigMap label selector");
+    const configurations = this.node.findAll().filter(ApiObject.isApiObject)
+      .filter(object => object.kind === "ConfigMap").map(object => object.toJson())
+      .filter(value => value.metadata.namespace === (this.config.namespace ?? "monitoring") &&
+        Object.hasOwn(value.metadata.labels ?? {}, label) && (labelValue === undefined || value.metadata.labels[label] === labelValue))
+      .map(value => ({ name: value.metadata.name, data: Object.fromEntries(Object.entries(value.data ?? {}).sort(([a], [b]) => a.localeCompare(b))) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!configurations.length || new Set(configurations.map(source => source.name)).size !== configurations.length)
+      throw new Error("Grafana provisioning requires distinct module-owned datasource ConfigMaps");
+    deployment.addJsonPatch(
+      JsonPatch.replace(`/spec/template/spec/initContainers/${index}/env`, environment.filter(entry =>
+        !["REQ_USERNAME", "REQ_PASSWORD"].includes(entry.name))),
+      JsonPatch.add("/spec/template/metadata/annotations/checksum~1datasource-configuration",
+        createHash("sha256").update(JSON.stringify(configurations)).digest("hex")),
+    );
   }
 }
 

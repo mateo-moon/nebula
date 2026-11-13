@@ -61,12 +61,17 @@ jobs:
           curl --fail --location --retry 3 https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz --output "$RUNNER_TEMP/kyverno-cli.tar.gz"
           printf 'b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  %s\n' "$RUNNER_TEMP/kyverno-cli.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/kyverno-cli.tar.gz" -C "$RUNNER_TEMP" kyverno
+      - name: Fetch pinned Prometheus chart for Grafana provisioning tests
+        run: |
+          helm pull kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts --version 81.4.3 --destination "$RUNNER_TEMP"
+          printf '0543d9257d025157b2626342384d7d17bcf5fbfcd7837aec2a176944cd2d4cb4  %s\n' "$RUNNER_TEMP/kube-prometheus-stack-81.4.3.tgz" | sha256sum --check
       - name: Tests (including the packed-tarball import test)
         env:
           ECR_READER_CONTAINER_TEST: "1"
           BAREMETAL_CROSSPLANE_CLI: ${{ runner.temp }}/crossplane
           KYVERNO_CHART_ARCHIVE: ${{ runner.temp }}/kyverno-3.9.1.tgz
           KYVERNO_CLI: ${{ runner.temp }}/kyverno
+          PROMETHEUS_CHART_ARCHIVE: ${{ runner.temp }}/kube-prometheus-stack-81.4.3.tgz
         run: pnpm test
       - run: pnpm exec tsc --noEmit
       - name: Real Envoy mutual TLS qualification

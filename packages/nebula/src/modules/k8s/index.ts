@@ -166,8 +166,6 @@ export type {
 } from "./calico-wg-repair";
 
 export { PrometheusOperator, MemberMonitoring, promtailValues, grafanaOperatorKubeAuthValues } from "./prometheus-operator";
-export { provisionGrafanaDatasources } from "./prometheus-operator/datasource-provisioning";
-export type { GrafanaDatasourceProvisioningOptions } from "./prometheus-operator/datasource-provisioning";
 export type {
   PrometheusOperatorConfig,
   GrafanaOperatorKubeAuthConfig,
