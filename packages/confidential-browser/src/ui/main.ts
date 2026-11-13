@@ -12,6 +12,27 @@ let busy = false;
 let connected = false;
 let recoveryUrl: string | undefined;
 let imageLimits = imageUploadLimits();
+const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"] as const;
+type Phase = typeof phases[number];
+const phaseLabels: Record<Phase, string> = {
+  encrypting: "Encrypt locally and publish ciphertext", measuring: "Compile native genpolicy independently",
+  waiting: "Wait for the final confidential workload", attesting: "Verify and enroll its unique instance",
+  provisioning: "Provision keys directly to its Trustee", ready: "Unlock storage and authorize app startup",
+};
+const completed = new Set<Phase>();
+let activePhase: Phase | undefined;
+function renderSteps() {
+  for (const item of document.querySelectorAll<HTMLElement>("[data-phase]")) {
+    const phase = item.dataset.phase as Phase, active = phase === activePhase, done = completed.has(phase) && !active;
+    item.classList.toggle("active", active); item.classList.toggle("done", done);
+    item.setAttribute("aria-label", `${phaseLabels[phase]}: ${done ? "Completed" : active ? "In progress" : "Pending"}`);
+    if (active) item.setAttribute("aria-current", "step"); else item.removeAttribute("aria-current");
+  }
+}
+function complete(...steps: Phase[]) {
+  for (const phase of steps) { completed.add(phase); if (activePhase === phase) activePhase = undefined; }
+  renderSteps();
+}
 const jwtPayload = (jwt: string) => JSON.parse(new TextDecoder().decode(bytes(jwt.split(".")[1].replaceAll("-", "+").replaceAll("_", "/"))));
 function evidence() {
   const value = { version: 1, checkedAt: new Date().toISOString(), frontend: api.manualTls ? {
@@ -49,6 +70,7 @@ function failure(error: unknown) {
   const notice = el("notice"); notice.hidden = false;
   notice.textContent = error instanceof Error ? error.message : "Verification or deployment stopped. No unverified fallback was used.";
   busy = false; input("deploy").disabled = !connected || !!owner.prepared;
+  activePhase = undefined; renderSteps();
   if (owner.prepared) el("inspect").hidden = false;
 }
 async function request(channel: AttestedChannel, path: string, method = "GET", body?: BodyInit, audience = "nebula-browser", headers: Record<string, string> = {}) {
@@ -125,12 +147,31 @@ async function connect() {
   input("deploy").disabled = !!owner.prepared; text("job-title", owner.prepared ? "Release prepared" : "Ready when you are");
   text("job-description", "Choose an image and approve the stack. No administrator action is needed.");
   if (owner.prepared) { el("inspect").hidden = false; }
+  // These encrypted owner checkpoints describe completed operations, not a
+  // fresh health check. Storage readiness is always checked again below.
+  if (owner.prepared) {
+    complete("encrypting", "measuring");
+    if (owner.finalPin) {
+      complete("waiting");
+      if (owner.finalClaimed) {
+        complete("attesting");
+        if (owner.provisioned) complete("provisioning");
+      }
+    }
+    text("job-description", "Saved release checkpoints restored. Verify again to check the current workload and storage status.");
+  } else if (owner.encryptedImage && currentJob.phase === "measuring") {
+    complete("encrypting");
+    if (currentJob.state === "running") progress("measuring", "Compiling native genpolicy independently…");
+    else text("job-title", "Ciphertext published; native policy needs attention");
+    text("job-description", "The attested preparation service confirmed publication of your saved encrypted release. Native policy preparation is not complete.");
+  } else renderSteps();
 }
-function progress(phase: string, title: string) {
+function progress(phase: Phase, title: string) {
   text("job-title", title);
-  for (const item of document.querySelectorAll<HTMLElement>("[data-phase]")) item.classList.toggle("active", item.dataset.phase === phase);
+  activePhase = phase; completed.delete(phase); renderSteps();
 }
 async function finalConnection() {
+  progress(owner.finalPin ? "attesting" : "waiting", owner.finalPin ? "Verifying your enrolled confidential workload…" : "Waiting for your confidential workload…");
   const prepared = owner.prepared;
   const origin = connection.browserEndpoint ?? `${api.target.startsWith("https:") ? "https:" : "http:"}//${connection.endpoint.host}:${connection.endpoint.port}`;
   final = api.finalChannel(origin, prepared.identity, owner.finalPin);
@@ -146,6 +187,8 @@ async function finalConnection() {
       await sleep(4000);
     }
   }
+  complete("waiting");
+  progress("attesting", "Attestation passed. Checking final instance enrollment…");
   if (!owner.finalPin) {
     if (owner.restored) throw new Error("This recovery file predates final instance enrollment. Restore the updated backup; no replacement instance was adopted.");
     owner.finalPin = final!.pin; await api.save();
@@ -157,10 +200,10 @@ async function finalConnection() {
     await request(final!, "/kbs/v0/resource-policy", "GET", undefined, prepared.audience);
     owner.finalClaimed = true; delete owner.token; await api.save();
   }
+  complete("attesting");
   evidence(); text("final-status", "Final workload verified"); return final!;
 }
 async function provision() {
-  progress("waiting", "Waiting for your confidential workload…");
   const channel = await finalConnection(), prepared = owner.prepared;
   progress("provisioning", "Verified final instance. Provisioning keys…");
   const encode = (text: string) => b64(utf8(text)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
@@ -179,6 +222,7 @@ async function provision() {
     finally { raw.fill(0); }
   }
   owner.provisioned = true; await api.save();
+  complete("provisioning");
   await inspect();
 }
 async function inspect() {
@@ -193,7 +237,8 @@ async function inspect() {
     if (Date.now() >= deadline) throw new Error("Keys reached the verified VM. Startup is still pending; use Verify again for status.");
     await sleep(4000);
   }
-  text("job-title", "Keys delivered; encrypted storage unlocked"); text("job-description", "The final VM passed fresh attestation and accepted your owner keys. Workload startup is now authorized.");
+  complete("ready");
+  text("job-title", "Keys delivered; encrypted storage unlocked"); text("job-description", "The final VM passed fresh attestation and accepted your owner keys. App startup is authorized; application health is checked separately.");
   el("inspect").hidden = false;
 }
 el("deploy-form").addEventListener("submit", event => {
@@ -226,6 +271,7 @@ el("deploy-form").addEventListener("submit", event => {
     let recoveryPassword = input("recovery-password").value;
     download("nebula-owner-recovery.json", await api.backup(recoveryPassword)); input("recovery-password").value = "";
     try {
+    completed.clear();
     progress("encrypting", "Encrypting image locally in your browser…");
     const local = await prepareLocalImage(archive, owner.imageKey, `kbs:///${connection.workload.spec.containers[0].imageKeyResource.join("/")}`,
       imageLimits, owner.encryptedImage, (done, total) => progress("encrypting", `Encrypting locally: ${imageSizeLabel(done)} / ${imageSizeLabel(total)} (${Math.floor(done * 100 / total)}%)`));
@@ -233,7 +279,7 @@ el("deploy-form").addEventListener("submit", event => {
     await uploadEncryptedImage(local.image, imageLimits,
       (path, method, body, headers) => request(api.channel, path, method, body, "nebula-browser", headers),
       (sent, total) => progress("encrypting", `Uploading encrypted layers: ${imageSizeLabel(sent)} / ${imageSizeLabel(total)} (${Math.floor(sent * 100 / total)}%)`));
-    progress("measuring", "Publishing ciphertext and generating native policy…");
+    progress("encrypting", "Publishing your encrypted image…");
     await request(api.channel, "/nebula/v1/publish", "POST", JSON.stringify({
       registryUsername: input("registry-username").value, registryPassword: input("registry-password").value }));
     input("registry-password").value = "";
@@ -242,10 +288,14 @@ el("deploy-form").addEventListener("submit", event => {
       if (Date.now() >= deadline) throw new Error("Preparation is still pending. Your keys and release checkpoint were preserved.");
       await sleep(3000);
       const job = await (await request(api.channel, "/nebula/v1/job")).json();
+      if (job.phase === "measuring" && job.state !== "ready") {
+        complete("encrypting"); progress("measuring", "Compiling native genpolicy independently…");
+      }
       if (job.state === "failed") throw new Error(`Preparation stopped during ${job.phase ?? "publication"}: ${job.error ?? "native publication or policy generation failed"}`);
       if (job.state === "ready") {
         if (job.result.digest !== local.image.manifestDigest) throw new Error("Published image differs from your browser-encrypted release");
         owner.prepared = job.result; await api.save();
+        complete("encrypting", "measuring");
         await removeCipherCache(owner.encryptedImage); delete owner.encryptedImage; await api.save(); break;
       }
     }

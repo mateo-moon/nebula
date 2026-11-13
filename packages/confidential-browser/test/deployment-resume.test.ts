@@ -10,11 +10,18 @@ const bundle = await build({ entryPoints: [new URL("../src/ui/main.ts", import.m
 
 // Exercise the real UI event handlers. The attested channel is a test double;
 // transport/evidence verification is covered separately by the security tests.
-async function deployment(restored = false, rejectedConnection = false) {
+async function deployment(restored = false, rejectedConnection = false, options: {
+  provisionedCheckpoint?: boolean; preparationFailure?: "publishing" | "measuring"; keyWriteFailure?: boolean;
+  pendingCheckpoint?: "running" | "failed";
+} = {}) {
   class Element {
     id = ""; value = ""; textContent = ""; hidden = false; disabled = false;
-    checked = false; files: unknown[] = []; classList = { toggle() {} };
+    checked = false; files: unknown[] = []; dataset: Record<string, string> = {};
+    attributes = new Map<string, string>(); classes = new Set<string>();
+    classList = { toggle: (name: string, enabled: boolean) => enabled ? this.classes.add(name) : this.classes.delete(name) };
     listeners = new Map<string, (event: { preventDefault(): void }) => void>();
+    setAttribute(name: string, value: string) { this.attributes.set(name, value); }
+    removeAttribute(name: string) { this.attributes.delete(name); }
     addEventListener(name: string, listener: (event: { preventDefault(): void }) => void) { this.listeners.set(name, listener); }
     click() { this.listeners.get("click")?.({ preventDefault() {} }); }
     append() {} after() {} remove() {} querySelectorAll() { return []; }
@@ -34,7 +41,11 @@ async function deployment(restored = false, rejectedConnection = false) {
   const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
   const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored };
-  let now = 0, available = false, storageReady = true, publishes = 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
+  if (options.provisionedCheckpoint) Object.assign(owner, { prepared, finalPin: "b".repeat(64), finalClaimed: true, provisioned: true });
+  if (options.pendingCheckpoint) owner.encryptedImage = { id: "test-only-cache", manifestDigest: prepared.digest };
+  let now = 0, available = false, storageReady = true, publishes = options.provisionedCheckpoint ? 1 : 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
+  const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
+  const steps = phases.map(phase => { const step = el("step-" + phase); step.dataset.phase = phase; return step; });
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const channel = { identity: {}, pin: "a".repeat(64), request: async (path: string, init?: RequestInit) => {
     if (path === "/nebula/v1/browser") return response({ imageUpload: imageUploadLimits(), imageEncryption: { protocol: "oci-encrypted-v2", location: "owner-browser", preparationReceivesImageKey: false } });
@@ -44,13 +55,17 @@ async function deployment(restored = false, rejectedConnection = false) {
       assert.deepEqual(Object.keys(JSON.parse(init!.body as string)).sort(), ["registryPassword", "registryUsername"]);
       publishes++; return response({}, 202);
     }
-    if (path === "/nebula/v1/job") return response(publishes ? { state: "ready", result: prepared } : { state: "idle" });
+    if (path === "/nebula/v1/job" && options.pendingCheckpoint) return response({ state: options.pendingCheckpoint, phase: "measuring" });
+    if (path === "/nebula/v1/job") return response(publishes ? options.preparationFailure ?
+      { state: "failed", phase: options.preparationFailure, error: "test-only preparation failure" } : { state: "ready", result: prepared } : { state: "idle" });
     throw new Error("Unexpected preparation request: " + path);
   } };
   const final = { identity: {}, pin: "b".repeat(64), request: async (path: string, init: RequestInit = {}) => {
     finalAttempts++;
     if (!available) { now += 900_001; throw new Error("Test control plane is offline"); }
-    if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") keyWrites++;
+    if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") {
+      keyWrites++; if (options.keyWriteFailure) return response({}, 403);
+    }
     return response(path === "/nebula/v1/bootstrap" ? { phase: "ready", resources: { image: { status: 200 } },
       storage: storageReady ? {} : { data: { phase: "awaiting-owner" } } } : {});
   } };
@@ -61,7 +76,7 @@ async function deployment(restored = false, rejectedConnection = false) {
     terminate() {}
   }
   class Clock extends Date { static now() { return now; } }
-  const document = { getElementById: el, querySelectorAll: () => [], createElement: () => new Element() };
+  const document = { getElementById: el, querySelectorAll: (selector: string) => selector === "[data-phase]" ? steps : [], createElement: () => new Element() };
   runInNewContext(bundle.outputFiles[0].text, { window: { nebula: { owner, channel, target: "https://prep.example",
     finalChannel: () => final, save: async () => {}, backup: async () => ({}), jwt: async () => "test-owner-proof" } },
     document, crypto: webcrypto, TextEncoder, TextDecoder, Blob, Response, atob, btoa, Date: Clock, Worker: LocalWorker,
@@ -72,10 +87,17 @@ async function deployment(restored = false, rejectedConnection = false) {
     for (let i = 0; i < 200; i++) { if (predicate()) return; await new Promise(resolve => setImmediate(resolve)); }
     assert.fail("The UI did not settle");
   };
-  await wait(() => rejectedConnection ? el("notice").textContent.length > 0 : el("job-title").textContent === "Ready when you are");
-  el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
-  await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
-  return { owner, el, wait, counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
+  await wait(() => rejectedConnection ? el("notice").textContent.length > 0 :
+    el("job-title").textContent === (options.provisionedCheckpoint ? "Release prepared" : options.pendingCheckpoint === "running" ?
+      "Compiling native genpolicy independently…" : options.pendingCheckpoint ? "Ciphertext published; native policy needs attention" : "Ready when you are"));
+  if (!options.provisionedCheckpoint && !options.pendingCheckpoint) {
+    el("deploy-form").listeners.get("submit")!({ preventDefault() {} });
+    await wait(() => !el("notice").hidden && el("notice").textContent.length > 0);
+  }
+  return { owner, el, wait, steps,
+    completed: () => phases.filter((_, index) => steps[index].classes.has("done")),
+    active: () => phases.filter((_, index) => steps[index].classes.has("active")),
+    counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
     restoreConnectivity(ready = true) { available = true; storageReady = ready; } };
 }
 
@@ -86,6 +108,8 @@ test("rejected stack settings keep image encryption and publication disabled", a
   assert.equal(ui.counts().publishes, 0);
   assert.equal(ui.counts().uploadRequests, 0);
   assert.equal(ui.counts().keyWrites, 0);
+  assert.deepEqual(ui.completed(), []);
+  assert.deepEqual(ui.active(), []);
 });
 
 test("a post-publication timeout offers retry and resumes without republishing or changing the owner", async () => {
@@ -96,6 +120,8 @@ test("a post-publication timeout offers retry and resumes without republishing o
   assert.equal(ui.counts().keyWrites, 0);
   assert.equal(ui.owner.finalPin, undefined);
   assert.equal(ui.el("final-status").textContent, "Final workload pending");
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring"]);
+  assert.deepEqual(ui.active(), [], "A stopped deployment must not keep an active spinner");
   const imageKey = ui.owner.imageKey;
   ui.restoreConnectivity(); ui.el("inspect").click();
   await ui.wait(() => ui.owner.provisioned === true && ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
@@ -107,6 +133,12 @@ test("a post-publication timeout offers retry and resumes without republishing o
   assert.equal(ui.counts().publishes, 1);
   assert.equal(ui.counts().uploadRequests, 2);
   assert.equal(ui.counts().keyWrites, 1);
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"]);
+  assert.deepEqual(ui.active(), []);
+  assert.ok(ui.steps.every(step => step.attributes.get("aria-label")?.endsWith(": Completed")));
+  assert.match(ui.el("job-description").textContent, /application health is checked separately/);
+  const stepText = ui.steps.map(step => [...step.attributes.values()].join(" ")).join(" ");
+  assert.ok(!stepText.includes(imageKey) && !stepText.includes(ui.owner.token ?? "8".repeat(64)));
 });
 
 test("verified final attestation stays distinct from pending encrypted storage startup", async () => {
@@ -119,6 +151,8 @@ test("verified final attestation stays distinct from pending encrypted storage s
   assert.equal(ui.owner.provisioned, true);
   assert.equal(ui.counts().keyWrites, 1);
   assert.match(ui.el("result").textContent, /awaiting-owner/);
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning"]);
+  assert.deepEqual(ui.active(), []);
 });
 
 test("retry still refuses first enrollment from a restored pre-enrollment backup", async () => {
@@ -128,4 +162,43 @@ test("retry still refuses first enrollment from a restored pre-enrollment backup
   assert.equal(ui.owner.finalPin, undefined);
   assert.equal(ui.counts().keyWrites, 0);
   assert.equal(ui.counts().publishes, 1);
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting"]);
+  assert.deepEqual(ui.active(), []);
+});
+
+test("restored delivery checkpoints do not claim current storage readiness", async () => {
+  const ui = await deployment(true, false, { provisionedCheckpoint: true });
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning"]);
+  assert.deepEqual(ui.active(), []);
+  assert.match(ui.el("job-description").textContent, /Saved release checkpoints restored/);
+  ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"]);
+  assert.equal(ui.counts().publishes, 1);
+  assert.equal(ui.counts().keyWrites, 0);
+});
+
+for (const state of ["running", "failed"] as const) test(`restored ${state} native preparation retains only its confirmed publication checkpoint`, async () => {
+  const ui = await deployment(true, false, { pendingCheckpoint: state });
+  assert.deepEqual(ui.completed(), ["encrypting"]);
+  assert.deepEqual(ui.active(), state === "running" ? ["measuring"] : []);
+  assert.equal(ui.owner.prepared, undefined);
+  assert.equal(ui.counts().keyWrites, 0);
+});
+
+for (const phase of ["publishing", "measuring"] as const) test(`a ${phase} failure marks only confirmed earlier steps complete`, async () => {
+  const ui = await deployment(false, false, { preparationFailure: phase });
+  assert.match(ui.el("notice").textContent, /preparation failure/);
+  assert.deepEqual(ui.completed(), phase === "measuring" ? ["encrypting"] : []);
+  assert.deepEqual(ui.active(), []);
+  assert.equal(ui.counts().keyWrites, 0);
+});
+
+test("refused key delivery does not finish provisioning or startup", async () => {
+  const ui = await deployment(false, false, { keyWriteFailure: true });
+  ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("notice").textContent.includes("(403)"));
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting"]);
+  assert.deepEqual(ui.active(), []);
+  assert.equal(ui.owner.provisioned, undefined);
 });
