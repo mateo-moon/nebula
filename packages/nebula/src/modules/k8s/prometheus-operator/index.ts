@@ -30,6 +30,7 @@ import {
   BucketIamMemberV1Beta2 as BucketIamMember,
 } from "#imports/storage.gcp.upbound.io";
 import { HelmModule, type Toleration } from "../../../core";
+import { grafanaDatasource, type GrafanaDatasourceConfig, type GrafanaDatasourceSecret } from "../grafana-operator";
 import { normalizeAccountId } from "../../infra/_shared";
 import {
   bindWorkloadIdentityUser,
@@ -209,6 +210,19 @@ export interface LokiPushIngressConfig {
   ingressAnnotations?: Record<string, string>;
 }
 
+export type MonitoringDatasource = "prometheus" | "alertmanager" | "loki" | "thanos";
+
+/** Deliver the stack's datasources as Grafana operator resources. */
+export interface OperatorDatasourcesConfig {
+  /** Labels of the operator's Grafana resource. */
+  instance: Record<string, string>;
+  /** Fields merged over a datasource's definition, or `false` to leave it to another owner. */
+  overrides?: Partial<Record<MonitoringDatasource, false | {
+    datasource?: Partial<GrafanaDatasourceConfig["datasource"]>;
+    secrets?: GrafanaDatasourceSecret[];
+  }>>;
+}
+
 /** Accept one Grafana operator's projected Kubernetes token for API writes. */
 export interface GrafanaOperatorKubeAuthConfig {
   /** Exact `iss` claim from the cluster's ServiceAccount tokens. */
@@ -296,7 +310,16 @@ export interface PrometheusOperatorConfig {
     version?: string;
     /** Loki basic auth htpasswd content */
     authHtpasswd?: string;
+    /** Loki chart values merged over the module's; arrays replace. */
+    values?: Record<string, unknown>;
   };
+  /**
+   * How Grafana receives the Prometheus, Alertmanager, Loki and Thanos
+   * datasources. By default the chart's sidecar reads labelled ConfigMaps,
+   * which needs Grafana's admin account to reload them. With `operator`, the
+   * sidecar is off and a Grafana operator applies them through the API.
+   */
+  grafanaDatasources?: { operator: OperatorDatasourcesConfig };
   /** Promtail configuration */
   promtail?: {
     /** Enable Promtail (defaults to true) */
@@ -649,6 +672,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       throw new Error("Set Grafana JWT auth through grafanaOperatorKubeAuth, not values.grafana.grafana.ini");
     }
 
+    const operatorDatasources = this.config.grafanaDatasources?.operator;
     this.helm = this.createHelmRelease({
       namespace: namespaceName,
       chart: "kube-prometheus-stack",
@@ -658,12 +682,11 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         "https://prometheus-community.github.io/helm-charts",
       version: this.config.version ?? "81.4.3",
       defaultValues,
-      values: this.config.grafanaOperatorKubeAuth
-        ? mergeHelmValues(
-            this.config.values ?? {},
-            grafanaOperatorKubeAuthValues(this.config.grafanaOperatorKubeAuth),
-          )
-        : this.config.values,
+      values: mergeHelmValues(
+        operatorDatasources ? { grafana: { sidecar: { datasources: { enabled: false } } } } : {},
+        this.config.values ?? {},
+        this.config.grafanaOperatorKubeAuth ? grafanaOperatorKubeAuthValues(this.config.grafanaOperatorKubeAuth) : {},
+      ) as Record<string, unknown>,
       // kube-prometheus-stack CRDs exceed the 262144-byte annotation limit
       // for kubectl client-side apply. They must be pre-installed via
       // `kubectl apply --server-side` or by ArgoCD with ServerSideApply=true.
@@ -671,6 +694,20 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       // cannot apply them without hitting the annotation size limit.
       helmFlags: [],
     });
+
+    // The chart provisions these two itself while its sidecar is on.
+    if (operatorDatasources) {
+      this.datasource("prometheus-datasource", {
+        name: "Prometheus", type: "prometheus", uid: "prometheus", isDefault: true,
+        url: `http://prometheus-kube-prometheus-prometheus.${namespaceName}:9090/`,
+        jsonData: { httpMethod: "POST", timeInterval: "30s" },
+      });
+      this.datasource("alertmanager-datasource", {
+        name: "Alertmanager", type: "alertmanager", uid: "alertmanager",
+        url: `http://prometheus-kube-prometheus-alertmanager.${namespaceName}:9093/`,
+        jsonData: { handleGrafanaManagedAlerts: false, implementation: "prometheus" },
+      });
+    }
 
     // Deploy Loki
     if (this.config.loki?.enabled !== false) {
@@ -761,33 +798,12 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         repo: "https://grafana.github.io/helm-charts",
         version: this.config.loki?.version ?? "6.51.0",
         namespace: namespaceName,
-        values: lokiValues,
+        values: mergeHelmValues(lokiValues, this.config.loki?.values ?? {}) as Record<string, unknown>,
       });
 
-      // Loki Grafana datasource
-      new kplus.ConfigMap(this, "loki-datasource", {
-        metadata: {
-          name: "loki-datasource",
-          namespace: namespaceName,
-          labels: { grafana_datasource: "1" },
-        },
-        data: {
-          "datasource.yaml": JSON.stringify({
-            apiVersion: 1,
-            datasources: [
-              {
-                name: "Loki",
-                type: "loki",
-                uid: "loki",
-                url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
-                access: "proxy",
-                isDefault: false,
-                editable: true,
-                jsonData: { maxLines: 1000 },
-              },
-            ],
-          }),
-        },
+      this.datasource("loki-datasource", {
+        name: "Loki", type: "loki", uid: "loki", url: `http://loki.${namespaceName}.svc.cluster.local:3100`,
+        isDefault: false, jsonData: { maxLines: 1000 },
       });
     }
 
@@ -1015,32 +1031,11 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
       });
 
       // Expose Thanos Query as a Grafana datasource (long-term + cross-cluster view).
-      new kplus.ConfigMap(this, "thanos-grafana-datasource", {
-        metadata: {
-          name: "thanos-datasource",
-          namespace: namespaceName,
-          labels: { grafana_datasource: "1" },
-        },
-        data: {
-          // Grafana datasource provisioning files must be { apiVersion, datasources },
-          // not a bare array (a bare array crashes Grafana provisioning).
-          "datasource.yaml": JSON.stringify({
-            apiVersion: 1,
-            datasources: [
-              {
-                name: "Thanos",
-                type: "prometheus",
-                uid: "thanos",
-                url: `http://thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
-                access: "proxy",
-                isDefault: false,
-                editable: true,
-                jsonData: { httpMethod: "POST", timeInterval: "30s" },
-              },
-            ],
-          }),
-        },
-      });
+      this.datasource("thanos-grafana-datasource", {
+        name: "Thanos", type: "prometheus", uid: "thanos",
+        url: `http://thanos-query-frontend.${namespaceName}.svc.cluster.local:9090`,
+        isDefault: false, jsonData: { httpMethod: "POST", timeInterval: "30s" },
+      }, "thanos-datasource");
     }
 
     // --- Central-sink ingresses ----------------------------------------------
@@ -1159,6 +1154,29 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         },
       });
     }
+  }
+  /** One stack datasource, as a sidecar ConfigMap or an operator resource. */
+  private datasource(id: string, datasource: GrafanaDatasourceConfig["datasource"], configMapName = id): void {
+    const namespace = this.config.namespace ?? "monitoring";
+    const operator = this.config.grafanaDatasources?.operator;
+    if (!operator) {
+      const { name, type, uid, url, isDefault, jsonData } = datasource;
+      new kplus.ConfigMap(this, id, {
+        metadata: { name: configMapName, namespace, labels: { grafana_datasource: "1" } },
+        // A provisioning file is { apiVersion, datasources }; a bare array crashes Grafana.
+        data: { "datasource.yaml": JSON.stringify({
+          apiVersion: 1, datasources: [{ name, type, uid, url, access: "proxy", isDefault, editable: true, jsonData }],
+        }) },
+      });
+      return;
+    }
+    const override = operator.overrides?.[datasource.uid as MonitoringDatasource];
+    if (override === false) return;
+    grafanaDatasource(this, {
+      namespace, instance: operator.instance,
+      datasource: mergeHelmValues(datasource, override?.datasource ?? {}) as GrafanaDatasourceConfig["datasource"],
+      secrets: override?.secrets, definitionsInstalledElsewhere: true,
+    });
   }
 }
 

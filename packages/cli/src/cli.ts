@@ -10,6 +10,8 @@
  *   destroy     - Delete Kind cluster
  *   init-sops   - Initialize SOPS configuration for secret management
  *   oidc-kubeconfig - Write a sign-in kubeconfig from local OIDC inputs
+ *   render-tree - Render every entry and plugin Application of one or more trees
+ *   render-diff - Compare two render-tree outputs object by object
  */
 import { Command } from 'commander';
 import { init, InitOptions } from './commands/init';
@@ -19,6 +21,8 @@ import { apply } from './commands/apply';
 import { destroy } from './commands/destroy';
 import { initSops, InitSopsOptions } from './commands/init-sops';
 import { oidcKubeconfig, OidcKubeconfigOptions } from './commands/oidc-kubeconfig';
+import { renderTree, RenderTreeOptions } from './commands/render-tree';
+import { renderDiff, RenderDiffOptions } from './commands/render-diff';
 
 const program = new Command();
 
@@ -97,6 +101,54 @@ program
   .action(async (opts: OidcKubeconfigOptions) => {
     try {
       await oidcKubeconfig(opts);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+const collect = (value: string, previous: string[] = []) => [...previous, value];
+
+program
+  .command('render-tree')
+  .description(
+    "Render every index.ts entry of one or more repository trees, and every plugin Application they declare, with the tree's own Argo CD ConfigManagementPlugin scripts. Writes renders/, index.json and timings.json per tree for render-diff.",
+  )
+  .requiredOption('--side <root:out:revision>', 'A tree to render, its output directory and the revision to report; repeat per tree', collect)
+  .option('--entries <dir>', 'Directory under each root to search for entries (default: the root); repeatable', collect)
+  .option('--plugin <file>', 'ConfigManagementPlugin file to use')
+  .option('--plugin-entry <dir>', 'Entry directory, relative to the root, that renders the plugin ConfigMap')
+  .option('--plugin-configmap <name>', 'Name of that ConfigMap', 'argocd-cmp-nebula')
+  .option('--bin <dir>', 'Directory put first on PATH')
+  .option('--image-env <file>', "JSON file with the renderer image's environment (default: this process's)")
+  .option('--env <name=value>', 'Extra environment for every render; repeatable', collect)
+  .option('--registry-config <dir>', 'Read-only Docker config directory for private image metadata')
+  .option('--allow-plugin-env <name>', 'Plugin environment variable Applications may set besides ENTRY_FILE; repeatable', collect)
+  .option('--jobs <n>', 'Concurrent renders (default: available CPUs)')
+  .action(async (opts: RenderTreeOptions) => {
+    try {
+      await renderTree(opts);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('render-diff')
+  .description(
+    'Compare two render-tree outputs object by object. Differences are informational; it fails when an entry does not render or a golden digest does not hold at head.',
+  )
+  .requiredOption('--base <dir>', 'render-tree output of the base tree')
+  .requiredOption('--head <dir>', 'render-tree output of the changed tree')
+  .option('--goldens <file>', 'JSON of entry key to expected digests')
+  .option('--volatile <file>', 'Fields compared as present or absent only')
+  .option('--unrendered <file>', 'Entries that may stay uncompared while they fail at base')
+  .action((opts: RenderDiffOptions) => {
+    try {
+      const { pass, report } = renderDiff(opts);
+      console.log(report);
+      process.exit(pass ? 0 : 1);
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
       process.exit(1);

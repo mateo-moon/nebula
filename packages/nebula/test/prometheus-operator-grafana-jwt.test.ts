@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { App, Chart, Yaml } from "cdk8s";
+import { App, Chart } from "cdk8s";
 import {
   PrometheusOperator,
   grafanaOperatorKubeAuthValues,
   type GrafanaOperatorKubeAuthConfig,
 } from "../src/modules/k8s/prometheus-operator";
+
+import { withStubHelm } from "./helm-stub";
 
 const kubeAuth: GrafanaOperatorKubeAuthConfig = {
   issuer: "https://kubernetes.default.svc",
@@ -17,32 +16,6 @@ const kubeAuth: GrafanaOperatorKubeAuthConfig = {
   serviceAccountName: "grafana-operator",
   jwksUrl: "https://kubernetes.default.svc/openid/v1/jwks",
 };
-
-function withStubHelm<T>(run: (valuesOf: (release: string) => any) => T): T {
-  const dir = mkdtempSync(join(tmpdir(), "nebula-grafana-jwt-stub-"));
-  writeFileSync(join(dir, "helm"), [
-    "#!/bin/sh",
-    "values= release= last=",
-    'for arg in "$@"; do',
-    '  [ "$last" = -f ] && values=$arg',
-    "  release=$last last=$arg",
-    "done",
-    '[ -z "$values" ] || cp "$values" "$HELM_STUB_OUT/$release.yaml"',
-    "",
-  ].join("\n"), { mode: 0o755 });
-  const saved = { PATH: process.env.PATH, HELM_STUB_OUT: process.env.HELM_STUB_OUT };
-  process.env.PATH = `${dir}:${process.env.PATH}`;
-  process.env.HELM_STUB_OUT = dir;
-  try {
-    return run(release => Yaml.load(join(dir, `${release}.yaml`))[0]);
-  } finally {
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 test("Grafana JWT accepts only the exact operator identity and audience", () => {
   const values = grafanaOperatorKubeAuthValues(kubeAuth) as any;

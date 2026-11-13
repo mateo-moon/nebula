@@ -155,3 +155,5 @@ imports:
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_resourcebindings.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_clusterresourcebindings.yaml
   - https://raw.githubusercontent.com/karmada-io/karmada/v1.16.0/charts/karmada/_crds/bases/work/work.karmada.io_works.yaml
+  # Grafana Operator CRDs (v5.24.0)
+  - https://raw.githubusercontent.com/grafana/grafana-operator/v5.24.0/deploy/kustomize/base/crds.yaml

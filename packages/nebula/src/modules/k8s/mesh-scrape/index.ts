@@ -193,6 +193,42 @@ export const NODE_FROM_POD = {
   targetLabel: "node",
 };
 
+export interface CiliumMeshMonitorsOptions extends MeshTarget {
+  /** Namespace the ServiceMonitors land in. */
+  namespace: string;
+  /** Namespace Cilium runs in (default kube-system). */
+  ciliumNamespace?: string;
+}
+
+/**
+ * ServiceMonitors for the cilium agent, the operator and Hubble, which all
+ * serve metrics on the host network. Each mirrors the monitor Cilium's chart
+ * would create (selector, port, interval, honorLabels, target labels and the
+ * pod-node-name relabel its dashboards select on) and adds the mesh address.
+ * Leave the chart's own monitors off.
+ */
+export class CiliumMeshMonitors extends Construct {
+  constructor(scope: Construct, id: string, options: CiliumMeshMonitorsOptions) {
+    super(scope, id);
+    const { namespace, ciliumNamespace = "kube-system", ...target } = options;
+    const shared = {
+      namespace, serviceNamespaces: [ciliumNamespace], path: "/metrics", interval: "10s", honorLabels: true, ...target,
+    };
+    new MeshServiceMonitor(this, "agent", {
+      ...shared, name: "cilium-agent-mesh", selector: { "app.kubernetes.io/name": "cilium-agent" },
+      port: "metrics", targetPort: 9962, targetLabels: ["k8s-app"], relabelings: [NODE_FROM_POD],
+    });
+    new MeshServiceMonitor(this, "operator", {
+      ...shared, name: "cilium-operator-mesh", selector: { "io.cilium/app": "operator", name: "cilium-operator" },
+      port: "metrics", targetPort: 9963, targetLabels: ["io.cilium/app"],
+    });
+    new MeshServiceMonitor(this, "hubble", {
+      ...shared, name: "hubble-mesh", selector: { "k8s-app": "hubble" },
+      port: "hubble-metrics", targetPort: 9965, scheme: "http", relabelings: [NODE_FROM_POD],
+    });
+  }
+}
+
 export interface MeshKubeProxyServiceMonitorOptions extends MeshTarget {
   /** monitoring namespace the CR lands in. */
   namespace: string;

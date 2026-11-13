@@ -39,6 +39,7 @@ import { KubernetesWorkloadIdentity, type KubernetesWorkloadIdentityConfig } fro
 import { Construct } from "constructs";
 import { Helm, ApiObject, JsonPatch } from "cdk8s";
 import * as kplus from "cdk8s-plus-33";
+import { IntOrString, KubeNetworkPolicy } from "cdk8s-plus-33/lib/imports/k8s";
 import { deepmerge } from "deepmerge-ts";
 import * as crypto from "crypto";
 import bcrypt from "bcryptjs";
@@ -149,7 +150,33 @@ export interface NebulaPluginConfig {
   };
   /** ARGOCD_EXEC_TIMEOUT for the cmp sidecar (default "5m"). */
   execTimeout?: string;
+  /**
+   * Give only the renderer an AWS role through a projected ServiceAccount
+   * token (for KMS-backed SOPS). Requires a dedicated repo-server
+   * ServiceAccount that does not automount Kubernetes API credentials.
+   */
+  awsWebIdentity?: {
+    roleArn: string;
+    region: string;
+    /** Token audience the role's trust policy expects (default sts.amazonaws.com). */
+    audience?: string;
+  };
+  /**
+   * Deny the repo-server pod the instance metadata addresses, so a renderer
+   * cannot take the node's cloud identity. List link-local DNS resolvers the
+   * pod must still reach.
+   */
+  metadataBoundary?: { linkLocalDnsServers?: readonly string[] };
+  /**
+   * Create the `argocd-nebula-cmp` ServiceAccount bound to cluster-admin
+   * (default true, for existing deployments). No rendered workload uses it;
+   * set false to leave it out.
+   */
+  clusterAdminAccount?: boolean;
 }
+
+const AWS_TOKEN_VOLUME = "aws-web-identity";
+const AWS_TOKEN_PATH = "/var/run/secrets/nebula-aws";
 
 export interface ArgoCdConfig {
   /** Short-lived target-cluster identities mounted into both controller and server. */
@@ -578,6 +605,11 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
       helmFlags: ["--api-versions", "monitoring.coreos.com/v1"],
     });
 
+    if (this.config.nebulaPlugin?.enabled && this.config.nebulaPlugin.awsWebIdentity)
+      this.mountAwsWebIdentity(namespaceName, this.config.nebulaPlugin.awsWebIdentity.audience ?? "sts.amazonaws.com");
+    if (this.config.nebulaPlugin?.enabled && this.config.nebulaPlugin.metadataBoundary)
+      this.declareMetadataBoundary(namespaceName, this.config.nebulaPlugin.metadataBoundary.linkLocalDnsServers ?? []);
+
     // The chart has one Pod security context for every component, so the
     // image's group (999) is set on the workloads that mount the tokens.
     if (workloadTokens.volumes) {
@@ -646,6 +678,79 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
     ) {
       this.setupCrossplaneUserBootstrap(namespaceName);
     }
+  }
+
+  /**
+   * Mount the projected token only into the renderer and make it readable by
+   * the repo-server's group. Fails when the pod could reach AWS another way.
+   */
+  private mountAwsWebIdentity(namespace: string, audience: string): void {
+    const named = (kind: string) => this.helm.apiObjects.filter(object =>
+      object.kind === kind && object.name === "argocd-repo-server" && object.toJson().metadata?.namespace === namespace);
+    const [deployment, ...otherDeployments] = named("Deployment");
+    const [account, ...otherAccounts] = named("ServiceAccount");
+    if (!deployment || !account || otherDeployments.length || otherAccounts.length)
+      throw new Error("awsWebIdentity requires a dedicated repo-server Deployment and ServiceAccount");
+    const pod = deployment.toJson().spec.template.spec;
+    if (pod.serviceAccountName !== "argocd-repo-server" || pod.automountServiceAccountToken !== false ||
+        account.toJson().automountServiceAccountToken !== false)
+      throw new Error("The repo-server identity must not automount Kubernetes API credentials");
+    const containers = pod.containers as Array<Record<string, any>>;
+    const index = containers.findIndex(container => container.name === "nebula-cmp");
+    const identityVariables = ["AWS_ROLE_ARN", "AWS_WEB_IDENTITY_TOKEN_FILE"];
+    for (const container of [...containers, ...(pod.initContainers ?? [])]) {
+      if ((container.volumeMounts ?? []).some((mount: { name: string }) => mount.name === "sops-age" || mount.name === AWS_TOKEN_VOLUME))
+        throw new Error("Unexpected age or preexisting identity token mount");
+      for (const entry of container.env ?? []) {
+        if (["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "SOPS_AGE_KEY", "SOPS_AGE_KEY_FILE"].includes(entry.name))
+          throw new Error("Static AWS or age credentials must not enter the repo-server pod");
+        if (container !== containers[index] && identityVariables.includes(entry.name))
+          throw new Error("Only the CMP sidecar may receive the AWS identity environment");
+      }
+    }
+    if ((pod.volumes ?? []).some((volume: { name: string }) => volume.name === "sops-age" || volume.name === AWS_TOKEN_VOLUME))
+      throw new Error("Unexpected age or preexisting identity token volume");
+    // The sidecar runs as uid 999 in the chart's group 999; the token is group-readable.
+    if (pod.securityContext?.fsGroup !== undefined && pod.securityContext.fsGroup !== 999)
+      throw new Error("Review the existing repo-server file group before adding the token");
+    deployment.addJsonPatch(
+      JsonPatch.add("/spec/template/spec/securityContext", { ...pod.securityContext, fsGroup: 999 }),
+      JsonPatch.add("/spec/template/spec/volumes", [
+        ...(pod.volumes ?? []),
+        { name: AWS_TOKEN_VOLUME, projected: { defaultMode: 0o440, sources: [
+          { serviceAccountToken: { audience, expirationSeconds: 900, path: "token" } },
+        ] } },
+      ]),
+      JsonPatch.add(`/spec/template/spec/containers/${index}/volumeMounts`, [
+        ...(containers[index].volumeMounts ?? []),
+        { name: AWS_TOKEN_VOLUME, mountPath: AWS_TOKEN_PATH, readOnly: true },
+      ]),
+    );
+  }
+
+  private declareMetadataBoundary(namespace: string, linkLocalDnsServers: readonly string[]): void {
+    for (const address of linkLocalDnsServers) {
+      const octets = address.split(".");
+      if (octets.length !== 4 || octets[0] !== "169" || octets[1] !== "254" ||
+          octets.some(octet => !/^\d+$/.test(octet) || Number(octet) > 255 || String(Number(octet)) !== octet) ||
+          address === "169.254.169.254")
+        throw new Error("only a verified link-local DNS address may be excepted");
+    }
+    new KubeNetworkPolicy(this, "cmp-metadata-boundary", {
+      metadata: { name: "argocd-repo-server-metadata-boundary", namespace },
+      spec: {
+        podSelector: { matchLabels: { "app.kubernetes.io/name": "argocd-repo-server", "app.kubernetes.io/instance": "argocd" } },
+        policyTypes: ["Egress"],
+        egress: [
+          { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: ["169.254.0.0/16"] } }] },
+          { to: [{ ipBlock: { cidr: "::/0", except: ["fd00:ec2::254/128"] } }] },
+          ...(linkLocalDnsServers.length ? [{
+            to: linkLocalDnsServers.map(address => ({ ipBlock: { cidr: `${address}/32` } })),
+            ports: [{ protocol: "UDP", port: IntOrString.fromNumber(53) }, { protocol: "TCP", port: IntOrString.fromNumber(53) }],
+          }] : []),
+        ],
+      },
+    });
   }
 
   /**
@@ -724,53 +829,57 @@ export class ArgoCd extends HelmModule<ArgoCdConfig> {
       }
     }
 
+    if (pluginConfig.clusterAdminAccount === false && gcpServiceAccountEmail)
+      throw new Error("The GCP Workload Identity binding uses the argocd-nebula-cmp ServiceAccount");
     // Create K8s ServiceAccount for Nebula CMP
     const nebulaSaName = "argocd-nebula-cmp";
-    new kplus.ServiceAccount(this, "nebula-sa", {
-      metadata: {
-        name: nebulaSaName,
-        namespace: namespaceName,
-        ...(gcpServiceAccountEmail
-          ? { annotations: wiKsaAnnotations(gcpServiceAccountEmail) }
-          : {}),
-      },
-    });
-
-    // Create ClusterRole with full admin permissions
-    // Using ApiObject because kplus doesn't support wildcard RBAC rules
-    new ApiObject(this, "nebula-cluster-role", {
-      apiVersion: "rbac.authorization.k8s.io/v1",
-      kind: "ClusterRole",
-      metadata: { name: "argocd-nebula-cmp" },
-      rules: [
-        { apiGroups: ["*"], resources: ["*"], verbs: ["*"] },
-        { nonResourceURLs: ["*"], verbs: ["*"] },
-      ],
-    });
-
-    // Create ClusterRoleBinding
-    new ApiObject(this, "nebula-cluster-role-binding", {
-      apiVersion: "rbac.authorization.k8s.io/v1",
-      kind: "ClusterRoleBinding",
-      metadata: { name: "argocd-nebula-cmp" },
-      roleRef: {
-        apiGroup: "rbac.authorization.k8s.io",
-        kind: "ClusterRole",
-        name: "argocd-nebula-cmp",
-      },
-      subjects: [
-        {
-          kind: "ServiceAccount",
+    if (pluginConfig.clusterAdminAccount !== false) {
+      new kplus.ServiceAccount(this, "nebula-sa", {
+        metadata: {
           name: nebulaSaName,
           namespace: namespaceName,
+          ...(gcpServiceAccountEmail
+            ? { annotations: wiKsaAnnotations(gcpServiceAccountEmail) }
+            : {}),
         },
-        // NOTE: argocd-repo-server was previously a subject here too, giving the
-        // whole repo-server pod (which hosts the cmp sidecar) cluster-admin — a
-        // supply-chain RCE path (a compromised dep in the cmp = cluster root).
-        // Removed: the cmp renderer only writes manifests to stdout and needs zero
-        // in-cluster permissions (the application-controller applies them).
-      ],
-    });
+      });
+
+      // Create ClusterRole with full admin permissions
+      // Using ApiObject because kplus doesn't support wildcard RBAC rules
+      new ApiObject(this, "nebula-cluster-role", {
+        apiVersion: "rbac.authorization.k8s.io/v1",
+        kind: "ClusterRole",
+        metadata: { name: "argocd-nebula-cmp" },
+        rules: [
+          { apiGroups: ["*"], resources: ["*"], verbs: ["*"] },
+          { nonResourceURLs: ["*"], verbs: ["*"] },
+        ],
+      });
+
+      // Create ClusterRoleBinding
+      new ApiObject(this, "nebula-cluster-role-binding", {
+        apiVersion: "rbac.authorization.k8s.io/v1",
+        kind: "ClusterRoleBinding",
+        metadata: { name: "argocd-nebula-cmp" },
+        roleRef: {
+          apiGroup: "rbac.authorization.k8s.io",
+          kind: "ClusterRole",
+          name: "argocd-nebula-cmp",
+        },
+        subjects: [
+          {
+            kind: "ServiceAccount",
+            name: nebulaSaName,
+            namespace: namespaceName,
+          },
+          // NOTE: argocd-repo-server was previously a subject here too, giving the
+          // whole repo-server pod (which hosts the cmp sidecar) cluster-admin — a
+          // supply-chain RCE path (a compromised dep in the cmp = cluster root).
+          // Removed: the cmp renderer only writes manifests to stdout and needs zero
+          // in-cluster permissions (the application-controller applies them).
+        ],
+      });
+    }
 
     // Create ConfigMap with Nebula CMP plugin configuration
     new kplus.ConfigMap(this, "nebula-cmp-plugin", {
@@ -855,6 +964,18 @@ done
         name: "GOOGLE_APPLICATION_CREDENTIALS",
         value: "/secrets/gcp/credentials.json",
       });
+    }
+
+    if (pluginConfig.awsWebIdentity) {
+      const { roleArn, region } = pluginConfig.awsWebIdentity;
+      sidecarEnv.push(
+        { name: "AWS_ROLE_ARN", value: roleArn },
+        { name: "AWS_WEB_IDENTITY_TOKEN_FILE", value: `${AWS_TOKEN_PATH}/token` },
+        { name: "AWS_REGION", value: region },
+        { name: "AWS_DEFAULT_REGION", value: region },
+        { name: "AWS_STS_REGIONAL_ENDPOINTS", value: "regional" },
+        { name: "AWS_EC2_METADATA_DISABLED", value: "true" },
+      );
     }
 
     // Add custom environment variables
@@ -1149,6 +1270,7 @@ export {
 } from "./app-tier";
 export type {
   ArgoCdAppTierConfig,
+  ArgoCdAppOverride,
   ArgoCdAppTierDiscovery,
   ArgoCdAppTierRegistryDiscovery,
   ArgoCdAppTierAutoDiscovery,

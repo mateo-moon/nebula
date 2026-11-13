@@ -38,6 +38,7 @@ export * as certManager from "./cert-manager.io";
 
 // Prometheus/Monitoring
 export * as monitoring from "./monitoring.coreos.com";
+export * as grafana from "./grafana.integreatly.org";
 
 // Cluster API Core
 export * as clusterApi from "./cluster.x-k8s.io";
