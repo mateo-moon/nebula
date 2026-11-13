@@ -8,6 +8,10 @@
   "engines": {
     "node": ">=20"
   },
+  "scripts": {
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "check": "tsc --noEmit"
+  },
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",
     "commander": "^13.0.0",
