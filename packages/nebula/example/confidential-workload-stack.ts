@@ -4,29 +4,44 @@
  *
  *   pnpm exec cdk8s synth --app 'tsx example/confidential-workload-stack.ts'
  *
- * Set CONFIDENTIAL_BROWSER_IMAGE to a reviewed digest-pinned preparation
- * image to enable the browser flow. To serve its first page from a TEE, also
- * set CONFIDENTIAL_BROWSER_TLS_IMAGE and CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE
- * to the reviewed frontend and HTTP/1.1-capable TNG images. The user checks
- * the browser certificate before entering the separately supplied token.
+ * Set CONFIDENTIAL_PUBLIC_IP, CONFIDENTIAL_SNP_NODE and CONFIDENTIAL_ACME_EMAIL
+ * for the host. The stack owns ports 80/443 and HTTPS relays 8440/8441/8442;
+ * direct guest TLS uses 9443 (browser) and 8443 (native owner client).
+ * Set CONFIDENTIAL_BROWSER_IMAGE, CONFIDENTIAL_BROWSER_TLS_IMAGE and
+ * CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE together to reviewed digest pins. Supply
+ * CONFIDENTIAL_BROWSER_TLS_MEASUREMENT and CONFIDENTIAL_BROWSER_TLS_INIT_DATA_SHA256
+ * from independent approval of that exact frontend; never learn trust from the
+ * endpoint itself. The user compares the actual browser certificate before
+ * entering the separately supplied token. The welcome page accepts no secrets.
  * CONFIDENTIAL_MAX_IMAGE_SIZE_MIB=4096 enables 4 GiB archive uploads with
  * a 32 GiB preparation VM; the host must have that capacity available.
  */
 import { App, Chart, ApiObject } from "cdk8s";
+import { isIP } from "node:net";
 import { SealedDisks } from "../src/modules/k8s/confidential-guests/sealed-disks";
 import { ConfidentialBrowser, ConfidentialOperator, ConfidentialStorage, ConfidentialStorageDevices,
-  ConfidentialWorkload, type ConfidentialStorageResource } from "../src/modules/k8s/confidential-workloads";
+  ConfidentialWelcome, ConfidentialWorkload, type ConfidentialStorageResource } from "../src/modules/k8s/confidential-workloads";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 
 const namespace = "confidential-example";
-const node = "replace-with-snp-node";
+const node = process.env.CONFIDENTIAL_SNP_NODE ?? "replace-with-snp-node";
 const profile = "example-workload";
+const publicIp = process.env.CONFIDENTIAL_PUBLIC_IP ?? "192.0.2.10";
+if (isIP(publicIp) !== 4) throw new Error("CONFIDENTIAL_PUBLIC_IP must be the host's literal public IPv4 address");
+const endpoints = { metadata: `https://${publicIp}:8440/`, preparation: `https://${publicIp}:8441/`,
+  owner: `https://${publicIp}:8442/`, frontend: `https://${publicIp}:9443/` };
 const browserImage = process.env.CONFIDENTIAL_BROWSER_IMAGE;
 const maxImageSizeMiB = process.env.CONFIDENTIAL_MAX_IMAGE_SIZE_MIB === undefined ? undefined : Number(process.env.CONFIDENTIAL_MAX_IMAGE_SIZE_MIB);
 const frontendImage = process.env.CONFIDENTIAL_BROWSER_TLS_IMAGE;
 const frontendTngImage = process.env.CONFIDENTIAL_BROWSER_TLS_TNG_IMAGE;
-const frontendUrl = process.env.CONFIDENTIAL_BROWSER_TLS_ENDPOINT ?? "https://192.0.2.10:9443/";
-if (frontendImage && (!browserImage || !frontendTngImage)) throw new Error("Manual TLS also needs reviewed preparation and HTTP/1.1 TNG images");
+const frontendMeasurement = process.env.CONFIDENTIAL_BROWSER_TLS_MEASUREMENT;
+const frontendPolicyHash = process.env.CONFIDENTIAL_BROWSER_TLS_INIT_DATA_SHA256;
+if ((browserImage || frontendImage || frontendTngImage) && !(browserImage && frontendImage && frontendTngImage)) {
+  throw new Error("The browser flow needs reviewed preparation, frontend and HTTP/1.1 TNG images together");
+}
+if (frontendImage && (!/^[a-f0-9]{96}$/.test(frontendMeasurement ?? "") || !/^[a-f0-9]{64}$/.test(frontendPolicyHash ?? ""))) {
+  throw new Error("Supply the independently approved frontend SNP measurement and native Init-Data SHA-256");
+}
 const nodeSelector = { "kubernetes.io/hostname": node };
 const network = { ipv4AddressPattern: "^10[.]244[.][0-9]{1,3}[.][0-9]{1,3}$", ipv6AddressPattern: "^2001:db8::[0-9a-f:]+$" };
 const images = {
@@ -50,7 +65,7 @@ if (browserImage) new ConfidentialBrowser(chart, "preparation", { name: "example
   agentImage: browserImage, tngImage: images.tng, nodeSelector, network, maxImageSizeMiB });
 if (frontendImage) new ConfidentialBrowser(chart, "browser-ui", { name: "example-browser-ui", namespace,
   agentImage: frontendImage, tngImage: frontendTngImage!, nodeSelector, network,
-  manualTls: { preparationEndpoint: "https://preparation.example.test/", stackEndpoint: "https://owner.example.test/" } });
+  manualTls: { preparationEndpoint: endpoints.preparation, stackEndpoint: endpoints.metadata } });
 new SealedDisks(chart, "ciphertext-disk", {
   namespace, nodeName: node, image: images.disks,
   stateDir: "/var/lib/confidential-example", roles: [{ role: "data", claim: "example-data",
@@ -69,13 +84,12 @@ const storages: ConfidentialStorageResource[] = [{ apiVersion: "confidential.neb
 for (const storage of storages) new ConfidentialStorage(chart, storage.metadata.name,
   { name: storage.metadata.name, namespace, spec: storage.spec });
 new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, storages, spec: {
-  profile, ...(browserImage ? { browserOwner: true as const } : {}),
-  accessLink: { url: "https://owner.example.test/", ownerPort: 8443, secretName: "workload-access",
+  profile, browserOwner: true,
+  accessLink: { url: endpoints.metadata, ownerPort: 8443, secretName: "workload-access",
     ...(browserImage ? { browser: {
       invitationEndpoint: `http://example-preparation-invitation.${namespace}.svc:8089/invitation`,
-      workloadEndpoint: "https://preparation.example.test/", ownerEndpoint: "https://workload.example.test/",
-      loaderUrl: frontendImage ? frontendUrl : "https://release.example.test/confidential/",
-      ...(frontendImage ? { manualTls: true as const } : {}),
+      workloadEndpoint: endpoints.preparation, ownerEndpoint: endpoints.owner,
+      loaderUrl: endpoints.frontend, manualTls: true,
     } } : {}) },
   guest: { measurement: "7".repeat(96), chipId: "8".repeat(128),
     minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 } },
@@ -91,31 +105,35 @@ new ConfidentialWorkload(chart, "workload", { name: "workload", namespace, stora
   resources: [["default", "image", "app"], ["default", "volume", "data"]],
   runtime: { memoryMiB: 4096, vcpus: 2, k8sDistribution: "k0s", ociVersion: "1.3.0" },
 } });
-// HTTPS serves bootstrap metadata; guest ownership uses a separate raw TCP
-// listener. The discovery service never terminates the guest's TNG/TLS channel.
-new ApiObject(chart, "owner-gateway", { apiVersion: "gateway.networking.k8s.io/v1", kind: "Gateway",
-  metadata: { name: "example-owner", namespace }, spec: { gatewayClassName: "replace-with-gateway-class",
-    listeners: [{ name: "owner", protocol: "TCP", port: 8443 }, { name: "access", protocol: "HTTPS", port: 443,
-      hostname: "owner.example.test", tls: { mode: "Terminate", certificateRefs: [{ name: "replace-with-discovery-certificate" }] } },
-      ...(frontendImage ? [{ name: "browser-ui", protocol: "TCP", port: 9443 }] : []),
-      ...(browserImage ? ["preparation", "workload"].map(name => ({ name, protocol: "HTTPS", port: 443,
-        hostname: `${name}.example.test`, tls: { mode: "Terminate", certificateRefs: [{ name: `replace-with-${name}-certificate` }] } })) : [])] } });
-new ApiObject(chart, "owner-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TCPRoute",
-  metadata: { name: "example-owner", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "owner" }],
-    rules: [{ backendRefs: [{ name: "workload-owner", port: 8443 }] }] } });
-if (frontendImage) new ApiObject(chart, "browser-ui-route", { apiVersion: "gateway.networking.k8s.io/v1alpha2", kind: "TCPRoute",
-  metadata: { name: "example-browser-ui", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "browser-ui" }],
-    rules: [{ backendRefs: [{ name: "example-browser-ui", port: 10443 }] }] } });
-new ApiObject(chart, "access-route", { apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
-  metadata: { name: "example-access", namespace }, spec: { parentRefs: [{ name: "example-owner", sectionName: "access" }],
-    hostnames: ["owner.example.test"], rules: [{ backendRefs: [{ name: "confidential-operator-access", port: 8083 }] }] } });
-if (browserImage) for (const [name, service] of [["preparation", "example-preparation"], ["workload", "workload-owner"]]) {
-  // HTTPS termination carries only OHTTP ciphertext. This proxy never sees
-  // owner JWTs, image plaintext, registry credentials or decryption keys.
-  new ApiObject(chart, `${name}-browser-route`, { apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
-    metadata: { name: `${name}-browser`, namespace }, spec: {
-      parentRefs: [{ name: "example-owner", sectionName: name }], hostnames: [`${name}.example.test`],
-      rules: [{ backendRefs: [{ name: service, port: 8445 }] }],
-    } });
-}
+// Direct Services preserve the guest's TLS certificate through the first page
+// and native owner connection. No shared ingress terminates either channel.
+new ApiObject(chart, "native-owner", { apiVersion: "v1", kind: "Service",
+  metadata: { name: "example-owner-native", namespace }, spec: { externalIPs: [publicIp], publishNotReadyAddresses: true,
+    selector: { "confidential.nebula.dev/profile": profile },
+    ports: [{ name: "owner", port: 8443, targetPort: 8443 }] } });
+new ApiObject(chart, "owner-ohttp", { apiVersion: "v1", kind: "Service",
+  metadata: { name: "example-owner-ohttp", namespace }, spec: { publishNotReadyAddresses: true,
+    selector: { "confidential.nebula.dev/profile": profile },
+    ports: [{ name: "ohttp", port: 8445, targetPort: 8445 }] } });
+if (frontendImage) new ApiObject(chart, "browser-ui-public", { apiVersion: "v1", kind: "Service",
+  metadata: { name: "example-browser-ui-public", namespace }, spec: { externalIPs: [publicIp],
+    selector: { "confidential.nebula.dev/browser": "example-browser-ui" },
+    ports: [{ name: "https", port: 9443, targetPort: 10443 }] } });
+const acmeClaim = "example-welcome-acme";
+new ApiObject(chart, "acme-claim", { apiVersion: "v1", kind: "PersistentVolumeClaim",
+  metadata: { name: acmeClaim, namespace, annotations: { "argocd.argoproj.io/sync-options": "Prune=false,Delete=false" } },
+  // Use the administrator's existing default filesystem StorageClass. Keep the
+  // claim through stack removal to retain Caddy's ACME account and TLS keys.
+  spec: { accessModes: ["ReadWriteOnce"], volumeMode: "Filesystem", resources: { requests: { storage: "128Mi" } } } });
+new ConfidentialWelcome(chart, "welcome", { name: "example-welcome", namespace, ipAddress: publicIp,
+  acmeEmail: process.env.CONFIDENTIAL_ACME_EMAIL ?? "replace@example.test", acmeClaimName: acmeClaim, nodeSelector,
+  portalUrl: endpoints.frontend,
+  ...(frontendImage ? { portalService: { name: "example-browser-ui", namespace }, reference: {
+    measurement: frontendMeasurement!, initDataSha256: frontendPolicyHash!,
+    minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 88 },
+  } } : {}),
+  publicOhttpRoutes: [{ port: 8440, upstream: `http://confidential-operator-access.${namespace}.svc:8083/` },
+    ...(browserImage ? [{ port: 8441, upstream: `http://example-preparation.${namespace}.svc:8445/` }] : []),
+    { port: 8442, upstream: `http://example-owner-ohttp.${namespace}.svc:8445/` }],
+});
 app.synth();
