@@ -217,7 +217,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     },
   }, spec: {
     runtimeClassName: "kata-qemu-snp", nodeSelector: spec.nodeSelector,
-    automountServiceAccountToken: false, enableServiceLinks: false, restartPolicy: "Never",
+    automountServiceAccountToken: false, enableServiceLinks: false, restartPolicy: "Always",
     terminationGracePeriodSeconds: 90, securityContext: { fsGroup: 10001, supplementalGroups: [0, 10001] },
     initContainers, containers, volumes,
   } };

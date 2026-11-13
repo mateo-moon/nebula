@@ -51,7 +51,8 @@ func (r *testRenderer) Render(_ context.Context, w *api.ConfidentialWorkload, _ 
 	_ = writer.Close()
 	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: w.Namespace, GenerateName: "same-code-",
 		Annotations: map[string]string{initDataAnnotation: base64.StdEncoding.EncodeToString(compressed.Bytes())}},
-		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "example.invalid/test@sha256:" + strings.Repeat("a", 64)}}}}
+		Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyAlways,
+			Containers: []corev1.Container{{Name: "app", Image: "example.invalid/test@sha256:" + strings.Repeat("a", 64)}}}}
 	hash, _ := podInitDataSHA256(&pod)
 	return &Plan{Pod: pod, SpecSHA256: fmt.Sprintf("%064d", w.Generation), InitDataSHA256: hash}, nil
 }
@@ -164,6 +165,59 @@ func TestReconcileIdempotenceReplacementAndOwnership(t *testing.T) {
 	var claim corev1.PersistentVolumeClaim
 	if err := c.Get(ctx, client.ObjectKeyFromObject(pvc), &claim); err != nil {
 		t.Fatal("claim was removed")
+	}
+}
+
+func TestApplicationStartupRetriesKeepTheExistingPod(t *testing.T) {
+	ctx := context.Background()
+	w, s, pvc := fixture("qualified", "startup-retry")
+	scheme := testScheme()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(w, s, &corev1.Pod{}).WithObjects(w, s, pvc).Build()
+	r := &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: &testRenderer{}}
+	if err := run(t, r, w); err != nil {
+		t.Fatal(err)
+	}
+	pod := getPods(t, c)[0]
+	// The fake client does not assign the real API server's Pod UID.
+	pod.UID = "same-approved-instance"
+	if err := c.Update(ctx, &pod); err != nil {
+		t.Fatal(err)
+	}
+	before := pod.DeepCopy()
+	// A new controller process must recover this Pod, not start another guest.
+	renderer := &testRenderer{}
+	r = &WorkloadReconciler{Client: c, Reader: c, Scheme: scheme, Renderer: renderer}
+	for _, reason := range []string{"CreateContainerError", "CrashLoopBackOff", ""} {
+		pod.Status = corev1.PodStatus{Phase: corev1.PodPending, ContainerStatuses: []corev1.ContainerStatus{{
+			Name: "app", RestartCount: 1, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}},
+		}}}
+		if reason == "" {
+			pod.Status.Phase = corev1.PodRunning
+			pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+			pod.Status.ContainerStatuses[0] = corev1.ContainerStatus{Name: "app", Ready: true, RestartCount: 2,
+				State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}
+		}
+		if err := c.Status().Update(ctx, &pod); err != nil {
+			t.Fatal(err)
+		}
+		for range 2 {
+			if err := run(t, r, w); err != nil {
+				t.Fatal(err)
+			}
+		}
+		pods := getPods(t, c)
+		state := getWorkload(t, c, w).Status
+		if len(pods) != 1 || pods[0].Name != before.Name || pods[0].UID != before.UID ||
+			pods[0].Annotations[measurementAnnotation] != before.Annotations[measurementAnnotation] ||
+			state.PodUID != string(before.UID) || state.Phase == "Stopped" {
+			t.Fatalf("application state %q replaced or retired its measured Pod: %+v", reason, state)
+		}
+		if reason == "" && state.Phase != "Running" {
+			t.Fatalf("recovered application was not reported running: %+v", state)
+		}
+	}
+	if renderer.calls != 1 {
+		t.Fatalf("container retries changed the cached declaration: renders=%d", renderer.calls)
 	}
 }
 func TestRendererUpgradeReportsExistingPodMeasurement(t *testing.T) {

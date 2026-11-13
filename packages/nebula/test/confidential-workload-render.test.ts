@@ -37,11 +37,19 @@ test("native renderer binds the final Pod and keeps repeated measurements stable
   const second = renderConfidentialWorkload(declaration, [], options);
   assert.deepEqual(second, first);
   const pod = first.pod;
+  assert.equal(pod.spec!.restartPolicy, "Always", "Application startup failures must retry within the existing Pod");
   assert.equal(first.identity.initDataSha256, initDataSha256(pod.metadata!.annotations![INIT_DATA_ANNOTATION]));
   assert.deepEqual(pod.spec!.containers!.map(c => c.name), ["app"]);
   assert.ok(pod.spec!.initContainers!.some(c => c.name === "nebula-guard"));
   assert.ok(pod.spec!.initContainers!.some(c => c.name === "nebula-owner"));
   assert.ok(pod.spec!.initContainers!.some(c => c.name === "nebula-resource-broker") === false);
+  for (const name of ["kbs", "nebula-owner", "nebula-tng"]) {
+    assert.equal(pod.spec!.initContainers!.find(container => container.name === name)!.restartPolicy, "Always");
+  }
+  for (const name of ["nebula-guard", "nebula-await-owner", "nebula-install-storage"]) {
+    assert.equal(pod.spec!.initContainers!.find(container => container.name === name)!.restartPolicy, undefined,
+      `${name} must remain a finite init stage`);
+  }
   assert.deepEqual(pod.spec!.containers![0].command, ["/run/nebula-runtime/nebula-confidential-storage"]);
   assert.ok(!pod.spec!.volumes!.some(v => "secret" in v || "hostPath" in v));
   const timeoutAnnotation = "io.katacontainers.config.runtime.create_container_timeout";
@@ -96,7 +104,10 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   const first = renderConfidentialWorkload(declaration, storages, options);
   assert.deepEqual(renderConfidentialWorkload(declaration, storages, options), first);
   const components = first.pod.spec!.initContainers!;
+  assert.equal(first.pod.spec!.restartPolicy, "Always");
   assert.deepEqual(components.map(container => container.name), ["nebula-agent", "kbs", "nebula-tng", "nebula-await-owner"]);
+  assert.ok(components.slice(0, 3).every(container => container.restartPolicy === "Always"),
+    "Persistent trusted helpers must remain restartable sidecars");
   assert.equal(components[2].startupProbe, undefined, "Waiting for an owner must not kill the attestation sidecar");
   assert.equal(components[0].startupProbe, undefined, "The agent must not block KBS and TNG from starting");
   const gate = components[3];
