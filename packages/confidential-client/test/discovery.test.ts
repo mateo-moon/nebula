@@ -79,6 +79,52 @@ test("reviewed agent releases are accepted without approving other agent images"
   }
 });
 
+test("the collateral-qualified browser workload binds its exact runtime and four resource paths", () => {
+  const connection = discoveredConnection("45".repeat(32));
+  const workload = connection.workload;
+  workload.spec.agentImage = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:6f640db9370a5a42a218ab064d825304a0755986498739bd632189aef42e09c8";
+  workload.spec.guest = {
+    measurement: "8c33e7ed240da6571f04802dd97050d4a8ce029473931dce869ee458b1dfd7025745ed62e7391fea520db139332c0c8e",
+    chipId: "1".repeat(128), minimumReportedTcb: { bootloader: 10, tee: 0, snp: 24, microcode: 84 },
+  };
+  workload.spec.trustee = {
+    chart: "oci://ghcr.io/mateo-moon/helm/trustee@sha256:371376d5c4b135890f6b9b0071ad5a8f7c9975af797994b4aaf5efbea2e21cb5",
+    kbsImage: "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68",
+    tngImage: "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+  };
+  delete workload.spec.storageImage;
+  workload.spec.browserOwner = true;
+  workload.spec.resources = [["default", "image", "agent"], ["default", "volume", "agent"],
+    ["default", "volume", "agent-audit"], ["default", "config", "agent"]];
+  workload.spec.storage = [{ name: "data", resource: "data" }, { name: "audit", resource: "audit" }];
+  workload.spec.containers = [{ name: "agent", image: "example.invalid/agent:reserved", imageKeyResource: ["default", "image", "agent"],
+    commandFromImage: true, uid: 11000, gid: 11000, applicationResources: [["default", "config", "agent"]],
+    mounts: [{ storage: "data", path: "/data" }, { storage: "audit", path: "/audit" }], ports: [{ name: "http", port: 9080 }] }];
+  connection.storages = ["data", "audit"].map(name => ({ apiVersion: "confidential.nebula.dev/v1alpha1", kind: "ConfidentialStorage",
+    metadata: { name, namespace: workload.metadata.namespace }, spec: { type: "Memory", sizeLimit: "64Mi" } }));
+  connection.browserEndpoint = "https://127.0.0.1:8445/";
+  const accepted = readConnection(JSON.stringify(connection));
+  assert.equal(trustedStack(accepted), "nebula-snp-agent-collateral-2026-11-13");
+  for (const field of ["bootloader", "snp", "microcode"] as const) {
+    const lower = structuredClone(accepted);
+    lower.workload.spec.guest = { ...lower.workload.spec.guest, minimumReportedTcb: {
+      ...lower.workload.spec.guest.minimumReportedTcb, [field]: lower.workload.spec.guest.minimumReportedTcb[field] - 1 } };
+    assert.throws(() => trustedStack(readConnection(JSON.stringify(lower))), /reviewed profile/);
+  }
+  const unknown = structuredClone(accepted);
+  unknown.workload.spec.agentImage = `example.invalid/unreviewed@sha256:${"f".repeat(64)}`;
+  assert.throws(() => trustedStack(readConnection(JSON.stringify(unknown))), /reviewed profile/);
+  const wrongGuest = structuredClone(accepted);
+  wrongGuest.workload.spec.guest = { ...wrongGuest.workload.spec.guest, measurement: "f".repeat(96) };
+  assert.throws(() => trustedStack(readConnection(JSON.stringify(wrongGuest))), /reviewed profile/);
+  const legacyGateway = structuredClone(accepted);
+  legacyGateway.workload.spec.trustee.gatewayImage = TRUSTED_STACKS[0].gatewayImage;
+  assert.throws(() => trustedStack(legacyGateway), /reviewed profile/);
+  const legacyStorage = structuredClone(accepted);
+  legacyStorage.workload.spec.storageImage = TRUSTED_STACKS[0].storageImage;
+  assert.throws(() => trustedStack(legacyStorage), /reviewed profile/);
+});
+
 test("discovered declarations cannot approve their own software, CPU policy or owner route", async t => {
   const token = "19".repeat(32), baseline = discoveredConnection(token);
   let connection = structuredClone(baseline), redirect = false, lastPath = "", lastAuthorization = "";
