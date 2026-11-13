@@ -49,6 +49,7 @@ test("native renderer binds the final Pod and keeps repeated measurements stable
   const legacyKbs = pod.spec!.initContainers!.find(container => container.name === "kbs")!;
   assert.match(Buffer.from(legacyKbs.args!.join(""), "base64").toString(), /kbs\.toml >\/dev\/null 2>&1/);
   assert.ok(!pod.spec!.initContainers!.some(container => container.volumeMounts?.some(mount => mount.mountPath === "/run/kbs-diagnostics")));
+  assert.ok(!pod.spec!.volumes!.some(volume => volume.name === "public-kds"));
   for (const name of ["nebula-guard", "nebula-await-owner", "nebula-install-storage"]) {
     assert.equal(pod.spec!.initContainers!.find(container => container.name === name)!.restartPolicy, undefined,
       `${name} must remain a finite init stage`);
@@ -128,6 +129,13 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
     { name: "kbs-tmp", mountPath: "/run/kbs-diagnostics", readOnly: true });
   assert.ok(!first.pod.spec!.containers!.some(container => container.volumeMounts?.some(mount => mount.name === "kbs-tmp")),
     "Application containers must never receive the private KBS log volume");
+  assert.deepEqual(agent.volumeMounts!.find(mount => mount.name === "public-kds"),
+    { name: "public-kds", mountPath: "/run/nebula-public-kds" });
+  assert.deepEqual(trustee.volumeMounts!.find(mount => mount.name === "public-kds"),
+    { name: "public-kds", mountPath: "/run/trustee/public-kds", readOnly: true });
+  assert.deepEqual(first.pod.spec!.volumes!.find(volume => volume.name === "public-kds"),
+    { name: "public-kds", emptyDir: { medium: "Memory", sizeLimit: "1Mi" } });
+  assert.ok(!first.pod.spec!.containers!.some(container => container.volumeMounts?.some(mount => mount.name === "public-kds")));
   assert.equal(config.role, "workload");
   assert.deepEqual(config.storage.volumes.map((volume: any) => volume.name), ["data", "scratch"]);
   assert.deepEqual(agent.volumeDevices!.map(device => device.devicePath), ["/dev/nebula-volumes/data", "/dev/nebula-volumes/scratch"]);

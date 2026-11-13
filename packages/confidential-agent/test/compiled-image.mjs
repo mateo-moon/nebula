@@ -14,8 +14,9 @@ const args = ["create", "--name", name, "--platform", "linux/amd64", "--network"
 for (const cap of ["NET_ADMIN", "SYS_ADMIN", "MKNOD", "CHOWN", "SETUID", "SETGID", "SETPCAP"]) args.push("--cap-add", cap);
 for (const [path, uid, mode] of [["/tmp", 10001, "0700"], ["/run/instance", 10001, "0770"],
   ["/run/nebula-guard", 0, "0755"], ["/run/nebula-owner-ready", 10001, "0770"],
+  ["/run/nebula-public-kds", 10001, "0700"],
   ["/run/nebula-runtime", 0, "0755"], ["/run/nebula-resources/app", 0, "0755"]]) {
-  args.push("--tmpfs", `${path}:rw,nosuid,nodev,size=16m,uid=${uid},gid=10001,mode=${mode}`);
+  args.push("--tmpfs", `${path}:rw,nosuid,nodev,size=${path === "/run/nebula-public-kds" ? "1m" : "16m"},uid=${uid},gid=10001,mode=${mode}`);
 }
 // Local process-boundary tests may emulate a swap-free guest kernel view.
 // This test-only mount is never part of a rendered confidential Pod or image.
@@ -27,8 +28,45 @@ docker([...args, image, JSON.stringify(config)]);
 const exec = (uid, code) => docker(["exec", "--user", `${uid}:${uid}`, name, "node", "--input-type=module", "-e", code]);
 try {
   docker(["start", name]);
+  // These fixed loopback fixtures provide a synthetic public certificate and
+  // native KBS/CDH responses. They establish no SNP or real-owner verdict.
+  docker(["exec", "--detach", "--user", "10001:10001", name, "node", "--input-type=module", "-e", `
+    import {createServer} from 'node:http';import {execFileSync} from 'node:child_process';
+    import {mkdtempSync,readFileSync,rmSync} from 'node:fs';import {X509Certificate} from 'node:crypto';
+    let reads=0,available=false,collateralReady=false,publicDer;
+    const certificate=()=>{
+      if(publicDer)return publicDer;
+      const dir=mkdtempSync('/tmp/synthetic-public-collateral-');
+      try{
+        execFileSync('openssl',['req','-new','-x509','-newkey','rsa:2048','-noenc','-sha256','-days','1','-subj','/CN=synthetic-public-only','-keyout',dir+'/key.pem','-out',dir+'/cert.pem'],{stdio:'ignore'});
+        return publicDer=[...new X509Certificate(readFileSync(dir+'/cert.pem')).raw];
+      }finally{rmSync(dir,{recursive:true,force:true});}
+    };
+    createServer((req,res)=>{req.resume();res.end('[]');}).listen(8080,'127.0.0.1');
+    createServer((req,res)=>{
+      req.resume();
+      if(req.url.startsWith('/aa/evidence?')){
+        if(!collateralReady){res.writeHead(503).end();return;}
+        res.setHeader('content-type','application/json');
+        res.end(JSON.stringify({attestation_report:{version:3,key_info:0,cpuid_fam_id:25,cpuid_mod_id:17,chip_id:Array(64).fill(66),reported_tcb:{bootloader:10,tee:0,snp:24,microcode:84}},cert_chain:[{cert_type:'VCEK',data:certificate()}]}));return;
+      }
+      reads++;res.writeHead(available?200:404).end(available?'synthetic-approved-resource':'');
+    }).listen(8006,'127.0.0.1');
+    createServer((req,res)=>{if(req.url==='/publish')available=true;if(req.url==='/collateral-ready')collateralReady=true;res.end(String(reads));}).listen(8082,'127.0.0.1');
+  `]);
   exec(10001, `
-    import assert from 'node:assert/strict'; import {readFileSync,openSync} from 'node:fs';
+    import assert from 'node:assert/strict';import {existsSync} from 'node:fs';import {setTimeout} from 'node:timers/promises';import {createConnection} from 'node:net';
+    for(let attempt=0;attempt<100;attempt++){try{await fetch('http://127.0.0.1:8082');break;}catch{await setTimeout(20);}}
+    await assert.rejects(new Promise((resolve,reject)=>{
+      const connection=createConnection({host:'127.0.0.1',port:8444});
+      connection.once('connect',()=>{connection.destroy();resolve();});connection.once('error',reject);
+      connection.setTimeout(1000,()=>connection.destroy(new Error('synthetic listener check timed out')));
+    }),'owner listener opened before public collateral was available');
+    assert.equal(existsSync('/run/nebula-owner-ready/ready'),false,'collateral failure opened workload readiness');
+    await fetch('http://127.0.0.1:8082/collateral-ready');
+  `);
+  exec(10001, `
+    import assert from 'node:assert/strict'; import {readFileSync,openSync,readdirSync,lstatSync} from 'node:fs';
     import {request} from 'node:https'; import {setTimeout} from 'node:timers/promises';
     const get = () => new Promise((resolve,reject) => {
       const req=request({hostname:'127.0.0.1',port:8444,path:'/nebula/v1/configured',rejectUnauthorized:false},res=>{
@@ -38,6 +76,10 @@ try {
     let ready;
     for(let attempt=0;attempt<100;attempt++){try{ready=await get();break;}catch{await setTimeout(100);}}
     assert.equal(ready?.configured,false,'compiled agent did not start or bypassed its owner gate');
+    const publicDir='/run/nebula-public-kds/vcek/'+Buffer.alloc(64,66).toString('hex');
+    assert.equal(readdirSync(publicDir).length,2,'public collateral cache exceeded its completed file bound');
+    assert.ok(readFileSync(publicDir+'/vcek.der').length<16385,'public certificate exceeded its byte bound');
+    assert.equal(lstatSync(publicDir+'/vcek.der').mode&0o7777,0o600);
     const startup=await new Promise((resolve,reject)=>{
       const req=request({hostname:'127.0.0.1',port:8444,path:'/nebula/v1/ready',rejectUnauthorized:false},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.end();
     });
@@ -62,14 +104,6 @@ try {
     await assert.rejects(fetch('http://127.0.0.1:9229/json/version', {signal: AbortSignal.timeout(2000)}));
     console.log('SIGUSR1 cannot start a trusted-agent inspector.');
   `);
-  // Fixed loopback fixtures stand in for native KBS/CDH; no attestation verdict
-  // or production identity is invented by this offline process-boundary test.
-  docker(["exec", "--detach", "--user", "10001:10001", name, "node", "--input-type=module", "-e", `
-    import {createServer} from 'node:http';let reads=0,available=false;
-    createServer((req,res)=>{req.resume();res.end('[]');}).listen(8080,'127.0.0.1');
-    createServer((req,res)=>{req.resume();reads++;res.writeHead(available?200:404).end(available?'synthetic-approved-resource':'');}).listen(8006,'127.0.0.1');
-    createServer((req,res)=>{if(req.url==='/publish')available=true;res.end(String(reads));}).listen(8082,'127.0.0.1');
-  `]);
   exec(10001, `
     import assert from 'node:assert/strict';import {request} from 'node:https';import {existsSync} from 'node:fs';import {setTimeout} from 'node:timers/promises';
     for(let attempt=0;attempt<100;attempt++){try{await fetch('http://127.0.0.1:8082');break;}catch{await setTimeout(100);}}

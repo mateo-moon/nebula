@@ -12,6 +12,8 @@ The main service owns startup, shutdown and failure handling. A failed native mo
 
 A regular Kubernetes init stage runs the same agent's `owner-gate` module after TNG and Trustee start. It has no capabilities or listeners and reads only the guest-memory readiness marker. It can wait indefinitely for owner policies and all declared resources without killing a healthy attestation sidecar. Kubelet pulls the encrypted application after this stage exits. The application launcher independently checks the private readiness marker before executing application code.
 
+Before opening owner access, the unified agent obtains its public SNP report from fixed guest-loopback AA and prepares one bounded public VCEK in dedicated guest memory. Certificate downloads use only the AMD URL derived from that report; an embedded public VCEK can avoid the download. Publication is atomic, restart reuse is bound to the exact chip/TCB URL, and failed preparation keeps startup closed. Native KBS reads this volume read-only through `OfflineStore`, without a network fallback, and still performs all AMD chain, signature, chip, TCB and policy verification. The cache provides public collateral, never attestation authority or workload keys. Applications and legacy layouts do not receive the volume.
+
 Upstream TNG and the unmodified Trustee remain separate components in the measured Pod. The Kubernetes operator stays outside the guest. Application launchers retain their UID, capability and mount boundaries.
 
 Build and test from the repository root:

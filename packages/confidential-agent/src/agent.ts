@@ -6,7 +6,7 @@ import { parseAgentConfig, type AgentConfig } from "./config.js";
 import { installGuestGuard } from "./guard.js";
 import { awaitOwner, awaitOwnerReady, publishOwnerReady } from "./await-owner.js";
 import { gatewayConfigured, startGateway } from "./gateway.js";
-import { collateralProxy } from "./snp-collateral.js";
+import { collateralProxy, prefetchSnpCollateral } from "./snp-collateral.js";
 import { AgentLifecycle } from "./lifecycle.js";
 
 const native = "/usr/local/bin/nebula-confidential-storage";
@@ -72,6 +72,7 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
   process.setgid!(10001);
   process.setuid!(10001);
   if (process.getuid?.() !== 10001 || process.getgid?.() !== 10001) throw new Error("Agent privilege drop failed");
+  await prefetchSnpCollateral(lifecycle.signal, stage => { agentStartupStage = stage; });
   const owner = config.owner;
   let ready = false;
   if (owner.ownerClaimSha256) {

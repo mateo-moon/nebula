@@ -40,7 +40,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     nodeSelector: spec.nodeSelector, clients: [{ namespace: metadata.namespace, podLabels: { app: spec.profile } }],
     genpolicy: options.genpolicy, k8sDistribution: runtime.k8sDistribution, ociVersion: runtime.ociVersion,
   };
-  const settings = trusteeSettings(config, { privateDiagnostics: Boolean(spec.agentImage) });
+  const settings = trusteeSettings(config, { privateDiagnostics: Boolean(spec.agentImage), publicCollateral: Boolean(spec.agentImage) });
   const app = new App(), chart = new Chart(app, "confidential-components");
   const helm = new Helm(chart, "trustee", trusteeHelmProps(config, settings));
   extendTrusteeHelm(helm, settings);
@@ -56,6 +56,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
   if (spec.agentImage) {
     kbs.env = [...(kbs.env ?? []).filter((entry: { name: string }) => entry.name !== "RUST_LOG"),
       { name: "RUST_LOG", value: "warn" }];
+    kbs.volumeMounts.push(mount("public-kds", "/run/trustee/public-kds", true));
   }
   if (spec.ownerClaimSha256) kbs.volumeMounts.push(mount("instance", "/run/instance"));
   // Kubelet TCP probes target the Pod IP; KBS is intentionally guest-loopback.
@@ -88,7 +89,8 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     volumeMounts: [mount("guest-guard", "/run/nebula-guard")] };
   const initContainers: any[] = spec.agentImage ? [] : [guard, kbs, gateway, tng];
   const volumes: any[] = [...structuredClone(base.spec.volumes), memory("instance"), memory("owner-tmp"),
-    memory("guest-guard", "1Mi"), memory("owner-ready", "1Mi"), memory("storage-runtime", "32Mi")];
+    memory("guest-guard", "1Mi"), memory("owner-ready", "1Mi"), memory("storage-runtime", "32Mi"),
+    ...(spec.agentImage ? [memory("public-kds", "1Mi")] : [])];
   const bindings = (spec.storage ?? []).map(binding => ({ ...binding,
     spec: storages.find(storage => storage.metadata.namespace === metadata.namespace && storage.metadata.name === binding.resource)!.spec }));
   const encrypted = bindings.filter((binding): binding is typeof binding & { spec: Extract<ConfidentialStorageSpec, { type: "EncryptedBlock" }> } => binding.spec.type === "EncryptedBlock");
@@ -168,6 +170,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       resources: { requests: { cpu: "50m", memory: "256Mi" }, limits: { memory: "1Gi" } },
       volumeMounts: [mount("instance", "/run/instance"), mount("owner-tmp", "/tmp"),
         mount("kbs-tmp", "/run/kbs-diagnostics", true),
+        mount("public-kds", "/run/nebula-public-kds"),
         mount("guest-guard", "/run/nebula-guard"), mount("owner-ready", "/run/nebula-owner-ready"), mount("storage-runtime", "/run/nebula-runtime"),
         ...encrypted.map(binding => mount(`state-${binding.name}`, `/run/nebula-storage/${binding.name}`)),
         ...resourceClients.map(client => mount(`resource-${client.name}`, `/run/nebula-resources/${client.name}`))],

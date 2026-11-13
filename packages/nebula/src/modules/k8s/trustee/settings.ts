@@ -36,7 +36,7 @@ function publicKey(pem: string): string {
   return createPublicKey({ key: key.export({ format: "jwk" }), format: "jwk" })
     .export({ format: "pem", type: "spki" }).toString();
 }
-export function trusteeSettings(config: TrusteeConfig, options: { privateDiagnostics?: boolean } = {}) {
+export function trusteeSettings(config: TrusteeConfig, options: { privateDiagnostics?: boolean; publicCollateral?: boolean } = {}) {
   publicConfig("Trustee", config);
   // Validate the owner-supplied guest fields before invoking external tools.
   // The real Init-Data hash is produced by native genpolicy below.
@@ -63,6 +63,9 @@ export function trusteeSettings(config: TrusteeConfig, options: { privateDiagnos
     attestation_token: { insecure_header_jwk: false, trusted_certs_paths: [`${root}/issuer/cert.pem`],
       trusted_jwk_sets: [], extra_teekey_paths: [] },
     attestation_service: { type: "coco_as_builtin", policy_id_map: {}, rvps_config: { type: "BuiltIn" },
+      ...(options.publicCollateral ? { verifier_config: { snp_verifier: {
+        vcek_sources: [{ type: "OfflineStore", path: "/run/trustee/public-kds" }],
+      } } } : {}),
       attestation_token_broker: { duration_min: 5,
         signer: { key_path: `${root}/issuer/key.pem`, cert_path: `${root}/issuer/cert.pem` } } },
     admin: { authorization_mode: "AuthenticatedAuthorization",
