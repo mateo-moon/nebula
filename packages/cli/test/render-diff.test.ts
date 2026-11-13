@@ -3,8 +3,8 @@ import test from "node:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { renderDiff } from "../src/commands/render-diff";
-import { renderEnvironment } from "../src/commands/render-tree";
+import { execFileSync } from "node:child_process";
+import { renderDiff, renderEnvironment } from "nebula-cdk8s/tools/render";
 
 function output(directory: string, name: string, entries: Record<string, { status?: string; yaml: string }>): string {
   const out = path.join(directory, name);
@@ -65,4 +65,16 @@ test("the render environment carries tool locations and stated extras, not the c
     { bin: "/opt/bin", env: ["FIXTURE=a=b"] });
   assert.deepEqual(env, { PATH: "/opt/bin:/usr/bin", HOME: "/home/r", ARGOCD_EXEC_TIMEOUT: "10m", FIXTURE: "a=b" });
   assert.throws(() => renderEnvironment({ PATH: "/usr/bin" }, { env: ["novalue"] }), /NAME=VALUE/);
+});
+
+test("the library entry point runs when invoked through its node_modules link", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nebula-render-entry-"));
+  try {
+    const entries = { "apps/one": { yaml: configMap("a", { x: "1" }) } };
+    const base = output(directory, "base", entries), head = output(directory, "head", entries);
+    const tool = path.join(__dirname, "..", "node_modules", "nebula-cdk8s", "src", "tools", "render.ts");
+    const report = execFileSync(process.execPath, ["--import", "tsx", tool, "diff", "--base", base, "--head", head], { encoding: "utf8" });
+    assert.match(report, /== differences \(0\)/);
+    assert.match(report, /PASS/);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

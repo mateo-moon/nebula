@@ -32,6 +32,7 @@ import {
 import { HelmModule, type Toleration } from "../../../core";
 import { grafanaDatasource, type GrafanaDatasourceConfig, type GrafanaDatasourceSecret } from "../grafana-operator";
 import { normalizeAccountId } from "../../infra/_shared";
+import { machineHtpasswd, type BasicAuthAccount } from "../../../utils/htpasswd";
 import {
   bindWorkloadIdentityUser,
   wiKsaAnnotations,
@@ -173,10 +174,18 @@ export interface PrometheusRwIngressConfig {
   /** Public hostname, e.g. "prometheus-rw.example.com" (external-dns + TLS). */
   host: string;
   /**
-   * htpasswd file content for nginx basic auth. A plain string or a ref+
-   * secret reference (resolved automatically at synth time).
+   * Clients of this endpoint. A client with a `password` (a ref+ secret
+   * reference, shared with the client's own configuration) is hashed cheaply at
+   * synth time; a client known only by its existing hash keeps it.
    */
-  authHtpasswd: string;
+  accounts?: readonly BasicAuthAccount[];
+  /**
+   * Additional htpasswd file content for nginx basic auth. A plain string or a
+   * ref+ secret reference (resolved automatically at synth time).
+   */
+  authHtpasswd?: string;
+  /** Largest request body accepted, e.g. "8m" (nginx default: 1m). */
+  maxBodySize?: string;
   /**
    * Extra/override Ingress annotations, merged over the defaults
    * (cert-manager letsencrypt-prod + external-dns hostname + nginx basic auth).
@@ -197,10 +206,18 @@ export interface LokiPushIngressConfig {
   /** Public hostname, e.g. "loki.example.com" (external-dns + TLS). */
   host: string;
   /**
-   * htpasswd file content for nginx basic auth. A plain string or a ref+
-   * secret reference (resolved automatically at synth time).
+   * Clients of this endpoint. A client with a `password` (a ref+ secret
+   * reference, shared with the client's own configuration) is hashed cheaply at
+   * synth time; a client known only by its existing hash keeps it.
    */
-  authHtpasswd: string;
+  accounts?: readonly BasicAuthAccount[];
+  /**
+   * Additional htpasswd file content for nginx basic auth. A plain string or a
+   * ref+ secret reference (resolved automatically at synth time).
+   */
+  authHtpasswd?: string;
+  /** Largest request body accepted, e.g. "8m" (nginx default: 1m). */
+  maxBodySize?: string;
   /** Backend service (defaults to the module's Loki service `loki`:3100). */
   backendService?: { name?: string; port?: number };
   /**
@@ -362,6 +379,12 @@ export interface PrometheusOperatorConfig {
 }
 
 const mergeHelmValues = deepmergeCustom({ mergeArrays: false });
+
+function sinkHtpasswd(sink: { accounts?: readonly BasicAuthAccount[]; authHtpasswd?: string }): string {
+  const content = (sink.accounts?.length ? machineHtpasswd(sink.accounts) : "") + (sink.authHtpasswd ?? "");
+  if (!content.trim()) throw new Error("An ingestion endpoint needs accounts or authHtpasswd");
+  return content;
+}
 
 /**
  * The promtail chart values the module renders: one client (the local Loki,
@@ -1051,7 +1074,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         kind: "Secret",
         metadata: { name: "prometheus-rw-auth", namespace: namespaceName },
         type: "Opaque",
-        stringData: { auth: rw.authHtpasswd },
+        stringData: { auth: sinkHtpasswd(rw) },
       });
 
       new ApiObject(this, "prometheus-rw-ingress", {
@@ -1067,6 +1090,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             "nginx.ingress.kubernetes.io/auth-secret": "prometheus-rw-auth",
             "nginx.ingress.kubernetes.io/auth-realm":
               "Authentication Required - Prometheus Remote Write",
+            ...(rw.maxBodySize ? { "nginx.ingress.kubernetes.io/proxy-body-size": rw.maxBodySize } : {}),
             ...(rw.ingressAnnotations ?? {}),
           },
         },
@@ -1107,7 +1131,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
         kind: "Secret",
         metadata: { name: "loki-push-auth", namespace: namespaceName },
         type: "Opaque",
-        stringData: { auth: push.authHtpasswd },
+        stringData: { auth: sinkHtpasswd(push) },
       });
 
       new ApiObject(this, "loki-push-ingress", {
@@ -1123,6 +1147,7 @@ export class PrometheusOperator extends HelmModule<PrometheusOperatorConfig> {
             "nginx.ingress.kubernetes.io/auth-secret": "loki-push-auth",
             "nginx.ingress.kubernetes.io/auth-realm":
               "Authentication Required - Loki Push",
+            ...(push.maxBodySize ? { "nginx.ingress.kubernetes.io/proxy-body-size": push.maxBodySize } : {}),
             ...(push.ingressAnnotations ?? {}),
           },
         },

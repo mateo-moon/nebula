@@ -115,6 +115,13 @@ nebula render-diff --base ./out/base --head ./out/head
 | `--allow-plugin-env NAME` | Plugin environment variable Applications may set besides `ENTRY_FILE`. Repeatable. |
 | `--bin DIR`, `--image-env FILE`, `--registry-config DIR`, `--jobs N` | Tool directory, the renderer image's environment, a read-only registry config and concurrency. |
 
+A repository that depends on `nebula-cdk8s` can run the same code without the CLI:
+
+```sh
+node --import tsx node_modules/nebula-cdk8s/src/tools/render.ts tree --side ...
+node --import tsx node_modules/nebula-cdk8s/src/tools/render.ts diff --base ... --head ...
+```
+
 | `render-diff` option | Meaning |
 | --- | --- |
 | `--goldens FILE` | JSON of entry key to digests that must hold at head. |

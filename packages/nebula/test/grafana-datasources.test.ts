@@ -87,3 +87,25 @@ test("the operator module installs the chart and manages content of an existing 
     assert.throws(() => new GrafanaOperator(chart, "bare").folder("x", "X"), /needs an instance/);
   });
 });
+
+test("ingestion endpoints hash held passwords cheaply, keep external hashes and accept a body size", () => {
+  withStubHelm(() => {
+    const chart = new Chart(new App(), "test");
+    const password = "synthetic-machine-password-".repeat(2), external = "$2y$12$" + "a".repeat(53);
+    new PrometheusOperator(chart, "monitoring", {
+      promtail: { enabled: false },
+      prometheusRw: { host: "metrics.example.test", accounts: [{ username: "fleet", password }, { username: "external", hash: external }] },
+      lokiPush: { host: "logs.example.test", accounts: [{ username: "fleet", password }], authHtpasswd: `legacy:${external}\n`, maxBodySize: "8m" },
+    });
+    const objects = Testing.synth(chart);
+    const secrets = named(objects, "Secret"), ingresses = named(objects, "Ingress");
+    const [fleet, other] = secrets["prometheus-rw-auth"].stringData.auth.trim().split("\n");
+    assert.match(fleet, /^fleet:\$2y\$05\$/);
+    assert.equal(other, `external:${external}`);
+    assert.deepEqual(secrets["loki-push-auth"].stringData.auth.trim().split("\n").map((l: string) => l.split(":")[0]), ["fleet", "legacy"]);
+    assert.equal(ingresses["loki-push"].metadata.annotations["nginx.ingress.kubernetes.io/proxy-body-size"], "8m");
+    assert.equal(ingresses["prometheus-remote-write"].metadata.annotations["nginx.ingress.kubernetes.io/proxy-body-size"], undefined);
+    assert.equal(ingresses["prometheus-remote-write"].metadata.annotations["nginx.ingress.kubernetes.io/auth-type"], "basic");
+    assert.throws(() => new PrometheusOperator(new Chart(new App(), "t2"), "m", { promtail: { enabled: false }, prometheusRw: { host: "metrics.example.test" } }), /needs accounts or authHtpasswd/);
+  });
+});
