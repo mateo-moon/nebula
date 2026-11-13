@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 export interface WelcomeConfig {
   portalUrl: string;
+  certificateOrigin?: string;
   reference?: {
     measurement: string;
     initDataSha256: string;
@@ -39,8 +40,16 @@ function httpsUrl(value: unknown, origin = false): string {
 
 /** Copy only the deliberately public configuration; never serialize arbitrary input. */
 export function parseWelcomeConfig(value: unknown): WelcomeConfig {
-  const input = object(value, ["portalUrl", "reference"]);
+  const input = object(value, ["portalUrl", "reference", "certificateOrigin"]);
   const config: WelcomeConfig = { portalUrl: httpsUrl(input.portalUrl, true) };
+  if (input.certificateOrigin !== undefined) {
+    const origin = httpsUrl(input.certificateOrigin, true), url = new URL(origin), parts = url.hostname.split(".");
+    if (typeof input.certificateOrigin !== "string" || /[\x00-\x20\x7f]/.test(input.certificateOrigin) || url.port !== "10443" ||
+        parts.length !== 3 || parts[2] !== "svc" || parts.slice(0, 2).some(part => part.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(part))) {
+      throw new TypeError("Invalid fixed portal certificate service origin");
+    }
+    config.certificateOrigin = origin;
+  }
   if (input.reference !== undefined) {
     const ref = object(input.reference, ["measurement", "initDataSha256", "minimumReportedTcb", "releaseUrl"]);
     if (typeof ref.measurement !== "string" || !/^[a-f0-9]{96}$/.test(ref.measurement) ||
@@ -122,12 +131,13 @@ export function publicCertificateSnapshot(portalUrl: string, timeoutMs = 5000, s
 
 export function createWelcomeServer(options: { config: unknown; assetsDirectory?: string; certificateTimeoutMs?: number }): Server {
   const config = parseWelcomeConfig(options.config);
+  const publicConfig = { portalUrl: config.portalUrl, ...(config.reference === undefined ? {} : { reference: config.reference }) };
   const assets = options.assetsDirectory ?? "/app";
   const staticRoutes = new Map<string, { type: string; body: Buffer }>([
     ["/", { type: "text/html; charset=utf-8", body: readFileSync(join(assets, "index.html")) }],
     ["/style.css", { type: "text/css; charset=utf-8", body: readFileSync(join(assets, "style.css")) }],
     ["/welcome.js", { type: "text/javascript; charset=utf-8", body: Buffer.from(stripTypeScriptTypes(readFileSync(join(assets, "client.ts"), "utf8"))) }],
-    ["/config.json", { type: "application/json; charset=utf-8", body: Buffer.from(JSON.stringify(config)) }],
+    ["/config.json", { type: "application/json; charset=utf-8", body: Buffer.from(JSON.stringify(publicConfig)) }],
     ["/healthz", { type: "text/plain; charset=utf-8", body: Buffer.from("ok\n") }],
   ]);
   const server = createServer(async (incoming, outgoing) => {
@@ -151,7 +161,7 @@ export function createWelcomeServer(options: { config: unknown; assetsDirectory?
     const disconnected = () => abort.abort();
     outgoing.once("close", disconnected);
     try {
-      const material = await publicCertificateSnapshot(config.portalUrl, options.certificateTimeoutMs, abort.signal);
+      const material = await publicCertificateSnapshot(config.certificateOrigin ?? config.portalUrl, options.certificateTimeoutMs, abort.signal);
       if (outgoing.destroyed) return;
       outgoing.writeHead(200, { "Content-Type": "application/json; charset=utf-8" }).end(JSON.stringify(material));
     } catch {
@@ -172,5 +182,5 @@ export function createWelcomeServer(options: { config: unknown; assetsDirectory?
 
 // ConfigMap projections are symlinks; Node resolves import.meta.url to their real path.
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  createWelcomeServer({ config: JSON.parse(readFileSync("/app/config.json", "utf8")) }).listen(8080, "0.0.0.0");
+  createWelcomeServer({ config: JSON.parse(readFileSync("/app/config.json", "utf8")) }).listen(8081, "127.0.0.1");
 }
