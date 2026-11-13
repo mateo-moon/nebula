@@ -13,6 +13,7 @@ const bundle = await build({ entryPoints: [new URL("../src/ui/main.ts", import.m
 async function deployment(restored = false, rejectedConnection = false, options: {
   provisionedCheckpoint?: boolean; preparationFailure?: "publishing" | "measuring"; keyWriteFailure?: boolean;
   pendingCheckpoint?: "running" | "failed";
+  missingResource?: boolean; missingDisk?: "audit" | "all" | "resource-names";
 } = {}) {
   class Element {
     id = ""; value = ""; textContent = ""; hidden = false; disabled = false;
@@ -36,14 +37,24 @@ async function deployment(restored = false, rejectedConnection = false, options:
   el("archive").files = [new Blob(["test-only local image"])];
   el("registry-username").value = "test-owner"; el("registry-password").value = "test-token";
   el("recovery-password").value = "test-only-recovery-password";
+  const resourcePaths = ["default/image/app", "default/volume/data", "default/volume/audit"];
   const connection = { version: 1, browserEndpoint: "https://final.example", endpoint: { host: "final.example", port: 8443 },
-    workload: { spec: { profile: "test", containers: [{ image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"] }], resources: [] } }, storages: [] };
+    workload: { metadata: { name: "test", namespace: "qualified" }, spec: { profile: "test",
+      containers: [{ image: "ghcr.io/example/final:release", imageKeyResource: ["default", "image", "app"] }],
+      resources: resourcePaths.map(path => path.split("/")),
+      storage: [{ name: "data", resource: "data-store" }, { name: "audit", resource: "audit-store" }, { name: "scratch", resource: "memory-store" }] } },
+    storages: [
+      ...["data", "audit"].map(name => ({ metadata: { name: `${name}-store`, namespace: "qualified" },
+        spec: { type: "EncryptedBlock", initialization: "IfEmpty", keyResource: ["default", "volume", name] } })),
+      { metadata: { name: "memory-store", namespace: "qualified" }, spec: { type: "Memory" } },
+    ] };
   const prepared = { digest: "sha256:" + "d".repeat(64), identity: {}, audience: "final-test", imageKeyResource: ["default", "image", "app"],
     policies: { attestationPolicy: "test attestation policy", resourcePolicy: "test resource policy" } };
   const owner: any = { connection, imageKey: "9".repeat(64), token: "8".repeat(64), restored };
   if (options.provisionedCheckpoint) Object.assign(owner, { prepared, finalPin: "b".repeat(64), finalClaimed: true, provisioned: true });
   if (options.pendingCheckpoint) owner.encryptedImage = { id: "test-only-cache", manifestDigest: prepared.digest };
   let now = 0, available = false, storageReady = true, publishes = options.provisionedCheckpoint ? 1 : 0, keyWrites = 0, uploadRequests = 0, finalAttempts = 0;
+  let missingResource = options.missingResource, missingDisk = options.missingDisk;
   const phases = ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"];
   const steps = phases.map(phase => { const step = el("step-" + phase); step.dataset.phase = phase; return step; });
   const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -66,8 +77,13 @@ async function deployment(restored = false, rejectedConnection = false, options:
     if (path.startsWith("/kbs/v0/resource/") && init.method === "POST") {
       keyWrites++; if (options.keyWriteFailure) return response({}, 403);
     }
-    return response(path === "/nebula/v1/bootstrap" ? { phase: "ready", resources: { image: { status: 200 } },
-      storage: storageReady ? {} : { data: { phase: "awaiting-owner" } } } : {});
+    if (path === "/nebula/v1/bootstrap") {
+      const resources = Object.fromEntries(resourcePaths.filter(path => !missingResource || path !== "default/volume/audit").map(path => [path, { status: 200 }]));
+      const storage = missingDisk === "all" ? {} : Object.fromEntries(["data", "audit"].filter(name => missingDisk !== name).map(name =>
+        [missingDisk === "resource-names" ? `${name}-store` : name, { phase: !storageReady && name === "data" ? "awaiting-owner" : "ready" }]));
+      return response({ phase: "ready", resources, storage });
+    }
+    return response({});
   } };
   class LocalWorker {
     onmessage?: (event: any) => void;
@@ -98,7 +114,8 @@ async function deployment(restored = false, rejectedConnection = false, options:
     completed: () => phases.filter((_, index) => steps[index].classes.has("done")),
     active: () => phases.filter((_, index) => steps[index].classes.has("active")),
     counts: () => ({ publishes, keyWrites, uploadRequests, finalAttempts }),
-    restoreConnectivity(ready = true) { available = true; storageReady = ready; } };
+    restoreConnectivity(ready = true) { available = true; storageReady = ready; },
+    completeStatus() { missingResource = false; missingDisk = undefined; storageReady = true; } };
 }
 
 test("rejected stack settings keep image encryption and publication disabled", async () => {
@@ -132,7 +149,7 @@ test("a post-publication timeout offers retry and resumes without republishing o
   assert.equal(ui.owner.provisioned, true);
   assert.equal(ui.counts().publishes, 1);
   assert.equal(ui.counts().uploadRequests, 2);
-  assert.equal(ui.counts().keyWrites, 1);
+  assert.equal(ui.counts().keyWrites, 3);
   assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"]);
   assert.deepEqual(ui.active(), []);
   assert.ok(ui.steps.every(step => step.attributes.get("aria-label")?.endsWith(": Completed")));
@@ -149,10 +166,24 @@ test("verified final attestation stays distinct from pending encrypted storage s
   assert.equal(ui.el("final-status").textContent, "Final workload verified");
   assert.equal(ui.owner.finalPin, "b".repeat(64));
   assert.equal(ui.owner.provisioned, true);
-  assert.equal(ui.counts().keyWrites, 1);
+  assert.equal(ui.counts().keyWrites, 3);
   assert.match(ui.el("result").textContent, /awaiting-owner/);
   assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning"]);
   assert.deepEqual(ui.active(), []);
+});
+
+for (const missing of ["resource", "audit", "all", "resource-names"] as const) test(`missing ${missing} readiness cannot finish the deployment`, async () => {
+  const ui = await deployment(false, false, missing === "resource" ? { missingResource: true } : { missingDisk: missing });
+  ui.restoreConnectivity(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("notice").textContent.includes("Startup is still pending"));
+  assert.equal(ui.el("final-status").textContent, "Final workload verified");
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning"]);
+  assert.deepEqual(ui.active(), []);
+  assert.equal(ui.counts().keyWrites, 3);
+  ui.completeStatus(); ui.el("inspect").click();
+  await ui.wait(() => ui.el("job-title").textContent === "Keys delivered; encrypted storage unlocked");
+  assert.deepEqual(ui.completed(), ["encrypting", "measuring", "waiting", "attesting", "provisioning", "ready"]);
+  assert.equal(ui.counts().keyWrites, 3, "A readiness retry must not provision keys again");
 });
 
 test("retry still refuses first enrollment from a restored pre-enrollment backup", async () => {

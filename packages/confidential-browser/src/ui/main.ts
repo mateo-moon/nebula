@@ -228,12 +228,20 @@ async function provision() {
 async function inspect() {
   const channel = final ?? await finalConnection();
   const deadline = Date.now() + 300_000;
+  const resources = connection.workload.spec.resources.map((path: string[]) => path.join("/"));
+  const encryptedStorage = (connection.workload.spec.storage ?? []).filter((binding: { resource: string }) => {
+    const storage = connection.storages.find((value: any) => value.metadata.name === binding.resource &&
+      value.metadata.namespace === connection.workload.metadata.namespace);
+    if (!storage) throw new Error("Declared storage is missing from the verified stack");
+    return storage.spec.type === "EncryptedBlock";
+  }).map((binding: { name: string }) => binding.name);
   progress("ready", "Checking workload and encrypted storage…");
   while (true) {
     const status = await (await request(channel, "/nebula/v1/bootstrap", "GET", undefined, owner.prepared.audience)).json();
     text("result", JSON.stringify(status, null, 2)); evidence();
-    if (status.phase !== "awaiting-configuration" && Object.keys(status.resources ?? {}).length > 0 &&
-        Object.values(status.resources).every((v: any) => v.status === 200) && Object.values(status.storage ?? {}).every((v: any) => v.phase === "ready")) break;
+    if (status.phase !== "awaiting-configuration" && resources.length > 0 &&
+        resources.every((path: string) => status.resources?.[path]?.status === 200) &&
+        encryptedStorage.every((name: string) => status.storage?.[name]?.phase === "ready")) break;
     if (Date.now() >= deadline) throw new Error("Keys reached the verified VM. Startup is still pending; use Verify again for status.");
     await sleep(4000);
   }
