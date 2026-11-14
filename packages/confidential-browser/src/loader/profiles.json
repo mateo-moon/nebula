@@ -2,6 +2,23 @@
   "version": 1,
   "profiles": [
     {
+      "id": "nebula-snp-agent-preparation-owner-auth-2026-11-14",
+      "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:fc9ba88ad771a15ea1637d72ffe1773e3940e1a0a313177e20eb7829d3a80891",
+      "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
+      "identity": {
+        "measurement": "e17cb86d23c57635b2fa4540bc44c411c2ef7b1836ad9fb05906f57d3692292c32645a61e913e80b618abc1d40f54149",
+        "initDataSha256": "5046ae310625decb4b5e60223c0cd9a1299dfde028578e34dc1025a55530463a",
+        "minimumReportedTcb": {
+          "bootloader": 10,
+          "tee": 0,
+          "snp": 24,
+          "microcode": 84
+        }
+      },
+      "sourceRevision": "d78afe5047ed5c273e6f166978e3ea8f89099a54",
+      "tngSourceRevision": "cc494fd65fe22817e20a39c04b173efa14bc316a"
+    },
+    {
       "id": "nebula-snp-agent-preparation-literal-env-2026-11-14",
       "image": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:87484ab814fd09fbae6020c1ac0f26445642dfe6c61bca6bfdaee019ea5ce16c",
       "tngImage": "ghcr.io/mateo-moon/nebula-coco-canary@sha256:111286414faa8505162bcdc861046f1428c9b7ef832b583bf220d9ce68932029",
