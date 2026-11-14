@@ -42,3 +42,16 @@ test("frontend and preparation cannot activate workload modules or accept secret
     assert.throws(() => parseAgentConfig(JSON.stringify({ version: 1, role: "preparation", ...extra })));
   }
 });
+
+
+test("native recipient reservations and serialized module limits reject before helper startup", () => {
+  for (const role of ["volume", "broker"]) {
+    const config=workload();
+    (role==="volume" ? config.storage.volumes[0].clients[0] : config.storage.clients[0]).name="coco-volume-marker";
+    assert.throws(()=>parseAgentConfig(JSON.stringify(config)), /recipient|delegated/);
+  }
+  const oversized=workload();
+  oversized.storage.clients[0].resources=Array.from({length:64},(_,index)=>`${"a".repeat(127)}/${"b".repeat(127)}/${String(index).padStart(3,"0")}${"c".repeat(124)}`);
+  assert.ok(Buffer.byteLength(JSON.stringify(oversized))<65536,"fixture fits outer configuration bound");
+  assert.throws(()=>parseAgentConfig(JSON.stringify(oversized)),/broker configuration is too large/);
+});

@@ -85,7 +85,7 @@ export class ConfidentialWelcome extends BaseConstruct<ConfidentialWelcomeConfig
           const parts = key.split("/");
           return parts.length > 2 || !(parts.length === 1 ? selectorPart(parts[0]) && !!parts[0] : dnsName(parts[0]) && selectorPart(parts[1]) && !!parts[1]) || !selectorPart(value);
         }))) throw new TypeError("Invalid welcome node selector");
-    if (config.publicOhttpRoutes !== undefined && (!Array.isArray(config.publicOhttpRoutes) || config.publicOhttpRoutes.length > 8)) {
+    if (config.publicOhttpRoutes !== undefined && (!Array.isArray(config.publicOhttpRoutes) || config.publicOhttpRoutes.length > 16)) {
       throw new TypeError("Welcome public routes require a bounded explicit list");
     }
     const portal = httpsUrl(config.portalUrl, true);

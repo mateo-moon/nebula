@@ -130,6 +130,12 @@ pub(crate) fn serve_resources(json: &str) -> Result<()> {
 }
 
 pub(crate) fn serve_resource_module(config: ResourceBroker) -> Result<()> {
+    serve_resource_module_ready(config, None)
+}
+pub(crate) fn serve_resource_module_ready(
+    config: ResourceBroker,
+    ready: Option<crate::recovery::BrokerReady>,
+) -> Result<()> {
     // The socket must be private from its first instant, before the
     // application UID is assigned and before any client can connect.
     unsafe { libc::umask(0o077) };
@@ -156,6 +162,9 @@ pub(crate) fn serve_resource_module(config: ResourceBroker) -> Result<()> {
         );
         listener.set_nonblocking(true)?;
         listeners.push(listener);
+    }
+    if let Some(ready) = ready {
+        ready.ready();
     }
     let busy: Vec<_> = (0..config.clients.len())
         .map(|_| Arc::new(AtomicBool::new(false)))
@@ -368,7 +377,11 @@ pub(crate) fn serve_volume(
     }
     // Keep the mapping alive and the failure visible if a lease or listener
     // fails. Restarting this sidecar is never an owner-authorized disk retry.
-    if let Err(error) = serve_mounted(&config, profile, &mut active, &report) {
+    let result = serve_mounted(&config, profile, &mut active, &report, recovery.as_ref());
+    if let Some(control) = &recovery {
+        control.ready(false);
+    }
+    if let Err(error) = result {
         return hold_refusal(profile, "failed", error);
     }
     Ok(())
@@ -379,6 +392,7 @@ fn serve_mounted(
     profile: &'static volume::Profile,
     active: &mut volume::ActiveVolume,
     report: &serde_json::Value,
+    ready: Option<&crate::recovery::VolumeRecovery>,
 ) -> Result<()> {
     if let Err(error) = directories(
         config,
@@ -405,6 +419,9 @@ fn serve_mounted(
     let mut initial_report = report.clone();
     initial_report["supervisors"]=serde_json::Value::Object(config.clients.iter().map(|client| (client.name.clone(),serde_json::json!({"phase":"starting","restartCount":0,"applicationReady":null}))).collect());
     publish_status(profile, "ready", None, Some(&initial_report))?;
+    if let Some(control) = ready {
+        control.ready(true);
+    }
     let count = config.clients.len();
     let mut leases: Vec<Option<UnixStream>> = (0..count).map(|_| None).collect();
     let mut pending: Vec<Option<handoff::PendingMount>> = (0..count).map(|_| None).collect();
@@ -504,7 +521,7 @@ fn serve_mounted(
 }
 
 fn wait_owner() -> Result<()> {
-    let marker = "/run/nebula-owner-ready/ready";
+    let marker = "/run/nebula-owner-ready/configured";
     tmpfs("/run/nebula-owner-ready")?;
     loop {
         ensure!(
@@ -517,7 +534,7 @@ fn wait_owner() -> Result<()> {
                     info.is_file()
                         && info.uid() == 10001
                         && info.mode() & 0o7777 == 0o640
-                        && fs::read(marker)? == b"nebula-owner-ready-v1\n",
+                        && fs::read(marker)? == b"nebula-owner-configured-v1\n",
                     "invalid owner gate"
                 );
                 return Ok(());

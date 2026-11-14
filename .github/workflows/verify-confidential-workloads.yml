@@ -137,8 +137,9 @@ jobs:
             --mount "type=bind,src=$PWD/packages/confidential-agent,dst=/fixture,readonly" \
             --env CONFIDENTIAL_DIAGNOSTICS_TEST_TMPFS=1 \
             --env CONFIDENTIAL_COLLATERAL_TEST_TMPFS=1 \
+            --env CONFIDENTIAL_STORAGE_GATE_TEST_TMPFS=1 \
             --entrypoint node nebula-confidential-agent:ci \
-            --disable-sigusr1 --test /fixture/test/diagnostics.test.mjs /fixture/test/public-collateral.test.mjs
+            --disable-sigusr1 --test /fixture/test/diagnostics.test.mjs /fixture/test/public-collateral.test.mjs /fixture/test/storage-gate.test.mjs
 
   native-render:
     name: Native confidential Pod synthesis

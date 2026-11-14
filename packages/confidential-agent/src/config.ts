@@ -31,7 +31,7 @@ function fields(value: unknown, allowed: string[], required = allowed): asserts 
 const name = (value: unknown): value is string => typeof value === "string" && /^[a-z][a-z0-9-]{0,39}$/.test(value);
 const list = (value: unknown, max: number): value is any[] => Array.isArray(value) && value.length <= max;
 const resources = (value: unknown): value is string[] => list(value, 64) && value.every(validResource) && new Set(value).size === value.length;
-const recipient = (value: Record<string, any>) => name(value.name) && [value.uid, value.gid].every(id => Number.isInteger(id) && id >= 11000 && id <= 65534);
+const recipient = (value: Record<string, any>) => name(value.name) && value.name !== "coco-volume-marker" && [value.uid, value.gid].every(id => Number.isInteger(id) && id >= 11000 && id <= 65534);
 
 export function parseAgentConfig(raw: string): AgentConfig {
   if (Buffer.byteLength(raw) > 65536) throw new Error("Measured agent configuration is too large");
@@ -71,6 +71,7 @@ export function parseAgentConfig(raw: string): AgentConfig {
           !list(volume.clients, 8) || !volume.clients.length || !storage.deniedResources.includes(volume.keyResource)) {
         throw new Error("Invalid measured volume module");
       }
+      if (Buffer.byteLength(JSON.stringify(volume)) > 8192) throw new Error("Measured native volume configuration is too large");
       names.add(volume.name);
       const users = new Set<number>(), clients = new Set<string>();
       for (const client of volume.clients) {
@@ -88,6 +89,7 @@ export function parseAgentConfig(raw: string): AgentConfig {
           client.resources.some((resource: string) => storage.deniedResources.includes(resource))) throw new Error("Private keys cannot be delegated to an application");
       clients.add(client.name); users.add(client.uid);
     }
+    if (Buffer.byteLength(JSON.stringify({ version: 1, clients: storage.clients })) > 16384) throw new Error("Measured native resource broker configuration is too large");
   } else throw new Error("Unknown agent module");
   return config as AgentConfig;
 }

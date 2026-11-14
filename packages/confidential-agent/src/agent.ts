@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseAgentConfig, type AgentConfig } from "./config.js";
 import { installGuestGuard } from "./guard.js";
-import { awaitOwner, awaitOwnerReady, publishOwnerReady } from "./await-owner.js";
+import { awaitOwner, awaitOwnerReady, monitorOwnerReadiness } from "./await-owner.js";
 import { gatewayConfigured, loadOrCreateIdentity, startGateway } from "./gateway.js";
 import { collateralProxy, prefetchSnpCollateral } from "./snp-collateral.js";
 import { AgentLifecycle } from "./lifecycle.js";
@@ -69,7 +69,7 @@ export function nativeStorageControl(child: ChildProcess) {
   });
   channel.once("error", fail); channel.once("end", fail); child.once("error", fail); child.once("exit", fail);
   ready.finally(() => clearTimeout(timer)).catch(() => {});
-  const request = async (op: "bind" | "plans" | "apply", fields: Record<string, unknown> = {}) => {
+  const request = async (op: "bind" | "plans" | "apply" | "ready", fields: Record<string, unknown> = {}) => {
     await ready;
     if (closed || pending.size >= 8 || sequence >= 0x7fffffff) throw new Error("Native storage control unavailable");
     const id = ++sequence, raw = JSON.stringify({ id, op, ...fields }) + "\n";
@@ -81,7 +81,12 @@ export function nativeStorageControl(child: ChildProcess) {
     });
   };
   return { ready, bind: (instance: string) => request("bind", { instance }),
-    plans: () => request("plans"), apply: (value: unknown) => request("apply", { request: value }) };
+    plans: () => request("plans"), apply: (value: unknown) => request("apply", { request: value }),
+    modulesReady: async () => {
+      const value = await request("ready") as { ready?: unknown };
+      if (!value || Object.keys(value).join() !== "ready" || typeof value.ready !== "boolean") throw new Error("Invalid native readiness response");
+      return value.ready;
+    } };
 }
 
 /** Privileged setup finishes before any owner-facing listener starts. The
@@ -128,9 +133,9 @@ async function initializeWorkload(config: Extract<AgentConfig, { role: "workload
     owner.ownerClaimSha256, owner.audience, owner.browser, () => ready, control);
   lifecycle.server(gateway);
   lifecycle.task(awaitOwner(owner.resources, lifecycle.signal, undefined,
-    async () => gatewayConfigured(gateway)).then(() => {
-      if (!lifecycle.signal.aborted) { publishOwnerReady(); ready = true; }
-    }));
+    async () => gatewayConfigured(gateway)).then(() => monitorOwnerReadiness(lifecycle.signal,
+      () => control ? control.modulesReady() : Promise.resolve(true),
+      value => { ready = value; agentStartupStage = value ? "running" : "native-storage"; })));
   agentStartupStage = "running";
 }
 

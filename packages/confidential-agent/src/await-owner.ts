@@ -48,21 +48,50 @@ export async function awaitOwner(resources: unknown, signal: AbortSignal,
 /** A guest-memory completion marker makes host-selected container start order
  * irrelevant: the static launcher never starts application bytes before the
  * measured owner gate has observed all declared resources. */
-export function publishOwnerReady(directory = "/run/nebula-owner-ready"): void {
+function publishOwnerMarker(marker: "ready" | "configured", directory: string): void {
   if (process.getuid?.() !== 10001 || Number(statfsSync(directory).type) !== 0x01021994) {
     throw new Error("Owner readiness requires measured guest tmpfs and helper UID");
   }
-  const temporary = `${directory}/.ready-${randomUUID()}`;
+  const temporary = `${directory}/.${marker}-${randomUUID()}`;
   const file = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try {
-    writeSync(file, "nebula-owner-ready-v1\n");
+    writeSync(file, marker === "ready" ? "nebula-owner-ready-v1\n" : "nebula-owner-configured-v1\n");
     // The static launcher starts as UID 0 without DAC_OVERRIDE, but belongs to
     // the measured Pod's group 10001. Its application child gets read-only
     // access to this volume and cannot alter the marker.
     fchmodSync(file, 0o640);
     fsyncSync(file);
-    renameSync(temporary, `${directory}/ready`);
+    renameSync(temporary, `${directory}/${marker}`);
   } finally { closeSync(file); try { unlinkSync(temporary); } catch { /* Renamed. */ } }
+}
+
+/** Application and native-helper gates are deliberately separate fixed files. */
+export function publishOwnerReady(directory = "/run/nebula-owner-ready"): void {
+  publishOwnerMarker("ready", directory);
+}
+export function publishOwnerConfigured(directory = "/run/nebula-owner-ready"): void {
+  publishOwnerMarker("configured", directory);
+}
+
+/** Owner policies/keys are already configured when this starts. The native
+ * helper may now open/recover volumes while the application gate stays closed.
+ * Every probe is a bounded, fixed private IPC request, never host-reported state.
+ * Continue reporting actual module readiness after the one-time app gate opens. */
+export async function monitorOwnerReadiness(signal: AbortSignal, modulesReady: () => Promise<boolean>,
+  changed: (ready: boolean) => void, directory = "/run/nebula-owner-ready"): Promise<void> {
+  signal.throwIfAborted();
+  publishOwnerConfigured(directory);
+  let published = false;
+  try {
+    while (!signal.aborted) {
+      const ready = await modulesReady();
+      signal.throwIfAborted();
+      if (ready && !published) { publishOwnerReady(directory); published = true; }
+      changed(ready);
+      await delay(250, undefined, { signal });
+    }
+    signal.throwIfAborted();
+  } finally { changed(false); }
 }
 
 /** A regular Kubernetes init stage waits without a startup-probe deadline.

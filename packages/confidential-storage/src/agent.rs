@@ -115,6 +115,7 @@ pub(crate) fn run(raw: &str) -> Result<()> {
             (config, control)
         })
         .collect();
+    let broker_ready = broker.as_ref().map(|_| recovery.broker());
     recovery.start()?;
     let (finished, completion) = mpsc::channel();
     let mut modules = Vec::new();
@@ -135,8 +136,9 @@ pub(crate) fn run(raw: &str) -> Result<()> {
     if let Some(broker) = broker {
         let done = finished.clone();
         modules.push(thread::spawn(move || {
-            let result =
-                std::panic::catch_unwind(|| generic_storage::serve_resource_module(broker));
+            let result = std::panic::catch_unwind(|| {
+                generic_storage::serve_resource_module_ready(broker, broker_ready)
+            });
             let _ = done.send(
                 result
                     .map_err(|_| anyhow::anyhow!("resource module failed"))

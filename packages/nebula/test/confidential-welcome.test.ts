@@ -71,6 +71,13 @@ test("literal IPv6 welcome addresses retain IP certificate identity and correct 
   assert.match(site.data.Caddyfile, /https:\/\/\[2001:db8::10\] \{/);
 });
 
+test("parallel disposable slots can retain existing transport routes within a bounded limit", () => {
+  const routes = Array.from({ length: 16 }, (_, index) => ({ port: 8500 + index, upstream: "http://metadata.qualified.svc:8083/" }));
+  const value = render({ ...config, publicOhttpRoutes: routes });
+  assert.equal(value.resources.find(resource => resource.kind === "Service")!.spec.ports.length, 18);
+  assert.throws(() => render({ ...config, publicOhttpRoutes: [...routes, { port: 8600, upstream: routes[0].upstream }] }), /routes/);
+});
+
 test("explicit stack-owned public routes expose only TNG OHTTP and filtered metadata services", () => {
   const routes = [{ port: 8440, upstream: "http://confidential-operator-access.qualified.svc:8083/" },
     { port: 8441, upstream: "http://preparation.qualified.svc:8445" },

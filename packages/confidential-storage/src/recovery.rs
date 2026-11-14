@@ -16,13 +16,32 @@ pub(crate) const ACTION: &str = "initialize-empty-filesystem";
 pub(crate) const ACK: &str = "RESUME ONLY THIS VERIFIED EMPTY FILESYSTEM";
 const LIFETIME: Duration = Duration::from_secs(60);
 type Shared = Arc<Mutex<State>>;
-#[derive(Default)]
 struct State {
     instance: Option<String>,
     volumes: BTreeMap<String, Entry>,
+    broker_ready: bool,
 }
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            instance: None,
+            volumes: BTreeMap::new(),
+            broker_ready: true,
+        }
+    }
+}
+pub(crate) struct BrokerReady {
+    shared: Shared,
+}
+impl BrokerReady {
+    pub(crate) fn ready(self) {
+        self.shared.lock().unwrap().broker_ready = true;
+    }
+}
+
 struct Entry {
     resource: String,
+    ready: bool,
     candidate: Option<String>,
     challenge: Option<Challenge>,
     sender: mpsc::SyncSender<String>,
@@ -59,6 +78,7 @@ impl Manager {
             name.into(),
             Entry {
                 resource: resource.into(),
+                ready: false,
                 candidate: None,
                 challenge: None,
                 sender,
@@ -68,6 +88,12 @@ impl Manager {
             name: name.into(),
             shared: self.shared.clone(),
             receiver,
+        }
+    }
+    pub(crate) fn broker(&self) -> BrokerReady {
+        self.shared.lock().unwrap().broker_ready = false;
+        BrokerReady {
+            shared: self.shared.clone(),
         }
     }
     pub(crate) fn start(self) -> Result<()> {
@@ -127,6 +153,12 @@ impl Manager {
             .lock()
             .map_err(|_| anyhow::anyhow!("recovery unavailable"))?;
         match op {
+            "ready" => {
+                ensure!(object.len() == 2, "invalid native readiness request");
+                Ok(
+                    json!({"ready":state.broker_ready && state.volumes.values().all(|volume|volume.ready)}),
+                )
+            }
             "bind" => {
                 ensure!(
                     object.len() == 3 && object.contains_key("instance"),
@@ -224,6 +256,15 @@ struct Apply {
     acknowledgement: String,
 }
 impl VolumeRecovery {
+    pub(crate) fn ready(&self, ready: bool) {
+        self.shared
+            .lock()
+            .unwrap()
+            .volumes
+            .get_mut(&self.name)
+            .unwrap()
+            .ready = ready;
+    }
     pub(crate) fn candidate(&self, header: Option<String>) {
         let mut state = self.shared.lock().unwrap();
         let entry = state.volumes.get_mut(&self.name).unwrap();
@@ -297,5 +338,52 @@ mod tests {
         volume.candidate(Some("c".repeat(64)));
         assert!(manager.request(request(&fresh)).is_err());
         assert!(volume.requested(Duration::from_millis(1)).is_none());
+    }
+    #[test]
+    fn application_readiness_requires_every_volume_and_broker_without_releasing_recovery() {
+        let manager = Manager::new();
+        let data = manager.volume("data", "default/volume/agent");
+        let audit = manager.volume("audit", "default/volume/agent-audit");
+        let broker = manager.broker();
+        let ready = || {
+            manager.request(json!({"id":1,"op":"ready"})).unwrap()["ready"]
+                .as_bool()
+                .unwrap()
+        };
+        assert!(!ready());
+        broker.ready();
+        audit.ready(true);
+        data.candidate(Some("b".repeat(64)));
+        assert!(!ready());
+        // Recovery control remains independent of the blocked application gate.
+        manager
+            .request(json!({"id":2,"op":"bind","instance":"a".repeat(64)}))
+            .unwrap();
+        assert_eq!(
+            manager.request(json!({"id":3,"op":"plans"})).unwrap()["plans"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        data.ready(true);
+        assert!(ready());
+        data.ready(false);
+        assert!(!ready());
+        let memory_only = Manager::new();
+        assert_eq!(
+            memory_only.request(json!({"id":1,"op":"ready"})).unwrap()["ready"],
+            true
+        );
+        let broker = memory_only.broker();
+        assert_eq!(
+            memory_only.request(json!({"id":1,"op":"ready"})).unwrap()["ready"],
+            false
+        );
+        broker.ready();
+        assert_eq!(
+            memory_only.request(json!({"id":1,"op":"ready"})).unwrap()["ready"],
+            true
+        );
     }
 }
