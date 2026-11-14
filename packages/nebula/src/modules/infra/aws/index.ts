@@ -20,6 +20,8 @@ export { addAwsEcrScaledJobReader, registryReaderRunnerConfig, ECR_READER_AWS_CL
 export type { AwsEcrScaledJobReaderConfig } from "./ecr-scaled-job-reader";
 export { AwsKubernetesOidcPublication, AwsKubernetesOidcPublicationSetup } from "./kubernetes-oidc-publication";
 export type { AwsKubernetesOidcPublicationConfig } from "./kubernetes-oidc-publication";
+export { AwsNlbAccess, AwsNlbAccessSetup, CLOSED_NLB_SOURCE_RANGES, AWS_NLB_PREFIX_LIST_ANNOTATION } from "./nlb-access";
+export type { AwsNlbAccessConfig, AwsIpv4AccessSource, AwsClusterAccessSource } from "./nlb-access";
 export { AwsClusterNatIngress, AwsClusterNatIngressSetup } from "./cluster-nat-ingress";
 export type { AwsClusterNatIngressConfig } from "./cluster-nat-ingress";
 export type { AwsWorkerFleetIngressRule } from "./worker-ingress";

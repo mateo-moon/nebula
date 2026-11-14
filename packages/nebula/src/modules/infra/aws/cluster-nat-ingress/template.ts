@@ -1,22 +1,15 @@
+import { NETWORK_OBSERVATION_HELPERS } from "../network-observation";
 import { OWNED_RESOURCE_ACKNOWLEDGEMENT } from "../owned-resource-acknowledgement";
 
 /** CAPA supplies NAT addresses; staged adoption preserves existing rules until
  * their controller ownership and retained cloud bindings have been observed. */
 export const CLUSTER_NAT_INGRESS_TEMPLATE = String.raw`
 ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
+${NETWORK_OBSERVATION_HELPERS}
 {{- define "emit" }}
 ---
 {{ . | toJson }}
 {{ end -}}
-{{- define "nat.ready" -}}
-{{- $ready := false -}}{{- $synced := false -}}{{- $object := . -}}
-{{- range (dig "status" "conditions" (list) $object) -}}
-{{- if and (eq .type "Ready") (eq .status "True") -}}{{- $ready = true -}}{{- end -}}
-{{- if and (eq .type "Synced") (eq .status "True") -}}{{- $synced = true -}}
-{{- if hasKey . "observedGeneration" -}}{{- $synced = eq (toString .observedGeneration) (toString (dig "metadata" "generation" 0 $object)) -}}{{- end -}}
-{{- end -}}{{- end -}}
-{{- and $ready $synced (not (dig "metadata" "deletionTimestamp" "" $object)) -}}
-{{- end -}}
 {{- define "nat.owned" -}}
 {{- $owned := false -}}{{- $xr := .xr -}}
 {{- range (dig "metadata" "ownerReferences" (list) .rule) -}}
@@ -45,7 +38,7 @@ ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- end -}}{{- $ready -}}
 {{- end -}}
 {{- define "nat.rule" -}}
-{{- and (eq (include "nat.ready" .rule) "true") (eq (include "nat.identity" .) "true") -}}
+{{- and (eq (include "network.ready" .rule) "true") (eq (include "nat.identity" .) "true") -}}
 {{- end -}}
 {{- define "nat.retiring" -}}
 {{- and (eq (.spec.deletionPolicy | default "") "Delete")
@@ -61,7 +54,7 @@ ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- $clusterObserver := dig "resource" (dict) (get $resources "cluster" | default dict) -}}
 {{- $cluster := dig "status" "atProvider" "manifest" (dict) $clusterObserver -}}
 {{- $ips := dig "status" "networkStatus" "natGatewaysIPs" (list) $cluster -}}
-{{- $valid := and (eq (include "nat.ready" $clusterObserver) "true")
+{{- $valid := and (eq (include "network.ready" $clusterObserver) "true")
   (eq (dig "apiVersion" "" $cluster) "infrastructure.cluster.x-k8s.io/v1beta2") (eq (dig "kind" "" $cluster) "AWSCluster")
   (eq (dig "metadata" "name" "" $cluster) $spec.awsClusterName) (eq (dig "metadata" "namespace" "" $cluster) $spec.awsClusterNamespace)
   (not (dig "metadata" "deletionTimestamp" "" $cluster)) (eq (dig "spec" "region" "" $cluster) $spec.awsClusterRegion)
@@ -75,11 +68,7 @@ ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- range $ip := $ips -}}
 {{- if not (kindIs "string" $ip) -}}{{- $valid = false -}}
 {{- else -}}
-{{- if or (not (regexMatch "^([0-9]{1,3}\\.){3}[0-9]{1,3}$" $ip)) (hasKey $wanted $ip) -}}{{- $valid = false -}}{{- end -}}
-{{- range $octet := splitList "." $ip -}}
-{{- if or (gt (int $octet) 255) (ne (toString (int $octet)) $octet) -}}{{- $valid = false -}}{{- end -}}
-{{- end -}}
-{{- if or (hasPrefix "0." $ip) (hasPrefix "127." $ip) (eq $ip "255.255.255.255") -}}{{- $valid = false -}}{{- end -}}
+{{- if or (ne (include "network.ipv4" $ip) "true") (hasKey $wanted $ip) -}}{{- $valid = false -}}{{- end -}}
 {{- $_ := set $wanted $ip true -}}
 {{- end -}}{{- end -}}{{- end -}}
 {{- $observers := list -}}{{- $sources := dict -}}{{- $known := dict -}}{{- $owned := dict -}}
@@ -89,7 +78,7 @@ ${OWNED_RESOURCE_ACKNOWLEDGEMENT}
 {{- range $name := $spec.existingRuleNames -}}
 {{- $observer := dig "resource" (dict) (get $resources (printf "existing-%s" $name) | default dict) -}}
 {{- $rule := dig "status" "atProvider" "manifest" (dict) $observer -}}
-{{- $matches := and (eq (include "nat.ready" $observer) "true") (eq (include "nat.rule" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true") -}}
+{{- $matches := and (eq (include "network.ready" $observer) "true") (eq (include "nat.rule" (dict "rule" $rule "spec" $spec "name" $name "xr" $xr)) "true") -}}
 {{- if and $matches (eq $handoff "retain") (not (hasKey $baseline $name)) -}}
 {{- $_ := set $baseline $name (dict "uid" $rule.metadata.uid "externalName" (get $rule.metadata.annotations "crossplane.io/external-name")) -}}
 {{- end -}}
