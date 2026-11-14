@@ -355,7 +355,14 @@ test("requests time out and caller cancellation closes in-flight operations", as
   const f = await fixture(t), controller = new AbortController();
   const client = await TrusteeClient.connect({ ...f.options, requestTimeoutMs: 2000, signal: controller.signal }); t.after(() => client.close());
   await assert.rejects(client.putResource(["owner", "key", "slow"], Buffer.from("synthetic")), /connection failed/);
+  const bytesBeforeAbort = f.outer.bytes(), started = Date.now();
   controller.abort();
-  await assert.rejects(client.listResourcePolicies(), /abort/i);
+  assert.equal(controller.signal.aborted, true);
+  // Node versions may expose the caller abort or the runtime's terminal close
+  // reason first. Both must refuse new owner traffic and finish private cleanup.
+  await assert.rejects(client.listResourcePolicies(), /abort|closed/i);
   await client.close();
+  assert.equal(f.outer.bytes(), bytesBeforeAbort, "no owner bytes may be sent after cancellation");
+  assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
+  assert.ok(Date.now() - started < 3000, "caller cancellation cleanup must remain bounded");
 });
