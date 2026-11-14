@@ -15,6 +15,19 @@ enter Kubernetes, the host device helper, command arguments or persistent files.
 headers cause refusal. Inspection and unlock use the same sealed header copy,
 so changing the backing header between those operations cannot bypass checks.
 
+The unified agent can resume journaled initialization and publish new measured
+recipient directories without modifying existing recipients. An interrupted
+filesystem creation gets an owner recovery plan only when the owned sealed
+header is valid and every ciphertext payload byte is zero. A one-use challenge
+binds acknowledgement to that exact header and enrolled instance. Nonzero or
+ambiguous payloads are never reformatted automatically.
+
+Application children restart inside the original trusted PID1 launcher, using
+the same exclusive mount leases. All old descendants must be reaped first.
+Lease loss stops the application, and native create-once restrictions remain.
+Ext4 MMP remains enabled; Kubernetes consumer reservations are an additional
+orchestration guard rather than hardware singleton enforcement.
+
 The binary exposes three measured entry points:
 
 - `install`: copy the static launcher to guest tmpfs.

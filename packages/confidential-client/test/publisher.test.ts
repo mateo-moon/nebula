@@ -22,11 +22,49 @@ test("encrypted manifests must bind every layer to the declared Trustee key", ()
     layers: [layer(key, false)] })), key), /Every application layer must be encrypted/);
 });
 
+test("interrupted publisher retires only its owned helper before removing private mounts", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "confidential-publisher-abort-")), controller = new AbortController();
+  const auth = join(directory, "auth.json"), calls: string[][] = [];
+  writeFileSync(auth, JSON.stringify({ auths: { "registry.example.test": { auth: "dGVzdDp0ZXN0" } } }), { mode: 0o600 });
+  let work = "", container = "", removedWhileMountPresent = false;
+  try {
+    await assert.rejects(publishImage({ sourceImage: "local:app", destination: "registry.example.test/owner/app:release",
+      imageKeyResource: ["default", "image", "app"], releaseDirectory: join(directory, "release"), registryAuthFile: auth,
+      helperImage: "registry.example.test/helper@sha256:" + "a".repeat(64), signal: controller.signal,
+      command: async (_program, args) => {
+        if (args[0] === "--host") args = args.slice(2);
+        calls.push(args);
+        if (args[0] === "context") return Buffer.from("unix:///private/local.sock");
+        if (args[0] === "image" && args[1] === "inspect") return Buffer.from("amd64");
+        if (args[0] === "image" && args[1] === "save") return Buffer.alloc(0);
+        if (args[0] === "run") {
+          container = args[args.indexOf("--name") + 1];
+          const mount = args.find(value => value.startsWith("type=bind,source=") && value.endsWith(",target=/work"))!;
+          work = mount.slice("type=bind,source=".length, -",target=/work".length);
+          assert.equal(existsSync(work), true);
+          controller.abort(new Error("synthetic interrupt")); throw controller.signal.reason;
+        }
+        if (args[0] === "ps") { assert.ok(args.includes(`name=^/${container}$`)); return Buffer.from("owned-id"); }
+        if (args[0] === "rm") {
+          assert.deepEqual(args, ["rm", "--force", container]);
+          removedWhileMountPresent = existsSync(work); return Buffer.alloc(0);
+        }
+        throw new Error("Unexpected test command");
+      } }), /synthetic interrupt/);
+    assert.equal(removedWhileMountPresent, true);
+    assert.equal(existsSync(work), false);
+    const key = readFileSync(join(directory, "release", "image.key"));
+    for (const encoding of ["hex", "base64"] as const) assert.ok(!JSON.stringify(calls).includes(key.toString(encoding)));
+    key.fill(0);
+    assert.equal(existsSync(join(directory, "release", "receipt.json")), true, "private release key/receipt survive retry");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 // A local-only integration test: the real reviewed CoCo helper encrypts a
 // scratch OCI image; only registry I/O is simulated, so CI needs no account.
 test("local CoCo helper encrypts a disposable image before publication", {
   skip: process.env.CONFIDENTIAL_LOCAL_PUBLISHER !== "1", timeout: 300_000,
-}, () => {
+}, async () => {
   const directory = mkdtempSync(join(tmpdir(), "confidential-publisher-test-"));
   const source = `confidential-publisher-test:${randomBytes(4).toString("hex")}`;
   const destination = "registry.example.test/owner/app:release";
@@ -40,9 +78,10 @@ test("local CoCo helper encrypts a disposable image before publication", {
     const auth = join(directory, "auth.json");
     writeFileSync(auth, JSON.stringify({ auths: { "registry.example.test": { auth: "dGVzdDp0ZXN0" } } }),
       { mode: 0o600 });
-    const result = publishImage({ sourceImage: source, destination,
+    const result = await publishImage({ sourceImage: source, destination,
       imageKeyResource: ["default", "image", "app"], releaseDirectory: join(directory, "release"),
       registryAuthFile: auth, command: (program, args, timeout) => {
+        if (args[0] === "--host") args = args.slice(2);
         if (program === "docker" && args[0] === "run" && args.includes("docker://" + destination)) {
           const entry = args[args.indexOf("--entrypoint") + 1];
           if (entry === "/usr/local/bin/skopeo" && args.includes("inspect")) return remote as Buffer;

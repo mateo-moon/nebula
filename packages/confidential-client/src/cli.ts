@@ -10,6 +10,7 @@ import { createInvitation, createOwnerKey, deploy, reviewApplication } from "./d
 import { publishImage } from "./publisher";
 import { readPreparedClient } from "./prepare";
 import { readEnrollment } from "./enrollment";
+import { STORAGE_RECOVERY_ACK, type StorageRecoveryPlan } from "./client";
 import { withClient, pathTuple } from "./commands/shared";
 import { renewClient } from "./prepare";
 import { prepareWorkloadCommand, configureWorkload, storageStatus, bootstrapStatus, diagnostics } from "./commands/workload";
@@ -26,6 +27,15 @@ const environmentToken = process.env.CONFIDENTIAL_ACCESS_TOKEN;
 delete process.env.CONFIDENTIAL_ACCESS_TOKEN; // Never inherit it in native subprocess environments.
 const accessToken = (options: { accessToken?: string; claimToken?: string }) => options.accessToken ??
   (options.claimToken ? undefined : environmentToken);
+
+async function interruptible<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const interrupt = () => { process.exitCode = 130; controller.abort(new Error("Operation interrupted; cleaning up owned processes")); };
+  const terminate = () => { process.exitCode = 143; controller.abort(new Error("Operation terminated; cleaning up owned processes")); };
+  process.once("SIGINT", interrupt); process.once("SIGTERM", terminate);
+  try { return await operation(controller.signal); }
+  finally { process.removeListener("SIGINT", interrupt); process.removeListener("SIGTERM", terminate); }
+}
 
 program.command("ui [access-link]")
   .description("Open the one-page owner interface; signing, encryption and verification stay on this computer")
@@ -107,7 +117,7 @@ program.command("deploy <manifest>")
   .option("--wait-seconds <number>", "Maximum time for publication, attestation and bootstrap", Number, 900)
   .action(async (manifest: string, options: any) => {
     const { host } = options;
-    const result = await deploy({ manifest, name: options.name, host, port: options.port,
+    const result = await interruptible(signal => deploy({ manifest, name: options.name, host, port: options.port, signal,
       applicationApproval: JSON.parse(readFileSync(options.applicationApproval, "utf8")),
       sourceImage: options.sourceImage, releaseDirectory: options.releaseDir, claimTokenFile: options.claimToken,
       accessToken: accessToken(options),
@@ -115,7 +125,7 @@ program.command("deploy <manifest>")
       helperImage: options.helperImage, genpolicy: options.genpolicy, cache: options.cache,
       vcekFile: options.vcek,
       localPort: options.localPort, verifierPort: options.verifierPort,
-      volumeKey: options.volumeKey, resourceFile: options.resourceFile, waitSeconds: options.waitSeconds });
+      volumeKey: options.volumeKey, resourceFile: options.resourceFile, waitSeconds: options.waitSeconds }));
     console.log(JSON.stringify(result, null, 2));
   });
 
@@ -129,9 +139,9 @@ program.command("encrypt-publish")
   .option("--aws-profile <name>", "AWS profile for ECR publication")
   .option("--helper-image <digest>", "Reviewed CoCo encryption helper image")
   .action(async (options: any) => {
-    console.log(JSON.stringify(publishImage({ sourceImage: options.sourceImage, destination: options.destination,
+    console.log(JSON.stringify(await interruptible(signal => publishImage({ sourceImage: options.sourceImage, destination: options.destination, signal,
       imageKeyResource: pathTuple(options.resource), releaseDirectory: options.releaseDir,
-      registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile, helperImage: options.helperImage }), null, 2));
+      registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile, helperImage: options.helperImage })), null, 2));
   });
 
 program.command("prepare")
@@ -207,6 +217,24 @@ connected(program.command("configure-workload").description("Install the indepen
   .action(configureWorkload);
 connected(program.command("storage-status").description("Read non-secret storage phase through the enrolled attested connection"))
   .action(storageStatus);
+connected(program.command("storage-recovery-plan").description("Save one owner-authorized recovery challenge for a verified empty interrupted filesystem"))
+  .requiredOption("--storage <name>", "Exact storage binding to recover")
+  .requiredOption("--output <file>", "New private plan file to inspect before acknowledgement")
+  .action(async (options: any) => withClient(options, async client => {
+    const plans = await client.storageRecoveryPlans(), plan = plans.find(plan => plan.storage === options.storage);
+    if (!plan) throw new Error("This storage has no safe automatic recovery plan; existing data was preserved");
+    writeFileSync(options.output, JSON.stringify(plan, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+    console.log(`Review ${options.output}. Acknowledgement is valid only for this instance and sealed header, for ${plan.expiresInSeconds} seconds.`);
+  }));
+connected(program.command("recover-storage <plan>").description("Resume only the exact verified empty filesystem authorized by an unexpired owner recovery plan"))
+  .requiredOption("--acknowledge <text>", `After reviewing the plan, type: ${STORAGE_RECOVERY_ACK}`)
+  .action(async (path: string, options: any) => {
+    if (options.acknowledge !== STORAGE_RECOVERY_ACK) throw new Error("The exact empty-filesystem recovery acknowledgement is required");
+    await withClient(options, async client => {
+      await client.recoverStorage(JSON.parse(readFileSync(path, "utf8")) as StorageRecoveryPlan, options.acknowledge);
+      console.log("Recovery accepted for the reviewed empty filesystem; check storage-status for completion.");
+    });
+  });
 connected(program.command("bootstrap-status").description("Read owner-authorized guest-local retrieval diagnostics; never returns resource bytes"))
   .action(bootstrapStatus);
 connected(program.command("diagnostics").description("Read owner-authorized fixed diagnostic counters from the enrolled guest; never returns raw logs"))

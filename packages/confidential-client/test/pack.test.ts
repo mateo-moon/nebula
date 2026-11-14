@@ -20,6 +20,8 @@ test("packed TypeScript API and CLI work with declared dependencies outside the 
   const packed = pack(packageDirectory), nebula = pack(resolve(packageDirectory, "../nebula"));
   const files = packed.files.map(file => file.path);
   assert.ok(files.includes("src/index.ts"));
+  assert.ok(files.includes("src/runtime.ts"));
+  assert.ok(files.includes("src/application-approval.ts"));
   assert.ok(files.includes("src/commands/prepare.ts"));
   assert.ok(files.includes("src/ui/browser.ts"));
   assert.ok(files.includes("src/ui/index.html"));

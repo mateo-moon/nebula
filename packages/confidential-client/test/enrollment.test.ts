@@ -10,7 +10,7 @@ import { gateway, ownerRoute } from "../../confidential-agent/src/gateway";
 import { enrollInstance, TrusteeClient, renewClient } from "../src/index";
 import { readEnrollment } from "../src/enrollment";
 import { readPreparedClient } from "../src/prepare";
-import { fixture, port } from "./support";
+import { fixture, port, tlsCertificate } from "./support";
 
 test("guest gateway exposes only owner administration, never remote key consumption", () => {
   for (const method of ["POST", "DELETE"]) assert.equal(ownerRoute(method, "/kbs/v0/resource/default/key/example"), true);
@@ -83,21 +83,36 @@ test("enrollment pins the guest key and rejects a replacement before any owner H
   t.after(() => client.close());
   await client.putResource(["default", "key", "example"], Buffer.from("synthetic-secret"));
   assert.equal(writes, 1);
+  const sameKey = tlsCertificate(f.directory, "same-key-renewed", join(f.directory, "first.key"));
+  const renewedCertificate = readFileSync(sameKey.cert);
+  assert.notEqual(new X509Certificate(renewedCertificate).fingerprint256, new X509Certificate(enrolled.certificate).fingerprint256);
+  first.setSecureContext({ key: readFileSync(sameKey.key), cert: renewedCertificate });
+  await client.putResource(["default", "key", "example"], Buffer.from("same-instance-after-renewal"));
+  const refreshed = readEnrollment(f.stateDirectory, f.options.audience);
+  assert.equal(refreshed.publicKeySha256, enrolled.publicKeySha256, "Certificate renewal never changes instance identity");
+  assert.equal(new X509Certificate(refreshed.certificate).fingerprint256, new X509Certificate(renewedCertificate).fingerprint256);
+  assert.equal(writes, 2);
   // Change routing after connect: each resource request must still prove the
   // enrolled instance. A one-time verification before plaintext POST would fail.
   first.closeAllConnections();
   await new Promise<void>(accept => first.close(() => accept()));
-  let replacementRequests = 0;
+  let replacementRequests = 0, replacementOwnerRequests = 0;
   const replacement = server("replacement");
-  replacement.on("request", () => replacementRequests++);
+  replacement.on("request", req => {
+    replacementRequests++;
+    if (req.headers.authorization) replacementOwnerRequests++;
+    else assert.equal(req.url, "/nebula/v1/instance", "Only public certificate refresh may precede SPKI comparison");
+  });
   await new Promise<void>(accept => replacement.listen(targetPort, "127.0.0.1", accept));
   t.after(() => { replacement.closeAllConnections(); replacement.close(); });
-  await assert.rejects(client.putResource(["default", "key", "example"], Buffer.from("must-not-arrive")), /connection failed/);
-  assert.equal(replacementRequests, 0);
-  assert.equal(writes, 1);
+  await assert.rejects(client.putResource(["default", "key", "example"], Buffer.from("must-not-arrive")), /different confidential instance|connection failed/);
+  assert.equal(replacementOwnerRequests, 0);
+  assert.equal(writes, 2);
+  assert.equal(readEnrollment(f.stateDirectory, f.options.audience).publicKeySha256, enrolled.publicKeySha256);
   await client.close();
-  await assert.rejects(TrusteeClient.connect(f.options), /connection failed/);
-  assert.equal(replacementRequests, 0);
+  await assert.rejects(TrusteeClient.connect(f.options), /different confidential instance|connection failed/);
+  assert.ok(replacementRequests > 0);
+  assert.equal(replacementOwnerRequests, 0);
 });
 
 test("gateway blocks the resource GET route even with an owner bearer", async t => {

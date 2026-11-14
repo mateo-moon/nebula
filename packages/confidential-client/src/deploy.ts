@@ -179,11 +179,14 @@ export async function deploy(options: DeployOptions) {
   }
   mkdirSync(release, { recursive: true, mode: 0o700 });
   if ((lstatSync(release).mode & 0o077) !== 0) throw new Error("Release directory must be private (0700)");
+  const approvalFile = join(release, "application-approval.json");
+  if (existsSync(approvalFile)) assertApplicationApproval({ workload, storages }, JSON.parse(privateFile(approvalFile, 2 * 1024 * 1024).toString("utf8")));
+  else writeFileSync(approvalFile, JSON.stringify(applicationContract({ workload, storages }), null, 2) + "\n", { mode: 0o600, flag: "wx" });
   createOwnerKey(ownerKeyPath);
   options.onProgress?.("encrypting");
-  const published: PublishedImage = publishImage({ sourceImage: options.sourceImage, destination: container.image,
+  const published: PublishedImage = await publishImage({ sourceImage: options.sourceImage, destination: container.image,
     imageKeyResource: container.imageKeyResource!, releaseDirectory: release,
-    registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile, helperImage: options.helperImage });
+    registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile, helperImage: options.helperImage, signal: options.signal });
   options.onProgress?.("published");
   options.signal?.throwIfAborted();
   const volumes = volumeKeys(workload, storages, release, options.volumeKey ?? []);

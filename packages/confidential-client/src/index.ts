@@ -1,5 +1,6 @@
 export { prepareClient, renewClient, type PrepareClientOptions } from "./prepare";
-export { TrusteeClient, type TrusteeClientOptions, type ConfidentialDiagnostics, TrusteeHttpError } from "./client";
+export { TrusteeClient, type TrusteeClientOptions, type ConfidentialDiagnostics, TrusteeHttpError,
+  type StorageRecoveryPlan, STORAGE_RECOVERY_ACK } from "./client";
 export { createOwnerToken } from "./owner-token";
 export { enrollInstance, type EnrollOptions, type InstanceEnrollment } from "./enrollment";
 export { tngTrusteeClientPlan } from "nebula-cdk8s/trustee/client-plan";

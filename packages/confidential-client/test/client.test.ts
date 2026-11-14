@@ -1,15 +1,49 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { X509Certificate, verify, generateKeyPairSync } from "node:crypto";
-import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createTlsServer } from "node:https";
-import { join } from "node:path";
+import { createConnection } from "node:net";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { TrusteeClient, TrusteeHttpError, prepareClient, createOwnerToken, tngTrusteeClientPlan, trusteePolicies, enrollInstance } from "../src/index";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { TrusteeClient, TrusteeHttpError, prepareClient, renewClient, createOwnerToken, tngTrusteeClientPlan, trusteePolicies, enrollInstance } from "../src/index";
 import { readPreparedClient } from "../src/prepare";
-import { fixture, identity, port } from "./support";
+import { nativeVerification, startRuntime } from "../src/runtime";
+import { fixture, identity, port, tlsCertificate } from "./support";
 import type { RecordedRequest } from "./fixtures";
+
+const policyRunner = process.env.POLICY_TEST_RUNNER ?? fileURLToPath(new URL("../../nebula/test/support/broker-policy-runner/target/debug/broker-policy-test-runner", import.meta.url));
+test("native builtin policy appraises raw SNP claims and denies every identity or security downgrade", {
+  skip: !existsSync(policyRunner),
+}, () => {
+  const approved = { ...identity(), minimumReportedTcb: { bootloader: 2, tee: 2, snp: 2, microcode: 2 } };
+  const config = nativeVerification(approved);
+  const policy = Buffer.from(config.attestation_policy.content, "base64").toString() + `
+default test_allowed := false
+test_allowed if { executables == 3; hardware == 2; configuration == 2; file_system == 2 }
+`;
+  const claims = { init_data: approved.initDataSha256, snp: {
+    measurement: Buffer.from(approved.measurement, "hex").toString("base64"), chip_id: approved.chipId,
+    policy_debug_allowed: "0", policy_migrate_ma: "0", reported_tcb_bootloader: "2", reported_tcb_tee: "2",
+    reported_tcb_snp: "2", reported_tcb_microcode: "2",
+  } };
+  const cases: { policy: string; query: string; input: unknown }[] = [];
+  const expected: boolean[] = [];
+  const check = (input: unknown, allow: boolean) => { cases.push({ policy, query: "data.policy.test_allowed", input }); expected.push(allow); };
+  check(claims, true);
+  check({ ...claims, snp: { ...claims.snp, reported_tcb_microcode: "3" } }, true);
+  for (const [field, value] of [["measurement", Buffer.from("different").toString("base64")], ["measurement", approved.measurement],
+    ["chip_id", "d".repeat(128)], ["policy_debug_allowed", "1"], ["policy_migrate_ma", "1"],
+    ...Object.keys(approved.minimumReportedTcb).map(field => [`reported_tcb_${field}`, "1"]),
+  ]) check({ ...claims, snp: { ...claims.snp, [field]: value } }, false);
+  check({ ...claims, init_data: "d".repeat(64) }, false);
+  check({ snp: claims.snp }, false);
+  const actual = execFileSync(policyRunner, { input: JSON.stringify(cases), encoding: "utf8" }).trim().split("\n").map(line => JSON.parse(line));
+  assert.deepEqual(actual, expected);
+});
 
 test("offline preparation preserves exact workload approval and private signing custody", async t => {
   const f = await fixture(t), before = process.umask();
@@ -42,6 +76,30 @@ test("altered verification configuration and unsafe state are refused before pro
   assert.equal(existsSync(join(f.directory, "docker-args.jsonl")), false);
   writeFileSync(file, original); chmodSync(join(f.stateDirectory, "signer.key"), 0o644);
   await assert.rejects(TrusteeClient.connect(f.options), /non-private/);
+});
+
+test("transport socket remains private and its reservation is removed only on close", async t => {
+  const f = await fixture(t), runtime = await startRuntime(f.options);
+  const privateDirectory = dirname(runtime.socketPath);
+  try {
+    assert.equal(statSync(privateDirectory).mode & 0o777, 0o700);
+    assert.equal(statSync(runtime.socketPath).mode & 0o777, 0o600);
+    assert.equal(statSync(runtime.socketPath).isSocket(), true);
+    await assert.rejects(startRuntime(f.options), /EEXIST/);
+  } finally { await runtime.close(); }
+  assert.equal(existsSync(privateDirectory), false);
+  assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
+});
+
+test("native appraisal receives only its prepared public endorsement cache location", async t => {
+  const f = await fixture(t), cached = join(f.directory, "with-public-cache");
+  // A software-only X509 fixture checks path plumbing, not AMD endorsements.
+  await renewClient(f.stateDirectory, cached, { vcekFile: join(f.stateDirectory, "ca.pem") });
+  const client = await TrusteeClient.connect({ ...f.options, stateDirectory: cached });
+  try {
+    const records = readFileSync(join(f.directory, "verifications.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+    assert.ok(records.every(record => record.offlineStore === realpathSync(join(cached, "kds-store"))));
+  } finally { await client.close(); }
 });
 
 test("owner JWT is native ES256 with bounded lifetime; CLI never prints or overwrites it", async t => {
@@ -83,9 +141,14 @@ test("managed client uses native admin encoding, validates paths, isolates keys 
   await assert.rejects(client.putResource(["..", "key", "x"], secret), /three plain/);
   await assert.rejects(client.putResource(["owner", "key", "x"], Buffer.alloc(2 * 1024 * 1024 + 1)), /2 MiB/);
   assert.equal(readFileSync(join(f.directory, "requests.jsonl"), "utf8").trim().split("\n").length, requests.length);
-  const docker = readFileSync(join(f.directory, "docker-args.jsonl"), "utf8");
-  assert.doesNotMatch(docker, /owner.key|Bearer|BEGIN/);
-  assert.match(docker, /127.0.0.1:/); assert.match(docker, /sha256:/);
+  const verifications = readFileSync(join(f.directory, "verifications.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+  assert.ok(verifications.length >= requests.length * 2);
+  assert.ok(verifications.every(record => record.certificateSha256 === record.expectedSha256 && record.privateMode === 0o600));
+  const appraisal = Buffer.from(verifications[0].configuration.attestation_policy.content, "base64").toString();
+  assert.ok(appraisal.includes(identity().initDataSha256));
+  assert.ok(appraisal.includes(Buffer.from(identity().measurement, "hex").toString("base64")));
+  assert.doesNotMatch(JSON.stringify(verifications), /owner.key|Bearer|PRIVATE KEY/);
+  assert.equal(existsSync(join(f.directory, "docker-args.jsonl")), false, "Verification must not expose a local Docker AS API");
   await client.close(); await client.close();
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
   assert.equal(existsSync(join(f.directory, "verifier.pid")), false);
@@ -153,12 +216,108 @@ test("diagnostics uses enrolled owner TLS and accepts only bounded fixed counter
   assert.doesNotMatch(help, /--(?:tail|raw|log|path|file)\b/);
 });
 
-test("TNG waits for verifier HTTP readiness behind an early-accepting published port", async t => {
-  const f = await fixture(t, { verifierHttpDelayMs: 750 });
-  const client = await TrusteeClient.connect(f.options);
+test("no owner bytes reach outer TLS until its exact live certificate is accepted", async t => {
+  const f = await fixture(t, { verifyDelayMs: 750 });
+  const connecting = TrusteeClient.connect(f.options);
+  const deadline = Date.now() + 5000;
+  while (!existsSync(join(f.directory, "verifications.jsonl")) && Date.now() < deadline) await delay(10);
+  assert.ok(existsSync(join(f.directory, "verifications.jsonl")), "Verifier must run before forwarding");
+  assert.equal(f.outer.bytes(), 0, "Not even a partial owner HTTP request may precede appraisal");
+  const client = await connecting;
+  try { assert.ok(f.outer.bytes() > 0, "The byte-count control must observe accepted traffic"); }
+  finally { await client.close(); }
+});
+
+test("closing a local caller promptly kills its pending certificate verifier", async t => {
+  const f = await fixture(t, { verifyDelayMs: 5000 }), runtime = await startRuntime(f.options);
+  const socket = createConnection(runtime.socketPath); socket.on("error", () => {});
   try {
-    assert.equal(readFileSync(join(f.directory, "verifier-http-ready"), "utf8"), "ready");
-    assert.deepEqual(await client.listResourcePolicies(), ["resource-policy"]);
+    socket.write("synthetic-owner-bytes");
+    const deadline = Date.now() + 5000;
+    while (!existsSync(join(f.directory, "verifications.jsonl")) && Date.now() < deadline) await delay(10);
+    assert.ok(existsSync(join(f.directory, "verifications.jsonl")));
+    const record = JSON.parse(readFileSync(join(f.directory, "verifications.jsonl"), "utf8").trim().split("\n")[0]);
+    socket.destroy();
+    const stoppedBy = Date.now() + 1500;
+    let running = true;
+    while (running && Date.now() < stoppedBy) {
+      try { process.kill(record.pid, 0); await delay(10); } catch { running = false; }
+    }
+    assert.equal(running, false, "Caller closure must not leave the verifier running until its startup timeout");
+    assert.equal(f.outer.bytes(), 0);
+    assert.doesNotMatch(readFileSync(join(f.directory, "verifications.jsonl"), "utf8"), /"phase":"accepted"/);
+  } finally { socket.destroy(); await runtime.close(); }
+});
+
+test("RPC deadlines include certificate refresh and stalled public bodies cannot block independent requests", { timeout: 10000 }, async t => {
+  const targetPort = await port(), f = await fixture(t, { instanceBound: true, tcpForwardPort: targetPort });
+  const tls = tlsCertificate(f.directory, "bounded-discovery");
+  let next: "normal" | "stall" | "oversize" | "truncated" = "normal", ownerRequests = 0;
+  let started!: () => void;
+  const server = createTlsServer({ key: readFileSync(tls.key), cert: readFileSync(tls.cert), minVersion: "TLSv1.3" }, (req, res) => {
+    req.resume();
+    if (req.url === "/nebula/v1/instance") {
+      assert.equal(req.headers.authorization, undefined, "Certificate refresh never sends an owner JWT");
+      const mode = next; next = "normal";
+      if (mode === "oversize") { res.end(Buffer.alloc(16385)); return; }
+      if (mode === "truncated") { res.writeHead(200, { "Content-Length": 100 }); res.write("{"); res.destroy(); return; }
+      if (mode === "stall") {
+        res.writeHead(200); res.write(" ");
+        const timer = setInterval(() => res.write(" "), 25); res.once("close", () => clearInterval(timer));
+        started(); return;
+      }
+      res.end("{}"); return;
+    }
+    ownerRequests++;
+    if (req.url === "/nebula/v1/bootstrap") res.end('{"phase":"test-ready"}');
+    else res.end(req.method === "GET" ? '["resource-policy"]' : "");
+  });
+  await new Promise<void>(accept => server.listen(targetPort, "127.0.0.1", accept));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  await enrollInstance(f.options);
+  const client = await TrusteeClient.connect({ ...f.options, requestTimeoutMs: 800 });
+  try {
+    next = "stall";
+    const stalled = new Promise<void>(accept => { started = accept; });
+    const began = Date.now(), short = client.putResource(["owner", "key", "unused"], Buffer.from("must-not-arrive")).catch(error => error);
+    await Promise.race([stalled, delay(2000).then(() => { throw new Error("Public refresh did not start"); })]);
+    assert.deepEqual(await Promise.race([client.bootstrapStatus(), delay(2000).then(() => { throw new Error("Independent refresh was blocked"); })]), { phase: "test-ready" });
+    const result = await short;
+    assert.match(result.message, /timed out/);
+    assert.ok(Date.now() - began < 2000, "The timeout budget begins before the certificate-refresh body");
+    for (const mode of ["oversize", "truncated"] as const) {
+      next = mode; const before = ownerRequests;
+      await assert.rejects(client.listResourcePolicies(), /discovery failed|timed out/);
+      assert.equal(ownerRequests, before, "An invalid public response must not authorize an owner request");
+    }
+  } finally { await client.close(); }
+});
+
+test("denied certificate appraisal and missing rats-tls ALPN release no owner bytes", async t => {
+  for (const overrides of [{ rejectVerification: true }, { outerAlpn: ["http/1.1"] }]) {
+    const f = await fixture(t, overrides);
+    await assert.rejects(TrusteeClient.connect(f.options), /connection failed/);
+    assert.equal(f.outer.bytes(), 0);
+    assert.equal(existsSync(join(f.directory, "requests.jsonl")), false);
+    assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
+    if (overrides.outerAlpn) assert.equal(existsSync(join(f.directory, "verifications.jsonl")), false,
+      "An ordinary TLS connection must be refused before calling the verifier");
+  }
+});
+
+test("certificate appraisal and owner bytes use the same live TLS connection", async t => {
+  const f = await fixture(t, { verifyDelayMs: 750 });
+  const connecting = TrusteeClient.connect(f.options), deadline = Date.now() + 5000;
+  while (!existsSync(join(f.directory, "verifications.jsonl")) && Date.now() < deadline) await delay(10);
+  assert.ok(existsSync(join(f.directory, "verifications.jsonl")));
+  const replacement = tlsCertificate(f.directory, "outer-replacement");
+  f.outer.server.setSecureContext({ key: readFileSync(replacement.key), cert: readFileSync(replacement.cert) });
+  const client = await connecting;
+  try {
+    assert.ok(f.outer.bytes() > 0, "Already-verified old TLS session remains usable without reconnecting");
+    const before = f.outer.bytes();
+    await assert.rejects(client.listResourcePolicies(), /connection failed/);
+    assert.equal(f.outer.bytes(), before, "A subsequent connection presenting another certificate must not receive owner bytes");
   } finally { await client.close(); }
 });
 
@@ -177,21 +336,24 @@ test("redirects and HTTP failures never leak credentials or response content, an
   assert.equal(redirected, 0);
 });
 
-test("failed TNG startup and occupied ports cannot reuse another local proxy", async t => {
+test("missing verifier fails closed and unrelated TCP listeners cannot become the private tunnel", async t => {
   const f = await fixture(t);
-  await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary: join(f.directory, "missing") }), /TNG/);
+  await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary: join(f.directory, "missing") }), /connection failed/);
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
   assert.equal(existsSync(join(f.directory, "verifier.pid")), false);
   let requests = 0;
   const blocker = createServer((_req, res) => { requests++; res.end(); });
   await new Promise<void>(accept => blocker.listen(f.localPort, "0.0.0.0", accept)); t.after(() => blocker.close());
-  await assert.rejects(TrusteeClient.connect(f.options), /already in use/);
+  const verifierBlocker = createServer((_req, res) => { requests++; res.end(); });
+  await new Promise<void>(accept => verifierBlocker.listen(f.verifierPort, "0.0.0.0", accept)); t.after(() => verifierBlocker.close());
+  const client = await TrusteeClient.connect(f.options);
+  await client.close();
   assert.equal(requests, 0, "an existing wildcard listener must never receive owner credentials");
 });
 
 test("requests time out and caller cancellation closes in-flight operations", async t => {
   const f = await fixture(t), controller = new AbortController();
-  const client = await TrusteeClient.connect({ ...f.options, requestTimeoutMs: 300, signal: controller.signal }); t.after(() => client.close());
+  const client = await TrusteeClient.connect({ ...f.options, requestTimeoutMs: 2000, signal: controller.signal }); t.after(() => client.close());
   await assert.rejects(client.putResource(["owner", "key", "slow"], Buffer.from("synthetic")), /connection failed/);
   controller.abort();
   await assert.rejects(client.listResourcePolicies(), /abort/i);

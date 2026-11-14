@@ -5,7 +5,7 @@ import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/pol
 import { createOwnerToken, ownerKey } from "./owner-token";
 import { startRuntime, type RuntimeOptions } from "./runtime";
 import { readPreparedClient } from "./prepare";
-import { readEnrollment, instanceTls, type InstanceEnrollment } from "./enrollment";
+import { readEnrollment, refreshEnrollment, instanceTls, type InstanceEnrollment } from "./enrollment";
 
 export interface TrusteeClientOptions extends RuntimeOptions {
   readonly ownerPrivateKey: string | Buffer | KeyObject;
@@ -22,6 +22,22 @@ export class TrusteeHttpError extends Error {
 }
 
 type Runtime = Awaited<ReturnType<typeof startRuntime>>;
+export const STORAGE_RECOVERY_ACK = "RESUME ONLY THIS VERIFIED EMPTY FILESYSTEM";
+export interface StorageRecoveryPlan {
+  version: 1; storage: string; keyResource: string; instance: string;
+  headerSha256: string; challenge: string; action: "initialize-empty-filesystem"; expiresInSeconds: number;
+}
+function recoveryPlan(value: any, instance: string): StorageRecoveryPlan {
+  const fields = ["version", "storage", "keyResource", "instance", "headerSha256", "challenge", "action", "expiresInSeconds"];
+  if (!value || typeof value !== "object" || Object.keys(value).length !== fields.length || fields.some(field => !Object.hasOwn(value, field)) ||
+      value.version !== 1 || typeof value.storage !== "string" || !/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(value.storage) ||
+      value.instance !== instance || !/^[a-f0-9]{64}$/.test(value.headerSha256) || !/^[a-f0-9]{64}$/.test(value.challenge) ||
+      value.action !== "initialize-empty-filesystem" || !Number.isInteger(value.expiresInSeconds) || value.expiresInSeconds < 1 || value.expiresInSeconds > 300) {
+    throw new Error("Invalid storage recovery plan");
+  }
+  if (typeof value.keyResource !== "string" || resourcePath(value.keyResource.split("/")) !== value.keyResource) throw new Error("Invalid storage recovery resource");
+  return value;
+}
 const MAX_BODY = 2 * 1024 * 1024; // deployed KBS payload_request_size = 2 MiB
 const DIAGNOSTIC_CATEGORIES = ["startup", "ownerAuthorization", "attestationHandshake", "evidenceVerification",
   "collateral", "attestationPolicy", "attestationToken", "resourcePolicy", "resourceStorage", "responseEncryption", "unclassified"] as const;
@@ -62,12 +78,14 @@ export class TrusteeClient {
   #timeout: number;
   #signal: AbortSignal;
   #enrollment?: InstanceEnrollment;
+  #state: string;
 
   private constructor(runtime: Runtime, key: KeyObject, options: TrusteeClientOptions, enrollment?: InstanceEnrollment) {
     this.#runtime = runtime; this.#key = key; this.#audience = options.audience;
     this.#timeout = options.requestTimeoutMs ?? 30_000;
     this.#signal = options.signal ? AbortSignal.any([options.signal, runtime.signal]) : runtime.signal;
     this.#enrollment = enrollment;
+    this.#state = options.stateDirectory;
   }
 
   /** Starts the local verifier and TNG, then verifies an authenticated round trip. */
@@ -109,10 +127,30 @@ export class TrusteeClient {
     const status = JSON.parse((await this.#request("GET", "/nebula/v1/storage")).toString("utf8"));
     if (status.version !== 1 || !status.storage || typeof status.storage !== "object" ||
         Object.values(status.storage).some((s: any) =>
-          !["starting", "awaiting-owner", "ready", "unlock-denied", "failed", "closed"].includes(s?.phase))) {
+          !["starting", "awaiting-owner", "ready", "unlock-denied", "failed", "closed", "initializing", "migrating",
+            "recovery-required", "recovering", "manual-recovery-required"].includes(s?.phase))) {
       throw new Error("Invalid attested storage status");
     }
     return status;
+  }
+
+  async storageRecoveryPlans(): Promise<StorageRecoveryPlan[]> {
+    if (!this.#enrollment) throw new Error("Storage recovery requires instance enrollment");
+    const value = JSON.parse((await this.#request("GET", "/nebula/v1/storage-recovery")).toString("utf8"));
+    if (!value || value.version !== 1 || value.instance !== this.#enrollment.publicKeySha256 ||
+        !Array.isArray(value.plans) || value.plans.length > 16) throw new Error("Invalid storage recovery plan");
+    return value.plans.map((plan: unknown) => recoveryPlan(plan, this.#enrollment!.publicKeySha256));
+  }
+
+  /** One explicit owner acknowledgement, bound to a short-lived challenge,
+   * current instance and exact sealed header; never accepts a device path. */
+  async recoverStorage(plan: StorageRecoveryPlan, acknowledgement: typeof STORAGE_RECOVERY_ACK): Promise<void> {
+    if (!this.#enrollment || acknowledgement !== STORAGE_RECOVERY_ACK) throw new Error("Explicit owner recovery acknowledgement is required");
+    const approved = recoveryPlan(plan, this.#enrollment.publicKeySha256);
+    const { keyResource: _resource, expiresInSeconds: _expiry, ...request } = approved;
+    const value = JSON.parse((await this.#request("POST", "/nebula/v1/storage-recovery",
+      Buffer.from(JSON.stringify({ ...request, acknowledgement })), "application/json", this.#timeout, [202])).toString("utf8"));
+    if (value?.version !== 1 || value.storage !== approved.storage || value.accepted !== true) throw new Error("Storage recovery was not accepted");
   }
 
   async listResourcePolicies(): Promise<string[]> {
@@ -147,15 +185,22 @@ export class TrusteeClient {
   }
 
   async #request(method: string, path: string, body: Buffer = Buffer.alloc(0), contentType = "application/octet-stream",
-    timeoutMs = this.#timeout): Promise<Buffer> {
+    timeoutMs = this.#timeout, successStatuses: readonly number[] = [200]): Promise<Buffer> {
     this.#runtime.assertAlive();
     if (body.length > MAX_BODY) throw new RangeError("Request exceeds the deployed Trustee's 2 MiB limit");
-    return new Promise((accept, reject) => {
-      // node:http goes straight to loopback, ignores proxy environment variables,
+    const budget = new AbortController();
+    const timeout = setTimeout(() => budget.abort(new Error("Trustee request timed out")), timeoutMs);
+    timeout.unref();
+    const signal = AbortSignal.any([this.#signal, budget.signal]);
+    try {
+      signal.throwIfAborted();
+      if (this.#enrollment) this.#enrollment = await refreshEnrollment(this.#state, this.#audience, this.#runtime, signal);
+      return await new Promise((accept, reject) => {
+      // node:http uses our private Unix socket, ignores proxy environment variables,
       // follows no redirects, and performs no automatic retries of writes.
       const send = this.#enrollment ? httpsRequest : request;
-      const req = send({ host: "127.0.0.1", port: this.#runtime.port, method, path: path.startsWith("/") ? path : `/kbs/v0/${path}`,
-        agent: false, signal: this.#signal,
+      const req = send({ socketPath: this.#runtime.socketPath, method, path: path.startsWith("/") ? path : `/kbs/v0/${path}`,
+        agent: false, signal,
         ...(this.#enrollment ? instanceTls(this.#enrollment) : {}),
         headers: { Authorization: `Bearer ${createOwnerToken(this.#key, this.#audience)}`,
           "Content-Type": contentType, "Content-Length": body.length } }, response => {
@@ -166,13 +211,14 @@ export class TrusteeClient {
           else chunks.push(chunk);
         });
         response.on("error", () => reject(new Error("Trustee response was interrupted")));
-        response.on("end", () => response.statusCode === 200 ? accept(Buffer.concat(chunks)) : reject(new TrusteeHttpError(response.statusCode ?? 0)));
+        response.on("end", () => successStatuses.includes(response.statusCode ?? 0) ? accept(Buffer.concat(chunks)) : reject(new TrusteeHttpError(response.statusCode ?? 0)));
       });
-      const timeout = setTimeout(() => req.destroy(new Error("Trustee request timed out")), timeoutMs);
-      timeout.unref();
-      req.once("close", () => clearTimeout(timeout));
       req.on("error", () => reject(new Error("Trustee connection failed, timed out or was closed; no unverified fallback was attempted")));
       req.end(body);
-    });
+      });
+    } catch (error) {
+      if (signal.aborted) throw new Error("Trustee connection failed, timed out or was closed; no unverified fallback was attempted");
+      throw error;
+    } finally { clearTimeout(timeout); }
   }
 }

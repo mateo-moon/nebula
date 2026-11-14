@@ -1,6 +1,7 @@
-import { createHash, createPublicKey, X509Certificate } from "node:crypto";
-import { lstatSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, createPublicKey, randomUUID, X509Certificate } from "node:crypto";
+import { lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:https";
+import type { IncomingMessage } from "node:http";
 import { join } from "node:path";
 import { checkServerIdentity, type TLSSocket } from "node:tls";
 import { readPreparedClient } from "./prepare";
@@ -23,12 +24,12 @@ function fingerprint(certificate: X509Certificate): string {
   return createHash("sha256").update(certificate.publicKey.export({ type: "spki", format: "der" })).digest("hex");
 }
 
-function certificate(pem: string): X509Certificate {
+function certificate(pem: string, allowExpired = false): X509Certificate {
   const cert = new X509Certificate(pem);
   if (cert.publicKey.asymmetricKeyType !== "ec" ||
       cert.publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
       !cert.verify(cert.publicKey) || !cert.checkHost(INSTANCE_SERVER_NAME) ||
-      Date.parse(cert.validFrom) > Date.now() || Date.parse(cert.validTo) <= Date.now()) {
+      Date.parse(cert.validFrom) > Date.now() || (!allowExpired && Date.parse(cert.validTo) <= Date.now())) {
     throw new Error("Invalid instance certificate");
   }
   return cert;
@@ -48,10 +49,71 @@ export function readEnrollment(directory: string, audience: string): InstanceEnr
   }
   const enrolled = JSON.parse(readFileSync(path, "utf8")) as InstanceEnrollment;
   if (enrolled.version !== 1 || enrolled.approvalSha256 !== approval(profile.identity) ||
-      enrolled.audience !== audience || fingerprint(certificate(enrolled.certificate)) !== enrolled.publicKeySha256) {
+      enrolled.audience !== audience || fingerprint(certificate(enrolled.certificate, true)) !== enrolled.publicKeySha256) {
     throw new Error("Instance enrollment differs from the approved client profile or audience");
   }
   return enrolled;
+}
+
+/** An expired certificate is still a saved public-key identity, never authority
+ * to adopt another key. Refresh only through newly verified outer attestation,
+ * without an owner JWT, then require the exact enrolled SPKI and a valid cert. */
+export async function refreshEnrollment(directory: string, audience: string,
+  runtime: Awaited<ReturnType<typeof startRuntime>>, signal?: AbortSignal): Promise<InstanceEnrollment> {
+  const enrolled = readEnrollment(directory, audience);
+  const pem = await discoverCertificate(runtime, signal);
+  if (fingerprint(certificate(pem)) !== enrolled.publicKeySha256) {
+    throw new Error("The endpoint is a different confidential instance; enrollment was preserved");
+  }
+  if (pem === enrolled.certificate) return enrolled;
+  const next = { ...enrolled, certificate: pem }, path = join(directory, FILE), temporary = `${path}.${randomUUID()}.tmp`;
+  // Avoid overwriting an out-of-band enrollment change during the round trip.
+  const current = readEnrollment(directory, audience);
+  if (JSON.stringify(current) !== JSON.stringify(enrolled)) {
+    if (current.approvalSha256 !== enrolled.approvalSha256 || current.audience !== enrolled.audience || current.publicKeySha256 !== enrolled.publicKeySha256) {
+      throw new Error("Enrollment changed during certificate refresh");
+    }
+    // Another request may have refreshed the same instance while this public
+    // discovery was in flight. Keep its valid certificate instead of rolling
+    // the cache back to an older response or failing an unrelated caller.
+    if (Date.parse(new X509Certificate(current.certificate).validTo) > Date.now()) return current;
+  }
+  try {
+    writeFileSync(temporary, JSON.stringify(next, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+    renameSync(temporary, path);
+  } finally { rmSync(temporary, { force: true }); }
+  return next;
+}
+
+function consumeBounded(response: IncomingMessage): Promise<void> {
+  return new Promise((accept, reject) => {
+    let bytes = 0;
+    const failed = () => reject(new Error("Instance response was interrupted or exceeded its limit"));
+    response.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > 16384) { failed(); response.destroy(); }
+    });
+    response.once("error", failed); response.once("aborted", failed);
+    response.once("end", () => response.complete ? accept() : failed());
+  });
+}
+
+async function discoverCertificate(runtime: Awaited<ReturnType<typeof startRuntime>>, signal?: AbortSignal): Promise<string> {
+  runtime.assertAlive();
+  return new Promise((accept, reject) => {
+    const req = request({ socketPath: runtime.socketPath, path: "/nebula/v1/instance",
+      agent: false, servername: INSTANCE_SERVER_NAME, minVersion: "TLSv1.3", rejectUnauthorized: false,
+      signal: AbortSignal.any([runtime.signal, ...(signal ? [signal] : []), AbortSignal.timeout(30_000)]) }, response => {
+      const raw = (response.socket as TLSSocket).getPeerCertificate().raw;
+      const pem = raw ? new X509Certificate(raw).toString() : undefined;
+      void consumeBounded(response).then(() => {
+        if (![200, 403].includes(response.statusCode ?? 0) || !pem) reject(new Error("Instance discovery failed"));
+        else accept(pem);
+      }, () => reject(new Error("Instance discovery failed")));
+    });
+    req.on("error", () => reject(new Error("Attested instance discovery failed")));
+    req.end();
+  });
 }
 
 /** Every request performs a pinned inner TLS handshake before sending a JWT or
@@ -106,25 +168,7 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
   try { runtime = await startRuntime(options); }
   catch (error) { claimToken?.fill(0); throw error; }
   try {
-    const pem = await new Promise<string>((accept, reject) => {
-      runtime.assertAlive();
-      const req = request({ host: "127.0.0.1", port: runtime.port, path: "/nebula/v1/instance",
-        agent: false, servername: INSTANCE_SERVER_NAME, minVersion: "TLSv1.3",
-        // This one public discovery request runs only inside verified TNG.
-        rejectUnauthorized: false, signal: runtime.signal,
-      }, response => {
-        const raw = (response.socket as TLSSocket).getPeerCertificate().raw;
-        response.resume();
-        // A previously claimed guest returns 403 without a JWT. Its certificate
-        // is public TLS data; only a subsequent pinned owner-authorized request
-        // can establish enrollment, including recovery after a lost claim reply.
-        if (![200, 403].includes(response.statusCode ?? 0) || !raw) reject(new Error("Instance discovery failed"));
-        else accept(new X509Certificate(raw).toString());
-      });
-      req.setTimeout(30_000, () => req.destroy());
-      req.on("error", () => reject(new Error("Attested instance discovery failed")));
-      req.end();
-    });
+    const pem = await discoverCertificate(runtime);
     const enrolled: InstanceEnrollment = { version: 1, approvalSha256: approval(profile.identity),
       audience: options.audience, certificate: pem, publicKeySha256: fingerprint(certificate(pem)) };
     if (claimToken) {
@@ -133,17 +177,17 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
       try {
         await new Promise<void>((accept, reject) => {
           runtime.assertAlive();
-          const req = request({ host: "127.0.0.1", port: runtime.port, path: "/nebula/v1/claim", method: "POST",
-            agent: false, signal: runtime.signal, ...instanceTls(enrolled),
+          const req = request({ socketPath: runtime.socketPath, path: "/nebula/v1/claim", method: "POST",
+            agent: false, signal: AbortSignal.any([runtime.signal, AbortSignal.timeout(30_000)]), ...instanceTls(enrolled),
             headers: { Authorization: `Bearer ${createOwnerToken(key, options.audience)}`,
               "Content-Type": "application/json", "Content-Length": body.length } }, response => {
-            response.resume();
             // A lost response after a successful claim is recoverable only if
             // the following owner-authorized round trip succeeds.
-            if (response.statusCode === 200 || response.statusCode === 409) accept();
-            else reject(new Error("Instance claim was refused"));
+            void consumeBounded(response).then(() => {
+              if (response.statusCode === 200 || response.statusCode === 409) accept();
+              else reject(new Error("Instance claim was refused"));
+            }, () => reject(new Error("Instance claim response was interrupted")));
           });
-          req.setTimeout(30_000, () => req.destroy());
           req.on("error", () => reject(new Error("Instance claim failed or timed out")));
           req.end(body);
         });
@@ -151,15 +195,15 @@ export async function enrollInstance(options: EnrollOptions): Promise<InstanceEn
     }
     await new Promise<void>((accept, reject) => {
       runtime.assertAlive();
-      const req = request({ host: "127.0.0.1", port: runtime.port, path: "/kbs/v0/resource-policy",
-        agent: false, signal: runtime.signal, ...instanceTls(enrolled),
+      const req = request({ socketPath: runtime.socketPath, path: "/kbs/v0/resource-policy",
+        agent: false, signal: AbortSignal.any([runtime.signal, AbortSignal.timeout(30_000)]), ...instanceTls(enrolled),
         headers: { Authorization: `Bearer ${createOwnerToken(key, options.audience)}` },
       }, response => {
-        response.resume();
-        if (response.statusCode === 200) accept();
-        else reject(new Error("Owner authorization failed for this instance"));
+        void consumeBounded(response).then(() => {
+          if (response.statusCode === 200) accept();
+          else reject(new Error("Owner authorization failed for this instance"));
+        }, () => reject(new Error("Instance authorization response was interrupted")));
       });
-      req.setTimeout(30_000, () => req.destroy());
       req.on("error", () => reject(new Error("Instance changed or owner verification failed during enrollment")));
       req.end();
     });

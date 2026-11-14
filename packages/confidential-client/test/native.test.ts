@@ -9,14 +9,15 @@ import { test } from "node:test";
 import { TrusteeClient, trusteePolicies } from "../src/index";
 import { fixture, identity, port } from "./support";
 
-test("native TNG and mainline AS reject a TLS server without attestation before sending an owner request", {
+test("native TNG builtin verification rejects ordinary TLS despite correct RA-TLS ALPN before owner bytes", {
   skip: !process.env.TNG_TEST_BINARY, timeout: 120_000,
 }, async t => {
   const tngBinary = process.env.TNG_TEST_BINARY;
   assert.ok(tngBinary);
   const remotePort = await port(), f = await fixture(t, { targetPort: remotePort });
   let requests = 0;
-  const server = createServer({ key: readFileSync(join(f.stateDirectory, "signer.key")), cert: readFileSync(join(f.stateDirectory, "signer.pem")) },
+  const server = createServer({ key: readFileSync(join(f.directory, "outer.key")), cert: readFileSync(join(f.directory, "outer.pem")),
+    minVersion: "TLSv1.3", maxVersion: "TLSv1.3", ALPNProtocols: ["rats-tls"] },
     (_req, res) => { requests++; res.end('["resource-policy"]'); });
   await new Promise<void>(accept => server.listen(remotePort, "127.0.0.1", accept)); t.after(() => server.close());
   await assert.rejects(TrusteeClient.connect({ ...f.options, tngBinary,
@@ -25,8 +26,9 @@ test("native TNG and mainline AS reject a TLS server without attestation before 
   assert.equal(existsSync(join(f.stateDirectory, "runtime.lock")), false);
 });
 
-// This is a native HTTP/admin protocol test in ordinary Docker. Its test-only
-// proxy forwards plaintext loopback traffic and deliberately does no attestation.
+// Native HTTP/admin protocol test in ordinary Docker. Its SOFTWARE-ONLY outer
+// TLS verifier compares fixture certificate bytes and deliberately does no TEE
+// attestation; this test must never be cited as a hardware security proof.
 test("native upstream KBS accepts Node owner JWTs, policy updates and binary resource lifecycle", {
   skip: !process.env.TRUSTEE_TEST_IMAGE, timeout: 120_000,
 }, async t => {
