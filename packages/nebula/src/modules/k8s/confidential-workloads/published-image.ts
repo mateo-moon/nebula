@@ -52,7 +52,7 @@ export function resolvePublishedImage(tag: string, resource: TrusteeResourcePath
 
 /** Never trust registry command metadata without binding it to the measured
  * manifest. Config bytes remain public; decryption keys are not needed here. */
-export function imageCommand(image: string, supplied?: { manifest: Uint8Array; config: Uint8Array }): string[] {
+export function imageProcess(image: string, supplied?: { manifest: Uint8Array; config: Uint8Array }, useImageCommand = true): { command: string[]; env: Record<string, string> } {
   const expected = image.split("@")[1];
   if (!digestPattern.test(expected ?? "")) throw new Error("Image command requires an immutable digest");
   const inspect = (config: boolean): Buffer => execFileSync("skopeo", ["--insecure-policy", "inspect", "--raw",
@@ -71,10 +71,24 @@ export function imageCommand(image: string, supplied?: { manifest: Uint8Array; c
   }
   const value = JSON.parse(raw.toString("utf8"));
   if (value.architecture !== "amd64" || value.os !== "linux") throw new Error("Image must be linux/amd64");
+  const environment = value.config?.Env ?? [];
+  if (!Array.isArray(environment) || environment.length > 4096) throw new Error("Invalid OCI environment");
+  const env: Record<string, string> = Object.create(null);
+  for (const entry of environment) {
+    if (typeof entry !== "string" || entry.length > 16384 || entry.includes("\0") || entry.includes("$(")) throw new Error("OCI environment must contain literal values without native policy placeholders");
+    const split = entry.indexOf("="), name = entry.slice(0, split);
+    if (split < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || Object.hasOwn(env, name)) throw new Error("Invalid or duplicate OCI environment name");
+    env[name] = entry.slice(split + 1);
+  }
+  if (!useImageCommand) return { command: [], env };
   const entrypoint = value.config?.Entrypoint ?? [], cmd = value.config?.Cmd ?? [];
   if (!Array.isArray(entrypoint) || !Array.isArray(cmd)) throw new Error("Invalid OCI entrypoint");
   const command = [...entrypoint, ...cmd];
   if (!command.length || command.length > 128 || command.some(arg => typeof arg !== "string" || arg.includes("\0") || arg.length > 16384) ||
       !command[0].startsWith("/")) throw new Error("Image entrypoint must start with an absolute executable path");
-  return command;
+  return { command, env };
+}
+
+export function imageCommand(image: string, supplied?: { manifest: Uint8Array; config: Uint8Array }): string[] {
+  return imageProcess(image, supplied).command;
 }

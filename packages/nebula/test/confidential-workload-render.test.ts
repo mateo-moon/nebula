@@ -95,6 +95,7 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   delete declaration.spec.trustee.gatewayImage;
   declaration.spec.containers[0].imageKeyResource = ["default", "image", "app"];
   declaration.spec.containers[0].applicationResources = [["default", "config", "app"]];
+  declaration.spec.containers[0].env = { DEBUG: "false", CHANNEL: "stable" };
   declaration.spec.containers[0].mounts = [{ storage: "data", path: "/data" }, { storage: "scratch", path: "/scratch" }];
   declaration.spec.storage = [{ name: "data", resource: "data" }, { name: "scratch", resource: "scratch" }];
   declaration.spec.resources = [["default", "image", "app"], ["default", "volume", "data"],
@@ -149,4 +150,7 @@ test("one measured agent replaces the guest daemons and owns isolated multi-volu
   assert.equal(agent.securityContext!.readOnlyRootFilesystem, true);
   assert.ok(!first.pod.spec!.volumes!.some(volume => "secret" in volume || "hostPath" in volume));
   assert.deepEqual(first.pod.spec!.containers![0].command, ["/run/nebula-runtime/nebula-confidential-storage"]);
+  const environment = first.pod.spec!.containers![0].env!.map(value => value.name);
+  assert.ok(environment.indexOf("CHANNEL") < environment.indexOf("DEBUG"),
+    "Measured environment ordering must not follow the owner's locale collation");
 });

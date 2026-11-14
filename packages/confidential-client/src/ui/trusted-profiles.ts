@@ -1,7 +1,8 @@
 import type { ConfidentialConnection } from "./connection";
 
-/** Release trust is installed with this client, never learned from the stack
- * that is asking for keys. A new measured runtime needs a reviewed release. */
+/** Runtime release trust is installed with this client, never learned from the
+ * stack asking for keys. This approves helper code, not administrator-selected
+ * application behavior: applicationContract needs separate owner approval. */
 const ACCESS_PROFILE = {
   agentImage: undefined as string | undefined,
   id: "nebula-snp-access-2026-10",

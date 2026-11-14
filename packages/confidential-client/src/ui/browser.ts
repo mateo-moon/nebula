@@ -1,4 +1,5 @@
 import type { StackSummary, UiJob, Upload } from "./protocol";
+import { applicationContract } from "../application-approval";
 
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const token = new URLSearchParams(location.hash.slice(1)).get("session");
@@ -52,10 +53,10 @@ function security(job?: UiJob) {
   const badge = element("attestation-status");
   badge.textContent = receipt ? "Attestation verified locally" : running ? "Verification in progress" : "Not attested this session";
   badge.className = `badge ${receipt ? "verified" : "pending"}`;
-  element("profile-status").textContent = source ? `Reviewed profile · ${source.profile}` : stack ? "Owner-reviewed settings" : "No stack connected";
+  element("profile-status").textContent = source ? `Reviewed runtime · ${source.profile}` : stack ? "Custom settings · owner review required" : "No stack connected";
   element("security-description").textContent = receipt ?
     "Native verification passed and your owner key is authorized for the enrolled guest. The constraints below were enforced locally." :
-    source ? "Fetched settings match a reviewed profile installed with this client. Live attestation is still required before any key is provisioned." :
+    source ? "Helper software matches a reviewed runtime profile. Approve the application settings separately; live attestation is still required before keys are provisioned." :
     "The local verifier checks the stack before any image or disk key leaves your computer.";
   const values = element("security-values"); values.replaceChildren();
   const row = (name: string, value: string) => {
@@ -86,6 +87,7 @@ function security(job?: UiJob) {
 function connected(value: any) {
   source = value.source; bootstrapReady = Boolean(value.bootstrapReady); configuration = value.configuration;
   element("configuration").textContent = configuration ? JSON.stringify(configuration, null, 2) : "";
+  element("application-contract").textContent = configuration ? JSON.stringify(applicationContract(configuration), null, 2) : "";
   element("connection-hint").textContent = source ? "Settings fetched automatically. Your one-time token is kept only in private local state until ownership is established." : "Public settings loaded locally.";
   showStack(value.stack, value.hasRelease); showJob();
 }
@@ -183,6 +185,7 @@ element("deploy-form").addEventListener("submit", async event => {
     const registryAuth = element<HTMLInputElement>("registry-auth").files?.[0];
     const value = await api("/api/deploy", { sourceImage: element<HTMLInputElement>("source-image").value.trim(),
       accessToken: element<HTMLInputElement>("access-token").value.trim(), reviewed: element<HTMLInputElement>("reviewed").checked,
+      applicationApproval: applicationContract(configuration),
       ...(registryAuth ? { registryAuth: await registryAuth.text() } : {}),
       ...(element<HTMLInputElement>("registry-username").value || element<HTMLInputElement>("registry-password").value ? {
         registryUsername: element<HTMLInputElement>("registry-username").value,

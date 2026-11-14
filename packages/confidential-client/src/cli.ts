@@ -3,11 +3,10 @@ import { Command } from "commander";
 import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { startUi } from "./ui/server";
 import { connectionFromManifest } from "./ui/connection";
 import { enroll } from "./commands/enroll";
-import { createInvitation, createOwnerKey, deploy } from "./deploy";
+import { createInvitation, createOwnerKey, deploy, reviewApplication } from "./deploy";
 import { publishImage } from "./publisher";
 import { readPreparedClient } from "./prepare";
 import { readEnrollment } from "./enrollment";
@@ -38,17 +37,15 @@ program.command("ui [access-link]")
   .option("--port <number>", "Local browser port (otherwise a random free port)", Number)
   .option("--local-port <number>", "Local TNG verifier tunnel port", Number)
   .option("--verifier-port <number>", "Local AS port", Number)
-  .option("--no-open", "Print the local address without opening a browser")
+  .option("--no-open", "Print the local address (the browser is always opened manually)")
   .action(async (link: string | undefined, options: any) => {
     const ui = await startUi({ directory: options.directory, connectionFile: options.connection,
       accessLink: link,
       tngBinary: options.tng, genpolicy: options.genpolicy, cache: options.cache,
       port: options.port, localPort: options.localPort, verifierPort: options.verifierPort });
     console.log(`Open ${ui.url}\nKeep this process running. Private releases: ${options.directory}`);
-    if (options.open) {
-      const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
-      const child = spawn(opener, [ui.url], { stdio: "ignore" }); child.on("error", () => {}); child.unref();
-    }
+    // The session capability stays out of process arguments, which can be read
+    // by other local users on some operating systems. Open the printed URL.
     const close = async () => { await ui.close(); };
     process.once("SIGINT", close); process.once("SIGTERM", close);
   });
@@ -76,6 +73,16 @@ program.command("owner-key <file>")
   .description("Create or validate a private P-256 workload owner key")
   .action((file: string) => { createOwnerKey(file); console.log(`Owner key is stored in ${file}`); });
 
+program.command("application-approval <manifest>")
+  .description("Export the complete application contract for owner review before deployment")
+  .requiredOption("--name <name>", "ConfidentialWorkload name")
+  .requiredOption("--output <file>", "New review document; inspect every setting before approving deployment")
+  .action((manifest: string, options: any) => {
+    writeFileSync(options.output, JSON.stringify(reviewApplication(manifest, options.name), null, 2) + "\n",
+      { flag: "wx", mode: 0o600 });
+    console.log(`Review application settings in ${options.output}; pass it to deploy only after approving them.`);
+  });
+
 program.command("deploy <manifest>")
   .description("Encrypt and publish a local image, attest and claim the guest, then provision its keys")
   .requiredOption("--name <name>", "ConfidentialWorkload name in the reviewed declaration")
@@ -83,6 +90,7 @@ program.command("deploy <manifest>")
   .option("--port <number>", "Owner endpoint port", Number, 8443)
   .requiredOption("--source-image <image>", "Local linux/amd64 OCI image")
   .requiredOption("--release-dir <directory>", "Private output directory for owner and image keys")
+  .requiredOption("--application-approval <file>", "Complete application contract reviewed and approved by the owner")
   .option("--access-token <token>", "Temporary deployment-time token (or CONFIDENTIAL_ACCESS_TOKEN)")
   .option("--claim-token <file>", "Legacy private claim token file")
   .requiredOption("--tng <file>", "Qualified native TNG client executable")
@@ -100,6 +108,7 @@ program.command("deploy <manifest>")
   .action(async (manifest: string, options: any) => {
     const { host } = options;
     const result = await deploy({ manifest, name: options.name, host, port: options.port,
+      applicationApproval: JSON.parse(readFileSync(options.applicationApproval, "utf8")),
       sourceImage: options.sourceImage, releaseDirectory: options.releaseDir, claimTokenFile: options.claimToken,
       accessToken: accessToken(options),
       tngBinary: options.tng, registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile,
@@ -119,7 +128,7 @@ program.command("encrypt-publish")
   .option("--registry-auth-file <file>", "Private skopeo auth JSON")
   .option("--aws-profile <name>", "AWS profile for ECR publication")
   .option("--helper-image <digest>", "Reviewed CoCo encryption helper image")
-  .action((options: any) => {
+  .action(async (options: any) => {
     console.log(JSON.stringify(publishImage({ sourceImage: options.sourceImage, destination: options.destination,
       imageKeyResource: pathTuple(options.resource), releaseDirectory: options.releaseDir,
       registryAuthFile: options.registryAuthFile, awsProfile: options.awsProfile, helperImage: options.helperImage }), null, 2));

@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./endpoint": "./src/endpoint.ts",
+    "./application-approval": "./src/application-approval.ts",
     "./image-protocol": "./src/image-protocol.ts"
   },
   "files": ["src/", "bin/", "tsconfig.json", "LICENSE", "NOTICE"],

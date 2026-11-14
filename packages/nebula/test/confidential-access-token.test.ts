@@ -4,7 +4,7 @@ import { Testing } from "cdk8s";
 import { test } from "node:test";
 import { ConfidentialWorkload, confidentialAccessTokenHash, validateWorkload,
   type ConfidentialWorkloadResource } from "../src/modules/k8s/confidential-workloads";
-import { imageCommand } from "../src/modules/k8s/confidential-workloads/published-image";
+import { imageCommand, imageProcess } from "../src/modules/k8s/confidential-workloads/published-image";
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 
 const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
@@ -52,4 +52,20 @@ test("generated access links remain deterministic declarations and cannot mix ow
   assert.throws(() => validateWorkload({ ...first.declaration, spec: { ...config, ownerClaimSha256: "f".repeat(64) } }, []), /generated access link/);
   assert.throws(() => validateWorkload({ ...first.declaration, spec: { ...config, accessLink: { ...config.accessLink, url: "http://stack.example/" } } }, []), /HTTPS/);
   assert.throws(() => validateWorkload({ ...first.declaration, spec: { ...config, accessLink: { ...config.accessLink, url: "https://stack.example/#secret" } } }, []), /HTTPS/);
+});
+
+test("OCI environment placeholders cannot acquire dynamic native-policy semantics", () => {
+  for (const env of [["NODE_OPTIONS=$(node-name)"], ["HOSTNAME=$(host-name)"], ["EXAMPLE=$(pod-ip)"], ["PATH=/bin", "PATH=/unapproved"]]) {
+    const config = Buffer.from(JSON.stringify({ architecture: "amd64", os: "linux", config: { Env: env } }));
+    const manifest = Buffer.from(JSON.stringify({ schemaVersion: 2, config: { digest: `sha256:${createHash("sha256").update(config).digest("hex")}`, size: config.length } }));
+    const reference = `example.invalid/app@sha256:${createHash("sha256").update(manifest).digest("hex")}`;
+    assert.throws(() => imageProcess(reference, { manifest, config }, false), /literal|duplicate/,
+      "Even an explicit command must validate the image's implicit environment");
+  }
+  const workload: ConfidentialWorkloadResource = { apiVersion: "confidential.nebula.dev/v1alpha1", kind: "ConfidentialWorkload",
+    metadata: { name: "guest", namespace: "test" }, spec: { ...spec(), ownerClaimSha256: "b".repeat(64) } };
+  delete workload.spec.containers[0].commandFromImage;
+  assert.doesNotThrow(() => validateWorkload(workload, []), "An omitted command safely defaults to the owner's image");
+  workload.spec.containers[0].env = { NODE_OPTIONS: "$(node-name)" };
+  assert.throws(() => validateWorkload(workload, []), /literal/);
 });

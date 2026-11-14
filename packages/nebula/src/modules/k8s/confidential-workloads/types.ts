@@ -40,7 +40,9 @@ export interface WorkloadContainer {
   /** CoCo key ID for an owner-published encrypted image. Required with a tag. */
   imageKeyResource?: TrusteeResourcePath;
   command?: readonly string[];
-  /** Derive Entrypoint + Cmd from the published, digest-bound OCI config. */
+  /** Derive Entrypoint + Cmd from the published, digest-bound OCI config.
+   * This is also the default when command and args are absent. An explicit
+   * command/args override requires separate owner application approval. */
   commandFromImage?: true;
   args?: readonly string[];
   env?: Readonly<Record<string, string>>;

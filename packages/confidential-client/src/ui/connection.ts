@@ -87,7 +87,7 @@ export function connectionSummary(connection: ConfidentialConnection): Connectio
   const keyPaths = new Set(workload.spec.containers.flatMap(c => c.imageKeyResource ? [c.imageKeyResource.join("/")] : []));
   for (const s of storages) if (s.spec.type === "EncryptedBlock") keyPaths.add(s.spec.keyResource.join("/"));
   return { name: workload.metadata.name, profile: workload.spec.profile, endpoint: connection.endpoint,
-    images: workload.spec.containers.map(c => ({ name: c.name, command: c.commandFromImage ? "Image entrypoint" : [...c.command!, ...(c.args ?? [])].join(" "),
+    images: workload.spec.containers.map(c => ({ name: c.name, command: c.command === undefined ? "Image entrypoint" : [...c.command, ...(c.args ?? [])].join(" "),
       uid: c.uid, mounts: c.mounts ?? [], ports: c.ports ?? [] })), volumes,
     resourceFiles: workload.spec.resources.map(p => p.join("/")).filter(p => !keyPaths.has(p)),
     identity: workload.spec.guest, helperImages: { ...workload.spec.trustee, storageImage: workload.spec.storageImage,

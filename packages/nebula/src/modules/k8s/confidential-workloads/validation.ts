@@ -55,7 +55,8 @@ export function validateStorage(resource: ConfidentialStorageResource): void {
 
 function validateContainer(container: WorkloadContainer): void {
   fields(container, ["name", "image", "imageKeyResource", "command", "commandFromImage", "args", "env", "uid", "gid", "mounts", "applicationResources", "ports", "resources"]);
-  const imageCommand = container.commandFromImage === true && container.command === undefined && container.args === undefined;
+  const imageCommand = (container.commandFromImage === undefined || container.commandFromImage === true) &&
+    container.command === undefined && container.args === undefined;
   const explicitCommand = container.commandFromImage === undefined && Array.isArray(container.command) &&
     container.command.length > 0 && [...container.command, ...(container.args ?? [])].every(value =>
       typeof value === "string" && !value.includes("\0")) && container.command[0].startsWith("/");
@@ -66,7 +67,7 @@ function validateContainer(container: WorkloadContainer): void {
     fail("containers need digest images or an owner-keyed publication tag, an explicit command or commandFromImage, and non-reserved non-root uid/gid");
   }
   if (container.imageKeyResource) resourcePath(container.imageKeyResource);
-  if (Object.entries(container.env ?? {}).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string")) {
+  if (Object.entries(container.env ?? {}).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== "string" || value.includes("\0") || value.includes("$("))) {
     fail("environment must contain public literal strings");
   }
   for (const mount of container.mounts ?? []) {

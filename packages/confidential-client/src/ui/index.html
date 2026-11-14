@@ -17,7 +17,8 @@
         <div id="stack" hidden><div class="stack-name" id="stack-name"></div><div class="muted" id="endpoint"></div>
           <div id="storage-summary" class="chips"></div>
           <details><summary>Review the prepared stack</summary><div id="image-contract"></div><label>Expected guest and pinned helper images</label><pre id="identity"></pre></details>
-          <details><summary>All fetched settings</summary><p class="hint">These declarations are checked against the local trusted profile and measured independently before keys are released.</p><pre id="configuration"></pre></details>
+          <h3>Approve your application settings</h3><p class="hint">A reviewed runtime does not approve administrator-selected application behavior. Review the complete command, environment, ports, network, registry routes and storage below before deploying. Without an override, execution comes from your image.</p><pre id="application-contract"></pre>
+          <details><summary>All fetched settings</summary><p class="hint">Discovered helper software is checked against the installed runtime profiles. Imported files require independent owner review. The approved declaration is measured before keys are released.</p><pre id="configuration"></pre></details>
         </div>
       </section>
       <section class="card"><div class="section-title"><span class="number">2</span><h2>Deploy your image</h2></div>
@@ -34,7 +35,7 @@
             <label for="aws-profile">Local AWS profile <span class="muted">for ECR</span></label><input id="aws-profile" placeholder="default" autocomplete="off">
             <div id="volume-keys"></div><div id="resource-files"></div>
           </details>
-          <label class="check"><input id="reviewed" type="checkbox" required><span>I approve this stack’s guest, helper images, storage and image requirements.</span></label>
+          <label class="check"><input id="reviewed" type="checkbox" required><span>I approve the complete application settings above, including command, environment, ports, network, registry routes and storage.</span></label>
           <button id="deploy" type="submit" class="primary" disabled><span id="deploy-label">Encrypt &amp; deploy</span><span aria-hidden="true">→</span></button>
         </form>
         <p class="privacy">Images are encrypted locally. Owner and storage keys stay in your private local release directory and the verified guest.</p>

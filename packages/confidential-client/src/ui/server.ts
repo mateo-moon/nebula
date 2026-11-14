@@ -13,6 +13,7 @@ import type { UiDeployInput, UiJob } from "./protocol";
 import { accessLink, discoverStack, type DiscoveredStack } from "../discovery";
 import { accessTokenBytes } from "../claim";
 import { trustedStack } from "./trusted-profiles";
+import { assertApplicationApproval } from "../application-approval";
 
 export interface UiOptions {
   directory: string;
@@ -233,8 +234,12 @@ export async function startUi(options: UiOptions, runner: UiRunner = nativeRunne
           localPort: options.localPort, verifierPort: options.verifierPort };
         if (source) { trustedStack(connection); native.discoveryEndpoint = source.endpoint; }
         if (action === "deploy") {
-          if (Object.keys(input).some(key => !["sourceImage", "accessToken", "reviewed", "registryAuth", "registryUsername", "registryPassword", "awsProfile", "volumeKeys", "resourceFiles"].includes(key))) throw new InputError("Unexpected deployment option");
+          if (Object.keys(input).some(key => !["sourceImage", "accessToken", "reviewed", "applicationApproval", "registryAuth", "registryUsername", "registryPassword", "awsProfile", "volumeKeys", "resourceFiles"].includes(key))) throw new InputError("Unexpected deployment option");
           if (input.reviewed !== true) throw new InputError("Review and approve the stack settings first");
+          try { assertApplicationApproval(connection, input.applicationApproval); }
+          catch { throw new InputError("Review and explicitly approve the complete application settings; saved approval is missing or changed"); }
+          savePrivate(join(release, "application-approval.json"), JSON.stringify(input.applicationApproval) + "\n");
+          native.applicationApproval = input.applicationApproval;
           if (typeof input.sourceImage !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,1023}$/.test(input.sourceImage)) throw new InputError("Choose a valid local image");
           const alreadyEnrolled = existsSync(join(release, "owner-state", "instance.json"));
           let token = input.accessToken;

@@ -13,3 +13,4 @@ export { connectionFromManifest, readConnection, type ConfidentialConnection } f
 export { accessLink, discoverStack, consumeAccessLink, type DiscoveredStack } from "./discovery";
 
 export { trustedStack } from "./ui/trusted-profiles";
+export { applicationContract, assertApplicationApproval, type OwnerApplicationContract } from "./application-approval";

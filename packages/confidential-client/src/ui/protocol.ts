@@ -1,5 +1,6 @@
 import type { DeployPhase } from "../deploy";
 import type { connectionSummary } from "./connection";
+import type { OwnerApplicationContract } from "../application-approval";
 
 export type StackSummary = ReturnType<typeof connectionSummary>;
 export interface UiJob {
@@ -15,6 +16,7 @@ export interface UiDeployInput {
   sourceImage: string;
   accessToken?: string;
   reviewed: boolean;
+  applicationApproval: OwnerApplicationContract;
   registryAuth?: string;
   registryUsername?: string;
   registryPassword?: string;

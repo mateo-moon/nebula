@@ -45,6 +45,20 @@ for (const [field, value] of [["FileMode", 438], ["UID", 10001], ["GID", 0], ["P
   agentCheck(`agent rejects substituted ${field}`, changed, false);
 }
 check("ordinary apps receive no agent controls", "confidential_linux_devices([], input)", agentDevices, false, agentPolicy);
+const processPolicy = `${asset("rules.rego")}\n${asset("client.rego")}\npolicy_data := {}\ntrustee_network := {"ipv4AddressPattern":"^192[.]0[.]2[.][0-9]+$", "ipv6AddressPattern":"^2001:db8:[0-9a-f:]+$"}\n`;
+const expectedProcess = { Args: ["/app/server", "$(node-name)"], Env: ["PATH=/usr/bin", "NODE_OPTIONS=$(node-name)", "HOSTNAME=$(host-name)"] };
+const actual = { ...expectedProcess, Env: ["PATH=/usr/bin", "NODE_OPTIONS=$(node-name)", "HOSTNAME=guest-123"] };
+const literal = (name: string, expected: any, actual: any, allowed: boolean) =>
+  check(name, "trustee_literal_process(input.expected, input.actual)", { expected, actual }, allowed, processPolicy);
+literal("literal application values and native generated hostname", expectedProcess, actual, true);
+literal("host cannot replace a placeholder argument", expectedProcess, { ...actual, Args: ["/app/server", "unapproved"] }, false);
+literal("host cannot replace placeholder environment", expectedProcess, { ...actual, Env: ["PATH=/usr/bin", "NODE_OPTIONS=--import=unapproved", "HOSTNAME=guest-123"] }, false);
+literal("host cannot omit placeholder environment", expectedProcess, { ...actual, Env: ["PATH=/usr/bin", "HOSTNAME=guest-123"] }, false);
+literal("host cannot add a duplicate environment override", expectedProcess, { ...actual, Env: [...actual.Env, "NODE_OPTIONS=--import=unapproved"] }, false);
+literal("host cannot substitute hostname without native placeholder", { Args: [], Env: ["HOSTNAME=owner-literal"] }, { Args: [], Env: ["HOSTNAME=host-changed"] }, false);
+literal("container without arguments remains supported", { Env: [] }, { Env: [] }, true);
+literal("native literal dollar escaping remains supported", { Args: ["/app/server", "$$(node-name)"], Env: [] },
+  { Args: ["/app/server", "$(node-name)"], Env: [] }, true);
 const runner = process.env.POLICY_TEST_RUNNER ?? fileURLToPath(new URL("./support/broker-policy-runner/target/debug/broker-policy-test-runner", import.meta.url));
 const result = execFileSync(runner, { input: JSON.stringify(cases), encoding: "utf8" }).trim().split("\n").map(line => JSON.parse(line));
 assert.equal(result.length, decisions.length);

@@ -7,6 +7,7 @@ import { parseAllDocuments } from "yaml";
 import { validateWorkload, type ConfidentialStorageResource, type ConfidentialWorkloadResource } from "nebula-cdk8s/confidential-workloads";
 import { resourcePath, type TrusteeResourcePath } from "nebula-cdk8s/trustee/policies";
 import { accessTokenBytes, claimSha256 } from "./claim";
+import { applicationContract, assertApplicationApproval } from "./application-approval";
 import { TrusteeClient, TrusteeHttpError } from "./client";
 import { enrollInstance, readEnrollment } from "./enrollment";
 import { consumeAccessLink } from "./discovery";
@@ -54,6 +55,12 @@ function declaration(manifest: string, name: string) {
   const storages = values.filter(value => value?.kind === "ConfidentialStorage") as ConfidentialStorageResource[];
   validateWorkload(workload, storages);
   return { workload, storages, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+/** Public review document, containing no invitation, owner key or image key. */
+export function reviewApplication(manifest: string, name: string) {
+  const { workload, storages } = declaration(manifest, name);
+  return applicationContract({ workload, storages });
 }
 
 function publishedContainer(workload: ConfidentialWorkloadResource) {
@@ -137,6 +144,8 @@ async function waitForEndpoint(host: string, port: number, deadline: number, sig
 }
 
 export interface DeployOptions {
+  /** Exact application contract independently reviewed and approved by its owner. */
+  applicationApproval?: unknown;
   manifest: string; name: string; host: string; port?: number; sourceImage: string;
   releaseDirectory: string; tngBinary: string; claimTokenFile?: string;
   registryAuthFile?: string; awsProfile?: string; helperImage?: string;
@@ -157,6 +166,7 @@ export async function deploy(options: DeployOptions) {
   options.signal?.throwIfAborted();
   const { host } = options;
   const { workload, storages, sha256 } = declaration(options.manifest, options.name);
+  assertApplicationApproval({ workload, storages }, options.applicationApproval);
   const container = publishedContainer(workload);
   const claim = workload.spec.ownerClaimSha256;
   if (!claim) throw new Error("The one-command deployment requires a claimable stack");
@@ -186,11 +196,13 @@ export async function deploy(options: DeployOptions) {
       throw new Error("Release directory was approved for another declaration or image digest");
     }
   } else writeFileSync(deployment, JSON.stringify(identity) + "\n", { flag: "wx", mode: 0o600 });
-  const manifestBytes = container.commandFromImage ? readFileSync(join(release, "encrypted-image", "manifest.json")) : undefined;
-  const configDigest = manifestBytes ? JSON.parse(manifestBytes.toString("utf8")).config?.digest : undefined;
-  if (manifestBytes && !/^sha256:[a-f0-9]{64}$/.test(configDigest ?? "")) throw new Error("Invalid encrypted image configuration");
-  const publishedImageConfigs = manifestBytes ? { [container.image]: { manifest: manifestBytes,
-    config: readFileSync(join(release, "encrypted-image", configDigest.slice(7))) } } : undefined;
+  // Env is inherited from the owner's OCI config even when command is overridden.
+  // Bind and validate that config for every encrypted application image.
+  const manifestBytes = readFileSync(join(release, "encrypted-image", "manifest.json"));
+  const configDigest = JSON.parse(manifestBytes.toString("utf8")).config?.digest;
+  if (!/^sha256:[a-f0-9]{64}$/.test(configDigest ?? "")) throw new Error("Invalid encrypted image configuration");
+  const publishedImageConfigs = { [container.image]: { manifest: manifestBytes,
+    config: readFileSync(join(release, "encrypted-image", configDigest.slice(7))) } };
   options.onProgress?.("measuring");
   if (!existsSync(state)) prepareWorkload({ manifest: options.manifest, name: options.name, stateDirectory: state,
     target: { host, port: options.port ?? 8443 },

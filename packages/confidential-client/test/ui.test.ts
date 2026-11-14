@@ -11,6 +11,7 @@ import { connectionFromManifest, readConnection, type ConfidentialConnection } f
 import { accessTokenBytes } from "../src/claim";
 import { identity } from "./support";
 import { releaseStateDirectory } from "../src/prepare";
+import { applicationContract } from "../src/application-approval";
 
 function connection(token: string): ConfidentialConnection {
   const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
@@ -91,12 +92,19 @@ test("local web boundary rejects foreign sites, wrong capabilities and unreviewe
   const settings = { ...original, workload: { ...original.workload, spec: { ...original.workload.spec,
     resources: [...original.workload.spec.resources, ["default", "application", "config"] as const] } } };
   assert.equal((await call("/api/connection", { text: JSON.stringify(settings) })).status, 200);
-  assert.equal((await call("/api/deploy", { sourceImage: "local/app:test", reviewed: true })).status, 400);
-  assert.equal((await call("/api/deploy", { accessToken: "0".repeat(64), sourceImage: "local/app:test", reviewed: true })).status, 400);
-  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: false })).status, 400);
-  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "--format=evil", reviewed: true })).status, 400);
+  assert.equal((await call("/api/deploy", { sourceImage: "local/app:test", reviewed: true, applicationApproval: applicationContract(settings) })).status, 400);
+  assert.equal((await call("/api/deploy", { accessToken: "0".repeat(64), sourceImage: "local/app:test", reviewed: true, applicationApproval: applicationContract(settings) })).status, 400);
+  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: false, applicationApproval: applicationContract(settings) })).status, 400);
+  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "--format=evil", reviewed: true, applicationApproval: applicationContract(settings) })).status, 400);
   assert.equal(started, 0);
+  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: true })).status, 400,
+    "A generic review checkbox cannot approve undisclosed application behavior");
+  const changedApproval = applicationContract(settings);
+  changedApproval.containers[0].env = { NODE_OPTIONS: "--import=data:text/javascript,unapproved" };
+  assert.equal((await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: true,
+    applicationApproval: changedApproval })).status, 400, "A stale or substituted approval cannot start publication");
   const response = await call("/api/deploy", { accessToken: token, sourceImage: "local/app:test", reviewed: true,
+    applicationApproval: applicationContract(settings),
     registryUsername: "test-owner", registryPassword: registrySecret,
     resourceFiles: [{ name: "default/application/config", base64: Buffer.from(applicationSecret).toString("base64") }] });
   assert.equal(response.status, 202);
@@ -109,8 +117,9 @@ test("local web boundary rejects foreign sites, wrong capabilities and unreviewe
   assert.equal(completed.job.status, "succeeded"); assert.equal(completed.job.result.verified, true);
   assert.ok(!readFileSync(join(directory, "connection.json"), "utf8").includes(token));
   assert.equal(existsSync(join(directory, "claim-token.txt")), false);
-  assert.equal((await call("/api/deploy", { accessToken: "0".repeat(64), sourceImage: "local/app:test", reviewed: true })).status, 400);
-  assert.equal((await call("/api/deploy", { sourceImage: "local/app:test", reviewed: true })).status, 202,
+  assert.equal((await call("/api/deploy", { accessToken: "0".repeat(64), sourceImage: "local/app:test", reviewed: true, applicationApproval: applicationContract(settings) })).status, 400);
+  assert.equal((await call("/api/deploy", { sourceImage: "local/app:test", reviewed: true,
+    applicationApproval: applicationContract(settings) })).status, 202,
     "An enrolled release reuses its private registry/resource files without the temporary token");
   assert.equal(started, 2);
   finish();

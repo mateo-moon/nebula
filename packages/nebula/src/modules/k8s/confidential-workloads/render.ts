@@ -11,7 +11,7 @@ import { snpIdentity, trusteePolicies } from "../trustee/policies";
 import type { TrusteeConfig } from "../trustee/types";
 import { validateWorkload } from "./validation";
 import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
-import { resolvePublishedImage, imageCommand } from "./published-image";
+import { resolvePublishedImage, imageProcess } from "./published-image";
 import type { ConfidentialStorageResource, ConfidentialStorageSpec, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
@@ -185,7 +185,9 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
     const image = container.imageKeyResource && !container.image.includes("@sha256:")
       ? resolvePublishedImage(container.image, container.imageKeyResource,
         options.publishedImageDigests?.[container.image]) : container.image;
-    const command = container.commandFromImage ? imageCommand(image, options.publishedImageConfigs?.[container.image])
+    const fromImage = container.command === undefined;
+    const process = imageProcess(image, options.publishedImageConfigs?.[container.image], fromImage);
+    const command = fromImage ? process.command
       : [...container.command!, ...(container.args ?? [])];
     const blockMounts = (container.mounts ?? []).filter(m => encrypted.some(binding => binding.name === m.storage));
     const directMounts = (container.mounts ?? []).filter(m => !blockMounts.includes(m));
@@ -197,7 +199,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       imagePullPolicy: "Always",
       command: ["/run/nebula-runtime/nebula-confidential-storage"],
       args: ["launch", JSON.stringify(launch), "--", ...command],
-      env: Object.entries(container.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value })),
+      env: Object.entries({ ...process.env, ...container.env }).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([name, value]) => ({ name, value })),
       securityContext: security(0, 0, ["SYS_ADMIN", "SETPCAP", "SETUID", "SETGID"]),
       resources: container.resources ?? limits,
       volumeMounts: [
