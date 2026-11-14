@@ -156,7 +156,9 @@ OIDC acceptance; Kubernetes system authentication remains a control-plane concer
 
 `AwsK0sCluster.apiSourceRanges` restricts client CIDRs on the native API's load
 balancer listener. Its existing controller-join and konnectivity rules are
-preserved. Hosted clusters use `controlPlane.apiSourceRanges`, which writes the
+preserved. CAPA also adds worker reachability rules; verify these have no wildcard
+fallback, including when NAT gateway addresses are unavailable. Hosted clusters
+use `controlPlane.apiSourceRanges`, which writes the
 standard `Service.spec.loadBalancerSourceRanges` through k0smotron's Service
 patches and composes with `serviceAnnotations`.
 
