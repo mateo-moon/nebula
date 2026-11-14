@@ -6,7 +6,7 @@ import * as os from "node:os";
 import { execFileSync } from "node:child_process";
 import { Testing } from "cdk8s";
 import { parse, stringify } from "yaml";
-import { AwsK0sCluster, type KubernetesOidcIdentityConfig } from "nebula-cdk8s";
+import { AwsK0sCluster, K0sOidcAuthentication, type KubernetesOidcIdentityConfig } from "nebula-cdk8s";
 import { assertRenderedAuthenticator, buildOidcProfile, writeOidcProfile, type OidcKubeconfigOptions } from "../src/commands/oidc-kubeconfig";
 
 const identity = (): KubernetesOidcIdentityConfig => ({
@@ -140,4 +140,29 @@ test("the command reads the identity from standard input and writes only the pro
   const other = identity(); other.hostname = "api.other.example.test";
   assert.throws(() => run(JSON.stringify(other)), /Refusing to replace/);
   assert.throws(() => run("not json"), /standard input/);
+}));
+
+test("a hosted control plane's authenticator is read from its mounted ConfigMap", () => fixture(f => {
+  const chart = Testing.chart();
+  const authentication = new K0sOidcAuthentication(chart, "oidc", { identity: identity(), namespace: "hosting" });
+  const hosted = authentication.hosted(), api = authentication.api();
+  const objects = [
+    ...Testing.synth(chart),
+    { apiVersion: "cluster.x-k8s.io/v1beta2", kind: "Cluster", metadata: { name: "mgmt", namespace: "hosting" },
+      spec: { controlPlaneRef: { apiGroup: "controlplane.cluster.x-k8s.io", kind: "K0smotronControlPlane", name: "mgmt-cp" } } },
+    { apiVersion: "controlplane.cluster.x-k8s.io/v1beta2", kind: "K0smotronControlPlane", metadata: { name: "mgmt-cp", namespace: "hosting" },
+      spec: { mounts: hosted.mounts, k0sConfig: { apiVersion: "k0s.k0sproject.io/v1beta1", kind: "ClusterConfig", spec: { api } } } },
+  ];
+  const manifests = path.join(f.directory, "hosted"); fs.mkdirSync(manifests);
+  const write = (items: any[]) => fs.writeFileSync(path.join(manifests, "hosted.k8s.yaml"), items.map(object => stringify(object)).join("---\n"));
+  write(objects);
+  const profile = f.build();
+  assert.doesNotThrow(() => assertRenderedAuthenticator(manifests, profile));
+  const other = identity(); other.workforce.audience = "other-client"; fs.writeFileSync(f.config, JSON.stringify(other));
+  assert.throws(() => assertRenderedAuthenticator(manifests, f.build()), /does not match/);
+  // The ConfigMap of another namespace, or a control plane without the mount, is not this cluster's authenticator.
+  write(objects.map(object => object.kind === "ConfigMap" ? { ...object, metadata: { ...object.metadata, namespace: "elsewhere" } } : object));
+  assert.throws(() => assertRenderedAuthenticator(manifests, profile), /does not match/);
+  write(objects.map(object => object.kind === "K0smotronControlPlane" ? { ...object, spec: { ...object.spec, mounts: [] } } : object));
+  assert.throws(() => assertRenderedAuthenticator(manifests, profile), /does not match/);
 }));

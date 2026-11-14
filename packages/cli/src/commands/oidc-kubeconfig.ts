@@ -92,18 +92,37 @@ function existingOutput({ output, kubeconfig }: OidcProfile): boolean {
   return true;
 }
 
+/** The authentication configuration a rendered control plane hands its API server, or undefined. */
+function renderedAuthentication(objects: any[], cluster: string): unknown {
+  const owner = objects.find(object => object?.kind === "Cluster" && object.metadata?.name === cluster);
+  const ref = owner?.spec?.controlPlaneRef;
+  const namespace = owner?.metadata?.namespace ?? "default";
+  const controlPlane = objects.find(object => object?.kind === ref?.kind && object.metadata?.name === ref?.name &&
+    (object.metadata?.namespace ?? "default") === namespace);
+  // A control plane on its own machines carries the file in its bootstrap
+  // configuration; one hosted as pods mounts it from a ConfigMap.
+  const standalone = controlPlane?.spec?.k0sConfigSpec;
+  const file: string | undefined = (standalone?.k0s ?? controlPlane?.spec?.k0sConfig)?.spec?.api?.extraArgs?.["authentication-config"];
+  if (!file) return undefined;
+  if (standalone) {
+    const content = standalone.files?.find((item: { path: string }) => item.path === file)?.content;
+    return typeof content === "string" ? parse(content) : undefined;
+  }
+  for (const mount of controlPlane.spec.mounts ?? []) {
+    if (!mount.configMap?.name || !file.startsWith(`${mount.path}/`)) continue;
+    const configMap = objects.find(object => object?.kind === "ConfigMap" && object.metadata?.name === mount.configMap.name &&
+      (object.metadata?.namespace ?? "default") === namespace);
+    const content = configMap?.data?.[file.slice(mount.path.length + 1)];
+    if (typeof content === "string") return parse(content);
+  }
+  return undefined;
+}
+
 /** Check the identity against the authenticator a synthesized control plane will enforce. */
 export function assertRenderedAuthenticator(directory: string, profile: OidcProfile): void {
   const objects = fs.readdirSync(directory).filter(file => file.endsWith(".k8s.yaml"))
     .flatMap(file => parseAllDocuments(fs.readFileSync(path.join(directory, file), "utf8")).map(document => document.toJSON()));
-  const cluster = objects.find(object => object?.kind === "Cluster" && object.metadata?.name === profile.cluster);
-  const ref = cluster?.spec?.controlPlaneRef;
-  const controlPlane = objects.find(object => object?.kind === "K0sControlPlane" && object.metadata?.name === ref?.name &&
-    (object.metadata?.namespace ?? "default") === (cluster?.metadata?.namespace ?? "default"));
-  const config = controlPlane?.spec?.k0sConfigSpec;
-  const authenticationPath = config?.k0s?.spec?.api?.extraArgs?.["authentication-config"];
-  const file = config?.files?.find((item: { path: string }) => item.path === authenticationPath);
-  if (!authenticationPath || typeof file?.content !== "string" || !isDeepStrictEqual(parse(file.content), profile.authentication))
+  if (!isDeepStrictEqual(renderedAuthentication(objects, profile.cluster), profile.authentication))
     throw new Error(`Local OIDC identity does not match the rendered control-plane authentication configuration of ${profile.cluster}`);
 }
 
