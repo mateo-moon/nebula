@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { withNeutralKubernetesServiceEnv } from "../src/modules/k8s/trustee/runtime-env";
 
 const asset = (name: string) => readFileSync(new URL(`../src/modules/k8s/trustee/assets/genpolicy/${name}`, import.meta.url), "utf8");
 const policy = `package agent_policy\nimport rego.v1\n${asset("confidential-block.rego")}\n`;
@@ -60,6 +61,33 @@ literal("host cannot substitute hostname without native placeholder", { Args: []
 literal("container without arguments remains supported", { Env: [] }, { Env: [] }, true);
 literal("native literal dollar escaping remains supported", { Args: ["/app/server", "$$(node-name)"], Env: [] },
   { Args: ["/app/server", "$(node-name)"], Env: [] }, true);
+// Observed SNP runtime shape: five generated image/Pod env values become
+// fourteen because HOME repeats and kubelet supplies eight API-service vars.
+// Use documentation addresses instead of retaining cluster metadata here.
+const imageEnv = ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "NODE_VERSION=24.22.0",
+  "YARN_VERSION=1.22.22", "HOME=/tmp", "HOSTNAME=$(host-name)"];
+const injected = ["KUBERNETES_SERVICE_HOST=192.0.2.1", "KUBERNETES_SERVICE_PORT=443", "KUBERNETES_SERVICE_PORT_HTTPS=443",
+  "KUBERNETES_PORT=tcp://192.0.2.1:443", "KUBERNETES_PORT_443_TCP=tcp://192.0.2.1:443",
+  "KUBERNETES_PORT_443_TCP_PROTO=tcp", "KUBERNETES_PORT_443_TCP_PORT=443", "KUBERNETES_PORT_443_TCP_ADDR=192.0.2.1"];
+const runtimeEnv = [...imageEnv.map(value => value === "HOSTNAME=$(host-name)" ? "HOSTNAME=test-preparation" : value), "HOME=/tmp"];
+const nativeEnvironmentPolicy = processPolicy.replace("policy_data := {}", `policy_data := ${asset("genpolicy-settings.json")}`);
+const neutral = withNeutralKubernetesServiceEnv().map(variable => `${variable.name}=${variable.value}`);
+const environment = (name: string, expected: any, actual: any, allowed: boolean) => check(name,
+  'trustee_literal_process(input.expected, input.actual); allow_env(input.expected, input.actual, "test-preparation", "qualified")',
+  { expected, actual }, allowed, nativeEnvironmentPolicy);
+environment("observed implicit Kubernetes API environment is not owner-approved", { Args: ["/app/server"], Env: imageEnv },
+  { Args: ["/app/server"], Env: [...runtimeEnv, ...injected] }, false);
+for (const name of ["trusted helper", "owner application"]) {
+  const expected = { Args: ["/app/server"], Env: [...imageEnv, ...neutral] }, actual = { Args: ["/app/server"], Env: [...runtimeEnv, ...neutral] };
+  environment(`${name} accepts measured empty API defaults and identical HOME merging`, expected, actual, true);
+  environment(`${name} rejects host API endpoint substitution`, expected,
+    { ...actual, Env: [...runtimeEnv, ...injected] }, false);
+  environment(`${name} rejects a different-value duplicate`, expected, { ...actual, Env: [...actual.Env, "HOME=/unapproved"] }, false);
+  environment(`${name} rejects a missing literal despite duplicate values`, expected,
+    { ...actual, Env: actual.Env.filter(value => value !== "NODE_VERSION=24.22.0") }, false);
+  environment(`${name} rejects an unexpected environment name`, expected,
+    { ...actual, Env: [...actual.Env, "UNAPPROVED=1"] }, false);
+}
 const runner = process.env.POLICY_TEST_RUNNER ?? fileURLToPath(new URL("./support/broker-policy-runner/target/debug/broker-policy-test-runner", import.meta.url));
 const result = execFileSync(runner, { input: JSON.stringify(cases), encoding: "utf8" }).trim().split("\n").map(line => JSON.parse(line));
 assert.equal(result.length, decisions.length);

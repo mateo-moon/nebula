@@ -4,6 +4,7 @@ import { App, Chart, Testing } from "cdk8s";
 import { ConfidentialBrowser, confidentialBrowserPlan } from "../src/modules/k8s/confidential-workloads/browser";
 import { INIT_DATA_ANNOTATION, initDataSha256, initDataDocument } from "../src/modules/k8s/confidential-guests/measured";
 import { parse } from "smol-toml";
+import { KUBERNETES_API_SERVICE_ENV } from "../src/modules/k8s/trustee/runtime-env";
 
 const native = process.env.TRUSTEE_GENPOLICY;
 const image = "ghcr.io/mateo-moon/nebula-coco-canary@sha256:071b9ef9dc86c0275ffcc5cdc256ad3b87d41a42536c305855061876185827d7";
@@ -46,6 +47,9 @@ test("frontend and preparation use the same measured agent entrypoint with expli
     assert.equal(agent.env!.some(entry => entry.name === "NEBULA_MANUAL_TLS_ENTRY" || entry.name === "NEBULA_MAX_IMAGE_SIZE_MIB"), false);
     assert.equal(agent.securityContext!.runAsUser, 10001);
     assert.deepEqual(agent.securityContext!.capabilities, { drop: ["ALL"] });
+    for (const container of first.pod.spec!.containers!) {
+      for (const name of KUBERNETES_API_SERVICE_ENV) assert.deepEqual(container.env!.filter(value => value.name === name), [{ name, value: "" }]);
+    }
   }
   assert.throws(() => confidentialBrowserPlan({ ...config, agentImage }), /pinned images/);
 });

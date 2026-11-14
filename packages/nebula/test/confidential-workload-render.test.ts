@@ -5,6 +5,7 @@ import { INIT_DATA_ANNOTATION, initDataSha256 } from "../src/modules/k8s/confide
 import { TRUSTEE_CHART } from "../src/modules/k8s/confidential-workloads/chart";
 import { renderConfidentialWorkload } from "../src/modules/k8s/confidential-workloads/render";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource } from "../src/modules/k8s/confidential-workloads/types";
+import { KUBERNETES_API_SERVICE_ENV } from "../src/modules/k8s/trustee/runtime-env";
 
 const kbs = "ghcr.io/confidential-containers/staged-images/kbs@sha256:ebbb0b34c748ce59a6afcaf05c1cc6f6c66ee6aa2c70222fd160700a296edd68";
 const tng = "ghcr.io/inclavare-containers/tng@sha256:233528659b406ffc67e6b2bd542f58825a3e85c7a25559a5adc74a16e582d416";
@@ -37,6 +38,9 @@ test("native renderer binds the final Pod and keeps repeated measurements stable
   const second = renderConfidentialWorkload(declaration, [], options);
   assert.deepEqual(second, first);
   const pod = first.pod;
+  for (const container of [...pod.spec!.initContainers!, ...pod.spec!.containers!]) {
+    for (const name of KUBERNETES_API_SERVICE_ENV) assert.deepEqual(container.env!.filter(value => value.name === name), [{ name, value: "" }]);
+  }
   assert.equal(pod.spec!.restartPolicy, "Always", "Application startup failures must retry within the existing Pod");
   assert.equal(first.identity.initDataSha256, initDataSha256(pod.metadata!.annotations![INIT_DATA_ANNOTATION]));
   assert.deepEqual(pod.spec!.containers!.map(c => c.name), ["app"]);

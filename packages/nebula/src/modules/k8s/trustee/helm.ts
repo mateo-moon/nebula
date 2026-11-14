@@ -4,6 +4,7 @@ import { INIT_DATA_ANNOTATION } from "../confidential-guests/measured";
 import { measuredFragments } from "../envoy/measured-fragments";
 import type { TrusteeContainer, TrusteeDeploymentManifest, TrusteePodManifest } from "./manifests";
 import type { TrusteeConfig } from "./types";
+import { withNeutralKubernetesServiceEnv } from "./runtime-env";
 
 type ReleaseConfig = Pick<TrusteeConfig, "name" | "namespace" | "nodeSelector">;
 
@@ -24,7 +25,7 @@ export function confidentialTrusteeHelmSettings(config: ReleaseConfig, guest: {
       kbs: {
         replicaCount: 1,
         image: { repository: guest.image.split("@")[0], tag: "unused", pullPolicy: "Always" },
-        extraEnvVars: [{ name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
+        extraEnvVars: withNeutralKubernetesServiceEnv([{ name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }]),
         podAnnotations: {
           "io.containerd.cri.runtime-handler": "kata-qemu-snp",
           "io.katacontainers.config.hypervisor.default_memory": String(guest.memory),

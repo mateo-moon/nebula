@@ -9,6 +9,7 @@ import type { TrusteeConfig, TrusteeTngConfig } from "./types";
 import { publicConfig } from "./validation";
 import { snpIdentity } from "./policies";
 import { validateNetwork } from "./genpolicy";
+import { withNeutralKubernetesServiceEnv } from "./runtime-env";
 
 const fail = (message: string): never => { throw new TypeError(`Trustee: ${message}`); };
 function label(value: string): void {
@@ -90,7 +91,7 @@ export function trusteeSettings(config: TrusteeConfig, options: { privateDiagnos
   extensions.extraContainers = [{ name: "tng", image: config.tngImage, imagePullPolicy: "Always",
     command: ["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', "tng"],
     args: measuredFragments(Buffer.from(tngScript).toString("base64")),
-    env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
+    env: withNeutralKubernetesServiceEnv([{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }]),
     securityContext: extensions.containerSecurityContext, resources: values.kbs.resources,
     volumeMounts: [{ name: "tng-tmp", mountPath: "/tmp" }],
     ports: [{ name: "rats-tls", containerPort: 8443 }],

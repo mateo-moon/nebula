@@ -10,6 +10,7 @@ import { trusteeSettings } from "../src/modules/k8s/trustee/settings";
 import { extendTrusteeHelm, readTrusteeHelmPlan, trusteeHelmProps } from "../src/modules/k8s/trustee/helm";
 import { initDataDocument, initDataSha256, INIT_DATA_ANNOTATION } from "../src/modules/k8s/confidential-guests/measured";
 import { trusteeConfig } from "./support/trustee";
+import { KUBERNETES_API_SERVICE_ENV } from "../src/modules/k8s/trustee/runtime-env";
 
 const native = process.env.TRUSTEE_GENPOLICY;
 const realHelm = !!native || process.env.NEBULA_HELM_TESTS === "1";
@@ -67,6 +68,7 @@ test("official chart dependency plus extensions produce one confidential Pod wit
     assert.equal(c.securityContext!.allowPrivilegeEscalation, false);
     assert.deepEqual(c.securityContext!.capabilities!.drop, ["ALL"]);
     assert.ok(c.env!.every(e => typeof e.value === "string"));
+    for (const name of KUBERNETES_API_SERVICE_ENV) assert.deepEqual(c.env!.filter(value => value.name === name), [{ name, value: "" }]);
   }
 });
 

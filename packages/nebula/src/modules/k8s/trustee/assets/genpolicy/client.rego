@@ -24,7 +24,9 @@ trustee_literal_process(p, i) if {
     }
     expected := object.get(p, "Env", [])
     actual := object.get(i, "Env", [])
-    count(expected) == count(actual)
+    # Native image/Pod merging can repeat an identical value (for example
+    # HOME=/tmp). Such repetitions have identical process semantics. Required
+    # literal values and all unexpected/different values remain exact sets.
     count([value | some value in expected; startswith(value, "HOSTNAME=")]) ==
         count([value | some value in actual; startswith(value, "HOSTNAME=")])
     {value | some value in expected; value != "HOSTNAME=$(host-name)"} ==

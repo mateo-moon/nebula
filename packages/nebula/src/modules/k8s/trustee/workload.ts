@@ -1,7 +1,9 @@
 import { measuredFragments } from "../envoy/measured-fragments";
 import { tngTrusteeClientPlan } from "./client-plan";
 import type { TrusteeSnpIdentity } from "./policies";
+import { withNeutralKubernetesServiceEnv } from "./runtime-env";
 export { generateAttestedWorkloadPolicy } from "./genpolicy";
+export { withNeutralKubernetesServiceEnv } from "./runtime-env";
 
 const encode = (value: string) => Buffer.from(value).toString("base64");
 const write = (path: string, value: string) => `printf '%s' '${encode(value)}' | base64 -d > ${path}`;
@@ -54,7 +56,7 @@ export function trusteeClientSidecars(options: {
     name, image, imagePullPolicy: "Always", restartPolicy: "Always",
     command: ["/bin/sh", "-ec", 'exec /bin/sh -ec "$(printf \'%s\' "$@" | base64 -d)"', name],
     args: measuredFragments(encode(script)),
-    env: [{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }],
+    env: withNeutralKubernetesServiceEnv([{ name: "RUST_LOG", value: "error" }, { name: "RUST_BACKTRACE", value: "0" }, { name: "HOME", value: "/tmp" }]),
     securityContext: { runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false,
       readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
     volumeMounts: [{ name: "trustee-verifier-state", mountPath: "/state", ...(readOnly ? { readOnly: true } : {}) },

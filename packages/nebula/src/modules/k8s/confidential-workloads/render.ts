@@ -14,6 +14,7 @@ import { TRUSTEE_CHART, TRUSTEE_CHART_VERSION } from "./chart";
 import { resolvePublishedImage, imageProcess } from "./published-image";
 import type { ConfidentialStorageResource, ConfidentialWorkloadResource, WorkloadRenderOptions } from "./types";
 import { derivedLauncherConfig, derivedWorkloadConfig } from "./derived-config";
+import { withNeutralKubernetesServiceEnv } from "../trustee/runtime-env";
 
 const limits = { requests: { cpu: "50m", memory: "128Mi" }, limits: { memory: "512Mi" } };
 const security = (uid: number, gid = uid, capabilities: string[] = []) => ({
@@ -188,6 +189,7 @@ export function renderConfidentialWorkload(resource: ConfidentialWorkloadResourc
       ...(container.ports?.length ? { ports: container.ports.map(p => ({ name: p.name, containerPort: p.port })) } : {}),
     };
   });
+  for (const container of [...initContainers, ...containers]) container.env = withNeutralKubernetesServiceEnv(container.env);
   const pod: GuestPodManifest = { apiVersion: "v1", kind: "Pod", metadata: {
     generateName: `${spec.profile}-`, namespace: metadata.namespace,
     ...(spec.browserOwner ? { labels: { "confidential.nebula.dev/profile": spec.profile } } : {}),

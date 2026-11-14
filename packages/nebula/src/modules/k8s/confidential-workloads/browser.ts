@@ -9,6 +9,7 @@ import { measuredFragments } from "../envoy/measured-fragments";
 import { INIT_DATA_ANNOTATION, type GuestPodManifest } from "../confidential-guests/measured";
 import { isDigestImage } from "../confidential-guests/types";
 import type { WorkloadRenderOptions, ConfidentialWorkloadSpec } from "./types";
+import { withNeutralKubernetesServiceEnv } from "../trustee/runtime-env";
 
 export interface ConfidentialBrowserConfig {
   name: string; namespace: string; agentImage?: string; image?: string; tngImage: string;
@@ -110,6 +111,7 @@ export function confidentialBrowserPlan(config: ConfidentialBrowserConfig) {
     ], volumes: ["state", "tmp", "tng-tmp"].map(name => ({ name, emptyDir: { medium: "Memory", sizeLimit:
       name === "tmp" ? "512Mi" : name === "state" && config.maxImageSizeMiB !== undefined ? `${workspaceMiB}Mi` : "2Gi" } })),
   } };
+  for (const container of pod.spec!.containers!) container.env = withNeutralKubernetesServiceEnv(container.env);
   // CDH requires an explicit KBC configuration when loading its TOML. Public
   // helper image pulls need no key; the guest-local URL is never contacted for
   // bootstrap. Keeping it local prevents an external bootstrap Trustee.
